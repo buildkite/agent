@@ -9,6 +9,8 @@ import (
 
 type Build struct {
   State string
+  Script string
+  Output string
 }
 
 func (b Build) String() string {
