@@ -8,6 +8,7 @@ import (
   "path/filepath"
   "io"
   "bytes"
+  "log"
 )
 
 type Process struct {
@@ -27,10 +28,14 @@ func RunScript(script string, env []string, callback func(Process)) error {
   var process Process
 
   // Build our command
-  absolutePath, _ := filepath.Abs("test/script.sh")
-  command := exec.Command(absolutePath)
-  command.Dir = "test"
+  path, _ := filepath.Abs(script)
+  dir := filepath.Dir(path)
+
+  command := exec.Command(path)
+  command.Dir = dir
   command.Env = env
+
+  log.Printf("Running: %s\n", path)
 
   // Start our process
   pty, err := pty.Start(command)
