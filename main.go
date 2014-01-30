@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "log"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
 
@@ -18,5 +19,8 @@ func main() {
   env := []string{"BUILDBOX_COMIMT=lollies", "BUILDBOX_REPO=repotime"}
 
   // Run the script
-  buildbox.RunScript("test/script.sh", env, callback)
+  err := buildbox.RunScript("test/script.sh", env, callback)
+  if err != nil {
+    log.Fatal(err)
+  }
 }
