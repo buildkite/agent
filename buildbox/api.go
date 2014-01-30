@@ -1,21 +1,10 @@
 package buildbox
 
 import (
-  "fmt"
   "log"
   "net/http"
   "encoding/json"
 )
-
-type Build struct {
-  State string
-  Script string
-  Output string
-}
-
-func (b Build) String() string {
-  return fmt.Sprintf("Build(%s)", b.State)
-}
 
 type Response struct {
   Build *Build
@@ -35,8 +24,6 @@ func Get(url string) (*http.Response) {
   if resp.StatusCode != http.StatusOK {
     log.Fatal(resp.Status)
   }
-
-  // io.Copy(os.Stdout, resp.Body)
 
   return resp
 }
