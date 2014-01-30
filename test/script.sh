@@ -5,11 +5,7 @@ set -x
 sleep 1
 echo 'hi'
 sleep 1
-echo 'i know'
-sleep 1
-echo 'lets try this'
-sleep 1
-echo 'got it'
+echo 'FINISHED'
 
 exit 123
 

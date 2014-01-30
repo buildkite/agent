@@ -2,14 +2,14 @@ package main
 
 import (
   "fmt"
-  // "time"
+  "time"
   "github.com/kr/pty"
   // "github.com/buildboxhq/buildbox-agent/buildbox"
   "os/exec"
   "path/filepath"
   "log"
   "io"
-  "syscall"
+  "bytes"
 )
 
 const CMD_IOBUF_LEN = 512
@@ -26,37 +26,37 @@ func main() {
   c := exec.Command(absolutePath)
   c.Dir = "test"
   c.Env = []string{"BUILDBOX_COMIMT=1"}
-  c.Args[0] = "script.sh"
-  c.SysProcAttr = &syscall.SysProcAttr{Setctty: true, Setsid: true}
 
   fmt.Println("before")
-
-  output := new(io.Writer)
-
-  ptyMaster, ptySlave, err := pty.Open()
+  pty, err := pty.Start(c)
   if err != nil {
     log.Fatal(err)
   }
+  fmt.Println("after")
 
-  c.Stdout = ptySlave
-  c.Stderr = ptySlave
+  var out bytes.Buffer
 
-	go func() {
-		// defer output.Close()
-		log.Printf("startPty: begin of stdout pipe")
-		io.Copy(*output, ptyMaster)
-		log.Printf("startPty: end of stdout pipe")
-	}()
+  go func() {
+    fmt.Println("before-copy")
+    io.Copy(&out, pty)
+    fmt.Println("after-copy")
+  }()
 
-  err = c.Start()
-  if err != nil {
-    log.Fatal(err)
-  }
+  go func(){
+    for {
+      fmt.Println(out.String())
 
-  err = c.Wait()
-  if err != nil {
-    log.Fatal(err)
-  }
+      time.Sleep(2000 * time.Millisecond)
+    }
+  }()
 
-  fmt.Println("%s", c.ProcessState)
+
+  fmt.Println("gonna wait")
+  c.Wait()
+
+
+  fmt.Println("all done!")
+  fmt.Println(out.String())
+
+  fmt.Println("finished with: %s", c.ProcessState)
 }
