@@ -81,6 +81,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 
   // Update the process with the final results
   // of the script
+  // TODO: Find out how to get the correct ExitStatus
   process.Running = false
   process.ExitStatus = 123
   process.Output = buffer.String()
