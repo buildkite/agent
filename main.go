@@ -44,9 +44,10 @@ func main() {
 
   go func(){
     for {
+      fmt.Println("--")
       fmt.Println(out.String())
-
-      time.Sleep(2000 * time.Millisecond)
+      time.Sleep(1000 * time.Millisecond)
+      fmt.Println("--")
     }
   }()
 

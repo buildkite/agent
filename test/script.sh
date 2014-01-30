@@ -2,6 +2,7 @@
 set -e
 set -x
 
+echo 'sleepy time'
 sleep 1
 echo 'hi'
 sleep 1
