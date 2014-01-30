@@ -15,7 +15,7 @@ func main() {
 
   // Define the ENV variables that should be used for
   // the script
-  env := []string{"BUILDBOX_COMIMT=1"}
+  env := []string{"BUILDBOX_COMIMT=lollies"}
 
   // Run the script
   buildbox.RunScript("test/script.sh", env, callback)

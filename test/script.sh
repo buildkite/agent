@@ -2,7 +2,7 @@
 set -e
 set -x
 
-echo 'sleepy time'
+echo "sleepy time $BUILDBOX_COMIMT"
 sleep 1
 echo 'hi'
 sleep 1
