@@ -5,10 +5,12 @@ import (
   "time"
   "github.com/kr/pty"
   "os/exec"
-  "path/filepath"
   "io"
+  "os"
   "bytes"
   "log"
+  "path"
+  "path/filepath"
 )
 
 type Process struct {
@@ -23,19 +25,25 @@ func (p Process) String() string {
   return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %d}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func RunScript(script string, env []string, callback func(Process)) error {
+func RunScript(dir string, script string, env []string, callback func(Process)) error {
   // Create a new instance of our process struct
   var process Process
 
-  // Build our command
-  path, _ := filepath.Abs(script)
-  dir := filepath.Dir(path)
+  // Find the script to run
+  absoluteDir, _ := filepath.Abs(dir)
+  pathToScript := path.Join(absoluteDir, script)
 
-  command := exec.Command(path)
-  command.Dir = dir
-  command.Env = env
+  log.Printf("Running: %s from within %s\n", script, absoluteDir)
 
-  log.Printf("Running: %s\n", path)
+  command := exec.Command(pathToScript)
+  command.Dir = absoluteDir
+
+  // Copy the current processes ENV and merge in the
+  // new ones. We do this so the sub process gets PATH
+  // and stuff.
+  // TODO: Is this correct?
+  currentEnv := os.Environ()
+  command.Env = append(currentEnv, env...)
 
   // Start our process
   pty, err := pty.Start(command)
