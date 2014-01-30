@@ -11,5 +11,5 @@ type Build struct {
 }
 
 func (b Build) String() string {
-  return fmt.Sprintf("Build(%s)", b.State)
+  return fmt.Sprintf("Build{State: %s}", b.State)
 }
