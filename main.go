@@ -5,14 +5,25 @@ import (
 	// "time"
 	"github.com/kr/pty"
 	// "github.com/buildboxhq/buildbox-agent/buildbox"
-	"io"
+	"bufio"
+	//	"io"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 )
 
 const CMD_IOBUF_LEN = 512
+
+func process(wg *sync.WaitGroup, batch []string) {
+	defer wg.Done()
+	// send to API
+	log.Printf("shipping %d", len(batch))
+}
+
+// low batch size for demo purposes
+const BatchSize = 4
 
 func main() {
 	// b := buildbox.GetNextBuild()
@@ -21,6 +32,9 @@ func main() {
 	// }
 
 	// time.Sleep(5000 * time.Millisecond)
+
+	// process waiter
+	wg := new(sync.WaitGroup)
 
 	// so run this script
 	absolutePath, _ := filepath.Abs("test/script.sh")
@@ -44,9 +58,32 @@ func main() {
 	fmt.Printf("%v\n", pty)
 
 	// now we attach the output of the pty to stdout
-	// need a line buffered go routine sending
-	// this to buildbox..
-	io.Copy(os.Stdout, pty)
+	// read each line using a buffered reader
+	scanner := bufio.NewScanner(pty)
+
+	// Batch the lines
+	var batch []string
+
+	for scanner.Scan() {
+		batch = append(batch, scanner.Text())
+		// buffer is full ship it
+		if len(batch) == BatchSize {
+			wg.Add(1)
+
+			// process this in another go routine
+			go process(wg, batch)
+
+			batch = nil
+		}
+		fmt.Fprintln(os.Stdout, scanner.Text())
+	}
+
+	// PTY has closed the stream..
+
+	if batch != nil {
+		// ship any remaining data
+		go process(wg, batch)
+	}
 
 	// wait for the pty to finish
 	err = c.Wait()
