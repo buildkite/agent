@@ -37,11 +37,13 @@ func (c *Client) Get(v interface{}, path string) error {
 
 // Sends a Buildbox API request and decodes the response into v.
 func (c *Client) APIReq(v interface{}, method string, path string, body interface{}) error {
+  // Generate a new request
   req, err := c.NewRequest(method, path, body)
   if err != nil {
     return err
   }
 
+  // Perform the request
   return c.DoReq(req, v)
 }
 
