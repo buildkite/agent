@@ -2,11 +2,15 @@ package buildbox
 
 import (
   "net/http"
+  "net/http/httputil"
   "encoding/json"
   "runtime"
   "strings"
   "io"
   "errors"
+  "log"
+  "os"
+  "bytes"
 )
 
 const (
@@ -35,6 +39,10 @@ func (c *Client) Get(v interface{}, path string) error {
   return c.APIReq(v, "GET", path, nil)
 }
 
+func (c *Client) Put(v interface{}, path string, body interface{}) error {
+  return c.APIReq(v, "PUT", path, body)
+}
+
 // Sends a Buildbox API request and decodes the response into v.
 func (c *Client) APIReq(v interface{}, method string, path string, body interface{}) error {
   // Generate a new request
@@ -53,6 +61,16 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
   // Popualte the request body if we have to
   var requestBody io.Reader
   var contentType string
+
+  if body != nil {
+    j, err := json.Marshal(body)
+    if err != nil {
+      log.Fatal(err)
+    }
+
+    requestBody = bytes.NewReader(j)
+    contentType = "application/json"
+  }
 
   // Generate the URL for the request
   endpointUrl := strings.TrimRight(c.URL, "/")
@@ -90,6 +108,10 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 // Submits an HTTP request, checks its response, and deserializes
 // the response into v.
 func (c *Client) DoReq(req *http.Request, v interface{}) error {
+  if c.Debug {
+    log.Printf("%s %s\n", req.Method, req.URL)
+  }
+
   res, err := http.DefaultClient.Do(req)
   if err != nil {
     return err
@@ -98,6 +120,16 @@ func (c *Client) DoReq(req *http.Request, v interface{}) error {
   // Be sure to close the response body at the end of
   // this function
   defer res.Body.Close()
+
+  if c.Debug {
+    dump, err := httputil.DumpResponse(res, true)
+    if err != nil {
+      log.Println(err)
+    } else {
+      os.Stderr.Write(dump)
+      os.Stderr.Write([]byte{'\n'})
+    }
+  }
 
   // Check the response of the response
   if err = checkResp(res); err != nil {

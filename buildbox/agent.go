@@ -16,7 +16,7 @@ type Agent struct {
 func (a Agent) Work() {
   for {
     // Try and find some work to do
-    job, err := a.Client.GetNextJob()
+    job, err := a.Client.JobNext()
     if err != nil {
       log.Fatal(err)
     }
@@ -38,8 +38,16 @@ func (a Agent) run(job *Job) {
   // This callback will get called every second with the
   // entire output of the command.
   callback := func(process Process) {
-    fmt.Println(process)
-    // fmt.Println(process.Output)
+    // Update the job output
+    job.Output = process.Output
+
+    // Post the update to the API
+    _, err := a.Client.JobUpdate(job)
+    if err != nil {
+      log.Fatal(err)
+    }
+
+    // TODO: Was the job cancelled?
   }
 
   // Define the path to the job and ensure it exists
