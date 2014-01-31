@@ -13,3 +13,8 @@ type Build struct {
 func (b Build) String() string {
   return fmt.Sprintf("Build{State: %s}", b.State)
 }
+
+func (c *Client) GetNextBuild() (*Build, error) {
+  var build Build
+  return &build, c.Get(&build, "builds/queue/next")
+}
