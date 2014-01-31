@@ -47,7 +47,7 @@ func main() {
   }
 
   // Now run the build script
-  err = buildbox.RunScript("tmp", "script/buildbox", env, callback)
+  err = buildbox.RunScript("tmp", job.ScriptPath, env, callback)
   if err != nil {
     log.Fatal(err)
   }

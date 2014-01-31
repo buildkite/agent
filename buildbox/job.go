@@ -5,13 +5,14 @@ import (
 )
 
 type Job struct {
+  ID string
   State string
-  Script string
+  ScriptPath string `json:"script_path"`
   Output string
 }
 
 func (b Job) String() string {
-  return fmt.Sprintf("Job{State: %s}", b.State)
+  return fmt.Sprintf("Job{ID: %s, State: %s, ScriptPath: %s}", b.ID, b.State, b.ScriptPath)
 }
 
 func (c *Client) GetNextJob() (*Job, error) {
