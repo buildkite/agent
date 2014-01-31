@@ -15,6 +15,10 @@ func (b Build) String() string {
 }
 
 func (c *Client) GetNextBuild() (*Build, error) {
+  // Create a new instance of a build that will be populated
+  // by the client.
   var build Build
+
+  // Return the build.
   return &build, c.Get(&build, "builds/queue/next")
 }

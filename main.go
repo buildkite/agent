@@ -9,11 +9,16 @@ import (
 )
 
 func main() {
-  //build := buildbox.GetNextBuild()
-  //if build == nil {
-  //  log.Println("Nothing to do")
-  //  os.Exit(0)
-  //}
+  var client buildbox.Client
+  client.AgentAccessToken = "e6296371ed3dd3f24881b0866506b8c6"
+  client.URL = "http://agent.buildbox.dev/v1"
+
+  build, err := client.GetNextBuild()
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  log.Printf("%s", build)
 
   //log.Println(build)
 
@@ -26,7 +31,7 @@ func main() {
 
   // Define the path to the build and ensure it exists
   path, _ := filepath.Abs("tmp") // Joins the current working directory
-  err := os.MkdirAll(path, 0700)
+  err = os.MkdirAll(path, 0700)
 
   // Define the ENV variables that should be used for
   // the script

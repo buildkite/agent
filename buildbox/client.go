@@ -1,19 +1,18 @@
 package buildbox
 
-// Inspired from:
-// https://github.com/bgentry/heroku-go/blob/ab3320c0b603292a42f39cd41a0a8f71d1b3716b/heroku.go
-
 import (
-  "log"
   "net/http"
   "encoding/json"
   "runtime"
+  "strings"
+  "io"
+  "errors"
 )
 
 const (
   Version          = "0.1"
   DefaultAPIURL    = "https://agent.buildbox.io/v1"
-  DefaultUserAgent = "heroku-go/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+  DefaultUserAgent = "buildbox-agent-go/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 )
 
 type Client struct {
@@ -32,36 +31,97 @@ type Client struct {
   UserAgent string
 }
 
-type Response struct {
-  Build *Build
-}
-
 func (c *Client) Get(v interface{}, path string) error {
   return c.APIReq(v, "GET", path, nil)
 }
 
-func Get(url string) (*http.Response) {
-  log.Printf("GET %s", url)
-
-  var r *Response = new(Response)
-  err := json.NewDecoder(resp.Body).Decode(r)
+// Sends a Buildbox API request and decodes the response into v.
+func (c *Client) APIReq(v interface{}, method string, path string, body interface{}) error {
+  req, err := c.NewRequest(method, path, body)
   if err != nil {
-    log.Fatal(err)
+    return err
   }
 
-  return r.Build
+  return c.DoReq(req, v)
+}
 
-  resp, err := http.Get(url)
+// Generates an HTTP request for the Buildbox API, but does not
+// perform the request.
+func (c *Client) NewRequest(method string, path string, body interface{}) (*http.Request, error) {
+  // Popualte the request body if we have to
+  var requestBody io.Reader
+  var contentType string
 
-  // Check to make sure no error returned from the get request
+  // Generate the URL for the request
+  endpointUrl := strings.TrimRight(c.URL, "/")
+  if endpointUrl == "" {
+    endpointUrl = DefaultAPIURL
+  }
+
+  normalizedPath := strings.TrimLeft(path, "/")
+  url := endpointUrl +"/" + c.AgentAccessToken + "/" + normalizedPath
+
+  // Create a new request object
+  req, err := http.NewRequest(method, url, requestBody)
   if err != nil {
-    log.Fatal(err)
+    return nil, err
   }
 
-  // Check the status code
-  if resp.StatusCode != http.StatusOK {
-    log.Fatal(resp.Status)
+  // Set the accept content type. The Buildbox API only speaks
+  // json.
+  req.Header.Set("Accept", "application/json")
+
+  // Figure out and set the User Agent
+  userAgent := c.UserAgent
+  if userAgent == "" {
+    userAgent = DefaultUserAgent
   }
 
-  return resp
+  req.Header.Set("User-Agent", userAgent)
+  if contentType != "" {
+    req.Header.Set("Content-Type", contentType)
+  }
+
+  return req, nil
+}
+
+// Submits an HTTP request, checks its response, and deserializes
+// the response into v.
+func (c *Client) DoReq(req *http.Request, v interface{}) error {
+  res, err := http.DefaultClient.Do(req)
+  if err != nil {
+    return err
+  }
+
+  // Be sure to close the response body at the end of
+  // this function
+  defer res.Body.Close()
+
+  // Check the response of the response
+  if err = checkResp(res); err != nil {
+    return err
+  }
+
+  // Decode the response
+  return json.NewDecoder(res.Body).Decode(v)
+}
+
+type errorResp struct {
+  Message string `json:"error"`
+}
+
+func checkResp(res *http.Response) error {
+  // Was the request not a: 200, 201, 202, etc
+  if res.StatusCode/100 != 2 {
+    // Decode the error json
+    var e errorResp
+    err := json.NewDecoder(res.Body).Decode(&e)
+    if err != nil {
+      return errors.New("Unexpected error: " + res.Status)
+    }
+
+    return errors.New(e.Message)
+  }
+
+  return nil
 }
