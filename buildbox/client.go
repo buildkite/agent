@@ -7,6 +7,13 @@ import (
   "log"
   "net/http"
   "encoding/json"
+  "runtime"
+)
+
+const (
+  Version          = "0.1"
+  DefaultAPIURL    = "https://agent.buildbox.io/v1"
+  DefaultUserAgent = "heroku-go/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 )
 
 type Client struct {
@@ -19,6 +26,10 @@ type Client struct {
 
   // Debug mode can be used to dump the full request and response to stdout.
   Debug bool
+
+  // UserAgent to be provided in API requests. Set to DefaultUserAgent if not
+  // specified.
+  UserAgent string
 }
 
 type Response struct {
