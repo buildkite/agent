@@ -13,14 +13,14 @@ func main() {
   client.AgentAccessToken = "e6296371ed3dd3f24881b0866506b8c6"
   client.URL = "http://agent.buildbox.dev/v1"
 
-  build, err := client.GetNextBuild()
+  job, err := client.GetNextJob()
   if err != nil {
     log.Fatal(err)
   }
 
-  log.Printf("%s", build)
+  log.Printf("%s", job)
 
-  //log.Println(build)
+  //log.Println(job)
 
   // This callback will get called every second with the
   // entire output of the command.
@@ -29,7 +29,7 @@ func main() {
     // fmt.Println(process.Output)
   }
 
-  // Define the path to the build and ensure it exists
+  // Define the path to the job and ensure it exists
   path, _ := filepath.Abs("tmp") // Joins the current working directory
   err = os.MkdirAll(path, 0700)
 
