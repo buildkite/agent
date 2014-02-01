@@ -25,7 +25,7 @@ func (p Process) String() string {
   return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %d}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func RunScript(dir string, script string, env []string, callback func(Process)) error {
+func RunScript(dir string, script string, env []string, callback func(Process)) (*Process, error) {
   // Create a new instance of our process struct
   var process Process
 
@@ -48,7 +48,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   // Start our process
   pty, err := pty.Start(command)
   if err != nil {
-    return err
+    return nil, err
   }
 
   process.Pid = command.Process.Pid
@@ -83,12 +83,9 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   // of the script
   // TODO: Find out how to get the correct ExitStatus
   process.Running = false
-  process.ExitStatus = 123
+  process.ExitStatus = 0
   process.Output = buffer.String()
 
-  // Do the final call of the callback
-  callback(process)
-
   // No error occured so we can return nil
-  return nil
+  return &process, nil
 }

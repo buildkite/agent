@@ -1,11 +1,6 @@
 package buildbox
 
-import (
-  "fmt"
-  "log"
-  "os"
-  "path/filepath"
-)
+import "log"
 
 type Agent struct {
   // The client the agent will use to communicate to
@@ -26,50 +21,6 @@ func (a Agent) Work() {
       break
     }
 
-    a.run(job)
-  }
-}
-
-func (a Agent) run(job *Job) {
-  log.Printf("%s", job)
-
-  //log.Println(job)
-
-  // This callback will get called every second with the
-  // entire output of the command.
-  callback := func(process Process) {
-    // Update the job output
-    job.Output = process.Output
-
-    // Post the update to the API
-    _, err := a.Client.JobUpdate(job)
-    if err != nil {
-      log.Fatal(err)
-    }
-
-    // TODO: Was the job cancelled?
-  }
-
-  // Define the path to the job and ensure it exists
-  path, _ := filepath.Abs("tmp") // Joins the current working directory
-  err := os.MkdirAll(path, 0700)
-
-  // Define the ENV variables that should be used for
-  // the script
-  env := []string{
-    fmt.Sprintf("BUILDBOX_BUILD_PATH=%s", path),
-    "BUILDBOX_COMIMT=af8f05c9921946dfb502461dad3f5f7335004935",
-    "BUILDBOX_REPO=git@github.com:buildboxhq/rails-example.git"}
-
-  // Run the bootstrap script
-  err = RunScript(".", "bootstrap.sh", env, callback)
-  if err != nil {
-    log.Fatal(err)
-  }
-
-  // Now run the build script
-  err = RunScript("tmp", job.ScriptPath, env, callback)
-  if err != nil {
-    log.Fatal(err)
+    job.Run(&a.Client)
   }
 }

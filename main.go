@@ -12,7 +12,7 @@ func main() {
   var client buildbox.Client
   client.AgentAccessToken = "e6296371ed3dd3f24881b0866506b8c6"
   client.URL = "http://agent.buildbox.dev/v1"
-  client.Debug = true
+  client.Debug = false
 
   // Create a new instance of the Agent
   var agent buildbox.Agent
