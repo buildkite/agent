@@ -17,7 +17,7 @@ import (
 type Job struct {
   ID string
   State string
-  ScriptPath string `json:"script_path"`
+  Env map[string]string
   Output string `json:"output,omitempty"`
   ExitStatus string `json:"exit_status,omitempty"`
   StartedAt string `json:"started_at,omitempty"`
@@ -25,7 +25,7 @@ type Job struct {
 }
 
 func (b Job) String() string {
-  return fmt.Sprintf("Job{ID: %s, State: %s, ScriptPath: %s}", b.ID, b.State, b.ScriptPath)
+  return fmt.Sprintf("Job{ID: %s, State: %s}", b.ID, b.State)
 }
 
 func (c *Client) JobNext() (*Job, error) {
@@ -54,25 +54,41 @@ func (j *Job) Run(client *Client) error {
     log.Fatal(err)
   }
 
-  // Define the ENV variables that should be used for
-  // the script
-  env := []string{
-    fmt.Sprintf("BUILDBOX_BUILD_PATH=%s", path),
-    "BUILDBOX_COMIMT=af8f05c9921946dfb502461dad3f5f7335004935",
-    "BUILDBOX_REPO=git@github.com:buildboxhq/rails-example.git"}
+  // Create the environment that the script will run in
+  env := []string{}
+
+  // Add the environment variables from the API to the process
+  for key, value := range j.Env {
+    env = append(env, fmt.Sprintf("%s=%s", key, value))
+  }
+
+  // Add the build path to the environmnet
+  env = append(env, fmt.Sprintf("BUILDBOX_BUILD_PATH=%s", path))
 
   // Mark the build as started
   j.StartedAt = time.Now().Format(time.RFC3339)
   client.JobUpdate(j)
 
-  // Run the boostrapping script
-  process, _ := runJobScript(j, client, env, ".", "bootstrap.sh")
+  // This callback is called every second the build is running. This lets
+  // us do a lazy-person's method of streaming data to Buildbox.
+  callback := func(process Process) {
+    j.Output = process.Output
 
-  // Only progress to the next step if the bootstrapping step
-  // was successful
-  if process.Success {
-    process, _ = runJobScript(j, client, env, "tmp", j.ScriptPath)
+    // Post the update to the API
+    _, err := client.JobUpdate(j)
+    if err != nil {
+      log.Fatal(err)
+    }
   }
+
+  // Run the bootstrap script
+  process, err := RunScript(".", "bootstrap.sh", env, callback)
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  // Store the final output
+  j.Output = process.Output
 
   // Mark the build as finished
   j.FinishedAt = time.Now().Format(time.RFC3339)
@@ -87,31 +103,4 @@ func (j *Job) Run(client *Client) error {
   client.JobUpdate(j)
 
   return nil
-}
-
-func runJobScript(j *Job, client *Client, env []string, path string, script string) (*Process, error) {
-  // Store the existing output. Any new data that they
-  // get from the process we append to this.
-  existingOutput := j.Output
-
-  callback := func(process Process) {
-    j.Output = existingOutput + process.Output
-
-    // Post the update to the API
-    _, err := client.JobUpdate(j)
-    if err != nil {
-      log.Fatal(err)
-    }
-  }
-
-  // Run the bootstrap script
-  process, err := RunScript(path, script, env, callback)
-  if err != nil {
-    log.Fatal(err)
-  }
-
-  // Store the final output
-  j.Output = existingOutput + process.Output
-
-  return process, err
 }

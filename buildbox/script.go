@@ -78,7 +78,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   }()
 
   // Wait until the process has finished
-  command.Wait()
+  err = command.Wait()
 
   // Update the process with the final results
   // of the script
