@@ -11,6 +11,8 @@ import (
   "log"
   "path"
   "path/filepath"
+  "errors"
+  "syscall"
 )
 
 type Process struct {
@@ -78,16 +80,31 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   }()
 
   // Wait until the process has finished
-  err = command.Wait()
+  waitResult := command.Wait()
 
   // Update the process with the final results
   // of the script
-  // TODO: Find out how to get the correct ExitStatus
   process.Running = false
-  process.ExitStatus = 0
+  process.ExitStatus = getExitStatus(waitResult)
   process.Output = buffer.String()
   process.Success = true
 
   // No error occured so we can return nil
   return &process, nil
+}
+
+// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
+// WTF? Computers... (shrug)
+// TODO: Can this be better?
+func getExitStatus(waitResult error) int {
+  if waitResult != nil {
+    if err, ok := waitResult.(*exec.ExitError); ok {
+      if s, ok := err.Sys().(syscall.WaitStatus); ok {
+        return s.ExitStatus()
+      } else {
+        panic(errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus."))
+      }
+    }
+  }
+  return 0
 }
