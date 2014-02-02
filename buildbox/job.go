@@ -5,16 +5,23 @@ import (
   "log"
   "os"
   "path/filepath"
+  "time"
 )
 
+// The Job struct uses strings for StartedAt and FinishedAt because
+// if they were actual date objects, then when this struct is
+// initialized they would have a default value of: 00:00:00.000000000.
+// This causes problems for the Buildbox Agent API because it looks for
+// the presence of values in these properties to determine if the build
+// has finished.
 type Job struct {
   ID string
   State string
   ScriptPath string `json:"script_path"`
   Output string `json:"output,omitempty"`
   ExitStatus string `json:"exit_status,omitempty"`
-  StartedAt string
-  FinishedAt string
+  StartedAt string `json:"started_at,omitempty"`
+  FinishedAt string `json:"finished_at,omitempty"`
 }
 
 func (b Job) String() string {
@@ -55,7 +62,7 @@ func (j *Job) Run(client *Client) error {
     "BUILDBOX_REPO=git@github.com:buildboxhq/rails-example.git"}
 
   // Mark the build as started
-  // j.StartedAt = "started"
+  j.StartedAt = time.Now().Format(time.RFC3339)
   client.JobUpdate(j)
 
   // Run the boostrapping script
@@ -63,15 +70,21 @@ func (j *Job) Run(client *Client) error {
 
   // Only progress to the next step if the bootstrapping step
   // was successful
-  if process.ExitStatus == 0 {
+  if process.Success {
     process, _ = runJobScript(j, client, env, "tmp", j.ScriptPath)
   }
 
   // Mark the build as finished
-  // j.FinishedAt = "finished"
-  client.JobUpdate(j)
+  j.FinishedAt = time.Now().Format(time.RFC3339)
 
-  log.Fatal("Done")
+  // Use the last processes exit status. ExitStatus is a string
+  // on the Job struct because 0 is considerered an empty value
+  // and won't be marshalled. We only want to send the exit status
+  // when the build has finsihed.
+  j.ExitStatus = fmt.Sprintf("%d", process.ExitStatus)
+
+  // Finally tell buildbox that we finished the build!
+  client.JobUpdate(j)
 
   return nil
 }

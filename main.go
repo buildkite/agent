@@ -3,7 +3,11 @@ package main
 import (
   "time"
   "log"
-  "github.com/buildboxhq/buildbox-agent/buildbox"
+  "github.com/buildboxhq/buildbox-agent-go/buildbox"
+)
+
+const (
+  IdleSeconds = 5
 )
 
 func main() {
@@ -23,7 +27,7 @@ func main() {
     // when there's nothing left to do.
     agent.Work()
 
-    log.Println("Sleeping for 3 seconds")
-    time.Sleep(5000 * time.Millisecond)
+    log.Printf("Idling for %d seconds\n", IdleSeconds)
+    time.Sleep(IdleSeconds * 1000 * time.Millisecond)
   }
 }

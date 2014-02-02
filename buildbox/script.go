@@ -18,6 +18,7 @@ type Process struct {
   Pid int
   Running bool
   ExitStatus int
+  Success bool
 }
 
 // Implement the Stringer thingy
@@ -85,6 +86,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   process.Running = false
   process.ExitStatus = 0
   process.Output = buffer.String()
+  process.Success = true
 
   // No error occured so we can return nil
   return &process, nil
