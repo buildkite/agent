@@ -47,6 +47,8 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 }
 
 func (j *Job) Run(client *Client) error {
+  log.Printf("Starting job #%s", j.ID)
+
   // Define the path to the job and ensure it exists
   path, _ := filepath.Abs("tmp") // Joins the current working directory
   err := os.MkdirAll(path, 0700)
@@ -75,9 +77,14 @@ func (j *Job) Run(client *Client) error {
     j.Output = process.Output
 
     // Post the update to the API
-    _, err := client.JobUpdate(j)
+    updatedJob, err := client.JobUpdate(j)
     if err != nil {
       log.Fatal(err)
+    }
+
+    if updatedJob.State == "canceled" {
+      log.Printf("Cancelling job #%s", j.ID)
+      process.Kill()
     }
   }
 
