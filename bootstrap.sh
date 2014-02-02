@@ -19,4 +19,4 @@ git checkout -qf "$BUILDBOX_COMMIT"
 
 echo "--- running $BUILDBOX_SCRIPT_PATH"
 
-source $BUILDBOX_SCRIPT_PATH
+."/$BUILDBOX_SCRIPT_PATH"

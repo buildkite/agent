@@ -3,14 +3,14 @@ package main
 import (
   "time"
   "log"
+  "fmt"
   "github.com/buildboxhq/buildbox-agent-go/buildbox"
 )
 
-const (
-  IdleSeconds = 5
-)
-
 func main() {
+  processName := fmt.Sprintf("buildbox-agent-%s", buildbox.Version)
+  log.Printf("Starting up %s...\n", processName)
+
   // Create a new Client that we'll use to interact with
   // the API
   var client buildbox.Client
@@ -22,12 +22,15 @@ func main() {
   var agent buildbox.Agent
   agent.Client = client
 
+  idleSeconds := 5
+  sleepTime := time.Duration(idleSeconds * 1000) * time.Millisecond
+
   for {
     // The agent will run all the jobs in the queue, and return
     // when there's nothing left to do.
     agent.Work()
 
-    log.Printf("Idling for %d seconds\n", IdleSeconds)
-    time.Sleep(IdleSeconds * 1000 * time.Millisecond)
+    // Sleep then check again later.
+    time.Sleep(sleepTime)
   }
 }

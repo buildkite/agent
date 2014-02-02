@@ -14,8 +14,7 @@ import (
 )
 
 const (
-  Version          = "0.1"
-  DefaultAPIURL    = "https://agent.buildbox.io/v1"
+  DefaultAPIURL = "https://agent.buildbox.io/v1"
   DefaultUserAgent = "buildbox-agent-go/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 )
 
