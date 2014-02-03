@@ -1,0 +1,11 @@
+{
+	"ImportPath": "github.com/buildboxhq/buildbox-agent-go",
+	"GoVersion": "go1.2",
+	"Deps": [
+		{
+			"ImportPath": "github.com/kr/pty",
+			"Comment": "release.r56-14-g3b1f648",
+			"Rev": "3b1f6487b7fc649d5f146df04e623bd55ba1bf7f"
+		}
+	]
+}
