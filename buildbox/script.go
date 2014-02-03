@@ -55,7 +55,11 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   // Start our process
   pty, err := pty.Start(process.command)
   if err != nil {
-    return nil, err
+    // The process essentially failed, so we'll just make up
+    // and exit status.
+    process.ExitStatus = 1
+
+    return &process, err
   }
 
   process.Pid = process.command.Process.Pid

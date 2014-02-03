@@ -4,7 +4,8 @@ set -x
 
 env | grep BUILDBOX
 
-cd $BUILDBOX_BUILD_PATH
+mkdir tmp
+cd tmp
 
 if [ ! -d ".git" ]; then
   git clone "$BUILDBOX_REPO" . -qv

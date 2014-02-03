@@ -82,6 +82,6 @@ func (a Agent) work() {
       break
     }
 
-    job.Run(&a.Client)
+    job.Run(&a.Client, a.BootstrapScript)
   }
 }

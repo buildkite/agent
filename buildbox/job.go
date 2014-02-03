@@ -3,9 +3,8 @@ package buildbox
 import (
   "fmt"
   "log"
-  "os"
-  "path/filepath"
   "time"
+  "path"
 )
 
 // The Job struct uses strings for StartedAt and FinishedAt because
@@ -46,26 +45,16 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
   return &updatedJob, c.Put(&updatedJob, "jobs/" + job.ID, job)
 }
 
-func (j *Job) Run(client *Client) error {
+func (j *Job) Run(client *Client, bootstrapScript string) error {
   log.Printf("Starting job #%s", j.ID)
 
-  // Define the path to the job and ensure it exists
-  path, _ := filepath.Abs("tmp") // Joins the current working directory
-  err := os.MkdirAll(path, 0700)
-  if err != nil {
-    log.Fatal(err)
-  }
-
-  // Create the environment that the script will run in
+  // Create the environment that the script will use
   env := []string{}
 
   // Add the environment variables from the API to the process
   for key, value := range j.Env {
     env = append(env, fmt.Sprintf("%s=%s", key, value))
   }
-
-  // Add the build path to the environmnet
-  env = append(env, fmt.Sprintf("BUILDBOX_BUILD_PATH=%s", path))
 
   // Mark the build as started
   j.StartedAt = time.Now().Format(time.RFC3339)
@@ -89,13 +78,17 @@ func (j *Job) Run(client *Client) error {
   }
 
   // Run the bootstrap script
-  process, err := RunScript(".", "bootstrap.sh", env, callback)
-  if err != nil {
-    log.Fatal(err)
-  }
+  scriptPath := path.Dir(bootstrapScript)
+  scriptName := path.Base(bootstrapScript)
+  process, err := RunScript(scriptPath, scriptName, env, callback)
 
-  // Store the final output
-  j.Output = process.Output
+  // Did the process succeed?
+  if err == nil {
+    // Store the final output
+    j.Output = process.Output
+  } else {
+    j.Output = fmt.Sprintf("%s", err)
+  }
 
   // Mark the build as finished
   j.FinishedAt = time.Now().Format(time.RFC3339)
