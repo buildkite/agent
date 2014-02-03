@@ -3,6 +3,11 @@
 	"GoVersion": "go1.2",
 	"Deps": [
 		{
+			"ImportPath": "github.com/codegangsta/cli",
+			"Comment": "1.0.0-31-gc606efc",
+			"Rev": "c606efc92b966e5f627f2785d28e7e92787e08d0"
+		},
+		{
 			"ImportPath": "github.com/kr/pty",
 			"Comment": "release.r56-14-g3b1f648",
 			"Rev": "3b1f6487b7fc649d5f146df04e623bd55ba1bf7f"
