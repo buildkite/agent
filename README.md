@@ -22,6 +22,7 @@ Setup your boostrap script:
 
     $ mkdir -p ~/.buildbox
     $ curl -o ~/.buildbox/bootstrap.sh https://raw.github.com/buildboxhq/agent-go/master/bootstrap-example.sh
+    $ chmod +x ~/.buildbox/bootstrap.sh
 
 Run the agent
 
