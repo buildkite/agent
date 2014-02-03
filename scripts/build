@@ -3,5 +3,20 @@ set -e
 set -x
 
 mkdir -p pkg
-GOOS=linux GOARCH=amd64 go build -o pkg/buildbox-agent-linux-amd64
-GOOS=darwin GOARCH=amd64 go build -o pkg/buildbox-agent-darwin-amd64
+
+build() {
+  FILENAME=buildbox-agent-$GOOS-$GOARCH
+  go build -o pkg/$FILENAME
+  tar -cvzf pkg/$FILENAME.tar.gz pkg/$FILENAME
+  rm pkg/$FILENAME
+}
+
+GOOS=linux
+GOARCH=amd64 build
+GOARCH=386 build
+
+# --
+
+GOOS=darwin
+GOARCH=amd64 build
+GOARCH=386 build
