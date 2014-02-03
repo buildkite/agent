@@ -4,9 +4,12 @@ set -x
 
 env | grep BUILDBOX
 
-mkdir tmp
-cd tmp
+# Create the build directory
+BUILD_DIR="tmp/$BUILDBOX_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
+mkdir -p $BUILD_DIR
+cd $BUILD_DIR
 
+# Do we need to do a git checkout?
 if [ ! -d ".git" ]; then
   git clone "$BUILDBOX_REPO" . -qv
 fi

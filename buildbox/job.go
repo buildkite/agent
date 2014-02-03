@@ -45,7 +45,7 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
   return &updatedJob, c.Put(&updatedJob, "jobs/" + job.ID, job)
 }
 
-func (j *Job) Run(client *Client, bootstrapScript string) error {
+func (j *Job) Run(agent *Agent) error {
   log.Printf("Starting job #%s", j.ID)
 
   // Create the environment that the script will use
@@ -56,9 +56,13 @@ func (j *Job) Run(client *Client, bootstrapScript string) error {
     env = append(env, fmt.Sprintf("%s=%s", key, value))
   }
 
+  // Append agent information to the ENV
+  env = append(env, fmt.Sprintf("BUILDBOX_AGENT_NAME=%s", agent.Name),
+                    fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AgentAccessToken))
+
   // Mark the build as started
   j.StartedAt = time.Now().Format(time.RFC3339)
-  client.JobUpdate(j)
+  agent.Client.JobUpdate(j)
 
   // This callback is called every second the build is running. This lets
   // us do a lazy-person's method of streaming data to Buildbox.
@@ -66,7 +70,7 @@ func (j *Job) Run(client *Client, bootstrapScript string) error {
     j.Output = process.Output
 
     // Post the update to the API
-    updatedJob, err := client.JobUpdate(j)
+    updatedJob, err := agent.Client.JobUpdate(j)
     if err != nil {
       log.Fatal(err)
     }
@@ -78,8 +82,8 @@ func (j *Job) Run(client *Client, bootstrapScript string) error {
   }
 
   // Run the bootstrap script
-  scriptPath := path.Dir(bootstrapScript)
-  scriptName := path.Base(bootstrapScript)
+  scriptPath := path.Dir(agent.BootstrapScript)
+  scriptName := path.Base(agent.BootstrapScript)
   process, err := RunScript(scriptPath, scriptName, env, callback)
 
   // Did the process succeed?
@@ -100,7 +104,7 @@ func (j *Job) Run(client *Client, bootstrapScript string) error {
   j.ExitStatus = fmt.Sprintf("%d", process.ExitStatus)
 
   // Finally tell buildbox that we finished the build!
-  client.JobUpdate(j)
+  agent.Client.JobUpdate(j)
 
   log.Printf("Finished job #%s", j.ID)
 
