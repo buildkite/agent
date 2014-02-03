@@ -6,11 +6,6 @@ import (
   "github.com/buildboxhq/buildbox-agent-go/buildbox"
 )
 
-/*
-func start(cli *Cli) {
-}
-*/
-
 var AppHelpTemplate = `The agent performs builds and sends the results back to Buildbox.
 
 Usage:
