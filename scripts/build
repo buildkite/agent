@@ -1,0 +1,7 @@
+#!/bin/bash
+set -e
+set -x
+
+mkdir -p pkg
+GOOS=linux GOARCH=amd64 go build -o pkg/buildbox-agent-linux-amd64
+GOOS=darwin GOARCH=amd64 go build -o pkg/buildbox-agent-darwin-amd64
