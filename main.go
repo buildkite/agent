@@ -80,6 +80,7 @@ func main() {
         agent.BootstrapScript = c.String("bootstrap-script")
 
         // Client specific options
+        agent.Client.AgentAccessToken = c.String("access-token")
         agent.Client.URL = c.String("url")
 
         // Run the agent

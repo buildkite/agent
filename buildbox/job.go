@@ -109,5 +109,7 @@ func (j *Job) Run(client *Client) error {
   // Finally tell buildbox that we finished the build!
   client.JobUpdate(j)
 
+  log.Printf("Finished job #%s", j.ID)
+
   return nil
 }

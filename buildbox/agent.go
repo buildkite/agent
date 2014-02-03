@@ -2,6 +2,7 @@ package buildbox
 
 import (
   "log"
+  "fmt"
   "time"
 )
 
@@ -23,6 +24,14 @@ type Agent struct {
   BootstrapScript string
 }
 
+func (a Agent) String() string {
+  return fmt.Sprintf("Agent{Name: %s}", a.Name)
+}
+
+func (c *Client) AgentUpdate(agent *Agent) error {
+  return c.Put(&agent, "/", agent)
+}
+
 func (a Agent) Run() {
   // Tell the user that debug mode has been enabled
   if a.Debug {
@@ -32,12 +41,15 @@ func (a Agent) Run() {
   // Should the client also run in Debug mode?
   a.Client.Debug = a.Debug
 
-  // TODO
-  // Get agent information from API
-  a.Name = "hello123"
+  // Get agent information from API. It will populate the
+  // current agent struct with data.
+  err := a.Client.AgentUpdate(&a)
+  if err != nil {
+    log.Fatal(err)
+  }
 
   // A nice welcome message
-  log.Printf("Starting up buildbox-agent `%s` (version %s)...\n", a.Name, Version)
+  log.Printf("Started buildbox-agent `%s` (version %s)\n", a.Name, Version)
 
   if a.ExitOnComplete {
     a.work()
