@@ -13,9 +13,16 @@ func main() {
   accessToken := flag.String("access-token", "", "The access token used to identify the agent.")
   debug := flag.Bool("debug", false, "Runs the agent in debug mode.")
   url := flag.String("url", "", "Specify a different API endpoint.")
+  version := flag.Bool("version", false, "Show the version of the agent")
 
   // Parse the flags
   flag.Parse()
+
+  // Are they trying to show the version?
+  if *version {
+    fmt.Printf("buildbox-agent version %s\n", buildbox.Version)
+    os.Exit(0)
+  }
 
   // Raise an error if no access token has been set.
   if *accessToken == "" {
