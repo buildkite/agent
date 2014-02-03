@@ -3,7 +3,7 @@ package main
 import (
   "os"
   "github.com/codegangsta/cli"
-  "github.com/buildboxhq/buildbox-agent-go/buildbox"
+  "github.com/buildboxhq/agent-go/buildbox"
 )
 
 var AppHelpTemplate = `The agent performs builds and sends the results back to Buildbox.
