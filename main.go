@@ -14,6 +14,7 @@ func main() {
   debug := flag.Bool("debug", false, "Runs the agent in debug mode.")
   url := flag.String("url", "", "Specify a different API endpoint.")
   version := flag.Bool("version", false, "Show the version of the agent")
+  exitOnComplete := flag.Bool("exit-on-complete", false, "Runs all available jobs and then exits")
 
   // Parse the flags
   flag.Parse()
@@ -45,6 +46,11 @@ func main() {
   var agent buildbox.Agent
   agent.Client = client
 
-  // Kick the agent off, and start some jobs!
-  agent.Start()
+  agent.Prepare()
+
+  if *exitOnComplete {
+    agent.Work()
+  } else {
+    agent.Start()
+  }
 }

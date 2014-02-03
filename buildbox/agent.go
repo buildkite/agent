@@ -14,14 +14,16 @@ type Agent struct {
   Client Client
 }
 
-func (a Agent) Start() {
+func (a Agent) Prepare() {
   // TODO
   // Get agent information from API
   a.Name = "hello123"
 
   // A nice welcome message
   log.Printf("Starting up buildbox-agent-(%s) (%s)...\n", Version, a.Name)
+}
 
+func (a Agent) Start() {
   // How long the agent will wait when no jobs can be found.
   idleSeconds := 5
   sleepTime := time.Duration(idleSeconds * 1000) * time.Millisecond
@@ -29,14 +31,14 @@ func (a Agent) Start() {
   for {
     // The agent will run all the jobs in the queue, and return
     // when there's nothing left to do.
-    a.work()
+    a.Work()
 
     // Sleep then check again later.
     time.Sleep(sleepTime)
   }
 }
 
-func (a Agent) work() {
+func (a Agent) Work() {
   for {
     // Try and find some work to do
     job, err := a.Client.JobNext()
