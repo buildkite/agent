@@ -74,7 +74,7 @@ func (a Agent) work() {
     // Try and find some work to do
     job, err := a.Client.JobNext()
     if err != nil {
-      log.Fatal(err)
+      log.Fatalf("Failed to get job (%s)", err)
     }
 
     // If there's no ID, then there's no job.

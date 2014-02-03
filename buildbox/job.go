@@ -56,10 +56,6 @@ func (j *Job) Run(agent *Agent) error {
     env = append(env, fmt.Sprintf("%s=%s", key, value))
   }
 
-  // Append agent information to the ENV
-  env = append(env, fmt.Sprintf("BUILDBOX_AGENT_NAME=%s", agent.Name),
-                    fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AgentAccessToken))
-
   // Mark the build as started
   j.StartedAt = time.Now().Format(time.RFC3339)
   agent.Client.JobUpdate(j)
@@ -72,7 +68,7 @@ func (j *Job) Run(agent *Agent) error {
     // Post the update to the API
     updatedJob, err := agent.Client.JobUpdate(j)
     if err != nil {
-      log.Fatal(err)
+      log.Fatal("Failed to update %s (%s)", j, err)
     }
 
     if updatedJob.State == "canceled" {

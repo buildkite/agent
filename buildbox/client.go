@@ -64,7 +64,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
   if body != nil {
     j, err := json.Marshal(body)
     if err != nil {
-      log.Fatal(err)
+      log.Fatal("Failed to json.Marshal: %s with error: %s", body, err)
     }
 
     requestBody = bytes.NewReader(j)
