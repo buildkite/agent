@@ -32,6 +32,10 @@ For more help with the command line interface
 
     $ buildbox-agent help
 
+## Development
+
+`brew install go --cross-compile-common`
+
 ## Contributing
 
 1. Fork it
