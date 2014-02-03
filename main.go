@@ -46,7 +46,7 @@ func main() {
   cli.CommandHelpTemplate = CommandHelpTemplate
 
   app := cli.NewApp()
-  app.Name = "buildbox.agent"
+  app.Name = "buildbox-agent"
   app.Version = buildbox.Version
 
   // Define the actions for our CLI
