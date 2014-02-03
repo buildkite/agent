@@ -2,17 +2,17 @@
 
 The new Buildbox Agent written in Go (Golang)
 
-## Background
+### Background
 
 TODO
 
-## How does it work?
+### How does it work?
 
 When a job is ready to be run on the agent, it runs your Bootstrap script with all the Environment variables required.
 
 The Bootstrap script is responsible for creating the build directory, checking out the code, and running the build script.
 
-## Installation
+### Installation
 
 Install the agent
 
@@ -33,11 +33,11 @@ For more help with the command line interface
 
     $ buildbox-agent help
 
-## Development
+### Development
 
 `brew install go --cross-compile-common`
 
-## Contributing
+### Contributing
 
 1. Fork it
 2. Create your feature branch (`git checkout -b my-new-feature`)
@@ -45,6 +45,6 @@ For more help with the command line interface
 4. Push to the branch (`git push origin my-new-feature`)
 5. Create new Pull Request
 
-## Copyright
+### Copyright
 
 Copyright (c) 2014 Keith Pitt. See LICENSE for details.
