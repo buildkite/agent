@@ -10,7 +10,7 @@ Install the agent
 
 Run the agent
 
-    $ buildbox-agent start --access-token [token123] \
+    $ buildbox-agent start --access-token token123 \
                            --bootstrap-script ~/.buildbox/bootstrap.sh
 
 For more help with the command line interface
