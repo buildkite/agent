@@ -16,18 +16,13 @@ The Bootstrap script is responsible for creating the build directory, checking o
 
 Install the agent
 
-    $ TODO
+    $ bash -c \"\`curl -sL https://agent.buildbox.io/install.sh\`\"
 
-Setup your boostrap script:
+The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 
-    $ mkdir -p ~/.buildbox
-    $ curl -o ~/.buildbox/bootstrap.sh https://raw.github.com/buildboxhq/agent-go/master/bootstrap-example.sh
-    $ chmod +x ~/.buildbox/bootstrap.sh
+Once installed, you should now be able to run the agent
 
-Run the agent
-
-    $ buildbox-agent start --access-token token123 \
-                           --bootstrap-script ~/.buildbox/bootstrap.sh
+    $ buildbox-agent start --access-token token123
 
 For more help with the command line interface
 
