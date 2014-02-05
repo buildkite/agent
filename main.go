@@ -2,6 +2,8 @@ package main
 
 import (
   "os"
+  "os/user"
+  "path"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/agent-go/buildbox"
 )
@@ -41,6 +43,8 @@ Example:
 buildbox-agent start --access-token a374fha7834f \
                      --bootstrap-script ~/.buildbox/bootstrap.sh`
 
+var BootstrapScriptDefault = "$HOME/.buildbox/bootstrap.sh"
+
 func main() {
   cli.AppHelpTemplate = AppHelpTemplate
   cli.CommandHelpTemplate = CommandHelpTemplate
@@ -57,7 +61,7 @@ func main() {
       Description: StartHelpDescription,
       Flags: []cli.Flag {
         cli.StringFlag{"access-token", "", "The access token used to identify the agent."},
-        cli.StringFlag{"bootstrap-script", "bootstrap.sh", "Path to the bootstrap script."},
+        cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
         cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
         cli.BoolFlag{"exit-on-complete", "Runs all available jobs and then exit."},
         cli.BoolFlag{"debug", "Enable debug mode."},
@@ -68,11 +72,32 @@ func main() {
           os.Exit(1)
         }
 
+        bootstrapScript := c.String("bootstrap-script")
+
+        // Go doesn't provide an a mechanism to turn $HOME into an absolute
+        // path, so if they're using the default, I'll remake it using real
+        // values.
+        if c.String("bootstrap-script") == BootstrapScriptDefault {
+          usr, err := user.Current()
+          if err != nil {
+            print(err)
+            os.Exit(1)
+          }
+
+          bootstrapScript = path.Join(usr.HomeDir, ".buildbox", "bootstrap.sh")
+        }
+
+        // Make sure the boostrap script exists.
+        if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
+          print("buildbox-agent: no such file " + bootstrapScript + "\n")
+          os.Exit(1)
+        }
+
         // Set the agent options
         var agent buildbox.Agent;
         agent.Debug = c.Bool("debug")
         agent.ExitOnComplete = c.Bool("exit-on-complete")
-        agent.BootstrapScript = c.String("bootstrap-script")
+        agent.BootstrapScript = bootstrapScript
 
         // Client specific options
         agent.Client.AgentAccessToken = c.String("access-token")
