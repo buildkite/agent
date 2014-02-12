@@ -30,10 +30,14 @@ For more help with the command line interface
 
 ### Development
 
-`mkdir -p $GOPATH/src/github.com/buildboxhq/agent-go
-`git clone git@github.com:buildboxhq/agent-go.git $GOPATH/src/github.com/buildboxhq/agent-go`
+```bash
+brew install go --cross-compile-common
 
-`brew install go --cross-compile-common`
+mkdir -p $GOPATH/src/github.com/buildboxhq/agent-go
+git clone git@github.com:buildboxhq/agent-go.git $GOPATH/src/github.com/buildboxhq/agent-go
+cd $GOPATH/src/github.com/buildboxhq/agent-go
+go run main.go
+```
 
 ### Contributing
 
