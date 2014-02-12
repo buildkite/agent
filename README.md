@@ -30,12 +30,24 @@ For more help with the command line interface
 
 ### Development
 
+Some basic instructions on setting up your Go environment and the codebase for running.
+
 ```bash
+# Make sure you have go installed.
 brew install go --cross-compile-common
 
+# Setup your GOPATH
+export GOPATH="$HOME/Code/go"
+export PATH="$HOME/Code/go/bin:$PATH"
+
+# Install godep
+go get github.com/kr/godep
+
+# Checkout the code
 mkdir -p $GOPATH/src/github.com/buildboxhq/agent-go
 git clone git@github.com:buildboxhq/agent-go.git $GOPATH/src/github.com/buildboxhq/agent-go
 cd $GOPATH/src/github.com/buildboxhq/agent-go
+godep get
 go run main.go
 ```
 
