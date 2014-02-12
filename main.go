@@ -2,8 +2,8 @@ package main
 
 import (
   "os"
-  "os/user"
   "path"
+  "fmt"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/agent-go/buildbox"
 )
@@ -68,7 +68,7 @@ func main() {
       },
       Action: func(c *cli.Context) {
         if c.String("access-token") == "" {
-          print("buildbox-agent: missing access token\nSee 'buildbox-agent help start'\n")
+          fmt.Println("buildbox-agent: missing access token\nSee 'buildbox-agent help start'")
           os.Exit(1)
         }
 
@@ -78,13 +78,9 @@ func main() {
         // path, so if they're using the default, I'll remake it using real
         // values.
         if c.String("bootstrap-script") == BootstrapScriptDefault {
-          usr, err := user.Current()
-          if err != nil {
-            print(err)
-            os.Exit(1)
-          }
+          homeDir := os.Getenv("HOME")
 
-          bootstrapScript = path.Join(usr.HomeDir, ".buildbox", "bootstrap.sh")
+          bootstrapScript = path.Join(homeDir, ".buildbox", "bootstrap.sh")
         }
 
         // Make sure the boostrap script exists.

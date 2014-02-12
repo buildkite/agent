@@ -2,12 +2,16 @@
 set -e
 set -x
 
-mkdir -p pkg
+DIRECTORY=pkg
+if [ -d "$DIRECTORY" ]; then
+  rm -rf "$DIRECTORY"
+fi
+mkdir -p "$DIRECTORY"
 
 function build {
   FILENAME=buildbox-agent-$1-$2
-  GOOS=$1 GOARCH=$2 go build -o pkg/$FILENAME
-  gzip pkg/$FILENAME
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$FILENAME
+  gzip $DIRECTORY/$FILENAME
 }
 
 build "linux" "amd64"
