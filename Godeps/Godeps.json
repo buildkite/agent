@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/buildboxhq/buildbox-agent-go",
+	"ImportPath": "github.com/buildboxhq/agent-go",
 	"GoVersion": "go1.2",
 	"Deps": [
 		{
