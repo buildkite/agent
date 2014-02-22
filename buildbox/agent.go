@@ -75,7 +75,10 @@ func (a Agent) Run() {
     for {
       // The agent will run all the jobs in the queue, and return
       // when there's nothing left to do.
-      a.work()
+      err = a.work()
+      if err != nil {
+        log.Printf("Failed to get job (%s)", err)
+      }
 
       // Sleep then check again later.
       time.Sleep(sleepTime)
@@ -83,19 +86,21 @@ func (a Agent) Run() {
   }
 }
 
-func (a Agent) work() {
+func (a Agent) work() error {
   for {
     // Try and find some work to do
     job, err := a.Client.JobNext()
     if err != nil {
-      log.Fatalf("Failed to get job (%s)", err)
+      return err
     }
 
     // If there's no ID, then there's no job.
     if job.ID == "" {
-      break
+      return nil
     }
 
     job.Run(&a)
+
+    return nil
   }
 }

@@ -58,7 +58,11 @@ func (j *Job) Run(agent *Agent) error {
 
   // Mark the build as started
   j.StartedAt = time.Now().Format(time.RFC3339)
-  agent.Client.JobUpdate(j)
+  _, err := agent.Client.JobUpdate(j)
+  if err != nil {
+    // We don't care if the HTTP request failed here. We hope that it
+    // starts working during the actual build.
+  }
 
   // This callback is called every second the build is running. This lets
   // us do a lazy-person's method of streaming data to Buildbox.
@@ -68,10 +72,11 @@ func (j *Job) Run(agent *Agent) error {
     // Post the update to the API
     updatedJob, err := agent.Client.JobUpdate(j)
     if err != nil {
-      log.Fatal("Failed to update %s (%s)", j, err)
-    }
-
-    if updatedJob.State == "canceled" {
+      // We don't really care if the job couldn't update at this point.
+      // This is just a partial update. We'll just let the job run
+      // and hopefully the host will fix itself before we finish.
+      log.Printf("Problem with updating job #%s", j.ID, err)
+    } else if updatedJob.State == "canceled" {
       log.Printf("Cancelling job #%s", j.ID)
       process.Kill()
     }
@@ -99,8 +104,22 @@ func (j *Job) Run(agent *Agent) error {
   // when the build has finsihed.
   j.ExitStatus = fmt.Sprintf("%d", process.ExitStatus)
 
-  // Finally tell buildbox that we finished the build!
-  agent.Client.JobUpdate(j)
+  // Keep trying this call until it works. This is the most important one.
+  for {
+    _, err = agent.Client.JobUpdate(j)
+    if err != nil {
+      log.Printf("Problem with updating final job information #%s", j.ID, err)
+
+      // How long should we wait until we try again?
+      idleSeconds := 5
+
+      // Sleep for a while
+      sleepTime := time.Duration(idleSeconds * 1000) * time.Millisecond
+      time.Sleep(sleepTime)
+    } else {
+      break
+    }
+  }
 
   log.Printf("Finished job #%s", j.ID)
 
