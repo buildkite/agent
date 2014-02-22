@@ -4,6 +4,8 @@ import (
   "log"
   "fmt"
   "time"
+  "strings"
+  "os/exec"
 )
 
 type Agent struct {
@@ -13,6 +15,9 @@ type Agent struct {
   // The client the agent will use to communicate to
   // the API
   Client Client
+
+  // The hostname of the agent
+  Hostname string `json:"hostname,omitempty"`
 
   // Whether to run the agent in Debug mode
   Debug bool
@@ -25,7 +30,7 @@ type Agent struct {
 }
 
 func (a Agent) String() string {
-  return fmt.Sprintf("Agent{Name: %s}", a.Name)
+  return fmt.Sprintf("Agent{Name: %s, Hostname: %s}", a.Name, a.Hostname)
 }
 
 func (c *Client) AgentUpdate(agent *Agent) error {
@@ -41,9 +46,18 @@ func (a Agent) Run() {
   // Should the client also run in Debug mode?
   a.Client.Debug = a.Debug
 
+  // Figure out the hostname of the current machine
+  hostname, err := exec.Command("hostname").Output()
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  // Set the hostname
+  a.Hostname = strings.Trim(fmt.Sprintf("%s", hostname), "\n")
+
   // Get agent information from API. It will populate the
   // current agent struct with data.
-  err := a.Client.AgentUpdate(&a)
+  err = a.Client.AgentUpdate(&a)
   if err != nil {
     log.Fatal(err)
   }
