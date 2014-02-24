@@ -65,10 +65,6 @@ func (a Agent) Start() {
   idleSeconds := 5
   sleepTime := time.Duration(idleSeconds * 1000) * time.Millisecond
 
-
-  log.Println(a.Debug)
-  log.Println(a.Client.Debug)
-
   for {
     // The agent will run all the jobs in the queue, and return
     // when there's nothing left to do.
