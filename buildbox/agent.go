@@ -34,7 +34,7 @@ func (c *Client) AgentUpdate(agent *Agent) error {
   return c.Put(&agent, "/", agent)
 }
 
-func (a Agent) Setup() {
+func (a *Agent) Setup() {
   // Figure out the hostname of the current machine
   hostname, err := exec.Command("hostname").Output()
   if err != nil {
@@ -46,7 +46,7 @@ func (a Agent) Setup() {
 
   // Get agent information from API. It will populate the
   // current agent struct with data.
-  err = a.Client.AgentUpdate(&a)
+  err = a.Client.AgentUpdate(a)
   if err != nil {
     log.Fatal(err)
   }
