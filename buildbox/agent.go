@@ -35,11 +35,6 @@ func (c *Client) AgentUpdate(agent *Agent) error {
 }
 
 func (a Agent) Setup() {
-  // Tell the user that debug mode has been enabled
-  if a.Debug {
-    log.Printf("Debug mode enabled")
-  }
-
   // Figure out the hostname of the current machine
   hostname, err := exec.Command("hostname").Output()
   if err != nil {
@@ -55,9 +50,6 @@ func (a Agent) Setup() {
   if err != nil {
     log.Fatal(err)
   }
-
-  // A nice welcome message
-  log.Printf("Started buildbox-agent `%s` (version %s)\n", a.Name, Version)
 }
 
 func (a Agent) Start() {

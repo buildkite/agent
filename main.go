@@ -150,8 +150,16 @@ func setupAgentFromCli(c *cli.Context, command string) buildbox.Agent {
   agent.Client.URL = c.String("url")
   agent.Client.Debug = agent.Debug
 
+  // Tell the user that debug mode has been enabled
+  if agent.Debug {
+    log.Printf("Debug mode enabled")
+  }
+
   // Setup the agent
   agent.Setup()
+
+  // A nice welcome message
+  log.Printf("Started buildbox-agent `%s` (version %s)\n", agent.Name, buildbox.Version)
 
   return agent
 }
