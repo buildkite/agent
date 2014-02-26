@@ -4,6 +4,7 @@ import (
   "os"
   "path"
   "fmt"
+  "log"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/agent-go/buildbox"
 )
