@@ -16,7 +16,7 @@ The Bootstrap script is responsible for creating the build directory, checking o
 
 Install the agent
 
-    $ bash -c "`curl -sL https://agent.buildbox.io/install.sh`"
+    $ bash -c "`curl -sL https://raw.github.com/buildboxhq/agent-go/master/install.sh`"
 
 The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 

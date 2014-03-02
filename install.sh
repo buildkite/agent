@@ -2,11 +2,11 @@
 #
 # You can install the Buildbox Agent with the following:
 #
-#   bash -c "`curl -sL https://agent.buildbox.io/install.sh`"
+#   bash -c "`curl -sL https://raw.github.com/buildboxhq/agent-go/master/install.sh`"
 #
 # For more information, see: https://github.com/buildboxhq/agent-go
 
-COMMAND="bash -c \"\`curl -sL https://agent.buildbox.io/install.sh\`\""
+COMMAND="bash -c \"\`curl -sL https://raw.github.com/buildboxhq/agent-go/master/install.sh\`\""
 
 set -e
 
