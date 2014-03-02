@@ -1,0 +1,115 @@
+#!/bin/bash
+#
+# You can install the Buildbox Agent with the following:
+#
+#   bash -c "`curl -sL https://agent.buildbox.io/install.sh`"
+#
+# For more information, see: https://github.com/buildboxhq/agent-go
+
+COMMAND="bash -c \"\`curl -sL https://agent.buildbox.io/install.sh\`\""
+
+set -e
+
+echo -e "\033[33m
+  _           _ _     _ _                                        _
+ | |         (_) |   | | |                                      | |
+ | |__  _   _ _| | __| | |__   _____  __   __ _  __ _  ___ _ __ | |_
+ | '_ \| | | | | |/ _\` | '_ \ / _ \ \/ /  / _\` |/ _\` |/ _ \ '_ \| __|
+ | |_) | |_| | | | (_| | |_) | (_) >  <  | (_| | (_| |  __/ | | | |_
+ |_.__/ \__,_|_|_|\__,_|_.__/ \___/_/\_\  \__,_|\__, |\___|_| |_|\__|
+                                                 __/ |
+                                                |___/\033[0m
+-- https://buildbox.io
+
+Latest Version: \033[35mv0.1-alpha\033[0m"
+
+UNAME=`uname -sp | awk '{print tolower($0)}'`
+
+if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]
+then
+  PLATFORM="darwin"
+else
+  PLATFORM="linux"
+fi
+
+if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]
+then
+  ARCH="amd64"
+else
+  ARCH="386"
+fi
+
+# Allow custom setting of the destination
+if [ -z "$DESTINATION" ]; then
+  # But default to the home directory
+  DESTINATION="$HOME/.buildbox"
+  mkdir -p $DESTINATION
+fi
+
+if [ ! -w "$DESTINATION" ]
+then
+  echo -e "\n\033[31mUnable to write to destination \`$DESTINATION\`\n\nYou can change the destination by running:\n\nDESTINATION=/my/path $COMMAND\033[0m\n"
+  exit 1
+fi
+
+echo -e "Destination: \033[35m$DESTINATION\033[0m"
+
+# Download and unzip the file to the destination
+FILE=$DESTINATION/buildbox-agent
+URL="https://github.com/buildboxhq/agent-go/releases/download/v0.1-alpha/buildbox-agent-$PLATFORM-$ARCH.gz"
+echo -e "\nDownloading $URL"
+
+if command -v wget >/dev/null
+then
+  wget -qO- $URL | zcat > $FILE
+else
+  curl -sL $URL | zcat > $FILE
+fi
+
+# Make sure it's exectuable
+chmod +x $FILE
+
+# Copy the bootstrap sample and make sure it's writable
+if [[ -e $DESTINATION/bootstrap.sh ]]
+then
+  echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
+else
+  BOOTSTRAP_URL=https://raw.github.com/buildboxhq/agent-go/master/bootstrap-example.sh
+  BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
+
+  echo -e "Downloading $BOOTSTRAP_URL"
+
+  if command -v wget >/dev/null
+  then
+    wget -q $BOOTSTRAP_URL -O $BOOTSTRAP_DESTINATION
+  else
+    curl -s -o $BOOTSTRAP_DESTINATION $BOOTSTRAP_URL
+  fi
+
+  chmod +x $DESTINATION/bootstrap.sh
+fi
+
+echo -e "\n\033[32mSuccessfully installed to: $FILE\033[0m
+
+You can now start the agent like so:
+
+  $DESTINATION/buildbox-agent start --access-token token123
+
+You can find your agent's Access Token on your Account Settings
+page under \"Agents\".
+
+To customize how builds are run on your server, you can edit:
+
+  $DESTINATION/bootstrap.sh
+
+This file is run for every build and it's responsible for checking out
+the source code and running the build script.
+
+The source code of the agent is available here:
+
+  https://github.com/buildboxhq/agent-go
+
+If you have any questions or need a help getting things setup,
+please email us at: hello@buildbox.io
+
+Happy Building!"
