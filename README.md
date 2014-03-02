@@ -2,15 +2,11 @@
 
 The new Buildbox Agent written in Go (Golang)
 
-### Background
-
-TODO
-
 ### How does it work?
 
-When a job is ready to be run on the agent, it runs your Bootstrap script with all the Environment variables required.
+When a job is ready to be run on the agent, the agent will run the `bootstrap.sh` script with all the correct environment variables presenter.
 
-The Bootstrap script is responsible for creating the build directory, checking out the code, and running the build script.
+This script is responsible for creating the build directory, cloning the repo, and running the build script.
 
 ### Installation
 
