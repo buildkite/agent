@@ -55,7 +55,7 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 }
 
 func (j *Job) Run(agent *Agent) error {
-  log.Printf("Starting job #%s", j.ID)
+  log.Printf("Starting job %s", j.ID)
 
   // Create the environment that the script will use
   env := []string{}
@@ -84,9 +84,9 @@ func (j *Job) Run(agent *Agent) error {
       // We don't really care if the job couldn't update at this point.
       // This is just a partial update. We'll just let the job run
       // and hopefully the host will fix itself before we finish.
-      log.Printf("Problem with updating job #%s", j.ID, err)
+      log.Printf("Problem with updating job %s", j.ID, err)
     } else if updatedJob.State == "canceled" {
-      log.Printf("Cancelling job #%s", j.ID)
+      log.Printf("Cancelling job %s", j.ID)
       process.Kill()
     }
   }
@@ -117,7 +117,7 @@ func (j *Job) Run(agent *Agent) error {
   for {
     _, err = agent.Client.JobUpdate(j)
     if err != nil {
-      log.Printf("Problem with updating final job information #%s", j.ID, err)
+      log.Printf("Problem with updating final job information %s (%s)", j.ID, err)
 
       // How long should we wait until we try again?
       idleSeconds := 5
@@ -130,7 +130,7 @@ func (j *Job) Run(agent *Agent) error {
     }
   }
 
-  log.Printf("Finished job #%s", j.ID)
+  log.Printf("Finished job %s", j.ID)
 
   return nil
 }
