@@ -70,8 +70,10 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   go func() {
     // Copy the pty to our buffer. This will block until it EOF's
     // or something breaks.
-    // TODO: What if this fails?
-    io.Copy(&buffer, pty)
+    _, err = io.Copy(&buffer, pty)
+    if err != nil {
+      log.Printf("io.Copy failed with error: %s\n", err)
+    }
   }()
 
   go func(){
