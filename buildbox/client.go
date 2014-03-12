@@ -42,6 +42,10 @@ func (c *Client) Put(v interface{}, path string, body interface{}) error {
   return c.APIReq(v, "PUT", path, body)
 }
 
+func (c *Client) Post(v interface{}, path string, body interface{}) error {
+  return c.APIReq(v, "POST", path, body)
+}
+
 // Sends a Buildbox API request and decodes the response into v.
 func (c *Client) APIReq(v interface{}, method string, path string, body interface{}) error {
   // Generate a new request
