@@ -36,6 +36,15 @@ func (c *Client) JobNext() (*Job, error) {
   return &job, c.Get(&job, "jobs/next")
 }
 
+func (c *Client) JobFind(id string) (*Job, error) {
+  // Create a new instance of a job that will be populated
+  // by the client.
+  var job Job
+
+  // Find the job
+  return &job, c.Get(&job, "jobs/" + id)
+}
+
 func (c *Client) JobFindAndAssign(id string) (*Job, error) {
   // Create a new instance of a job that will be populated
   // by the client.
