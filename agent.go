@@ -6,7 +6,7 @@ import (
   "fmt"
   "log"
   "github.com/codegangsta/cli"
-  "github.com/buildboxhq/agent-go/buildbox"
+  "github.com/buildboxhq/buildbox-agent/buildbox"
 )
 
 var AppHelpTemplate = `The agent performs builds and sends the results back to Buildbox.
