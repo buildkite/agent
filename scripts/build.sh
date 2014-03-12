@@ -10,11 +10,11 @@ mkdir -p "$DIRECTORY"
 
 function build {
   FILENAME=buildbox-agent-$1-$2
-  GOOS=$1 GOARCH=$2 go build agent.go -o $DIRECTORY/$FILENAME
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$FILENAME agent.go
   gzip $DIRECTORY/$FILENAME
 
   FILENAME=buildbox-artifact-$1-$2
-  GOOS=$1 GOARCH=$2 go build artifact.go -o $DIRECTORY/$FILENAME
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$FILENAME artifact.go
   gzip $DIRECTORY/$FILENAME
 }
 
