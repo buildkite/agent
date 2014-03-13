@@ -2,11 +2,11 @@
 #
 # You can install the Buildbox Agent with the following:
 #
-#   bash -c "`curl -sL https://raw.github.com/buildboxhq/agent-go/master/install.sh`"
+#   bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
 #
-# For more information, see: https://github.com/buildboxhq/agent-go
+# For more information, see: https://github.com/buildboxhq/buildbox-agent
 
-COMMAND="bash -c \"\`curl -sL https://raw.github.com/buildboxhq/agent-go/master/install.sh\`\""
+COMMAND="bash -c \"\`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh\`\""
 
 set -e
 
@@ -56,7 +56,7 @@ echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
 # Download and unzip the file to the destination
 FILE=$DESTINATION/buildbox-agent
-URL="https://github.com/buildboxhq/agent-go/releases/download/v0.1-alpha/buildbox-agent-$PLATFORM-$ARCH.gz"
+URL="https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-alpha/buildbox-agent-$PLATFORM-$ARCH.gz"
 echo -e "\nDownloading $URL"
 
 if command -v wget >/dev/null
@@ -74,7 +74,7 @@ if [[ -e $DESTINATION/bootstrap.sh ]]
 then
   echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
 else
-  BOOTSTRAP_URL=https://raw.github.com/buildboxhq/agent-go/master/bootstrap-example.sh
+  BOOTSTRAP_URL=https://raw.github.com/buildboxhq/buildbox-agent/master/bootstrap-example.sh
   BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
 
   echo -e "Downloading $BOOTSTRAP_URL"
@@ -107,7 +107,7 @@ the source code and running the build script.
 
 The source code of the agent is available here:
 
-  https://github.com/buildboxhq/agent-go
+  https://github.com/buildboxhq/buildbox-agent
 
 If you have any questions or need a help getting things setup,
 please email us at: hello@buildbox.io
