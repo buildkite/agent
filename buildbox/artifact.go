@@ -22,10 +22,14 @@ type Artifact struct {
 
   // The size of the file
   FileSize int64 `json:"file_size,omitempty"`
+
+  // Where we should upload the artifact to. If nil,
+  // it will upload to Buildbox.
+  URL string `json:"url,omitempty"`
 }
 
 func (a Artifact) String() string {
-  return fmt.Sprintf("Artifact{ID: %s, Path: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d}", a.ID, a.Path, a.AbsolutePath, a.GlobPath, a.FileSize)
+  return fmt.Sprintf("Artifact{ID: %s, Path: %s, URL: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d}", a.ID, a.Path, a.URL, a.AbsolutePath, a.GlobPath, a.FileSize)
 }
 
 func (a Artifact) Update(client *Client, job *Job, artifact *Artifact) (*Artifact, error) {
@@ -57,7 +61,7 @@ func BuildArtifact(path string, absolutePath string, globPath string) (*Artifact
     return nil, err
   }
 
-  return &Artifact{"", path, absolutePath, globPath, fileInfo.Size()}, nil
+  return &Artifact{"", path, absolutePath, globPath, fileInfo.Size(), ""}, nil
 }
 
 func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {

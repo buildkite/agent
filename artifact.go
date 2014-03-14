@@ -4,6 +4,7 @@ import (
   "os"
   "fmt"
   "log"
+  "strings"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -110,6 +111,11 @@ func main() {
         destination := ""
         if len(c.Args()) > 1 {
           destination = c.Args()[1]
+
+          // Normalize the end of the string (it should have a /)
+          if !strings.HasSuffix(destination, "/") {
+            destination += "/"
+          }
         }
 
         // Set the agent options
@@ -141,6 +147,13 @@ func main() {
           log.Fatalf("Failed to collect artifacts: %s", err)
         }
 
+        // If we're using a custome destination
+        if destination != "" {
+          for _, artifact := range artifacts {
+            artifact.URL = destination + "buildbox-artifacts/" + job.ID + "/" + artifact.Path
+          }
+        }
+
         if len(artifacts) == 0 {
           log.Print("No files matched paths: %s", paths)
         } else {
@@ -150,6 +163,7 @@ func main() {
           if err != nil {
             log.Fatalf("Failed to prepare artifacts: %s", err)
           }
+
           for x, artifact := range artifacts {
             log.Printf("%d %s", x, artifact)
           }
