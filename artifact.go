@@ -157,15 +157,11 @@ func main() {
         if len(artifacts) == 0 {
           log.Print("No files matched paths: %s", paths)
         } else {
-          log.Printf("Preparting to upload %d file(s)", len(artifacts))
+          log.Printf("Uploading %d file(s)", len(artifacts))
 
-          artifacts, err := buildbox.CreateArtifacts(agent.Client, job, artifacts)
+          err := buildbox.UploadArtifacts(agent.Client, job, artifacts)
           if err != nil {
-            log.Fatalf("Failed to prepare artifacts: %s", err)
-          }
-
-          for x, artifact := range artifacts {
-            log.Printf("%d %s", x, artifact)
+            log.Fatalf("Failed to upload artifacts: %s", err)
           }
         }
       },
