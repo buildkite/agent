@@ -70,7 +70,7 @@ else
   curl -L -s -o $DESTINATION/$DOWNLOAD $URL
 fi
 
-tar -C $DESTINATION -zxvf $DESTINATION/$DOWNLOAD
+tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
 # Make sure it's exectuable
 chmod +x $DESTINATION/buildbox-agent
