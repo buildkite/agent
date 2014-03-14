@@ -5,8 +5,9 @@ import (
   "os"
   "strings"
   "log"
+  "errors"
   "path/filepath"
-  "github.com/crowdmob/goamz/s3"
+  "mime"
 )
 
 type Artifact struct {
@@ -35,6 +36,17 @@ type Artifact struct {
 
 func (a Artifact) String() string {
   return fmt.Sprintf("Artifact{ID: %s, Path: %s, URL: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d}", a.ID, a.Path, a.URL, a.AbsolutePath, a.GlobPath, a.FileSize)
+}
+
+func (a Artifact) MimeType() string {
+  extension := filepath.Ext(a.Path)
+  mimeType := mime.TypeByExtension(extension)
+
+  if mimeType != "" {
+    return mimeType
+  } else {
+    return "binary/octet-stream"
+  }
 }
 
 func (c *Client) ArtifactUpdate(job *Job, artifact Artifact) (*Artifact, error) {
@@ -99,7 +111,31 @@ func BuildArtifact(path string, absolutePath string, globPath string) (*Artifact
   return &Artifact{"", "new", path, absolutePath, globPath, fileInfo.Size(), ""}, nil
 }
 
-func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, bucket *s3.Bucket) (error) {
+func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination string) (error) {
+  var uploader Uploader
+
+  // Determine what uploader to use
+  if destination != "" {
+    if strings.HasPrefix(destination, "s3://") {
+      uploader = new (S3Uploader)
+    } else {
+      return errors.New("Unknown upload destination: " + destination)
+    }
+  } else {
+    // TODO: Buildbox form uploader
+  }
+
+  // Setup the uploader
+  err := uploader.Setup(destination)
+  if err != nil {
+    return err
+  }
+
+  // Set the URL's of the artifacts based on the uploader
+  for _, artifact := range artifacts {
+    artifact.URL = uploader.URL(artifact)
+  }
+
   // Create artifacts on buildbox
   createdArtifacts, err := client.CreateArtifacts(job, artifacts)
   if err != nil {
@@ -117,7 +153,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, bucket *s3.
     // startup up again.
     count++
     wait := make(chan string)
-    go uploadRoutine(wait, client, job, artifact, bucket)
+    go uploadRoutine(wait, client, job, artifact, uploader)
     routines = append(routines, wait)
 
     if count >= concurrency {
@@ -135,24 +171,25 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, bucket *s3.
   return nil
 }
 
-func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, bucket *s3.Bucket) {
-  state := "finsihed"
-
+func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
   // Show a nice message that we're starting to upload the file
-  log.Printf("Uploading %s -> %s\n", artifact.Path, artifact.URL)
+  if artifact.URL != "" {
+    log.Printf("Uploading %s -> %s\n", artifact.Path, artifact.URL)
+  } else {
+    log.Printf("Uploading %s\n", artifact.Path)
+  }
 
-  // Upload the artifact to S3
-  s3url := S3Url{Url: artifact.URL}
-  err := Put(bucket, s3url.Path(), artifact.AbsolutePath)
+  // Upload the artifact and then set the state depending on whether or not
+  // it passed.
+  err := uploader.Upload(&artifact)
   if err != nil {
-    log.Printf("Error uploading %s (%s)", artifact.Path, err)
-
-    // We want to mark the artifact as "error" on Buildbox
-    state = "error"
+    artifact.State = "error"
+    log.Printf("Error uploading artifact %s (%s)", artifact.Path, err)
+  } else {
+    artifact.State = "finished"
   }
 
   // Update the state of the artifact on Buildbox
-  artifact.State = state
   _, err = client.ArtifactUpdate(job, artifact)
   if err != nil {
     log.Printf("Error marking artifact %s as uploaded (%s)", err)
