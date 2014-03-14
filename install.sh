@@ -7,6 +7,7 @@
 # For more information, see: https://github.com/buildboxhq/buildbox-agent
 
 COMMAND="bash -c \"\`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh\`\""
+VERSION="0.1-beta1"
 
 set -e
 
@@ -21,7 +22,7 @@ echo -e "\033[33m
                                                 |___/\033[0m
 -- https://buildbox.io
 
-Latest Version: \033[35mv0.1-alpha\033[0m"
+Latest Version: \033[35mv$VERSION\033[0m"
 
 UNAME=`uname -sp | awk '{print tolower($0)}'`
 
@@ -56,7 +57,7 @@ echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
 # Download and unzip the file to the destination
 DOWNLOAD="buildbox-agent-$PLATFORM-$ARCH.tar.gz"
-URL="https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-alpha/$DOWNLOAD"
+URL="https://github.com/buildboxhq/buildbox-agent/releases/download/v$VERSION/$DOWNLOAD"
 echo -e "\nDownloading $URL"
 
 # Remove the download if it already exists

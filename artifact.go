@@ -61,7 +61,7 @@ func main() {
 
   app := cli.NewApp()
   app.Name = "buildbox-artifact"
-  app.Version = "0.1.alpha"
+  app.Version = buildbox.Version
 
   // Define the actions for our CLI
   app.Commands = []cli.Command{
