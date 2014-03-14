@@ -23,4 +23,10 @@ git checkout -qf "$BUILDBOX_COMMIT"
 
 echo "--- running $BUILDBOX_SCRIPT_PATH"
 
-."/$BUILDBOX_SCRIPT_PATH"
+`."/$BUILDBOX_SCRIPT_PATH"`
+EXIT_STATUS=$?
+
+echo "--- uploading artifacts"
+buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS"
+
+exit $EXIT_STATUS
