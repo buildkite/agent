@@ -5,6 +5,8 @@ import (
   "fmt"
   "log"
   "strings"
+  "github.com/crowdmob/goamz/aws"
+  "github.com/crowdmob/goamz/s3"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -109,12 +111,34 @@ func main() {
 
         // Do we have a custom destination
         destination := ""
+        var bucket *s3.Bucket
+
         if len(c.Args()) > 1 {
           destination = c.Args()[1]
 
-          // Normalize the end of the string (it should have a /)
-          if !strings.HasSuffix(destination, "/") {
-            destination += "/"
+          if strings.HasPrefix(destination, "s3://") {
+            // Normalize the end of the string (it should have a /)
+            if !strings.HasSuffix(destination, "/") {
+              destination += "/"
+            }
+
+            // Are we uploading to an S3 bucket?
+            auth, err := aws.EnvAuth()
+            if err != nil {
+              fmt.Printf("Error loading AWS credentials: %s", err)
+              os.Exit(1)
+            }
+
+            s3url := buildbox.S3Url{Url: destination}
+            bucket, err = lookupBucket(s3url.Bucket(), auth)
+
+            if err != nil {
+              fmt.Printf("Error loading AWS credentials: %s", err)
+              os.Exit(1)
+            }
+          } else {
+            fmt.Printf("Unknown destination %s", destination)
+            os.Exit(1)
           }
         }
 
@@ -150,7 +174,7 @@ func main() {
         // If we're using a custome destination
         if destination != "" {
           for _, artifact := range artifacts {
-            artifact.URL = destination + "buildbox-artifacts/" + job.ID + "/" + artifact.Path
+            artifact.URL = destination + artifact.Path
           }
         }
 
@@ -159,7 +183,7 @@ func main() {
         } else {
           log.Printf("Uploading %d file(s)", len(artifacts))
 
-          err := buildbox.UploadArtifacts(agent.Client, job, artifacts)
+          err := buildbox.UploadArtifacts(agent.Client, job, artifacts, bucket)
           if err != nil {
             log.Fatalf("Failed to upload artifacts: %s", err)
           }
@@ -175,4 +199,23 @@ func main() {
   }
 
   app.Run(os.Args)
+}
+
+func lookupBucket(bucketName string, auth aws.Auth) (*s3.Bucket, error) {
+  var bucket s3.Bucket
+
+  s3 := s3.New(auth, aws.USEast)
+  b := s3.Bucket(bucketName)
+
+  // If list return, bucket is valid in this region.
+  _, err := b.List("", "", "", 0)
+  if err == nil {
+    bucket = *b
+  } else if err.Error() == "Get : 301 response missing Location header" {
+  } else {
+    fmt.Printf("Invalid bucket.\n")
+    return nil, err
+  }
+
+  return &bucket, nil
 }
