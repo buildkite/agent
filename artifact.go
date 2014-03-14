@@ -44,11 +44,10 @@ buildbox-artifact upload "log/**/*.log" --job [job] \
 
 You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
 
-buildbox-artifact upload "log/**/*.log" --job [job] \
-                                        --agent-access-token [agent-access-token] \
-                                        --aws-secret-access-key ...\
-                                        --aws-access-id ...\
-                                        --destination s3://bucket-name/foo/bar`
+export AWS_SECRET_ACCESS_KEY=yyy
+export AWS_ACCESS_KEY_ID=xxx
+buildbox-artifact upload "log/**/*.log" s3://bucket-name/foo/bar --job [job] \
+                                                                 --agent-access-token [agent-access-token] \`
 
 var JobIdEnv = "BUILDBOX_JOB_ID"
 var JobIdDefault = "$" + JobIdEnv
@@ -105,6 +104,12 @@ func main() {
         if paths == "" {
           fmt.Printf("%s: missing upload paths\nSee '%s help upload'\n", app.Name, app.Name)
           os.Exit(1)
+        }
+
+        // Do we have a custom destination
+        destination := ""
+        if len(c.Args()) > 1 {
+          destination = c.Args()[1]
         }
 
         // Set the agent options
