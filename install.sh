@@ -55,19 +55,28 @@ fi
 echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
 # Download and unzip the file to the destination
-FILE=$DESTINATION/buildbox-agent
-URL="https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-alpha/buildbox-agent-$PLATFORM-$ARCH.gz"
+DOWNLOAD="buildbox-agent-$PLATFORM-$ARCH.tar.gz"
+URL="https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-alpha/$DOWNLOAD"
 echo -e "\nDownloading $URL"
+
+# Remove the download if it already exists
+rm -f $DESTINATION/$DOWNLOAD
 
 if command -v wget >/dev/null
 then
-  wget -qO- $URL | zcat > $FILE
+  wget -q $URL -O $DESTINATION/$DOWNLOAD
 else
-  curl -sL $URL | zcat > $FILE
+  curl -L -s -o $DESTINATION/$DOWNLOAD $URL
 fi
 
+tar -C $DESTINATION -zxvf $DESTINATION/$DOWNLOAD
+
 # Make sure it's exectuable
-chmod +x $FILE
+chmod +x $DESTINATION/buildbox-agent
+chmod +x $DESTINATION/buildbox-artifact
+
+# Clean up the download
+rm -f $DESTINATION/$DOWNLOAD
 
 # Copy the bootstrap sample and make sure it's writable
 if [[ -e $DESTINATION/bootstrap.sh ]]
@@ -83,7 +92,7 @@ else
   then
     wget -q $BOOTSTRAP_URL -O $BOOTSTRAP_DESTINATION
   else
-    curl -s -o $BOOTSTRAP_DESTINATION $BOOTSTRAP_URL
+    curl -L -s -o $BOOTSTRAP_DESTINATION $BOOTSTRAP_URL
   fi
 
   chmod +x $DESTINATION/bootstrap.sh
