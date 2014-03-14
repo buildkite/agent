@@ -32,6 +32,28 @@ type Artifact struct {
   // Where we should upload the artifact to. If nil,
   // it will upload to Buildbox.
   URL string `json:"url,omitempty"`
+
+  // When uploading artifacts to Buildbox, the API will return some
+  // extra information on how/where to upload the file.
+  Uploader struct {
+    // Where/how to upload the file
+    Action struct {
+      // What the host to post to
+      URL string `json:"url,omitempty"`
+
+      // POST, PUT, GET, etc.
+      Method string
+
+      // What's the path at the URL we need to upload to
+      Path string
+
+      // What's the key of the file input named?
+      FileInput string `json:"file_input"`
+    }
+
+    // Data that should be sent along with the upload
+    Data map[string]string
+  }
 }
 
 func (a Artifact) String() string {
@@ -108,7 +130,15 @@ func BuildArtifact(path string, absolutePath string, globPath string) (*Artifact
     return nil, err
   }
 
-  return &Artifact{"", "new", path, absolutePath, globPath, fileInfo.Size(), ""}, nil
+  // Create our new artifact data structure
+  artifact := new (Artifact)
+  artifact.State = "new"
+  artifact.Path = path
+  artifact.AbsolutePath = absolutePath
+  artifact.GlobPath = globPath
+  artifact.FileSize = fileInfo.Size()
+
+  return artifact, nil
 }
 
 func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination string) (error) {
@@ -122,7 +152,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
       return errors.New("Unknown upload destination: " + destination)
     }
   } else {
-    // TODO: Buildbox form uploader
+    uploader = new (FormUploader)
   }
 
   // Setup the uploader
