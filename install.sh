@@ -74,7 +74,7 @@ if [[ -e $DESTINATION/bootstrap.sh ]]
 then
   echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
 else
-  BOOTSTRAP_URL=https://raw.github.com/buildboxhq/buildbox-agent/master/bootstrap.sh
+  BOOTSTRAP_URL=https://raw.github.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh
   BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
 
   echo -e "Downloading $BOOTSTRAP_URL"
