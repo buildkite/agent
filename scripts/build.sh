@@ -9,13 +9,23 @@ fi
 mkdir -p "$DIRECTORY"
 
 function build {
-  FILENAME=buildbox-agent-$1-$2
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$FILENAME agent.go
-  gzip $DIRECTORY/$FILENAME
+  # Build the agent binary
+  AGENT_FILENAME=buildbox-agent
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$AGENT_FILENAME agent.go
 
-  FILENAME=buildbox-artifact-$1-$2
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$FILENAME artifact.go
-  gzip $DIRECTORY/$FILENAME
+  # Build the artifact binary
+  ARTIFACT_FILENAME=buildbox-artifact
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$ARTIFACT_FILENAME artifact.go
+
+  FILENAME=buildbox-agent-$1-$2
+
+  # Tar up the binaries
+  cd $DIRECTORY
+  tar cfvz $FILENAME.tar.gz $AGENT_FILENAME $ARTIFACT_FILENAME
+  cd ..
+
+  # Cleanup after the build
+  rm $DIRECTORY/$AGENT_FILENAME $DIRECTORY/$ARTIFACT_FILENAME
 }
 
 build "linux" "amd64"
