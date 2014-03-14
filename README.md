@@ -1,4 +1,4 @@
-# agent-go
+# buildbox-agent
 
 The new Buildbox Agent written in Go (Golang)
 
@@ -12,7 +12,7 @@ This script is responsible for creating the build directory, cloning the repo, a
 
 Install the agent
 
-    $ bash -c "`curl -sL https://raw.github.com/buildboxhq/agent-go/master/install.sh`"
+    $ bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
 
 The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 
@@ -40,9 +40,9 @@ export PATH="$HOME/Code/go/bin:$PATH"
 go get github.com/kr/godep
 
 # Checkout the code
-mkdir -p $GOPATH/src/github.com/buildboxhq/agent-go
-git clone git@github.com:buildboxhq/agent-go.git $GOPATH/src/github.com/buildboxhq/agent-go
-cd $GOPATH/src/github.com/buildboxhq/agent-go
+mkdir -p $GOPATH/src/github.com/buildboxhq/buildbox-agent
+git clone git@github.com:buildboxhq/buildbox-agent.git $GOPATH/src/github.com/buildboxhq/buildbox-agent
+cd $GOPATH/src/github.com/buildboxhq/buildbox-agent
 godep get
 go run main.go
 ```

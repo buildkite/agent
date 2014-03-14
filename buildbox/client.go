@@ -15,7 +15,7 @@ import (
 
 const (
   DefaultAPIURL = "https://agent.buildbox.io/v1"
-  DefaultUserAgent = "buildbox-agent-go/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+  DefaultUserAgent = "buildbox-agent/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 )
 
 type Client struct {
