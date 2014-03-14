@@ -77,7 +77,7 @@ func (a Agent) Start() {
     }
 
     // Sleep then check again later.
-    log.Printf("Sleeping for %i seconds", idleSeconds)
+    log.Printf("Sleeping for %d seconds", idleSeconds)
     time.Sleep(sleepTime)
   }
 }
