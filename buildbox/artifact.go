@@ -18,16 +18,16 @@ type Artifact struct {
   State string `json:"state,omitempty"`
 
   // The relative path to the file
-  Path string `json:"path,omitempty"`
+  Path string `json:"path"`
 
   // The absolute path path to the file
-  AbsolutePath string `json:"absolute_path,omitempty"`
+  AbsolutePath string `json:"absolute_path"`
 
   // The glob path that was used to identify this file
-  GlobPath string `json:"glob_path,omitempty"`
+  GlobPath string `json:"glob_path"`
 
   // The size of the file
-  FileSize int64 `json:"file_size,omitempty"`
+  FileSize int64 `json:"file_size"`
 
   // Where we should upload the artifact to. If nil,
   // it will upload to Buildbox.
@@ -93,7 +93,7 @@ func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, er
   globs := strings.Split(artifactPaths, ";")
 
   for _, glob := range globs {
-    files, err := filepath.Glob(glob)
+    files, err := filepath.Glob(strings.TrimSpace(glob))
     if err != nil {
       return nil, err
     }
@@ -203,11 +203,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
   // Show a nice message that we're starting to upload the file
-  if artifact.URL != "" {
-    log.Printf("Uploading %s -> %s\n", artifact.Path, artifact.URL)
-  } else {
-    log.Printf("Uploading %s\n", artifact.Path)
-  }
+  log.Printf("Uploading %s\n", artifact.Path)
 
   // Upload the artifact and then set the state depending on whether or not
   // it passed.

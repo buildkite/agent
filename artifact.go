@@ -144,7 +144,7 @@ func main() {
         if len(artifacts) == 0 {
           log.Print("No files matched paths: %s", paths)
         } else {
-          log.Printf("Uploading %d file(s)", len(artifacts))
+          log.Printf("Uploading %d files that match \"%s\"", len(artifacts), paths)
 
           err := buildbox.UploadArtifacts(agent.Client, job, artifacts, destination)
           if err != nil {

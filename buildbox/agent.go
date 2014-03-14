@@ -61,7 +61,6 @@ func (a Agent) Start() {
     // The agent will run all the jobs in the queue, and return
     // when there's nothing left to do.
     for {
-      log.Printf("Checking for job")
       job, err := a.Client.JobNext()
       if err != nil {
         log.Printf("Failed to get job (%s)", err)
@@ -77,7 +76,6 @@ func (a Agent) Start() {
     }
 
     // Sleep then check again later.
-    log.Printf("Sleeping for %d seconds", idleSeconds)
     time.Sleep(sleepTime)
   }
 }
