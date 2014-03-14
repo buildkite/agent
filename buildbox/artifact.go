@@ -13,6 +13,9 @@ type Artifact struct {
   // The ID of the artifact
   ID string `json:"id,omitempty"`
 
+  // The current state of the artifact
+  State string `json:"state,omitempty"`
+
   // The relative path to the file
   Path string `json:"path,omitempty"`
 
@@ -34,13 +37,13 @@ func (a Artifact) String() string {
   return fmt.Sprintf("Artifact{ID: %s, Path: %s, URL: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d}", a.ID, a.Path, a.URL, a.AbsolutePath, a.GlobPath, a.FileSize)
 }
 
-func (a Artifact) Update(client *Client, job *Job, artifact *Artifact) (*Artifact, error) {
+func (c *Client) ArtifactUpdate(job *Job, artifact Artifact) (*Artifact, error) {
   // Create a new instance of a artifact that will be populated
   // with the updated data by the client
   var updatedArtifact Artifact
 
   // Return the job.
-  return &updatedArtifact, client.Put(&updatedArtifact, "jobs/" + job.ID + "/artifacts/" + artifact.ID, artifact)
+  return &updatedArtifact, c.Put(&updatedArtifact, "jobs/" + job.ID + "/artifacts/" + artifact.ID, artifact)
 }
 
 func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {
@@ -84,7 +87,7 @@ func BuildArtifact(path string, absolutePath string, globPath string) (*Artifact
     return nil, err
   }
 
-  return &Artifact{"", path, absolutePath, globPath, fileInfo.Size(), ""}, nil
+  return &Artifact{"", "new", path, absolutePath, globPath, fileInfo.Size(), ""}, nil
 }
 
 func CreateArtifacts(client Client, job *Job, artifacts []*Artifact) ([]Artifact, error) {
@@ -106,14 +109,14 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact) (error) {
 
   count := 0
   for _, artifact := range createdArtifacts {
-    log.Printf("Uploading `%s` to `%s`\n", artifact.Path, artifact.URL)
+    log.Printf("Uploading %s -> %s\n", artifact.Path, artifact.URL)
 
     // Create a channel and apend it to the routines array. Once we've hit our
     // concurrency limit, we'll block until one finishes, then this loop will
     // startup up again.
     count++
     wait := make(chan string)
-    go uploadRoutine(wait, artifact)
+    go uploadRoutine(wait, client, job, artifact)
     routines = append(routines, wait)
 
     if count >= concurrency {
@@ -125,14 +128,27 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact) (error) {
     }
   }
 
+  // Wait for any other routines to finish
+  waitForRoutines(routines)
+
   return nil
 }
 
-func uploadRoutine(quit chan string, artifact Artifact) {
-  idleSeconds := 5
+func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact) {
+
+  // Update the state of the artifact
+  artifact.State = "finished"
+  _, err := client.ArtifactUpdate(job, artifact)
+  if err != nil {
+    log.Printf("Error marking artifact as uploaded: %s", err)
+  }
+
+  idleSeconds := 0
   sleepTime := time.Duration(idleSeconds * 1000) * time.Millisecond
   time.Sleep(sleepTime)
+
   quit <- "finished"
+
 }
 
 func waitForRoutines(routines []chan string) {
