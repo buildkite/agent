@@ -10,10 +10,10 @@ This script is responsible for creating the build directory, cloning the repo, a
 
 ### Installation
 
-Install the agent
+Installing the agent is super easy. Run this on your command line:
 
 ```bash
-$ bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
+bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
 The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
@@ -21,13 +21,13 @@ The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 Once installed, you should now be able to run the agent
 
 ```bash
-$ buildbox-agent start --access-token token123
+buildbox-agent start --access-token token123
 ```
 
 For more help with the command line interface
 
 ```bash
-$ buildbox-agent --help
+buildbox-agent --help
 ```
 
 ### Artifacts
