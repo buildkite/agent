@@ -51,7 +51,7 @@ then
   echo "--- uploading artifacts"
   echo -e "$BUILDBOX_PROMPT buildbox-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\""
 
-  # If you want to upload artifacts to your own server, uncomment the below
+  # If you want to upload artifacts to your own server, uncomment the lines below
   # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
   # own bucket.
   # export AWS_SECRET_ACCESS_KEY=yyy
