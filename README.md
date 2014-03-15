@@ -1,7 +1,5 @@
 # buildbox-agent
 
-The Buildbox Agent written in Go
-
 ### What is it?
 
 The Buildbox Agent is responsible for running jobs on your own server.
