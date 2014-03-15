@@ -36,12 +36,11 @@ buildbox-agent --help
 
 ### Upgrading from the Ruby agent
 
-The agent was previously writtenin Ruby, however due to constant installation and performance issues, we've switched to something
-a bit more light-weight and universal.
+The Buildbox agent was previously writtenin Ruby, however due to installation and performance issues, we've switched to something
+a bit more light-weight and universal. Golang fit the bill the best with it's support for compiling to single binaries.
 
-The biggest change is that you no longer define your build scripts on Buildbox. You instead, should write thise scripts inside
-your projects, and call them from the agent. So first thing you need to do, is create a file in your project, for example,
-`scripts/buildbox.sh`, and fill it with something like this:
+The biggest change you'll notice is that you no longer define your build scripts on Buildbox. You instead, should write these scripts inside
+your projects. The first thing you'll need to do, is create a file in your project (for example `scripts/buildbox.sh`) and fill it with something like this:
 
 ```bash
 #!/bin/bash
@@ -57,8 +56,8 @@ echo '--- running specs'
 ```
 
 You'll obviously want to edit it to match your own build configuration. You should already have something like this in your
-existing build scripts on Buildbox. Once you've created this file, commit it to your source control. After this, edit your
-project on Buildbox and you'll notice a new field "Script Path". Enter the path to your build script (here we used `scripts/buildbox.sh`).
+existing build scripts on Buildbox. Once you've created this file, commit it to your source control. Next, edit your
+project on Buildbox add the path to your new build script to the "Script Path" field (here we used `scripts/buildbox.sh`).
 
 Now you can install the new agent and trigger some builds.
 
