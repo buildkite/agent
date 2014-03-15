@@ -36,11 +36,13 @@ buildbox-agent --help
 
 ### Upgrading from the Ruby agent
 
-The Buildbox agent was previously writtenin Ruby, however due to installation and performance issues, we've switched to something
+The Buildbox agent was previously written in Ruby, however due to installation and performance issues, we've switched to something
 a bit more light-weight and universal. Golang fit the bill the best with it's support for compiling to single binaries.
 
-The biggest change you'll notice is that you no longer define your build scripts on Buildbox. You instead, should write these scripts inside
-your projects. The first thing you'll need to do, is create a file in your project (for example `scripts/buildbox.sh`) and fill it with something like this:
+The biggest change you'll notice is that you no longer define your build scripts on Buildbox. You instead should write these scripts inside
+your projects source control.
+
+To migrate to the new agent, the first step is creating a file in your project (for example `scripts/buildbox.sh`) and fill it with something like this:
 
 ```bash
 #!/bin/bash
