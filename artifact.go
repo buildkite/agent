@@ -142,7 +142,7 @@ func main() {
         }
 
         if len(artifacts) == 0 {
-          log.Print("No files matched paths: %s", paths)
+          log.Printf("No files matched paths: %s", paths)
         } else {
           log.Printf("Uploading %d files that match \"%s\"", len(artifacts), paths)
 
