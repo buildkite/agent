@@ -100,7 +100,7 @@ mkdir -p $GOPATH/src/github.com/buildboxhq/buildbox-agent
 git clone git@github.com:buildboxhq/buildbox-agent.git $GOPATH/src/github.com/buildboxhq/buildbox-agent
 cd $GOPATH/src/github.com/buildboxhq/buildbox-agent
 godep get
-go run main.go
+go run agent.go
 ```
 
 ### Windows Support
