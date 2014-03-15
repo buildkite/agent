@@ -35,7 +35,7 @@ $ buildbox-agent --help
 Uploading artifacts is handling by a seperate tool `buildbox-artifact` which is bundled with the agent. You can see
 it's general usage in `templates/bootstrap.sh`.
 
-If you'd like to host your own assets on Amazon S3, edit your `bootstrap.sh` file, and replace the `buildbox-artifact`
+If you'd like to upload artifacts to your own Amazon S3 bucket, edit your `bootstrap.sh` file, and replace the `buildbox-artifact`
 call with something like this:
 
 ```bash
