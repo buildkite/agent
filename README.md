@@ -38,7 +38,7 @@ it's general usage in `templates/bootstrap.sh`.
 If you'd like to host your own assets on Amazon S3, edit your `bootstrap.sh` file, and replace the `buildbox-artifact`
 call with something like this:
 
-``bash
+```bash
 export AWS_SECRET_ACCESS_KEY=yyy
 export AWS_ACCESS_KEY_ID=xxx
 $BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar --url $BUILDBOX_AGENT_API_URL
