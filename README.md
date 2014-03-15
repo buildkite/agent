@@ -59,8 +59,8 @@ echo '--- running specs'
 ```
 
 You'll obviously want to edit it to match your own build configuration. You should already have something like this in your
-existing build scripts on Buildbox. Once you've created this file, commit it to your source control. Next, edit your
-project on Buildbox add the path to your new build script to the "Script Path" field (here we used `scripts/buildbox.sh`).
+existing build scripts on Buildbox. Once you've created this file, commit it to your source control and push. Next, go to your
+Project Settings on Buildbox add the path to your new build script to the "Script Path" field (here we used `scripts/buildbox.sh`).
 
 Now you can install the new agent and trigger some builds.
 
