@@ -12,17 +12,37 @@ This script is responsible for creating the build directory, cloning the repo, a
 
 Install the agent
 
-    $ bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
+```bash
+$ bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
+```
 
 The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 
 Once installed, you should now be able to run the agent
 
-    $ buildbox-agent start --access-token token123
+```bash
+$ buildbox-agent start --access-token token123
+```
 
 For more help with the command line interface
 
-    $ buildbox-agent help
+```bash
+$ buildbox-agent --help
+```
+
+### Artifacts
+
+Uploading artifacts is handling by a seperate tool `buildbox-artifact` which is bundled with the agent. You can see
+it's general usage in `templates/bootstrap.sh`.
+
+If you'd like to host your own assets on Amazon S3, edit your `bootstrap.sh` file, and replace the `buildbox-artifact`
+call with something like this:
+
+``bash
+export AWS_SECRET_ACCESS_KEY=yyy
+export AWS_ACCESS_KEY_ID=xxx
+$BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar --url $BUILDBOX_AGENT_API_URL
+```
 
 ### Development
 
