@@ -44,6 +44,7 @@ your projects. The first thing you'll need to do, is create a file in your proje
 
 ```bash
 #!/bin/bash
+set -e # exit if any command fails
 
 echo '--- bundling'
 bundle install
