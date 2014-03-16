@@ -76,7 +76,7 @@ call with something like this:
 ```bash
 export AWS_SECRET_ACCESS_KEY=yyy
 export AWS_ACCESS_KEY_ID=xxx
-$BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar --url $BUILDBOX_AGENT_API_URL
+buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar
 ```
 
 If you upload artifacts to your own S3 Bucket, you can further secure your artifacts by [Restricting Access to Specific IP Addresses](https://docs.aws.amazon.com/AmazonS3/latest/dev/AccessPolicyLanguage_UseCases_s3_a.html)
