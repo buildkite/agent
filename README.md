@@ -81,6 +81,10 @@ buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar
 
 If you upload artifacts to your own S3 Bucket, you can further secure your artifacts by [Restricting Access to Specific IP Addresses](https://docs.aws.amazon.com/AmazonS3/latest/dev/AccessPolicyLanguage_UseCases_s3_a.html)
 
+### Windows Support
+
+Windows support is coming soon. In the meantime, you can use our [ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
+
 ### Development
 
 Some basic instructions on setting up your Go environment and the codebase for running.
@@ -103,10 +107,6 @@ cd $GOPATH/src/github.com/buildboxhq/buildbox-agent
 godep get
 go run agent.go
 ```
-
-### Windows Support
-
-Windows support is coming soon. In the meantime, you can use our [ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
 
 ### Contributing
 
