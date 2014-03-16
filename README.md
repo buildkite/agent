@@ -135,7 +135,24 @@ builds get run on your servers.
 
 ### Running in the background
 
-There are a few ways to run the Buildbox agent in the background.
+There are a few ways to run the Buildbox agent in the background. One is via `upstart` and the other via `screen`.
+
+#### Using `upstart`
+
+Upstart is a process monitoring tool built into Ubuntu. You can use it to run the `buildbox-agent` process. The benefit of using
+upstart is that it will restart the process when you restart your server.
+
+1. Download our upstart template and save it to: `/etc/init/buildbox-agent.conf`
+
+   ```bash
+   wget -q https://raw.github.com/buildboxhq/buildbox-agent/master/templates/buildbox-agent.conf -O /etc/init/buildbox-agent.conf
+   ```
+
+2. Edit the file and replace `ubuntu` with the user you'd like to run the builds as.
+
+3. Type `sudo service buildbox-agent start` when you're ready to start the process.
+
+4. Logs will be available here: `/var/log/upstart/buildbox-agent.log`
 
 #### Using `screen`
 
@@ -169,7 +186,7 @@ You can read more about how screen works over at the [Screen User's Manual](http
 
 ### Windows Support
 
-Windows support is coming soon. In the meantime, you can use our [ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
+Windows support is coming soon. In the meantime, you can use our [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
 
 ### Development
 
