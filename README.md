@@ -89,7 +89,7 @@ Here we'll show you how to manually install the buildbox agent.
    mkdir -p ~/.buildbox
    ```
 
-2. Download the binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.1-beta1 for a list for binaries.
+2. Download the correct binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.1-beta1 for a list for binaries.
 
    ```bash
    wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-beta1/buildbox-agent-linux-amd64.tar.gz
@@ -115,7 +115,22 @@ Here we'll show you how to manually install the buildbox agent.
 
 ### Customizing bootstrap.sh
 
-You can think of the `bootstrap.sh` file as a pre-script for your build.
+You can think of the `bootstrap.sh` file as a pre-script for your build. The template that we provide will checkout
+a Git project, and run your build script - but it can do what ever you like. If you don't use Git, you can edit the script
+to use what ever version control software you like.
+
+You can also use `bootstrap.sh` to control what repositores are checked out on your CI server. For example, you could
+add something like this to the top of your `bootstrap.sh` file:
+
+```bash
+if [ "$BUILDBOX_REPO" != "http://github.com/my/project" ]
+then
+  echo "Unrecognised repo: $BUILDBOX_REPO"
+fi
+```
+
+The benefit of the `bootstrap.sh` is that it's written in bash. You can change it how ever you like and customize how
+builds get run on your servers.
 
 ### Windows Support
 
