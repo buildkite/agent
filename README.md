@@ -14,6 +14,8 @@ Installing the agent is super easy. All you need to do is run this on your comma
 bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
+If you'd prefer not to run this install script, you can read the [manual installation guide]()
+
 The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 
 Once installed, you should now be able to run the agent
@@ -59,7 +61,7 @@ You'll obviously want to edit it to match your own build configuration. You shou
 existing build scripts on Buildbox. Once you've created this file, commit it to your source control and push. Next, go to your
 Project Settings on Buildbox and update the "Script Path" field with the path to your new build script (here we used `scripts/buildbox.sh`).
 
-Now you can install the new agent and trigger some builds.
+Now you can install the new agent and trigger some builds. You can use your exising agent tokens with the new agents.
 
 ### Artifacts
 
@@ -76,6 +78,14 @@ buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar
 ```
 
 If you upload artifacts to your own S3 Bucket, you can further secure your artifacts by [Restricting Access to Specific IP Addresses](https://docs.aws.amazon.com/AmazonS3/latest/dev/AccessPolicyLanguage_UseCases_s3_a.html)
+
+### Manual Installation
+
+TODO
+
+### Customizing bootstrap.sh
+
+TODO
 
 ### Windows Support
 
