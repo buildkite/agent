@@ -25,7 +25,8 @@ Once installed, you should now be able to run the agent
 ```bash
 buildbox-agent start --access-token token123
 # or
-BUILDBOX_AGENT_ACCESS_TOKEN=token123 buildbox-agent start
+export BUILDBOX_AGENT_ACCESS_TOKEN=token123
+buildbox-agent start
 ```
 
 For more help with the command line interface
