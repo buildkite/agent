@@ -1,7 +1,5 @@
 # buildbox-agent
 
-### What is it?
-
 The Buildbox Agent is responsible for running jobs on your own server.
 
 ### How does it work?
