@@ -99,9 +99,11 @@ else
   chmod +x $DESTINATION/bootstrap.sh
 fi
 
-echo -e "\n\033[32mSuccessfully installed to: $FILE\033[0m
+echo -e "\n\033[32mSuccessfully installed!\033[0m
 
-Please add $DESTINATION to your \$PATH
+You have to add $DESTINATION to your \$PATH
+
+  echo 'export PATH="$DESTINATION:$\PATH"' >> ~/.bash_profile
 
 Once you've done that, you'll be able to run the agent like so:
 
