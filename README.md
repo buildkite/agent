@@ -64,7 +64,7 @@ Now you can install the new agent and trigger some builds. You can use your exis
 
 ### Artifacts
 
-Uploading artifacts is handling by a seperate tool `buildbox-artifact` which is bundled with the agent. You can see
+Uploading artifacts is handled by a seperate tool `buildbox-artifact` which is bundled with the agent. You can see
 it's general usage in `templates/bootstrap.sh`.
 
 If you'd like to upload artifacts to your own Amazon S3 bucket, edit your `bootstrap.sh` file, and replace the `buildbox-artifact`
