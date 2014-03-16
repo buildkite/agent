@@ -2,8 +2,6 @@
 
 The Buildbox Agent is responsible for running jobs on your own server.
 
-### How does it work?
-
 The agent polls Buildbox looking for work. When a new job is ready to run, the agent will run the `bootstrap.sh` script with all the environment variables required to run the job.
 
 This script is responsible for creating the build directory, cloning the repo, running the build script, and uploading artifacts.
