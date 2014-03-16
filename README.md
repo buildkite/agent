@@ -88,10 +88,10 @@ Here we'll show you how to manually install the buildbox agent.
    mkdir -p ~/.buildbox
    ```
 
-2. Download the correct binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.1-beta1 for a list for binaries.
+2. Download the correct binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.1-beta.2 for a list for binaries.
 
    ```bash
-   wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-beta1/buildbox-agent-linux-amd64.tar.gz
+   wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-beta.2/buildbox-agent-linux-amd64.tar.gz
    ```
 
 3. Extract the tar. This should extract `buildbox-agent` and `buildbox-artifact` to the `~/.buildbox` folder.
