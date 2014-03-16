@@ -53,6 +53,9 @@ buildbox-agent run [job-id] --access-token [access-token]`
 
 var BootstrapScriptDefault = "$HOME/.buildbox/bootstrap.sh"
 
+var AgentAccessTokenEnv = "BUILDBOX_AGENT_ACCESS_TOKEN"
+var AgentAccessTokenDefault = "$" + AgentAccessTokenEnv
+
 func main() {
   cli.AppHelpTemplate = AppHelpTemplate
   cli.CommandHelpTemplate = CommandHelpTemplate
@@ -68,7 +71,7 @@ func main() {
       Usage: "Starts the Buildbox agent",
       Description: StartHelpDescription,
       Flags: []cli.Flag {
-        cli.StringFlag{"access-token", "", "The access token used to identify the agent."},
+        cli.StringFlag{"access-token", AgentAccessTokenDefault, "The access token used to identify the agent."},
         cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
         cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
         cli.BoolFlag{"debug", "Enable debug mode."},
@@ -119,8 +122,15 @@ func main() {
 }
 
 func setupAgentFromCli(c *cli.Context, command string) buildbox.Agent {
-  if c.String("access-token") == "" {
-    fmt.Printf("buildbox-agent: missing access token\nSee 'buildbox-agent help %s'\n", command)
+  agentAccessToken := c.String("access-token")
+
+  // Should we look to the environment for the agent access token?
+  if agentAccessToken == AgentAccessTokenDefault {
+    agentAccessToken = os.Getenv(AgentAccessTokenEnv)
+  }
+
+  if agentAccessToken == "" {
+    fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox-agent start --help'")
     os.Exit(1)
   }
 
@@ -147,7 +157,7 @@ func setupAgentFromCli(c *cli.Context, command string) buildbox.Agent {
   agent.BootstrapScript = bootstrapScript
 
   // Client specific options
-  agent.Client.AgentAccessToken = c.String("access-token")
+  agent.Client.AgentAccessToken = agentAccessToken
   agent.Client.URL = c.String("url")
   agent.Client.Debug = agent.Debug
 
