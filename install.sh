@@ -101,9 +101,11 @@ fi
 
 echo -e "\n\033[32mSuccessfully installed to: $FILE\033[0m
 
-You can now start the agent like so:
+Please add $DESTINATION to your \$PATH
 
-  $DESTINATION/buildbox-agent start --access-token token123
+Once you've done that, you'll be able to run the agent like so:
+
+  buildbox-agent start --access-token token123
 
 You can find your agent's Access Token on your Account Settings
 page under \"Agents\".
@@ -122,4 +124,6 @@ The source code of the agent is available here:
 If you have any questions or need a help getting things setup,
 please email us at: hello@buildbox.io
 
-Happy Building!"
+Happy Building!
+
+<3 Buildbox"

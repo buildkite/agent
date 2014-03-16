@@ -1,6 +1,6 @@
 # buildbox-agent
 
-The Buildbox Agent is responsible for running jobs on your own server.
+The Buildbox Agent is responsible for running jobs on your own CI server.
 
 The agent polls Buildbox looking for work. When a new job is ready to run, the agent will run the `bootstrap.sh` script with all the environment variables required to run the job.
 
@@ -8,7 +8,7 @@ This script is responsible for creating the build directory, cloning the repo, r
 
 ### Installation
 
-Installing the agent is super easy. All you need to do is run this on your command line:
+Installing the agent is super easy. All you need to do is run this on your CI server:
 
 ```bash
 bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
@@ -16,7 +16,7 @@ bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/insta
 
 If you'd prefer not to run this install script, you can read the [manual installation guide](https://github.com/buildboxhq/buildbox-agent#manual-installation)
 
-The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
+By default, it sets up a `~/.buildbox` folder. Inside this folder, is the `bootstrap.sh` file, and 2 binaries `buildbox-agent` and `buildbox-artifact`.
 
 Once installed, you should now be able to run the agent
 
@@ -38,10 +38,9 @@ buildbox-agent --help
 The Buildbox agent was previously written [in Ruby](https://github.com/buildboxhq/buildbox-agent-ruby), however due to installation and performance issues, we've switched to something
 a bit more light-weight and universal. Golang fit the bill the best with it's support for compiling to single binaries.
 
-The biggest change you'll notice is that you no longer define your build scripts on Buildbox. You instead should write these scripts inside
-your projects source control.
+The biggest change you'll notice is that you no longer define your build scripts on Buildbox. You instead should write these scripts and save them to your projects source control.
 
-To migrate to the new agent, the first step is creating a file in your project (for example `scripts/buildbox.sh`) and fill it with something like this:
+To migrate to the new agent, the first step is creating a file in your repository (for example `scripts/buildbox.sh`) and fill it with something like this:
 
 ```bash
 #!/bin/bash
@@ -61,7 +60,7 @@ You'll obviously want to edit it to match your own build configuration. You shou
 existing build scripts on Buildbox. Once you've created this file, commit it to your source control and push. Next, go to your
 Project Settings on Buildbox and update the "Script Path" field with the path to your new build script (here we used `scripts/buildbox.sh`).
 
-Now you can install the new agent and trigger some builds. You can use your exising agent tokens with the new agents.
+Now you can install the new agent and trigger some builds. You can use your exising agent access tokens with the new agents.
 
 ### Artifacts
 
@@ -134,8 +133,6 @@ The benefit of the `bootstrap.sh` is that it's written in bash. You can change i
 builds get run on your servers.
 
 ### Running in the background
-
-There are a few ways to run the Buildbox agent in the background. One is via `upstart` and the other via `screen`.
 
 #### Using `upstart`
 

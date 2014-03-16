@@ -36,8 +36,14 @@ buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
 echo "--- running $BUILDBOX_SCRIPT_PATH"
 
-."/$BUILDBOX_SCRIPT_PATH"
-EXIT_STATUS=$?
+if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
+then
+  echo "ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script."
+  exit 1
+else
+  ."/$BUILDBOX_SCRIPT_PATH"
+  EXIT_STATUS=$?
+fi
 
 if [ "$BUILDBOX_ARTIFACT_PATHS" != "" ]
 then
