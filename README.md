@@ -133,6 +133,40 @@ fi
 The benefit of the `bootstrap.sh` is that it's written in bash. You can change it how ever you like and customize how
 builds get run on your servers.
 
+### Running in the background
+
+There are a few ways to run the Buildbox agent in the background.
+
+#### Using `screen`
+
+1. The first step is installing screen
+
+   ```bash
+   sudo apt-get install screen
+   ```
+
+2. Then load up screen
+
+   ```bash
+   screen
+   ```
+
+3. Once you're in a new screen, start the `buildbox-agent` process
+
+  ```bash
+  buildbox-agent start --access-token token1234
+  ```
+
+4. Now that it's started, you can exit out of the screen by hitting `Ctrl-a` then `d` on your keyboard.
+
+5. To resume the screen, type:
+
+   ```bash
+   screen -r
+   ```
+
+You can read more about how screen works over at the [Screen User's Manual](http://www.gnu.org/software/screen/manual/screen.html)
+
 ### Windows Support
 
 Windows support is coming soon. In the meantime, you can use our [ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
