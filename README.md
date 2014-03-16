@@ -14,7 +14,7 @@ Installing the agent is super easy. All you need to do is run this on your comma
 bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
-If you'd prefer not to run this install script, you can read the [manual installation guide]()
+If you'd prefer not to run this install script, you can read the [manual installation guide](https://github.com/buildboxhq/buildbox-agent#manual-installation)
 
 The bootstrap script is by default installed to: `$HOME/.buildbox/bootstrap.sh`
 
@@ -81,11 +81,41 @@ If you upload artifacts to your own S3 Bucket, you can further secure your artif
 
 ### Manual Installation
 
-TODO
+Here we'll show you how to manually install the buildbox agent.
+
+1. Create a folder at `~/.buildbox`
+
+   ```bash
+   mkdir -p ~/.buildbox
+   ```
+
+2. Download the binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.1-beta1 for a list for binaries.
+
+   ```bash
+   wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.1-beta1/buildbox-agent-linux-amd64.tar.gz
+   ```
+
+3. Extract the tar
+
+   ```bash
+   tar -C ~/.buildbox -zvxf $DESTINATION/$DOWNLOAD
+   ```
+
+4. Download our example `bootstrap.sh` and put it in `~/.buildbox`
+
+   ```bash
+   wget -q https://raw.github.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
+   ```
+
+5. Add `~/.buildbox` to your `$PATH` so you can access the binaries.
+
+   ```bash
+   echo 'export PATH="$HOME/.buildbox:$PATH"' >> ~/.bash_profile
+   ```
 
 ### Customizing bootstrap.sh
 
-TODO
+You can think of the `bootstrap.sh` file as a pre-script for your build.
 
 ### Windows Support
 
