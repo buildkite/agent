@@ -32,3 +32,5 @@ build "linux" "amd64"
 build "linux" "386"
 build "darwin" "386"
 build "darwin" "amd64"
+
+open pkg
