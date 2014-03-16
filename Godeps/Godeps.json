@@ -17,8 +17,8 @@
 		},
 		{
 			"ImportPath": "github.com/kr/pty",
-			"Comment": "release.r56-14-g3b1f648",
-			"Rev": "3b1f6487b7fc649d5f146df04e623bd55ba1bf7f"
+			"Comment": "release.r56-18-g88e4fdb",
+			"Rev": "88e4fdb5b466ac228f35d9f75b315726bf09b2d1"
 		}
 	]
 }
