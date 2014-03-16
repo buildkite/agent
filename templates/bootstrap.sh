@@ -38,7 +38,7 @@ echo "--- running $BUILDBOX_SCRIPT_PATH"
 
 if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
 then
-  echo "ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script."
+  echo "ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script"
   exit 1
 else
   ."/$BUILDBOX_SCRIPT_PATH"
