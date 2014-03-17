@@ -46,8 +46,8 @@ You can also upload directy to Amazon S3 if you'd like to host your own artifact
 
 export AWS_SECRET_ACCESS_KEY=yyy
 export AWS_ACCESS_KEY_ID=xxx
-buildbox-artifact upload "log/**/*.log" s3://bucket-name/foo/bar --job [job] \
-                                                                 --agent-access-token [agent-access-token]`
+buildbox-artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID --job [job] \
+                                                                                     --agent-access-token [agent-access-token]`
 
 var JobIdEnv = "BUILDBOX_JOB_ID"
 var JobIdDefault = "$" + JobIdEnv

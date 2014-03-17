@@ -99,15 +99,11 @@ else
   chmod +x $DESTINATION/bootstrap.sh
 fi
 
-echo -e "\n\033[32mSuccessfully installed!\033[0m
+echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
-You have to add $DESTINATION to your \$PATH
+You can now run the Buildbox agent like so:
 
-  echo 'export PATH="$DESTINATION:$\PATH"' >> ~/.bash_profile
-
-Once you've done that, you'll be able to run the agent like so:
-
-  buildbox-agent start --access-token token123
+  $DESTINATION/buildbox-agent start --access-token token123
 
 You can find your agent's Access Token on your Account Settings
 page under \"Agents\".

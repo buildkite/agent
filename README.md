@@ -67,14 +67,18 @@ Now you can install the new agent and trigger some builds. You can use your exis
 Uploading artifacts is handled by a seperate tool `buildbox-artifact` which is bundled with the agent. You can see
 it's general usage in `templates/bootstrap.sh`.
 
+#### Uploading Artifacts to S3
+
 If you'd like to upload artifacts to your own Amazon S3 bucket, edit your `bootstrap.sh` file, and replace the `buildbox-artifact`
 call with something like this:
 
 ```bash
 export AWS_SECRET_ACCESS_KEY=yyy
 export AWS_ACCESS_KEY_ID=xxx
-buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" s3://bucket-name/foo/bar
+buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
 ```
+
+We'll recognise the `s3://` prefix and upload the artifacts to S3 to the bucket name `name-of-your-s3-bucket` (obviously you'll want to change it to the name of your own S3 bucket)
 
 If you upload artifacts to your own S3 Bucket, you can further secure your artifacts by [Restricting Access to Specific IP Addresses](https://docs.aws.amazon.com/AmazonS3/latest/dev/AccessPolicyLanguage_UseCases_s3_a.html)
 
@@ -106,7 +110,7 @@ Here we'll show you how to manually install the buildbox agent.
    wget -q https://raw.github.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
    ```
 
-5. Add `~/.buildbox` to your `$PATH` so you can access the binaries.
+5. (Optional) Add `~/.buildbox` to your `$PATH` so you can access the binaries eaiser.
 
    ```bash
    echo 'export PATH="$HOME/.buildbox:$PATH"' >> ~/.bash_profile
