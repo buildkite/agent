@@ -43,9 +43,9 @@ Upgrading the agent is pretty straightforward. The general idea is:
 
 In practise, this can be quite tricky. But no problems! We've got everything you need to set that up here.
 
-1. Make sure you've got your agent process running through a process montior. If you're on Ubuntu, the easiest way of setting this up is using [upstart](https://github.com/buildboxhq/buildbox-agent#using-upstart)
+1. Make sure you've got your `buildbox-agent` process running through a process montior. If you're on Ubuntu, the easiest way of setting this up is using [upstart](https://github.com/buildboxhq/buildbox-agent#using-upstart)
 
-2. Run the install script again. This will download new copies of the binaries. It **won't** override the bootstrap.sh file.
+2. Run the install script again. This will download new copies of the binaries. **It won't** override the bootstrap.sh file.**
 
    ```bash
    bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
@@ -57,7 +57,7 @@ In practise, this can be quite tricky. But no problems! We've got everything you
    killall -USR2 buildbox-agent
    ```
 
-   This will tell it to finish off any current job, and then shut itself down. Our process management stuff (`upstart`, etc) will notice the process has died, and start it back up again.
+   This will tell it to finish off any current job, and then shut itself down. Our process monitor will notice the process has died, and start it back up again.
 
 4. If you're running a **super** long job, and just want to kill it, send the `USR2` signal twice. That'll cause the job to cancel and the agent to shutdown immediately.
 
