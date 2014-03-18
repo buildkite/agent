@@ -177,7 +177,7 @@ upstart is that it will restart the process when you restart your server.
 5. Logs will be available here: `/var/log/upstart/buildbox-agent.log`
 
    ```bash
-   tail -f -n 200 /var/log/upstart/buildbox-agent.log
+   sudo tail -f -n 200 /var/log/upstart/buildbox-agent.log
    ```
 
 #### Using `screen`
