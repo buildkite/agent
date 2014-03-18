@@ -63,13 +63,21 @@ echo -e "\nDownloading $URL"
 # Remove the download if it already exists
 rm -f $DESTINATION/$DOWNLOAD
 
-if command -v wget >/dev/null
+# If the file already exists in a folder called pkg, just use that. :)
+if [[ -e pkg/$DOWNLOAD ]]
 then
-  wget -q $URL -O $DESTINATION/$DOWNLOAD
+  cp pkg/$DOWNLOAD $DESTINATION/$DOWNLOAD
 else
-  curl -L -s -o $DESTINATION/$DOWNLOAD $URL
+  # Boo, we don't have it. Download the file then.
+  if command -v wget >/dev/null
+  then
+    wget -q $URL -O $DESTINATION/$DOWNLOAD
+  else
+    curl -L -s -o $DESTINATION/$DOWNLOAD $URL
+  fi
 fi
 
+# Extract the download to the destination folder
 tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
 # Make sure it's exectuable
