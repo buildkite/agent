@@ -59,7 +59,7 @@ In practise, this can be quite tricky. But no problems! We've got everything you
 
    This will tell it to finish off any current job, and then shut itself down. The process monitor will notice the process has died, and start it back up again.
 
-4. If you're running a **super** long job, and just want to kill it, send the `USR2` signal twice. That'll cause the job to cancel and the agent to shutdown immediately.
+4. If you're running a **really long** job, and just want to kill it, send the `USR2` signal twice. That'll cause the job to cancel and the agent to shutdown immediately.
 
 5. Check your `buildbox-agent` logs to make sure it has started up the agent again.
 
