@@ -37,7 +37,7 @@ buildbox-agent --help
 
 Upgrading the agent is pretty straightforward. The general idea is:
 
-1. Download new binaries, and replace the old ones.
+1. Download new binaries replacing the old ones.
 
 2. Restart the `buildbox-agent` process.
 
