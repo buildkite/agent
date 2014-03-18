@@ -162,9 +162,19 @@ upstart is that it will restart the process when you restart your server.
 
 2. Edit the file and replace `ubuntu` with the user you'd like to run the builds as.
 
-3. Type `sudo service buildbox-agent start` when you're ready to start the process.
+   ```bash
+   sudo sed -i "s/your-build-user/`whoami`/g" /etc/init/buildbox-agent.conf
+   ```
 
-4. Logs will be available here: `/var/log/upstart/buildbox-agent.log`
+3. You'll also need to change the `access-token` it uses.
+
+   ```bash
+   sudo sed -i "s/your-agent-access-token/[insert your agent access token here]/g" /etc/init/buildbox-agent.conf
+   ```
+
+4. Type `sudo service buildbox-agent start` when you're ready to start the process.
+
+5. Logs will be available here: `/var/log/upstart/buildbox-agent.log`
 
 #### Using `screen`
 
