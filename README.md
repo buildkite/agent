@@ -43,7 +43,7 @@ Upgrading the agent is pretty straightforward. The general idea is:
 
 In practise, this can be quite tricky. But no problems! We've got everything you need to set that up here.
 
-1. Make sure you've got your agent process running through a process montior. If you're on Ubuntu, the easiest way of setting this up is using [upstart](#)
+1. Make sure you've got your agent process running through a process montior. If you're on Ubuntu, the easiest way of setting this up is using [upstart](https://github.com/buildboxhq/buildbox-agent#using-upstart)
 
 2. Run the install script again. This will download new copies of the binaries. It **won't** override the bootstrap.sh file.
 
