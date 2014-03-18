@@ -145,6 +145,8 @@ Sending `USR2` will cause the agent to finish off any running job, and shut down
 killall -USR2 buildbox-agent
 ```
 
+If you send it again, it'll forcefully quit the agent.
+
 ### Running in the background
 
 #### Using `upstart`
