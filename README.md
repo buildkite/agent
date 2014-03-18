@@ -157,7 +157,7 @@ upstart is that it will restart the process when you restart your server.
 1. Download our upstart template and save it to: `/etc/init/buildbox-agent.conf`
 
    ```bash
-   wget -q https://raw.github.com/buildboxhq/buildbox-agent/master/templates/buildbox-agent.conf -O /etc/init/buildbox-agent.conf
+   sudo wget -q https://raw.github.com/buildboxhq/buildbox-agent/master/templates/buildbox-agent.conf -O /etc/init/buildbox-agent.conf
    ```
 
 2. Edit the file and replace `ubuntu` with the user you'd like to run the builds as.
