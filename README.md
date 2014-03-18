@@ -33,6 +33,33 @@ For more help with the command line interface
 buildbox-agent --help
 ```
 
+### Upgrading
+
+Upgrading the agent is pretty straightforward. The general idea is:
+
+1. Download new binaries, and replace the old ones.
+
+2. Restart the `buildbox-agent` process.
+
+In practise, this can be quite tricky. But no problems! We've got everything you need to set that up here.
+
+1. Make sure you've got your agent process running through a process montior. If you're on Ubuntu, the easiest way of setting this up is using [upstart](#)
+
+2. Run the install script again. This will download new copies of the binaries. It **won't** override the bootstrap.sh file.
+
+   ```bash
+   bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
+   ```
+
+3. Tell the `buildbox-agent` process to restart by sending it an `USR2` signal
+
+   ```bash
+   killall -USR2 buildbox-agent
+   ```
+
+   This will tell it to finish off any current job, and then shut itself down. The `upstart` stuff we setup before will notice the process has died, and start it back up again! Easy peasy!
+
+
 ### Upgrading from the Ruby agent
 
 The Buildbox agent was previously written [in Ruby](https://github.com/buildboxhq/buildbox-agent-ruby), however due to installation and performance issues, we've switched to something
@@ -136,16 +163,6 @@ fi
 
 The benefit of the `bootstrap.sh` is that it's written in bash. You can change it how ever you like and customize how
 builds get run on your servers.
-
-### Signals
-
-Sending `USR2` will cause the agent to finish off any running job, and shut down.
-
-```bash
-killall -USR2 buildbox-agent
-```
-
-If you send it again, it'll forcefully quit the agent.
 
 ### Running in the background
 
