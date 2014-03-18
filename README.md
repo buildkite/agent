@@ -75,6 +75,7 @@ call with something like this:
 ```bash
 export AWS_SECRET_ACCESS_KEY=yyy
 export AWS_ACCESS_KEY_ID=xxx
+# export AWS_DEFAULT_REGION=ap-southeast-2 (Optionally set the region. Defaults to us-east-1)
 buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
 ```
 
