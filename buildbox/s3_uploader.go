@@ -69,12 +69,12 @@ func (u *S3Uploader) Upload(artifact *Artifact) (error) {
 
   data, err := ioutil.ReadFile(artifact.AbsolutePath)
   if err != nil {
-    return err
+    return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
   }
 
   err = u.Bucket.Put(u.artifactPath(artifact), data, artifact.MimeType(), Perms, s3.Options{})
   if err != nil {
-    return err
+    return errors.New("Failed to PUT file " + u.artifactPath(artifact) + " (" + err.Error() + ")")
   }
 
   return nil
