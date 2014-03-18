@@ -80,6 +80,9 @@ func main() {
         // Create the agent from the CLI options
         agent := setupAgentFromCli(c, "start")
 
+        // Setup signal monitoring
+        agent.MonitorSignals()
+
         // Start the agent
         agent.Start()
       },
@@ -121,7 +124,7 @@ func main() {
   app.Run(os.Args)
 }
 
-func setupAgentFromCli(c *cli.Context, command string) buildbox.Agent {
+func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
   agentAccessToken := c.String("access-token")
 
   // Should we look to the environment for the agent access token?
@@ -172,5 +175,5 @@ func setupAgentFromCli(c *cli.Context, command string) buildbox.Agent {
   // A nice welcome message
   log.Printf("Started buildbox-agent `%s` (version %s)\n", agent.Name, buildbox.Version)
 
-  return agent
+  return &agent
 }

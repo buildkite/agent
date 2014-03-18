@@ -5,6 +5,9 @@ import (
   "fmt"
   "time"
   "strings"
+  "syscall"
+  "os"
+  "os/signal"
   "os/exec"
 )
 
@@ -24,14 +27,24 @@ type Agent struct {
 
   // The boostrap script to run
   BootstrapScript string
-}
 
-func (a Agent) String() string {
-  return fmt.Sprintf("Agent{Name: %s, Hostname: %s}", a.Name, a.Hostname)
+  // The currently running Job
+  Job *Job
+
+  // This is true if the agent should no longer accept work
+  stopping bool
 }
 
 func (c *Client) AgentUpdate(agent *Agent) error {
   return c.Put(&agent, "/", agent)
+}
+
+func (c *Client) AgentCrash(agent *Agent) error {
+  return c.Post(&agent, "/crash", agent)
+}
+
+func (a *Agent) String() string {
+  return fmt.Sprintf("Agent{Name: %s, Hostname: %s}", a.Name, a.Hostname)
 }
 
 func (a *Agent) Setup() {
@@ -52,7 +65,45 @@ func (a *Agent) Setup() {
   }
 }
 
-func (a Agent) Start() {
+func (a *Agent) MonitorSignals() {
+  // Handle signals
+  signals := make(chan os.Signal, 1)
+  signal.Notify(signals, syscall.SIGINT, syscall.SIGUSR2)
+
+  go func() {
+    // This will block until a signal is sent
+    // sig := <-signals
+    <-signals
+
+    // If the agent isn't running a job, exit right away
+    if a.Job == nil {
+      log.Printf("No jobs running. Exiting...")
+      os.Exit(1)
+    }
+
+    // If the agent is already trying to stop and we've got another interupt,
+    // just forcefully shut it down.
+    if a.stopping {
+      // Kill the job
+      a.Job.Kill()
+
+      // Send an API call letting BB know that the agent had to forcefully stop
+      a.Client.AgentCrash(a)
+
+      // Die time.
+      os.Exit(1)
+    } else {
+      log.Print("Exiting... Waiting for job to finish before stopping. Send signal again to exit immediately.")
+
+      a.stopping = true
+    }
+
+    // Start monitoring signals again
+    a.MonitorSignals()
+  }()
+}
+
+func (a *Agent) Start() {
   // How long the agent will wait when no jobs can be found.
   idleSeconds := 5
   sleepTime := time.Duration(idleSeconds * 1000) * time.Millisecond
@@ -72,15 +123,22 @@ func (a Agent) Start() {
         break
       }
 
-      job.Run(&a)
+      a.Job = job
+      job.Run(a)
+      a.Job = nil
     }
 
-    // Sleep then check again later.
-    time.Sleep(sleepTime)
+    // Should we be stopping?
+    if a.stopping {
+      break
+    } else {
+      // Sleep then check again later.
+      time.Sleep(sleepTime)
+    }
   }
 }
 
-func (a Agent) Run(id string) {
+func (a *Agent) Run(id string) {
   // Try and find the job
   job, err := a.Client.JobFindAndAssign(id)
 
@@ -93,5 +151,5 @@ func (a Agent) Run(id string) {
   }
 
   // Run the paticular job
-  job.Run(&a)
+  job.Run(a)
 }

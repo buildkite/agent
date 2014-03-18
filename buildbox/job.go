@@ -15,12 +15,21 @@ import (
 // has finished.
 type Job struct {
   ID string
+
   State string
+
   Env map[string]string
+
   Output string `json:"output,omitempty"`
+
   ExitStatus string `json:"exit_status,omitempty"`
+
   StartedAt string `json:"started_at,omitempty"`
+
   FinishedAt string `json:"finished_at,omitempty"`
+
+  // The currently running process of the job
+  process *Process
 }
 
 func (b Job) String() string {
@@ -63,6 +72,15 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
   return &updatedJob, c.Put(&updatedJob, "jobs/" + job.ID, job)
 }
 
+func (j *Job) Kill() error {
+  if j.process != nil {
+    log.Printf("Cancelling job %s", j.ID)
+    j.process.Kill()
+  }
+
+  return nil
+}
+
 func (j *Job) Run(agent *Agent) error {
   log.Printf("Starting job %s", j.ID)
 
@@ -95,8 +113,7 @@ func (j *Job) Run(agent *Agent) error {
       // and hopefully the host will fix itself before we finish.
       log.Printf("Problem with updating job %s", j.ID, err)
     } else if updatedJob.State == "canceled" {
-      log.Printf("Cancelling job %s", j.ID)
-      process.Kill()
+      j.Kill()
     }
   }
 
@@ -105,10 +122,13 @@ func (j *Job) Run(agent *Agent) error {
   scriptName := path.Base(agent.BootstrapScript)
   process, err := RunScript(scriptPath, scriptName, env, callback)
 
+  // Store the process for later
+  j.process = process
+
   // Did the process succeed?
   if err == nil {
     // Store the final output
-    j.Output = process.Output
+    j.Output = j.process.Output
   } else {
     j.Output = fmt.Sprintf("%s", err)
   }
@@ -120,7 +140,7 @@ func (j *Job) Run(agent *Agent) error {
   // on the Job struct because 0 is considerered an empty value
   // and won't be marshalled. We only want to send the exit status
   // when the build has finsihed.
-  j.ExitStatus = fmt.Sprintf("%d", process.ExitStatus)
+  j.ExitStatus = fmt.Sprintf("%d", j.process.ExitStatus)
 
   // Keep trying this call until it works. This is the most important one.
   for {
