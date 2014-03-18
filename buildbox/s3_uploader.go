@@ -7,6 +7,7 @@ import (
   "os"
   "fmt"
   "strings"
+  "errors"
 )
 
 type S3Uploader struct {
@@ -29,15 +30,29 @@ func (u *S3Uploader) Setup(destination string) (error) {
     os.Exit(1)
   }
 
+  // Decide what region to use
+  // https://github.com/crowdmob/goamz/blob/master/aws/regions.go
+  // I think S3 defaults to us-east-1
+  regionName := "us-east-1"
+  if os.Getenv("AWS_DEFAULT_REGION") != "" {
+    regionName = os.Getenv("AWS_DEFAULT_REGION")
+  }
+
+  // Check to make sure the region exists
+  region, ok := aws.Regions[regionName]
+  if ok == false {
+    return errors.New("Unknown AWS Region `" + regionName + "`")
+  }
+
   // Find the bucket
-  s3 := s3.New(auth, aws.USEast)
+  s3 := s3.New(auth, region)
   bucket := s3.Bucket(u.bucketName())
 
   // If the list doesn't return an error, then we've got our
   // bucket
   _, err = bucket.List("", "", "", 0)
   if err != nil {
-    return err
+    return errors.New("Could not find bucket `" + u.bucketName() + " in region `" + region.Name + "` (" + err.Error() + ")")
   }
 
   u.Bucket = bucket
