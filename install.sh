@@ -7,7 +7,7 @@
 # For more information, see: https://github.com/buildboxhq/buildbox-agent
 
 COMMAND="bash -c \"\`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh\`\""
-VERSION="0.1-beta.2"
+VERSION="0.1-beta.3"
 
 set -e
 

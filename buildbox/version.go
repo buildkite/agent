@@ -1,5 +1,5 @@
 package buildbox
 
 const (
-  Version = "0.1-beta.2"
+  Version = "0.1-beta.3"
 )
