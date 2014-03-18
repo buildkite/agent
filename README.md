@@ -57,8 +57,7 @@ In practise, this can be quite tricky. But no problems! We've got everything you
    killall -USR2 buildbox-agent
    ```
 
-   This will tell it to finish off any current job, and then shut itself down. The `upstart` stuff we setup before will notice the process has died, and start it back up again! Easy peasy!
-
+   This will tell it to finish off any current job, and then shut itself down. Our process management stuff (`upstart`, etc) will notice the process has died, and start it back up again! Easy peasy!
 
 ### Upgrading from the Ruby agent
 
