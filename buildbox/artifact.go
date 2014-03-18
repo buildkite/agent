@@ -91,25 +91,30 @@ func (c *Client) CreateArtifacts(job *Job, artifacts []*Artifact) ([]Artifact, e
 
 func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {
   globs := strings.Split(artifactPaths, ";")
+  workingDirectory, _ := os.Getwd()
 
   for _, glob := range globs {
-    files, err := filepath.Glob(strings.TrimSpace(glob))
-    if err != nil {
-      return nil, err
-    }
+    glob = strings.TrimSpace(glob)
 
-    for _, file := range files {
-      absolutePath, err := filepath.Abs(file)
+    if glob != "" {
+      files, err := Glob(workingDirectory, glob)
       if err != nil {
         return nil, err
       }
 
-      artifact, err := BuildArtifact(file, absolutePath, glob)
-      if err != nil {
-        return nil, err
-      }
+      for _, file := range files {
+        absolutePath, err := filepath.Abs(file)
+        if err != nil {
+          return nil, err
+        }
 
-      artifacts = append(artifacts, artifact)
+        artifact, err := BuildArtifact(file, absolutePath, glob)
+        if err != nil {
+          return nil, err
+        }
+
+        artifacts = append(artifacts, artifact)
+      }
     }
   }
 
@@ -174,7 +179,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
   // Upload the artifacts by spinning up some routines
   var routines []chan string
-  var concurrency int = 20
+  var concurrency int = 10
 
   count := 0
   for _, artifact := range createdArtifacts {
