@@ -137,6 +137,14 @@ fi
 The benefit of the `bootstrap.sh` is that it's written in bash. You can change it how ever you like and customize how
 builds get run on your servers.
 
+### Signals
+
+Sending `USR2` will cause the agent to finish off any running job, and shut down.
+
+```bash
+killall -USR2 buildbox-agent
+```
+
 ### Running in the background
 
 #### Using `upstart`
