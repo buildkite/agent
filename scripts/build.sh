@@ -19,7 +19,7 @@ function build {
 
   # Build the data binary
   DATA_FILENAME=buildbox-data
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$ARTIFACT_DATA data.go
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$DATA_FILENAME data.go
 
   FILENAME=buildbox-agent-$1-$2
 
