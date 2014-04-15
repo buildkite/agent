@@ -17,15 +17,19 @@ function build {
   ARTIFACT_FILENAME=buildbox-artifact
   GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$ARTIFACT_FILENAME artifact.go
 
+  # Build the data binary
+  DATA_FILENAME=buildbox-data
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$ARTIFACT_DATA data.go
+
   FILENAME=buildbox-agent-$1-$2
 
   # Tar up the binaries
   cd $DIRECTORY
-  tar cfvz $FILENAME.tar.gz $AGENT_FILENAME $ARTIFACT_FILENAME
+  tar cfvz $FILENAME.tar.gz $AGENT_FILENAME $ARTIFACT_FILENAME $DATA_FILENAME
   cd ..
 
   # Cleanup after the build
-  rm $DIRECTORY/$AGENT_FILENAME $DIRECTORY/$ARTIFACT_FILENAME
+  rm $DIRECTORY/$AGENT_FILENAME $DIRECTORY/$ARTIFACT_FILENAME $DIRECTORY/$DATA_FILENAME
 }
 
 build "linux" "amd64"

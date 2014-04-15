@@ -7,7 +7,11 @@
 # For more information, see: https://github.com/buildboxhq/buildbox-agent
 
 COMMAND="bash -c \"\`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh\`\""
-VERSION="0.1"
+
+# Allow custom setting of the version
+if [ -z "$VERSION" ]; then
+  VERSION="0.1"
+fi
 
 set -e
 
@@ -22,7 +26,7 @@ echo -e "\033[33m
                                                 |___/\033[0m
 -- https://buildbox.io
 
-Latest Version: \033[35mv$VERSION\033[0m"
+Installing Version: \033[35mv$VERSION\033[0m"
 
 UNAME=`uname -sp | awk '{print tolower($0)}'`
 
@@ -83,6 +87,7 @@ tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 # Make sure it's exectuable
 chmod +x $DESTINATION/buildbox-agent
 chmod +x $DESTINATION/buildbox-artifact
+chmod +x $DESTINATION/buildbox-data
 
 # Clean up the download
 rm -f $DESTINATION/$DOWNLOAD
