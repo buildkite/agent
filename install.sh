@@ -87,7 +87,7 @@ tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 # Make sure it's exectuable
 chmod +x $DESTINATION/buildbox-agent
 chmod +x $DESTINATION/buildbox-artifact
-chmod +x $DESTINATION/buildbox-data
+# chmod +x $DESTINATION/buildbox-data
 
 # Clean up the download
 rm -f $DESTINATION/$DOWNLOAD
