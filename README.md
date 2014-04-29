@@ -180,7 +180,7 @@ upstart is that it will restart the process when you restart your server.
    sudo wget https://raw.github.com/buildboxhq/buildbox-agent/master/templates/buildbox-agent.conf -O /etc/init/buildbox-agent.conf
    ```
 
-2. Edit the file and replace `ubuntu` with the user you'd like to run the builds as.
+2. Edit the file and replace `your-build-user` with the user you'd like to run the builds as.
 
    ```bash
    sudo sed -i "s/your-build-user/`whoami`/g" /etc/init/buildbox-agent.conf
