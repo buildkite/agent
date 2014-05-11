@@ -72,8 +72,9 @@ func (a *Agent) MonitorSignals() {
 
   go func() {
     // This will block until a signal is sent
-    // sig := <-signals
-    <-signals
+    sig := <-signals
+
+    log.Printf("Received signal `%s`", sig.String())
 
     // If the agent isn't running a job, exit right away
     if a.Job == nil {
