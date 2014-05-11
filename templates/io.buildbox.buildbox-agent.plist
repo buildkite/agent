@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>io.buildbox.buildbox-agent</string>
+
+    <key>UserName</key>
+    <string>your-build-user</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/your-build-user/.buildbox/buildbox-agent</string>
+      <string>start</string>
+    </array>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/usr/local/var/log/buildbox.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/usr/local/var/log/buildbox.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
+
+      <key>BUILDBOX_AGENT_ACCESS_TOKEN</key>
+      <string>your-agent-access-token</string>
+    </dict>
+  </dict>
+</plist>
