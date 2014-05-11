@@ -87,7 +87,12 @@ tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 # Make sure it's exectuable
 chmod +x $DESTINATION/buildbox-agent
 chmod +x $DESTINATION/buildbox-artifact
-# chmod +x $DESTINATION/buildbox-data
+
+# This file isn't availabe in stable yet
+if [[ -e $DESTINATION/buildbox-data ]]
+then
+  chmod +x $DESTINATION/buildbox-data
+fi
 
 # Clean up the download
 rm -f $DESTINATION/$DOWNLOAD
