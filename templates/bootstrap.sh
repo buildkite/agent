@@ -34,6 +34,12 @@ then
   buildbox-run "git clone "$BUILDBOX_REPO" . -qv"
 fi
 
+# Default empty branch names
+if [ "$BUILDBOX_BRANCH" == "" ]
+then
+  BUILDBOX_BRANCH="master"
+fi
+
 buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
 buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
