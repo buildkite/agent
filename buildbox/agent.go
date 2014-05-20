@@ -68,13 +68,31 @@ func (a *Agent) Setup() {
 func (a *Agent) MonitorSignals() {
   // Handle signals
   signals := make(chan os.Signal, 1)
-  signal.Notify(signals, syscall.SIGINT, syscall.SIGUSR2)
+
+  // Monitor a heap of different signals for debugging purposes. Only
+  // some of them are used.
+  signal.Notify(signals, os.Interrupt,
+                         syscall.SIGHUP,
+                         syscall.SIGTERM,
+                         syscall.SIGQUIT,
+                         syscall.SIGINT,
+                         syscall.SIGUSR2)
 
   go func() {
     // This will block until a signal is sent
     sig := <-signals
 
     log.Printf("Received signal `%s`", sig.String())
+
+    // Only monitor certain signals
+    if sig != syscall.SIGINT && sig != syscall.SIGUSR2 {
+      log.Printf("Ignoring signal `%s`", sig.String())
+
+      // Start monitoring signals again
+      a.MonitorSignals()
+
+      return
+    }
 
     // If the agent isn't running a job, exit right away
     if a.Job == nil {
