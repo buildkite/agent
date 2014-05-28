@@ -2,7 +2,6 @@ package main
 
 import (
   "os"
-  "path"
   "fmt"
   "log"
   "github.com/codegangsta/cli"
@@ -139,13 +138,9 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
 
   bootstrapScript := c.String("bootstrap-script")
 
-  // Go doesn't provide an a mechanism to turn $HOME into an absolute
-  // path, so if they're using the default, I'll remake it using real
-  // values.
-  if c.String("bootstrap-script") == BootstrapScriptDefault {
-    homeDir := os.Getenv("HOME")
-
-    bootstrapScript = path.Join(homeDir, ".buildbox", "bootstrap.sh")
+  // Expand the envionment variable.
+  if bootstrapScript == BootstrapScriptDefault {
+    bootstrapScript = os.ExpandEnv(bootstrapScript)
   }
 
   // Make sure the boostrap script exists.
