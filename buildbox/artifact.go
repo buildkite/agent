@@ -223,7 +223,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
   // Update the state of the artifact on Buildbox
   _, err = client.ArtifactUpdate(job, artifact)
   if err != nil {
-    log.Printf("Error marking artifact %s as uploaded (%s)", err)
+    log.Printf("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
   }
 
   // We can notify the channel that this routine has finished now

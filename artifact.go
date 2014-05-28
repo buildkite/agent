@@ -14,7 +14,7 @@ Usage:
 
   {{.Name}} command [arguments]
 
-The comamnds are:
+The commands are:
 
   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}
