@@ -34,6 +34,7 @@ function build {
 
 build "linux" "amd64"
 build "linux" "386"
+build "linux" "arm"
 build "darwin" "386"
 build "darwin" "amd64"
 
