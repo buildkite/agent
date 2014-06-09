@@ -6,6 +6,7 @@ import (
   "io"
   "mime/multipart"
   "net/http"
+  _ "crypto/sha512" // import sha512 to make sha512 ssl certs work
   // "net/http/httputil"
   "os"
   "path/filepath"

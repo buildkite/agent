@@ -3,6 +3,7 @@ package buildbox
 import (
   "net/http"
   "net/http/httputil"
+  _ "crypto/sha512" // import sha512 to make sha512 ssl certs work
   "encoding/json"
   "runtime"
   "strings"
