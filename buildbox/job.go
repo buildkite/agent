@@ -2,7 +2,6 @@ package buildbox
 
 import (
   "fmt"
-  "log"
   "time"
   "path"
 )
@@ -74,7 +73,7 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 
 func (j *Job) Kill() error {
   if j.process != nil {
-    log.Printf("Cancelling job %s", j.ID)
+    Logger.Infof("Cancelling job %s", j.ID)
     j.process.Kill()
   }
 
@@ -82,7 +81,7 @@ func (j *Job) Kill() error {
 }
 
 func (j *Job) Run(agent *Agent) error {
-  log.Printf("Starting job %s", j.ID)
+  Logger.Infof("Starting job %s", j.ID)
 
   // Create the environment that the script will use
   env := []string{}
@@ -111,7 +110,7 @@ func (j *Job) Run(agent *Agent) error {
       // We don't really care if the job couldn't update at this point.
       // This is just a partial update. We'll just let the job run
       // and hopefully the host will fix itself before we finish.
-      log.Printf("Problem with updating job %s (%s)", j.ID, err)
+      Logger.Errorf("Problem with updating job %s (%s)", j.ID, err)
     } else if updatedJob.State == "canceled" {
       j.Kill()
     }
@@ -146,7 +145,7 @@ func (j *Job) Run(agent *Agent) error {
   for {
     _, err = agent.Client.JobUpdate(j)
     if err != nil {
-      log.Printf("Problem with updating final job information %s (%s)", j.ID, err)
+      Logger.Errorf("Problem with updating final job information %s (%s)", j.ID, err)
 
       // How long should we wait until we try again?
       idleSeconds := 5
@@ -159,7 +158,7 @@ func (j *Job) Run(agent *Agent) error {
     }
   }
 
-  log.Printf("Finished job %s", j.ID)
+  Logger.Infof("Finished job %s", j.ID)
 
   return nil
 }

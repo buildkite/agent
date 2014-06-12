@@ -4,7 +4,6 @@ import (
   "fmt"
   "os"
   "strings"
-  "log"
   "errors"
   "path/filepath"
   "mime"
@@ -208,14 +207,14 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
   // Show a nice message that we're starting to upload the file
-  log.Printf("Uploading %s\n", artifact.Path)
+  Logger.Info("Uploading %s", artifact.Path)
 
   // Upload the artifact and then set the state depending on whether or not
   // it passed.
   err := uploader.Upload(&artifact)
   if err != nil {
     artifact.State = "error"
-    log.Printf("Error uploading artifact %s (%s)", artifact.Path, err)
+    Logger.Errorf("Error uploading artifact %s (%s)", artifact.Path, err)
   } else {
     artifact.State = "finished"
   }
@@ -223,7 +222,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
   // Update the state of the artifact on Buildbox
   _, err = client.ArtifactUpdate(job, artifact)
   if err != nil {
-    log.Printf("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
+    Logger.Errorf("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
   }
 
   // We can notify the channel that this routine has finished now

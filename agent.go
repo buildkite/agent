@@ -3,7 +3,6 @@ package main
 import (
   "os"
   "fmt"
-  "log"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -160,15 +159,13 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
   agent.Client.Debug = agent.Debug
 
   // Tell the user that debug mode has been enabled
-  if agent.Debug {
-    log.Printf("Debug mode enabled")
-  }
+  buildbox.Logger.Debug("Debug mode enabled")
 
   // Setup the agent
   agent.Setup()
 
   // A nice welcome message
-  log.Printf("Started buildbox-agent `%s` (version %s)\n", agent.Name, buildbox.Version)
+  buildbox.Logger.Infof("Started buildbox-agent `%s` (version %s)", agent.Name, buildbox.Version)
 
   return &agent
 }

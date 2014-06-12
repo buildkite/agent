@@ -3,7 +3,6 @@ package main
 import (
   "os"
   "fmt"
-  "log"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -89,7 +88,7 @@ func main() {
         // Set the data through the API
         _, err := agent.Client.DataSet(job, key, value)
         if err != nil {
-          log.Fatalf("Failed to set data: %s", err)
+          buildbox.Logger.Fatalf("Failed to set data: %s", err)
         }
       },
     },
@@ -122,7 +121,7 @@ func main() {
         // Get the data through the API
         data, err := agent.Client.DataGet(job, key)
         if err != nil {
-          log.Fatalf("Failed to get data: %s", err)
+          buildbox.Logger.Fatalf("Failed to get data: %s", err)
         }
 
         // Output it
@@ -163,9 +162,7 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
   agent.Client.Debug = agent.Debug
 
   // Tell the user that debug mode has been enabled
-  if agent.Debug {
-    log.Printf("Debug mode enabled")
-  }
+  // TODO: Enable debugging
 
   return &agent
 }
@@ -188,7 +185,7 @@ func findJobFromCli(agent *buildbox.Agent, c *cli.Context, command string) (*bui
   // Find the actual job now
   job, err := agent.Client.JobFind(jobId)
   if err != nil {
-    log.Fatalf("Could not find job: %s", jobId)
+    buildbox.Logger.Fatalf("Could not find job: %s", jobId)
   }
 
   return job
