@@ -5,7 +5,6 @@ import (
   "github.com/crowdmob/goamz/s3"
   "github.com/crowdmob/goamz/aws"
   "os"
-  "fmt"
   "strings"
   "errors"
 )
@@ -26,8 +25,7 @@ func (u *S3Uploader) Setup(destination string) (error) {
   // Setup the AWS authentication
   auth, err := aws.EnvAuth()
   if err != nil {
-    fmt.Printf("Error loading AWS credentials: %s", err)
-    os.Exit(1)
+    return errors.New("Error loading AWS credentials: " + err.Error())
   }
 
   // Decide what region to use
@@ -65,13 +63,17 @@ func (u *S3Uploader) URL(artifact *Artifact) (string) {
 }
 
 func (u *S3Uploader) Upload(artifact *Artifact) (error) {
-  Perms := s3.ACL("public-read")
+  // Define the permission to use. Hard coded for now.
+  permission := "public-read"
+  Perms := s3.ACL(permission)
 
+  Logger.Debugf("Reading file %s", artifact.AbsolutePath)
   data, err := ioutil.ReadFile(artifact.AbsolutePath)
   if err != nil {
     return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
   }
 
+  Logger.Debugf("Putting to %s with permission %s", u.artifactPath(artifact), permission)
   err = u.Bucket.Put(u.artifactPath(artifact), data, artifact.MimeType(), Perms, s3.Options{})
   if err != nil {
     return errors.New("Failed to PUT file " + u.artifactPath(artifact) + " (" + err.Error() + ")")

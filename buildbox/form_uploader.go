@@ -34,16 +34,11 @@ func (u *FormUploader) Upload(artifact *Artifact) (error) {
     return err
   }
 
-  // dump, err := httputil.DumpRequest(request, true)
-  // if err != nil {
-  //   fmt.Println(err)
-  // } else {
-  //   os.Stderr.Write(dump)
-  //   os.Stderr.Write([]byte{'\n'})
-  // }
+  // Create the client
+  client := &http.Client{}
 
   // Perform the request
-  client := &http.Client{}
+  Logger.Debugf("%s %s", request.Method, request.URL)
   response, err := client.Do(request)
 
   // Check for errors
@@ -53,14 +48,6 @@ func (u *FormUploader) Upload(artifact *Artifact) (error) {
     // Be sure to close the response body at the end of
     // this function
     defer response.Body.Close()
-
-    // dump, err := httputil.DumpResponse(response, true)
-    // if err != nil {
-    //   fmt.Println(err)
-    // } else {
-    //   os.Stderr.Write(dump)
-    //   os.Stderr.Write([]byte{'\n'})
-    // }
 
     if response.StatusCode/100 != 2 {
       body := &bytes.Buffer{}
@@ -104,7 +91,11 @@ func createUploadRequest(artifact *Artifact) (*http.Request, error) {
   if err != nil {
     return nil, err
   }
+
   _, err = io.Copy(part, file)
+  if err != nil {
+    return nil, err
+  }
 
   err = writer.Close()
   if err != nil {
@@ -113,6 +104,10 @@ func createUploadRequest(artifact *Artifact) (*http.Request, error) {
 
   // Create the URL that we'll send data to
   uri, err := url.Parse(artifact.Uploader.Action.URL)
+  if err != nil {
+    return nil, err
+  }
+
   uri.Path = artifact.Uploader.Action.Path
 
   // Create the request

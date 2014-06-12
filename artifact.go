@@ -129,23 +129,23 @@ func main() {
         // Find the actual job now
         job, err := agent.Client.JobFind(jobId)
         if err != nil {
-          buildbox.Logger.Fatal("Could not find job: %s", jobId)
+          buildbox.Logger.Fatalf("Could not find job: %s", jobId)
         }
 
         // Create artifact structs for all the files we need to upload
         artifacts, err := buildbox.CollectArtifacts(job, paths)
         if err != nil {
-          buildbox.Logger.Fatal("Failed to collect artifacts: %s", err)
+          buildbox.Logger.Fatalf("Failed to collect artifacts: %s", err)
         }
 
         if len(artifacts) == 0 {
-          buildbox.Logger.Info("No files matched paths: %s", paths)
+          buildbox.Logger.Infof("No files matched paths: %s", paths)
         } else {
-          buildbox.Logger.Info("Uploading %d files that match \"%s\"", len(artifacts), paths)
+          buildbox.Logger.Infof("Found %d files that match \"%s\"", len(artifacts), paths)
 
           err := buildbox.UploadArtifacts(agent.Client, job, artifacts, destination)
           if err != nil {
-            buildbox.Logger.Fatal("Failed to upload artifacts: %s", err)
+            buildbox.Logger.Fatalf("Failed to upload artifacts: %s", err)
           }
         }
       },
