@@ -24,9 +24,6 @@ type Client struct {
   // The access token of the agent being used to make API requests
   AgentAccessToken string
 
-  // Debug mode can be used to dump the full request and response to stdout.
-  Debug bool
-
   // UserAgent to be provided in API requests. Set to DefaultUserAgent if not
   // specified.
   UserAgent string

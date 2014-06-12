@@ -74,6 +74,11 @@ func main() {
         cli.BoolFlag{"debug", "Enable debug mode"},
       },
       Action: func(c *cli.Context) {
+        // Init debugging
+        if c.Bool("debug") {
+          buildbox.LoggerInitDebug()
+        }
+
         agentAccessToken := c.String("agent-access-token")
 
         // Should we look to the environment for the agent access token?
@@ -113,15 +118,10 @@ func main() {
 
         // Set the agent options
         var agent buildbox.Agent;
-        agent.Debug = c.Bool("debug")
 
         // Client specific options
         agent.Client.AgentAccessToken = agentAccessToken
         agent.Client.URL = c.String("url")
-        agent.Client.Debug = agent.Debug
-
-        // Tell the user that debug mode has been enabled
-        // TODO: Enable debug
 
         // Setup the agent
         agent.Setup()

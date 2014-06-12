@@ -4,14 +4,18 @@ import (
   "github.com/Sirupsen/logrus"
 )
 
+var Logger = initLogger()
 
 func initLogger() *logrus.Logger {
   var log = logrus.New()
 
-  log.Level = logrus.Debug
   log.Formatter = new(logrus.TextFormatter)
 
   return log
 }
 
-var Logger = initLogger()
+func LoggerInitDebug() {
+  Logger.Level = logrus.Debug
+
+  Logger.Debug("Debugging enabled")
+}

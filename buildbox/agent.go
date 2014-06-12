@@ -21,9 +21,6 @@ type Agent struct {
   // The hostname of the agent
   Hostname string `json:"hostname,omitempty"`
 
-  // Whether to run the agent in Debug mode
-  Debug bool
-
   // The boostrap script to run
   BootstrapScript string
 
