@@ -3,7 +3,6 @@ package main
 import (
   "os"
   "fmt"
-  "log"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -75,6 +74,11 @@ func main() {
         cli.BoolFlag{"debug", "Enable debug mode"},
       },
       Action: func(c *cli.Context) {
+        // Init debugging
+        if c.Bool("debug") {
+          buildbox.LoggerInitDebug()
+        }
+
         agentAccessToken := c.String("agent-access-token")
 
         // Should we look to the environment for the agent access token?
@@ -114,17 +118,10 @@ func main() {
 
         // Set the agent options
         var agent buildbox.Agent;
-        agent.Debug = c.Bool("debug")
 
         // Client specific options
         agent.Client.AgentAccessToken = agentAccessToken
         agent.Client.URL = c.String("url")
-        agent.Client.Debug = agent.Debug
-
-        // Tell the user that debug mode has been enabled
-        if agent.Debug {
-          log.Printf("Debug mode enabled")
-        }
 
         // Setup the agent
         agent.Setup()
@@ -132,23 +129,23 @@ func main() {
         // Find the actual job now
         job, err := agent.Client.JobFind(jobId)
         if err != nil {
-          log.Fatalf("Could not find job: %s", jobId)
+          buildbox.Logger.Fatalf("Could not find job: %s", jobId)
         }
 
         // Create artifact structs for all the files we need to upload
         artifacts, err := buildbox.CollectArtifacts(job, paths)
         if err != nil {
-          log.Fatalf("Failed to collect artifacts: %s", err)
+          buildbox.Logger.Fatalf("Failed to collect artifacts: %s", err)
         }
 
         if len(artifacts) == 0 {
-          log.Printf("No files matched paths: %s", paths)
+          buildbox.Logger.Infof("No files matched paths: %s", paths)
         } else {
-          log.Printf("Uploading %d files that match \"%s\"", len(artifacts), paths)
+          buildbox.Logger.Infof("Found %d files that match \"%s\"", len(artifacts), paths)
 
           err := buildbox.UploadArtifacts(agent.Client, job, artifacts, destination)
           if err != nil {
-            log.Fatalf("Failed to upload artifacts: %s", err)
+            buildbox.Logger.Fatalf("Failed to upload artifacts: %s", err)
           }
         }
       },

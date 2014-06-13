@@ -1,7 +1,6 @@
 package buildbox
 
 import (
-  "log"
   "fmt"
   "time"
   "strings"
@@ -21,9 +20,6 @@ type Agent struct {
 
   // The hostname of the agent
   Hostname string `json:"hostname,omitempty"`
-
-  // Whether to run the agent in Debug mode
-  Debug bool
 
   // The boostrap script to run
   BootstrapScript string
@@ -51,7 +47,7 @@ func (a *Agent) Setup() {
   // Figure out the hostname of the current machine
   hostname, err := exec.Command("hostname").Output()
   if err != nil {
-    log.Fatal(err)
+    Logger.Fatal(err)
   }
 
   // Set the hostname
@@ -61,7 +57,7 @@ func (a *Agent) Setup() {
   // current agent struct with data.
   err = a.Client.AgentUpdate(a)
   if err != nil {
-    log.Fatal(err)
+    Logger.Fatal(err)
   }
 }
 
@@ -82,11 +78,11 @@ func (a *Agent) MonitorSignals() {
     // This will block until a signal is sent
     sig := <-signals
 
-    log.Printf("Received signal `%s`", sig.String())
+    Logger.Debugf("Received signal `%s`", sig.String())
 
     // Only monitor certain signals
     if sig != syscall.SIGINT && sig != syscall.SIGUSR2 {
-      log.Printf("Ignoring signal `%s`", sig.String())
+      Logger.Debugf("Ignoring signal `%s`", sig.String())
 
       // Start monitoring signals again
       a.MonitorSignals()
@@ -96,7 +92,7 @@ func (a *Agent) MonitorSignals() {
 
     // If the agent isn't running a job, exit right away
     if a.Job == nil {
-      log.Printf("No jobs running. Exiting...")
+      Logger.Info("No jobs running. Exiting...")
       os.Exit(1)
     }
 
@@ -112,7 +108,7 @@ func (a *Agent) MonitorSignals() {
       // Die time.
       os.Exit(1)
     } else {
-      log.Print("Exiting... Waiting for job to finish before stopping. Send signal again to exit immediately.")
+      Logger.Info("Exiting... Waiting for job to finish before stopping. Send signal again to exit immediately.")
 
       a.stopping = true
     }
@@ -133,7 +129,7 @@ func (a *Agent) Start() {
     for {
       job, err := a.Client.JobNext()
       if err != nil {
-        log.Printf("Failed to get job (%s)", err)
+        Logger.Errorf("Failed to get job (%s)", err)
         break
       }
 
@@ -162,11 +158,11 @@ func (a *Agent) Run(id string) {
   job, err := a.Client.JobFindAndAssign(id)
 
   if err != nil {
-    log.Fatal(err)
+    Logger.Fatal(err)
   }
 
   if job.State != "scheduled" {
-    log.Fatalf("The agent can only run scheduled jobs. Current state is `%s`", job.State)
+    Logger.Fatalf("The agent can only run scheduled jobs. Current state is `%s`", job.State)
   }
 
   // Run the paticular job

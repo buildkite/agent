@@ -3,7 +3,7 @@ package main
 import (
   "os"
   "fmt"
-  "log"
+  "github.com/Sirupsen/logrus"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -124,6 +124,11 @@ func main() {
 }
 
 func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
+  // Init debugging
+  if c.Bool("debug") {
+    buildbox.LoggerInitDebug()
+  }
+
   agentAccessToken := c.String("access-token")
 
   // Should we look to the environment for the agent access token?
@@ -151,24 +156,20 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
 
   // Set the agent options
   var agent buildbox.Agent;
-  agent.Debug = c.Bool("debug")
   agent.BootstrapScript = bootstrapScript
 
   // Client specific options
   agent.Client.AgentAccessToken = agentAccessToken
   agent.Client.URL = c.String("url")
-  agent.Client.Debug = agent.Debug
-
-  // Tell the user that debug mode has been enabled
-  if agent.Debug {
-    log.Printf("Debug mode enabled")
-  }
 
   // Setup the agent
   agent.Setup()
 
   // A nice welcome message
-  log.Printf("Started buildbox-agent `%s` (version %s)\n", agent.Name, buildbox.Version)
+  buildbox.Logger.WithFields(logrus.Fields{
+    "pid": os.Getpid(),
+    "version": buildbox.Version,
+  }).Infof("Started buildbox-agent `%s`", agent.Name)
 
   return &agent
 }

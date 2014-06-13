@@ -2,15 +2,12 @@ package buildbox
 
 import (
   "net/http"
-  "net/http/httputil"
   _ "crypto/sha512" // import sha512 to make sha512 ssl certs work
   "encoding/json"
   "runtime"
   "strings"
   "io"
   "errors"
-  "log"
-  "os"
   "bytes"
 )
 
@@ -26,9 +23,6 @@ type Client struct {
 
   // The access token of the agent being used to make API requests
   AgentAccessToken string
-
-  // Debug mode can be used to dump the full request and response to stdout.
-  Debug bool
 
   // UserAgent to be provided in API requests. Set to DefaultUserAgent if not
   // specified.
@@ -112,9 +106,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 // Submits an HTTP request, checks its response, and deserializes
 // the response into v.
 func (c *Client) DoReq(req *http.Request, v interface{}) error {
-  if c.Debug {
-    log.Printf("%s %s\n", req.Method, req.URL)
-  }
+  Logger.Debugf("%s %s", req.Method, req.URL)
 
   res, err := http.DefaultClient.Do(req)
   if err != nil {
@@ -124,16 +116,6 @@ func (c *Client) DoReq(req *http.Request, v interface{}) error {
   // Be sure to close the response body at the end of
   // this function
   defer res.Body.Close()
-
-  if c.Debug {
-    dump, err := httputil.DumpResponse(res, true)
-    if err != nil {
-      log.Println(err)
-    } else {
-      os.Stderr.Write(dump)
-      os.Stderr.Write([]byte{'\n'})
-    }
-  }
 
   // Check the response of the response
   if err = checkResp(res); err != nil {

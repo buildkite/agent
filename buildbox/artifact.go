@@ -4,7 +4,6 @@ import (
   "fmt"
   "os"
   "strings"
-  "log"
   "errors"
   "path/filepath"
   "mime"
@@ -97,6 +96,8 @@ func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, er
     glob = strings.TrimSpace(glob)
 
     if glob != "" {
+      Logger.Debugf("Globbing %s for %s", workingDirectory, glob)
+
       files, err := Glob(workingDirectory, glob)
       if err != nil {
         return nil, err
@@ -181,6 +182,8 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
   var routines []chan string
   var concurrency int = 10
 
+  Logger.Debugf("Spinning up %d concurrent threads for uploads", concurrency)
+
   count := 0
   for _, artifact := range createdArtifacts {
     // Create a channel and apend it to the routines array. Once we've hit our
@@ -192,7 +195,8 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
     routines = append(routines, wait)
 
     if count >= concurrency {
-      // fmt.Printf("Maxiumum concurrent threads running. Waiting.\n")
+      Logger.Debug("Maxiumum concurrent threads running. Waiting.")
+
       // Wait for all the routines to finish, then reset
       waitForRoutines(routines)
       count = 0
@@ -208,14 +212,14 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
   // Show a nice message that we're starting to upload the file
-  log.Printf("Uploading %s\n", artifact.Path)
+  Logger.Infof("Uploading %s (%d bytes)", artifact.Path, artifact.FileSize)
 
   // Upload the artifact and then set the state depending on whether or not
   // it passed.
   err := uploader.Upload(&artifact)
   if err != nil {
     artifact.State = "error"
-    log.Printf("Error uploading artifact %s (%s)", artifact.Path, err)
+    Logger.Errorf("Error uploading artifact %s (%s)", artifact.Path, err)
   } else {
     artifact.State = "finished"
   }
@@ -223,7 +227,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
   // Update the state of the artifact on Buildbox
   _, err = client.ArtifactUpdate(job, artifact)
   if err != nil {
-    log.Printf("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
+    Logger.Errorf("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
   }
 
   // We can notify the channel that this routine has finished now
