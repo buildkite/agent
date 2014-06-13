@@ -36,10 +36,10 @@ func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
   // Print the log level, but toggle the color
   if logrus.IsTerminal() {
-    levelColor := blue
+    levelColor := green
 
     if entry.Data["level"] == "debug" {
-      levelColor = green
+      levelColor = blue
     } else if entry.Data["level"] == "warning" {
       levelColor = yellow
     } else if entry.Data["level"] == "error" || entry.Data["level"] == "fatal" || entry.Data["level"] == "panic" {
