@@ -13,6 +13,7 @@ import (
   "path/filepath"
   "errors"
   "syscall"
+  "sync"
 )
 
 type Process struct {
@@ -66,6 +67,8 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   process.Running = true
 
   var buffer bytes.Buffer
+  var w sync.WaitGroup
+  w.Add(2)
 
   go func() {
     // Copy the pty to our buffer. This will block until it EOF's
@@ -74,6 +77,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
     if err != nil {
       log.Printf("io.Copy failed with error: %s\n", err)
     }
+    w.Done()
   }()
 
   go func(){
@@ -87,6 +91,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
       // Sleep for 1 second
       time.Sleep(1000 * time.Millisecond)
     }
+    w.Done()
   }()
 
   // Wait until the process has finished
@@ -96,6 +101,9 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   // of the script
   process.Running = false
   process.ExitStatus = getExitStatus(waitResult)
+
+  // wait for the Copy and incremental output to finish first
+  w.Wait()
   process.Output = buffer.String()
 
   // No error occured so we can return nil
