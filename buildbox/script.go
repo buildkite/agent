@@ -40,7 +40,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   absoluteDir, _ := filepath.Abs(dir)
   pathToScript := path.Join(absoluteDir, script)
 
-  Logger.Infof("Running script `%s` from inside %s\n", script, absoluteDir)
+  Logger.Infof("Running script `%s` from inside %s", script, absoluteDir)
 
   process.command = exec.Command(pathToScript)
   process.command.Dir = absoluteDir
@@ -74,7 +74,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
     // or something breaks.
     _, err = io.Copy(&buffer, pty)
     if err != nil {
-      Logger.Errorf("io.Copy failed with error: %s\n", err)
+      Logger.Errorf("io.Copy failed with error: %s", err)
     }
     w.Done()
   }()

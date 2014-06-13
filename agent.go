@@ -3,6 +3,7 @@ package main
 import (
   "os"
   "fmt"
+  "github.com/Sirupsen/logrus"
   "github.com/codegangsta/cli"
   "github.com/buildboxhq/buildbox-agent/buildbox"
 )
@@ -165,7 +166,10 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
   agent.Setup()
 
   // A nice welcome message
-  buildbox.Logger.Infof("Started buildbox-agent `%s` (Version: %s, PID: %d)", agent.Name, buildbox.Version, os.Getpid())
+  buildbox.Logger.WithFields(logrus.Fields{
+    "pid": os.Getpid(),
+    "version": buildbox.Version,
+  }).Infof("Started buildbox-agent `%s`", agent.Name)
 
   return &agent
 }
