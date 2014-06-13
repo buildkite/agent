@@ -165,7 +165,7 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
   agent.Setup()
 
   // A nice welcome message
-  buildbox.Logger.Infof("Started buildbox-agent `%s` (version %s)", agent.Name, buildbox.Version)
+  buildbox.Logger.Infof("Started buildbox-agent `%s` (Version: %s, PID: %d)", agent.Name, buildbox.Version, os.Getpid())
 
   return &agent
 }
