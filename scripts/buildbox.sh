@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
-set -x
 
-go --version
+echo '--- go version'
+go version
 
+echo '--- building packages'
 ./scripts/build.sh
