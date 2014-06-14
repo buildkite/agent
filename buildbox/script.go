@@ -100,31 +100,37 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
     w.Done()
   }()
 
-  // Wait until the process has finished
+  // Wait until the process has finished. The returned error is nil if the command runs,
+  // has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
   waitResult := process.command.Wait()
 
   // The process is no longer running at this point
   process.Running = false
 
-  // Determine the exit status.
-  if werr, ok := waitResult.(*exec.ExitError); ok {
-    // This returns a string like: `exit status 123`
-    exitString := werr.Error()
-    exitStringRegex := regexp.MustCompile(`([0-9]+)$`)
+  // Determine the exit status (if waitResult is an error, that means that the process
+  // returned a non zero exit status)
+  if waitResult != nil {
+    if werr, ok := waitResult.(*exec.ExitError); ok {
+      // This returns a string like: `exit status 123`
+      exitString := werr.Error()
+      exitStringRegex := regexp.MustCompile(`([0-9]+)$`)
 
-    if exitStringRegex.MatchString(exitString) {
-      process.ExitStatus = exitStringRegex.FindString(exitString)
+      if exitStringRegex.MatchString(exitString) {
+        process.ExitStatus = exitStringRegex.FindString(exitString)
+      } else {
+        Logger.Errorf("Weird looking exit status: %s", exitString)
+
+        // If the exit status isn't what I'm looking for, provide a generic one.
+        process.ExitStatus = "-1"
+      }
     } else {
-      Logger.Errorf("Weird looking exit status: %s", exitString)
+      Logger.Errorf("Could not determine exit status. %T: %v", waitResult, waitResult)
 
-      // If the exit status isn't what I'm looking for, provide a generic one.
+      // Not sure what to provide as an exit status if one couldn't be determined.
       process.ExitStatus = "-1"
     }
   } else {
-    Logger.Errorf("Could not determine exit status. %T: %v", err, err)
-
-    // Not sure what to provide as an exit status if one couldn't be determined.
-    process.ExitStatus = "-1"
+    process.ExitStatus = "0"
   }
 
   Logger.Debugf("Process with PID: %d finished with Exit Status: %s", process.Pid, process.ExitStatus)
