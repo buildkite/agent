@@ -139,8 +139,25 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 
   Logger.Debugf("Process with PID: %d finished with Exit Status: %s", process.Pid, process.ExitStatus)
 
+  // Make a chanel that we'll use as a timeout
+  c := make(chan int, 1)
+
+  // Start waiting for the routines to finish
   Logger.Debug("Waiting for io.Copy and incremental output to finish")
-  w.Wait()
+  go func() {
+    w.Wait()
+    c <- 1
+  }()
+
+  // Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
+  // hack around it. If it doesn't finish after 1 second, just continue.
+  // TODO: Whyyyyy!?!?!?
+  select {
+  case _ = <-c:
+    // nothing, wait finished fine.
+  case <-time.After(1 * time.Second):
+    Logger.Error("Timed out waiting for the routines to finish. Forcefully moving on.")
+  }
 
   // Copy the final output back to the process
   process.Output = buffer.String()
