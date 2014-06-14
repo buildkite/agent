@@ -11,7 +11,7 @@ This script is responsible for creating the build directory, cloning the repo, r
 Installing the agent is super easy. All you need to do is run this on your CI server:
 
 ```bash
-bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
+bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
 If you'd prefer not to run this install script, you can read the [manual installation guide](https://github.com/buildboxhq/buildbox-agent#manual-installation)
@@ -48,7 +48,7 @@ In practise, this can be quite tricky. But no problems! We've got everything you
 2. Run the install script again. This will download new copies of the binaries. **It won't** override the bootstrap.sh file.**
 
    ```bash
-   bash -c "`curl -sL https://raw.github.com/buildboxhq/buildbox-agent/master/install.sh`"
+   bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
    ```
 
 3. Tell the `buildbox-agent` process to restart by sending it an `USR2` signal
@@ -138,7 +138,7 @@ Here we'll show you how to manually install the buildbox agent.
 4. Download our example `bootstrap.sh` and put it in `~/.buildbox`
 
    ```bash
-   wget -q https://raw.github.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
+   wget -q https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
    ```
 
 5. (Optional) Add `~/.buildbox` to your `$PATH` so you can access the binaries eaiser.
@@ -177,7 +177,7 @@ upstart is that it will restart the process when you restart your server.
 1. Download our upstart template and save it to: `/etc/init/buildbox-agent.conf`
 
    ```bash
-   sudo wget https://raw.github.com/buildboxhq/buildbox-agent/master/templates/buildbox-agent.conf -O /etc/init/buildbox-agent.conf
+   sudo wget https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/templates/buildbox-agent.conf -O /etc/init/buildbox-agent.conf
    ```
 
 2. Edit the file and replace `your-build-user` with the user you'd like to run the builds as.
