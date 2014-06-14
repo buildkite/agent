@@ -9,8 +9,8 @@ go get github.com/tools/godep
 godep restore
 
 # setup the current repo as a package
-mkdir -p gopath/src/github.com/buildboxhq/buildbox-agent
-ln -s buildbox gopath/src/github.com/buildboxhq/buildbox-agent/buildbox
+mkdir -p gopath/src/github.com/buildboxhq
+ln -s `pwd` gopath/src/github.com/buildboxhq/buildbox-agent
 export GOPATH="`pwd`/gopath:$GOPATH"
 
 echo '--- building packages'
