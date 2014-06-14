@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+set -x
+
+gvm list
