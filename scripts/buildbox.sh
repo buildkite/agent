@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+export GOPATH="`pwd`:$GOPATH"
+
 echo '--- go version'
 go version
 
