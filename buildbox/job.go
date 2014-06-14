@@ -134,12 +134,7 @@ func (j *Job) Run(agent *Agent) error {
 
   // Mark the build as finished
   j.FinishedAt = time.Now().Format(time.RFC3339)
-
-  // Use the last processes exit status. ExitStatus is a string
-  // on the Job struct because 0 is considerered an empty value
-  // and won't be marshalled. We only want to send the exit status
-  // when the build has finsihed.
-  j.ExitStatus = fmt.Sprintf("%d", j.process.ExitStatus)
+  j.ExitStatus = j.process.ExitStatus
 
   // Keep trying this call until it works. This is the most important one.
   for {

@@ -10,22 +10,21 @@ import (
   "bytes"
   "path"
   "path/filepath"
-  "errors"
-  "syscall"
   "sync"
+  "regexp"
 )
 
 type Process struct {
   Output string
   Pid int
   Running bool
-  ExitStatus int
+  ExitStatus string
   command *exec.Cmd
 }
 
 // Implement the Stringer thingy
 func (p Process) String() string {
-  return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %d}", p.Pid, p.Running, p.ExitStatus)
+  return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
 }
 
 func (p Process) Kill() error {
@@ -40,7 +39,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   absoluteDir, _ := filepath.Abs(dir)
   pathToScript := path.Join(absoluteDir, script)
 
-  Logger.Infof("Running script `%s` from inside %s", script, absoluteDir)
+  Logger.Infof("Starting to run script `%s` from inside %s", script, absoluteDir)
 
   process.command = exec.Command(pathToScript)
   process.command.Dir = absoluteDir
@@ -57,7 +56,7 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   if err != nil {
     // The process essentially failed, so we'll just make up
     // and exit status.
-    process.ExitStatus = 1
+    process.ExitStatus = "1"
 
     return &process, err
   }
@@ -65,22 +64,29 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
   process.Pid = process.command.Process.Pid
   process.Running = true
 
+  Logger.Infof("Process is running with PID: %d", process.Pid)
+
   var buffer bytes.Buffer
   var w sync.WaitGroup
   w.Add(2)
 
   go func() {
+    Logger.Debug("Starting to copy PTY to the buffer")
+
     // Copy the pty to our buffer. This will block until it EOF's
     // or something breaks.
     _, err = io.Copy(&buffer, pty)
     if err != nil {
-      Logger.Errorf("io.Copy failed with error: %s", err)
+      Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
     }
+
     w.Done()
   }()
 
   go func(){
     for process.Running {
+      Logger.Debug("Copying buffer to the process output")
+
       // Convert the stdout buffer to a string
       process.Output = buffer.String()
 
@@ -90,37 +96,45 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
       // Sleep for 1 second
       time.Sleep(1000 * time.Millisecond)
     }
+
     w.Done()
   }()
 
   // Wait until the process has finished
   waitResult := process.command.Wait()
 
-  // Update the process with the final results
-  // of the script
+  // The process is no longer running at this point
   process.Running = false
-  process.ExitStatus = getExitStatus(waitResult)
 
-  // wait for the Copy and incremental output to finish first
+  // Determine the exit status.
+  if werr, ok := waitResult.(*exec.ExitError); ok {
+    // This returns a string like: `exit status 123`
+    exitString := werr.Error()
+    exitStringRegex := regexp.MustCompile(`([0-9]+)$`)
+
+    if exitStringRegex.MatchString(exitString) {
+      process.ExitStatus = exitStringRegex.FindString(exitString)
+    } else {
+      Logger.Errorf("Weird looking exit status: %s", exitString)
+
+      // If the exit status isn't what I'm looking for, provide a generic one.
+      process.ExitStatus = "-1"
+    }
+  } else {
+    Logger.Errorf("Could not determine exit status. %T: %v", err, err)
+
+    // Not sure what to provide as an exit status if one couldn't be determined.
+    process.ExitStatus = "-1"
+  }
+
+  Logger.Debugf("Process with PID: %d finished with Exit Status: %s", process.Pid, process.ExitStatus)
+
+  Logger.Debug("Waiting for io.Copy and incremental output to finish")
   w.Wait()
+
+  // Copy the final output back to the process
   process.Output = buffer.String()
 
   // No error occured so we can return nil
   return &process, nil
-}
-
-// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
-// WTF? Computers... (shrug)
-// TODO: Can this be better?
-func getExitStatus(waitResult error) int {
-  if waitResult != nil {
-    if err, ok := waitResult.(*exec.ExitError); ok {
-      if s, ok := err.Sys().(syscall.WaitStatus); ok {
-        return s.ExitStatus()
-      } else {
-        panic(errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus."))
-      }
-    }
-  }
-  return 0
 }
