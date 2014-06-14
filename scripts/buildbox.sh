@@ -2,4 +2,6 @@
 set -e
 set -x
 
-gvm list
+go --version
+
+./scripts/build.sh
