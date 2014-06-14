@@ -78,6 +78,8 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
     _, err = io.Copy(&buffer, pty)
     if err != nil {
       Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
+    } else {
+      Logger.Debug("io.Copy finsihed")
     }
 
     w.Done()
@@ -96,6 +98,8 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
       // Sleep for 1 second
       time.Sleep(1000 * time.Millisecond)
     }
+
+    Logger.Debug("Finished routine that copies the buffer to the process output")
 
     w.Done()
   }()
