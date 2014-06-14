@@ -6,7 +6,7 @@ go version
 
 echo '--- install dependencies'
 go get github.com/tools/godep
-godep get
+godep restore
 
 echo '--- building packages'
 ./scripts/build.sh
