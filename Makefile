@@ -27,4 +27,4 @@ lint:
 vet:
 	@go vet ./...
 
-.PHONY: build clean test fmt vet
+.PHONY: build dist clean test fmt vet
