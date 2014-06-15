@@ -13,6 +13,9 @@ test:
 fmt:
 	@go fmt ./...
 
+lint:
+	@golint cmd buildbox
+
 vet:
 	@go vet ./...
 
