@@ -11,15 +11,15 @@ mkdir -p "$DIRECTORY"
 function build {
   # Build the agent binary
   AGENT_FILENAME=buildbox-agent
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$AGENT_FILENAME agent.go
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$AGENT_FILENAME cmd/agent/agent.go
 
   # Build the artifact binary
   ARTIFACT_FILENAME=buildbox-artifact
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$ARTIFACT_FILENAME artifact.go
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$ARTIFACT_FILENAME cmd/artifact/artifact.go
 
   # Build the data binary
   DATA_FILENAME=buildbox-data
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$DATA_FILENAME data.go
+  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$DATA_FILENAME cmd/data/data.go
 
   FILENAME=buildbox-agent-$1-$2
 
