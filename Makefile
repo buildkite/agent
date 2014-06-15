@@ -16,4 +16,4 @@ fmt:
 vet:
 	@go vet ./...
 
-.PHONY: build clean test fmt
+.PHONY: build clean test fmt vet
