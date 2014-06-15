@@ -3,10 +3,10 @@
 package buildbox
 
 import (
-    "errors"
-    "os"
-    "path/filepath"
-    "strings"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 /*
@@ -49,124 +49,124 @@ while num entries > 0
 
     keep current entry if it's idx is in bounds
 
- */
+*/
 
 type matchEntry struct {
-    path string
-    idx int
+	path string
+	idx  int
 }
 
 func Glob(root string, pattern string) (matches []string, e error) {
-    if strings.Index(pattern, "**") < 0 {
-        return filepath.Glob(filepath.Join(root, pattern))
-    }
+	if strings.Index(pattern, "**") < 0 {
+		return filepath.Glob(filepath.Join(root, pattern))
+	}
 
-    segments := strings.Split(pattern, string(os.PathSeparator))
+	segments := strings.Split(pattern, string(os.PathSeparator))
 
-    workingEntries := []matchEntry{
-        matchEntry{path: root, idx: 0},
-    }
+	workingEntries := []matchEntry{
+		matchEntry{path: root, idx: 0},
+	}
 
-    for len(workingEntries) > 0 {
+	for len(workingEntries) > 0 {
 
-        var temp []matchEntry
-        for _, entry := range workingEntries {
-            workingPath := entry.path
-            idx := entry.idx
-            segment := segments[entry.idx]
+		var temp []matchEntry
+		for _, entry := range workingEntries {
+			workingPath := entry.path
+			idx := entry.idx
+			segment := segments[entry.idx]
 
-            if segment == "**" {
-                // add all subdirectories and move yourself one step further
-                // into pattern
-                entry.idx++
+			if segment == "**" {
+				// add all subdirectories and move yourself one step further
+				// into pattern
+				entry.idx++
 
-                subDirectories, err := getAllSubDirectories(entry.path)
+				subDirectories, err := getAllSubDirectories(entry.path)
 
-                if err != nil {
-                    return nil, err
-                }
+				if err != nil {
+					return nil, err
+				}
 
-                for _, name := range subDirectories {
-                    path := filepath.Join(workingPath, name)
+				for _, name := range subDirectories {
+					path := filepath.Join(workingPath, name)
 
-                    newEntry := matchEntry{
-                        path: path,
-                        idx: idx,
-                    }
+					newEntry := matchEntry{
+						path: path,
+						idx:  idx,
+					}
 
-                    temp = append(temp, newEntry)
-                }
+					temp = append(temp, newEntry)
+				}
 
-            } else {
-                // look at all results
-                // if we're at the end of the pattern, we found a match
-                // else add it to a working entry
-                path := filepath.Join(workingPath, segment)
-                results, err := filepath.Glob(path)
+			} else {
+				// look at all results
+				// if we're at the end of the pattern, we found a match
+				// else add it to a working entry
+				path := filepath.Join(workingPath, segment)
+				results, err := filepath.Glob(path)
 
-                if err != nil {
-                    return nil, err
-                }
+				if err != nil {
+					return nil, err
+				}
 
-                for _, result := range results {
-                    if idx + 1 < len(segments) {
-                        newEntry := matchEntry{
-                            path: result,
-                            idx: idx + 1,
-                        }
+				for _, result := range results {
+					if idx+1 < len(segments) {
+						newEntry := matchEntry{
+							path: result,
+							idx:  idx + 1,
+						}
 
-                        temp = append(temp, newEntry)
-                    } else {
-                        matches = append(matches, result)
-                    }
-                }
-                // delete ourself regardless
-                entry.idx = len(segments)
-            }
+						temp = append(temp, newEntry)
+					} else {
+						matches = append(matches, result)
+					}
+				}
+				// delete ourself regardless
+				entry.idx = len(segments)
+			}
 
-            // check whether current entry is still valid
-            if entry.idx < len(segments) {
-                temp = append(temp, entry)
-            }
-        }
+			// check whether current entry is still valid
+			if entry.idx < len(segments) {
+				temp = append(temp, entry)
+			}
+		}
 
-        workingEntries = temp
-    }
+		workingEntries = temp
+	}
 
-    return
+	return
 }
 
 func isDir(path string) (val bool, err error) {
-    fi, err := os.Stat(path)
+	fi, err := os.Stat(path)
 
-    if err != nil {
-        return false, err
-    }
+	if err != nil {
+		return false, err
+	}
 
-    return fi.IsDir(), nil
+	return fi.IsDir(), nil
 }
 
 func getAllSubDirectories(path string) (dirs []string, err error) {
 
-    if dir, err := isDir(path); err != nil || !dir {
-        return nil, errors.New("Not a directory " + path)
-    }
+	if dir, err := isDir(path); err != nil || !dir {
+		return nil, errors.New("Not a directory " + path)
+	}
 
-    d, err := os.Open(path)
-    if err != nil {
-        return nil, err
-    }
+	d, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
 
-    files, err := d.Readdirnames(-1)
-    if err != nil {
-        return nil, err
-    }
+	files, err := d.Readdirnames(-1)
+	if err != nil {
+		return nil, err
+	}
 
-    for _, file := range files {
-        path := filepath.Join(path, file)
-        if dir, err := isDir(path); err == nil && dir {
-            dirs = append(dirs, file)
-        }
-    }
-    return
+	for _, file := range files {
+		path := filepath.Join(path, file)
+		if dir, err := isDir(path); err == nil && dir {
+			dirs = append(dirs, file)
+		}
+	}
+	return
 }

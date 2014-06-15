@@ -1,85 +1,85 @@
 package buildbox
 
 import (
-  "io/ioutil"
-  "github.com/crowdmob/goamz/s3"
-  "github.com/crowdmob/goamz/aws"
-  "os"
-  "strings"
-  "errors"
+	"errors"
+	"github.com/crowdmob/goamz/aws"
+	"github.com/crowdmob/goamz/s3"
+	"io/ioutil"
+	"os"
+	"strings"
 )
 
 type S3Uploader struct {
-  // The destination which includes the S3 bucket name
-  // and the path.
-  // s3://my-bucket-name/foo/bar
-  Destination string
+	// The destination which includes the S3 bucket name
+	// and the path.
+	// s3://my-bucket-name/foo/bar
+	Destination string
 
-  // The S3 Bucket we're uploading these files to
-  Bucket *s3.Bucket
+	// The S3 Bucket we're uploading these files to
+	Bucket *s3.Bucket
 }
 
-func (u *S3Uploader) Setup(destination string) (error) {
-  u.Destination = destination
+func (u *S3Uploader) Setup(destination string) error {
+	u.Destination = destination
 
-  // Setup the AWS authentication
-  auth, err := aws.EnvAuth()
-  if err != nil {
-    return errors.New("Error loading AWS credentials: " + err.Error())
-  }
+	// Setup the AWS authentication
+	auth, err := aws.EnvAuth()
+	if err != nil {
+		return errors.New("Error loading AWS credentials: " + err.Error())
+	}
 
-  // Decide what region to use
-  // https://github.com/crowdmob/goamz/blob/master/aws/regions.go
-  // I think S3 defaults to us-east-1
-  regionName := "us-east-1"
-  if os.Getenv("AWS_DEFAULT_REGION") != "" {
-    regionName = os.Getenv("AWS_DEFAULT_REGION")
-  }
+	// Decide what region to use
+	// https://github.com/crowdmob/goamz/blob/master/aws/regions.go
+	// I think S3 defaults to us-east-1
+	regionName := "us-east-1"
+	if os.Getenv("AWS_DEFAULT_REGION") != "" {
+		regionName = os.Getenv("AWS_DEFAULT_REGION")
+	}
 
-  // Check to make sure the region exists
-  region, ok := aws.Regions[regionName]
-  if ok == false {
-    return errors.New("Unknown AWS Region `" + regionName + "`")
-  }
+	// Check to make sure the region exists
+	region, ok := aws.Regions[regionName]
+	if ok == false {
+		return errors.New("Unknown AWS Region `" + regionName + "`")
+	}
 
-  // Find the bucket
-  s3 := s3.New(auth, region)
-  bucket := s3.Bucket(u.bucketName())
+	// Find the bucket
+	s3 := s3.New(auth, region)
+	bucket := s3.Bucket(u.bucketName())
 
-  // If the list doesn't return an error, then we've got our
-  // bucket
-  _, err = bucket.List("", "", "", 0)
-  if err != nil {
-    return errors.New("Could not find bucket `" + u.bucketName() + " in region `" + region.Name + "` (" + err.Error() + ")")
-  }
+	// If the list doesn't return an error, then we've got our
+	// bucket
+	_, err = bucket.List("", "", "", 0)
+	if err != nil {
+		return errors.New("Could not find bucket `" + u.bucketName() + " in region `" + region.Name + "` (" + err.Error() + ")")
+	}
 
-  u.Bucket = bucket
+	u.Bucket = bucket
 
-  return nil
+	return nil
 }
 
-func (u *S3Uploader) URL(artifact *Artifact) (string) {
-  return "http://" + u.bucketName() + ".s3.amazonaws.com/" + u.artifactPath(artifact)
+func (u *S3Uploader) URL(artifact *Artifact) string {
+	return "http://" + u.bucketName() + ".s3.amazonaws.com/" + u.artifactPath(artifact)
 }
 
-func (u *S3Uploader) Upload(artifact *Artifact) (error) {
-  // Define the permission to use. Hard coded for now.
-  permission := "public-read"
-  Perms := s3.ACL(permission)
+func (u *S3Uploader) Upload(artifact *Artifact) error {
+	// Define the permission to use. Hard coded for now.
+	permission := "public-read"
+	Perms := s3.ACL(permission)
 
-  Logger.Debugf("Reading file %s", artifact.AbsolutePath)
-  data, err := ioutil.ReadFile(artifact.AbsolutePath)
-  if err != nil {
-    return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
-  }
+	Logger.Debugf("Reading file %s", artifact.AbsolutePath)
+	data, err := ioutil.ReadFile(artifact.AbsolutePath)
+	if err != nil {
+		return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
+	}
 
-  Logger.Debugf("Putting to %s with permission %s", u.artifactPath(artifact), permission)
-  err = u.Bucket.Put(u.artifactPath(artifact), data, artifact.MimeType(), Perms, s3.Options{})
-  if err != nil {
-    return errors.New("Failed to PUT file " + u.artifactPath(artifact) + " (" + err.Error() + ")")
-  }
+	Logger.Debugf("Putting to %s with permission %s", u.artifactPath(artifact), permission)
+	err = u.Bucket.Put(u.artifactPath(artifact), data, artifact.MimeType(), Perms, s3.Options{})
+	if err != nil {
+		return errors.New("Failed to PUT file " + u.artifactPath(artifact) + " (" + err.Error() + ")")
+	}
 
-  return nil
+	return nil
 }
 
 // func (u S3Uploader) Download(file string, bucket *s3.Bucket, path string) {
@@ -95,22 +95,22 @@ func (u *S3Uploader) Upload(artifact *Artifact) (error) {
 //   }
 // }
 
-func (u *S3Uploader) artifactPath(artifact *Artifact) (string) {
-  parts := []string{u.bucketPath(), artifact.Path}
+func (u *S3Uploader) artifactPath(artifact *Artifact) string {
+	parts := []string{u.bucketPath(), artifact.Path}
 
-  return strings.Join(parts, "/")
+	return strings.Join(parts, "/")
 }
 
 func (u *S3Uploader) bucketPath() string {
-  return strings.Join(u.destinationParts()[1:len(u.destinationParts())], "/")
+	return strings.Join(u.destinationParts()[1:len(u.destinationParts())], "/")
 }
 
-func (u *S3Uploader) bucketName() (string) {
-  return u.destinationParts()[0]
+func (u *S3Uploader) bucketName() string {
+	return u.destinationParts()[0]
 }
 
 func (u *S3Uploader) destinationParts() []string {
-  trimmed_string := strings.TrimLeft(u.Destination, "s3://")
+	trimmed_string := strings.TrimLeft(u.Destination, "s3://")
 
-  return strings.Split(trimmed_string, "/")
+	return strings.Split(trimmed_string, "/")
 }

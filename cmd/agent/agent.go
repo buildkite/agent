@@ -1,11 +1,11 @@
 package main
 
 import (
-  "os"
-  "fmt"
-  "github.com/Sirupsen/logrus"
-  "github.com/codegangsta/cli"
-  "github.com/buildboxhq/buildbox-agent/buildbox"
+	"fmt"
+	"github.com/Sirupsen/logrus"
+	"github.com/buildboxhq/buildbox-agent/buildbox"
+	"github.com/codegangsta/cli"
+	"os"
 )
 
 var AppHelpTemplate = `The agent performs builds and sends the results back to Buildbox.
@@ -56,120 +56,120 @@ var AgentAccessTokenEnv = "BUILDBOX_AGENT_ACCESS_TOKEN"
 var AgentAccessTokenDefault = "$" + AgentAccessTokenEnv
 
 func main() {
-  cli.AppHelpTemplate = AppHelpTemplate
-  cli.CommandHelpTemplate = CommandHelpTemplate
+	cli.AppHelpTemplate = AppHelpTemplate
+	cli.CommandHelpTemplate = CommandHelpTemplate
 
-  app := cli.NewApp()
-  app.Name = "buildbox-agent"
-  app.Version = buildbox.Version
+	app := cli.NewApp()
+	app.Name = "buildbox-agent"
+	app.Version = buildbox.Version
 
-  // Define the actions for our CLI
-  app.Commands = []cli.Command{
-    {
-      Name:  "start",
-      Usage: "Starts the Buildbox agent",
-      Description: StartHelpDescription,
-      Flags: []cli.Flag {
-        cli.StringFlag{"access-token", AgentAccessTokenDefault, "The access token used to identify the agent."},
-        cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
-        cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
-        cli.BoolFlag{"debug", "Enable debug mode."},
-      },
-      Action: func(c *cli.Context) {
-        // Create the agent from the CLI options
-        agent := setupAgentFromCli(c, "start")
+	// Define the actions for our CLI
+	app.Commands = []cli.Command{
+		{
+			Name:        "start",
+			Usage:       "Starts the Buildbox agent",
+			Description: StartHelpDescription,
+			Flags: []cli.Flag{
+				cli.StringFlag{"access-token", AgentAccessTokenDefault, "The access token used to identify the agent."},
+				cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
+				cli.BoolFlag{"debug", "Enable debug mode."},
+			},
+			Action: func(c *cli.Context) {
+				// Create the agent from the CLI options
+				agent := setupAgentFromCli(c, "start")
 
-        // Setup signal monitoring
-        agent.MonitorSignals()
+				// Setup signal monitoring
+				agent.MonitorSignals()
 
-        // Start the agent
-        agent.Start()
-      },
-    },
-    {
-      Name:  "run",
-      Usage: "Manually run a scheduled job",
-      Description: RunHelpDescription,
-      Flags: []cli.Flag {
-        cli.StringFlag{"access-token", "", "The access token used to identify the agent."},
-        cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
-        cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
-        cli.BoolFlag{"debug", "Enable debug mode."},
-      },
-      Action: func(c *cli.Context) {
-        // Create the agent from the CLI options
-        agent := setupAgentFromCli(c, "run")
+				// Start the agent
+				agent.Start()
+			},
+		},
+		{
+			Name:        "run",
+			Usage:       "Manually run a scheduled job",
+			Description: RunHelpDescription,
+			Flags: []cli.Flag{
+				cli.StringFlag{"access-token", "", "The access token used to identify the agent."},
+				cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
+				cli.BoolFlag{"debug", "Enable debug mode."},
+			},
+			Action: func(c *cli.Context) {
+				// Create the agent from the CLI options
+				agent := setupAgentFromCli(c, "run")
 
-        // Grab the first argument and use as the job id
-        id := c.Args().First()
+				// Grab the first argument and use as the job id
+				id := c.Args().First()
 
-        // Validate the job id
-        if id == "" {
-          fmt.Printf("buildbox-agent: no job id specified.\nSee 'buildbox-agent help run'")
-          os.Exit(1)
-        }
+				// Validate the job id
+				if id == "" {
+					fmt.Printf("buildbox-agent: no job id specified.\nSee 'buildbox-agent help run'")
+					os.Exit(1)
+				}
 
-        agent.Run(id)
-      },
-    },
-  }
+				agent.Run(id)
+			},
+		},
+	}
 
-  // Default the default action
-  app.Action = func(c *cli.Context) {
-    cli.ShowAppHelp(c)
-    os.Exit(1)
-  }
+	// Default the default action
+	app.Action = func(c *cli.Context) {
+		cli.ShowAppHelp(c)
+		os.Exit(1)
+	}
 
-  app.Run(os.Args)
+	app.Run(os.Args)
 }
 
 func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
-  // Init debugging
-  if c.Bool("debug") {
-    buildbox.LoggerInitDebug()
-  }
+	// Init debugging
+	if c.Bool("debug") {
+		buildbox.LoggerInitDebug()
+	}
 
-  agentAccessToken := c.String("access-token")
+	agentAccessToken := c.String("access-token")
 
-  // Should we look to the environment for the agent access token?
-  if agentAccessToken == AgentAccessTokenDefault {
-    agentAccessToken = os.Getenv(AgentAccessTokenEnv)
-  }
+	// Should we look to the environment for the agent access token?
+	if agentAccessToken == AgentAccessTokenDefault {
+		agentAccessToken = os.Getenv(AgentAccessTokenEnv)
+	}
 
-  if agentAccessToken == "" {
-    fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox-agent start --help'")
-    os.Exit(1)
-  }
+	if agentAccessToken == "" {
+		fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox-agent start --help'")
+		os.Exit(1)
+	}
 
-  bootstrapScript := c.String("bootstrap-script")
+	bootstrapScript := c.String("bootstrap-script")
 
-  // Expand the envionment variable.
-  if bootstrapScript == BootstrapScriptDefault {
-    bootstrapScript = os.ExpandEnv(bootstrapScript)
-  }
+	// Expand the envionment variable.
+	if bootstrapScript == BootstrapScriptDefault {
+		bootstrapScript = os.ExpandEnv(bootstrapScript)
+	}
 
-  // Make sure the boostrap script exists.
-  if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
-    print("buildbox-agent: no such file " + bootstrapScript + "\n")
-    os.Exit(1)
-  }
+	// Make sure the boostrap script exists.
+	if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
+		print("buildbox-agent: no such file " + bootstrapScript + "\n")
+		os.Exit(1)
+	}
 
-  // Set the agent options
-  var agent buildbox.Agent;
-  agent.BootstrapScript = bootstrapScript
+	// Set the agent options
+	var agent buildbox.Agent
+	agent.BootstrapScript = bootstrapScript
 
-  // Client specific options
-  agent.Client.AgentAccessToken = agentAccessToken
-  agent.Client.URL = c.String("url")
+	// Client specific options
+	agent.Client.AgentAccessToken = agentAccessToken
+	agent.Client.URL = c.String("url")
 
-  // Setup the agent
-  agent.Setup()
+	// Setup the agent
+	agent.Setup()
 
-  // A nice welcome message
-  buildbox.Logger.WithFields(logrus.Fields{
-    "pid": os.Getpid(),
-    "version": buildbox.Version,
-  }).Infof("Started buildbox-agent `%s`", agent.Name)
+	// A nice welcome message
+	buildbox.Logger.WithFields(logrus.Fields{
+		"pid":     os.Getpid(),
+		"version": buildbox.Version,
+	}).Infof("Started buildbox-agent `%s`", agent.Name)
 
-  return &agent
+	return &agent
 }
