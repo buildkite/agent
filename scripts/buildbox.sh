@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# setup the current repo as a package - super hax.
+mkdir -p gopath/src/github.com/buildboxhq
+ln -s `pwd` gopath/src/github.com/buildboxhq/buildbox-agent
+export GOPATH="`pwd`/gopath:$GOPATH"
+
 echo '--- go version'
 go version
 
@@ -16,8 +21,4 @@ echo '--- tests'
 make test
 
 echo '--- building packages'
-# setup the current repo as a package - super hax.
-mkdir -p gopath/src/github.com/buildboxhq
-ln -s `pwd` gopath/src/github.com/buildboxhq/buildbox-agent
-export GOPATH="`pwd`/gopath:$GOPATH"
 make build
