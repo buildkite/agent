@@ -123,6 +123,9 @@ func (p *Process) Start() error {
 	// The process is no longer running at this point
 	p.Running = false
 
+	// Find the exit status of the script
+	p.ExitStatus = getExitStatus(waitResult)
+
 	Logger.Debugf("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
@@ -133,9 +136,6 @@ func (p *Process) Start() error {
 		Logger.Errorf("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
-	// Find the exit status of the script
-	p.ExitStatus = getExitStatus(waitResult)
-
 	// Copy the final output back to the process
 	p.Output = buffer.String()
 
@@ -144,7 +144,65 @@ func (p *Process) Start() error {
 }
 
 func (p *Process) Kill() error {
-	p.signal(syscall.SIGTERM)
+	// Send a sigterm
+	err := p.signal(syscall.SIGTERM)
+	if err != nil {
+		return err
+	}
+
+	// Make a chanel that we'll use as a timeout
+	c := make(chan int, 1)
+	checking := true
+
+	// Start a routine that checks to see if the process
+	// is still alive.
+	go func() {
+		for checking {
+			Logger.Debugf("Checking to see if PID: %d is still alive", p.Pid)
+
+			foundProcess, err := os.FindProcess(p.Pid)
+
+			// Can't find the process at all
+			if err != nil {
+				Logger.Debugf("Could not find process with PID: %d", p.Pid)
+
+				break
+			}
+
+			// We have some information about the procss
+			if foundProcess != nil {
+				processState, err := foundProcess.Wait()
+
+				if err != nil || processState.Exited() {
+					Logger.Debugf("Process with PID: %d has exited.", p.Pid)
+
+					break
+				}
+			}
+
+			// Retry in a moment
+			sleepTime := time.Duration(1 * time.Second)
+			time.Sleep(sleepTime)
+		}
+
+		c <- 1
+	}()
+
+	// Timeout this process after 3 seconds
+	select {
+	case _ = <-c:
+		// Was successfully terminated
+	case <-time.After(5 * time.Second):
+		// Stop checking in the routine above
+		checking = false
+
+		// Forcefully kill the thing
+		err = p.signal(syscall.SIGKILL)
+
+		if err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
