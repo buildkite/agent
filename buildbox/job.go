@@ -27,6 +27,9 @@ type Job struct {
 
 	FinishedAt string `json:"finished_at,omitempty"`
 
+	// If the job is currently being cancelled
+	cancelled bool
+
 	// The currently running process of the job
 	process *Process
 }
@@ -72,12 +75,17 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 }
 
 func (j *Job) Kill() error {
-	Logger.Infof("Cancelling job %s", j.ID)
-
-	if j.process != nil {
-		j.process.Kill()
+	if j.cancelled {
+		// Already cancelled
 	} else {
-		Logger.Errorf("No process to kill")
+		Logger.Infof("Cancelling job %s", j.ID)
+		j.cancelled = true
+
+		if j.process != nil {
+			j.process.Kill()
+		} else {
+			Logger.Errorf("No process to kill")
+		}
 	}
 
 	return nil
@@ -104,7 +112,7 @@ func (j *Job) Run(agent *Agent) error {
 
 	// This callback is called every second the build is running. This lets
 	// us do a lazy-person's method of streaming data to Buildbox.
-	callback := func(process Process) {
+	callback := func(process *Process) {
 		j.Output = process.Output
 
 		// Post the update to the API
@@ -119,15 +127,16 @@ func (j *Job) Run(agent *Agent) error {
 		}
 	}
 
-	// Run the bootstrap script
+	// Initialze our process to run
 	scriptPath := path.Dir(agent.BootstrapScript)
 	scriptName := path.Base(agent.BootstrapScript)
-	process, err := RunScript(scriptPath, scriptName, env, callback)
+	process := InitProcess(scriptPath, scriptName, env, callback)
 
-	// Store the process for later
+	// Store the process so we can cancel it later.
 	j.process = process
 
-	// Did the process succeed?
+	// Start the process. This will block until it finishes.
+	err = process.Start()
 	if err == nil {
 		// Store the final output
 		j.Output = j.process.Output
