@@ -104,27 +104,25 @@ func (j *Job) Run(agent *Agent) error {
 
 	// This callback is called every second the build is running. This lets
 	// us do a lazy-person's method of streaming data to Buildbox.
-	createCallback := func(jj *Job) func(Process) {
-		return func(process Process) {
-			jj.Output = process.Output
+	callback := func(process Process) {
+		j.Output = process.Output
 
-			// Post the update to the API
-			updatedJob, err := agent.Client.JobUpdate(jj)
-			if err != nil {
-				// We don't really care if the job couldn't update at this point.
-				// This is just a partial update. We'll just let the job run
-				// and hopefully the host will fix itself before we finish.
-				Logger.Errorf("Problem with updating job %s (%s)", j.ID, err)
-			} else if updatedJob.State == "canceled" {
-				jj.Kill()
-			}
+		// Post the update to the API
+		updatedJob, err := agent.Client.JobUpdate(j)
+		if err != nil {
+			// We don't really care if the job couldn't update at this point.
+			// This is just a partial update. We'll just let the job run
+			// and hopefully the host will fix itself before we finish.
+			Logger.Errorf("Problem with updating job %s (%s)", j.ID, err)
+		} else if updatedJob.State == "canceled" {
+			j.Kill()
 		}
 	}
 
 	// Run the bootstrap script
 	scriptPath := path.Dir(agent.BootstrapScript)
 	scriptName := path.Base(agent.BootstrapScript)
-	process, err := RunScript(scriptPath, scriptName, env, createCallback(j))
+	process, err := RunScript(scriptPath, scriptName, env, callback)
 
 	// Store the process for later
 	j.process = process
