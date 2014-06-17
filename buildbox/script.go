@@ -1,7 +1,11 @@
 package buildbox
 
+// Logic for this file is largely based on:
+// https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
+
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/kr/pty"
 	"io"
@@ -9,8 +13,8 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -20,6 +24,7 @@ type Process struct {
 	Running    bool
 	ExitStatus string
 	command    *exec.Cmd
+	callback   func(*Process)
 }
 
 // Implement the Stringer thingy
@@ -27,11 +32,7 @@ func (p Process) String() string {
 	return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func (p Process) Kill() error {
-	return p.command.Process.Kill()
-}
-
-func RunScript(dir string, script string, env []string, callback func(Process)) (*Process, error) {
+func InitProcess(dir string, script string, env []string, callback func(*Process)) *Process {
 	// Create a new instance of our process struct
 	var process Process
 
@@ -39,10 +40,12 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 	absoluteDir, _ := filepath.Abs(dir)
 	pathToScript := path.Join(absoluteDir, script)
 
-	Logger.Infof("Starting to run script `%s` from inside %s", script, absoluteDir)
-
 	process.command = exec.Command(pathToScript)
 	process.command.Dir = absoluteDir
+
+	// Children of the forked process will inherit its process group
+	// This is to make sure that all grandchildren dies when this Process instance is killed
+	process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Copy the current processes ENV and merge in the
 	// new ones. We do this so the sub process gets PATH
@@ -51,24 +54,33 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 	currentEnv := os.Environ()
 	process.command.Env = append(currentEnv, env...)
 
+	// Set the callback
+	process.callback = callback
+
+	return &process
+}
+
+func (p *Process) Start() error {
+	Logger.Infof("Starting to run script: %s", p.command.Path)
+
 	// Start our process
-	pty, err := pty.Start(process.command)
+	pty, err := pty.Start(p.command)
 	if err != nil {
 		// The process essentially failed, so we'll just make up
 		// and exit status.
-		process.ExitStatus = "1"
+		p.ExitStatus = "1"
 
-		return &process, err
+		return err
 	}
 
-	process.Pid = process.command.Process.Pid
-	process.Running = true
+	p.Pid = p.command.Process.Pid
+	p.Running = true
 
-	Logger.Infof("Process is running with PID: %d", process.Pid)
+	Logger.Infof("Process is running with PID: %d", p.Pid)
 
 	var buffer bytes.Buffer
-	var w sync.WaitGroup
-	w.Add(2)
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(2)
 
 	go func() {
 		Logger.Debug("Starting to copy PTY to the buffer")
@@ -82,18 +94,18 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 			Logger.Debug("io.Copy finsihed")
 		}
 
-		w.Done()
+		waitGroup.Done()
 	}()
 
 	go func() {
-		for process.Running {
+		for p.Running {
 			Logger.Debug("Copying buffer to the process output")
 
 			// Convert the stdout buffer to a string
-			process.Output = buffer.String()
+			p.Output = buffer.String()
 
 			// Call the callback and pass in our process object
-			callback(process)
+			p.callback(p)
 
 			// Sleep for 1 second
 			time.Sleep(1000 * time.Millisecond)
@@ -101,67 +113,148 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 
 		Logger.Debug("Finished routine that copies the buffer to the process output")
 
-		w.Done()
+		waitGroup.Done()
 	}()
 
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
-	waitResult := process.command.Wait()
+	waitResult := p.command.Wait()
 
 	// The process is no longer running at this point
-	process.Running = false
+	p.Running = false
 
-	// Determine the exit status (if waitResult is an error, that means that the process
-	// returned a non zero exit status)
-	if waitResult != nil {
-		if werr, ok := waitResult.(*exec.ExitError); ok {
-			// This returns a string like: `exit status 123`
-			exitString := werr.Error()
-			exitStringRegex := regexp.MustCompile(`([0-9]+)$`)
+	// Find the exit status of the script
+	p.ExitStatus = getExitStatus(waitResult)
 
-			if exitStringRegex.MatchString(exitString) {
-				process.ExitStatus = exitStringRegex.FindString(exitString)
-			} else {
-				Logger.Errorf("Weird looking exit status: %s", exitString)
+	Logger.Debugf("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
-				// If the exit status isn't what I'm looking for, provide a generic one.
-				process.ExitStatus = "-1"
-			}
-		} else {
-			Logger.Errorf("Could not determine exit status. %T: %v", waitResult, waitResult)
-
-			// Not sure what to provide as an exit status if one couldn't be determined.
-			process.ExitStatus = "-1"
-		}
-	} else {
-		process.ExitStatus = "0"
+	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
+	// hack around it. If it doesn't finish after 1 second, just continue.
+	Logger.Debug("Waiting for io.Copy and incremental output to finish")
+	err = timeoutWait(&waitGroup)
+	if err != nil {
+		Logger.Errorf("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
-	Logger.Debugf("Process with PID: %d finished with Exit Status: %s", process.Pid, process.ExitStatus)
+	// Copy the final output back to the process
+	p.Output = buffer.String()
 
+	// No error occured so we can return nil
+	return nil
+}
+
+func (p *Process) Kill() error {
+	// Send a sigterm
+	err := p.signal(syscall.SIGTERM)
+	if err != nil {
+		return err
+	}
+
+	// Make a chanel that we'll use as a timeout
+	c := make(chan int, 1)
+	checking := true
+
+	// Start a routine that checks to see if the process
+	// is still alive.
+	go func() {
+		for checking {
+			Logger.Debugf("Checking to see if PID: %d is still alive", p.Pid)
+
+			foundProcess, err := os.FindProcess(p.Pid)
+
+			// Can't find the process at all
+			if err != nil {
+				Logger.Debugf("Could not find process with PID: %d", p.Pid)
+
+				break
+			}
+
+			// We have some information about the procss
+			if foundProcess != nil {
+				processState, err := foundProcess.Wait()
+
+				if err != nil || processState.Exited() {
+					Logger.Debugf("Process with PID: %d has exited.", p.Pid)
+
+					break
+				}
+			}
+
+			// Retry in a moment
+			sleepTime := time.Duration(1 * time.Second)
+			time.Sleep(sleepTime)
+		}
+
+		c <- 1
+	}()
+
+	// Timeout this process after 3 seconds
+	select {
+	case _ = <-c:
+		// Was successfully terminated
+	case <-time.After(5 * time.Second):
+		// Stop checking in the routine above
+		checking = false
+
+		// Forcefully kill the thing
+		err = p.signal(syscall.SIGKILL)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (p *Process) signal(sig os.Signal) error {
+	Logger.Debugf("Sending signal: %s to PID: %d", sig.String(), p.Pid)
+
+	err := p.command.Process.Signal(syscall.SIGTERM)
+	if err != nil {
+		Logger.Errorf("Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
+		return err
+	}
+
+	return nil
+}
+
+// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
+// TODO: Can this be better?
+func getExitStatus(waitResult error) string {
+	exitStatus := -1
+
+	if waitResult != nil {
+		if err, ok := waitResult.(*exec.ExitError); ok {
+			if s, ok := err.Sys().(syscall.WaitStatus); ok {
+				exitStatus = s.ExitStatus()
+			} else {
+				Logger.Error("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+			}
+		}
+	} else {
+		exitStatus = 0
+	}
+
+	return fmt.Sprintf("%d", exitStatus)
+}
+
+func timeoutWait(waitGroup *sync.WaitGroup) error {
 	// Make a chanel that we'll use as a timeout
 	c := make(chan int, 1)
 
 	// Start waiting for the routines to finish
-	Logger.Debug("Waiting for io.Copy and incremental output to finish")
 	go func() {
-		w.Wait()
+		waitGroup.Wait()
 		c <- 1
 	}()
 
-	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
-	// hack around it. If it doesn't finish after 1 second, just continue.
-	// TODO: Whyyyyy!?!?!?
 	select {
 	case _ = <-c:
-		// nothing, wait finished fine.
-	case <-time.After(1 * time.Second):
-		Logger.Error("Timed out waiting for the routines to finish. Forcefully moving on.")
+		return nil
+	case <-time.After(3 * time.Second):
+		return errors.New("Timeout")
 	}
 
-	// Copy the final output back to the process
-	process.Output = buffer.String()
-
-	// No error occured so we can return nil
-	return &process, nil
+	return nil
 }
