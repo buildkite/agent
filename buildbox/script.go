@@ -1,5 +1,8 @@
 package buildbox
 
+// Logic for this file is largely based on:
+// https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
+
 import (
 	"bytes"
 	"fmt"
@@ -11,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -28,7 +32,21 @@ func (p Process) String() string {
 }
 
 func (p Process) Kill() error {
-	return p.command.Process.Kill()
+	p.signal(syscall.SIGTERM)
+
+	return nil
+}
+
+func (p Process) signal(sig os.Signal) error {
+	Logger.Debugf("Sending `%s` to PID: `%d`", sig.String(), p.Pid)
+
+	err := p.command.Process.Signal(syscall.SIGTERM)
+	if err != nil {
+		Logger.Errorf("Failed to send `%s` to PID: `%d` (%T: %v)", sig.String(), p.Pid, err, err)
+		return err
+	}
+
+	return nil
 }
 
 func RunScript(dir string, script string, env []string, callback func(Process)) (*Process, error) {
@@ -43,6 +61,10 @@ func RunScript(dir string, script string, env []string, callback func(Process)) 
 
 	process.command = exec.Command(pathToScript)
 	process.command.Dir = absoluteDir
+
+	// Children of the forked process will inherit its process group
+	// This is to make sure that all grandchildren dies when this Process instance is killed
+	process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Copy the current processes ENV and merge in the
 	// new ones. We do this so the sub process gets PATH

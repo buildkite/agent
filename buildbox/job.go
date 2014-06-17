@@ -72,9 +72,12 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 }
 
 func (j *Job) Kill() error {
+	Logger.Infof("Cancelling job %s", j.ID)
+
 	if j.process != nil {
-		Logger.Infof("Cancelling job %s", j.ID)
 		j.process.Kill()
+	} else {
+		Logger.Errorf("No process to kill")
 	}
 
 	return nil
