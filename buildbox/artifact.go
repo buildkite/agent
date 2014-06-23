@@ -83,9 +83,9 @@ func (c *Client) ArtifactUpdate(job *Job, artifact Artifact) (*Artifact, error) 
 // the UI to show what artifacts will be uploaded. Their state starts out as
 // "new"
 func (c *Client) CreateArtifacts(job *Job, artifacts []*Artifact) ([]Artifact, error) {
-	var updatedArtifacts []Artifact
+	var createdArtifacts []Artifact
 
-	return updatedArtifacts, c.Post(&updatedArtifacts, "jobs/"+job.ID+"/artifacts", artifacts)
+	return createdArtifacts, c.Post(&createdArtifacts, "jobs/"+job.ID+"/artifacts", artifacts)
 }
 
 func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {
@@ -172,10 +172,24 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 		artifact.URL = uploader.URL(artifact)
 	}
 
-	// Create artifacts on buildbox
-	createdArtifacts, err := client.CreateArtifacts(job, artifacts)
-	if err != nil {
-		return err
+	// Create artifacts on buildbox in batches to prevent timeouts with many artifacts
+	var lenArtifacts = len(artifacts)
+	var createdArtifacts = []Artifact{}
+
+	for i := 0; i < lenArtifacts; i += 100 {
+		j := i + 100
+		if lenArtifacts < j {
+			j = lenArtifacts
+		}
+
+		someArtifacts := artifacts[i:j]
+
+		someCreatedArtifacts, err := client.CreateArtifacts(job, someArtifacts)
+		if err != nil {
+			return err
+		}
+
+		createdArtifacts = append(createdArtifacts, someCreatedArtifacts...)
 	}
 
 	// Upload the artifacts by spinning up some routines
