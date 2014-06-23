@@ -109,6 +109,12 @@ func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, er
 					return nil, err
 				}
 
+				fileInfo, err := os.Stat(absolutePath)
+				if fileInfo.IsDir() {
+					Logger.Debugf("Skipping directory %s", file)
+					continue
+				}
+
 				artifact, err := BuildArtifact(file, absolutePath, glob)
 				if err != nil {
 					return nil, err
