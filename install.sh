@@ -137,7 +137,7 @@ The source code of the agent is available here:
 
   https://github.com/buildboxhq/buildbox-agent
 
-If you have any questions or need a help getting things setup,
+If you have any questions or need a hand getting things setup,
 please email us at: hello@buildbox.io
 
 Happy Building!
