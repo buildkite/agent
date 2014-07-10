@@ -127,7 +127,7 @@ func (c *Client) DoReq(req *http.Request, v interface{}) error {
 }
 
 type errorResp struct {
-	Message string `json:"error"`
+	Message string `json:"message"`
 }
 
 func checkResp(res *http.Response) error {
