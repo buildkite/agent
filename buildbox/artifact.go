@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"mime"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,13 @@ func (c *Client) CreateArtifacts(job *Job, artifacts []*Artifact) ([]Artifact, e
 	var createdArtifacts []Artifact
 
 	return createdArtifacts, c.Post(&createdArtifacts, "jobs/"+job.ID+"/artifacts", artifacts)
+}
+
+// Searches for artifacts on the build
+func (c *Client) SearchArtifacts(buildId string, searchQuery string, jobQuery string) ([]Artifact, error) {
+	var foundArtifacts []Artifact
+
+	return foundArtifacts, c.Get(&foundArtifacts, "builds/"+buildId+"/artifacts/search?query="+url.QueryEscape(searchQuery)+"&job_query="+url.QueryEscape(jobQuery))
 }
 
 func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {
