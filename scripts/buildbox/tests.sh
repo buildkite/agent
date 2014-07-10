@@ -19,6 +19,3 @@ make lint
 
 echo '--- tests'
 make test
-
-echo '--- building packages'
-make build
