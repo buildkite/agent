@@ -104,6 +104,7 @@ func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, er
 			}
 
 			for _, file := range files {
+				// Generate an absolute path for the artifact
 				absolutePath, err := filepath.Abs(file)
 				if err != nil {
 					return nil, err
@@ -115,7 +116,15 @@ func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, er
 					continue
 				}
 
-				artifact, err := BuildArtifact(file, absolutePath, glob)
+				// Create a relative path (from the workingDirectory) to the artifact, by removing the
+				// first part of the absolutePath that is the workingDirectory.
+				relativePath := strings.Replace(absolutePath, workingDirectory, "", 1)
+
+				// Ensure the relativePath doesn't have a file seperator "/" as the first character
+				relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
+
+				// Build an artifact object using the paths we have.
+				artifact, err := BuildArtifact(relativePath, absolutePath, glob)
 				if err != nil {
 					return nil, err
 				}
@@ -128,9 +137,9 @@ func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, er
 	return artifacts, nil
 }
 
-func BuildArtifact(path string, absolutePath string, globPath string) (*Artifact, error) {
+func BuildArtifact(relativePath string, absolutePath string, globPath string) (*Artifact, error) {
 	// Temporarily open the file to get it's size
-	file, err := os.Open(path)
+	file, err := os.Open(absolutePath)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +154,7 @@ func BuildArtifact(path string, absolutePath string, globPath string) (*Artifact
 	// Create our new artifact data structure
 	artifact := new(Artifact)
 	artifact.State = "new"
-	artifact.Path = path
+	artifact.Path = relativePath
 	artifact.AbsolutePath = absolutePath
 	artifact.GlobPath = globPath
 	artifact.FileSize = fileInfo.Size()
