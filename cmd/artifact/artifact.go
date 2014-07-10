@@ -56,7 +56,8 @@ which will break the download.
 
 Example:
 
-buildbox-artifact download "pkg/*.tar.gz" . --agent-access-token [agent-access-token]
+buildbox-artifact download "pkg/*.tar.gz" . --build [build] \
+                                            --agent-access-token [agent-access-token]
 
 This will search across all the artifacts for the build with files that match that part.
 The first argument is the search query, and the second argument is the download destination.
@@ -65,6 +66,7 @@ If you're trying to download a specific file, and there are multiple artifacts f
 jobs, you can target the paticular job you want to download the artifact from:
 
 buildbox-artifact download "pkg/*.tar.gz" . --job "tests" \
+                                            --build [build] \
                                             --agent-access-token [agent-access-token]
 
 You can also use the job's id (provided by the environment variable $BUILDBOX_JOB_ID)`
@@ -181,7 +183,7 @@ func main() {
 			Description: DownloadHelpDescription,
 			Flags: []cli.Flag{
 				cli.StringFlag{"job", "", "Which job should the artifacts be downloaded from"},
-				cli.StringFlag{"build", "", "Which build should the artifacts be downloaded from"},
+				cli.StringFlag{"build", BuildIdDefault, "Which build should the artifacts be downloaded from"},
 				cli.StringFlag{"agent-access-token", AgentAccessTokenDefault, "The access token used to identify the agent"},
 				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The agent API endpoint"},
 				cli.BoolFlag{"debug", "Enable debug mode"},
