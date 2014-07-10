@@ -257,6 +257,12 @@ godep get
 go run agent.go
 ```
 
+To test the commands locally:
+
+```bash
+go run cmd/agent/artifact.go upload "buildbox/*.go" --agent-access-token=[..] --job [...] --debug
+```
+
 ### Contributing
 
 1. Fork it
