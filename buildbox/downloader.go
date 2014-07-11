@@ -49,7 +49,7 @@ func StartDownload(quit chan string, download Download) {
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
-	Logger.Infof("Downloading %s to %s", download.URL, targetFile)
+	Logger.Debugf("Downloading %s to %s", download.URL, targetFile)
 
 	// Start by downloading the file
 	response, err := http.Get(download.URL)
@@ -81,7 +81,7 @@ func StartDownload(quit chan string, download Download) {
 		return
 	}
 
-	Logger.Infof("Successfully downloaded %s (%d bytes)", download.URL, bytes)
+	Logger.Infof("Successfully downloaded %s (%d bytes)", download.Path, bytes)
 
 	// We can notify the channel that this routine has finished now
 	quit <- "finished"
