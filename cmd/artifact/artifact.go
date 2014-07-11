@@ -248,7 +248,7 @@ func main() {
 				fmt.Printf("destination: %s\n", downloadDestination)
 
 				// Search for artifacts to download
-				artifacts, err := agent.Client.SearchForDownloadArtifacts(buildId, searchQuery, jobQuery)
+				artifacts, err := agent.Client.SearchArtifacts(buildId, searchQuery, jobQuery)
 				if err != nil {
 					buildbox.Logger.Fatalf("Failed to find artifacts: %s", err)
 				}
