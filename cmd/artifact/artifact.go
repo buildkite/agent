@@ -5,6 +5,7 @@ import (
 	"github.com/buildboxhq/buildbox-agent/buildbox"
 	"github.com/codegangsta/cli"
 	"os"
+	"path/filepath"
 )
 
 var AppHelpTemplate = `A utility to upload/download artifacts for jobs on Buildbox
@@ -227,6 +228,16 @@ func main() {
 				downloadDestination := c.Args()[1]
 				jobQuery := c.String("job")
 
+				// Turn the download destination into an absolute path and confirm it exists
+				downloadDestination, _ = filepath.Abs(downloadDestination)
+				fileInfo, err := os.Stat(downloadDestination)
+				if err != nil {
+					buildbox.Logger.Fatalf("Could not find information about destination: %s", downloadDestination)
+				}
+				if !fileInfo.IsDir() {
+					buildbox.Logger.Fatalf("%s is not a directory", downloadDestination)
+				}
+
 				// Set the agent options
 				var agent buildbox.Agent
 
@@ -243,17 +254,22 @@ func main() {
 					buildbox.Logger.Infof("Searching for artifacts: \"%s\" within job: \"%s\"", searchQuery, jobQuery)
 				}
 
-				fmt.Printf("query: %s\n", searchQuery)
-				fmt.Printf("job: %s\n", jobQuery)
-				fmt.Printf("destination: %s\n", downloadDestination)
-
 				// Search for artifacts (only those that have finished uploaded) to download
 				artifacts, err := agent.Client.SearchArtifacts(buildId, searchQuery, jobQuery, "finished")
 				if err != nil {
 					buildbox.Logger.Fatalf("Failed to find artifacts: %s", err)
 				}
 
-				buildbox.Logger.Debugf("%s", artifacts)
+				if len(artifacts) == 0 {
+					buildbox.Logger.Info("No artifacts found for downloading")
+				} else {
+					buildbox.Logger.Infof("Found %d artifacts. Starting to download to: %s", len(artifacts), downloadDestination)
+
+					err := buildbox.DownloadArtifacts(artifacts, downloadDestination)
+					if err != nil {
+						buildbox.Logger.Fatalf("Failed to download artifacts: %s", err)
+					}
+				}
 			},
 		},
 	}

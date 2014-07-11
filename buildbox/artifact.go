@@ -271,6 +271,11 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
 	quit <- "finished"
 }
 
+func DownloadArtifacts(artifacts []Artifact, destination string) error {
+
+	return nil
+}
+
 func waitForRoutines(routines []chan string) {
 	for _, r := range routines {
 		<-r
