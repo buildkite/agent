@@ -14,7 +14,8 @@ echo '--- installing github-release'
 go get github.com/buildboxhq/github-release
 
 echo '--- download artifacts'
-buildbox-artifact download "*.pkg" .
+mkdir -p pkg
+buildbox-artifact download "pkg/*" pkg
 
 echo '--- release'
 ruby scripts/publish_release.rb
