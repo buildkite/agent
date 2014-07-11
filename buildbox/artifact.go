@@ -90,10 +90,10 @@ func (c *Client) CreateArtifacts(job *Job, artifacts []*Artifact) ([]Artifact, e
 }
 
 // Searches for artifacts on the build
-func (c *Client) SearchArtifacts(buildId string, searchQuery string, jobQuery string) ([]Artifact, error) {
+func (c *Client) SearchArtifacts(buildId string, searchQuery string, jobQuery string, stateQuery string) ([]Artifact, error) {
 	var foundArtifacts []Artifact
 
-	return foundArtifacts, c.Get(&foundArtifacts, "builds/"+buildId+"/artifacts/search?query="+url.QueryEscape(searchQuery)+"&job_query="+url.QueryEscape(jobQuery))
+	return foundArtifacts, c.Get(&foundArtifacts, "builds/"+buildId+"/artifacts/search?query="+url.QueryEscape(searchQuery)+"&job_query="+url.QueryEscape(jobQuery)+"&state="+url.QueryEscape(stateQuery))
 }
 
 func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {
