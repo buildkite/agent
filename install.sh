@@ -10,7 +10,7 @@ COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildboxhq/build
 
 # Allow custom setting of the version
 if [ -z "$VERSION" ]; then
-  VERSION="0.1"
+  VERSION="0.2"
 fi
 
 set -e
