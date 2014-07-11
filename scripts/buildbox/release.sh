@@ -13,8 +13,8 @@ godep restore
 echo '--- installing github-release'
 go get github.com/buildboxhq/github-release
 
-echo '--- building'
-./scripts/build.sh
+echo '--- download artifacts'
+buildbox-artifact download "*.pkg" .
 
 echo '--- release'
 ruby scripts/publish_release.rb
