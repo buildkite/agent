@@ -272,6 +272,35 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
 }
 
 func DownloadArtifacts(artifacts []Artifact, destination string) error {
+	// Download the files by spinning up some routines
+	var routines []chan string
+	var concurrency int = 10
+
+	Logger.Debugf("Spinning up %d concurrent threads for downloads", concurrency)
+
+	count := 0
+	for _, artifact := range artifacts {
+		// Create a channel and apend it to the routines array. Once we've hit our
+		// concurrency limit, we'll block until one finishes, then this loop will
+		// startup up again.
+		count++
+		wait := make(chan string)
+		download := Download{URL: artifact.URL, Path: artifact.Path, Destination: destination}
+		go StartDownload(wait, download)
+		routines = append(routines, wait)
+
+		if count >= concurrency {
+			Logger.Debug("Maxiumum concurrent threads running. Waiting.")
+
+			// Wait for all the routines to finish, then reset
+			waitForRoutines(routines)
+			count = 0
+			routines = routines[0:0]
+		}
+	}
+
+	// Wait for any other routines to finish
+	waitForRoutines(routines)
 
 	return nil
 }
