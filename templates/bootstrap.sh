@@ -22,6 +22,9 @@ echo '--- setup environment'
 # and edit this file.
 BUILDBOX_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+# Add the $BUILDBOX_DIR to the $PATH
+export PATH="$BUILDBOX_DIR:$PATH"
+
 # Create the build directory
 BUILDBOX_BUILD_DIR="$BUILDBOX_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
 
