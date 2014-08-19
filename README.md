@@ -2,25 +2,23 @@
 
 There are three commands included in the buildbox-agent package:
 
-* `buildbox-agent` - the main job runner, which waits for build steps to execute
-* `buildbox-data` - reads and writes to your build-wide key/value store
+* buildbox-agent - the main job runner, which waits for build steps to execute
+* buildbox-data - reads and writes to your build-wide key/value store
 * [buildbox-artifact](https://buildbox.io/docs/agent/artifacts) - uploads and downloads files to your build-wide file store
 
 ## Installing
 
-Simply run the following command ([see the source](https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh)), which will automatically download the correct binaries for your platform:
+Simply run the following command ([see the source](https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh)), which will automatically download the correct binaries for your platform (or if you'd prefer not to run this install script see the [manual installation guide](#manual-installation)):
 
 ```bash
 bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
-If you'd prefer not to run this install script, you can read the [manual installation guide](#manual-installation)
-
-Once installed, copy the agent's secret access key from the agent's settings page on Buildbox:
+Once installed, copy the access token from the agent settings page on Buildbox:
 
 ![image](https://cloud.githubusercontent.com/assets/153/3960325/55662f70-273d-11e4-82c0-75e09d7ee6e6.png)
 
-And then start the agent:
+And then start the agent with the token:
 
 ```bash
 buildbox-agent start --access-token b9c784528b92d7e904cfa238e68701f1
@@ -40,16 +38,6 @@ We've some templates for the default process manageers for various platforms:
 * [Launchd (OSX)](/templates/launchd.plist)
 
 If you have another, or need another, send a pull request or let us know!
-
-## How build-agent works
-
-After starting, buildbox-agent polls Buildbox (over HTTP) looking for work.
-
-When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildbox.io/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
-
-The build's output is continously streamed back to buildbox, and when the build process exits it reports the status code and then returns to looking for new jobs to execute.
-
-Using a `bootsrap.sh` ensures that buildbox web can't be configured to run arbitrary commands on your server, and it also allows you to configure `bootsrap.sh` to do [anything you wish](#customizing-bootstrapsh) (although it works out-of-the-box with `git`-based projects).
 
 ## Upgrading
 
@@ -74,6 +62,16 @@ Upgrading the agent is simply a matter of re-running the install script and then
 4. Check your `buildbox-agent` logs to make sure it has started up the agent again.
 
 If you're running a **really long** job, and just want to kill it, send the `USR2` signal twice. That'll cause the `buildbox-agent` process to cancel the current job, and then shutdown.
+
+## How it works
+
+After starting, buildbox-agent polls Buildbox over HTTPS looking for work.
+
+When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildbox.io/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
+
+As the build is running the output stream is continously sent to buildbox, and when the build finishes it reports the exit status and then returns to looking for new jobs to execute.
+
+Using a `bootsrap.sh` ensures that buildbox web can't be configured to run arbitrary commands on your server, and it also allows you to configure `bootsrap.sh` to do [anything you wish](#customizing-bootstrapsh) (although it works out-of-the-box with `git`-based projects).
 
 ## Artifact uploads
 
