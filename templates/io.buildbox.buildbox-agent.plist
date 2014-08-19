@@ -18,7 +18,7 @@
     launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
     # Check the launchd log
-    tail -f /usr/local/var/log/buildbox.log
+    tail -f /usr/local/var/log/buildbox-agent.log
 
   If you need to edit the plist:
 
@@ -47,10 +47,10 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/usr/local/var/log/buildbox.log</string>
+    <string>/usr/local/var/log/buildbox-agent.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/buildbox.log</string>
+    <string>/usr/local/var/log/buildbox-agent.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
