@@ -1,5 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  This is a launchd configuration for loading buildbox-agent on system boot on OS X.
+
+  To install:
+
+    # Download launchd config into ~/Library/LaunchAgents/
+    curl -o ~/Library/LaunchAgents/io.buildbox.buildbox-agent.plist https://raw.githubusercontent.com/buildbox/buildbox-agent/master/templates/io.buildbox.buildbox-agent.plist
+
+    # Edit and add your details
+    open ~/Library/LaunchAgents/io.buildbox.buildbox-agent.plist
+
+    # Load on system boot, rather than user login
+    sudo ln -sfv ~/Library/LaunchAgents/io.buildbox.buildbox-agent.plist /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+
+    # Add it to launchd
+    launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+
+    # Check the launchd log
+    tail -f /usr/local/var/log/buildbox.log
+
+  If you need to edit the plist:
+
+    open /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+    launchctl unload /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+    launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+-->
 <plist version="1.0">
   <dict>
     <key>Label</key>
