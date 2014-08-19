@@ -1,16 +1,14 @@
 # buildbox-agent
 
-Your buildbox agent's are responsible for running build jobs on your own machine or server.
+There are three commands included in the buildbox-agent package:
 
-## How it works
+* `buildbox-agent` - the main job runner, which waits for build steps to execute
+* `buildbox-data` - reads and writes to your build-wide key/value store
+* [buildbox-artifact](https://buildbox.io/docs/agent/artifacts) - uploads and downloads files to your build-wide file store
 
-The agent polls Buildbox asking for work, and when a new job is given the agent execute [bootstrap.sh](templates/bootstrap.sh) passing all the [standard environment variables](https://buildbox.io/docs/guides/environment-variables) and any configured in your build pipeline's steps.
+## Installing
 
-This way buildbox web can't be configured to run arbitrary commands on your server, it is all down through your local `bootstrap.sh` file. By default it assumes `git`, but your `bootstrap.sh` could do anything you wish.
-
-## Installation
-
-Installing the agent is super easy. All you need to do is run this command ([see the source](https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh)):
+Simply run the following command ([see the source](https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh)), which will automatically download the correct binaries for your platform:
 
 ```bash
 bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
@@ -18,9 +16,11 @@ bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/m
 
 If you'd prefer not to run this install script, you can read the [manual installation guide](#manual-installation)
 
-Once installed, start the agent using the secret access key from your agent settings page:
+Once installed, copy the agent's secret access key from the agent's settings page on Buildbox:
 
 ![image](https://cloud.githubusercontent.com/assets/153/3960325/55662f70-273d-11e4-82c0-75e09d7ee6e6.png)
+
+And then start the agent:
 
 ```bash
 buildbox-agent start --access-token b9c784528b92d7e904cfa238e68701f1
@@ -34,15 +34,26 @@ buildbox-agent --help
 
 ### Launching on system startup
 
-Follow the instructions for your platform:
+We've some templates for the default process manageers for various platforms:
 
 * [Upstart (Ubuntu)](/templates/upstart.conf)
 * [Launchd (OSX)](/templates/launchd.plist)
-* Need another? Send a pull request or let us know!
+
+If you have another, or need another, send a pull request or let us know!
+
+## How build-agent works
+
+After starting, buildbox-agent polls Buildbox (over HTTP) looking for work.
+
+When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildbox.io/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
+
+The build's output is continously streamed back to buildbox, and when the build process exits it reports the status code and then returns to looking for new jobs to execute.
+
+Using a `bootsrap.sh` ensures that buildbox web can't be configured to run arbitrary commands on your server, and it also allows you to configure `bootsrap.sh` to do [anything you wish](#customizing-bootstrapsh) (although it works out-of-the-box with `git`-based projects).
 
 ## Upgrading
 
-Upgrading the agent is pretty straightforward.
+Upgrading the agent is simply a matter of re-running the install script and then restarting the agent (with a `USR2`).
 
 1. Run the install script again. This will download new copies of the binaries. **It won't** override the bootstrap.sh file.**
 
@@ -106,7 +117,7 @@ builds get run on your servers.
 
 ## Windows Support
 
-Windows support is coming soon. In the meantime, you can use our [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
+Windows support is coming soon. In the meantime, you can use our [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby).
 
 ## Manual Installation
 
