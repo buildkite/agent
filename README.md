@@ -2,7 +2,7 @@
 
 There are three commands included in the buildbox-agent package:
 
-* buildbox-agent - the main job runner, which waits for build steps to execute
+* buildbox-agent - the main job runner, which polls Buildbox for build steps to execute
 * buildbox-data - reads and writes to your build-wide key/value store
 * [buildbox-artifact](https://buildbox.io/docs/agent/artifacts) - uploads and downloads files to your build-wide file store
 
