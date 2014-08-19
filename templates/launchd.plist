@@ -5,24 +5,24 @@
 
   To install:
 
-    # Download launchd config into ~/Library/LaunchAgents/
-    curl -o ~/Library/LaunchAgents/io.buildbox.buildbox-agent.plist https://raw.githubusercontent.com/buildbox/buildbox-agent/master/templates/launchd.plist
+    # Download the launchd config to /Library/LaunchDaemons/ (it needs to be owned by root:wheel)
+    sudo curl -o /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist https://raw.githubusercontent.com/buildbox/buildbox-agent/master/templates/launchd.plist
 
-    # Edit and add your details
-    open ~/Library/LaunchAgents/io.buildbox.buildbox-agent.plist
+    # Set the user to run buildbox-agent as (usually `whoami`). It should be a full OS X user created via System Prefs, and the one you installed buildbox-agent under.
+    sudo sed -i "s/your-build-user/[insert username here]/g" /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+    
+    # Set the agent's access token
+    sudo sed -i "s/your-agent-access-token/[insert agent access token here]/g" /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
-    # Load on system boot, rather than user login
-    sudo ln -sfv ~/Library/LaunchAgents/io.buildbox.buildbox-agent.plist /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
-
-    # Add it to launchd
+    # Add it to launchd (which also starts buildbox-agent)
     launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
-    # Check the launchd log
+    # Check the logs
     tail -f /usr/local/var/log/buildbox-agent.log
 
   If you need to edit the plist:
 
-    open /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+    # Edit the plist, and then...
     launchctl unload /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
     launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 -->
