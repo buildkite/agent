@@ -30,6 +30,8 @@ For more help with the command line interface:
 buildbox-agent --help
 ```
 
+If you're using Windows, use the [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby).
+
 ### Launching on system startup
 
 We've some templates for the default process manageers for various platforms:
@@ -112,10 +114,6 @@ fi
 
 The benefit of the `bootstrap.sh` is that it's written in bash. You can change it how ever you like and customize how
 builds get run on your servers.
-
-## Windows Support
-
-Windows support is coming soon. In the meantime, you can use our [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby).
 
 ## Manual Installation
 
