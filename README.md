@@ -63,35 +63,6 @@ In practise, this can be quite tricky. But no problems! We've got everything you
 
 5. Check your `buildbox-agent` logs to make sure it has started up the agent again.
 
-### Upgrading from the Ruby agent
-
-The Buildbox agent was previously written [in Ruby](https://github.com/buildboxhq/buildbox-agent-ruby), however due to installation and performance issues, we've switched to something
-a bit more light-weight and universal. Golang fit the bill the best with it's support for compiling to single binaries.
-
-The biggest change you'll notice is that you no longer define your build scripts on Buildbox. You instead should write these scripts and save them to your projects source control.
-
-To migrate to the new agent, the first step is creating a file in your repository (for example `scripts/buildbox.sh`) and fill it with something like this:
-
-```bash
-#!/bin/bash
-set -e # exit if any command fails
-
-echo '--- bundling'
-bundle install
-
-echo '--- preparing database'
-./bin/rake db:test:prepare
-
-echo '--- running specs'
-./bin/rspec
-```
-
-You'll obviously want to edit it to match your own build configuration. You should already have something like this in your
-existing build scripts on Buildbox. Once you've created this file, commit it to your source control and push. Next, go to your
-Project Settings on Buildbox and update the "Script Path" field with the path to your new build script (here we used `scripts/buildbox.sh`).
-
-Now you can install the new agent and trigger some builds. You can use your exising agent access tokens with the new agents.
-
 ### Artifacts
 
 Uploading artifacts is handled by a seperate tool `buildbox-artifact` which is bundled with the agent. You can see
@@ -112,40 +83,6 @@ buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket
 We'll recognise the `s3://` prefix and upload the artifacts to S3 to the bucket name `name-of-your-s3-bucket` (obviously you'll want to change it to the name of your own S3 bucket)
 
 If you upload artifacts to your own S3 Bucket, you can further secure your artifacts by [Restricting Access to Specific IP Addresses](https://docs.aws.amazon.com/AmazonS3/latest/dev/AccessPolicyLanguage_UseCases_s3_a.html)
-
-### Manual Installation
-
-Here we'll show you how to manually install the buildbox agent.
-
-1. Create a folder at `~/.buildbox`
-
-   ```bash
-   mkdir -p ~/.buildbox
-   ```
-
-2. Download the correct binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.2 for a list for binaries.
-
-   ```bash
-   wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.2/buildbox-agent-linux-amd64.tar.gz
-   ```
-
-3. Extract the tar. This should extract `buildbox-agent` and `buildbox-artifact` to the `~/.buildbox` folder.
-
-   ```bash
-   tar -C ~/.buildbox -zvxf buildbox-agent-linux-amd64.tar.gz
-   ```
-
-4. Download our example `bootstrap.sh` and put it in `~/.buildbox`
-
-   ```bash
-   wget -q https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
-   ```
-
-5. (Optional) Add `~/.buildbox` to your `$PATH` so you can access the binaries eaiser.
-
-   ```bash
-   echo 'export PATH="$HOME/.buildbox:$PATH"' >> ~/.bash_profile
-   ```
 
 ### Customizing bootstrap.sh
 
@@ -233,6 +170,40 @@ You can read more about how screen works over at the [Screen User's Manual](http
 ### Windows Support
 
 Windows support is coming soon. In the meantime, you can use our [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby)
+
+### Manual Installation
+
+Here we'll show you how to manually install the buildbox agent.
+
+1. Create a folder at `~/.buildbox`
+
+   ```bash
+   mkdir -p ~/.buildbox
+   ```
+
+2. Download the correct binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.2 for a list for binaries.
+
+   ```bash
+   wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.2/buildbox-agent-linux-amd64.tar.gz
+   ```
+
+3. Extract the tar. This should extract `buildbox-agent` and `buildbox-artifact` to the `~/.buildbox` folder.
+
+   ```bash
+   tar -C ~/.buildbox -zvxf buildbox-agent-linux-amd64.tar.gz
+   ```
+
+4. Download our example `bootstrap.sh` and put it in `~/.buildbox`
+
+   ```bash
+   wget -q https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
+   ```
+
+5. (Optional) Add `~/.buildbox` to your `$PATH` so you can access the binaries eaiser.
+
+   ```bash
+   echo 'export PATH="$HOME/.buildbox:$PATH"' >> ~/.bash_profile
+   ```
 
 ### Development
 
