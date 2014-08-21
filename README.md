@@ -14,7 +14,7 @@ Simply run the following command ([see the source](https://raw.githubusercontent
 bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
-Nopy the access token from the agent settings page on Buildbox:
+Copy the access token from the agent settings page on Buildbox:
 
 ![image](https://cloud.githubusercontent.com/assets/153/3960325/55662f70-273d-11e4-82c0-75e09d7ee6e6.png)
 
