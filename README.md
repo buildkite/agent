@@ -14,38 +14,34 @@ Simply run the following command ([see the source](https://raw.githubusercontent
 bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
 ```
 
-Once installed, copy the access token from the agent settings page on Buildbox:
+Nopy the access token from the agent settings page on Buildbox:
 
 ![image](https://cloud.githubusercontent.com/assets/153/3960325/55662f70-273d-11e4-82c0-75e09d7ee6e6.png)
 
 And then start the agent with the token:
 
 ```bash
-buildbox-agent start --access-token b9c784528b92d7e904cfa238e68701f1
+~/.buildbox/buildbox-agent start --access-token b9c784528b92d7e904cfa238e68701f1
 ```
 
-For more help with the command line interface:
+Now you're all set to run your first build!
 
-```bash
-buildbox-agent --help
-```
-
-If you're using Windows, use the [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby).
+If you're using Windows, you'll want to use the [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby).
 
 ### Launching on system startup
 
-We've some templates for the default process manageers for various platforms:
+We've some templates for the default process manageers for various platforms. Using a process manager will allow to you ensure `buildbox-agent` is running on system boot, and will allow for easy upgrades and restarts because you can simply kill the process and the process manager to start it up again.
 
 * [Upstart (Ubuntu)](/templates/upstart.conf)
 * [Launchd (OSX)](/templates/launchd.plist)
 
-If you have another, or need another, send a pull request or let us know!
+If you have another to contribute, or need a hand, let us know! (pull requests also welcome)
 
 ## Upgrading
 
 Upgrading the agent is simply a matter of re-running the install script and then restarting the agent (with a `USR2`).
 
-1. Run the install script again. This will download new copies of the binaries. **It won't** override the bootstrap.sh file.**
+1. Run the install script again. This will download new copies of the binaries. Dont' worry, **it won't** override your bootstrap.sh file.
 
    ```bash
    bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
