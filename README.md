@@ -1,4 +1,4 @@
-# buildbox-agent
+# buildbox-agent ![Build status](https://badge.buildbox.io/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg)
 
 There are three commands included in the buildbox-agent package:
 
