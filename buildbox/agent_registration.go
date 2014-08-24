@@ -2,6 +2,7 @@ package buildbox
 
 import (
 	"fmt"
+	"github.com/Sirupsen/logrus"
 )
 
 type AgentRegistration struct {
@@ -13,13 +14,23 @@ type AgentRegistration struct {
 
 	// The name of the new agent
 	Name string `json:"name"`
+
+	// Meta data for the agent
+	MetaData []string `json:"meta_data"`
 }
 
-func (c *Client) AgentRegister() (string, error) {
+func (c *Client) AgentRegister(name string, metaData []string) (string, error) {
 	// Create the agent registration
 	var registration AgentRegistration
-	registration.Name = MachineHostname()
-	registration.Hostname = registration.Name
+	registration.Name = name
+	registration.Hostname = MachineHostname()
+	registration.MetaData = metaData
+
+	Logger.WithFields(logrus.Fields{
+		"name":      registration.Name,
+		"hostname":  registration.Hostname,
+		"meta-data": registration.MetaData,
+	}).Info("Registering agent")
 
 	// Register and return the agent
 	err := c.Post(&registration, "/register", registration)

@@ -43,6 +43,19 @@ Example:
 buildbox-agent start --access-token [access-token] \
                      --bootstrap-script ~/.buildbox/bootstrap.sh`
 
+var RegisterHelpDescription = `Creates an agent at run time and then starts it. To create
+registered agents, you will need your account's Agent Registration Token.
+You can customize the name and meta data of the agent when using this
+command. Those arguments are optional.
+
+Example:
+
+buildbox-agent register --agent-registraton-token [registraton-token] \
+                        --name best-agent-ever \
+                        --meta-data queue=example-queue \
+                        --meta-data user=$(whoami) \
+                        --bootstrap-script ~/.buildbox/bootstrap.sh`
+
 var RunHelpDescription = `Manually run a scheduled job. If the job has already assigned
 to another agent, it will not run.
 
@@ -71,11 +84,13 @@ func main() {
 		{
 			Name:        "register",
 			Usage:       "Registers an agent with Buildbox and starts it",
-			Description: StartHelpDescription,
+			Description: RegisterHelpDescription,
 			Flags: []cli.Flag{
 				cli.StringFlag{"agent-registration-token", AgentAccessTokenDefault, "The agent registration token for your account."},
+				cli.StringFlag{"name", "", "The name of the agent"},
+				cli.StringSliceFlag{"meta-data", &cli.StringSlice{}, "Meta data for the agent"},
 				cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The Agent API endpoint."},
 				cli.BoolFlag{"debug", "Enable debug mode."},
 			},
 			Action: func(c *cli.Context) {
@@ -171,7 +186,7 @@ func registerAgentFromCli(c *cli.Context) *buildbox.Agent {
 	client.URL = c.String("url")
 
 	// Register the agent
-	agentAccessToken, err := client.AgentRegister()
+	agentAccessToken, err := client.AgentRegister(c.String("name"), c.StringSlice("meta-data"))
 	if err != nil {
 		buildbox.Logger.Fatal(err)
 	}
