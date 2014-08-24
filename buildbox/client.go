@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	// "io/ioutil"
 	"net/http"
 	"runtime"
 	"strings"
 )
 
 const (
-	DefaultAPIURL    = "https://agent.buildbox.io/v1"
+	DefaultAPIURL    = "https://agent.buildbox.io/v2"
 	DefaultUserAgent = "buildbox-agent/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 )
 
@@ -21,8 +22,8 @@ type Client struct {
 	// "https://agent.buildbox.io/v1".
 	URL string
 
-	// The access token of the agent being used to make API requests
-	AgentAccessToken string
+	// The authorization token agent being used to make API requests
+	AuthorizationToken string
 
 	// UserAgent to be provided in API requests. Set to DefaultUserAgent if not
 	// specified.
@@ -77,7 +78,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 	}
 
 	normalizedPath := strings.TrimLeft(path, "/")
-	url := endpointUrl + "/" + c.AgentAccessToken + "/" + normalizedPath
+	url := endpointUrl + "/" + normalizedPath
 
 	// Create a new request object
 	req, err := http.NewRequest(method, url, requestBody)
@@ -88,6 +89,9 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 	// Set the accept content type. The Buildbox API only speaks
 	// json.
 	req.Header.Set("Accept", "application/json")
+
+	// Set the authorization header
+	req.Header.Set("Authorization", "Token "+c.AuthorizationToken)
 
 	// Figure out and set the User Agent
 	userAgent := c.UserAgent
@@ -121,6 +125,9 @@ func (c *Client) DoReq(req *http.Request, v interface{}) error {
 	if err = checkResp(res); err != nil {
 		return err
 	}
+
+	// body, err := ioutil.ReadAll(res.Body)
+	// Logger.Debugf("%s", body)
 
 	// Decode the response
 	return json.NewDecoder(res.Body).Decode(v)

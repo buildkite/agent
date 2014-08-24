@@ -55,6 +55,9 @@ var BootstrapScriptDefault = "$HOME/.buildbox/bootstrap.sh"
 var AgentAccessTokenEnv = "BUILDBOX_AGENT_ACCESS_TOKEN"
 var AgentAccessTokenDefault = "$" + AgentAccessTokenEnv
 
+var AgentRegistrationTokenEnv = "BUILDBOX_AGENT_REGISTRATION_TOKEN"
+var AgentRegistrationTokenDefault = "$" + AgentRegistrationTokenEnv
+
 func main() {
 	cli.AppHelpTemplate = AppHelpTemplate
 	cli.CommandHelpTemplate = CommandHelpTemplate
@@ -65,6 +68,27 @@ func main() {
 
 	// Define the actions for our CLI
 	app.Commands = []cli.Command{
+		{
+			Name:        "register",
+			Usage:       "Registers an agent with Buildbox and starts it",
+			Description: StartHelpDescription,
+			Flags: []cli.Flag{
+				cli.StringFlag{"agent-registration-token", AgentAccessTokenDefault, "The agent registration token for your account."},
+				cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
+				cli.BoolFlag{"debug", "Enable debug mode."},
+			},
+			Action: func(c *cli.Context) {
+				// Register an agent with Buildbox
+				agent := registerAgentFromCli(c)
+
+				// Setup signal monitoring
+				agent.MonitorSignals()
+
+				// Start the agent
+				agent.Start()
+			},
+		},
 		{
 			Name:        "start",
 			Usage:       "Starts the Buildbox agent",
@@ -123,25 +147,58 @@ func main() {
 	app.Run(os.Args)
 }
 
+func registerAgentFromCli(c *cli.Context) *buildbox.Agent {
+	// Init debugging
+	if c.Bool("debug") {
+		buildbox.LoggerInitDebug()
+	}
+
+	agentRegistrationToken := c.String("agent-registration-token")
+
+	// Should we look to the environment for the agent registration token?
+	if agentRegistrationToken == AgentRegistrationTokenDefault {
+		agentRegistrationToken = os.Getenv(AgentRegistrationTokenDefault)
+	}
+
+	if agentRegistrationToken == "" {
+		fmt.Println("buildbox-agent: missing agent registration token\nSee 'buildbox-agent register --help'")
+		os.Exit(1)
+	}
+
+	// Create a client so we can register the agent
+	var client buildbox.Client
+	client.AuthorizationToken = agentRegistrationToken
+	client.URL = c.String("url")
+
+	// Register the agent
+	agentAccessToken, err := client.AgentRegister()
+	if err != nil {
+		buildbox.Logger.Fatal(err)
+	}
+
+	// Start the agent using the token we have
+	return setupAgent("register", agentAccessToken, c.String("bootstrap-script"), c.String("url"))
+}
+
 func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
 	// Init debugging
 	if c.Bool("debug") {
 		buildbox.LoggerInitDebug()
 	}
 
-	agentAccessToken := c.String("access-token")
+	return setupAgent(command, c.String("access-token"), c.String("bootstrap-script"), c.String("url"))
+}
 
+func setupAgent(command string, agentAccessToken string, bootstrapScript string, url string) *buildbox.Agent {
 	// Should we look to the environment for the agent access token?
 	if agentAccessToken == AgentAccessTokenDefault {
 		agentAccessToken = os.Getenv(AgentAccessTokenEnv)
 	}
 
 	if agentAccessToken == "" {
-		fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox-agent start --help'")
+		fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox-agent " + command + " --help'")
 		os.Exit(1)
 	}
-
-	bootstrapScript := c.String("bootstrap-script")
 
 	// Expand the envionment variable.
 	if bootstrapScript == BootstrapScriptDefault {
@@ -159,8 +216,8 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
 	agent.BootstrapScript = bootstrapScript
 
 	// Client specific options
-	agent.Client.AgentAccessToken = agentAccessToken
-	agent.Client.URL = c.String("url")
+	agent.Client.AuthorizationToken = agentAccessToken
+	agent.Client.URL = url
 
 	// Setup the agent
 	agent.Setup()
