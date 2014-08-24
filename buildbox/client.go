@@ -19,7 +19,7 @@ const (
 
 type Client struct {
 	// The URL of the Buildbox Agent API to communicate with. Defaults to
-	// "https://agent.buildbox.io/v1".
+	// "https://agent.buildbox.io/v2".
 	URL string
 
 	// The authorization token agent being used to make API requests

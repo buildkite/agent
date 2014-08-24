@@ -96,7 +96,7 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{"access-token", AgentAccessTokenDefault, "The access token used to identify the agent."},
 				cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The Agent API endpoint."},
 				cli.BoolFlag{"debug", "Enable debug mode."},
 			},
 			Action: func(c *cli.Context) {
@@ -117,7 +117,7 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{"access-token", "", "The access token used to identify the agent."},
 				cli.StringFlag{"bootstrap-script", BootstrapScriptDefault, "Path to the bootstrap script."},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The Agent API endpoint."},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The Agent API endpoint."},
 				cli.BoolFlag{"debug", "Enable debug mode."},
 			},
 			Action: func(c *cli.Context) {

@@ -65,7 +65,7 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{"job", JobIdDefault, "The source job of the data"},
 				cli.StringFlag{"agent-access-token", AgentAccessTokenDefault, "The access token used to identify the agent"},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The agent API endpoint"},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The agent API endpoint"},
 				cli.BoolFlag{"debug", "Enable debug mode"},
 			},
 			Action: func(c *cli.Context) {
@@ -99,7 +99,7 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{"job", JobIdDefault, "The source job of the data"},
 				cli.StringFlag{"agent-access-token", AgentAccessTokenDefault, "The access token used to identify the agent"},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The agent API endpoint"},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The agent API endpoint"},
 				cli.BoolFlag{"debug", "Enable debug mode"},
 			},
 			Action: func(c *cli.Context) {

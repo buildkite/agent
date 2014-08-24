@@ -98,7 +98,7 @@ func main() {
 			Flags: []cli.Flag{
 				cli.StringFlag{"job", JobIdDefault, "Which job should the artifacts be uploaded to"},
 				cli.StringFlag{"agent-access-token", AgentAccessTokenDefault, "The access token used to identify the agent"},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The agent API endpoint"},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The agent API endpoint"},
 				cli.BoolFlag{"debug", "Enable debug mode"},
 			},
 			Action: func(c *cli.Context) {
@@ -186,7 +186,7 @@ func main() {
 				cli.StringFlag{"job", "", "Which job should the artifacts be downloaded from"},
 				cli.StringFlag{"build", BuildIdDefault, "Which build should the artifacts be downloaded from"},
 				cli.StringFlag{"agent-access-token", AgentAccessTokenDefault, "The access token used to identify the agent"},
-				cli.StringFlag{"url", "https://agent.buildbox.io/v1", "The agent API endpoint"},
+				cli.StringFlag{"url", "https://agent.buildbox.io/v2", "The agent API endpoint"},
 				cli.BoolFlag{"debug", "Enable debug mode"},
 			},
 			Action: func(c *cli.Context) {
