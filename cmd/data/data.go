@@ -161,7 +161,7 @@ func setupAgentFromCli(c *cli.Context, command string) *buildbox.Agent {
 	var agent buildbox.Agent
 
 	// Client specific options
-	agent.Client.AgentAccessToken = agentAccessToken
+	agent.Client.AuthorizationToken = agentAccessToken
 	agent.Client.URL = c.String("url")
 
 	return &agent

@@ -148,7 +148,7 @@ func main() {
 				var agent buildbox.Agent
 
 				// Client specific options
-				agent.Client.AgentAccessToken = agentAccessToken
+				agent.Client.AuthorizationToken = agentAccessToken
 				agent.Client.URL = c.String("url")
 
 				// Setup the agent

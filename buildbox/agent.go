@@ -3,9 +3,7 @@ package buildbox
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -31,12 +29,12 @@ type Agent struct {
 	stopping bool
 }
 
-func (c *Client) AgentUpdate(agent *Agent) error {
-	return c.Put(&agent, "/", agent)
+func (c *Client) AgentConnect(agent *Agent) error {
+	return c.Post(&agent, "/connect", agent)
 }
 
-func (c *Client) AgentCrash(agent *Agent) error {
-	return c.Post(&agent, "/crash", agent)
+func (c *Client) AgentDisconnect(agent *Agent) error {
+	return c.Post(&agent, "/disconnect", agent)
 }
 
 func (a *Agent) String() string {
@@ -44,18 +42,12 @@ func (a *Agent) String() string {
 }
 
 func (a *Agent) Setup() {
-	// Figure out the hostname of the current machine
-	hostname, err := exec.Command("hostname").Output()
-	if err != nil {
-		Logger.Fatal(err)
-	}
-
 	// Set the hostname
-	a.Hostname = strings.Trim(fmt.Sprintf("%s", hostname), "\n")
+	a.Hostname = MachineHostname()
 
 	// Get agent information from API. It will populate the
 	// current agent struct with data.
-	err = a.Client.AgentUpdate(a)
+	err := a.Client.AgentConnect(a)
 	if err != nil {
 		Logger.Fatal(err)
 	}
@@ -92,7 +84,10 @@ func (a *Agent) MonitorSignals() {
 
 		// If the agent isn't running a job, exit right away
 		if a.Job == nil {
-			Logger.Info("No jobs running. Exiting...")
+			// Disconnect from Buildbox
+			Logger.Info("No jobs running. Disconnecting...")
+			a.Client.AgentDisconnect(a)
+
 			os.Exit(1)
 		}
 
@@ -102,8 +97,9 @@ func (a *Agent) MonitorSignals() {
 			// Kill the job
 			a.Job.Kill()
 
-			// Send an API call letting BB know that the agent had to forcefully stop
-			a.Client.AgentCrash(a)
+			// Disconnect from Buildbox
+			Logger.Info("Disconnecting...")
+			a.Client.AgentDisconnect(a)
 
 			// Die time.
 			os.Exit(1)
