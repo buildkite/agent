@@ -26,7 +26,7 @@
     tail -f /usr/local/var/log/buildbox-agent.log
 
     # Troubleshooting
-    If you'rer setting up a new user for your buildbox-agent, your agent may stall on the first attempt of checking out code from your code host.
+    If you're setting up a new user for your buildbox-agent, the agent may stall on the first attempt of cloning code from your code host.
 
     To solve this you need trust the the RSA fingerprint of your code host manually, just run the following.
 
