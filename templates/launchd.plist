@@ -19,6 +19,9 @@
     sudo chmod 775 /usr/local/var/log
     sudo chown root:staff /usr/local/var/log
 
+    # If your buildbox-agent user hasn't checked out your code before, then you'll need to trust the RSA fingerprint of your code host
+    ssh github.com
+
     # Add it to launchd (which also starts buildbox-agent)
     launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
