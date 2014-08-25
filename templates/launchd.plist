@@ -14,6 +14,11 @@
     # Set the agent's access token
     sudo sed -i '' "s/your-agent-access-token/[insert agent access token here]/g" /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
+    # Create the agent's log directory with permissions for your user
+    sudo mkdir -p /usr/local/var/log
+    sudo chmod 775 /usr/local/var/log
+    sudo chown root:staff /usr/local/var/log
+
     # Add it to launchd (which also starts buildbox-agent)
     launchctl load /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
