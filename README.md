@@ -1,4 +1,4 @@
-# buildbox-agent ![Build status](https://badge.buildbox.io/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
+# Buildbox Agent ![Build status](https://badge.buildbox.io/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
 
 There are three commands included in the buildbox-agent package:
 
@@ -54,7 +54,7 @@ Upgrading the agent is simply a matter of re-running the install script and then
    ```
 
    This will tell it to finish off any current job, and then shut itself down.
-   
+
 3. If you use a process monitor such as `upstart` or `launchd` it will startup again automatically, with no more work required. If you don't, just start the buildbox-agent like you did initially.
 
 4. Check your `buildbox-agent` logs to make sure it has started up the agent again.
