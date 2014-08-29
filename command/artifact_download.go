@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"github.com/buildbox/buildbox-agent/buildbox"
+	"github.com/buildbox/agent/buildbox"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"

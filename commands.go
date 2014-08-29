@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/buildbox/buildbox-agent/command"
+	"github.com/buildbox/agent/command"
 	"github.com/codegangsta/cli"
 )
 

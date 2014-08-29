@@ -8,10 +8,10 @@ There are three commands included in the buildbox-agent package:
 
 ## Installing
 
-Simply run the following command ([see the source](https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh)), which will automatically download the correct binaries for your platform (or if you'd prefer not to run this install script see the [manual installation guide](#manual-installation)):
+Simply run the following command ([see the source](https://raw.githubusercontent.com/buildbox/agent/master/install.sh)), which will automatically download the correct binaries for your platform (or if you'd prefer not to run this install script see the [manual installation guide](#manual-installation)):
 
 ```bash
-bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
+bash -c "`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh`"
 ```
 
 Copy the access token from the agent settings page on Buildbox:
@@ -26,7 +26,7 @@ And then start the agent with the token:
 
 Now you're all set to run your first build!
 
-If you're using Windows, you'll want to use the [Ruby agent](https://github.com/buildboxhq/buildbox-agent-ruby).
+If you're using Windows, you'll want to use the [Ruby agent](https://github.com/buildbox/buildbox-agent-ruby).
 
 ### Launching on system startup
 
@@ -44,7 +44,7 @@ Upgrading the agent is simply a matter of re-running the install script and then
 1. Run the install script again. This will download new copies of the binaries. Dont' worry, **it won't** override your bootstrap.sh file.
 
    ```bash
-   bash -c "`curl -sL https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/install.sh`"
+   bash -c "`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh`"
    ```
 
 2. Tell the `buildbox-agent` process to restart by sending it an `USR2` signal
@@ -121,10 +121,10 @@ Here we'll show you how to manually install the buildbox agent.
    mkdir -p ~/.buildbox
    ```
 
-2. Download the correct binaries for your platform. See: https://github.com/buildboxhq/buildbox-agent/releases/tag/v0.2 for a list for binaries.
+2. Download the correct binaries for your platform. See: https://github.com/buildbox/agent/releases/tag/v0.2 for a list for binaries.
 
    ```bash
-   wget https://github.com/buildboxhq/buildbox-agent/releases/download/v0.2/buildbox-agent-linux-amd64.tar.gz
+   wget https://github.com/buildbox/agent/releases/download/v0.2/buildbox-agent-linux-amd64.tar.gz
    ```
 
 3. Extract the tar. This should extract `buildbox-agent` and `buildbox-artifact` to the `~/.buildbox` folder.
@@ -136,7 +136,7 @@ Here we'll show you how to manually install the buildbox agent.
 4. Download our example `bootstrap.sh` and put it in `~/.buildbox`
 
    ```bash
-   wget -q https://raw.githubusercontent.com/buildboxhq/buildbox-agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
+   wget -q https://raw.githubusercontent.com/buildbox/agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
    ```
 
 5. (Optional) Add `~/.buildbox` to your `$PATH` so you can access the binaries eaiser.
@@ -161,9 +161,9 @@ export PATH="$HOME/Code/go/bin:$PATH"
 go get github.com/kr/godep
 
 # Checkout the code
-mkdir -p $GOPATH/src/github.com/buildboxhq/buildbox-agent
-git clone git@github.com:buildboxhq/buildbox-agent.git $GOPATH/src/github.com/buildboxhq/buildbox-agent
-cd $GOPATH/src/github.com/buildboxhq/buildbox-agent
+mkdir -p $GOPATH/src/github.com/buildbox/agent
+git clone git@github.com:buildbox/agent.git $GOPATH/src/github.com/buildbox/agent
+cd $GOPATH/src/github.com/buildbox/agent
 godep get
 go run agent.go
 ```

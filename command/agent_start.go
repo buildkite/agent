@@ -3,7 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/Sirupsen/logrus"
-	"github.com/buildbox/buildbox-agent/buildbox"
+	"github.com/buildbox/agent/buildbox"
 	"github.com/codegangsta/cli"
 	"os"
 )
