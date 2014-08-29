@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+echo '--- go version'
+go version
+
 # setup the current repo as a package - super hax.
 mkdir -p gopath/src/github.com/buildbox
 ln -s `pwd` gopath/src/github.com/buildbox/agent
