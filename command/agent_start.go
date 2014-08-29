@@ -13,23 +13,13 @@ func AgentStartCommandAction(c *cli.Context) {
 	if c.Bool("debug") {
 		buildbox.LoggerInitDebug()
 	}
-	var agent *buildbox.Agent
 
 	// Create the agent
 	if c.String("access-token") != "" {
-		agent = setupAgentFromCli(c)
-	} else {
-		agent = registerAgentFromCli(c)
+		fmt.Println("buildbox: use of --access-token is now deprecated\nSee 'buildbox agent --help'")
+		os.Exit(1)
 	}
 
-	// Setup signal monitoring
-	agent.MonitorSignals()
-
-	// Start the agent
-	agent.Start()
-}
-
-func registerAgentFromCli(c *cli.Context) *buildbox.Agent {
 	agentRegistrationToken := c.String("token")
 	if agentRegistrationToken == "" {
 		fmt.Println("buildbox: missing token\nSee 'buildbox agent --help'")
@@ -48,17 +38,13 @@ func registerAgentFromCli(c *cli.Context) *buildbox.Agent {
 	}
 
 	// Start the agent using the token we have
-	return setupAgent(agentAccessToken, c.String("bootstrap-script"), c.String("url"))
-}
+	agent := setupAgent(agentAccessToken, c.String("bootstrap-script"), c.String("url"))
 
-func setupAgentFromCli(c *cli.Context) *buildbox.Agent {
-	agentAccessToken := c.String("access-token")
-	if agentAccessToken == "" {
-		fmt.Println("buildbox: missing agent access token\nSee 'buildbox agent --help'")
-		os.Exit(1)
-	}
+	// Setup signal monitoring
+	agent.MonitorSignals()
 
-	return setupAgent(c.String("access-token"), c.String("bootstrap-script"), c.String("url"))
+	// Start the agent
+	agent.Start()
 }
 
 func setupAgent(agentAccessToken string, bootstrapScript string, url string) *buildbox.Agent {
