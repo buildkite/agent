@@ -99,7 +99,7 @@ echo \"###################################################################
 DEPRECATED: This binary is deprecated. Please use: \\\`buildbox $1\\\`
 ###################################################################
 \"
-exec \$DIR/bin/buildbox $1 \$@"
+exit 1"
   }
 
   if [[ -e $DESTINATION/buildbox-agent ]]
@@ -143,11 +143,17 @@ else
   chmod +x $DESTINATION/bootstrap.sh
 fi
 
+# Allow custom setting of the version
+if [ -z "$TOKEN" ]; then
+  TOKEN="token123"
+fi
+
+# Switch the start command depending on the version
 if [[ -e $DESTINATION/bin/buildbox ]]
 then
-  START_COMMAND="bin/buildbox agent start --token token123"
+  START_COMMAND="bin/buildbox agent start --token $TOKEN"
 else
-  START_COMMAND="buildbox-agent start --access-token token123"
+  START_COMMAND="buildbox-agent start --access-token $TOKEN"
 fi
 
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
