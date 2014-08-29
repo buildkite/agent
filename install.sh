@@ -84,14 +84,40 @@ fi
 # Extract the download to the destination folder
 tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
-# Make sure it's exectuable
-chmod +x $DESTINATION/buildbox-agent
-chmod +x $DESTINATION/buildbox-artifact
-
-# This file isn't availabe in stable yet
-if [[ -e $DESTINATION/buildbox-data ]]
+# If just the buildbox binary is available, create shims for the old versions.
+if [[ -e $DESTINATION/buildbox ]]
 then
-  chmod +x $DESTINATION/buildbox-data
+  # Move the buildbox binary into a bin folder
+  mkdir -p $DESTINATION/bin
+  mv $DESTINATION/buildbox $DESTINATION/bin
+  chmod +x $DESTINATION/bin/buildbox
+
+  function shim {
+    echo "#!/bin/bash
+DIR=\$(cd \"\$( dirname \"\${BASH_SOURCE[0]}\" )\" && pwd)
+echo \"###################################################################
+DEPRECATED: This binary is deprecated. Please use: \\\`buildbox $1\\\`
+###################################################################
+\"
+exec \$DIR/bin/buildbox $1 \$@"
+  }
+
+  if [[ -e $DESTINATION/buildbox-agent ]]
+  then
+    shim "agent" > $DESTINATION/buildbox-agent
+  fi
+
+  if [[ -e $DESTINATION/buildbox-data ]]
+  then
+    shim "data" > $DESTINATION/buildbox-data
+  fi
+
+  if [[ -e $DESTINATION/buildbox-artifact ]]
+  then
+    shim "artifact" > $DESTINATION/buildbox-artifact
+  fi
+else
+  chmod +x $DESTINATION/buildbox-*
 fi
 
 # Clean up the download
@@ -117,11 +143,18 @@ else
   chmod +x $DESTINATION/bootstrap.sh
 fi
 
+if [[ -e $DESTINATION/bin/buildbox ]]
+then
+  START_COMMAND="bin/buildbox agent start --token token123"
+else
+  START_COMMAND="buildbox-agent start --access-token token123"
+fi
+
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
 You can now run the Buildbox agent like so:
 
-  $DESTINATION/buildbox-agent start --access-token token123
+  $DESTINATION/$START_COMMAND
 
 You can find your agent's Access Token on your Account Settings
 page under \"Agents\".
