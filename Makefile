@@ -2,9 +2,7 @@ VERSION := $(shell cat buildbox/version.go  | grep Version | head -n1 | cut -d \
 
 build: deps
 	@echo "building ${VERSION}"
-	@go build -o pkg/buildbox-agent cmd/agent/agent.go
-	@go build -o pkg/buildbox-artifact cmd/artifact/artifact.go
-	@go build -o pkg/buildbox-data cmd/data/data.go
+	@go build -o pkg/buildbox *.go
 
 dist: deps
 	@scripts/build.sh

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/buildbox/agent/buildbox"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -46,7 +47,7 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "buildbox"
-	app.Version = Version
+	app.Version = buildbox.Version
 	app.Commands = Commands
 
 	// Default the default action
