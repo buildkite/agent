@@ -24,7 +24,7 @@ end
 puts ""
 
 # Build the command to run
-command = [ %{github-release #{version} #{files.join(' ')} --github-repository "buildboxhq/buildbox-agent"} ]
+command = [ %{github-release #{version} #{files.join(' ')} --github-repository "buildbox/agent"} ]
 command << "--prerelease" if prerelease
 
 # Show and execute the command
