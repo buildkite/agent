@@ -2,10 +2,9 @@ package command
 
 import (
 	"fmt"
-	"github.com/buildboxhq/buildbox-agent/buildbox"
+	"github.com/buildbox/buildbox-agent/buildbox"
 	"github.com/codegangsta/cli"
 	"os"
-	"path/filepath"
 )
 
 func ArtifactUploadCommandAction(c *cli.Context) {
@@ -15,33 +14,21 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 	}
 
 	agentAccessToken := c.String("agent-access-token")
-
-	// Should we look to the environment for the agent access token?
-	if agentAccessToken == AgentAccessTokenDefault {
-		agentAccessToken = os.Getenv(AgentAccessTokenEnv)
-	}
-
 	if agentAccessToken == "" {
-		fmt.Printf("%s: missing agent access token\nSee '%s help upload'\n", app.Name, app.Name)
+		fmt.Printf("buildbox: missing agent access token\nSee 'buildbox artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	jobId := c.String("job")
-
-	// Should we look to the environment for the job id?
-	if jobId == JobIdDefault {
-		jobId = os.Getenv(JobIdEnv)
-	}
-
 	if jobId == "" {
-		fmt.Printf("%s: missing job\nSee '%s help upload'\n", app.Name, app.Name)
+		fmt.Printf("buildbox: missing job\nSee 'buildbox artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	// Grab the first argument and use as paths to download
 	paths := c.Args().First()
 	if paths == "" {
-		fmt.Printf("%s: missing upload paths\nSee '%s help upload'\n", app.Name, app.Name)
+		fmt.Printf("buildbox: missing upload paths\nSee 'buildbox artifact download --help'\n")
 		os.Exit(1)
 	}
 

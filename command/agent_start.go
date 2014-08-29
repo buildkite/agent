@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-func AgentCommandAction(c *cli.Context) {
+func AgentStartCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
 		buildbox.LoggerInitDebug()

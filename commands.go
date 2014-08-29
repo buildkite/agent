@@ -9,7 +9,7 @@ var Commands []cli.Command
 
 var AgentDescription = `Usage:
 
-   buildbox agent [arguments...]
+   buildbox agent start [arguments...]
 
 Description:
 
@@ -99,50 +99,57 @@ Example:
 func init() {
 	Commands = []cli.Command{
 		{
-			Name:        "agent",
-			Usage:       "Starts a Buildbox agent",
-			Description: AgentDescription,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:   "token",
-					Value:  "",
-					Usage:  "Your account agent token",
-					EnvVar: "BUILDBOX_AGENT_TOKEN",
-				},
-				cli.StringFlag{
-					Name:   "access-token",
-					Value:  "",
-					Usage:  "DEPRECATED: The agents access token",
-					EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
-				},
-				cli.StringFlag{
-					Name:   "name",
-					Value:  "",
-					Usage:  "The name of the agent",
-					EnvVar: "BUILDBOX_AGENT_NAME",
-				},
-				cli.StringSliceFlag{
-					Name:  "meta-data",
-					Value: &cli.StringSlice{},
-					Usage: "Meta data for the agent",
-				},
-				cli.StringFlag{
-					Name:   "bootstrap-script",
-					Value:  "$HOME/.buildbox/bootstrap.sh",
-					Usage:  "Path to the bootstrap script",
-					EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
-				},
-				cli.StringFlag{
-					Name:  "url",
-					Value: "https://agent.buildbox.io/v2",
-					Usage: "The agent API endpoint",
-				},
-				cli.BoolFlag{
-					Name:  "debug",
-					Usage: "Enable debug mode.",
+			Name:  "agent",
+			Usage: "Starts a Buildbox agent",
+			Subcommands: []cli.Command{
+				{
+					Name:        "start",
+					Usage:       "Starts a Buildbox agent",
+					Description: AgentDescription,
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:   "token",
+							Value:  "",
+							Usage:  "Your account agent token",
+							EnvVar: "BUILDBOX_AGENT_TOKEN",
+						},
+						cli.StringFlag{
+							Name:   "access-token",
+							Value:  "",
+							Usage:  "DEPRECATED: The agents access token",
+							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+						},
+						cli.StringFlag{
+							Name:   "name",
+							Value:  "",
+							Usage:  "The name of the agent",
+							EnvVar: "BUILDBOX_AGENT_NAME",
+						},
+						cli.StringSliceFlag{
+							Name:   "meta-data",
+							Value:  &cli.StringSlice{},
+							Usage:  "Meta data for the agent",
+							EnvVar: "BUILDBOX_AGENT_META_DATA",
+						},
+						cli.StringFlag{
+							Name:   "bootstrap-script",
+							Value:  "$HOME/.buildbox/bootstrap.sh",
+							Usage:  "Path to the bootstrap script",
+							EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
+						},
+						cli.StringFlag{
+							Name:  "url",
+							Value: "https://agent.buildbox.io/v2",
+							Usage: "The agent API endpoint",
+						},
+						cli.BoolFlag{
+							Name:  "debug",
+							Usage: "Enable debug mode.",
+						},
+					},
+					Action: command.AgentStartCommandAction,
 				},
 			},
-			Action: command.AgentCommandAction,
 		},
 		{
 			Name:  "artifact",

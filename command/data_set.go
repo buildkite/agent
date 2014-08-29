@@ -41,7 +41,7 @@ func DataSetCommandAction(c *cli.Context) {
 	value := c.Args()[1]
 
 	// Set the data through the API
-	data, err := client.DataSet(job, key, value)
+	_, err = client.DataSet(job, key, value)
 	if err != nil {
 		buildbox.Logger.Fatalf("Failed to set data: %s", err)
 	}
