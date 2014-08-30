@@ -26,10 +26,11 @@ BUILDBOX_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export PATH="$BUILDBOX_DIR:$PATH"
 
 # Create the build directory
-BUILDBOX_BUILD_DIR="$BUILDBOX_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
+SANITIZED_AGENT_NAME=$(echo $BUILDBOX_AGENT_NAME | tr -d '"')
+BUILDBOX_BUILD_DIR="$SANITIZED_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
 
-buildbox-run "mkdir -p $BUILDBOX_BUILD_DIR"
-buildbox-run "cd $BUILDBOX_BUILD_DIR"
+buildbox-run "mkdir -p \"$BUILDBOX_BUILD_DIR\""
+buildbox-run "cd \"$BUILDBOX_BUILD_DIR\""
 
 # Do we need to do a git checkout?
 if [ ! -d ".git" ]
