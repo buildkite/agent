@@ -46,7 +46,13 @@ fi
 
 buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
+
+# Only reset to the branch if we're not on a tag
+if [ "$BUILDBOX_TAG" == "" ]
+then
 buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
+fi
+
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
 echo "--- running $BUILDBOX_SCRIPT_PATH"
