@@ -57,6 +57,15 @@
 
     <key>RunAtLoad</key>
     <true/>
+    
+    <key>OnDemand</key>
+	  <false/>
+
+	  <key>ProcessType</key>
+  	<string>Interactive</string>
+  	
+  	<key>ThrottleInterval</key>
+	  <integer>30</integer>
 
     <key>StandardOutPath</key>
     <string>/usr/local/var/log/buildbox-agent.log</string>
