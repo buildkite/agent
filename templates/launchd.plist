@@ -63,6 +63,9 @@
 
     <key>ProcessType</key>
     <string>Interactive</string>
+
+    <key>SessionCreate</key>
+    <true/>
   	
     <key>ThrottleInterval</key>
     <integer>30</integer>
