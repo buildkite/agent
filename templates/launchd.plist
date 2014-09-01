@@ -59,13 +59,13 @@
     <true/>
     
     <key>OnDemand</key>
-	  <false/>
+    <false/>
 
-	  <key>ProcessType</key>
-  	<string>Interactive</string>
+    <key>ProcessType</key>
+    <string>Interactive</string>
   	
-  	<key>ThrottleInterval</key>
-	  <integer>30</integer>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
 
     <key>StandardOutPath</key>
     <string>/usr/local/var/log/buildbox-agent.log</string>
