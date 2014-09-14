@@ -31,8 +31,24 @@ func AgentStartCommandAction(c *cli.Context) {
 	client.AuthorizationToken = agentRegistrationToken
 	client.URL = c.String("url")
 
+	agentMetaData := c.StringSlice("meta-data")
+
+	// Should we try and grab the ec2 tags as well?
+	if c.Bool("meta-data-ec2-tags") {
+		tags, err := buildbox.EC2InstanceTags()
+
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			buildbox.Logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+		} else {
+			for tag, value := range tags {
+				agentMetaData = append(agentMetaData, fmt.Sprintf("%s=%s", tag, value))
+			}
+		}
+	}
+
 	// Register the agent
-	agentAccessToken, err := client.AgentRegister(c.String("name"), c.StringSlice("meta-data"))
+	agentAccessToken, err := client.AgentRegister(c.String("name"), agentMetaData)
 	if err != nil {
 		buildbox.Logger.Fatal(err)
 	}

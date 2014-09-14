@@ -143,6 +143,10 @@ func init() {
 							Usage: "The agent API endpoint",
 						},
 						cli.BoolFlag{
+							Name:  "meta-data-ec2-tags",
+							Usage: "Populate the meta data from the current instances EC2 Tags",
+						},
+						cli.BoolFlag{
 							Name:  "debug",
 							Usage: "Enable debug mode.",
 						},

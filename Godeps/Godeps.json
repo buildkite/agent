@@ -14,11 +14,15 @@
 		},
 		{
 			"ImportPath": "github.com/crowdmob/goamz/aws",
-			"Rev": "2ce2a996945b211826593092e3760e2935133403"
+			"Rev": "269e6d44f2b0df5728e6d77fe52167d8d44c2e3a"
+		},
+		{
+			"ImportPath": "github.com/crowdmob/goamz/ec2",
+			"Rev": "269e6d44f2b0df5728e6d77fe52167d8d44c2e3a"
 		},
 		{
 			"ImportPath": "github.com/crowdmob/goamz/s3",
-			"Rev": "2ce2a996945b211826593092e3760e2935133403"
+			"Rev": "269e6d44f2b0df5728e6d77fe52167d8d44c2e3a"
 		},
 		{
 			"ImportPath": "github.com/kr/pty",
