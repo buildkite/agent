@@ -9,7 +9,7 @@ var Commands []cli.Command
 
 var AgentDescription = `Usage:
 
-   buildbox agent start [arguments...]
+   buildbox-agent start [arguments...]
 
 Description:
 
@@ -22,11 +22,11 @@ Description:
 
 Example:
 
-   $ buildbox agent start --token xxx`
+   $ buildbox-agent start --token xxx`
 
 var DownloadHelpDescription = `Usage:
 
-   buildbox artifact download [arguments...]
+   buildbox-agent artifact download [arguments...]
 
 Description:
 
@@ -38,7 +38,7 @@ Description:
 
 Example:
 
-   $ buildbox artifact download "pkg/*.tar.gz" . --build xxx
+   $ buildbox-agent artifact download "pkg/*.tar.gz" . --build xxx
 
    This will search across all the artifacts for the build with files that match that part.
    The first argument is the search query, and the second argument is the download destination.
@@ -46,13 +46,13 @@ Example:
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the paticular job you want to download the artifact from:
 
-   $ buildbox artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
+   $ buildbox-agent artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
 
    You can also use the job's id (provided by the environment variable $BUILDBOX_JOB_ID)`
 
 var UploadHelpDescription = `Usage:
 
-   buildbox artifact upload <pattern> <destination> [arguments...]
+   buildbox-agent artifact upload <pattern> <destination> [arguments...]
 
 Description:
 
@@ -64,17 +64,17 @@ Description:
 
 Example:
 
-   $ buildbox artifact upload "log/**/*.log"
+   $ buildbox-agent artifact upload "log/**/*.log"
 
    You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
 
    $ export AWS_SECRET_ACCESS_KEY=yyy
    $ export AWS_ACCESS_KEY_ID=xxx
-   $ buildbox artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID`
+   $ buildbox-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID`
 
 var SetHelpDescription = `Usage:
 
-   buildbox data set <key> <value> [arguments...]
+   buildbox-agent build-meta-data set <key> <value> [arguments...]
 
 Description:
 
@@ -82,11 +82,11 @@ Description:
 
 Example:
 
-   $ buildbox data set "foo" "bar"`
+   $ buildbox-agent build-meta-data set "foo" "bar"`
 
 var GetHelpDescription = `Usage:
 
-   buildbox data get <key> [arguments...]
+   buildbox-agent build-meta-data get <key> [arguments...]
 
 Description:
 
@@ -94,68 +94,62 @@ Description:
 
 Example:
 
-   $ buildbox data get "foo"`
+   $ buildbox-agent build-meta-data get "foo"`
 
 func init() {
 	Commands = []cli.Command{
 		{
-			Name:  "agent",
-			Usage: "Starts a Buildbox agent",
-			Subcommands: []cli.Command{
-				{
-					Name:        "start",
-					Usage:       "Starts a Buildbox agent",
-					Description: AgentDescription,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:   "token",
-							Value:  "",
-							Usage:  "Your account agent token",
-							EnvVar: "BUILDBOX_AGENT_TOKEN",
-						},
-						cli.StringFlag{
-							Name:   "access-token",
-							Value:  "",
-							Usage:  "DEPRECATED: The agents access token",
-							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
-						},
-						cli.StringFlag{
-							Name:   "name",
-							Value:  "",
-							Usage:  "The name of the agent",
-							EnvVar: "BUILDBOX_AGENT_NAME",
-						},
-						cli.StringSliceFlag{
-							Name:   "meta-data",
-							Value:  &cli.StringSlice{},
-							Usage:  "Meta data for the agent",
-							EnvVar: "BUILDBOX_AGENT_META_DATA",
-						},
-						cli.StringFlag{
-							Name:   "bootstrap-script",
-							Value:  "$HOME/.buildbox/bootstrap.sh",
-							Usage:  "Path to the bootstrap script",
-							EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
-						},
-						cli.StringFlag{
-							Name:   "url",
-							Value:  "https://agent.buildbox.io/v2",
-							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_API_URL",
-						},
-						cli.BoolFlag{
-							Name:  "meta-data-ec2-tags",
-							Usage: "Populate the meta data from the current instances EC2 Tags",
-						},
-						cli.BoolFlag{
-							Name:   "debug",
-							Usage:  "Enable debug mode.",
-							EnvVar: "BUILDBOX_AGENT_DEBUG",
-						},
-					},
-					Action: command.AgentStartCommandAction,
+			Name:        "start",
+			Usage:       "Starts a Buildbox agent",
+			Description: AgentDescription,
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:   "token",
+					Value:  "",
+					Usage:  "Your account agent token",
+					EnvVar: "BUILDBOX_AGENT_TOKEN",
+				},
+				cli.StringFlag{
+					Name:   "access-token",
+					Value:  "",
+					Usage:  "DEPRECATED: The agents access token",
+					EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+				},
+				cli.StringFlag{
+					Name:   "name",
+					Value:  "",
+					Usage:  "The name of the agent",
+					EnvVar: "BUILDBOX_AGENT_NAME",
+				},
+				cli.StringSliceFlag{
+					Name:   "meta-data",
+					Value:  &cli.StringSlice{},
+					Usage:  "Meta data for the agent",
+					EnvVar: "BUILDBOX_AGENT_META_DATA",
+				},
+				cli.StringFlag{
+					Name:   "bootstrap-script",
+					Value:  "$HOME/.buildbox/bootstrap.sh",
+					Usage:  "Path to the bootstrap script",
+					EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
+				},
+				cli.StringFlag{
+					Name:   "url",
+					Value:  "https://agent.buildbox.io/v2",
+					Usage:  "The agent API endpoint",
+					EnvVar: "BUILDBOX_AGENT_API_URL",
+				},
+				cli.BoolFlag{
+					Name:  "meta-data-ec2-tags",
+					Usage: "Populate the meta data from the current instances EC2 Tags",
+				},
+				cli.BoolFlag{
+					Name:   "debug",
+					Usage:  "Enable debug mode.",
+					EnvVar: "BUILDBOX_AGENT_DEBUG",
 				},
 			},
+			Action: command.AgentStartCommandAction,
 		},
 		{
 			Name:  "artifact",
@@ -232,7 +226,7 @@ func init() {
 			},
 		},
 		{
-			Name:  "data",
+			Name:  "build-meta-data",
 			Usage: "Get/set data from Buildbox jobs",
 			Subcommands: []cli.Command{
 				{
