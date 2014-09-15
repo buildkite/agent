@@ -8,6 +8,12 @@
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh\`\""
 
+if [ "$VERSION" = "1.0-beta.1" ]
+then
+  echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.2"
+  exit 1
+fi
+
 # Allow custom setting of the version
 if [ -z "$VERSION" ]; then
   VERSION="0.2"
@@ -84,41 +90,44 @@ fi
 # Extract the download to the destination folder
 tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
-# If just the buildbox binary is available, create shims for the old versions.
-if [[ -e $DESTINATION/buildbox ]]
+INSTALLED_VERSION=`$DESTINATION/buildbox-agent --version`
+
+if [[ "$INSTALLED_VERSION" = "buildbox version 1.0-beta.2" ]]
 then
   # Move the buildbox binary into a bin folder
   mkdir -p $DESTINATION/bin
-  mv $DESTINATION/buildbox $DESTINATION/bin
-  chmod +x $DESTINATION/bin/buildbox
+  mv $DESTINATION/buildbox-agent $DESTINATION/bin
+  chmod +x $DESTINATION/bin/buildbox-agent
 
   function shim {
     echo "#!/bin/bash
 DIR=\$(cd \"\$( dirname \"\${BASH_SOURCE[0]}\" )\" && pwd)
 echo \"###################################################################
-DEPRECATED: This binary is deprecated. Please use: \\\`buildbox $1\\\`
+DEPRECATED: This binary is deprecated.
+
+Please use: \\\`$DESTINATION/bin/buildbox-agent$1\\\`
 ###################################################################
 \"
 exit 1"
   }
 
-  if [[ -e $DESTINATION/buildbox-agent ]]
+  # Deprecate the old 1.0-beta.1 binary.
+  if [[ -e $DESTINATION/bin/buildbox ]]
   then
-    shim "agent" > $DESTINATION/buildbox-agent
+    shim "" > $DESTINATION/bin/buildbox
+    chmod +x $DESTINATION/bin/buildbox
   fi
 
-  if [[ -e $DESTINATION/buildbox-data ]]
-  then
-    shim "data" > $DESTINATION/buildbox-data
-  fi
-
+  # Was there a previous agent installed?
   if [[ -e $DESTINATION/buildbox-artifact ]]
   then
-    shim "artifact" > $DESTINATION/buildbox-artifact
+    shim " start --token 123" > $DESTINATION/buildbox-agent
+    shim " artifact" > $DESTINATION/buildbox-artifact
+    shim " build-meta-data" > $DESTINATION/buildbox-data
   fi
-else
-  chmod +x $DESTINATION/buildbox-*
 fi
+
+chmod +x $DESTINATION/buildbox-*
 
 # Clean up the download
 rm -f $DESTINATION/$DOWNLOAD
@@ -149,9 +158,9 @@ if [ -z "$TOKEN" ]; then
 fi
 
 # Switch the start command depending on the version
-if [[ -e $DESTINATION/bin/buildbox ]]
+if [[ -e $DESTINATION/bin/buildbox-agent ]]
 then
-  START_COMMAND="bin/buildbox agent start --token $TOKEN"
+  START_COMMAND="bin/buildbox-agent start --token $TOKEN"
 else
   START_COMMAND="buildbox-agent start --access-token $TOKEN"
 fi

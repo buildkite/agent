@@ -10,7 +10,7 @@ mkdir -p "$DIRECTORY"
 
 function build {
   # Build the agent binary
-  BINARY_FILENAME=buildbox
+  BINARY_FILENAME=buildbox-agent
   GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$BINARY_FILENAME *.go
 
   FILENAME=buildbox-agent-$1-$2
