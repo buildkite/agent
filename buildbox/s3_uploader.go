@@ -63,8 +63,22 @@ func (u *S3Uploader) URL(artifact *Artifact) string {
 }
 
 func (u *S3Uploader) Upload(artifact *Artifact) error {
-	// Define the permission to use. Hard coded for now.
+	// Define the permission to use. Allow override by an ENV variable
 	permission := "public-read"
+	if os.Getenv("AWS_S3_ACL") != "" {
+		permission = os.Getenv("AWS_S3_ACL")
+	}
+
+	// The dirtiest validation method ever...
+	if permission != "private" &&
+		permission != "public-read" &&
+		permission != "public-read-write" &&
+		permission != "authenticated-read" &&
+		permission != "bucket-owner-read" &&
+		permission != "bucket-owner-full-control" {
+		Logger.Fatalf("Invalid S3 ACL `%s`", permission)
+	}
+
 	Perms := s3.ACL(permission)
 
 	Logger.Debugf("Reading file %s", artifact.AbsolutePath)
