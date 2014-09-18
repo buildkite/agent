@@ -32,9 +32,6 @@ func EC2InstanceTags() (map[string]string, error) {
 		return tags, errors.New(fmt.Sprintf("Error downloading tags: %s", err.Error()))
 	}
 
-	// Add a default tag of EC2
-	tags["EC2"] = "true"
-
 	// Collect the tags
 	for _, tag := range resp.Tags {
 		tags[tag.Key] = tag.Value
