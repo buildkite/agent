@@ -35,7 +35,7 @@ type Job struct {
 }
 
 func (b Job) String() string {
-	return fmt.Sprintf("Job{ID: %s, State: %s}", b.ID, b.State)
+	return fmt.Sprintf("Job{ID: %s, State: %s, StartedAt: %s, FinishedAt: %s, Process: %s}", b.ID, b.State, b.StartedAt, b.FinishedAt, b.process)
 }
 
 func (c *Client) JobNext() (*Job, error) {

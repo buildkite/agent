@@ -60,7 +60,9 @@ func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		for key, value := range entry.Data {
 			if key != "time" && key != "level" && key != "msg" {
 				if _, ok := value.(string); ok {
-					keys = append(keys, fmt.Sprintf("%v: %s", key, value))
+					if value != "" {
+						keys = append(keys, fmt.Sprintf("%v: %s", key, value))
+					}
 				} else {
 					keys = append(keys, fmt.Sprintf("%v: %v", key, value))
 				}

@@ -16,6 +16,9 @@ type Agent struct {
 	// the API
 	Client Client
 
+	// The PID of the agent
+	PID int `json:"pid,omitempty"`
+
 	// The hostname of the agent
 	Hostname string `json:"hostname,omitempty"`
 
@@ -38,12 +41,15 @@ func (c *Client) AgentDisconnect(agent *Agent) error {
 }
 
 func (a *Agent) String() string {
-	return fmt.Sprintf("Agent{Name: %s, Hostname: %s}", a.Name, a.Hostname)
+	return fmt.Sprintf("Agent{Name: %s, Hostname: %s, PID: %d}", a.Name, a.Hostname, a.PID)
 }
 
 func (a *Agent) Setup() {
 	// Set the hostname
 	a.Hostname = MachineHostname()
+
+	// Set the PID of the agent
+	a.PID = os.Getpid()
 
 	// Get agent information from API. It will populate the
 	// current agent struct with data.
@@ -102,7 +108,10 @@ func (a *Agent) MonitorSignals() {
 		syscall.SIGQUIT,
 
 		// The SIGUSR1 and SIGUSR2 signals are sent to a process to
-		// indicate user-defined conditions.
+		// indicate user-defined conditions. In this case SIGUSR1 will
+		// show debug information about the agnent, and SIGUSR2 will
+		// restart the agent.
+		syscall.SIGUSR1,
 		syscall.SIGUSR2)
 
 	go func() {
@@ -127,6 +136,19 @@ func (a *Agent) MonitorSignals() {
 			Logger.Debugf("Exiting immediately", sig.String())
 
 			os.Exit(1)
+		}
+
+		// Show debug information with SIGUSR1
+		if sig == syscall.SIGUSR1 {
+			Logger.Debugf("======DEBUG===== %s", a)
+			if a.Job != nil {
+				Logger.Debugf("======DEBUG===== %s", a.Job)
+			}
+
+			// Start monitoring signals again
+			a.MonitorSignals()
+
+			return
 		}
 
 		// If the agent isn't running a job, exit right away

@@ -121,6 +121,12 @@ func init() {
 					Usage:  "The name of the agent",
 					EnvVar: "BUILDBOX_AGENT_NAME",
 				},
+				cli.StringFlag{
+					Name:   "priority",
+					Value:  "",
+					Usage:  "The priority of the agent",
+					EnvVar: "BUILDBOX_AGENT_PRIORITY",
+				},
 				cli.StringSliceFlag{
 					Name:   "meta-data",
 					Value:  &cli.StringSlice{},

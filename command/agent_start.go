@@ -48,7 +48,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Register the agent
-	agentAccessToken, err := client.AgentRegister(c.String("name"), agentMetaData)
+	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData)
 	if err != nil {
 		buildbox.Logger.Fatal(err)
 	}

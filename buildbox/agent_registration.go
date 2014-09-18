@@ -12,6 +12,9 @@ type AgentRegistration struct {
 	// Hostname of the machine
 	Hostname string `json:"hostname"`
 
+	// The priority of the agent
+	Priority string `json:"priority,omitempty"`
+
 	// The name of the new agent
 	Name string `json:"name"`
 
@@ -19,10 +22,11 @@ type AgentRegistration struct {
 	MetaData []string `json:"meta_data"`
 }
 
-func (c *Client) AgentRegister(name string, metaData []string) (string, error) {
+func (c *Client) AgentRegister(name string, priority string, metaData []string) (string, error) {
 	// Create the agent registration
 	var registration AgentRegistration
 	registration.Name = name
+	registration.Priority = priority
 	registration.Hostname = MachineHostname()
 	registration.MetaData = metaData
 
@@ -30,7 +34,8 @@ func (c *Client) AgentRegister(name string, metaData []string) (string, error) {
 		"name":      registration.Name,
 		"hostname":  registration.Hostname,
 		"meta-data": registration.MetaData,
-	}).Info("Registering agent")
+		"priority":  registration.Priority,
+	}).Info("Registering agent with Buildbox")
 
 	// Register and return the agent
 	err := c.Post(&registration, "/register", registration)
