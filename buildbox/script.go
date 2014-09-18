@@ -89,7 +89,8 @@ func (p *Process) Start() error {
 			_, err = io.Copy(&buffer, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
-				// it's just the PTY telling us that it closed all good.
+				// it's just the PTY telling us that it closed
+				// successfully.
 				// See: https://github.com/buildbox/agent/pull/34#issuecomment-46080419
 			} else if err != nil {
 				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
