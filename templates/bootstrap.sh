@@ -68,24 +68,47 @@ fi
 
 if [ "$BUILDBOX_ARTIFACT_PATHS" != "" ]
 then
-  # Make sure the buildbox-artifact binary is in the right spot.
-  if [ ! -f $BUILDBOX_DIR/buildbox-artifact ]
+  # NOTE: In agent version 1.0 and above, the location and the name of the
+  # buildbox artifact binary changed. As of this verison, builbdox-artifact has
+  # been rolled into buildbox-agent, and now lives in the $BUILDBOX_DIR/bin
+  # directory.
+  if [[ -e $BUILDBOX_DIR/bin/buildbox-agent ]]
   then
+    # If you want to upload artifacts to your own server, uncomment the lines below
+    # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
+    # own bucket.
+    #
+    # export AWS_SECRET_ACCESS_KEY=yyy
+    # export AWS_ACCESS_KEY_ID=xxx
+    # buildbox-agent artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+
+    # Show the output of the artifact uploder when in debug mode
+    if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
+    then
+      echo '--- uploading artifacts'
+      $BUILDBOX_DIR/bin/buildbox-agent artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL
+      buildbox-exit-if-failed $?
+    else
+      $BUILDBOX_DIR/bin/buildbox-agent artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
+      buildbox-exit-if-failed $?
+    fi
+  elif [[ -e $BUILDBOX_DIR/buildbox-artifact ]]
+  then
+    # If you want to upload artifacts to your own server, uncomment the lines below
+    # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
+    # own bucket.
+    # export AWS_SECRET_ACCESS_KEY=yyy
+    # export AWS_ACCESS_KEY_ID=xxx
+    # buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+
+    # By default we silence the buildbox-artifact build output. However, if you'd like to see
+    # it in your logs, remove the: > /dev/null 2>&1 from the end of the line.
+    $BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
+    buildbox-exit-if-failed $?
+  else
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"
     exit 1
   fi
-
-  # If you want to upload artifacts to your own server, uncomment the lines below
-  # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
-  # own bucket.
-  # export AWS_SECRET_ACCESS_KEY=yyy
-  # export AWS_ACCESS_KEY_ID=xxx
-  # buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
-
-  # By default we silence the buildbox-artifact build output. However, if you'd like to see
-  # it in your logs, remove the: > /dev/null 2>&1 from the end of the line.
-  $BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
-  buildbox-exit-if-failed $?
 fi
 
 exit $EXIT_STATUS

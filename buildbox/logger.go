@@ -87,6 +87,10 @@ func initLogger() *logrus.Logger {
 	return log
 }
 
+func InDebugMode() bool {
+	return Logger.Level == logrus.Debug
+}
+
 func LoggerInitDebug() {
 	// Enable debugging
 	Logger.Level = logrus.Debug
