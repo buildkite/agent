@@ -181,6 +181,23 @@ func (a *Agent) Start() {
 				break
 			}
 
+			Logger.Infof("Assigned job %s. Accepting...", job.ID)
+
+			// Accept the job
+			job, err = a.Client.JobAccept(job)
+			if err != nil {
+				Logger.Errorf("Failed to accept the job (%s)", err)
+				break
+			}
+
+			Logger.Debugf("%s", job)
+
+			// Confirm that it's been accepted
+			if job.State != "accepted" {
+				Logger.Errorf("Can not accept job with state `%s`", job.State)
+				break
+			}
+
 			a.Job = job
 			job.Run(a)
 			a.Job = nil

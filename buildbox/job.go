@@ -56,13 +56,9 @@ func (c *Client) JobFind(id string) (*Job, error) {
 	return &job, c.Get(&job, "jobs/"+id)
 }
 
-func (c *Client) JobFindAndAssign(id string) (*Job, error) {
-	// Create a new instance of a job that will be populated
-	// by the client.
-	var job Job
-
-	// Find the job
-	return &job, c.Get(&job, "jobs/"+id+"/assign")
+func (c *Client) JobAccept(job *Job) (*Job, error) {
+	// Accept the job
+	return job, c.Put(job, "jobs/"+job.ID+"/accept", job)
 }
 
 func (c *Client) JobUpdate(job *Job) (*Job, error) {
@@ -97,7 +93,11 @@ func (j *Job) Run(agent *Agent) error {
 	// Create the environment that the script will use
 	env := []string{}
 
-	// Add the environment variables from the API to the process
+	// These are client specific
+	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_API_URL=%s", agent.Client.URL))
+	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
+
+	// Add the rest environment variables from the API to the process
 	for key, value := range j.Env {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
 	}
