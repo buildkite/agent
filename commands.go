@@ -150,6 +150,10 @@ func init() {
 					Usage: "Populate the meta data from the current instances EC2 Tags",
 				},
 				cli.BoolFlag{
+					Name:  "no-pty",
+					Usage: "Do not run jobs within a pseudo terminal",
+				},
+				cli.BoolFlag{
 					Name:   "debug",
 					Usage:  "Enable debug mode.",
 					EnvVar: "BUILDBOX_AGENT_DEBUG",

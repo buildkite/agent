@@ -54,7 +54,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Start the agent using the token we have
-	agent := setupAgent(agentAccessToken, c.String("bootstrap-script"), c.String("url"))
+	agent := setupAgent(agentAccessToken, c.String("bootstrap-script"), !c.Bool("no-pty"), c.String("url"))
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
@@ -63,7 +63,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.Start()
 }
 
-func setupAgent(agentAccessToken string, bootstrapScript string, url string) *buildbox.Agent {
+func setupAgent(agentAccessToken string, bootstrapScript string, runInPty bool, url string) *buildbox.Agent {
 	// Expand the envionment variable.
 	bootstrapScript = os.ExpandEnv(bootstrapScript)
 
@@ -76,6 +76,7 @@ func setupAgent(agentAccessToken string, bootstrapScript string, url string) *bu
 	// Set the agent options
 	var agent buildbox.Agent
 	agent.BootstrapScript = bootstrapScript
+	agent.RunInPty = runInPty
 
 	// Client specific options
 	agent.Client.AuthorizationToken = agentAccessToken

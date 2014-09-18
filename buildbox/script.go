@@ -22,6 +22,7 @@ type Process struct {
 	Output     string
 	Pid        int
 	Running    bool
+	RunInPty   bool
 	ExitStatus string
 	command    *exec.Cmd
 	callback   func(*Process)
@@ -32,9 +33,10 @@ func (p Process) String() string {
 	return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func InitProcess(dir string, script string, env []string, callback func(*Process)) *Process {
+func InitProcess(dir string, script string, env []string, runInPty bool, callback func(*Process)) *Process {
 	// Create a new instance of our process struct
 	var process Process
+	process.RunInPty = runInPty
 
 	// Find the script to run
 	absoluteDir, _ := filepath.Abs(dir)
@@ -61,41 +63,56 @@ func InitProcess(dir string, script string, env []string, callback func(*Process
 }
 
 func (p *Process) Start() error {
-	Logger.Infof("Starting to run script: %s", p.command.Path)
-
-	// Start our process
-	pty, err := pty.Start(p.command)
-	if err != nil {
-		// The process essentially failed, so we'll just make up
-		// and exit status.
-		p.ExitStatus = "1"
-
-		return err
-	}
-
-	p.Pid = p.command.Process.Pid
-	p.Running = true
-
-	Logger.Infof("Process is running with PID: %d", p.Pid)
-
 	var buffer bytes.Buffer
 	var waitGroup sync.WaitGroup
-	waitGroup.Add(2)
 
-	go func() {
-		Logger.Debug("Starting to copy PTY to the buffer")
+	Logger.Infof("Starting to run script: %s", p.command.Path)
 
-		// Copy the pty to our buffer. This will block until it EOF's
-		// or something breaks.
-		_, err = io.Copy(&buffer, pty)
+	// Toggle between running in a pty
+	if p.RunInPty {
+		pty, err := pty.Start(p.command)
 		if err != nil {
-			Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
-		} else {
-			Logger.Debug("io.Copy finsihed")
+			p.ExitStatus = "1"
+			return err
 		}
 
-		waitGroup.Done()
-	}()
+		p.Pid = p.command.Process.Pid
+		p.Running = true
+
+		waitGroup.Add(2)
+
+		go func() {
+			Logger.Debug("Starting to copy PTY to the buffer")
+
+			// Copy the pty to our buffer. This will block until it EOF's
+			// or something breaks.
+			_, err = io.Copy(&buffer, pty)
+			if err != nil {
+				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
+			} else {
+				Logger.Debug("io.Copy finsihed")
+			}
+
+			waitGroup.Done()
+		}()
+	} else {
+		p.command.Stdout = &buffer
+		p.command.Stderr = &buffer
+
+		err := p.command.Start()
+		if err != nil {
+			p.ExitStatus = "1"
+			return err
+		}
+
+		p.Pid = p.command.Process.Pid
+		p.Running = true
+
+		// We only have to wait for 1 thing if we're not running in a PTY.
+		waitGroup.Add(1)
+	}
+
+	Logger.Infof("Process is running with PID: %d", p.Pid)
 
 	go func() {
 		for p.Running {
@@ -131,7 +148,7 @@ func (p *Process) Start() error {
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
 	Logger.Debug("Waiting for io.Copy and incremental output to finish")
-	err = timeoutWait(&waitGroup)
+	err := timeoutWait(&waitGroup)
 	if err != nil {
 		Logger.Errorf("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
@@ -192,7 +209,7 @@ func (p *Process) Kill() error {
 	select {
 	case _ = <-c:
 		// Was successfully terminated
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		// Stop checking in the routine above
 		checking = false
 
@@ -252,7 +269,7 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	select {
 	case _ = <-c:
 		return nil
-	case <-time.After(3 * time.Second):
+	case <-time.After(5 * time.Second):
 		return errors.New("Timeout")
 	}
 

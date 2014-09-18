@@ -130,7 +130,7 @@ func (j *Job) Run(agent *Agent) error {
 	// Initialze our process to run
 	scriptPath := path.Dir(agent.BootstrapScript)
 	scriptName := path.Base(agent.BootstrapScript)
-	process := InitProcess(scriptPath, scriptName, env, callback)
+	process := InitProcess(scriptPath, scriptName, env, agent.RunInPty, callback)
 
 	// Store the process so we can cancel it later.
 	j.process = process

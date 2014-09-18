@@ -25,6 +25,9 @@ type Agent struct {
 	// The boostrap script to run
 	BootstrapScript string
 
+	// Run jobs in a PTY
+	RunInPty bool
+
 	// The currently running Job
 	Job *Job
 
@@ -41,7 +44,7 @@ func (c *Client) AgentDisconnect(agent *Agent) error {
 }
 
 func (a *Agent) String() string {
-	return fmt.Sprintf("Agent{Name: %s, Hostname: %s, PID: %d}", a.Name, a.Hostname, a.PID)
+	return fmt.Sprintf("Agent{Name: %s, Hostname: %s, PID: %d, RunInPty: %t}", a.Name, a.Hostname, a.PID, a.RunInPty)
 }
 
 func (a *Agent) Setup() {
@@ -211,8 +214,6 @@ func (a *Agent) Start() {
 				Logger.Errorf("Failed to accept the job (%s)", err)
 				break
 			}
-
-			Logger.Debugf("%s", job)
 
 			// Confirm that it's been accepted
 			if job.State != "accepted" {
