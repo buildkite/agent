@@ -82,19 +82,6 @@ func (u *S3Uploader) Upload(artifact *Artifact) error {
 	return nil
 }
 
-// func (u S3Uploader) Download(file string, bucket *s3.Bucket, path string) {
-//   data, err := bucket.Get(path)
-//   if err != nil {
-//     panic(err.Error())
-//   }
-//   perms := os.FileMode(0644)
-//
-//   err = ioutil.WriteFile(file, data, perms)
-//   if err != nil {
-//     panic(err.Error())
-//   }
-// }
-
 func (u *S3Uploader) artifactPath(artifact *Artifact) string {
 	parts := []string{u.bucketPath(), artifact.Path}
 
