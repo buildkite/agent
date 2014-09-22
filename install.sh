@@ -14,6 +14,11 @@ then
   exit 1
 fi
 
+if [ "$BETA" = "true" ]
+then
+  VERSION="1.0-beta.2"
+fi
+
 # Allow custom setting of the version
 if [ -z "$VERSION" ]; then
   VERSION="0.2"
