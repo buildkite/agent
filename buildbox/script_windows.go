@@ -48,8 +48,8 @@ func InitProcess(dir string, script string, env []string, runInPty bool, callbac
 	// new ones. We do this so the sub process gets PATH
 	// and stuff.
 	// TODO: Is this correct?
-	// currentEnv := os.Environ()
-	// process.command.Env = append(currentEnv, env...)
+	currentEnv := os.Environ()
+	process.command.Env = append(currentEnv, env...)
 
 	// Set the callback
 	process.callback = callback
