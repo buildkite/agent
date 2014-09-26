@@ -1,51 +1,75 @@
 @echo off
 
-echo Current environment variables
-SET
+REM echo --- Environment Variables
+REM SET
 
-echo Current directory
-chdir
+echo --- Creating Build Environment
 
-REM You can remove this conditional once you've added a repository
-IF "%BUILDBOX_REPO%" == "" (
-  echo Congratulations! You just ran a build! Now it's time to fill out this build script and customize your project
-  exit /b 0
+REM Returns the location of this file
+
+SET BUILDBOX_DIR=%~dp0
+
+REM Add the BUILDBOX_DIR to the PATH
+
+SET PATH=%PATH%;%BUILDBOX_DIR%
+
+REM Create the build directory
+
+SET SANITIED_PROJECT_SLUG=%BUILDBOX_PROJECT_SLUG:/=\%
+SET BUILDBOX_BUILD_DIR=%BUILDBOX_DIR%%BUILDBOX_AGENT_NAME%\%SANITIED_PROJECT_SLUG%
+
+IF NOT EXIST %BUILDBOX_BUILD_DIR% (
+  REM Create the build directory
+
+  ECHO ^> MKDIR %BUILDBOX_BUILD_DIR%
+  MKDIR %BUILDBOX_BUILD_DIR%
+  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 )
 
-REM Here are some basic setup instructions for checking out a git repository.
-REM You have to manage checking out and updating the repo yourself.
+REM Move to the build directory
+
+ECHO ^> CD %BUILDBOX_BUILD_DIR%
+CD %BUILDBOX_BUILD_DIR%
+IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+
+REM Do we need to do a git checkout?
 
 IF NOT EXIST ".git" (
-  echo Cloning %BUILDBOX_REPO%
-  call git clone "%BUILDBOX_REPO%" .
-  if %errorlevel% neq 0 exit /b %errorlevel%
+  ECHO ^> git clone %BUILDBOX_REPO%
+  CALL git clone "%BUILDBOX_REPO%" . -v
+  ECHO It was this: %ERRORLEVEL%
+  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 )
 
-echo Cleaning the repo
-call git clean -fd
-if %errorlevel% neq 0 exit /b %errorlevel%
+REM Clean the repo
 
-echo Fetching latest commits from origin
-call git fetch
-if %errorlevel% neq 0 exit /b %errorlevel%
+ECHO ^> git clean -fdq
+CALL git clean -fdq
+IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-echo Checking out %BUILDBOX_COMMIT%
-call git checkout -f "%BUILDBOX_COMMIT%"
-if %errorlevel% neq 0 exit /b %errorlevel%
+REM Fetch the latest code
 
-REM Here is an example on how to run tests for a Ruby on Rails project with rspec.
-REM You can change these commands to be what ever you like.
+ECHO ^> git fetch -q
+CALL git fetch -q
+IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-echo Bundling
-call bundle install
-if %errorlevel% neq 0 exit /b %errorlevel%
+REM Only reset to the branch if we're not on a tag
 
-REM bundle exec rake db:schema:load
-echo Running specs
-call bundle exec rspec
-if %errorlevel% neq 0 exit /b %errorlevel%
+IF "%BUILDBOX_TAG%" == "" (
+  ECHO ^> git reset --hard origin/%BUILDBOX_BRANCH%
+  CALL git reset --hard origin/%BUILDBOX_BRANCH%
+  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+)
 
-REM Want to do something paticular for a specific branch? You can do that!
-IF "%BUILDBOX_BRANCH%" == "master" (
-  REM Do something special if the current branch is 'master'
+ECHO ^> git checkout -qf "%BUILDBOX_COMMIT%"
+CALL git checkout -qf "%BUILDBOX_COMMIT%"
+IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+
+echo --- Running %BUILDBOX_SCRIPT_PATH%
+
+IF "%BUILDBOX_SCRIPT_PATH%" == "" (
+  echo ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script
+  exit 1
+) ELSE (
+  CALL %BUILDBOX_SCRIPT_PATH%
 )
