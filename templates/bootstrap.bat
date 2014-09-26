@@ -65,11 +65,37 @@ ECHO ^> git checkout -qf "%BUILDBOX_COMMIT%"
 CALL git checkout -qf "%BUILDBOX_COMMIT%"
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-echo --- Running %BUILDBOX_SCRIPT_PATH%
+ECHO --- Running Build Script
 
 IF "%BUILDBOX_SCRIPT_PATH%" == "" (
   echo ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script
   exit 1
 ) ELSE (
+  ECHO ^> CALL %BUILDBOX_SCRIPT_PATH%
   CALL %BUILDBOX_SCRIPT_PATH%
+  SET EXIT_STATUS=%ERRORLEVEL%
 )
+
+IF NOT "%BUILDBOX_ARTIFACT_PATHS%" == "" (
+  REM If you want to upload artifacts to your own server, uncomment the lines below
+  REM and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
+  REM own bucket.
+  REM
+  REM SET AWS_SECRET_ACCESS_KEY=yyy
+  REM SET AWS_ACCESS_KEY_ID=xxx
+  REM SET AWS_S3_ACL=private
+  REM call buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%" "s3://name-of-your-s3-bucket/%BUILDBOX_JOB_ID%"
+
+  REM Show the output of the artifact uploder when in debug mode
+  IF "%BUILDBOX_AGENT_DEBUG%" == "true" (
+    ECHO --- Uploading Artifacts
+    ECHO ^> %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%"
+    call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%"
+    IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+  ) ELSE (
+    call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%" >&2 nul
+    IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+  )
+)
+
+EXIT %EXIT_STATUS%
