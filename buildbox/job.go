@@ -123,7 +123,7 @@ func (j *Job) Run(agent *Agent) error {
 			// We don't really care if the job couldn't update at this point.
 			// This is just a partial update. We'll just let the job run
 			// and hopefully the host will fix itself before we finish.
-			Logger.Errorf("Problem with updating job %s (%s)", j.ID, err)
+			Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
 		} else if updatedJob.State == "canceled" {
 			j.Kill()
 		}

@@ -148,7 +148,7 @@ func (p *Process) Start() error {
 	// Find the exit status of the script
 	p.ExitStatus = getExitStatus(waitResult)
 
-	Logger.Debugf("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	Logger.Infof("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.

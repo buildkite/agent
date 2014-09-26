@@ -154,31 +154,21 @@ func (a *Agent) MonitorSignals() {
 			return
 		}
 
-		// If the agent isn't running a job, exit right away
+		// If theres no job, then we can just shut down right away.
 		if a.Job == nil {
-			// Disconnect from Buildbox
-			Logger.Info("Disconnecting...")
-			a.Client.AgentDisconnect(a)
-
-			os.Exit(1)
-		}
-
-		// If the agent is already trying to stop and we've got another interupt,
-		// just forcefully shut it down.
-		if a.stopping {
-			// Kill the job
-			a.Job.Kill()
-
-			// Disconnect from Buildbox
-			Logger.Info("Disconnecting...")
-			a.Client.AgentDisconnect(a)
-
-			// Die time.
-			os.Exit(1)
+			a.Stop()
 		} else {
-			Logger.Info("Exiting... Waiting for job to finish before stopping. Send signal again to exit immediately")
+			// The user is trying to forcefully kill the agent, so we need
+			// to kill any active job.
+			if a.stopping {
+				a.Job.Kill()
+			} else {
+				// We should warn the user before they try and shut down the
+				// agent while it's performing a job
+				Logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
 
-			a.stopping = true
+				a.stopping = true
+			}
 		}
 
 		// Start monitoring signals again
@@ -192,46 +182,55 @@ func (a *Agent) Start() {
 	sleepTime := time.Duration(idleSeconds*1000) * time.Millisecond
 
 	for {
-		// The agent will run all the jobs in the queue, and return
-		// when there's nothing left to do.
-		for {
-			job, err := a.Client.JobNext()
-			if err != nil {
-				Logger.Errorf("Failed to get job (%s)", err)
-				break
-			}
+		a.performNextJob()
 
-			// If there's no ID, then there's no job.
-			if job.ID == "" {
-				break
-			}
-
-			Logger.Infof("Assigned job %s. Accepting...", job.ID)
-
-			// Accept the job
-			job, err = a.Client.JobAccept(job)
-			if err != nil {
-				Logger.Errorf("Failed to accept the job (%s)", err)
-				break
-			}
-
-			// Confirm that it's been accepted
-			if job.State != "accepted" {
-				Logger.Errorf("Can not accept job with state `%s`", job.State)
-				break
-			}
-
-			a.Job = job
-			job.Run(a)
-			a.Job = nil
-		}
-
-		// Should we be stopping?
+		// Did the agent try and stop during the last job run?
 		if a.stopping {
-			break
-		} else {
-			// Sleep then check again later.
-			time.Sleep(sleepTime)
+			a.Stop()
 		}
+
+		// Sleep for a while before we check again
+		time.Sleep(sleepTime)
 	}
+}
+
+func (a *Agent) Stop() {
+	// Disconnect from Buildbox
+	Logger.Info("Disconnecting...")
+	a.Client.AgentDisconnect(a)
+
+	// Kill the process
+	os.Exit(0)
+}
+
+func (a *Agent) performNextJob() {
+	job, err := a.Client.JobNext()
+	if err != nil {
+		Logger.Warningf("Failed to get job (%s)", err)
+		return
+	}
+
+	// If there's no ID, then there's no job.
+	if job.ID == "" {
+		return
+	}
+
+	Logger.Infof("Assigned job %s. Accepting...", job.ID)
+
+	// Accept the job
+	job, err = a.Client.JobAccept(job)
+	if err != nil {
+		Logger.Errorf("Failed to accept the job (%s)", err)
+		return
+	}
+
+	// Confirm that it's been accepted
+	if job.State != "accepted" {
+		Logger.Errorf("Can not accept job with state `%s`", job.State)
+		return
+	}
+
+	a.Job = job
+	job.Run(a)
+	a.Job = nil
 }
