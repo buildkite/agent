@@ -66,11 +66,11 @@ func (a *Agent) Start() {
 	sleepTime := time.Duration(idleSeconds*1000) * time.Millisecond
 
 	for {
-		a.performNextJob()
-
 		// Did the agent try and stop during the last job run?
 		if a.stopping {
 			a.Stop()
+		} else {
+			a.performNextJob()
 		}
 
 		// Sleep for a while before we check again
