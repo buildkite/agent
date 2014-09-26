@@ -24,6 +24,8 @@ function build {
   rm $DIRECTORY/$BINARY_FILENAME
 }
 
+build "windows" "386"
+build "windows" "amd64"
 build "linux" "amd64"
 build "linux" "386"
 build "linux" "arm"
