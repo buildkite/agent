@@ -93,7 +93,7 @@ IF NOT "%BUILDBOX_ARTIFACT_PATHS%" == "" (
     call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%"
     IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
   ) ELSE (
-    call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%" >&2 nul
+    call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%" > nul 2>&1
     IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
   )
 )
