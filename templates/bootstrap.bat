@@ -37,7 +37,6 @@ REM Do we need to do a git checkout?
 IF NOT EXIST ".git" (
   ECHO ^> git clone %BUILDBOX_REPO%
   CALL git clone "%BUILDBOX_REPO%" . -v
-  ECHO It was this: %ERRORLEVEL%
   IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 )
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -28,26 +27,20 @@ func (p Process) String() string {
 	return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func InitProcess(dir string, script string, env []string, runInPty bool, callback func(*Process)) *Process {
+func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*Process)) *Process {
 	// Create a new instance of our process struct
 	var process Process
 	process.RunInPty = runInPty
 
 	// Find the script to run
-	absoluteDir, _ := filepath.Abs(dir)
-	pathToScript := path.Join(absoluteDir, script)
+	absolutePath, _ := filepath.Abs(scriptPath)
+	scriptDirectory := filepath.Dir(absolutePath)
 
-	process.command = exec.Command(pathToScript)
-	process.command.Dir = absoluteDir
+	process.command = exec.Command(absolutePath)
+	process.command.Dir = scriptDirectory
 
-	// Children of the forked process will inherit its process group
-	// This is to make sure that all grandchildren dies when this Process instance is killed
-	// process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-
-	// Copy the current processes ENV and merge in the
-	// new ones. We do this so the sub process gets PATH
-	// and stuff.
-	// TODO: Is this correct?
+	// Copy the current processes ENV and merge in the new ones. We do this
+	// so the sub process gets PATH and stuff.
 	currentEnv := os.Environ()
 	process.command.Env = append(currentEnv, env...)
 

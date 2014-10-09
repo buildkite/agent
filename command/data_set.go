@@ -15,13 +15,13 @@ func DataSetCommandAction(c *cli.Context) {
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Println("buildbox: missing agent access token\nSee 'buildbox data get --help'")
+		fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox data get --help'")
 		os.Exit(1)
 	}
 
 	jobId := c.String("job")
 	if jobId == "" {
-		fmt.Printf("buildbox: missing job\nSee 'buildbox data get --help'\n")
+		fmt.Printf("buildbox-agent: missing job\nSee 'buildbox data get --help'\n")
 		os.Exit(1)
 	}
 

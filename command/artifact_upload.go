@@ -15,20 +15,20 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Printf("buildbox: missing agent access token\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildbox-agent: missing agent access token\nSee 'buildbox-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	jobId := c.String("job")
 	if jobId == "" {
-		fmt.Printf("buildbox: missing job\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildbox-agent: missing job\nSee 'buildbox-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	// Grab the first argument and use as paths to download
 	paths := c.Args().First()
 	if paths == "" {
-		fmt.Printf("buildbox: missing upload paths\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildbox-agent: missing upload paths\nSee 'buildbox-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
