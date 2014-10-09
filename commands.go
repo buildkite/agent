@@ -26,7 +26,7 @@ Example:
 
 var DownloadHelpDescription = `Usage:
 
-   buildbox-agent artifact download [arguments...]
+   buildbox-agent build-artifact download [arguments...]
 
 Description:
 
@@ -46,13 +46,13 @@ Example:
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the paticular job you want to download the artifact from:
 
-   $ buildbox-agent artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
+   $ buildbox-agent build-artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
 
    You can also use the job's id (provided by the environment variable $BUILDBOX_JOB_ID)`
 
 var UploadHelpDescription = `Usage:
 
-   buildbox-agent artifact upload <pattern> <destination> [arguments...]
+   buildbox-agent build-artifact upload <pattern> <destination> [arguments...]
 
 Description:
 
@@ -64,17 +64,17 @@ Description:
 
 Example:
 
-   $ buildbox-agent artifact upload "log/**/*.log"
+   $ buildbox-agent build-artifact upload "log/**/*.log"
 
    You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
 
    $ export AWS_SECRET_ACCESS_KEY=yyy
    $ export AWS_ACCESS_KEY_ID=xxx
-   $ buildbox-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID`
+   $ buildbox-agent build-artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID`
 
 var SetHelpDescription = `Usage:
 
-   buildbox-agent build-meta-data set <key> <value> [arguments...]
+   buildbox-agent build-data set <key> <value> [arguments...]
 
 Description:
 
@@ -82,11 +82,11 @@ Description:
 
 Example:
 
-   $ buildbox-agent build-meta-data set "foo" "bar"`
+   $ buildbox-agent build-data set "foo" "bar"`
 
 var GetHelpDescription = `Usage:
 
-   buildbox-agent build-meta-data get <key> [arguments...]
+   buildbox-agent build-data get <key> [arguments...]
 
 Description:
 
@@ -94,7 +94,7 @@ Description:
 
 Example:
 
-   $ buildbox-agent build-meta-data get "foo"`
+   $ buildbox-agent build-data get "foo"`
 
 func init() {
 	Commands = []cli.Command{
@@ -162,7 +162,7 @@ func init() {
 			Action: command.AgentStartCommandAction,
 		},
 		{
-			Name:  "artifact",
+			Name:  "build-artifact",
 			Usage: "Upload/download artifacts from Buildbox jobs",
 			Subcommands: []cli.Command{
 				{
@@ -236,7 +236,7 @@ func init() {
 			},
 		},
 		{
-			Name:  "build-meta-data",
+			Name:  "build-data",
 			Usage: "Get/set data from Buildbox jobs",
 			Subcommands: []cli.Command{
 				{
