@@ -3,6 +3,7 @@ package buildbox
 import (
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 )
 
@@ -15,4 +16,8 @@ func MachineHostname() string {
 
 	// Retrun a trimmed hostname
 	return strings.Trim(fmt.Sprintf("%s", hostname), "\n")
+}
+
+func MachineIsWindows() bool {
+	return runtime.GOOS == "windows"
 }
