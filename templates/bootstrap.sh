@@ -35,7 +35,10 @@ buildbox-run "cd \"$BUILDBOX_BUILD_DIR\""
 # Do we need to do a git checkout?
 if [ ! -d ".git" ]
 then
-  buildbox-run "git clone "$BUILDBOX_REPO" . -qv"
+  # We use the yes command to accept the SSH fingerprint on first checkout,
+  # but for added security remove yes and ensure your host's key is in
+  # ~/.ssh/known_hosts. e.g.: ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+  buildbox-run "yes yes | git clone "$BUILDBOX_REPO" . -qv"
 fi
 
 # Default empty branch names
