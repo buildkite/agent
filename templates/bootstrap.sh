@@ -82,21 +82,21 @@ then
   buildbox-run "docker run --name buildbox-$BUILDBOX_JOB_ID-container buildbox-$BUILDBOX_JOB_ID-image ./$BUILDBOX_SCRIPT_PATH"
 
 ## Fig
-elif [ "$BUILDBOX_FIG_SERVICE" != "" ]
+elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
 then
   if [ ! -a "fig.yml" ]
   then
-    echo "You must have a fig.yml to use BUILDBOX_FIG_SERVICE"
+    echo "You must have a fig.yml to use BUILDBOX_FIG_CONTAINER"
     exit 1
   fi
 
   # Build the Docker images using Fig, namespaced to the job
   buildbox-run "fig -p $BUILDBOX_JOB_ID build"
 
-  echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_SERVICE')"
+  echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
 
-  # Run the build script command in the service specified in BUILDBOX_FIG_SERVICE
-  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID run $BUILDBOX_FIG_SERVICE ./$BUILDBOX_SCRIPT_PATH"
+  # Run the build script command in the service specified in BUILDBOX_FIG_CONTAINER
+  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
 
 ## Standard
 else
@@ -161,7 +161,7 @@ then
   buildbox-run "docker rm -f buildbox-$BUILDBOX_JOB_ID-container > /dev/null 2>&1"
   # Delete the Docker image
   buildbox-run "docker rmi buildbox-$BUILDBOX_JOB_ID-image > /dev/null 2>&1"
-elif [ "$BUILDBOX_FIG_SERVICE" != "" ]
+elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
 then
   # Kill the Fig Docker containers
   buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID kill > /dev/null 2>&1"
