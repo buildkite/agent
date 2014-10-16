@@ -66,8 +66,16 @@ then
   exit 1
 fi
 
-# Run the step's build script
-."/$BUILDBOX_SCRIPT_PATH"
+if [ "$BUILDBOX_FIG_SERVICE" != "" ]
+then
+  # Build and start the app's containers using fig. Setting the fig project name
+  # to the job id gives us a per-job namespace
+  buildbox-run "fig -p $BUILDBOX_JOB_ID build"
+  buildbox-run "fig -p $BUILDBOX_JOB_ID run $BUILDBOX_FIG_SERVICE ./$BUILDBOX_SCRIPT_PATH"
+else
+  # Run the step's build script
+  ."/$BUILDBOX_SCRIPT_PATH"
+fi
 
 # Capture the exit status for the end
 EXIT_STATUS=$?
@@ -116,6 +124,14 @@ then
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"
     exit 1
   fi
+fi
+
+if [ "$BUILDBOX_FIG_SERVICE" != "" ]
+then
+  # Kill the fig containers
+  buildbox-run "fig -p $BUILDBOX_JOB_ID kill > /dev/null 2>&1"
+  # Delete the Docker images
+  buildbox-run "fig -p $BUILDBOX_JOB_ID rm --force > /dev/null 2>&1"
 fi
 
 exit $EXIT_STATUS
