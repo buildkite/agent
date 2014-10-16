@@ -58,16 +58,56 @@ fi
 
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
-echo "--- running $BUILDBOX_SCRIPT_PATH"
-
 if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
 then
-  echo "ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script"
+  echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
-else
-  ."/$BUILDBOX_SCRIPT_PATH"
-  EXIT_STATUS=$?
 fi
+
+## Docker
+if [ "$BUILDBOX_DOCKER" != "" ]
+then
+  if [ ! -a "Dockerfile" ]
+  then
+    echo "You must have a Dockerfile to use BUILDBOX_DOCKER"
+    exit 1
+  fi
+
+  # Build the Docker image, namespaced to the job
+  buildbox-run "docker build -t buildbox-$BUILDBOX_JOB_ID-image ."
+
+  echo "--- running $BUILDBOX_SCRIPT_PATH (in Docker container buildbox-$BUILDBOX_JOB_ID-image)"
+
+  # Run the build script command in a one-off container
+  buildbox-run "docker run --name buildbox-$BUILDBOX_JOB_ID-container buildbox-$BUILDBOX_JOB_ID-image ./$BUILDBOX_SCRIPT_PATH"
+
+## Fig
+elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
+then
+  if [ ! -a "fig.yml" ]
+  then
+    echo "You must have a fig.yml to use BUILDBOX_FIG_CONTAINER"
+    exit 1
+  fi
+
+  # Build the Docker images using Fig, namespaced to the job
+  buildbox-run "fig -p $BUILDBOX_JOB_ID build"
+
+  echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
+
+  # Run the build script command in the service specified in BUILDBOX_FIG_CONTAINER
+  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
+
+## Standard
+else
+  echo "--- running $BUILDBOX_SCRIPT_PATH"
+
+  # Run the step's build script
+  ."/$BUILDBOX_SCRIPT_PATH"
+fi
+
+# Capture the exit status for the end
+EXIT_STATUS=$?
 
 if [ "$BUILDBOX_ARTIFACT_PATHS" != "" ]
 then
@@ -113,6 +153,20 @@ then
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"
     exit 1
   fi
+fi
+
+if [ "$BUILDBOX_DOCKER" != "" ]
+then
+  # Delete the Docker container
+  buildbox-run "docker rm -f buildbox-$BUILDBOX_JOB_ID-container > /dev/null 2>&1"
+  # Delete the Docker image
+  buildbox-run "docker rmi buildbox-$BUILDBOX_JOB_ID-image > /dev/null 2>&1"
+elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
+then
+  # Kill the Fig Docker containers
+  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID kill > /dev/null 2>&1"
+  # Delete the Fig Docker images
+  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID rm --force > /dev/null 2>&1"
 fi
 
 exit $EXIT_STATUS
