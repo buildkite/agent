@@ -62,12 +62,15 @@ echo "--- running $BUILDBOX_SCRIPT_PATH"
 
 if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
 then
-  echo "ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script"
+  echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
-else
-  ."/$BUILDBOX_SCRIPT_PATH"
-  EXIT_STATUS=$?
 fi
+
+# Run the step's build script
+."/$BUILDBOX_SCRIPT_PATH"
+
+# Capture the exit status for the end
+EXIT_STATUS=$?
 
 if [ "$BUILDBOX_ARTIFACT_PATHS" != "" ]
 then
