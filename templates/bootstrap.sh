@@ -67,12 +67,6 @@ fi
 ## Docker
 if [ "$BUILDBOX_DOCKER" != "" ]
 then
-  if [ ! -a "Dockerfile" ]
-  then
-    echo "You must have a Dockerfile to use BUILDBOX_DOCKER"
-    exit 1
-  fi
-
   # Build the Docker image, namespaced to the job
   buildbox-run "docker build -t buildbox-$BUILDBOX_JOB_ID-image ."
 
@@ -84,12 +78,6 @@ then
 ## Fig
 elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
 then
-  if [ ! -a "fig.yml" ]
-  then
-    echo "You must have a fig.yml to use BUILDBOX_FIG_CONTAINER"
-    exit 1
-  fi
-
   # Build the Docker images using Fig, namespaced to the job
   buildbox-run "fig -p $BUILDBOX_JOB_ID build"
 
