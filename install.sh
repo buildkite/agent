@@ -14,15 +14,9 @@ then
   exit 1
 fi
 
-if [ "$VERSION" = "1.0-beta.2" ]
-then
-  echo "NOTICE: Installing 1.0-beta.2 is no longer supported...sorry. Please install 1.0-beta.3"
-  exit 1
-fi
-
 if [ "$BETA" = "true" ]
 then
-  VERSION="1.0-beta.3"
+  VERSION="1.0-beta.4"
 fi
 
 # Allow custom setting of the version
@@ -103,7 +97,7 @@ tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
 INSTALLED_VERSION=`$DESTINATION/buildbox-agent --version`
 
-if [[ "$INSTALLED_VERSION" = "buildbox-agent version 1.0-beta.3" ]]
+if [[ "$INSTALLED_VERSION" = "buildbox-agent version 1.0-beta.4" ]]
 then
   # Move the buildbox binary into a bin folder
   mkdir -p $DESTINATION/bin
