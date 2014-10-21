@@ -98,7 +98,7 @@ then
 elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
 then
   # Build the Docker images using Fig, namespaced to the job
-  buildbox-run "fig -p $BUILDBOX_JOB_ID build"
+  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID build"
 
   echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
 
