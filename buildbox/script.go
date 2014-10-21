@@ -40,11 +40,10 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	var process Process
 	process.RunInPty = runInPty
 
-	// Find the script to run
-	pathToScript, _ := filepath.Abs(path.Dir(scriptPath))
-	localScriptName := path.Base(scriptPath)
+	process.command = exec.Command(scriptPath)
 
-	process.command = exec.Command(localScriptName)
+	// Set the working directory of the process
+	pathToScript, _ := filepath.Abs(path.Dir(scriptPath))
 	process.command.Dir = pathToScript
 
 	// Children of the forked process will inherit its process group

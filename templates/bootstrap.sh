@@ -17,6 +17,11 @@ function buildbox-run {
 
 echo '--- setup environment'
 
+if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
+then
+  buildbox-run "env | grep BUILDBOX"
+fi
+
 # This will return the location of this file. We assume that the buildbox-artifact
 # tool is in the same folder. You can of course customize the locations
 # and edit this file.

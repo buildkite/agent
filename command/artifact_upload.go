@@ -43,7 +43,7 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 
 	// Client specific options
 	agent.Client.AuthorizationToken = agentAccessToken
-	agent.Client.URL = c.String("url")
+	agent.Client.URL = c.String("endpoint")
 
 	// Setup the agent
 	agent.Setup()

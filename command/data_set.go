@@ -28,7 +28,7 @@ func DataSetCommandAction(c *cli.Context) {
 	// Create a client so we can register the agent
 	var client buildbox.Client
 	client.AuthorizationToken = agentAccessToken
-	client.URL = c.String("url")
+	client.URL = c.String("endpoint")
 
 	// Find the job
 	job, err := client.JobFind(jobId)

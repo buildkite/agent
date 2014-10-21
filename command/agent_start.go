@@ -40,7 +40,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	// Create a client so we can register the agent
 	var client buildbox.Client
 	client.AuthorizationToken = agentRegistrationToken
-	client.URL = c.String("url")
+	client.URL = c.String("endpoint")
 
 	agentMetaData := c.StringSlice("meta-data")
 
@@ -65,7 +65,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Start the agent using the token we have
-	agent := setupAgent(agentAccessToken, bootstrapScript, !c.Bool("no-pty"), c.String("url"))
+	agent := setupAgent(agentAccessToken, bootstrapScript, !c.Bool("no-pty"), c.String("endpoint"))
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
