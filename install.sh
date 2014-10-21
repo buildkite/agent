@@ -127,8 +127,8 @@ exit 1"
   if [[ -e $DESTINATION/buildbox-artifact ]]
   then
     shim " start --token 123" > $DESTINATION/buildbox-agent
-    shim " artifact" > $DESTINATION/buildbox-artifact
-    shim " build-meta-data" > $DESTINATION/buildbox-data
+    shim " build-artifact" > $DESTINATION/buildbox-artifact
+    shim " build-data" > $DESTINATION/buildbox-data
   fi
 fi
 

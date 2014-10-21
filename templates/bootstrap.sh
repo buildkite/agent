@@ -113,16 +113,16 @@ then
     # export AWS_SECRET_ACCESS_KEY=yyy
     # export AWS_ACCESS_KEY_ID=xxx
     # export AWS_S3_ACL=private
-    # buildbox-agent artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+    # buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
 
     # Show the output of the artifact uploder when in debug mode
     if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
     then
       echo '--- uploading artifacts'
-      $BUILDBOX_DIR/bin/buildbox-agent artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL
+      $BUILDBOX_DIR/bin/buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL
       buildbox-exit-if-failed $?
     else
-      $BUILDBOX_DIR/bin/buildbox-agent artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
+      $BUILDBOX_DIR/bin/buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
       buildbox-exit-if-failed $?
     fi
   elif [[ -e $BUILDBOX_DIR/buildbox-artifact ]]

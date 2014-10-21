@@ -39,7 +39,7 @@ Description:
 
 Example:
 
-   $ buildbox-agent artifact download "pkg/*.tar.gz" . --build xxx
+   $ buildbox-agent build-artifact download "pkg/*.tar.gz" . --build xxx
 
    This will search across all the artifacts for the build with files that match that part.
    The first argument is the search query, and the second argument is the download destination.
