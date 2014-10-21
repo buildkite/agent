@@ -113,16 +113,16 @@ then
     # export AWS_SECRET_ACCESS_KEY=yyy
     # export AWS_ACCESS_KEY_ID=xxx
     # export AWS_S3_ACL=private
-    # buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+    # buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --endpoint $BUILDBOX_AGENT_ENDPOINT
 
     # Show the output of the artifact uploder when in debug mode
     if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
     then
       echo '--- uploading artifacts'
-      $BUILDBOX_DIR/bin/buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL
+      $BUILDBOX_DIR/bin/buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --endpoint $BUILDBOX_AGENT_ENDPOINT
       buildbox-exit-if-failed $?
     else
-      $BUILDBOX_DIR/bin/buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
+      $BUILDBOX_DIR/bin/buildbox-agent build-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --endpoint $BUILDBOX_AGENT_ENDPOINT > /dev/null 2>&1
       buildbox-exit-if-failed $?
     fi
   elif [[ -e $BUILDBOX_DIR/buildbox-artifact ]]
@@ -132,11 +132,11 @@ then
     # own bucket.
     # export AWS_SECRET_ACCESS_KEY=yyy
     # export AWS_ACCESS_KEY_ID=xxx
-    # buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+    # buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --endpoint $BUILDBOX_AGENT_ENDPOINT
 
     # By default we silence the buildbox-artifact build output. However, if you'd like to see
     # it in your logs, remove the: > /dev/null 2>&1 from the end of the line.
-    $BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
+    $BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --endpoint $BUILDBOX_AGENT_ENDPOINT > /dev/null 2>&1
     buildbox-exit-if-failed $?
   else
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"

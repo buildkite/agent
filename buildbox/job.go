@@ -93,7 +93,7 @@ func (j *Job) Run(agent *Agent) error {
 	env := []string{}
 
 	// These are client specific
-	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_API_URL=%s", agent.Client.URL))
+	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ENDPOINT=%s", agent.Client.URL))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_DEBUG=%t", InDebugMode()))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_VERSION=%s", Version))

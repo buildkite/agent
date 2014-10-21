@@ -85,7 +85,7 @@ call with something like this:
 export AWS_SECRET_ACCESS_KEY=yyy
 export AWS_ACCESS_KEY_ID=xxx
 # export AWS_DEFAULT_REGION=ap-southeast-2 (Optionally set the region. Defaults to us-east-1)
-buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --endpoint $BUILDBOX_AGENT_ENDPOINT
 ```
 
 We'll recognise the `s3://` prefix and upload the artifacts to S3 to the bucket name `name-of-your-s3-bucket` (obviously you'll want to change it to the name of your own S3 bucket)

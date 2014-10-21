@@ -150,10 +150,10 @@ func init() {
 					EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
 				},
 				cli.StringFlag{
-					Name:   "url",
+					Name:   "endpoint",
 					Value:  "https://agent.buildbox.io/v2",
 					Usage:  "The agent API endpoint",
-					EnvVar: "BUILDBOX_AGENT_API_URL",
+					EnvVar: "BUILDBOX_AGENT_ENDPOINT",
 				},
 				cli.BoolFlag{
 					Name:  "meta-data-ec2-tags",
@@ -199,10 +199,10 @@ func init() {
 							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
-							Name:   "url",
+							Name:   "endpoint",
 							Value:  "https://agent.buildbox.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_API_URL",
+							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
@@ -230,10 +230,10 @@ func init() {
 							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
-							Name:   "url",
+							Name:   "endpoint",
 							Value:  "https://agent.buildbox.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_API_URL",
+							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
@@ -267,10 +267,10 @@ func init() {
 							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
-							Name:   "url",
+							Name:   "endpoint",
 							Value:  "https://agent.buildbox.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_API_URL",
+							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
@@ -298,10 +298,10 @@ func init() {
 							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
-							Name:   "url",
+							Name:   "endpoint",
 							Value:  "https://agent.buildbox.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_API_URL",
+							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
