@@ -2,6 +2,7 @@ package buildbox
 
 import (
 	"errors"
+	"fmt"
 	"github.com/crowdmob/goamz/aws"
 	"github.com/crowdmob/goamz/s3"
 	"io/ioutil"
@@ -22,10 +23,11 @@ type S3Uploader struct {
 func (u *S3Uploader) Setup(destination string) error {
 	u.Destination = destination
 
-	// Setup the AWS authentication
-	auth, err := aws.EnvAuth()
+	// Passing blank values here instructs the AWS library to look at the
+	// current instances meta data for the security credentials.
+	auth, err := aws.GetAuth("", "", "", time.Time{})
 	if err != nil {
-		return errors.New("Error loading AWS credentials: " + err.Error())
+		return errors.New(fmt.Sprintf("Error creating AWS authentication: %s", err.Error()))
 	}
 
 	// Decide what region to use
@@ -50,7 +52,7 @@ func (u *S3Uploader) Setup(destination string) error {
 	// bucket
 	_, err = bucket.List("", "", "", 0)
 	if err != nil {
-		return errors.New("Could not find bucket `" + u.bucketName() + " in region `" + region.Name + "` (" + err.Error() + ")")
+		return errors.New("Could not find bucket `" + u.bucketName() + "` in region `" + region.Name + "` (" + err.Error() + ")")
 	}
 
 	u.Bucket = bucket
