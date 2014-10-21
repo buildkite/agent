@@ -152,6 +152,7 @@ Some basic instructions on setting up your Go environment and the codebase for r
 ```bash
 # Make sure you have go installed.
 brew install go --cross-compile-common
+brew install mercurial
 
 # Setup your GOPATH
 export GOPATH="$HOME/Code/go"
