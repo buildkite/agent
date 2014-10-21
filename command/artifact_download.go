@@ -16,19 +16,19 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Printf("buildbox: missing agent access token\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildbox-agent: missing agent access token\nSee 'buildbox-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	if len(c.Args()) != 2 {
-		fmt.Printf("buildbox: invalid usage\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildbox-agent: invalid usage\nSee 'buildbox-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	// Find the build id
 	buildId := c.String("build")
 	if buildId == "" {
-		fmt.Printf("buildbox: missing build\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildbox-agent: missing build\nSee 'buildbox-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 

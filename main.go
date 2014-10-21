@@ -46,7 +46,7 @@ func main() {
 	cli.SubcommandHelpTemplate = SubcommandHelpTemplate
 
 	app := cli.NewApp()
-	app.Name = "buildbox"
+	app.Name = "buildbox-agent"
 	app.Version = buildbox.Version
 	app.Commands = Commands
 

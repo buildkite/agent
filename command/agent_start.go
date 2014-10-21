@@ -16,15 +16,26 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Create the agent
 	if c.String("access-token") != "" {
-		fmt.Println("buildbox: use of --access-token is now deprecated\nSee 'buildbox agent --help'")
+		fmt.Println("buildbox-agent: use of --access-token is now deprecated\nSee 'buildbox-agent start --help'")
 		os.Exit(1)
 	}
 
 	agentRegistrationToken := c.String("token")
 	if agentRegistrationToken == "" {
-		fmt.Println("buildbox: missing token\nSee 'buildbox agent --help'")
+		fmt.Println("buildbox-agent: missing token\nSee 'buildbox-agent start --help'")
 		os.Exit(1)
 	}
+
+	// Expand the envionment variable.
+	bootstrapScript := os.ExpandEnv(c.String("bootstrap-script"))
+
+	// Make sure the boostrap script exists.
+	if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
+		fmt.Printf("buildbox-agent: could not find bootstrap script %s\n", bootstrapScript)
+		os.Exit(1)
+	}
+
+	buildbox.Logger.Debugf("Using bootstrap script: %s", bootstrapScript)
 
 	// Create a client so we can register the agent
 	var client buildbox.Client
@@ -54,7 +65,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Start the agent using the token we have
-	agent := setupAgent(agentAccessToken, c.String("bootstrap-script"), !c.Bool("no-pty"), c.String("url"))
+	agent := setupAgent(agentAccessToken, bootstrapScript, !c.Bool("no-pty"), c.String("url"))
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
@@ -64,15 +75,6 @@ func AgentStartCommandAction(c *cli.Context) {
 }
 
 func setupAgent(agentAccessToken string, bootstrapScript string, runInPty bool, url string) *buildbox.Agent {
-	// Expand the envionment variable.
-	bootstrapScript = os.ExpandEnv(bootstrapScript)
-
-	// Make sure the boostrap script exists.
-	if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
-		print("buildbox: no such file " + bootstrapScript + "\n")
-		os.Exit(1)
-	}
-
 	// Set the agent options
 	var agent buildbox.Agent
 	agent.BootstrapScript = bootstrapScript

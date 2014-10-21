@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/Sirupsen/logrus"
 	"strings"
-	"time"
 )
 
 const (
@@ -27,21 +26,28 @@ func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	b := &bytes.Buffer{}
 
 	// Start by printing the time
-	now := time.Now()
-	fmt.Fprintf(b, "%s ", now.Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(b, "%s ", entry.Time.Format("2006-01-02 15:04:05"))
 
 	// Upper case the log level
-	levelText := strings.ToUpper(entry.Data["level"].(string))
+	levelText := strings.ToUpper(entry.Level.String())
+
+	// If we're running the agent from a terminal, then we should show colors.
+	showColors := logrus.IsTerminal()
+
+	// Windows doesn't support colors so just cut it off.
+	if MachineIsWindows() {
+		showColors = false
+	}
 
 	// Print the log level, but toggle the color
-	if logrus.IsTerminal() {
+	if showColors {
 		levelColor := green
 
-		if entry.Data["level"] == "debug" {
+		if levelText == "DEBUG" {
 			levelColor = blue
-		} else if entry.Data["level"] == "warning" {
+		} else if levelText == "WARNING" {
 			levelColor = yellow
-		} else if entry.Data["level"] == "error" || entry.Data["level"] == "fatal" || entry.Data["level"] == "panic" {
+		} else if levelText == "ERROR" || levelText == "FATAL" || levelText == "PANIC" {
 			levelColor = red
 		}
 
@@ -51,21 +57,19 @@ func (f *LogFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	}
 
 	// Now print the message
-	fmt.Fprintf(b, "%s ", entry.Data["msg"])
+	fmt.Fprintf(b, "%s ", entry.Message)
 
 	// Print any extra data. By default, the data map has 3
 	// elements.
 	if len(entry.Data) > 3 {
 		keys := make([]string, 0)
 		for key, value := range entry.Data {
-			if key != "time" && key != "level" && key != "msg" {
-				if _, ok := value.(string); ok {
-					if value != "" {
-						keys = append(keys, fmt.Sprintf("%v: %s", key, value))
-					}
-				} else {
-					keys = append(keys, fmt.Sprintf("%v: %v", key, value))
+			if _, ok := value.(string); ok {
+				if value != "" {
+					keys = append(keys, fmt.Sprintf("%v: %s", key, value))
 				}
+			} else {
+				keys = append(keys, fmt.Sprintf("%v: %v", key, value))
 			}
 		}
 
@@ -88,11 +92,11 @@ func initLogger() *logrus.Logger {
 }
 
 func InDebugMode() bool {
-	return Logger.Level == logrus.Debug
+	return Logger.Level == logrus.DebugLevel
 }
 
 func LoggerInitDebug() {
 	// Enable debugging
-	Logger.Level = logrus.Debug
+	Logger.Level = logrus.DebugLevel
 	Logger.Debug("Debugging enabled")
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/buildbox/agent/buildbox"
 	"github.com/buildbox/agent/command"
 	"github.com/codegangsta/cli"
 )
@@ -97,6 +98,15 @@ Example:
    $ buildbox-agent build-data get "foo"`
 
 func init() {
+	// This is default location of the bootstrap for unix based operating
+	// systems.
+	bootstrapScriptLocation := "$HOME/.buildbox/bootstrap.sh"
+
+	// Windows has a slightly modified default bootstrap location
+	if buildbox.MachineIsWindows() {
+		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildboxAgent\\bootstrap.bat"
+	}
+
 	Commands = []cli.Command{
 		{
 			Name:        "start",
@@ -135,7 +145,7 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "bootstrap-script",
-					Value:  "$HOME/.buildbox/bootstrap.sh",
+					Value:  bootstrapScriptLocation,
 					Usage:  "Path to the bootstrap script",
 					EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
 				},
