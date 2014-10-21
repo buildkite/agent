@@ -17,22 +17,35 @@ function buildbox-run {
 
 echo '--- setup environment'
 
-if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
-then
-  buildbox-run "env | grep BUILDBOX"
+# Provide a default BUILDBOX_DIR
+if [ -z "$BUILDBOX_DIR" ]; then
+  # This will return the location of this file. We assume that the buildbox-artifact
+  # tool is in the same folder. You can of course customize the locations
+  # and edit this file.
+  BUILDBOX_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 fi
 
-# This will return the location of this file. We assume that the buildbox-artifact
-# tool is in the same folder. You can of course customize the locations
-# and edit this file.
-BUILDBOX_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# If no BUILDBOX_BIN_DIR has been provided, make one up
+if [ -z "$BUILDBOX_BIN_DIR" ]; then
+  if [ -d "$BUILDBOX_DIR/bin" ]; then
+    BUILDBOX_BIN_DIR="$BUILDBOX_DIR/bin"
+  else
+    BUILDBOX_BIN_DIR="$BUILDBOX_DIR"
+  fi
+fi
 
-# Add the $BUILDBOX_DIR to the $PATH
-export PATH="$BUILDBOX_DIR:$PATH"
+# Add the $BUILDBOX_BIN to the $PATH
+export PATH="$BUILDBOX_BIN_DIR:$PATH"
 
 # Create the build directory
 SANITIZED_AGENT_NAME=$(echo $BUILDBOX_AGENT_NAME | tr -d '"')
 BUILDBOX_BUILD_DIR="$SANITIZED_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
+
+# Show the ENV variables if DEBUG is on
+if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
+then
+  buildbox-run "env | grep BUILDBOX"
+fi
 
 buildbox-run "mkdir -p \"$BUILDBOX_BUILD_DIR\""
 buildbox-run "cd \"$BUILDBOX_BUILD_DIR\""
@@ -118,16 +131,16 @@ then
     # export AWS_SECRET_ACCESS_KEY=yyy
     # export AWS_ACCESS_KEY_ID=xxx
     # export AWS_S3_ACL=private
-    # buildbox-run "$BUILDBOX_DIR/bin/buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID\""
+    # buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID\""
 
     # Show the output of the artifact uploder when in debug mode
     if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
     then
       echo '--- uploading artifacts'
-      buildbox-run "$BUILDBOX_DIR/bin/buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\""
+      buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\""
       buildbox-exit-if-failed $?
     else
-      buildbox-run "$BUILDBOX_DIR/bin/buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" > /dev/null 2>&1"
+      buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" > /dev/null 2>&1"
       buildbox-exit-if-failed $?
     fi
   elif [[ -e $BUILDBOX_DIR/buildbox-artifact ]]
@@ -137,11 +150,11 @@ then
     # own bucket.
     # export AWS_SECRET_ACCESS_KEY=yyy
     # export AWS_ACCESS_KEY_ID=xxx
-    # buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL
+    # buildbox-run "buildbox-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" "s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1"
 
     # By default we silence the buildbox-artifact build output. However, if you'd like to see
     # it in your logs, remove the: > /dev/null 2>&1 from the end of the line.
-    $BUILDBOX_DIR/buildbox-artifact upload "$BUILDBOX_ARTIFACT_PATHS" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1
+    buildbox-run "buildbox-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1"
     buildbox-exit-if-failed $?
   else
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"

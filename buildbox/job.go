@@ -2,6 +2,8 @@ package buildbox
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -97,6 +99,11 @@ func (j *Job) Run(agent *Agent) error {
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_DEBUG=%t", InDebugMode()))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_VERSION=%s", Version))
+
+	// We know the BUILDBOX_BIN_DIR dir, because it's the path to the
+	// currently running file (there is only 1 binary)
+	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	env = append(env, fmt.Sprintf("BUILDBOX_BIN_DIR=%s", dir))
 
 	// Add the rest environment variables from the API to the process
 	for key, value := range j.Env {
