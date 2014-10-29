@@ -180,11 +180,13 @@ func init() {
 					Usage:       "Downloads artifacts from Buildbox to the local machine.",
 					Description: DownloadHelpDescription,
 					Flags: []cli.Flag{
+						// We don't default to $BUILDBOX_JOB_ID with --job because downloading artifacts should
+						// default to all the jobs on the build, not just the current one. --job is used
+						// to scope to a paticular job if you
 						cli.StringFlag{
-							Name:   "job",
-							Value:  "",
-							Usage:  "Which job should the artifacts be downloaded from",
-							EnvVar: "BUILDBOX_JOB_ID",
+							Name:  "job",
+							Value: "",
+							Usage: "Used to target a specific job to download artifacts from",
 						},
 						cli.StringFlag{
 							Name:   "build",
@@ -288,7 +290,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "job",
 							Value:  "",
-							Usage:  "Which job should the artifacts be downloaded from",
+							Usage:  "Which job should the data be retrieved from",
 							EnvVar: "BUILDBOX_JOB_ID",
 						},
 						cli.StringFlag{
