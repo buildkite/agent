@@ -2,13 +2,36 @@ package command
 
 import (
 	"fmt"
-	"github.com/Sirupsen/logrus"
 	"github.com/buildbox/agent/buildbox"
 	"github.com/codegangsta/cli"
 	"os"
 )
 
 func AgentStartCommandAction(c *cli.Context) {
+	// For display purposes, come up with what the name of the agent is.
+	agentName := buildbox.MachineHostname()
+	if c.String("name") != "" {
+		agentName = c.String("name")
+	}
+
+	welcomeMessage := "                _._\n" +
+		"           _.-``   ''-._\n" +
+		"      _.-``             ''-._\n" +
+		"  .-``                       ''-._      Buildbox Agent " + buildbox.Version + "\n" +
+		" |        _______________         |\n" +
+		" |      .'  ___________  '.       |     Name: " + agentName + "\n" +
+		" |        .'  _______  '.         |     PID: " + fmt.Sprintf("%d", os.Getpid()) + "\n" +
+		" |          .'  ___  '.           |\n" +
+		" |            .' | '.             |     https://buildbox.io/agent\n" +
+		" |               |                |\n" +
+		" |               |                |\n" +
+		"  ``._           |            _.''\n" +
+		"      `._        |         _.'\n" +
+		"         `._     |      _.'\n" +
+		"            ``. _|_ . ''\n\n"
+
+	fmt.Printf(welcomeMessage)
+
 	// Init debugging
 	if c.Bool("debug") {
 		buildbox.LoggerInitDebug()
@@ -86,12 +109,6 @@ func setupAgent(agentAccessToken string, bootstrapScript string, runInPty bool, 
 
 	// Setup the agent
 	agent.Setup()
-
-	// A nice welcome message
-	buildbox.Logger.WithFields(logrus.Fields{
-		"pid":     os.Getpid(),
-		"version": buildbox.Version,
-	}).Infof("Started agent `%s`", agent.Name)
 
 	return &agent
 }
