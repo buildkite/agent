@@ -91,7 +91,11 @@ then
 
   function docker-cleanup {
     docker rm -f $DOCKER_CONTAINER
-    docker rmi -f $DOCKER_IMAGE
+    
+    # Enabling the following line will prevent your build server from filling up,
+    # but will slow down your builds because it'll be built from scratch each time.
+    #
+    # docker rmi -f $DOCKER_IMAGE
   }
 
   trap docker-cleanup EXIT
@@ -115,11 +119,15 @@ then
   function fig-cleanup {
     fig -p $FIG_PROJ_NAME kill
     fig -p $FIG_PROJ_NAME rm --force
+
     # The adhoc run container isn't cleaned up by fig, so we have to do it ourselves
     echo "Killing "$FIG_CONTAINER_NAME"_run_1..."
     docker rm -f $FIG_CONTAINER_NAME"_run_1"
-    # Kill the base image - this means it'll be built from scratch each time
-    docker rmi -f $FIG_CONTAINER_NAME
+
+    # Enabling the following line will prevent your build server from filling up,
+    # but will slow down your builds because it'll be built from scratch each time.
+    #
+    # docker rmi -f $FIG_CONTAINER_NAME
   }
 
   trap fig-cleanup EXIT
