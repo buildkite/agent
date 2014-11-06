@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/buildbox/agent",
-	"GoVersion": "go1.2.2",
+	"GoVersion": "go1.3.3",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
