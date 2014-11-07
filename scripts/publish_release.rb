@@ -12,7 +12,7 @@ version = "v#{version_number}"
 prerelease = !!(version =~ /beta|alpha/)
 
 # Collect the files that need to be uploaded
-files = Dir[File.join(root_dir, "pkg", "*.tar.gz")]
+files = Dir[File.join(root_dir, "pkg", "*.{tar.gz,zip}")]
 
 # Output information
 puts "Version: #{version}"
