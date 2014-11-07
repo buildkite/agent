@@ -10,7 +10,13 @@ COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildbox/agent/m
 
 if [ "$VERSION" = "1.0-beta.1" ]
 then
-  echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.2"
+  echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.5"
+  exit 1
+fi
+
+if [ "$VERSION" = "1.0-beta.2" ]
+then
+  echo "NOTICE: Installing 1.0-beta.2 is no longer supported...sorry. Please install 1.0-beta.5"
   exit 1
 fi
 
