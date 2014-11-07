@@ -2,27 +2,64 @@
 set -e
 set -x
 
-DIRECTORY=pkg
-if [ -d "$DIRECTORY" ]; then
-  rm -rf "$DIRECTORY"
+BASE_DIRECTORY=`pwd`
+
+PKG_DIRECTORY=$BASE_DIRECTORY/pkg
+TEMPLATE_DIRECTORY=$BASE_DIRECTORY/templates
+
+# Some validation
+if [ ! -d "$TEMPLATE_DIRECTORY" ]; then
+  echo "Missing templates directory. This script should be run from inside the agent folder like so:"
+  echo "cd agent && ./scripts/build.sh"
+  exit 1
 fi
-mkdir -p "$DIRECTORY"
 
 function build {
-  # Build the agent binary
+  # The name of the binary
   BINARY_FILENAME=buildbox-agent
-  GOOS=$1 GOARCH=$2 go build -o $DIRECTORY/$BINARY_FILENAME *.go
 
-  FILENAME=buildbox-agent-$1-$2
+  # The base name of the agent
+  FOLDER_NAME="$BINARY_FILENAME-$1-$2"
 
-  # Tar up the binaries
-  cd $DIRECTORY
-  tar cfvz $FILENAME.tar.gz $BINARY_FILENAME
-  cd ..
+  # The name of the folder we'll build the binary in
+  BUILD_DIRECTORY="$PKG_DIRECTORY/$FOLDER_NAME"
 
-  # Cleanup after the build
-  rm $DIRECTORY/$BINARY_FILENAME
+  # Add .exe for Windows builds
+  if [ "$1" == "windows" ]; then
+    BINARY_FILENAME="$BINARY_FILENAME.exe"
+  fi
+
+  # Build the binary
+  GOOS=$1 GOARCH=$2 go build -o $BUILD_DIRECTORY/$BINARY_FILENAME *.go
+
+  # Move into the built directory
+  cd $PKG_DIRECTORY/$FOLDER_NAME
+
+  # We need to use .zip for windows builds
+  if [ "$1" == "windows" ]; then
+    # Add in the additional Windows files
+    cp $TEMPLATE_DIRECTORY/bootstrap.bat .
+    cp $TEMPLATE_DIRECTORY/start.bat .
+
+    # Zip up the contents of the directory
+    zip -X -r "../$FOLDER_NAME.zip" *
+  else
+    # Use tar on non-windows platforms
+    tar cfvz ../$FOLDER_NAME.tar.gz $BINARY_FILENAME
+  fi
+
+  # Now back to the PKG_DIRECTORY
+  cd ../../
+
+  # Remove the built folder
+  rm -rf $PKG_DIRECTORY/$FOLDER_NAME
 }
+
+# Prepare the package folder
+if [ -d "$PKG_DIRECTORY" ]; then
+  rm -rf "$PKG_DIRECTORY"
+fi
+mkdir -p "$PKG_DIRECTORY"
 
 build "windows" "386"
 build "windows" "amd64"

@@ -58,6 +58,8 @@ func (a *Agent) Setup() {
 	if err != nil {
 		Logger.Fatal(err)
 	}
+
+	Logger.Infof("Agent successfully connected. Ready for work...")
 }
 
 func (a *Agent) Start() {
