@@ -86,24 +86,59 @@ fi
 ## Docker
 if [ "$BUILDBOX_DOCKER" != "" ]
 then
-  # Build the Docker image, namespaced to the job
-  buildbox-run "docker build -t buildbox-$BUILDBOX_JOB_ID-image ."
+  DOCKER_CONTAINER="buildbox_"$BUILDBOX_JOB_ID"_container"
+  DOCKER_IMAGE="buildbox_"$BUILDBOX_JOB_ID"_image"
 
-  echo "--- running $BUILDBOX_SCRIPT_PATH (in Docker container buildbox-$BUILDBOX_JOB_ID-image)"
+  function docker-cleanup {
+    docker rm -f $DOCKER_CONTAINER
+    
+    # Enabling the following line will prevent your build server from filling up,
+    # but will slow down your builds because it'll be built from scratch each time.
+    #
+    # docker rmi -f $DOCKER_IMAGE
+  }
+
+  trap docker-cleanup EXIT
+
+  # Build the Docker image, namespaced to the job
+  buildbox-run "docker build -t $DOCKER_IMAGE ."
+
+  echo "--- running $BUILDBOX_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
 
   # Run the build script command in a one-off container
-  buildbox-run "docker run --name buildbox-$BUILDBOX_JOB_ID-container buildbox-$BUILDBOX_JOB_ID-image ./$BUILDBOX_SCRIPT_PATH"
+  buildbox-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
 
 ## Fig
 elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
 then
+  # Fig strips dashes and underscores, so we'll remove them to match the docker container names
+  FIG_PROJ_NAME="buildbox"${BUILDBOX_JOB_ID//-}
+  # The name of the docker container fig creates when it creates the adhoc run
+  FIG_CONTAINER_NAME=$FIG_PROJ_NAME"_"$BUILDBOX_FIG_CONTAINER
+
+  function fig-cleanup {
+    fig -p $FIG_PROJ_NAME kill
+    fig -p $FIG_PROJ_NAME rm --force
+
+    # The adhoc run container isn't cleaned up by fig, so we have to do it ourselves
+    echo "Killing "$FIG_CONTAINER_NAME"_run_1..."
+    docker rm -f $FIG_CONTAINER_NAME"_run_1"
+
+    # Enabling the following line will prevent your build server from filling up,
+    # but will slow down your builds because it'll be built from scratch each time.
+    #
+    # docker rmi -f $FIG_CONTAINER_NAME
+  }
+
+  trap fig-cleanup EXIT
+
   # Build the Docker images using Fig, namespaced to the job
-  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID build"
+  buildbox-run "fig -p $FIG_PROJ_NAME build"
 
   echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
 
   # Run the build script command in the service specified in BUILDBOX_FIG_CONTAINER
-  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
+  buildbox-run "fig -p $FIG_PROJ_NAME run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
 
 ## Standard
 else
@@ -160,20 +195,6 @@ then
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"
     exit 1
   fi
-fi
-
-if [ "$BUILDBOX_DOCKER" != "" ]
-then
-  # Delete the Docker container
-  buildbox-run "docker rm -f buildbox-$BUILDBOX_JOB_ID-container > /dev/null 2>&1"
-  # Delete the Docker image
-  buildbox-run "docker rmi buildbox-$BUILDBOX_JOB_ID-image > /dev/null 2>&1"
-elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
-then
-  # Kill the Fig Docker containers
-  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID kill > /dev/null 2>&1"
-  # Delete the Fig Docker images
-  buildbox-run "fig -p buildbox-$BUILDBOX_JOB_ID rm --force > /dev/null 2>&1"
 fi
 
 exit $EXIT_STATUS
