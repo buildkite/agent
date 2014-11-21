@@ -8,6 +8,8 @@
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh\`\""
 
+LATEST_BETA="1.0-beta.6"
+
 if [ "$VERSION" = "1.0-beta.1" ]
 then
   echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.6"
@@ -22,7 +24,7 @@ fi
 
 if [ "$BETA" = "true" ]
 then
-  VERSION="1.0-beta.6"
+  VERSION=$LATEST_BETA
 fi
 
 # Allow custom setting of the version
@@ -31,6 +33,25 @@ if [ -z "$VERSION" ]; then
 fi
 
 set -e
+
+function buildbox-download {
+  if command -v wget >/dev/null
+  then
+    if [ "$DEBUG" = "true" ]
+    then
+      wget $1 -O $2
+    else
+      wget -q $1 -O $2
+    fi
+  else
+    if [ "$DEBUG" = "true" ]
+    then
+      curl -L -o $2 $1
+    else
+      curl -L -s -o $2 $1
+    fi
+  fi
+}
 
 echo -e "\033[33m
   _           _ _     _ _                                        _
@@ -89,13 +110,7 @@ if [[ -e pkg/$DOWNLOAD ]]
 then
   cp pkg/$DOWNLOAD $DESTINATION/$DOWNLOAD
 else
-  # Boo, we don't have it. Download the file then.
-  if command -v wget >/dev/null
-  then
-    wget -q $URL -O $DESTINATION/$DOWNLOAD
-  else
-    curl -L -s -o $DESTINATION/$DOWNLOAD $URL
-  fi
+  buildbox-download "$URL" "$DESTINATION/$DOWNLOAD"
 fi
 
 # Extract the download to the destination folder
@@ -103,7 +118,7 @@ tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
 INSTALLED_VERSION=`$DESTINATION/buildbox-agent --version`
 
-if [[ "$INSTALLED_VERSION" = "buildbox-agent version 1.0-beta.5" ]]
+if [[ "$INSTALLED_VERSION" = "buildbox-agent version $LATEST_BETA" ]]
 then
   # Move the buildbox binary into a bin folder
   mkdir -p $DESTINATION/bin
@@ -153,12 +168,7 @@ else
 
   echo -e "Downloading $BOOTSTRAP_URL"
 
-  if command -v wget >/dev/null
-  then
-    wget -q $BOOTSTRAP_URL -O $BOOTSTRAP_DESTINATION
-  else
-    curl -L -s -o $BOOTSTRAP_DESTINATION $BOOTSTRAP_URL
-  fi
+  buildbox-download "$BOOTSTRAP_URL" "$BOOTSTRAP_DESTINATION"
 
   chmod +x $DESTINATION/bootstrap.sh
 fi
