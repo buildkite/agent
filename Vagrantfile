@@ -5,7 +5,8 @@
 VAGRANTFILE_API_VERSION = "2"
 
 $INSTALL_FPM = <<SCRIPT
-apt-get install -y build-essential ruby-dev
+apt-get update --fix-missing
+apt-get install -y build-essential ruby-dev vim curl
 gem install fpm
 SCRIPT
 

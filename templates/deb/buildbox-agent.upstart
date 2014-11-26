@@ -1,0 +1,10 @@
+description "buildbox-agent"
+
+respawn
+
+start on runlevel [2345]
+stop on runlevel [06]
+
+script
+su - root -c "buildbox-agent start"
+end script
