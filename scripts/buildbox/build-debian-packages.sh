@@ -5,7 +5,7 @@ echo '--- Installing fpm'
 gem install fpm
 rbenv rehash
 
-echo '--- Downloading Binaries'
+echo '--- Downloading binaries'
 rm -rf pkg
 mkdir -p pkg
 ~/.buildbox/bin/buildbox-agent artifact download "pkg/*" pkg --job ""
