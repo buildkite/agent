@@ -8,6 +8,6 @@ rbenv rehash
 echo '--- Downloading Binaries'
 rm -rf pkg
 mkdir -p pkg
-~/.buildbox/bin/buildbox-agent artifact download "pkg/*" pkg
+~/.buildbox/bin/buildbox-agent artifact download "pkg/*" pkg --job ""
 
 ./scripts/create_debian_package.sh

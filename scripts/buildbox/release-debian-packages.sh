@@ -6,4 +6,4 @@ gem install deb-s3
 rbenv rehash
 
 echo '--- Downloading debian packages'
-~/.buildbox/bin/buildbox-agent artifact download "pkg/*.deb" .
+~/.buildbox/bin/buildbox-agent artifact download "pkg/*.deb" . --job ""
