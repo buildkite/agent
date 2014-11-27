@@ -3,6 +3,7 @@ set -e
 
 echo '--- Installing fpm'
 gem install fpm
+rbenv rehash
 
 echo '--- Downloading Binaries'
 rm -rf pkg
