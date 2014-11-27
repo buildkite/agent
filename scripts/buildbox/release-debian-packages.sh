@@ -8,5 +8,5 @@ rbenv rehash
 echo '--- Downloading debian packages'
 ~/.buildbox/bin/buildbox-agent artifact download "pkg/*.deb" . --job ""
 
-./scripts/publish_debian_package.sh "buildbox-agent_1.0.0_386.deb"
-./scripts/publish_debian_package.sh "buildbox-agent_1.0.0_amd64.deb"
+./scripts/publish_debian_package.sh "pkg/buildbox-agent_1.0.0_386.deb"
+./scripts/publish_debian_package.sh "pkg/buildbox-agent_1.0.0_amd64.deb"
