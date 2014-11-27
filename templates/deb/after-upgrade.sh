@@ -1,1 +1,1 @@
-killall -USR2 buildbox-agent
+killall -USR2 buildbox-agent || true

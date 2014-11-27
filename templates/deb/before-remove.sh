@@ -1,1 +1,1 @@
-service buildbox-agent stop
+service buildbox-agent stop || true
