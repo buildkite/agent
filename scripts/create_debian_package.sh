@@ -37,13 +37,13 @@ function package {
                 --url $URL \
                 --maintainer $MAINTAINER \
                 --architecture $ARCH \
-                --config-files /etc/buildbox-agent/buildbox-agent.conf \
+                --config-files /etc/buildbox-agent/buildbox-agent.env \
                 --config-files /etc/buildbox-agent/bootstrap.sh \
                 --deb-upstart templates/deb/buildbox-agent.upstart \
                 -p $PACKAGE_PATH \
                 -v $VERSION \
                 "./$BUILD_TARGET_PATH/buildbox-agent"=/usr/bin/buildbox-agent \
-                templates/deb/buildbox-agent.conf=/etc/buildbox-agent/buildbox-agent.conf \
+                templates/deb/buildbox-agent.env=/etc/buildbox-agent/buildbox-agent.env \
                 templates/bootstrap.sh=/etc/buildbox-agent/bootstrap.sh)
 
   # Capture the exit status for fpm build
