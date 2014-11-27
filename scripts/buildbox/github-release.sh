@@ -16,7 +16,7 @@ go get github.com/buildbox/github-release
 echo '--- download binaries'
 rm -rf pkg
 mkdir -p pkg
-buildbox-artifact download "pkg/*" pkg
+buildbox-agent artifact download "pkg/*" pkg
 
 echo '--- release'
 ruby scripts/publish_release.rb
