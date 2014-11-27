@@ -38,7 +38,10 @@ deb-s3 upload \
   --secret-access-key=$DEB_S3_SECRET_ACCESS_KEY_ID \
   $PACKAGE
 
-echo "✅ All done! To install:"
+echo "✅ All done! To install this package:"
+echo ""
+echo "    # Login as root"
+echo "    $ sudo su"
 echo ""
 echo "    # Add the repository to your APT sources"
 echo "    $ echo deb $DEB_S3_BUCKET $CODENAME $COMPONENT > /etc/apt/sources.list.d/buildbox-agent.list"
