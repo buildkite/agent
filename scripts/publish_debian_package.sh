@@ -13,6 +13,21 @@ CODENAME=${2}
 COMPONENT="main"
 
 # Some validations
+if [ -z "$GPG_SIGNING_KEY" ]; then
+  echo "Error: Missing ENV variable $GPG_SIGNING_KEY"
+  exit 1
+fi
+
+if [ -z "$GPG_PASSPHRASE_PASSWORD" ]; then
+  echo "Error: Missing ENV variable $GPG_PASSPHRASE_PASSWORD"
+  exit 1
+fi
+
+if [ -z "$GPG_PASSPHRASE_PATH" ]; then
+  echo "Error: Missing ENV variable $GPG_PASSPHRASE_PATH"
+  exit 1
+fi
+
 if [ -z "$DEB_S3_BUCKET" ]; then
   echo "Error: Missing ENV variable DEB_S3_BUCKET"
   exit 1
@@ -30,7 +45,14 @@ fi
 
 echo "--- Uploading $PACKAGE to $DEB_S3_BUCKET ($CODENAME $COMPONENT)"
 
+# Decrpyt the GPG_PASSPHRASE with our GPG_PASSPHRASE_PASSWORD
+GPG_PASSPHRASE=`openssl aes-256-cbc -k "$GPG_PASSPHRASE_PASSWORD" -in "$GPG_PASSPHRASE_PATH" -d`
+
+# Uploads to s3 and signs with the default key on the system
+
 deb-s3 upload \
+  --sign $GPG_SIGNING_KEY \
+  --gpg-options "\-\-passphrase $GPG_PASSPHRASE" \
   --bucket $DEB_S3_BUCKET \
   --codename $CODENAME \
   --component $COMPONENT \
