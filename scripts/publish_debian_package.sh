@@ -2,36 +2,50 @@
 
 set -o errexit
 
-DEB_CODENAME="buildbox-agent"
-
-if [[ ${#} -ne 1 ]]
+if [[ ${#} -ne 2 ]]
 then
-  echo "Usage: ${0} [debian-package]" >&2
+  echo "Usage: ${0} [debian-package] [codename]" >&2
   exit 1
 fi
-PACKAGE=${1} && shift
+
+PACKAGE=${1}
+CODENAME=${2}
+COMPONENT="main"
 
 # Some validations
-if [ -z "$APT_S3_BUCKET" ]; then
-  echo "Error: Missing ENV variable APT_S3_BUCKET"
+if [ -z "$S3_BUCKET" ]; then
+  echo "Error: Missing ENV variable S3_BUCKET"
   exit 1
 fi
 
-if [ -z "$APT_S3_ACCESS_KEY_ID" ]; then
-  echo "Error: Missing ENV variable APT_S3_ACCESS_KEY_ID"
+if [ -z "$S3_ACCESS_KEY_ID" ]; then
+  echo "Error: Missing ENV variable S3_ACCESS_KEY_ID"
   exit 1
 fi
 
-if [ -z "$APT_S3_SECRET_ACCESS_KEY_ID" ]; then
-  echo "Error: Missing ENV variable APT_S3_SECRET_ACCESS_KEY_ID"
+if [ -z "$S3_SECRET_ACCESS_KEY_ID" ]; then
+  echo "Error: Missing ENV variable S3_SECRET_ACCESS_KEY_ID"
   exit 1
 fi
 
-echo "--- Uploading $PACKAGE to $APT_S3_BUCKET"
+echo "--- Uploading $PACKAGE to $S3_BUCKET ($CODENAME $COMPONENT)"
 
 deb-s3 upload \
-  --bucket $APT_S3_BUCKET \
-  --codename $DEB_CODENAME \
-  --access-key-id=$APT_S3_ACCESS_KEY_ID \
-  --secret-access-key=$APT_S3_SECRET_ACCESS_KEY_ID \
+  --bucket $S3_BUCKET \
+  --codename $CODENAME \
+  --component $COMPONENT \
+  --access-key-id=$S3_ACCESS_KEY_ID \
+  --secret-access-key=$S3_SECRET_ACCESS_KEY_ID \
   $PACKAGE
+
+echo "All done! To install:"
+echo ""
+echo "    # Add the repository to your APT sources"
+echo "    $ echo deb $S3_BUCKET $CODENAME $COMPONENT > /etc/apt/sources.list.d/buildbox-agent.list"
+echo ""
+echo "    # Then import the repository key (TODO)"
+echo "    $ apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys xxx"
+echo ""
+echo "    # Install the agent"
+echo "    $ apt-get update"
+echo "    $ apt-get install -y buildbox-agent"

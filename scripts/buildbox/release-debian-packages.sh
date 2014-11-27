@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+if [[ "$CODENAME" == "" ]]; then
+  echo "Error: Missing $CODENAME (`stable` or `unstable`)"
+  exit 1
+fi
+
 echo '--- Installing deb-s3'
 gem install deb-s3
 rbenv rehash
@@ -8,5 +13,5 @@ rbenv rehash
 echo '--- Downloading debian packages'
 ~/.buildbox/bin/buildbox-agent artifact download "pkg/*.deb" . --job ""
 
-./scripts/publish_debian_package.sh "pkg/buildbox-agent_1.0.0_386.deb"
-./scripts/publish_debian_package.sh "pkg/buildbox-agent_1.0.0_amd64.deb"
+echo '--- Uploading packages'
+ls pkg/*.deb | xargs -0 -I {} ./scripts/publish_debian_package.sh {} $CODENAME
