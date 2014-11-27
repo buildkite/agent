@@ -7,6 +7,6 @@ gem install fpm
 echo '--- Downloading Binaries'
 rm -rf pkg
 mkdir -p pkg
-buildbox-agent artifact download "pkg/*" pkg
+~/.buildbox/bin/buildbox-agent artifact download "pkg/*" pkg
 
 ./scripts/create_debian_package.sh
