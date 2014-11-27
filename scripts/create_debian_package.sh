@@ -15,7 +15,8 @@ function package {
     exit 1
   fi
 
-  BINARY_PATH="pkg/buildbox-agent-linux-$1/buildbox-agent"
+  BUILD_TARGET_PATH="pkg/buildbox-agent-linux-$1"
+
   PACKAGE_NAME=$NAME"_"$VERSION"_"$1".deb"
   PACKAGE_PATH="pkg/$PACKAGE_NAME"
 
@@ -25,6 +26,10 @@ function package {
   if [[ -e $PACKAGE_PATH ]]; then
     rm -rf $PACKAGE_PATH
   fi
+
+  # Unzip the tar to the right folder
+  mkdir -p $BUILD_TARGET_PATH
+  tar -xvf "$BUILD_TARGET_PATH.tar.gz" -C $BUILD_TARGET_PATH
 
   FPM_BUILD=$(fpm -s dir \
                 -t deb \
@@ -37,12 +42,15 @@ function package {
                 --deb-upstart templates/deb/buildbox-agent.upstart \
                 -p $PACKAGE_PATH \
                 -v $VERSION \
-                "./$BINARY_PATH"=/usr/bin/buildbox-agent \
+                "./$BUILD_TARGET_PATH/buildbox-agent"=/usr/bin/buildbox-agent \
                 templates/deb/buildbox-agent.conf=/etc/buildbox-agent/buildbox-agent.conf \
                 templates/bootstrap.sh=/etc/buildbox-agent/bootstrap.sh)
 
   # Capture the exit status for fpm build
   FPM_EXIT_STATUS=$?
+
+  # Remove the folder we created
+  rm -rf "$BUILD_TARGET_PATH"
 
   # Did the fpm build fail?
   if [[ $FPM_EXIT_STATUS -ne "0" ]]; then

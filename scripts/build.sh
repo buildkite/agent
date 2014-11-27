@@ -50,6 +50,9 @@ function build {
 
   # Now back to the PKG_DIRECTORY
   cd ../../
+
+  # Remove the built folder
+  rm -rf pkg/$FOLDER_NAME
 }
 
 # Prepare the package folder
