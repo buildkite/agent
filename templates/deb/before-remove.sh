@@ -1,0 +1,1 @@
+service buildbox-agent stop

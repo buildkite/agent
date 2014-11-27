@@ -39,6 +39,8 @@ function package {
                 --architecture $ARCH \
                 --config-files /etc/buildbox-agent/buildbox-agent.env \
                 --config-files /etc/buildbox-agent/bootstrap.sh \
+                --before-remove templates/deb/before-remove.sh \
+                --after-upgrade templates/deb/after-upgrade.sh \
                 --deb-upstart templates/deb/buildbox-agent.upstart \
                 -p $PACKAGE_PATH \
                 -v $VERSION \
