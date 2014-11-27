@@ -14,4 +14,4 @@ echo '--- Downloading debian packages'
 ~/.buildbox/bin/buildbox-agent artifact download "pkg/*.deb" . --job ""
 
 echo '--- Uploading packages'
-ls pkg/*.deb | xargs -0 -I {} ./scripts/publish_debian_package.sh {} $CODENAME
+ls pkg/*.deb | xargs -I {} ./scripts/publish_debian_package.sh {} $CODENAME
