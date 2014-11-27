@@ -13,8 +13,5 @@ echo '--- install dependencies'
 go get github.com/tools/godep
 godep restore
 
-echo '--- installing github-release'
-go get github.com/buildbox/github-release
-
 echo '--- building'
 ./scripts/build.sh
