@@ -17,7 +17,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	welcomeMessage := "                _._\n" +
 		"           _.-``   ''-._\n" +
 		"      _.-``             ''-._\n" +
-		"  .-``                       ''-._      Buildbox Agent " + buildbox.Version + "\n" +
+		"  .-``                       ''-._      Buildbox Agent " + buildbox.Version() + "\n" +
 		" |        _______________         |\n" +
 		" |      .'  ___________  '.       |     Name: " + agentName + "\n" +
 		" |        .'  _______  '.         |     PID: " + fmt.Sprintf("%d", os.Getpid()) + "\n" +

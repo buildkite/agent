@@ -12,11 +12,6 @@ import (
 	"strings"
 )
 
-const (
-	DefaultAPIURL    = "https://agent.buildbox.io/v2"
-	DefaultUserAgent = "buildbox-agent/" + Version + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
-)
-
 type Client struct {
 	// The URL of the Buildbox Agent API to communicate with. Defaults to
 	// "https://agent.buildbox.io/v2".
@@ -74,7 +69,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 	// Generate the URL for the request
 	endpointUrl := strings.TrimRight(c.URL, "/")
 	if endpointUrl == "" {
-		endpointUrl = DefaultAPIURL
+		endpointUrl = defaultAPIURL()
 	}
 
 	normalizedPath := strings.TrimLeft(path, "/")
@@ -96,7 +91,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 	// Figure out and set the User Agent
 	userAgent := c.UserAgent
 	if userAgent == "" {
-		userAgent = DefaultUserAgent
+		userAgent = defaultUserAgent()
 	}
 
 	req.Header.Set("User-Agent", userAgent)
@@ -135,6 +130,14 @@ func (c *Client) DoReq(req *http.Request, v interface{}) error {
 
 type errorResp struct {
 	Message string `json:"message"`
+}
+
+func defaultUserAgent() string {
+	return "buildbox-agent/" + Version() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+}
+
+func defaultAPIURL() string {
+	return "https://agent.buildbox.io/v2"
 }
 
 func checkResp(res *http.Response) error {
