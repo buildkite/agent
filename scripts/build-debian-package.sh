@@ -19,6 +19,7 @@ DEB_NAME="buildbox-agent"
 DEB_MAINTAINER="<dev@buildbox.io>"
 DEB_URL="https://buildbox.io/agent"
 DEB_DESCRIPTION="The Buildbox Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
+DEB_LICENCE="MIT"
 
 BUILD_PATH="pkg/deb"
 BINARY_NAME="$NAME-$GOOS-$GOARCH"
@@ -67,6 +68,7 @@ fpm -s "dir" \
     --url "$DEB_URL" \
     --maintainer "$DEB_MAINTAINER" \
     --architecture "$DEB_ARCH" \
+    --license "$DEB_LICENCE" \
     --description "$DEB_DESCRIPTION" \
     --depends "git-core" \
     --config-files "/etc/buildbox-agent/buildbox-agent.env" \
