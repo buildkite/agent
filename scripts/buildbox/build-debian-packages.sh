@@ -33,4 +33,4 @@ godep restore
 
 # Build the packages
 build-package "linux" "amd64"
-build-package "linux" "i386"
+build-package "linux" "386"

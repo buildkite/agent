@@ -45,7 +45,7 @@ if [ "$GOARCH" == "amd64" ]; then
 elif [ "$GOARCH" == "386" ]; then
   DEB_ARCH="i386"
 else
-  echo "Unknown architecture: $1"
+  echo "Unknown architecture: $GOARCH"
   exit 1
 fi
 
