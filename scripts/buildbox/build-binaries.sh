@@ -14,4 +14,10 @@ go get github.com/tools/godep
 godep restore
 
 echo '--- building'
-./scripts/build.sh
+./scripts/build-release.sh "windows" "386"
+./scripts/build-release.sh "windows" "amd64"
+./scripts/build-release.sh "linux" "amd64"
+./scripts/build-release.sh "linux" "386"
+./scripts/build-release.sh "linux" "arm"
+./scripts/build-release.sh "darwin" "386"
+./scripts/build-release.sh "darwin" "amd64"
