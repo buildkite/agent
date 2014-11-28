@@ -6,13 +6,13 @@ if [[ "$CODENAME" == "" ]]; then
   exit 1
 fi
 
-function publish-package {
+function publish() {
   echo "--- Publishing $1"
   ./scripts/publish-debian-package.sh $1 $CODENAME
 }
 
 # Export the function so we can use it in xargs
-export -f publish-package
+export -f publish
 
 echo '--- Installing dependencies'
 gem install deb-s3
@@ -22,4 +22,4 @@ echo '--- Downloading package artifacts'
 ~/.buildbox/bin/buildbox-agent artifact download "pkg/deb/*.deb" . --job ""
 
 # Loop over all the .deb files and publish them
-ls pkg/deb/*.deb | xargs -I {} bash -c "publish-package {}"
+ls pkg/deb/*.deb | xargs -I {} bash -c "publish {}"
