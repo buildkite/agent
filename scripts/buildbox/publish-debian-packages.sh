@@ -16,7 +16,7 @@ gem install deb-s3
 rbenv rehash
 
 echo '--- Downloading package artifacts'
-~/.buildbox/buildbox-artifact download "pkg/deb/*.deb" .
+~/.buildbox/bin/buildbox-agent artifact download "pkg/deb/*.deb" .
 
 # Loop over all the .deb files and publish them
 ls pkg/deb/*.deb | xargs publish-package
