@@ -73,6 +73,7 @@ fpm -s "dir" \
     --config-files "/etc/buildbox-agent/bootstrap.sh" \
     --before-remove "templates/deb/before-remove.sh" \
     --after-upgrade "templates/deb/after-upgrade.sh" \
+    --after_install "templates/deb/after-install.sh" \
     --deb-upstart "templates/deb/buildbox-agent.upstart" \
     -p "$PACKAGE_PATH" \
     -v "$DEB_VERSION" \
