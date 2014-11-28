@@ -4,6 +4,7 @@ VERSION="1.0.0"
 NAME="buildbox-agent"
 MAINTAINER="<dev@buildbox.io>"
 URL="https://buildbox.io/agent"
+DESCRIPTION="The Buildbox Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
 
 function package {
   if [ "$1" == "amd64" ]; then
@@ -37,6 +38,7 @@ function package {
                 --url $URL \
                 --maintainer $MAINTAINER \
                 --architecture $ARCH \
+                --descrption $DESCRIPTION \
                 --config-files /etc/buildbox-agent/buildbox-agent.env \
                 --config-files /etc/buildbox-agent/bootstrap.sh \
                 --before-remove templates/deb/before-remove.sh \
