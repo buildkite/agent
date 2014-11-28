@@ -18,6 +18,9 @@ function build-package {
   fi
 }
 
+# Clear out any existing pkg dir
+rm -rf pkg
+
 echo '--- Installing fpm'
 gem install fpm
 rbenv rehash
