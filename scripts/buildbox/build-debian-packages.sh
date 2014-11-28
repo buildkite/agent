@@ -18,18 +18,10 @@ function build-package {
   fi
 }
 
-function publish-package {
-  echo "--- Publishing $1"
-  ./scripts/publish-debian-package.sh $1 $CODENAME
-}
-
 echo '--- Installing dependencies'
-gem install deb-s3 fpm
+gem install fpm
 rbenv rehash
 
 # Build the packages
 build-package "linux" "amd64"
 build-package "linux" "i386"
-
-# Loop over all the .deb files and publish them
-ls pkg/deb/*.deb | xargs publish-package
