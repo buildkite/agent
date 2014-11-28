@@ -11,7 +11,7 @@ var buildVersion string = ""
 
 func Version() string {
 	if buildVersion != "" {
-		return fmt.Sprintf("%s-%s", baseVersion, buildVersion)
+		return fmt.Sprintf("%s.%s", baseVersion, buildVersion)
 	} else {
 		return baseVersion
 	}
