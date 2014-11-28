@@ -18,9 +18,18 @@ function build-package {
   fi
 }
 
-echo '--- Installing dependencies'
+echo '--- Installing fpm'
 gem install fpm
 rbenv rehash
+
+echo '--- Installing go dependencies'
+# setup the current repo as a package - super hax.
+mkdir -p gopath/src/github.com/buildbox
+ln -s `pwd` gopath/src/github.com/buildbox/agent
+export GOPATH="$GOPATH:`pwd`/gopath"
+
+go get github.com/tools/godep
+godep restore
 
 # Build the packages
 build-package "linux" "amd64"
