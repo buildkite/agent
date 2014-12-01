@@ -14,9 +14,8 @@ function publish() {
 # Export the function so we can use it in xargs
 export -f publish
 
-echo '--- Installing dependencies'
-gem install deb-s3
-rbenv rehash
+echo '--- Installing ruby dependencies'
+bundle
 
 echo '--- Downloading package artifacts'
 ~/.buildbox/bin/buildbox-agent artifact download "pkg/deb/*.deb" . --job ""

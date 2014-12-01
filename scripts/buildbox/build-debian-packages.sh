@@ -21,9 +21,8 @@ function build-package {
 # Clear out any existing pkg dir
 rm -rf pkg
 
-echo '--- Installing fpm'
-gem install fpm
-rbenv rehash
+echo '--- Installing ruby dependencies'
+bundle
 
 echo '--- Installing go dependencies'
 # setup the current repo as a package - super hax.

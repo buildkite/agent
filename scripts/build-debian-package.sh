@@ -62,27 +62,27 @@ fi
 
 info "Building debian package $PACKAGE_NAME"
 
-fpm -s "dir" \
-    -t "deb" \
-    -n "$DEB_NAME" \
-    --url "$DEB_URL" \
-    --maintainer "$DEB_MAINTAINER" \
-    --architecture "$DEB_ARCH" \
-    --license "$DEB_LICENCE" \
-    --description "$DEB_DESCRIPTION" \
-    --depends "git-core" \
-    --config-files "/etc/buildbox-agent/buildbox-agent.env" \
-    --config-files "/etc/buildbox-agent/bootstrap.sh" \
-    --before-remove "templates/deb/before-remove.sh" \
-    --after-remove "templates/deb/after-remove.sh" \
-    --after-upgrade "templates/deb/after-upgrade.sh" \
-    --after-install "templates/deb/after-install.sh" \
-    --deb-upstart "templates/deb/buildbox-agent.upstart" \
-    -p "$PACKAGE_PATH" \
-    -v "$DEB_VERSION" \
-    "./$BUILD_PATH/$BINARY_NAME=/usr/bin/buildbox-agent" \
-    "templates/deb/buildbox-agent.env=/etc/buildbox-agent/buildbox-agent.env" \
-    "templates/bootstrap.sh=/etc/buildbox-agent/bootstrap.sh"
+bundle exec fpm -s "dir" \
+  -t "deb" \
+  -n "$DEB_NAME" \
+  --url "$DEB_URL" \
+  --maintainer "$DEB_MAINTAINER" \
+  --architecture "$DEB_ARCH" \
+  --license "$DEB_LICENCE" \
+  --description "$DEB_DESCRIPTION" \
+  --depends "git-core" \
+  --config-files "/etc/buildbox-agent/buildbox-agent.env" \
+  --config-files "/etc/buildbox-agent/bootstrap.sh" \
+  --before-remove "templates/deb/before-remove.sh" \
+  --after-remove "templates/deb/after-remove.sh" \
+  --after-upgrade "templates/deb/after-upgrade.sh" \
+  --after-install "templates/deb/after-install.sh" \
+  --deb-upstart "templates/deb/buildbox-agent.upstart" \
+  -p "$PACKAGE_PATH" \
+  -v "$DEB_VERSION" \
+  "./$BUILD_PATH/$BINARY_NAME=/usr/bin/buildbox-agent" \
+  "templates/deb/buildbox-agent.env=/etc/buildbox-agent/buildbox-agent.env" \
+  "templates/bootstrap.sh=/etc/buildbox-agent/bootstrap.sh"
 
 echo ""
 echo -e "Successfully created \033[33m$PACKAGE_PATH\033[0m 👏"
