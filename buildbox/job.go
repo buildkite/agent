@@ -98,7 +98,7 @@ func (j *Job) Run(agent *Agent) error {
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ENDPOINT=%s", agent.Client.URL))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_DEBUG=%t", InDebugMode()))
 	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
-	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_VERSION=%s", Version))
+	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_VERSION=%s", Version()))
 
 	// We know the BUILDBOX_BIN_DIR dir, because it's the path to the
 	// currently running file (there is only 1 binary)
