@@ -91,7 +91,7 @@ then
 
   function docker-cleanup {
     docker rm -f $DOCKER_CONTAINER
-    
+
     # Enabling the following line will prevent your build server from filling up,
     # but will slow down your builds because it'll be built from scratch each time.
     #
@@ -155,9 +155,8 @@ if [ "$BUILDBOX_ARTIFACT_PATHS" != "" ]
 then
   # NOTE: In agent version 1.0 and above, the location and the name of the
   # buildbox artifact binary changed. As of this verison, builbdox-artifact has
-  # been rolled into buildbox-agent, and now lives in the $BUILDBOX_DIR/bin
-  # directory.
-  if [[ -e $BUILDBOX_DIR/bin/buildbox-agent ]]
+  # been rolled into buildbox-agent.
+  if buildbox-agent --help | grep build-artifact
   then
     # If you want to upload artifacts to your own server, uncomment the lines below
     # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
