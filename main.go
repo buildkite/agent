@@ -47,7 +47,7 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "buildbox-agent"
-	app.Version = buildbox.Version
+	app.Version = buildbox.Version()
 	app.Commands = Commands
 
 	// Default the default action
