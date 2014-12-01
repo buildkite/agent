@@ -12,8 +12,8 @@ env PIDFILE=/var/run/buildbox-agent.pid
 
 pre-start script
 . /etc/buildbox-agent/buildbox-agent.env
-mkdir -p $BUILDBOX_DIR
-chown -R $BUILDBOX_USER:$BUILDBOX_USER_GROUP $BUILDBOX_DIR
+mkdir -p $BUILDBOX_BUILD_PATH
+chown -R $BUILDBOX_USER:$BUILDBOX_USER_GROUP $BUILDBOX_BUILD_PATH
 end script
 
 script

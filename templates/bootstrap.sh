@@ -15,31 +15,50 @@ function buildbox-run {
   buildbox-exit-if-failed $?
 }
 
+if [ "$BUILDBOX_BIN_DIR" != "" ]
+then
+  echo "Deprecation warning: BUILDBOX_BIN_DIR has been renamed to BUILDBOX_BIN_PATH"
+  BUILDBOX_BIN_PATH=$BUILDBOX_BIN_DIR
+fi
+
+if [ "$BUILDBOX_DIR" != "" ]
+then
+  echo "Deprecation warning: BUILDBOX_DIR has been renamed to BUILDBOX_PATH"
+  BUILDBOX_PATH=$BUILDBOX_DIR
+fi
+
 echo '--- setup environment'
 
-# Provide a default BUILDBOX_DIR
-if [ -z "$BUILDBOX_DIR" ]; then
+# Provide a default BUILDBOX_PATH
+if [ -z "$BUILDBOX_PATH" ]; then
   # This will return the location of this file. We assume that the buildbox-artifact
   # tool is in the same folder. You can of course customize the locations
   # and edit this file.
-  BUILDBOX_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+  BUILDBOX_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 fi
 
-# If no BUILDBOX_BIN_DIR has been provided, make one up
-if [ -z "$BUILDBOX_BIN_DIR" ]; then
-  if [ -d "$BUILDBOX_DIR/bin" ]; then
-    BUILDBOX_BIN_DIR="$BUILDBOX_DIR/bin"
+# If no BUILDBOX_BIN_PATH has been provided, make one up
+if [ -z "$BUILDBOX_BIN_PATH" ]; then
+  if [ -d "$BUILDBOX_PATH/bin" ]; then
+    BUILDBOX_BIN_PATH="$BUILDBOX_PATH/bin"
   else
-    BUILDBOX_BIN_DIR="$BUILDBOX_DIR"
+    BUILDBOX_BIN_PATH="$BUILDBOX_PATH"
   fi
 fi
 
 # Add the $BUILDBOX_BIN to the $PATH
-export PATH="$BUILDBOX_BIN_DIR:$PATH"
+export PATH="$BUILDBOX_BIN_PATH:$PATH"
 
 # Create the build directory
 SANITIZED_AGENT_NAME=$(echo $BUILDBOX_AGENT_NAME | tr -d '"')
-BUILDBOX_BUILD_DIR="$SANITIZED_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
+PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
+
+# Allow overiding the location that builds get run in
+if [ -z "$BUILDBOX_BUILD_PATH" ]; then
+  BUILDBOX_PROJECT_PATH="$BUILDBOX_PATH/builds/$PROJECT_FOLDER_NAME"
+else
+  BUILDBOX_PROJECT_PATH="$BUILDBOX_BUILD_PATH/$PROJECT_FOLDER_NAME"
+fi
 
 # Show the ENV variables if DEBUG is on
 if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
@@ -47,8 +66,8 @@ then
   buildbox-run "env | grep BUILDBOX"
 fi
 
-buildbox-run "mkdir -p \"$BUILDBOX_BUILD_DIR\""
-buildbox-run "cd \"$BUILDBOX_BUILD_DIR\""
+buildbox-run "mkdir -p \"$BUILDBOX_PROJECT_PATH\""
+buildbox-run "cd \"$BUILDBOX_PROJECT_PATH\""
 
 # Do we need to do a git checkout?
 if [ ! -d ".git" ]
@@ -177,7 +196,7 @@ then
       buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" > /dev/null 2>&1"
       buildbox-exit-if-failed $?
     fi
-  elif [[ -e $BUILDBOX_DIR/buildbox-artifact ]]
+  elif [[ -e $BUILDBOX_PATH/buildbox-artifact ]]
   then
     # If you want to upload artifacts to your own server, uncomment the lines below
     # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
@@ -191,7 +210,7 @@ then
     buildbox-run "buildbox-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1"
     buildbox-exit-if-failed $?
   else
-    echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_DIR"
+    echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_PATH"
     exit 1
   fi
 fi
