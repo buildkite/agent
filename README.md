@@ -186,4 +186,4 @@ go run cmd/artifact/artifact.go download "buildbox/*.go" . --agent-access-token=
 
 ## Copyright
 
-Copyright (c) 2014 Keith Pitt. See LICENSE for details.
+Copyright (c) 2014 Keith Pitt, Buildbox. See LICENSE for details.
