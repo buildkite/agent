@@ -65,7 +65,7 @@ buildbox-run "mkdir -p \"$BUILDBOX_PROJECT_PATH\""
 buildbox-run "cd \"$BUILDBOX_PROJECT_PATH\""
 
 # Do we need to do a git checkout?
-if [[ ! -d ".git" ]]; then
+if [[ ! -d .git ]]; then
   # If it's a first time SSH git clone it will prompt to accept the host's
   # fingerprint. To avoid this add the host's key to ~/.ssh/known_hosts ahead
   # of time:
@@ -86,7 +86,7 @@ fi
 
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
-if [[ -z "$BUILDBOX_SCRIPT_PATH" ]]; then
+if [[ -z $BUILDBOX_SCRIPT_PATH ]]; then
   echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
 fi
