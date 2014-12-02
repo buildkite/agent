@@ -3,7 +3,7 @@
 BUILDBOX_PROMPT="\033[90m$\033[0m"
 
 function buildbox-exit-if-failed {
-  if [ $1 -ne 0 ]
+  if [[ $1 -ne 0 ]]
   then
     exit $1
   fi
@@ -15,13 +15,13 @@ function buildbox-run {
   buildbox-exit-if-failed $?
 }
 
-if [ "$BUILDBOX_BIN_DIR" != "" ]
+if [[ $BUILDBOX_BIN_DIR ]]
 then
   echo "Deprecation warning: BUILDBOX_BIN_DIR has been renamed to BUILDBOX_BIN_PATH"
   BUILDBOX_BIN_PATH=$BUILDBOX_BIN_DIR
 fi
 
-if [ "$BUILDBOX_DIR" != "" ]
+if [[ $BUILDBOX_DIR ]]
 then
   echo "Deprecation warning: BUILDBOX_DIR has been renamed to BUILDBOX_PATH"
   BUILDBOX_PATH=$BUILDBOX_DIR
@@ -30,7 +30,7 @@ fi
 echo '--- setup environment'
 
 # Provide a default BUILDBOX_PATH
-if [ -z "$BUILDBOX_PATH" ]; then
+if [[ -z $BUILDBOX_PATH ]]; then
   # This will return the location of this file. We assume that the buildbox-artifact
   # tool is in the same folder. You can of course customize the locations
   # and edit this file.
@@ -38,8 +38,8 @@ if [ -z "$BUILDBOX_PATH" ]; then
 fi
 
 # If no BUILDBOX_BIN_PATH has been provided, make one up
-if [ -z "$BUILDBOX_BIN_PATH" ]; then
-  if [ -d "$BUILDBOX_PATH/bin" ]; then
+if [[ -z $BUILDBOX_BIN_PATH ]]; then
+  if [[ -d $BUILDBOX_PATH/bin ]]; then
     BUILDBOX_BIN_PATH="$BUILDBOX_PATH/bin"
   else
     BUILDBOX_BIN_PATH="$BUILDBOX_PATH"
@@ -54,14 +54,14 @@ SANITIZED_AGENT_NAME=$(echo $BUILDBOX_AGENT_NAME | tr -d '"')
 PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDBOX_PROJECT_SLUG"
 
 # Allow overiding the location that builds get run in
-if [ -z "$BUILDBOX_BUILD_PATH" ]; then
+if [[ -z $BUILDBOX_BUILD_PATH ]]; then
   BUILDBOX_PROJECT_PATH="$BUILDBOX_PATH/builds/$PROJECT_FOLDER_NAME"
 else
   BUILDBOX_PROJECT_PATH="$BUILDBOX_BUILD_PATH/$PROJECT_FOLDER_NAME"
 fi
 
 # Show the ENV variables if DEBUG is on
-if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
+if [[ "$BUILDBOX_AGENT_DEBUG" == "true" ]]
 then
   buildbox-run "env | grep BUILDBOX"
 fi
@@ -70,7 +70,7 @@ buildbox-run "mkdir -p \"$BUILDBOX_PROJECT_PATH\""
 buildbox-run "cd \"$BUILDBOX_PROJECT_PATH\""
 
 # Do we need to do a git checkout?
-if [ ! -d ".git" ]
+if [[ ! -d ".git" ]]
 then
   # If it's a first time SSH git clone it will prompt to accept the host's
   # fingerprint. To avoid this add the host's key to ~/.ssh/known_hosts ahead
@@ -80,7 +80,7 @@ then
 fi
 
 # Default empty branch names
-if [ "$BUILDBOX_BRANCH" == "" ]
+if [[ -z $BUILDBOX_BRANCH ]]
 then
   BUILDBOX_BRANCH="master"
 fi
@@ -89,21 +89,21 @@ buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
 
 # Only reset to the branch if we're not on a tag
-if [ "$BUILDBOX_TAG" == "" ]
+if [[ -z $BUILDBOX_TAG ]]
 then
 buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
 fi
 
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
-if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
+if [[ -z "$BUILDBOX_SCRIPT_PATH" ]]
 then
   echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
 fi
 
 ## Docker
-if [ "$BUILDBOX_DOCKER" != "" ]
+if [[ $BUILDBOX_DOCKER ]]
 then
   DOCKER_CONTAINER="buildbox_"$BUILDBOX_JOB_ID"_container"
   DOCKER_IMAGE="buildbox_"$BUILDBOX_JOB_ID"_image"
@@ -128,7 +128,7 @@ then
   buildbox-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
 
 ## Fig
-elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
+elif [[ $BUILDBOX_FIG_CONTAINER ]]
 then
   # Fig strips dashes and underscores, so we'll remove them to match the docker container names
   FIG_PROJ_NAME="buildbox"${BUILDBOX_JOB_ID//-}
@@ -170,7 +170,7 @@ fi
 # Capture the exit status for the end
 EXIT_STATUS=$?
 
-if [ "$BUILDBOX_ARTIFACT_PATHS" != "" ]
+if [[ $BUILDBOX_ARTIFACT_PATHS ]]
 then
   # NOTE: In agent version 1.0 and above, the location and the name of the
   # buildbox artifact binary changed. As of this verison, builbdox-artifact has
