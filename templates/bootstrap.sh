@@ -27,12 +27,11 @@ fi
 echo '--- setup environment'
 
 # Provide a default BUILDBOX_PATH
-if [[ -z $BUILDBOX_PATH ]]; then
-  # This will return the location of this file. We assume that the buildbox-artifact
-  # tool is in the same folder. You can of course customize the locations
-  # and edit this file.
-  BUILDBOX_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-fi
+# This will return the location of this file. We assume that the buildbox-artifact
+# tool is in the same folder. You can of course customize the locations
+# and edit this file.
+: ${BUILDBOX_PATH:="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"}
+
 
 # If no BUILDBOX_BIN_PATH has been provided, make one up
 if [[ -z $BUILDBOX_BIN_PATH ]]; then
@@ -75,9 +74,7 @@ if [[ ! -d ".git" ]]; then
 fi
 
 # Default empty branch names
-if [[ -z $BUILDBOX_BRANCH ]]; then
-  BUILDBOX_BRANCH="master"
-fi
+: ${BUILDBOX_BRANCH:=master}
 
 buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
