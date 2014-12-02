@@ -3,8 +3,7 @@
 BUILDBOX_PROMPT="\033[90m$\033[0m"
 
 function buildbox-exit-if-failed {
-  if [[ $1 -ne 0 ]]
-  then
+  if [[ $1 -ne 0 ]]; then
     exit $1
   fi
 }
@@ -15,14 +14,12 @@ function buildbox-run {
   buildbox-exit-if-failed $?
 }
 
-if [[ $BUILDBOX_BIN_DIR ]]
-then
+if [[ $BUILDBOX_BIN_DIR ]]; then
   echo "Deprecation warning: BUILDBOX_BIN_DIR has been renamed to BUILDBOX_BIN_PATH"
   BUILDBOX_BIN_PATH=$BUILDBOX_BIN_DIR
 fi
 
-if [[ $BUILDBOX_DIR ]]
-then
+if [[ $BUILDBOX_DIR ]]; then
   echo "Deprecation warning: BUILDBOX_DIR has been renamed to BUILDBOX_PATH"
   BUILDBOX_PATH=$BUILDBOX_DIR
 fi
@@ -61,8 +58,7 @@ else
 fi
 
 # Show the ENV variables if DEBUG is on
-if [[ "$BUILDBOX_AGENT_DEBUG" == "true" ]]
-then
+if [[ "$BUILDBOX_AGENT_DEBUG" == "true" ]]; then
   buildbox-run "env | grep BUILDBOX"
 fi
 
@@ -70,8 +66,7 @@ buildbox-run "mkdir -p \"$BUILDBOX_PROJECT_PATH\""
 buildbox-run "cd \"$BUILDBOX_PROJECT_PATH\""
 
 # Do we need to do a git checkout?
-if [[ ! -d ".git" ]]
-then
+if [[ ! -d ".git" ]]; then
   # If it's a first time SSH git clone it will prompt to accept the host's
   # fingerprint. To avoid this add the host's key to ~/.ssh/known_hosts ahead
   # of time:
@@ -80,8 +75,7 @@ then
 fi
 
 # Default empty branch names
-if [[ -z $BUILDBOX_BRANCH ]]
-then
+if [[ -z $BUILDBOX_BRANCH ]]; then
   BUILDBOX_BRANCH="master"
 fi
 
@@ -89,22 +83,19 @@ buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
 
 # Only reset to the branch if we're not on a tag
-if [[ -z $BUILDBOX_TAG ]]
-then
+if [[ -z $BUILDBOX_TAG ]]; then
 buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
 fi
 
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
-if [[ -z "$BUILDBOX_SCRIPT_PATH" ]]
-then
+if [[ -z "$BUILDBOX_SCRIPT_PATH" ]]; then
   echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
 fi
 
 ## Docker
-if [[ $BUILDBOX_DOCKER ]]
-then
+if [[ $BUILDBOX_DOCKER ]]; then
   DOCKER_CONTAINER="buildbox_"$BUILDBOX_JOB_ID"_container"
   DOCKER_IMAGE="buildbox_"$BUILDBOX_JOB_ID"_image"
 
@@ -128,8 +119,7 @@ then
   buildbox-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
 
 ## Fig
-elif [[ $BUILDBOX_FIG_CONTAINER ]]
-then
+elif [[ $BUILDBOX_FIG_CONTAINER ]]; then
   # Fig strips dashes and underscores, so we'll remove them to match the docker container names
   FIG_PROJ_NAME="buildbox"${BUILDBOX_JOB_ID//-}
   # The name of the docker container fig creates when it creates the adhoc run
@@ -170,13 +160,11 @@ fi
 # Capture the exit status for the end
 EXIT_STATUS=$?
 
-if [[ $BUILDBOX_ARTIFACT_PATHS ]]
-then
+if [[ $BUILDBOX_ARTIFACT_PATHS ]]; then
   # NOTE: In agent version 1.0 and above, the location and the name of the
   # buildbox artifact binary changed. As of this verison, builbdox-artifact has
   # been rolled into buildbox-agent.
-  if buildbox-agent --help | grep build-artifact
-  then
+  if buildbox-agent --help | grep build-artifact; then
     # If you want to upload artifacts to your own server, uncomment the lines below
     # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
     # own bucket.
@@ -187,8 +175,7 @@ then
     # buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID\""
 
     # Show the output of the artifact uploder when in debug mode
-    if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]
-    then
+    if [ "$BUILDBOX_AGENT_DEBUG" == "true" ]; then
       echo '--- uploading artifacts'
       buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\""
       buildbox-exit-if-failed $?
@@ -196,8 +183,7 @@ then
       buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" > /dev/null 2>&1"
       buildbox-exit-if-failed $?
     fi
-  elif [[ -e $BUILDBOX_PATH/buildbox-artifact ]]
-  then
+  elif [[ -e $BUILDBOX_PATH/buildbox-artifact ]]; then
     # If you want to upload artifacts to your own server, uncomment the lines below
     # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
     # own bucket.
