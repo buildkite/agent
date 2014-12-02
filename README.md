@@ -166,7 +166,7 @@ mkdir -p $GOPATH/src/github.com/buildbox/agent
 git clone git@github.com:buildbox/agent.git $GOPATH/src/github.com/buildbox/agent
 cd $GOPATH/src/github.com/buildbox/agent
 godep get
-go run agent.go
+go run *.go start --token xxx --debug
 ```
 
 To test the commands locally:
