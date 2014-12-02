@@ -70,7 +70,7 @@ if [[ ! -d ".git" ]]; then
   # fingerprint. To avoid this add the host's key to ~/.ssh/known_hosts ahead
   # of time:
   #   ssh-keyscan -H host.com >> ~/.ssh/known_hosts
-  buildbox-run "git clone "$BUILDBOX_REPO" . -qv"
+  buildbox-run "git clone \"$BUILDBOX_REPO\" . -qv"
 fi
 
 # Default empty branch names
