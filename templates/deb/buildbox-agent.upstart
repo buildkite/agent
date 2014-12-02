@@ -9,16 +9,17 @@ kill signal TERM
 reload signal USR2
 
 env PIDFILE=/var/run/buildbox-agent.pid
+env ENVFILE=/etc/buildbox-agent/buildbox-agent.env
 
 pre-start script
-. /etc/buildbox-agent/buildbox-agent.env
+. $ENVFILE
 mkdir -p $BUILDBOX_BUILD_PATH
 chown -R $BUILDBOX_USER:$BUILDBOX_USER_GROUP $BUILDBOX_BUILD_PATH
 end script
 
 script
 set -a
-. /etc/buildbox-agent/buildbox-agent.env
+. $ENVFILE
 set +a
 exec start-stop-daemon --start --quiet --chuid $BUILDBOX_USER --pidfile $PIDFILE --make-pidfile --exec /usr/bin/buildbox-agent -- start
 end script
