@@ -2,17 +2,19 @@
 
 BUILDBOX_PROMPT="\033[90m$\033[0m"
 
-function buildbox-exit-if-failed {
-  if [ $1 -ne 0 ]
-  then
-    exit $1
-  fi
+function buildbox-run-no-exit {
+  echo -e "$BUILDBOX_PROMPT $1"
+  eval $1
 }
 
 function buildbox-run {
   echo -e "$BUILDBOX_PROMPT $1"
   eval $1
-  buildbox-exit-if-failed $?
+
+  if [ $? -ne 0 ]
+  then
+    exit $?
+  fi
 }
 
 if [ "$BUILDBOX_BIN_DIR" != "" ]
@@ -125,7 +127,7 @@ then
   echo "--- running $BUILDBOX_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
 
   # Run the build script command in a one-off container
-  buildbox-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
+  buildbox-run-no-exit "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
 
 ## Fig
 elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
@@ -157,7 +159,7 @@ then
   echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
 
   # Run the build script command in the service specified in BUILDBOX_FIG_CONTAINER
-  buildbox-run "fig -p $FIG_PROJ_NAME run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
+  buildbox-run-no-exit "fig -p $FIG_PROJ_NAME run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
 
 ## Standard
 else
@@ -191,10 +193,8 @@ then
     then
       echo '--- uploading artifacts'
       buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\""
-      buildbox-exit-if-failed $?
     else
       buildbox-run "buildbox-agent build-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" > /dev/null 2>&1"
-      buildbox-exit-if-failed $?
     fi
   elif [[ -e $BUILDBOX_PATH/buildbox-artifact ]]
   then
@@ -208,7 +208,6 @@ then
     # By default we silence the buildbox-artifact build output. However, if you'd like to see
     # it in your logs, remove the: > /dev/null 2>&1 from the end of the line.
     buildbox-run "buildbox-artifact upload \"$BUILDBOX_ARTIFACT_PATHS\" --url $BUILDBOX_AGENT_API_URL > /dev/null 2>&1"
-    buildbox-exit-if-failed $?
   else
     echo >&2 "ERROR: buildbox-artifact could not be found in $BUILDBOX_PATH"
     exit 1
