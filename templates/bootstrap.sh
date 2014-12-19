@@ -2,18 +2,20 @@
 
 BUILDBOX_PROMPT="\033[90m$\033[0m"
 
-function buildbox-run-no-exit {
+function buildbox-prompt-and-run {
   echo -e "$BUILDBOX_PROMPT $1"
   eval $1
 }
 
 function buildbox-run {
   echo -e "$BUILDBOX_PROMPT $1"
-  eval $1
 
-  if [ $? -ne 0 ]
+  eval $1
+  EVAL_EXIT_STATUS=$?
+
+  if [ $EVAL_EXIT_STATUS -ne 0 ]
   then
-    exit $?
+    exit $EVAL_EXIT_STATUS
   fi
 }
 
@@ -127,7 +129,7 @@ then
   echo "--- running $BUILDBOX_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
 
   # Run the build script command in a one-off container
-  buildbox-run-no-exit "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
+  buildbox-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
 
 ## Fig
 elif [ "$BUILDBOX_FIG_CONTAINER" != "" ]
@@ -159,7 +161,7 @@ then
   echo "--- running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
 
   # Run the build script command in the service specified in BUILDBOX_FIG_CONTAINER
-  buildbox-run-no-exit "fig -p $FIG_PROJ_NAME run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
+  buildbox-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
 
 ## Standard
 else
