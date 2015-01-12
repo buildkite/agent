@@ -11,6 +11,9 @@
     # Set the user to run buildbox-agent as (usually `whoami`). It should be a full OS X user created via System Prefs, and the one you installed buildbox-agent under.
     sudo sed -i '' "s/your-build-user/[insert username here]/g" /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
+    # Set the agent's name
+    sudo sed -i '' "s/your-agent-name/[insert agent name]/g" /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
+
     # Set the agent's access token
     sudo sed -i '' "s/your-agent-access-token/[insert agent access token here]/g" /Library/LaunchDaemons/io.buildbox.buildbox-agent.plist
 
@@ -83,6 +86,8 @@
 
       <key>BUILDBOX_AGENT_TOKEN</key>
       <string>your-agent-access-token</string>
+      <key>BUILDBOX_AGENT_NAME</key>
+      <string>your-agent-name</string>
     </dict>
   </dict>
 </plist>
