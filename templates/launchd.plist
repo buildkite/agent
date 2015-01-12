@@ -48,7 +48,7 @@
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/your-build-user/.buildbox/buildbox-agent</string>
+      <string>/Users/your-build-user/.buildbox/bin/buildbox-agent</string>
       <string>start</string>
     </array>
 
@@ -57,7 +57,7 @@
 
     <key>RunAtLoad</key>
     <true/>
-    
+
     <key>OnDemand</key>
     <false/>
 
@@ -66,7 +66,7 @@
 
     <key>SessionCreate</key>
     <true/>
-  	
+
     <key>ThrottleInterval</key>
     <integer>30</integer>
 
@@ -81,7 +81,7 @@
       <key>PATH</key>
       <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
 
-      <key>BUILDBOX_AGENT_ACCESS_TOKEN</key>
+      <key>BUILDBOX_AGENT_TOKEN</key>
       <string>your-agent-access-token</string>
     </dict>
   </dict>
