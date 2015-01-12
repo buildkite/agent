@@ -18,7 +18,7 @@
     sudo sed -i '' "s/your-agent-access-token/[insert agent access token here]/g" ~/Library/LaunchAgent/io.buildbox.buildbox-agent.plist
 
     # Set metadata for your agent
-    # in format: '--meta-data key=value --meta-data key=value'
+    # comma delimited key=value format: 'key=value,key=value'
     sudo sed -i '' "s/your-agent-meta-data/[insert agent meta data]/g" ~/Library/LaunchAgent/io.buildbox.buildbox-agent.plist
 
     # Create the agent's log directory with permissions for your user
