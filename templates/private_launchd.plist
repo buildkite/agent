@@ -25,7 +25,7 @@
     mkdir -p ~/.buildbox/log
     sudo chmod 775 ~/.buildbox/log
 
-    # Add it to launchd (which also starts buildbox-agent)
+    # Add it to launchd (which also starts buildbox-agent - may require a restart)
     launchctl load ~/Library/LaunchAgent/io.buildbox.buildbox-agent.plist
 
     # Check the logs
@@ -53,6 +53,7 @@
     <array>
       <string>/Users/your-build-user/.buildbox/bin/buildbox-agent</string>
       <string>start</string>
+      <string>--debug</string>
     </array>
 
     <key>KeepAlive</key>
@@ -63,9 +64,6 @@
 
     <key>ProcessType</key>
     <string>Interactive</string>
-
-    <key>SessionCreate</key>
-    <true/>
 
     <key>ThrottleInterval</key>
     <integer>30</integer>
@@ -78,9 +76,6 @@
 
     <key>EnvironmentVariables</key>
     <dict>
-      <key>PATH</key>
-      <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
-
       <key>BUILDBOX_AGENT_TOKEN</key>
       <string>your-agent-access-token</string>
       <key>BUILDBOX_AGENT_NAME</key>
