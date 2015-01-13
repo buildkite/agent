@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  This is an example launchd config for loading buildbox-agent on system boot on OS X systems using launchd for a private user
+  This is an example launchd config for loading buildbox-agent on system boot on OS X systems using launchd for a local user.
+  With an initial login, this can be used for running XCode tests via iOS Simulator (that requires GUI access)
+
 
   To install:
 
