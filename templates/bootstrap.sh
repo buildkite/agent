@@ -92,13 +92,21 @@ fi
 buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
 
-# Only reset to the branch if we're not on a tag
-if [ "$BUILDBOX_TAG" == "" ]
+if [ "$BUILDBOX_PULL_REQUEST" != "false" ]
 then
-buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
+  echo "building result of pull request $BUILDBOX_PULL_REQUEST"
+  buildbox-run "git fetch origin +refs/pull/$BUILDBOX_PULL_REQUEST/merge:"
+  buildbox-run "git checkout -qf FETCH_HEAD"
+else
+  if [ "$BUILDBOX_TAG" == "" ]
+  then
+    # Only reset to the branch if we're not on a tag
+    buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
+  fi
+    buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 fi
 
-buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
+
 
 if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
 then
