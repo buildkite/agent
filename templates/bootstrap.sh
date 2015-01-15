@@ -31,8 +31,6 @@ then
   BUILDBOX_PATH=$BUILDBOX_DIR
 fi
 
-echo '--- setup environment'
-
 # Provide a default BUILDBOX_PATH
 if [ -z "$BUILDBOX_PATH" ]; then
   # This will return the location of this file. We assume that the buildbox-artifact
@@ -52,6 +50,17 @@ fi
 
 # Add the $BUILDBOX_BIN to the $PATH
 export PATH="$BUILDBOX_BIN_PATH:$PATH"
+
+function buildbox-meta-data {
+  # Check to see if we're on the latest version of the agent (older agents
+  # don't have the build-data argument)
+  if buildbox-agent --help | grep build-data
+  then
+    buildbox-agent build-data set $1 $2
+  fi
+}
+
+echo '--- setup environment'
 
 # Create the build directory
 SANITIZED_AGENT_NAME=$(echo $BUILDBOX_AGENT_NAME | tr -d '"')
@@ -105,11 +114,8 @@ fi
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
 
 # Grab author and commit information and send it back to Buildbox
-if buildbox-agent --help | grep build-data
-then
-  buildbox-agent build-data set "buildkite:git:commit" "`git show "$BUILDBOX_COMMIT" -s --format=fuller --no-color`"
-  buildbox-agent build-data set "buildkite:git:branch" "`git branch --contains "$BUILDBOX_COMMIT" --no-color`"
-fi
+buildbox-meta-data "buildkite:git:commit" "`git show "$BUILDBOX_COMMIT" -s --format=fuller --no-color`"
+buildbox-meta-data "buildkite:git:branch" "`git branch --contains "$BUILDBOX_COMMIT" --no-color`"
 
 if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
 then
