@@ -1,5 +1,6 @@
 #!/bin/bash
 
+BUILDBOX_BOOTSTRAP_VERSION="0.9"
 BUILDBOX_PROMPT="\033[90m$\033[0m"
 
 function buildbox-prompt-and-run {
@@ -61,6 +62,9 @@ function buildbox-meta-data {
 }
 
 echo '--- setup environment'
+
+# Send the bootstrap version back to Buildbox
+buildbox-meta-data "buildkite:bootstrap:version" $BUILDBOX_BOOTSTRAP_VERSION
 
 # Create the build directory
 SANITIZED_AGENT_NAME=$(echo $BUILDBOX_AGENT_NAME | tr -d '"')
