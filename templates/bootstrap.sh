@@ -67,14 +67,14 @@ BUILDBOX_BUILD_CHECKOUT_PATH="$BUILDBOX_BUILD_PATH/$PROJECT_FOLDER_NAME"
 #
 ##############################################################
 
-# Show the ENV variables if DEBUG is on
-if [[ "$BUILDBOX_AGENT_DEBUG" == "true" ]]; then
-  echo '--- Buildbox environment variables'
+# Remove the checkout folder if BUILDBOX_CLEAN_CHECKOUT is present
+if [[ "$BUILDBOX_CLEAN_CHECKOUT" == "true" ]]; then
+  echo '--- Cleaning project checkout'
 
-  buildbox-run "env | grep BUILDBOX"
+  buildbox-run "rm -rf \"$BUILDBOX_BUILD_CHECKOUT_PATH\""
 fi
 
-echo '--- Preparing build'
+echo '--- Preparing build folder'
 
 buildbox-run "mkdir -p \"$BUILDBOX_BUILD_CHECKOUT_PATH\""
 buildbox-run "cd \"$BUILDBOX_BUILD_CHECKOUT_PATH\""
