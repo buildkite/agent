@@ -92,13 +92,24 @@ fi
 buildbox-run "git clean -fdq"
 buildbox-run "git fetch -q"
 
-# Only reset to the branch if we're not on a tag
-if [ "$BUILDBOX_TAG" == "" ]
+# Allow checkouts of forked pull requests on GitHub only. See:
+# https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+if [ "$BUILDBOX_PULL_REQUEST" != "false" ] && [ "$BUILDBOX_PROJECT_PROVIDER" == *"github"* ]
 then
-buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
+  buildbox-run "git fetch origin \"+refs/pull/$BUILDBOX_PULL_REQUEST/merge:\""
+elif [ "$BUILDBOX_TAG" == "" ]
+then
+  buildbox-run "git reset --hard origin/$BUILDBOX_BRANCH"
 fi
 
 buildbox-run "git checkout -qf \"$BUILDBOX_COMMIT\""
+
+# Grab author and commit information and send it back to Buildbox
+if buildbox-agent --help | grep build-data
+then
+  buildbox-agent build-data set "buildkite:git:commit" "`git show "$BUILDBOX_COMMIT" -s --format=fuller --no-color`"
+  buildbox-agent build-data set "buildkite:git:branch" "`git branch --contains "$BUILDBOX_COMMIT" --no-color`"
+fi
 
 if [ "$BUILDBOX_SCRIPT_PATH" == "" ]
 then
