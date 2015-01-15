@@ -163,7 +163,15 @@ if [[ -e $DESTINATION/bootstrap.sh ]]
 then
   echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
 else
-  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildbox/agent/master/templates/bootstrap.sh
+  # Switch between the old bootstrap, and the new one.
+  if [ "$VERSION" == *"1.0"* ]
+  then
+    BOOTSTRAP_NAME="bootstrap.sh"
+  else
+    BOOTSTRAP_NAME="bootstrap-0.2.sh"
+  fi
+
+  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildbox/agent/master/templates/$BOOTSTRAP_NAME
   BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
 
   echo -e "Downloading $BOOTSTRAP_URL"
