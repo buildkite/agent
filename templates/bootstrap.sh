@@ -94,7 +94,7 @@ buildbox-run "git fetch -q"
 # Allow checkouts of forked pull requests on GitHub only. See:
 # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 if [[ "$BUILDBOX_PULL_REQUEST" != "false" ]] && [[ "$BUILDBOX_PROJECT_PROVIDER" == *"github"* ]]; then
-  buildbox-run "git fetch origin \"+refs/pull/$BUILDBOX_PULL_REQUEST/merge:\""
+  buildbox-run "git fetch origin \"+refs/pull/$BUILDBOX_PULL_REQUEST/head:\""
 elif [[ "$BUILDBOX_TAG" == "" ]]; then
   # Default empty branch names
   : ${BUILDBOX_BRANCH:=master}
