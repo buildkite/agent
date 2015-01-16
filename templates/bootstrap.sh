@@ -139,7 +139,7 @@ if [[ "$BUILDBOX_DOCKER" != "" ]]; then
   # Build the Docker image, namespaced to the job
   buildbox-run "docker build -t $DOCKER_IMAGE ."
 
-  echo "--- Running $BUILDBOX_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
+  echo "+++ Running $BUILDBOX_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
 
   # Run the build script command in a one-off container
   buildbox-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDBOX_SCRIPT_PATH"
@@ -170,7 +170,7 @@ elif [[ "$BUILDBOX_FIG_CONTAINER" != "" ]]; then
   # Build the Docker images using Fig, namespaced to the job
   buildbox-run "fig -p $FIG_PROJ_NAME build"
 
-  echo "--- Running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
+  echo "+++ Running $BUILDBOX_SCRIPT_PATH (in Fig container '$BUILDBOX_FIG_CONTAINER')"
 
   # Run the build script command in the service specified in BUILDBOX_FIG_CONTAINER
   buildbox-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDBOX_FIG_CONTAINER ./$BUILDBOX_SCRIPT_PATH"
