@@ -18,7 +18,7 @@ echo '--- Installing ruby dependencies'
 bundle
 
 echo '--- Downloading package artifacts'
-~/.buildbox/bin/buildbox-agent artifact download "pkg/deb/*.deb" . --job ""
+buildbox-agent artifact download "pkg/deb/*.deb" . --job ""
 
 # Loop over all the .deb files and publish them
 ls pkg/deb/*.deb | xargs -I {} bash -c "publish {}"
