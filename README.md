@@ -1,4 +1,4 @@
-# Buildkite Agent ![Build status](https://badge.buildbox.io/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
+# Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
 
 > **Rename notice**
 >
@@ -10,7 +10,7 @@ There are three commands included in the buildbox-agent package:
 
 * buildbox-agent - the main job runner, which polls Buildkite for build steps to execute
 * buildbox-data - reads and writes to your build-wide key/value store
-* [buildbox-artifact](https://buildbox.io/docs/agent/artifacts) - uploads and downloads files to your build-wide file store
+* [buildbox-artifact](https://buildkite.com/docs/agent/artifacts) - uploads and downloads files to your build-wide file store
 
 ## Installing
 
@@ -38,8 +38,8 @@ If you're using Windows, you'll want to use the [Ruby agent](https://github.com/
 
 We've some templates for the default process manageers for various platforms. Using a process manager will allow to you ensure `buildbox-agent` is running on system boot, and will allow for easy upgrades and restarts because you can simply kill the process and the process manager to start it up again.
 
-* [Upstart (Ubuntu)](/templates/upstart.conf)
-* [Launchd (OSX)](/templates/launchd.plist)
+* [Upstart (Ubuntu)](/templates/0.2/upstart.conf)
+* [Launchd (OSX)](/templates/0.2/launchd.plist)
 
 If you have another to contribute, or need a hand, let us know! (pull requests also welcome)
 
@@ -71,7 +71,7 @@ If you're running a **really long** job, and just want to kill it, send the `USR
 
 After starting, buildbox-agent polls Buildkite over HTTPS looking for work.
 
-When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildbox.io/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
+When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildkite.com/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
 
 As the build is running the output stream is continously sent to buildbox, and when the build finishes it reports the exit status and then returns to looking for new jobs to execute.
 
