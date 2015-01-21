@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"bytes"
@@ -13,8 +13,8 @@ import (
 )
 
 type Client struct {
-	// The URL of the Buildbox Agent API to communicate with. Defaults to
-	// "https://agent.buildbox.io/v2".
+	// The URL of the Buildkite Agent API to communicate with. Defaults to
+	// "https://agent.buildkite.com/v2".
 	URL string
 
 	// The authorization token agent being used to make API requests
@@ -37,7 +37,7 @@ func (c *Client) Post(v interface{}, path string, body interface{}) error {
 	return c.APIReq(v, "POST", path, body)
 }
 
-// Sends a Buildbox API request and decodes the response into v.
+// Sends a Buildkite API request and decodes the response into v.
 func (c *Client) APIReq(v interface{}, method string, path string, body interface{}) error {
 	// Generate a new request
 	req, err := c.NewRequest(method, path, body)
@@ -49,7 +49,7 @@ func (c *Client) APIReq(v interface{}, method string, path string, body interfac
 	return c.DoReq(req, v)
 }
 
-// Generates an HTTP request for the Buildbox API, but does not
+// Generates an HTTP request for the Buildkite API, but does not
 // perform the request.
 func (c *Client) NewRequest(method string, path string, body interface{}) (*http.Request, error) {
 	// Popualte the request body if we have to
@@ -81,7 +81,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 		return nil, err
 	}
 
-	// Set the accept content type. The Buildbox API only speaks
+	// Set the accept content type. The Buildkite API only speaks
 	// json.
 	req.Header.Set("Accept", "application/json")
 
@@ -133,11 +133,11 @@ type errorResp struct {
 }
 
 func defaultUserAgent() string {
-	return "buildbox-agent/" + Version() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+	return "buildkite-agent/" + Version() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 }
 
 func defaultAPIURL() string {
-	return "https://agent.buildbox.io/v2"
+	return "https://agent.buildkite.com/v2"
 }
 
 func checkResp(res *http.Response) error {

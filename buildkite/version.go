@@ -1,10 +1,10 @@
-package buildbox
+package buildkite
 
 import "fmt"
 
 // buildVersion can be overriden at compile time by using:
 //
-//  go run -ldflags "-X github.com/buildbox/agent/buildbox.buildVersion abc" *.go --version
+//  go run -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion abc" *.go --version
 
 var baseVersion string = "1.0-beta.6"
 var buildVersion string = ""

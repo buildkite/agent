@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"errors"
@@ -30,10 +30,10 @@ type Artifact struct {
 	FileSize int64 `json:"file_size"`
 
 	// Where we should upload the artifact to. If nil,
-	// it will upload to Buildbox.
+	// it will upload to Buildkite.
 	URL string `json:"url,omitempty"`
 
-	// When uploading artifacts to Buildbox, the API will return some
+	// When uploading artifacts to Buildkite, the API will return some
 	// extra information on how/where to upload the file.
 	Uploader struct {
 		// Where/how to upload the file
@@ -80,7 +80,7 @@ func (c *Client) ArtifactUpdate(job *Job, artifact Artifact) (*Artifact, error) 
 	return &updatedArtifact, c.Put(&updatedArtifact, "jobs/"+job.ID+"/artifacts/"+artifact.ID, artifact)
 }
 
-// Sends all the artifacts at once to the Buildbox Agent API. This will allow
+// Sends all the artifacts at once to the Buildkite Agent API. This will allow
 // the UI to show what artifacts will be uploaded. Their state starts out as
 // "new"
 func (c *Client) CreateArtifacts(job *Job, artifacts []*Artifact) ([]Artifact, error) {
@@ -195,7 +195,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 		artifact.URL = uploader.URL(artifact)
 	}
 
-	// Create artifacts on buildbox in batches to prevent timeouts with many artifacts
+	// Create artifacts on buildkite in batches to prevent timeouts with many artifacts
 	var lenArtifacts = len(artifacts)
 	var createdArtifacts = []Artifact{}
 
@@ -261,7 +261,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
 		artifact.State = "finished"
 	}
 
-	// Update the state of the artifact on Buildbox
+	// Update the state of the artifact on Buildkite
 	_, err = client.ArtifactUpdate(job, artifact)
 	if err != nil {
 		Logger.Errorf("Error marking artifact %s as uploaded (%s)", artifact.Path, err)

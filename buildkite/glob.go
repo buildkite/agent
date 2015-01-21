@@ -1,6 +1,6 @@
 // Source: https://github.com/aashah/glob
 
-package buildbox
+package buildkite
 
 import (
 	"errors"

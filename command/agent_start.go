@@ -2,14 +2,14 @@ package command
 
 import (
 	"fmt"
-	"github.com/buildbox/agent/buildbox"
+	"github.com/buildkite/agent/buildkite"
 	"github.com/codegangsta/cli"
 	"os"
 )
 
 func AgentStartCommandAction(c *cli.Context) {
 	// For display purposes, come up with what the name of the agent is.
-	agentName := buildbox.MachineHostname()
+	agentName := buildkite.MachineHostname()
 	if c.String("name") != "" {
 		agentName = c.String("name")
 	}
@@ -17,12 +17,12 @@ func AgentStartCommandAction(c *cli.Context) {
 	welcomeMessage := "                _._\n" +
 		"           _.-``   ''-._\n" +
 		"      _.-``             ''-._\n" +
-		"  .-``                       ''-._      Buildbox Agent " + buildbox.Version() + "\n" +
+		"  .-``                       ''-._      Buildkite Agent " + buildkite.Version() + "\n" +
 		" |        _______________         |\n" +
 		" |      .'  ___________  '.       |     Name: " + agentName + "\n" +
 		" |        .'  _______  '.         |     PID: " + fmt.Sprintf("%d", os.Getpid()) + "\n" +
 		" |          .'  ___  '.           |\n" +
-		" |            .' | '.             |     https://buildbox.io/agent\n" +
+		" |            .' | '.             |     https://buildkite.com/agent\n" +
 		" |               |                |\n" +
 		" |               |                |\n" +
 		"  ``._           |            _.''\n" +
@@ -34,18 +34,18 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Init debugging
 	if c.Bool("debug") {
-		buildbox.LoggerInitDebug()
+		buildkite.LoggerInitDebug()
 	}
 
 	// Create the agent
 	if c.String("access-token") != "" {
-		fmt.Println("buildbox-agent: use of --access-token is now deprecated\nSee 'buildbox-agent start --help'")
+		fmt.Println("buildkite-agent: use of --access-token is now deprecated\nSee 'buildkite-agent start --help'")
 		os.Exit(1)
 	}
 
 	agentRegistrationToken := c.String("token")
 	if agentRegistrationToken == "" {
-		fmt.Println("buildbox-agent: missing token\nSee 'buildbox-agent start --help'")
+		fmt.Println("buildkite-agent: missing token\nSee 'buildkite-agent start --help'")
 		os.Exit(1)
 	}
 
@@ -54,14 +54,14 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Make sure the boostrap script exists.
 	if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
-		fmt.Printf("buildbox-agent: could not find bootstrap script %s\n", bootstrapScript)
+		fmt.Printf("buildkite-agent: could not find bootstrap script %s\n", bootstrapScript)
 		os.Exit(1)
 	}
 
-	buildbox.Logger.Debugf("Using bootstrap script: %s", bootstrapScript)
+	buildkite.Logger.Debugf("Using bootstrap script: %s", bootstrapScript)
 
 	// Create a client so we can register the agent
-	var client buildbox.Client
+	var client buildkite.Client
 	client.AuthorizationToken = agentRegistrationToken
 	client.URL = c.String("endpoint")
 
@@ -69,11 +69,11 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Should we try and grab the ec2 tags as well?
 	if c.Bool("meta-data-ec2-tags") {
-		tags, err := buildbox.EC2InstanceTags()
+		tags, err := buildkite.EC2InstanceTags()
 
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
-			buildbox.Logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+			buildkite.Logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
 				agentMetaData = append(agentMetaData, fmt.Sprintf("%s=%s", tag, value))
@@ -84,7 +84,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	// Register the agent
 	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData)
 	if err != nil {
-		buildbox.Logger.Fatal(err)
+		buildkite.Logger.Fatal(err)
 	}
 
 	// Start the agent using the token we have
@@ -97,9 +97,9 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.Start()
 }
 
-func setupAgent(agentAccessToken string, bootstrapScript string, runInPty bool, url string) *buildbox.Agent {
+func setupAgent(agentAccessToken string, bootstrapScript string, runInPty bool, url string) *buildkite.Agent {
 	// Set the agent options
-	var agent buildbox.Agent
+	var agent buildkite.Agent
 	agent.BootstrapScript = bootstrapScript
 	agent.RunInPty = runInPty
 

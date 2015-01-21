@@ -1,8 +1,8 @@
-VERSION := $(shell cat buildbox/version.go  | grep Version | head -n1 | cut -d \" -f 2)
+VERSION := $(shell cat buildkite/version.go  | grep Version | head -n1 | cut -d \" -f 2)
 
 build: deps
 	@echo "building ${VERSION}"
-	@go build -o pkg/buildbox *.go
+	@go build -o pkg/buildkite *.go
 
 dist: deps
 	@scripts/build.sh
@@ -20,7 +20,7 @@ fmt:
 	@go fmt ./...
 
 lint:
-	@golint cmd buildbox
+	@golint cmd buildkite
 
 vet:
 	@go vet ./...

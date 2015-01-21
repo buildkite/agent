@@ -1,11 +1,19 @@
-package buildbox
+// +build !windows
+
+package buildkite
+
+// Logic for this file is largely based on:
+// https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
 
 import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/kr/pty"
+	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -32,12 +40,15 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	var process Process
 	process.RunInPty = runInPty
 
-	// Find the script to run
-	absolutePath, _ := filepath.Abs(scriptPath)
-	scriptDirectory := filepath.Dir(absolutePath)
+	process.command = exec.Command(scriptPath)
 
-	process.command = exec.Command(absolutePath)
-	process.command.Dir = scriptDirectory
+	// Set the working directory of the process
+	pathToScript, _ := filepath.Abs(path.Dir(scriptPath))
+	process.command.Dir = pathToScript
+
+	// Children of the forked process will inherit its process group
+	// This is to make sure that all grandchildren dies when this Process instance is killed
+	process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff.
@@ -56,20 +67,54 @@ func (p *Process) Start() error {
 
 	Logger.Infof("Starting to run script: %s", p.command.Path)
 
-	p.command.Stdout = &buffer
-	p.command.Stderr = &buffer
+	// Toggle between running in a pty
+	if p.RunInPty {
+		pty, err := pty.Start(p.command)
+		if err != nil {
+			p.ExitStatus = "1"
+			return err
+		}
 
-	err := p.command.Start()
-	if err != nil {
-		p.ExitStatus = "1"
-		return err
+		p.Pid = p.command.Process.Pid
+		p.Running = true
+
+		waitGroup.Add(2)
+
+		go func() {
+			Logger.Debug("Starting to copy PTY to the buffer")
+
+			// Copy the pty to our buffer. This will block until it EOF's
+			// or something breaks.
+			_, err = io.Copy(&buffer, pty)
+			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
+				// We can safely ignore this error, because
+				// it's just the PTY telling us that it closed
+				// successfully.
+				// See: https://github.com/buildkite/agent/pull/34#issuecomment-46080419
+			} else if err != nil {
+				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
+			} else {
+				Logger.Debug("io.Copy finsihed")
+			}
+
+			waitGroup.Done()
+		}()
+	} else {
+		p.command.Stdout = &buffer
+		p.command.Stderr = &buffer
+
+		err := p.command.Start()
+		if err != nil {
+			p.ExitStatus = "1"
+			return err
+		}
+
+		p.Pid = p.command.Process.Pid
+		p.Running = true
+
+		// We only have to wait for 1 thing if we're not running in a PTY.
+		waitGroup.Add(1)
 	}
-
-	p.Pid = p.command.Process.Pid
-	p.Running = true
-
-	// We only have to wait for 1 thing if we're not running in a PTY.
-	waitGroup.Add(1)
 
 	Logger.Infof("Process is running with PID: %d", p.Pid)
 
@@ -107,7 +152,7 @@ func (p *Process) Start() error {
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
 	Logger.Debug("Waiting for io.Copy and incremental output to finish")
-	err = timeoutWait(&waitGroup)
+	err := timeoutWait(&waitGroup)
 	if err != nil {
 		Logger.Errorf("Timed out waiting for wait group: (%T: %v)", err, err)
 	}

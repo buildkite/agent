@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"errors"

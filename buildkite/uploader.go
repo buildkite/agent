@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 type Uploader interface {
 	// Called before anything happens.
