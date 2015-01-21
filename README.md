@@ -1,6 +1,6 @@
 # Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
 
-> **Rename notice**
+> **RENAME NOTICE**
 >
 > We’ve just changed our company name from Buildbox to Buildkite, so don’t be confused if you see the word “buildbox” in the instructions below.
 > The next version of buildbox-agent will be renamed to buildkite-agent, and we’ll be releasing upgrade instructions when it’s released. In the mean time, just use the instructions below.
