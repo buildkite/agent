@@ -18,6 +18,8 @@ echo '--- Installing ruby dependencies'
 bundle
 
 echo '--- Downloading package artifacts'
+rm -rf pkg
+mkdir -p pkg
 buildbox-agent artifact download "pkg/deb/*.deb" . --job ""
 
 # Loop over all the .deb files and publish them

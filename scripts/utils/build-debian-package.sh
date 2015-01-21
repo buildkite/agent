@@ -18,7 +18,7 @@ BUILD_VERSION=${3}
 DEB_NAME="buildkite-agent"
 DEB_MAINTAINER="<dev@buildkite.com>"
 DEB_URL="https://buildkite.com/agent"
-DEB_DESCRIPTION="The Buildbox Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
+DEB_DESCRIPTION="The Buildkite Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
 DEB_LICENCE="MIT"
 
 BUILD_PATH="pkg/deb"
@@ -34,7 +34,7 @@ else
   info "Building the buildkite-agent binary with build version $BUILD_VERSION"
 
   # Build the binary but define the build version at compile time
-  go build -ldflags "-X github.com/buildbox/agent/buildbox.buildVersion $BUILD_VERSION" -o $BUILD_PATH/$BINARY_NAME -v *.go
+  go build -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion $BUILD_VERSION" -o $BUILD_PATH/$BINARY_NAME -v *.go
 fi
 
 # Grab the version from the binary. The version spits out as: buildkite-agent
