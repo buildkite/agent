@@ -1,8 +1,13 @@
-# Buildbox Agent ![Build status](https://badge.buildbox.io/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
+# Buildkite Agent ![Build status](https://badge.buildbox.io/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
+
+> *Rename notice*
+> We’ve just changed our name from Buildbox to Buildkite, so don’t be confused if you see the word “buildbox” in the instructions below.
+> The next version of buildbox-agent will be renamed to buildkite-agent, and we’ll be releasing upgrade instructions when it’s released. In the mean time, just use the instructions below.
+> You can read more about the rename on the blog.
 
 There are three commands included in the buildbox-agent package:
 
-* buildbox-agent - the main job runner, which polls Buildbox for build steps to execute
+* buildbox-agent - the main job runner, which polls Buildkite for build steps to execute
 * buildbox-data - reads and writes to your build-wide key/value store
 * [buildbox-artifact](https://buildbox.io/docs/agent/artifacts) - uploads and downloads files to your build-wide file store
 
@@ -14,7 +19,7 @@ Simply run the following command ([see the source](https://raw.githubusercontent
 bash -c "`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh`"
 ```
 
-Copy the access token from the agent settings page on Buildbox:
+Copy the access token from the agent settings page on Buildkite:
 
 ![image](https://cloud.githubusercontent.com/assets/153/3960325/55662f70-273d-11e4-82c0-75e09d7ee6e6.png)
 
@@ -63,7 +68,7 @@ If you're running a **really long** job, and just want to kill it, send the `USR
 
 ## How it works
 
-After starting, buildbox-agent polls Buildbox over HTTPS looking for work.
+After starting, buildbox-agent polls Buildkite over HTTPS looking for work.
 
 When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildbox.io/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
 
@@ -186,4 +191,4 @@ go run cmd/artifact/artifact.go download "buildbox/*.go" . --agent-access-token=
 
 ## Copyright
 
-Copyright (c) 2014 Keith Pitt, Buildbox. See LICENSE for details.
+Copyright (c) 2014,2015 Keith Pitt, Buildkite. See LICENSE for details.
