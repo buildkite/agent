@@ -14,7 +14,7 @@ import (
 
 type Client struct {
 	// The URL of the Buildkite Agent API to communicate with. Defaults to
-	// "https://agent.buildkite.io/v2".
+	// "https://agent.buildkite.com/v2".
 	URL string
 
 	// The authorization token agent being used to make API requests
@@ -137,7 +137,7 @@ func defaultUserAgent() string {
 }
 
 func defaultAPIURL() string {
-	return "https://agent.buildkite.io/v2"
+	return "https://agent.buildkite.com/v2"
 }
 
 func checkResp(res *http.Response) error {

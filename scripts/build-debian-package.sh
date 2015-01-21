@@ -16,8 +16,8 @@ GOARCH=${2}
 BUILD_VERSION=${3}
 
 DEB_NAME="buildbox-agent"
-DEB_MAINTAINER="<dev@buildbox.io>"
-DEB_URL="https://buildbox.io/agent"
+DEB_MAINTAINER="<dev@buildkite.com>"
+DEB_URL="https://buildkite.com/agent"
 DEB_DESCRIPTION="The Buildbox Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
 DEB_LICENCE="MIT"
 

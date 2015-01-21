@@ -151,7 +151,7 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "endpoint",
-					Value:  "https://agent.buildkite.io/v2",
+					Value:  "https://agent.buildkite.com/v2",
 					Usage:  "The agent API endpoint",
 					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 				},
@@ -202,7 +202,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.io/v2",
+							Value:  "https://agent.buildkite.com/v2",
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -233,7 +233,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.io/v2",
+							Value:  "https://agent.buildkite.com/v2",
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -270,7 +270,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.io/v2",
+							Value:  "https://agent.buildkite.com/v2",
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -301,7 +301,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.io/v2",
+							Value:  "https://agent.buildkite.com/v2",
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
