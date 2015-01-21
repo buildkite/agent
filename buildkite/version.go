@@ -6,7 +6,7 @@ import "fmt"
 //
 //  go run -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion abc" *.go --version
 
-var baseVersion string = "1.0-beta.6"
+var baseVersion string = "1.0-beta.7"
 var buildVersion string = ""
 
 func Version() string {
