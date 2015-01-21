@@ -3,7 +3,7 @@ FROM golang:cross
 # We need to Ruby to run FPM
 RUN echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list
 RUN apt-get update
-RUN apt-get install -y ruby
+RUN apt-get install -y ruby-full
 RUN gem install bundler
 
 # Install Golang dependencies
