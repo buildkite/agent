@@ -166,7 +166,7 @@ else
   # Switch between the old bootstrap, and the new one.
   if [ "$VERSION" == *"1.0"* ]
   then
-    BOOTSTRAP_NAME="bootstrap.sh"
+    BOOTSTRAP_NAME="1.0-beta.1-6/bootstrap.sh"
   else
     BOOTSTRAP_NAME="0.2/bootstrap.sh"
   fi
