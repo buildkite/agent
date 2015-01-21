@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"fmt"
@@ -35,7 +35,7 @@ func (c *Client) AgentRegister(name string, priority string, metaData []string) 
 		"hostname":  registration.Hostname,
 		"meta-data": registration.MetaData,
 		"priority":  registration.Priority,
-	}).Info("Registering agent with Buildbox")
+	}).Info("Registering agent with Buildkite")
 
 	// Register and return the agent
 	err := c.Post(&registration, "/register", registration)

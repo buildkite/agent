@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"github.com/buildbox/agent/buildbox"
+	"github.com/buildkite/agent/buildkite"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"
@@ -11,24 +11,24 @@ import (
 func ArtifactDownloadCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildbox.LoggerInitDebug()
+		buildkite.LoggerInitDebug()
 	}
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Printf("buildbox-agent: missing agent access token\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing agent access token\nSee 'buildkite-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	if len(c.Args()) != 2 {
-		fmt.Printf("buildbox-agent: invalid usage\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: invalid usage\nSee 'buildkite-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	// Find the build id
 	buildId := c.String("build")
 	if buildId == "" {
-		fmt.Printf("buildbox-agent: missing build\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing build\nSee 'buildkite-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
@@ -41,14 +41,14 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 	downloadDestination, _ = filepath.Abs(downloadDestination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
-		buildbox.Logger.Fatalf("Could not find information about destination: %s", downloadDestination)
+		buildkite.Logger.Fatalf("Could not find information about destination: %s", downloadDestination)
 	}
 	if !fileInfo.IsDir() {
-		buildbox.Logger.Fatalf("%s is not a directory", downloadDestination)
+		buildkite.Logger.Fatalf("%s is not a directory", downloadDestination)
 	}
 
 	// Set the agent options
-	var agent buildbox.Agent
+	var agent buildkite.Agent
 
 	// Client specific options
 	agent.Client.AuthorizationToken = agentAccessToken
@@ -58,25 +58,25 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 	agent.Setup()
 
 	if jobQuery == "" {
-		buildbox.Logger.Infof("Searching for artifacts: \"%s\"", searchQuery)
+		buildkite.Logger.Infof("Searching for artifacts: \"%s\"", searchQuery)
 	} else {
-		buildbox.Logger.Infof("Searching for artifacts: \"%s\" within job: \"%s\"", searchQuery, jobQuery)
+		buildkite.Logger.Infof("Searching for artifacts: \"%s\" within job: \"%s\"", searchQuery, jobQuery)
 	}
 
 	// Search for artifacts (only those that have finished uploaded) to download
 	artifacts, err := agent.Client.SearchArtifacts(buildId, searchQuery, jobQuery, "finished")
 	if err != nil {
-		buildbox.Logger.Fatalf("Failed to find artifacts: %s", err)
+		buildkite.Logger.Fatalf("Failed to find artifacts: %s", err)
 	}
 
 	if len(artifacts) == 0 {
-		buildbox.Logger.Info("No artifacts found for downloading")
+		buildkite.Logger.Info("No artifacts found for downloading")
 	} else {
-		buildbox.Logger.Infof("Found %d artifacts. Starting to download to: %s", len(artifacts), downloadDestination)
+		buildkite.Logger.Infof("Found %d artifacts. Starting to download to: %s", len(artifacts), downloadDestination)
 
-		err := buildbox.DownloadArtifacts(artifacts, downloadDestination)
+		err := buildkite.DownloadArtifacts(artifacts, downloadDestination)
 		if err != nil {
-			buildbox.Logger.Fatalf("Failed to download artifacts: %s", err)
+			buildkite.Logger.Fatalf("Failed to download artifacts: %s", err)
 		}
 	}
 }

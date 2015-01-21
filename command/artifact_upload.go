@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"github.com/buildbox/agent/buildbox"
+	"github.com/buildkite/agent/buildkite"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -10,25 +10,25 @@ import (
 func ArtifactUploadCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildbox.LoggerInitDebug()
+		buildkite.LoggerInitDebug()
 	}
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Printf("buildbox-agent: missing agent access token\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing agent access token\nSee 'buildkite-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	jobId := c.String("job")
 	if jobId == "" {
-		fmt.Printf("buildbox-agent: missing job\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing job\nSee 'buildkite-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
 	// Grab the first argument and use as paths to download
 	paths := c.Args().First()
 	if paths == "" {
-		fmt.Printf("buildbox-agent: missing upload paths\nSee 'buildbox-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing upload paths\nSee 'buildkite-agent artifact download --help'\n")
 		os.Exit(1)
 	}
 
@@ -39,7 +39,7 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 	}
 
 	// Set the agent options
-	var agent buildbox.Agent
+	var agent buildkite.Agent
 
 	// Client specific options
 	agent.Client.AuthorizationToken = agentAccessToken
@@ -51,23 +51,23 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 	// Find the actual job now
 	job, err := agent.Client.JobFind(jobId)
 	if err != nil {
-		buildbox.Logger.Fatalf("Could not find job: %s", jobId)
+		buildkite.Logger.Fatalf("Could not find job: %s", jobId)
 	}
 
 	// Create artifact structs for all the files we need to upload
-	artifacts, err := buildbox.CollectArtifacts(job, paths)
+	artifacts, err := buildkite.CollectArtifacts(job, paths)
 	if err != nil {
-		buildbox.Logger.Fatalf("Failed to collect artifacts: %s", err)
+		buildkite.Logger.Fatalf("Failed to collect artifacts: %s", err)
 	}
 
 	if len(artifacts) == 0 {
-		buildbox.Logger.Infof("No files matched paths: %s", paths)
+		buildkite.Logger.Infof("No files matched paths: %s", paths)
 	} else {
-		buildbox.Logger.Infof("Found %d files that match \"%s\"", len(artifacts), paths)
+		buildkite.Logger.Infof("Found %d files that match \"%s\"", len(artifacts), paths)
 
-		err := buildbox.UploadArtifacts(agent.Client, job, artifacts, destination)
+		err := buildkite.UploadArtifacts(agent.Client, job, artifacts, destination)
 		if err != nil {
-			buildbox.Logger.Fatalf("Failed to upload artifacts: %s", err)
+			buildkite.Logger.Fatalf("Failed to upload artifacts: %s", err)
 		}
 	}
 }

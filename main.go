@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/buildbox/agent/buildbox"
+	"github.com/buildkite/agent/buildkite"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -46,8 +46,8 @@ func main() {
 	cli.SubcommandHelpTemplate = SubcommandHelpTemplate
 
 	app := cli.NewApp()
-	app.Name = "buildbox-agent"
-	app.Version = buildbox.Version()
+	app.Name = "buildkite-agent"
+	app.Version = buildkite.Version()
 	app.Commands = Commands
 
 	// Default the default action

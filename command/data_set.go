@@ -2,7 +2,7 @@ package command
 
 import (
 	"fmt"
-	"github.com/buildbox/agent/buildbox"
+	"github.com/buildkite/agent/buildkite"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -10,30 +10,30 @@ import (
 func DataSetCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildbox.LoggerInitDebug()
+		buildkite.LoggerInitDebug()
 	}
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Println("buildbox-agent: missing agent access token\nSee 'buildbox data get --help'")
+		fmt.Println("buildkite-agent: missing agent access token\nSee 'buildkite data get --help'")
 		os.Exit(1)
 	}
 
 	jobId := c.String("job")
 	if jobId == "" {
-		fmt.Printf("buildbox-agent: missing job\nSee 'buildbox data get --help'\n")
+		fmt.Printf("buildkite-agent: missing job\nSee 'buildkite data get --help'\n")
 		os.Exit(1)
 	}
 
 	// Create a client so we can register the agent
-	var client buildbox.Client
+	var client buildkite.Client
 	client.AuthorizationToken = agentAccessToken
 	client.URL = c.String("endpoint")
 
 	// Find the job
 	job, err := client.JobFind(jobId)
 	if err != nil {
-		buildbox.Logger.Fatalf("Could not find job: %s", jobId)
+		buildkite.Logger.Fatalf("Could not find job: %s", jobId)
 	}
 
 	// Grab the key and value to set
@@ -43,6 +43,6 @@ func DataSetCommandAction(c *cli.Context) {
 	// Set the data through the API
 	_, err = client.DataSet(job, key, value)
 	if err != nil {
-		buildbox.Logger.Fatalf("Failed to set data: %s", err)
+		buildkite.Logger.Fatalf("Failed to set data: %s", err)
 	}
 }

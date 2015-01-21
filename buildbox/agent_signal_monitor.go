@@ -1,6 +1,6 @@
 // +build !windows
 
-package buildbox
+package buildkite
 
 import (
 	"os"

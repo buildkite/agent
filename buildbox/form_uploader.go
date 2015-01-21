@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"bytes"
@@ -21,7 +21,7 @@ func (u *FormUploader) Setup(destination string) error {
 	return nil
 }
 
-// The FormUploader doens't specify a URL, as one is provided by Buildbox
+// The FormUploader doens't specify a URL, as one is provided by Buildkite
 // after uploading
 func (u *FormUploader) URL(artifact *Artifact) string {
 	return ""

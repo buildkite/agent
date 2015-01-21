@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/buildbox/agent/buildbox"
-	"github.com/buildbox/agent/command"
+	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/command"
 	"github.com/codegangsta/cli"
 )
 
@@ -10,7 +10,7 @@ var Commands []cli.Command
 
 var AgentDescription = `Usage:
 
-   buildbox-agent start [arguments...]
+   buildkite-agent start [arguments...]
 
 Description:
 
@@ -23,15 +23,15 @@ Description:
 
 Example:
 
-   $ buildbox-agent start --token xxx`
+   $ buildkite-agent start --token xxx`
 
 var DownloadHelpDescription = `Usage:
 
-   buildbox-agent build-artifact download [arguments...]
+   buildkite-agent build-artifact download [arguments...]
 
 Description:
 
-   Downloads artifacts from Buildbox to the local machine.
+   Downloads artifacts from Buildkite to the local machine.
 
    You need to ensure that your search query is surrounded by quotes if
    using a wild card as the built-in shell path globbing will provide files,
@@ -39,7 +39,7 @@ Description:
 
 Example:
 
-   $ buildbox-agent build-artifact download "pkg/*.tar.gz" . --build xxx
+   $ buildkite-agent build-artifact download "pkg/*.tar.gz" . --build xxx
 
    This will search across all the artifacts for the build with files that match that part.
    The first argument is the search query, and the second argument is the download destination.
@@ -47,13 +47,13 @@ Example:
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the paticular job you want to download the artifact from:
 
-   $ buildbox-agent build-artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
+   $ buildkite-agent build-artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
 
-   You can also use the job's id (provided by the environment variable $BUILDBOX_JOB_ID)`
+   You can also use the job's id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 var UploadHelpDescription = `Usage:
 
-   buildbox-agent build-artifact upload <pattern> <destination> [arguments...]
+   buildkite-agent build-artifact upload <pattern> <destination> [arguments...]
 
 Description:
 
@@ -65,17 +65,17 @@ Description:
 
 Example:
 
-   $ buildbox-agent build-artifact upload "log/**/*.log"
+   $ buildkite-agent build-artifact upload "log/**/*.log"
 
    You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
 
    $ export AWS_SECRET_ACCESS_KEY=yyy
    $ export AWS_ACCESS_KEY_ID=xxx
-   $ buildbox-agent build-artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDBOX_JOB_ID`
+   $ buildkite-agent build-artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
 
 var SetHelpDescription = `Usage:
 
-   buildbox-agent build-data set <key> <value> [arguments...]
+   buildkite-agent build-data set <key> <value> [arguments...]
 
 Description:
 
@@ -83,11 +83,11 @@ Description:
 
 Example:
 
-   $ buildbox-agent build-data set "foo" "bar"`
+   $ buildkite-agent build-data set "foo" "bar"`
 
 var GetHelpDescription = `Usage:
 
-   buildbox-agent build-data get <key> [arguments...]
+   buildkite-agent build-data get <key> [arguments...]
 
 Description:
 
@@ -95,65 +95,65 @@ Description:
 
 Example:
 
-   $ buildbox-agent build-data get "foo"`
+   $ buildkite-agent build-data get "foo"`
 
 func init() {
 	// This is default location of the bootstrap for unix based operating
 	// systems.
-	bootstrapScriptLocation := "$HOME/.buildbox/bootstrap.sh"
+	bootstrapScriptLocation := "$HOME/.buildkite/bootstrap.sh"
 
 	// Windows has a slightly modified default bootstrap location
-	if buildbox.MachineIsWindows() {
-		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildboxAgent\\bootstrap.bat"
+	if buildkite.MachineIsWindows() {
+		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\bootstrap.bat"
 	}
 
 	Commands = []cli.Command{
 		{
 			Name:        "start",
-			Usage:       "Starts a Buildbox agent",
+			Usage:       "Starts a Buildkite agent",
 			Description: AgentDescription,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:   "token",
 					Value:  "",
 					Usage:  "Your account agent token",
-					EnvVar: "BUILDBOX_AGENT_TOKEN",
+					EnvVar: "BUILDKITE_AGENT_TOKEN",
 				},
 				cli.StringFlag{
 					Name:   "access-token",
 					Value:  "",
 					Usage:  "DEPRECATED: The agents access token",
-					EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+					EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 				},
 				cli.StringFlag{
 					Name:   "name",
 					Value:  "",
 					Usage:  "The name of the agent",
-					EnvVar: "BUILDBOX_AGENT_NAME",
+					EnvVar: "BUILDKITE_AGENT_NAME",
 				},
 				cli.StringFlag{
 					Name:   "priority",
 					Value:  "",
 					Usage:  "The priority of the agent",
-					EnvVar: "BUILDBOX_AGENT_PRIORITY",
+					EnvVar: "BUILDKITE_AGENT_PRIORITY",
 				},
 				cli.StringSliceFlag{
 					Name:   "meta-data",
 					Value:  &cli.StringSlice{},
 					Usage:  "Meta data for the agent",
-					EnvVar: "BUILDBOX_AGENT_META_DATA",
+					EnvVar: "BUILDKITE_AGENT_META_DATA",
 				},
 				cli.StringFlag{
 					Name:   "bootstrap-script",
 					Value:  bootstrapScriptLocation,
 					Usage:  "Path to the bootstrap script",
-					EnvVar: "BUILDBOX_BOOTSTRAP_SCRIPT_PATH",
+					EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 				},
 				cli.StringFlag{
 					Name:   "endpoint",
-					Value:  "https://agent.buildbox.io/v2",
+					Value:  "https://agent.buildkite.io/v2",
 					Usage:  "The agent API endpoint",
-					EnvVar: "BUILDBOX_AGENT_ENDPOINT",
+					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 				},
 				cli.BoolFlag{
 					Name:  "meta-data-ec2-tags",
@@ -166,21 +166,21 @@ func init() {
 				cli.BoolFlag{
 					Name:   "debug",
 					Usage:  "Enable debug mode.",
-					EnvVar: "BUILDBOX_AGENT_DEBUG",
+					EnvVar: "BUILDKITE_AGENT_DEBUG",
 				},
 			},
 			Action: command.AgentStartCommandAction,
 		},
 		{
 			Name:  "build-artifact",
-			Usage: "Upload/download artifacts from Buildbox jobs",
+			Usage: "Upload/download artifacts from buildkite jobs",
 			Subcommands: []cli.Command{
 				{
 					Name:        "download",
-					Usage:       "Downloads artifacts from Buildbox to the local machine.",
+					Usage:       "Downloads artifacts from buildkite to the local machine.",
 					Description: DownloadHelpDescription,
 					Flags: []cli.Flag{
-						// We don't default to $BUILDBOX_JOB_ID with --job because downloading artifacts should
+						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
 						// default to all the jobs on the build, not just the current one. --job is used
 						// to scope to a paticular job if you
 						cli.StringFlag{
@@ -192,24 +192,24 @@ func init() {
 							Name:   "build",
 							Value:  "",
 							Usage:  "Which build should the artifacts be downloaded from",
-							EnvVar: "BUILDBOX_BUILD_ID",
+							EnvVar: "BUILDKITE_BUILD_ID",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
 							Value:  "",
 							Usage:  "The access token used to identify the agent",
-							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+							EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildbox.io/v2",
+							Value:  "https://agent.buildkite.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
+							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
 							Usage:  "Enable debug mode",
-							EnvVar: "BUILDBOX_AGENT_DEBUG",
+							EnvVar: "BUILDKITE_AGENT_DEBUG",
 						},
 					},
 					Action: command.ArtifactDownloadCommandAction,
@@ -223,24 +223,24 @@ func init() {
 							Name:   "job",
 							Value:  "",
 							Usage:  "Which job should the artifacts be downloaded from",
-							EnvVar: "BUILDBOX_JOB_ID",
+							EnvVar: "BUILDKITE_JOB_ID",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
 							Value:  "",
 							Usage:  "The access token used to identify the agent",
-							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+							EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildbox.io/v2",
+							Value:  "https://agent.buildkite.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
+							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
 							Usage:  "Enable debug mode",
-							EnvVar: "BUILDBOX_AGENT_DEBUG",
+							EnvVar: "BUILDKITE_AGENT_DEBUG",
 						},
 					},
 					Action: command.ArtifactUploadCommandAction,
@@ -249,7 +249,7 @@ func init() {
 		},
 		{
 			Name:  "build-data",
-			Usage: "Get/set data from Buildbox jobs",
+			Usage: "Get/set data from buildkite jobs",
 			Subcommands: []cli.Command{
 				{
 					Name:        "set",
@@ -260,24 +260,24 @@ func init() {
 							Name:   "job",
 							Value:  "",
 							Usage:  "Which job should the artifacts be downloaded from",
-							EnvVar: "BUILDBOX_JOB_ID",
+							EnvVar: "BUILDKITE_JOB_ID",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
 							Value:  "",
 							Usage:  "The access token used to identify the agent",
-							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+							EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildbox.io/v2",
+							Value:  "https://agent.buildkite.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
+							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
 							Usage:  "Enable debug mode",
-							EnvVar: "BUILDBOX_AGENT_DEBUG",
+							EnvVar: "BUILDKITE_AGENT_DEBUG",
 						},
 					},
 					Action: command.DataSetCommandAction,
@@ -291,24 +291,24 @@ func init() {
 							Name:   "job",
 							Value:  "",
 							Usage:  "Which job should the data be retrieved from",
-							EnvVar: "BUILDBOX_JOB_ID",
+							EnvVar: "BUILDKITE_JOB_ID",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
 							Value:  "",
 							Usage:  "The access token used to identify the agent",
-							EnvVar: "BUILDBOX_AGENT_ACCESS_TOKEN",
+							EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildbox.io/v2",
+							Value:  "https://agent.buildkite.io/v2",
 							Usage:  "The agent API endpoint",
-							EnvVar: "BUILDBOX_AGENT_ENDPOINT",
+							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
 							Name:   "debug",
 							Usage:  "Enable debug mode",
-							EnvVar: "BUILDBOX_AGENT_DEBUG",
+							EnvVar: "BUILDKITE_AGENT_DEBUG",
 						},
 					},
 					Action: command.DataGetCommandAction,

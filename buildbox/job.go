@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 // The Job struct uses strings for StartedAt and FinishedAt because
 // if they were actual date objects, then when this struct is
 // initialized they would have a default value of: 00:00:00.000000000.
-// This causes problems for the Buildbox Agent API because it looks for
+// This causes problems for the Buildkite Agent API because it looks for
 // the presence of values in these properties to determine if the build
 // has finished.
 type Job struct {
@@ -95,15 +95,15 @@ func (j *Job) Run(agent *Agent) error {
 	env := []string{}
 
 	// These are client specific
-	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ENDPOINT=%s", agent.Client.URL))
-	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_DEBUG=%t", InDebugMode()))
-	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
-	env = append(env, fmt.Sprintf("BUILDBOX_AGENT_VERSION=%s", Version()))
+	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", agent.Client.URL))
+	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_DEBUG=%t", InDebugMode()))
+	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
+	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_VERSION=%s", Version()))
 
-	// We know the BUILDBOX_BIN_DIR dir, because it's the path to the
+	// We know the BUILDKITE_BIN_DIR dir, because it's the path to the
 	// currently running file (there is only 1 binary)
 	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	env = append(env, fmt.Sprintf("BUILDBOX_BIN_DIR=%s", dir))
+	env = append(env, fmt.Sprintf("BUILDKITE_BIN_DIR=%s", dir))
 
 	// Add the rest environment variables from the API to the process
 	for key, value := range j.Env {
@@ -119,7 +119,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// This callback is called every second the build is running. This lets
-	// us do a lazy-person's method of streaming data to Buildbox.
+	// us do a lazy-person's method of streaming data to Buildkite.
 	callback := func(process *Process) {
 		j.Output = process.Output
 

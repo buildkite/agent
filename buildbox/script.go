@@ -1,6 +1,6 @@
 // +build !windows
 
-package buildbox
+package buildkite
 
 // Logic for this file is largely based on:
 // https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
@@ -90,7 +90,7 @@ func (p *Process) Start() error {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
 				// successfully.
-				// See: https://github.com/buildbox/agent/pull/34#issuecomment-46080419
+				// See: https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 			} else if err != nil {
 				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
 			} else {

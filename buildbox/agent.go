@@ -1,4 +1,4 @@
-package buildbox
+package buildkite
 
 import (
 	"fmt"
@@ -81,7 +81,7 @@ func (a *Agent) Start() {
 }
 
 func (a *Agent) Stop() {
-	// Disconnect from Buildbox
+	// Disconnect from Buildkite
 	Logger.Info("Disconnecting...")
 	a.Client.AgentDisconnect(a)
 
