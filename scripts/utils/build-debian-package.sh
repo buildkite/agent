@@ -15,7 +15,7 @@ GOOS=${1}
 GOARCH=${2}
 BUILD_VERSION=${3}
 
-DEB_NAME="buildbox-agent"
+DEB_NAME="buildkite-agent"
 DEB_MAINTAINER="<dev@buildkite.com>"
 DEB_URL="https://buildkite.com/agent"
 DEB_DESCRIPTION="The Buildbox Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
@@ -28,18 +28,18 @@ BINARY_NAME="$NAME-$GOOS-$GOARCH"
 mkdir -p $BUILD_PATH
 
 if [ "$BUILD_VERSION" == "" ]; then
-  info "Building the buildbox-agent binary"
+  info "Building the buildkite-agent binary"
   go build -v -o $BUILD_PATH/$BINARY_NAME *.go
 else
-  info "Building the buildbox-agent binary with build version $BUILD_VERSION"
+  info "Building the buildkite-agent binary with build version $BUILD_VERSION"
 
   # Build the binary but define the build version at compile time
   go build -ldflags "-X github.com/buildbox/agent/buildbox.buildVersion $BUILD_VERSION" -o $BUILD_PATH/$BINARY_NAME -v *.go
 fi
 
-# Grab the version from the binary. The version spits out as: buildbox-agent
-# version 1.0-beta.6 We cut out the 'buildbox-agent version ' part of it.
-DEB_VERSION=$($BUILD_PATH/$BINARY_NAME --version | sed 's/buildbox-agent version //')
+# Grab the version from the binary. The version spits out as: buildkite-agent
+# version 1.0-beta.6 We cut out the 'buildkite-agent version ' part of it.
+DEB_VERSION=$($BUILD_PATH/$BINARY_NAME --version | sed 's/buildkite-agent version //')
 
 if [ "$GOARCH" == "amd64" ]; then
   DEB_ARCH="x86_64"
@@ -71,16 +71,16 @@ bundle exec fpm -s "dir" \
   --license "$DEB_LICENCE" \
   --description "$DEB_DESCRIPTION" \
   --depends "git-core" \
-  --config-files "/etc/buildbox-agent/buildbox-agent.env" \
-  --config-files "/etc/buildbox-agent/bootstrap.sh" \
+  --config-files "/etc/buildkite-agent/buildkite-agent.env" \
+  --config-files "/etc/buildkite-agent/bootstrap.sh" \
   --before-remove "templates/apt-package/before-remove.sh" \
   --after-upgrade "templates/apt-package/after-upgrade.sh" \
-  --deb-upstart "templates/apt-package/buildbox-agent.upstart" \
+  --deb-upstart "templates/apt-package/buildkite-agent.upstart" \
   -p "$PACKAGE_PATH" \
   -v "$DEB_VERSION" \
-  "./$BUILD_PATH/$BINARY_NAME=/usr/bin/buildbox-agent" \
-  "templates/apt-package/buildbox-agent.env=/etc/buildbox-agent/buildbox-agent.env" \
-  "templates/bootstrap.sh=/etc/buildbox-agent/bootstrap.sh"
+  "./$BUILD_PATH/$BINARY_NAME=/usr/bin/buildkite-agent" \
+  "templates/apt-package/buildkite-agent.env=/etc/buildkite-agent/buildkite-agent.env" \
+  "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh"
 
 echo ""
 echo -e "Successfully created \033[33m$PACKAGE_PATH\033[0m 👏"

@@ -1,3 +1,3 @@
-if ( initctl status buildbox-agent | grep start ); then
-  service buildbox-agent stop || true
+if ( initctl status buildkite-agent | grep start ); then
+  service buildkite-agent stop || true
 fi

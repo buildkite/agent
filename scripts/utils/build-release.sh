@@ -26,7 +26,7 @@ if [ ! -d "$TEMPLATE_DIRECTORY" ]; then
 fi
 
 # The name of the binary
-BINARY_FILENAME=buildbox-agent
+BINARY_FILENAME=buildkite-agent
 
 # The base name of the agent
 FOLDER_NAME="$BINARY_FILENAME-$GOOS-$GOARCH"
