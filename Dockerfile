@@ -6,6 +6,9 @@ RUN apt-get update
 RUN apt-get install -y ruby-full
 RUN gem install bundler
 
+# When installing nokogiri, force the installation to use the system libraries.
+RUN bundle config build.nokogiri --use-system-libraries
+
 # Install Golang dependencies
 RUN go get github.com/tools/godep
 RUN go get github.com/golang/lint/golint
