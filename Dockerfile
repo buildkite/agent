@@ -6,9 +6,9 @@ RUN apt-get update
 RUN apt-get install -y ruby-full
 RUN gem install bundler
 
-# When installing nokogiri, force the installation to use the system libraries.
-RUN apt-get install -y libxml2 libxml2-dev libxslt1-dev
-RUN bundle config build.nokogiri --use-system-libraries
+# When nokogiri installs, it calls out the `patch` command to fix some libxml
+# stuffs
+RUN apt-get install -y patch
 
 # Install Golang dependencies
 RUN go get github.com/tools/godep
