@@ -1,0 +1,4 @@
+agent:
+  build: .
+  volumes:
+    - ./:/agent
