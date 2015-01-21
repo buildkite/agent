@@ -8,7 +8,7 @@ fi
 
 function publish() {
   echo "--- Publishing $1"
-  ./scripts/publish-debian-package.sh $1 $CODENAME
+  ./scripts/utils/publish-debian-package.sh $1 $CODENAME
 }
 
 # Export the function so we can use it in xargs
