@@ -73,13 +73,13 @@ bundle exec fpm -s "dir" \
   --depends "git-core" \
   --config-files "/etc/buildbox-agent/buildbox-agent.env" \
   --config-files "/etc/buildbox-agent/bootstrap.sh" \
-  --before-remove "templates/deb/before-remove.sh" \
-  --after-upgrade "templates/deb/after-upgrade.sh" \
-  --deb-upstart "templates/deb/buildbox-agent.upstart" \
+  --before-remove "templates/apt-package/before-remove.sh" \
+  --after-upgrade "templates/apt-package/after-upgrade.sh" \
+  --deb-upstart "templates/apt-package/buildbox-agent.upstart" \
   -p "$PACKAGE_PATH" \
   -v "$DEB_VERSION" \
   "./$BUILD_PATH/$BINARY_NAME=/usr/bin/buildbox-agent" \
-  "templates/deb/buildbox-agent.env=/etc/buildbox-agent/buildbox-agent.env" \
+  "templates/apt-package/buildbox-agent.env=/etc/buildbox-agent/buildbox-agent.env" \
   "templates/bootstrap.sh=/etc/buildbox-agent/bootstrap.sh"
 
 echo ""
