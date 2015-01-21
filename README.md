@@ -14,10 +14,10 @@ There are three commands included in the buildbox-agent package:
 
 ## Installing
 
-Simply run the following command ([see the source](https://raw.githubusercontent.com/buildbox/agent/master/install.sh)), which will automatically download the correct binaries for your platform (or if you'd prefer not to run this install script see the [manual installation guide](#manual-installation)):
+Simply run the following command ([see the source](https://raw.githubusercontent.com/buildkite/agent/master/install.sh)), which will automatically download the correct binaries for your platform (or if you'd prefer not to run this install script see the [manual installation guide](#manual-installation)):
 
 ```bash
-bash -c "`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh`"
+bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh`"
 ```
 
 Copy the access token from the agent settings page on Buildkite:
@@ -32,7 +32,7 @@ And then start the agent with the token:
 
 Now you're all set to run your first build!
 
-If you're using Windows, you'll want to use the [Ruby agent](https://github.com/buildbox/buildbox-agent-ruby).
+If you're using Windows, get in touch and we'll get you onto our Private Beta.
 
 ### Launching on system startup
 
@@ -50,7 +50,7 @@ Upgrading the agent is simply a matter of re-running the install script and then
 1. Run the install script again. This will download new copies of the binaries. Dont' worry, **it won't** override your bootstrap.sh file.
 
    ```bash
-   bash -c "`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh`"
+   bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh`"
    ```
 
 2. Tell the `buildbox-agent` process to restart by sending it an `USR2` signal
@@ -61,7 +61,7 @@ Upgrading the agent is simply a matter of re-running the install script and then
 
    This will tell it to finish off any current job, and then shut itself down.
 
-3. If you use a process monitor such as `upstart` or `launchd` it will startup again automatically, with no more work required. If you don't, just start the buildbox-agent like you did initially.
+3. If you use a process monitor such as `upstart` or `launchd` it will startup again automatically, with no more work required. If you don't, just start the `buildbox-agent` like you did initially.
 
 4. Check your `buildbox-agent` logs to make sure it has started up the agent again.
 
@@ -69,13 +69,13 @@ If you're running a **really long** job, and just want to kill it, send the `USR
 
 ## How it works
 
-After starting, buildbox-agent polls Buildkite over HTTPS looking for work.
+After starting, `buildbox-agent` polls Buildkite over HTTPS looking for work.
 
-When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildbox environment variables](https://buildkite.com/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
+When a new job is found it executes [bootstrap.sh](templates/bootstrap.sh) with the [standard Buildkite environment variables](https://buildkite.com/docs/guides/environment-variables) and any extra environment variables configured in your build pipeline's steps.
 
-As the build is running the output stream is continously sent to buildbox, and when the build finishes it reports the exit status and then returns to looking for new jobs to execute.
+As the build is running the output stream is continously sent to Buildkite, and when the build finishes it reports the exit status and then returns to looking for new jobs to execute.
 
-Using a `bootsrap.sh` ensures that buildbox web can't be configured to run arbitrary commands on your server, and it also allows you to configure `bootsrap.sh` to do [anything you wish](#customizing-bootstrapsh) (although it works out-of-the-box with `git`-based projects).
+Using a `bootsrap.sh` ensures that Buildkite web can't be configured to run arbitrary commands on your server, and it also allows you to configure `bootsrap.sh` to do [anything you wish](#customizing-bootstrapsh) (although it works out-of-the-box with `git`-based projects).
 
 ## Artifact uploads
 
@@ -119,7 +119,7 @@ builds get run on your servers.
 
 ## Manual Installation
 
-Here we'll show you how to manually install the buildbox agent.
+Here we'll show you how to manually install the Buildkite agent.
 
 1. Create a folder at `~/.buildbox`
 
@@ -127,10 +127,10 @@ Here we'll show you how to manually install the buildbox agent.
    mkdir -p ~/.buildbox
    ```
 
-2. Download the correct binaries for your platform. See: https://github.com/buildbox/agent/releases/tag/v0.2 for a list for binaries.
+2. Download the correct binaries for your platform. See: https://github.com/buildkite/agent/releases/tag/v0.2 for a list for binaries.
 
    ```bash
-   wget https://github.com/buildbox/agent/releases/download/v0.2/buildbox-agent-linux-amd64.tar.gz
+   wget https://github.com/buildkite/agent/releases/download/v0.2/buildbox-agent-linux-amd64.tar.gz
    ```
 
 3. Extract the tar. This should extract `buildbox-agent` and `buildbox-artifact` to the `~/.buildbox` folder.
@@ -142,7 +142,7 @@ Here we'll show you how to manually install the buildbox agent.
 4. Download our example `bootstrap.sh` and put it in `~/.buildbox`
 
    ```bash
-   wget -q https://raw.githubusercontent.com/buildbox/agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
+   wget -q https://raw.githubusercontent.com/buildkite/agent/master/templates/bootstrap.sh -O ~/.buildbox/bootstrap.sh
    ```
 
 5. (Optional) Add `~/.buildbox` to your `$PATH` so you can access the binaries eaiser.
@@ -168,9 +168,9 @@ export PATH="$HOME/Code/go/bin:$PATH"
 go get github.com/kr/godep
 
 # Checkout the code
-mkdir -p $GOPATH/src/github.com/buildbox/agent
-git clone git@github.com:buildbox/agent.git $GOPATH/src/github.com/buildbox/agent
-cd $GOPATH/src/github.com/buildbox/agent
+mkdir -p $GOPATH/src/github.com/buildkite/agent
+git clone git@github.com:buildkite/agent.git $GOPATH/src/github.com/buildkite/agent
+cd $GOPATH/src/github.com/buildkite/agent
 godep get
 go run *.go start --token xxx --debug
 ```
@@ -178,8 +178,8 @@ go run *.go start --token xxx --debug
 To test the commands locally:
 
 ```bash
-go run cmd/artifact/artifact.go upload "buildbox/*.go" --agent-access-token=[..] --job [...] --debug
-go run cmd/artifact/artifact.go download "buildbox/*.go" . --agent-access-token=[..] --job [...] --debug
+go run cmd/artifact/artifact.go upload "buildkite/*.go" --agent-access-token=[..] --job [...] --debug
+go run cmd/artifact/artifact.go download "buildkite/*.go" . --agent-access-token=[..] --job [...] --debug
 ```
 
 ## Contributing
