@@ -1,4 +1,4 @@
 agent:
   build: .
   volumes:
-    - ./:/agent
+    - ./:/go/src/github.com/buildkite/agent
