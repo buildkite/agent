@@ -5,6 +5,7 @@
 > We’ve just changed our company name from Buildbox to Buildkite, so don’t be confused if you see the word “buildbox” in the instructions below.
 > The next version of buildbox-agent will be renamed to buildkite-agent, and we’ll be releasing upgrade instructions when it’s released. In the mean time, just use the instructions below.
 > You can read more about the rename on the blog.
+> https://buildkite.com/blog/introducing-our-new-name
 
 There are three commands included in the buildbox-agent package:
 

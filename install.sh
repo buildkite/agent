@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# You can install the Buildbox Agent with the following:
+# You can install the Buildkite Agent with the following:
 #
-#   bash -c "`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh`"
+#   bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh`"
 #
-# For more information, see: https://github.com/buildbox/agent
+# For more information, see: https://github.com/buildkite/agent
 
-COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildbox/agent/master/install.sh\`\""
+COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh\`\""
 
 LATEST_BETA="1.0-beta.6"
 
@@ -34,35 +34,43 @@ fi
 
 set -e
 
-function buildbox-download {
+function buildkite-download {
+  BUILDKITE_DOWNLOAD_TMP_FILE="/tmp/buildkite-download-$$.txt"
+
   if command -v wget >/dev/null
   then
-    if [ "$DEBUG" = "true" ]
-    then
-      wget $1 -O $2
-    else
-      wget -q $1 -O $2
-    fi
+    wget $1 -O $2 2> $BUILDKITE_DOWNLOAD_TMP_FILE || BUILDKITE_DOWNLOAD_EXIT_STATUS=$?
   else
-    if [ "$DEBUG" = "true" ]
-    then
-      curl -L -o $2 $1
-    else
-      curl -L -s -o $2 $1
-    fi
+    curl -L -o $2 $1 2> $BUILDKITE_DOWNLOAD_TMP_FILE || BUILDKITE_DOWNLOAD_EXIT_STATUS=$?
+  fi
+
+  if [[ $BUILDKITE_DOWNLOAD_EXIT_STATUS -ne 0 ]]; then
+    echo -e "\033[31mFailed to download file: $1\033[0m\n"
+
+    cat $BUILDKITE_DOWNLOAD_TMP_FILE
+    exit $BUILDKITE_DOWNLOAD_EXIT_STATUS
   fi
 }
 
 echo -e "\033[33m
-  _           _ _     _ _                                        _
- | |         (_) |   | | |                                      | |
- | |__  _   _ _| | __| | |__   _____  __   __ _  __ _  ___ _ __ | |_
- | '_ \| | | | | |/ _\` | '_ \ / _ \ \/ /  / _\` |/ _\` |/ _ \ '_ \| __|
- | |_) | |_| | | | (_| | |_) | (_) >  <  | (_| | (_| |  __/ | | | |_
- |_.__/ \__,_|_|_|\__,_|_.__/ \___/_/\_\  \__,_|\__, |\___|_| |_|\__|
-                                                 __/ |
-                                                |___/\033[0m
--- https://buildbox.io
+
+  _           _ _     _ _    _ _                                _
+ | |         (_) |   | | |  (_) |                              | |
+ | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
+ | '_ \| | | | | |/ _\` | |/ / | __/ _ \  / _\` |/ _\` |/ _ \ '_ \| __|
+ | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
+ |_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
+                                                __/ |
+                                               |___/\033[0m
+
+\033[1;32m> RENAME NOTICE
+>
+> We’ve just changed our company name from Buildbox to Buildkite, so don’t be
+> confused if you see the word “buildbox” in the instructions below. The next
+> version of buildbox-agent will be renamed to buildkite-agent, and we’ll be
+> releasing upgrade instructions when it’s released. In the mean time, just use
+> the instructions below. You can read more about the rename on the blog.
+> https://buildkite.com/blog/introducing-our-new-name\033[0m
 
 Installing Version: \033[35mv$VERSION\033[0m"
 
@@ -99,7 +107,7 @@ echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
 # Download and unzip the file to the destination
 DOWNLOAD="buildbox-agent-$PLATFORM-$ARCH.tar.gz"
-URL="https://github.com/buildbox/agent/releases/download/v$VERSION/$DOWNLOAD"
+URL="https://github.com/buildkite/agent/releases/download/v$VERSION/$DOWNLOAD"
 echo -e "\nDownloading $URL"
 
 # Remove the download if it already exists
@@ -110,7 +118,7 @@ if [[ -e pkg/$DOWNLOAD ]]
 then
   cp pkg/$DOWNLOAD $DESTINATION/$DOWNLOAD
 else
-  buildbox-download "$URL" "$DESTINATION/$DOWNLOAD"
+  buildkite-download "$URL" "$DESTINATION/$DOWNLOAD"
 fi
 
 # Extract the download to the destination folder
@@ -164,19 +172,18 @@ then
   echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
 else
   # Switch between the old bootstrap, and the new one.
-  if [ "$VERSION" == *"1.0"* ]
-  then
+  if [[ "$VERSION" == *"1.0"* ]]; then
     BOOTSTRAP_NAME="1.0-beta.1-6/bootstrap.sh"
   else
     BOOTSTRAP_NAME="0.2/bootstrap.sh"
   fi
 
-  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildbox/agent/master/templates/$BOOTSTRAP_NAME
+  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildkite/agent/master/templates/$BOOTSTRAP_NAME
   BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
 
   echo -e "Downloading $BOOTSTRAP_URL"
 
-  buildbox-download "$BOOTSTRAP_URL" "$BOOTSTRAP_DESTINATION"
+  buildkite-download "$BOOTSTRAP_URL" "$BOOTSTRAP_DESTINATION"
 
   chmod +x $DESTINATION/bootstrap.sh
 fi
@@ -196,7 +203,7 @@ fi
 
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
-You can now run the Buildbox agent like so:
+You can now run the Buildkite agent like so:
 
   $DESTINATION/$START_COMMAND
 
@@ -212,11 +219,11 @@ the source code and running the build script.
 
 The source code of the agent is available here:
 
-  https://github.com/buildbox/agent
+  https://github.com/buildkite/agent
 
 If you have any questions or need a hand getting things setup,
-please email us at: hello@buildbox.io
+please email us at: hello@buildkite.com
 
 Happy Building!
 
-<3 Buildbox"
+<3 Buildkite"
