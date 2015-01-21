@@ -2,3 +2,5 @@ agent:
   build: .
   volumes:
     - ./:/go/src/github.com/buildkite/agent
+  environment:
+    - CODENAME
