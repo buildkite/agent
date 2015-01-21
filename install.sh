@@ -168,7 +168,7 @@ else
   then
     BOOTSTRAP_NAME="bootstrap.sh"
   else
-    BOOTSTRAP_NAME="bootstrap-0.2.sh"
+    BOOTSTRAP_NAME="0.2/bootstrap.sh"
   fi
 
   BOOTSTRAP_URL=https://raw.githubusercontent.com/buildbox/agent/master/templates/$BOOTSTRAP_NAME
