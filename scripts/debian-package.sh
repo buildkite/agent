@@ -22,7 +22,8 @@ function build() {
 }
 
 function publish() {
-  echo "--- Shipping $1"
+  echo "+++ Shipping $1"
+
   ./scripts/utils/publish-debian-package.sh $1 $CODENAME
 }
 

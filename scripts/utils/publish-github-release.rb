@@ -1,6 +1,15 @@
 #!/usr/bin/env ruby
 
-raise "Missing GITHUB_RELEASE_ACCESS_TOKEN" unless ENV['GITHUB_RELEASE_ACCESS_TOKEN']
+# Make sure the arguments passed are correct
+if ARGV.length < 2
+  puts "Usage: publish-github-release [version] [assets]"
+  exit 1
+end
+
+unless ENV['GITHUB_RELEASE_ACCESS_TOKEN']
+  puts "Missing GITHUB_RELEASE_ACCESS_TOKEN"
+  exit 1
+end
 
 # Find out the current version of the agent
 root_dir = File.expand_path(File.join(File.expand_path(File.dirname(__FILE__)), '..'))

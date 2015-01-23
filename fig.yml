@@ -3,5 +3,4 @@ agent:
   volumes:
     - ./:/go/src/github.com/buildkite/agent
   environment:
-    - CODENAME
-    - BUILDKITE_BUILD_NUMBER
+    - BUILDBOX_AGENT_ACCESS_TOKEN
