@@ -24,11 +24,9 @@ ls pkg/* | xargs -I {} bash -c "build {}"
 
 echo '--- Getting agent version from build meta data'
 
-FULL_AGENT_VERSION=$(buildbox-agent build-data get "agent-version")
+AGENT_VERSION=$(buildbox-agent build-data get "agent-version" | sed 's/buildkite-agent version //')
 
-SHORT_AGENT_VERSION=$($FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
-
-echo "--- 🚀 $SHORT_AGENT_VERSION"
+echo "--- 🚀 $AGENT_VERSION"
 
 if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   export GITHUB_RELEASE_PRERELEASE="true"
@@ -36,4 +34,4 @@ fi
 
 export GITHUB_RELEASE_REPOSITORY="buildbox/agent"
 
-github-release $SHORT_AGENT_VERSION pkg/*.tar.gz
+github-release "v$AGENT_VERSION" pkg/*.tar.gz
