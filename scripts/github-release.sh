@@ -16,7 +16,10 @@ buildbox-agent artifact download "pkg/*" .
 # Loop over all the .deb files and build them
 ls pkg/* | xargs -I {} bash -c "build {}"
 
-echo '--- 🚀'
+echo '--- Getting agent version from build meta data'
+AGENT_VERSION=$(buildbox-agent build-data get "agent-version")
+
+echo "--- 🚀 $AGENT_VERSION"
 # ruby scripts/utils/publish-github-release.rb
 
 #!/usr/bin/env ruby
