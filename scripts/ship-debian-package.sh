@@ -29,8 +29,12 @@ export -f publish
 echo '--- Installing dependencies'
 bundle --path vendor/bundle
 
-ship-packages "linux" "amd64"
-ship-packages "linux" "386"
+# Make sure we have a clean deb folder
+rm -rf deb
+
+# Build the packages into deb/
+build "linux" "amd64"
+build "linux" "386"
 
 # Loop over all the .deb files and publish them
 ls pkg/deb/*.deb | xargs -I {} bash -c "publish {}"
