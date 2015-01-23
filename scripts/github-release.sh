@@ -10,7 +10,7 @@ echo '--- Downloading binaries'
 
 rm -rf pkg
 mkdir -p pkg
-# buildbox-agent build-artifact download "pkg/*" .
+buildbox-agent build-artifact download "pkg/*" .
 
 function build() {
   echo "--- Building release for: $1"
@@ -29,11 +29,10 @@ ls pkg/* | xargs -I {} bash -c "build {}"
 
 echo '--- Getting agent version from build meta data'
 
-AGENT_VERSION=$(buildbox-agent build-data get "agent-version" | sed 's/buildkite-agent version //')
+FULL_AGENT_VERSION=$(buildbox-agent build-data get "agent-version")
+AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
 
-echo "Version is $AGENT_VERSION"
-
-echo "--- 🚀 $AGENT_VERSION"
+echo "Version is $FULL_AGENT_VERSION"
 
 export GITHUB_RELEASE_REPOSITORY="buildkite/agent"
 
@@ -45,9 +44,13 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   #
   # We don't want the build numbers for GitHub releases, so this command will
   # drop them.
-  AGENT_VERSION=$($AGENT_VERSION | sed -E 's/\.[0-9]+$//')
+  AGENT_VERSION=$(echo $AGENT_VERSION | sed -E 's/\.[0-9]+$//')
+
+  echo "--- 🚀 $AGENT_VERSION (prerelease)"
 
   github-release "v$AGENT_VERSION" releases/* --prerelease
 else
+  echo "--- 🚀 $AGENT_VERSION"
+
   github-release "v$AGENT_VERSION" releases/*
 fi
