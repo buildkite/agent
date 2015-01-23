@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-if [[ ${#} -ne 2 ]]
+if [[ ${#} -ne 1 ]]
 then
-  echo "Usage: ${0} [platform] [arch]" >&2
+  echo "Usage: ${0} [file]" >&2
   exit 1
 fi
 
@@ -11,71 +11,56 @@ function info {
   echo -e "\033[35m$1\033[0m"
 }
 
-GOOS=${1}
-GOARCH=${2}
+BINARY_PATH=${1}
 
 BASE_DIRECTORY=`pwd`
-RELEASE_DIRECTORY=$BASE_DIRECTORY/pkg/releases
 TEMPLATE_DIRECTORY=$BASE_DIRECTORY/templates
+TMP_DIRECTORY=$BASE_DIRECTORY/tmp
+RELEASE_DIRECTORY=$BASE_DIRECTORY/releases
 
 # Make sure the template directory is there
 if [ ! -d "$TEMPLATE_DIRECTORY" ]; then
-  echo "Missing templates directory. This script should be run from inside the agent folder like so:"
-  echo "cd agent && ./scripts/build.sh"
+  echo "Missing templates directory."
   exit 1
 fi
 
-# The name of the binary
-BINARY_FILENAME=buildkite-agent
+# Find the base name of the binary without the extension (if there is one)
+RELEASE_NAME=$(basename "$BINARY_PATH")
+RELEASE_NAME="${RELEASE_NAME%.*}"
 
-# The base name of the agent
-FOLDER_NAME="$BINARY_FILENAME-$GOOS-$GOARCH"
+# Where we will construct the release
+TMP_RELEASE_DIRECTORY=$TMP_DIRECTORY/$RELEASE_NAME
 
-# The name of the folder we'll build the binary in
-BUILD_DIRECTORY="$RELEASE_DIRECTORY/$FOLDER_NAME"
-
-# Add .exe for Windows builds
-if [ "$GOOS" == "windows" ]; then
-  BINARY_FILENAME="$BINARY_FILENAME.exe"
-  RELEASE_FILE_NAME="$FOLDER_NAME.zip"
-else
-  RELEASE_FILE_NAME="$FOLDER_NAME.tar.gz"
-fi
-
-# Remove the release if it already exists
-if [ -d "$RELEASE_DIRECTORY/$RELEASE_FILE_NAME" ]; then
-  rm -rf "$RELEASE_DIRECTORY/$RELEASE_FILE_NAME"
-fi
-
-info "Building the binary"
-
-# Build the binary
-go build -v -o $BUILD_DIRECTORY/$BINARY_FILENAME *.go
-
-# Move into the built directory
-cd $RELEASE_DIRECTORY/$FOLDER_NAME
+# Ensure the tmp release directory exists
+rm -rf $TMP_RELEASE_DIRECTORY
+mkdir -p $TMP_RELEASE_DIRECTORY
 
 # We need to use .zip for windows builds
-if [ "$GOOS" == "windows" ]; then
+if [[ "$BINARY_PATH" == *"windows"* ]]; then
+  RELEASE_FILE_NAME="$RELEASE_NAME.zip"
+
+  info "Copying binary"
+  cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildbox-agent.exe
+
+  info "Copying templates"
+  cp $TEMPLATE_DIRECTORY/bootstrap.bat $TMP_RELEASE_DIRECTORY
+  cp $TEMPLATE_DIRECTORY/start.bat $TMP_RELEASE_DIRECTORY
+
   info "Zipping up the files"
-
-  # Add in the additional Windows files
-  cp $TEMPLATE_DIRECTORY/bootstrap.bat .
-  cp $TEMPLATE_DIRECTORY/start.bat .
-
-  # Zip up the contents of the directory
+  cd $TMP_RELEASE_DIRECTORY
   zip -X -r "../$RELEASE_FILE_NAME" *
 else
-  info "Tarring up the files"
+  RELEASE_FILE_NAME="$RELEASE_NAME.tar.gz"
 
-  # Use tar on non-windows platforms
-  tar cfvz ../$RELEASE_FILE_NAME $BINARY_FILENAME
+  info "Copying binary"
+  cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildbox-agent
+
+  info "Tarring up the files"
+  cd $TMP_RELEASE_DIRECTORY
+  tar cfvz ../$RELEASE_FILE_NAME .
 fi
 
-# Now back to the RELEASE_DIRECTORY
-cd ../../
+mkdir -p $RELEASE_DIRECTORY
+mv $TMP_DIRECTORY/$RELEASE_FILE_NAME $RELEASE_DIRECTORY/
 
-# Remove the built folder
-rm -rf pkg/$FOLDER_NAME
-
-echo -e "👏 Created release \033[33mpkg/releases/$RELEASE_FILE_NAME\033[0m"
+echo -e "👏 Created release \033[33m$RELEASE_DIRECTORY/$RELEASE_FILE_NAME\033[0m"

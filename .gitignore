@@ -1,5 +1,6 @@
 tmp
 pkg
+releases
 deb
 .vagrant
 .bundle

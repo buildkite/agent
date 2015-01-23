@@ -19,6 +19,9 @@ function build() {
 # Export the function so we can use it in xargs
 export -f build
 
+# Make sure the releases directory is empty
+rm -rf releases
+
 # Loop over all the .deb files and build them
 ls pkg/* | xargs -I {} bash -c "build {}"
 
@@ -32,6 +35,6 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   export GITHUB_RELEASE_PRERELEASE="true"
 fi
 
-export GITHUB_RELEASE_REPOSITORY="buildbox/agent"
+export GITHUB_RELEASE_REPOSITORY="buildkite/agent"
 
-github-release "v$AGENT_VERSION" pkg/*.tar.gz
+github-release "v$AGENT_VERSION" releases/*
