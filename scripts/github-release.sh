@@ -14,6 +14,8 @@ buildbox-agent build-artifact download "pkg/*" .
 
 function build() {
   echo "--- Building release for: $1"
+
+  ./scripts/utils/build-github-release.sh $1
 }
 
 # Export the function so we can use it in xargs
