@@ -1,20 +1,20 @@
 #!/bin/bash
 set -e
 
-echo '--- Building Github packages'
+function publish() {
+  echo "--- Building GitHub release for: $1"
+}
 
-./scripts/build-release.sh "windows" "386"
-./scripts/build-release.sh "windows" "amd64"
-./scripts/build-release.sh "linux" "amd64"
-./scripts/build-release.sh "linux" "386"
-./scripts/build-release.sh "linux" "arm"
-./scripts/build-release.sh "darwin" "386"
-./scripts/build-release.sh "darwin" "amd64"
+# Export the function so we can use it in xargs
+export -f build
 
 echo '--- Downloading binaries'
 rm -rf pkg
 mkdir -p pkg
-buildbox-agent artifact download "pkg/*" pkg
+buildbox-agent artifact download "pkg/*" .
 
-echo '--- release'
-ruby scripts/publish_release.rb
+# Loop over all the .deb files and build them
+ls pkg/* | xargs -I {} bash -c "build {}"
+
+echo '--- 🚀'
+# ruby scripts/publish_release.rb
