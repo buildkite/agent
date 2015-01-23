@@ -24,6 +24,9 @@ function build-package {
 rm -rf pkg
 
 echo '--- Installing dependencies'
+ls -lsa
+ls vendor -lsa
+ls vendor/bundle -lsa
 bundle --path vendor/bundle
 godep restore
 
