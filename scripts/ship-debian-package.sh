@@ -12,7 +12,7 @@ function build() {
   BINARY_FILENAME="buildkite-binary-$1-$2"
 
   # Download the built binary artifact
-  buildbox-agent build-artifact download $BINARY_FILENAME .
+  buildbox-agent artifact download $BINARY_FILENAME .
 
   # Build the debian package using the architectre and binary
   ./scripts/utils/build-debian-package.sh $2 $BINARY_FILENAME
