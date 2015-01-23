@@ -1,23 +1,24 @@
 #!/bin/bash
 set -e
 
-echo '--- go version'
-go version
+if [[ "$BUILDKITE_BUILD_NUMBER" == "" ]]; then
+  echo "Error: Missing \$BUILDKITE_BUILD_NUMBER"
+  exit 1
+fi
 
-# setup the current repo as a package - super hax.
-mkdir -p gopath/src/github.com/buildbox
-ln -s `pwd` gopath/src/github.com/buildbox/agent
-export GOPATH="$GOPATH:`pwd`/gopath"
+function build-binary {
+  echo "--- Building binary for $1/$2"
 
-echo '--- install dependencies'
-go get github.com/tools/godep
+  ./scripts/utils/build-binary.sh $1 $2 $BUILDKITE_BUILD_NUMBER
+}
+
+echo '--- Installing dependencies'
 godep restore
 
-echo '--- building'
-./scripts/build-release.sh "windows" "386"
-./scripts/build-release.sh "windows" "amd64"
-./scripts/build-release.sh "linux" "amd64"
-./scripts/build-release.sh "linux" "386"
-./scripts/build-release.sh "linux" "arm"
-./scripts/build-release.sh "darwin" "386"
-./scripts/build-release.sh "darwin" "amd64"
+build-binary "windows" "386"
+build-binary "windows" "amd64"
+build-binary "linux" "amd64"
+build-binary "linux" "386"
+build-binary "linux" "arm"
+build-binary "darwin" "386"
+build-binary "darwin" "amd64"
