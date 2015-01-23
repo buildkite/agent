@@ -4,4 +4,5 @@ agent:
     - ./:/go/src/github.com/buildkite/agent
   environment:
     - BUILDBOX_AGENT_ACCESS_TOKEN
+    - BUILDBOX_JOB_ID
     - BUILDKITE_BUILD_NUMBER
