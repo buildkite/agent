@@ -15,6 +15,9 @@ function build-binary {
 echo '--- Installing dependencies'
 godep restore
 
+# Clear out the pkg directory
+rm -rf pkg
+
 build-binary "windows" "386"
 build-binary "windows" "amd64"
 build-binary "linux" "amd64"
