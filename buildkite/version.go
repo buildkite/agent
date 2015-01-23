@@ -1,17 +1,27 @@
 package buildkite
 
 import "fmt"
+import "strings"
 
-// buildVersion can be overriden at compile time by using:
+// You can overriden buildVersion at compile time by using:
 //
 //  go run -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion abc" *.go --version
+//
+// On CI, the binaries are always build with the buildVersion variable set.
 
 var baseVersion string = "1.0-beta.7"
 var buildVersion string = ""
 
 func Version() string {
-	if buildVersion != "" {
-		return fmt.Sprintf("%s.%s", baseVersion, buildVersion)
+	// Only output the build version if a pre-release
+	if strings.Contains(baseVersion, "beta") || strings.Contains(baseVersion, "alpha") {
+		// Use a default buildVersion if one doesn't exist
+		actualBuildVersion := buildVersion
+		if actualBuildVersion == "" {
+			actualBuildVersion = "x"
+		}
+
+		return fmt.Sprintf("%s.%s", baseVersion, actualBuildVersion)
 	} else {
 		return baseVersion
 	}
