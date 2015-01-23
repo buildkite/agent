@@ -31,7 +31,7 @@ function publish() {
 export -f publish
 
 echo '--- Installing dependencies'
-bundle --path vendor/bundle
+bundle
 
 # Make sure we have a clean deb folder
 rm -rf deb
