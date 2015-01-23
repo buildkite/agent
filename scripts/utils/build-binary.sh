@@ -24,4 +24,6 @@ echo "BUILD_VERSION=$BUILD_VERSION"
 mkdir -p $BUILD_PATH
 go build -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion $BUILD_VERSION" -o $BUILD_PATH/$BINARY_NAME *.go
 
+chmod +x $BUILD_PATH/$BINARY_NAME
+
 echo -e "\nDone: \033[33m$BUILD_PATH/$BINARY_NAME\033[0m 💪"

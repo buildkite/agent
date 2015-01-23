@@ -2,6 +2,7 @@
 set -e
 
 echo '--- Building Github packages'
+
 ./scripts/build-release.sh "windows" "386"
 ./scripts/build-release.sh "windows" "amd64"
 ./scripts/build-release.sh "linux" "amd64"
