@@ -2,8 +2,7 @@ FROM golang:cross
 
 # Install buildbox-agent
 RUN BETA=true bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh`"
-RUN ln -s /.root/bin/buildbox-agent /usr/local/bin/buildbox-agent
-RUN buildbox-agent --help
+RUN ln -s /.root/buildbox/bin/buildbox-agent /usr/local/bin/buildbox-agent
 
 # We need to Ruby to run FPM
 RUN echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list
