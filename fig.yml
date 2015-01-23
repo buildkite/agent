@@ -4,3 +4,4 @@ agent:
     - ./:/go/src/github.com/buildkite/agent
   environment:
     - CODENAME
+    - BUILDKITE_BUILD_NUMBER
