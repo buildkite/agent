@@ -28,4 +28,5 @@ build-binary "darwin" "amd64"
 
 # Grab the version of the binary while we're here (we need it if we deploy this
 # commit to GitHub)
+echo '--- Saving agent version to build meta data'
 buildbox-agent build-data set "agent-version" "`pkg/buildkite-agent-linux-386 --version`"
