@@ -28,7 +28,6 @@ export -f publish
 
 echo '--- Installing dependencies'
 bundle --path vendor/bundle
-godep restore
 
 ship-packages "linux" "amd64"
 ship-packages "linux" "386"
