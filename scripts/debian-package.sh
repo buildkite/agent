@@ -14,6 +14,9 @@ function build() {
   # Download the built binary artifact
   buildbox-agent artifact download $BINARY_FILENAME . --job ""
 
+  # Make sure it's got execute permissions so we can extract the version out of it
+  chmod +x $BINARY_FILENAME
+
   # Build the debian package using the architectre and binary
   ./scripts/utils/build-debian-package.sh $2 $BINARY_FILENAME
 }
