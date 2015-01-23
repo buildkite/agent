@@ -10,12 +10,13 @@ fi
 GOOS=${1}
 GOARCH=${2}
 BUILD_VERSION=${3}
-NAME="buildkite-binary"
+NAME="buildkite-agent"
 
-BUILD_PATH="pkg/deb"
+BUILD_PATH="pkg"
 BINARY_NAME="$NAME-$GOOS-$GOARCH"
 
-echo "Building $NAME with:"
+echo "Building $NAME with:\n"
+
 echo "GOOS=$GOOS"
 echo "GOARCH=$GOARCH"
 echo "BUILD_VERSION=$BUILD_VERSION"
