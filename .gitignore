@@ -1,4 +1,6 @@
 tmp
 pkg
+deb
 .vagrant
+.bundle
 vendor/bundle

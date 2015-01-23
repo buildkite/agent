@@ -15,7 +15,8 @@ NAME="buildkite-binary"
 BUILD_PATH="pkg/deb"
 BINARY_NAME="$NAME-$GOOS-$GOARCH"
 
-# Ensure the deb path exists
+# Ensure the deb path is fresh and exists
+rm -rf $BUILD_PATH
 mkdir -p $BUILD_PATH
 
 echo "Building $NAME with:"

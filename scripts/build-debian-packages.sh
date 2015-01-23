@@ -1,19 +1,17 @@
 #!/bin/bash
 set -e
 
-if [[ "$CODENAME" == "" ]]; then
-  echo "Error: Missing \$CODENAME (\`stable\` or \`unstable\`)"
-  exit 1
-fi
-
 function build-package {
-  echo "--- Building debian package $1/$2 ($CODENAME/$BUILDKITE_BUILD_NUMBER)"
+  echo "--- Building debian package $1/$2"
 
-  ./scripts/utils/build-debian-package.sh $1 $2 $BUILDKITE_BUILD_NUMBER
+  BINARY_FILENAME="buildkite-binary-$1-$2"
+
+  # Download the built binary artifact
+  buildbox-agent build-artifact download $BINARY_FILENAME .
+
+  # Build the debian package using the architectre and binary
+  ./scripts/utils/build-debian-package.sh $2 $BINARY_FILENAME
 }
-
-# Clear out any existing pkg dir
-rm -rf pkg
 
 echo '--- Installing dependencies'
 bundle --path vendor/bundle
