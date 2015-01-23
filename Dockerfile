@@ -20,7 +20,7 @@ RUN go get github.com/golang/lint/golint
 RUN go get github.com/buildkite/github-release
 
 # Install zip which is required for releasing to GitHub
-RUN apt-get install zip
+RUN apt-get install -y zip
 
 # The golang Docker sets the $GOPATH to be /go
 # https://github.com/docker-library/golang/blob/c1baf037d71331eb0b8d4c70cff4c29cf124c5e0/1.4/Dockerfile
