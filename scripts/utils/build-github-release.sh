@@ -40,7 +40,7 @@ if [[ "$BINARY_PATH" == *"windows"* ]]; then
   RELEASE_FILE_NAME="$RELEASE_NAME.zip"
 
   info "Copying binary"
-  cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildbox-agent.exe
+  cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent.exe
 
   info "Copying templates"
   cp $TEMPLATE_DIRECTORY/bootstrap.bat $TMP_RELEASE_DIRECTORY
@@ -53,7 +53,7 @@ else
   RELEASE_FILE_NAME="$RELEASE_NAME.tar.gz"
 
   info "Copying binary"
-  cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildbox-agent
+  cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent
 
   info "Tarring up the files"
   cd $TMP_RELEASE_DIRECTORY
