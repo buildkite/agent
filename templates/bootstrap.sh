@@ -141,6 +141,8 @@ if [[ "$BUILDKITE_DOCKER" != "" ]]; then
 
   trap docker-cleanup EXIT
 
+  echo "--- Building Docker image $DOCKER_IMAGE"
+
   # Build the Docker image, namespaced to the job
   buildkite-run "docker build -t $DOCKER_IMAGE ."
 
@@ -171,6 +173,8 @@ elif [[ "$BUILDKITE_FIG_CONTAINER" != "" ]]; then
   }
 
   trap fig-cleanup EXIT
+
+  echo "--- Building Fig Docker images"
 
   # Build the Docker images using Fig, namespaced to the job
   buildkite-run "fig -p $FIG_PROJ_NAME build"
