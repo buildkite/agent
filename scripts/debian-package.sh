@@ -17,7 +17,7 @@ function build() {
   # Make sure it's got execute permissions so we can extract the version out of it
   chmod +x $BINARY_FILENAME
 
-  # Build the debian package using the architectre and binary
+  # Build the debian package using the architectre and binary, they are saved to deb/
   ./scripts/utils/build-debian-package.sh $2 $BINARY_FILENAME
 }
 
@@ -41,4 +41,4 @@ build "linux" "amd64"
 build "linux" "386"
 
 # Loop over all the .deb files and publish them
-ls pkg/deb/*.deb | xargs -I {} bash -c "publish {}"
+ls deb/*.deb | xargs -I {} bash -c "publish {}"
