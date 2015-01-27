@@ -102,7 +102,9 @@ elif [[ "$BUILDKITE_TAG" == "" ]]; then
   buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
 fi
 
+# Checkout the right commit and ensure the subomodules are all there
 buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
+buildkite-run "git submodule update --init"
 
 # Grab author and commit information and send it back to Buildkite
 buildkite-agent build-data set "buildkite:git:commit" "`git show "$BUILDKITE_COMMIT" -s --format=fuller --no-color`"
