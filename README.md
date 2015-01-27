@@ -193,4 +193,4 @@ go run cmd/artifact/artifact.go download "buildkite/*.go" . --agent-access-token
 
 ## Copyright
 
-Copyright (c) 2014,2015 Keith Pitt, Buildkite. See LICENSE for details.
+Copyright (c) 2014-2015 Keith Pitt, Buildkite Pty Ltd. See LICENSE for details.
