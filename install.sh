@@ -6,32 +6,6 @@
 #
 # For more information, see: https://github.com/buildkite/agent
 
-COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh\`\""
-
-LATEST_BETA="1.0-beta.6"
-
-if [ "$VERSION" = "1.0-beta.1" ]
-then
-  echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.6"
-  exit 1
-fi
-
-if [ "$VERSION" = "1.0-beta.2" ]
-then
-  echo "NOTICE: Installing 1.0-beta.2 is no longer supported...sorry. Please install 1.0-beta.6"
-  exit 1
-fi
-
-if [ "$BETA" = "true" ]
-then
-  VERSION=$LATEST_BETA
-fi
-
-# Allow custom setting of the version
-if [ -z "$VERSION" ]; then
-  VERSION="0.2"
-fi
-
 set -e
 
 function buildkite-download {
@@ -51,6 +25,42 @@ function buildkite-download {
     exit $BUILDKITE_DOWNLOAD_EXIT_STATUS
   fi
 }
+
+COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh\`\""
+
+LATEST_BETA="1.0-beta.6"
+
+if [ "$VERSION" = "1.0-beta.1" ]
+then
+  echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.6"
+  exit 1
+fi
+
+if [ "$VERSION" = "1.0-beta.2" ]
+then
+  echo "NOTICE: Installing 1.0-beta.2 is no longer supported...sorry. Please install 1.0-beta.6"
+  exit 1
+fi
+
+if [ "$BETA" = "true" ]
+then
+  BETA_URL="https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh"
+  BETA_INSTALLER="/tmp/buildkite-install-beta-$$.sh"
+
+  echo -e "Downloading and running the beta installer from:\n$BETA_URL"
+
+  buildkite-download $BETA_URL $BETA_INSTALLER
+
+  chmod +x $BETA_INSTALLER
+  . $BETA_INSTALLER
+
+  exit 0
+fi
+
+# Allow custom setting of the version
+if [ -z "$VERSION" ]; then
+  VERSION="0.2"
+fi
 
 echo -e "\033[33m
 
