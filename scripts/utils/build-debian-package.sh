@@ -20,6 +20,7 @@ DEB_MAINTAINER="<dev@buildkite.com>"
 DEB_URL="https://buildkite.com/agent"
 DEB_DESCRIPTION="The Buildkite Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
 DEB_LICENCE="MIT"
+DEB_VENDOR="Buildkite"
 
 # Grab the version from the binary. The version spits out as: buildkite-agent
 # version 1.0-beta.6 We cut out the 'buildkite-agent version ' part of it.
@@ -49,6 +50,7 @@ bundle exec fpm -s "dir" \
   --architecture "$DEB_ARCH" \
   --license "$DEB_LICENCE" \
   --description "$DEB_DESCRIPTION" \
+  --vendor "$DEB_VENDOR" \
   --depends "git-core" \
   --config-files "/etc/buildkite-agent/buildkite-agent.env" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
