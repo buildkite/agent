@@ -55,6 +55,7 @@ GPG_PASSPHRASE=`openssl aes-256-cbc -k "$GPG_PASSPHRASE_PASSWORD" -in "$GPG_PASS
 # Uploads to s3 and signs with the default key on the system
 
 bundle exec deb-s3 upload \
+  --preserve-versions \
   --sign $GPG_SIGNING_KEY \
   --gpg-options "\-\-passphrase $GPG_PASSPHRASE" \
   --bucket $DEB_S3_BUCKET \

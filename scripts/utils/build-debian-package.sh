@@ -16,7 +16,7 @@ BUILD_BINARY_PATH=${2}
 DESTINATION_PATH=${3}
 
 DEB_NAME="buildkite-agent"
-DEB_MAINTAINER="<dev@buildkite.com>"
+DEB_MAINTAINER="dev@buildkite.com"
 DEB_URL="https://buildkite.com/agent"
 DEB_DESCRIPTION="The Buildkite Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
 DEB_LICENCE="MIT"
