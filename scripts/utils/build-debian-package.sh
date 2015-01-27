@@ -13,6 +13,7 @@ function info {
 
 BUILD_ARCH=${1}
 BUILD_BINARY_PATH=${2}
+DESTINATION_PATH=${3}
 
 DEB_NAME="buildkite-agent"
 DEB_MAINTAINER="<dev@buildkite.com>"
@@ -34,13 +35,11 @@ else
 fi
 
 PACKAGE_NAME=$DEB_NAME"_"$DEB_VERSION"_"$DEB_ARCH".deb"
-PACKAGE_PATH="deb/$PACKAGE_NAME"
+PACKAGE_PATH="$DESTINATION_PATH/$PACKAGE_NAME"
 
-# Ensure a clean package path
-rm -rf "$PACKAGE_PATH"
-mkdir -p "$PACKAGE_PATH"
+mkdir -p $DESTINATION_PATH
 
-info "Building debian package $PACKAGE_NAME"
+info "Building debian package $PACKAGE_NAME to $DESTINATION_PATH"
 
 bundle exec fpm -s "dir" \
   -t "deb" \

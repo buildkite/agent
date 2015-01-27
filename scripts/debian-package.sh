@@ -18,7 +18,7 @@ function build() {
   chmod +x $BINARY_FILENAME
 
   # Build the debian package using the architectre and binary, they are saved to deb/
-  ./scripts/utils/build-debian-package.sh $2 $BINARY_FILENAME
+  ./scripts/utils/build-debian-package.sh $2 $BINARY_FILENAME deb
 }
 
 function publish() {
