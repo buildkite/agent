@@ -88,7 +88,11 @@ if [[ ! -d ".git" ]]; then
   buildkite-run "git clone \"$BUILDKITE_REPO\" . -qv"
 fi
 
-buildkite-run "git clean -fdq"
+# Calling `git clean` with the -x will also remove all ignored files, to create
+# a pristine working directory
+buildkite-run "git clean -fdqx"
+buildkite-run "git submodule foreach --recursive git clean -fdqx"
+
 buildkite-run "git fetch -q"
 
 # Allow checkouts of forked pull requests on GitHub only. See:
