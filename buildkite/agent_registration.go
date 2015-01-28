@@ -12,6 +12,9 @@ type AgentRegistration struct {
 	// Hostname of the machine
 	Hostname string `json:"hostname"`
 
+	// Operating system for this machine
+	OS string `json:"os"`
+
 	// The priority of the agent
 	Priority string `json:"priority,omitempty"`
 
@@ -28,6 +31,7 @@ func (c *Client) AgentRegister(name string, priority string, metaData []string) 
 	registration.Name = name
 	registration.Priority = priority
 	registration.Hostname = MachineHostname()
+	registration.OS = MachineOS()
 	registration.MetaData = metaData
 
 	Logger.WithFields(logrus.Fields{
