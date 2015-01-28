@@ -8,35 +8,21 @@ import (
 )
 
 // Returns the machines hostname
-func MachineHostname() string {
-	if hostname, err := run("hostname"); err != nil {
-		return ""
-	} else {
-		return hostname
-	}
+func MachineHostname() (string, error) {
+	return run("hostname")
 }
 
-// Returns operating system information about the current machine
-func MachineOS() string {
-	command := ""
-
+// Returns a dump of the raw operating system information
+func MachineOSDump() (string, error) {
 	if runtime.GOOS == "darwin" {
-		command = "sw_vers"
+		return run("sw_vers")
 	} else if runtime.GOOS == "linux" {
-		command = "cat /etc/*-release"
+		return run("cat", "/etc/*-release")
 	} else if runtime.GOOS == "windows" {
-		command = "ver"
+		return run("ver")
 	}
 
-	if command != "" {
-		if hostname, err := run(command); err != nil {
-			return ""
-		} else {
-			return hostname
-		}
-	} else {
-		return ""
-	}
+	return "", nil
 }
 
 // Will return true if the machine is Windows
@@ -44,8 +30,8 @@ func MachineIsWindows() bool {
 	return runtime.GOOS == "windows"
 }
 
-func run(command string) (string, error) {
-	output, err := exec.Command(command).Output()
+func run(command string, arg ...string) (string, error) {
+	output, err := exec.Command(command, arg...).Output()
 
 	if err != nil {
 		Logger.Fatal(err)

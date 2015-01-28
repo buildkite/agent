@@ -9,7 +9,7 @@ import (
 
 func AgentStartCommandAction(c *cli.Context) {
 	// For display purposes, come up with what the name of the agent is.
-	agentName := buildkite.MachineHostname()
+	agentName, err := buildkite.MachineHostname()
 	if c.String("name") != "" {
 		agentName = c.String("name")
 	}

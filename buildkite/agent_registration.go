@@ -26,12 +26,15 @@ type AgentRegistration struct {
 }
 
 func (c *Client) AgentRegister(name string, priority string, metaData []string) (string, error) {
+	os, err := MachineOSDump()
+	hostname, err := MachineHostname()
+
 	// Create the agent registration
 	var registration AgentRegistration
 	registration.Name = name
 	registration.Priority = priority
-	registration.Hostname = MachineHostname()
-	registration.OS = MachineOS()
+	registration.Hostname = hostname
+	registration.OS = os
 	registration.MetaData = metaData
 
 	Logger.WithFields(logrus.Fields{
@@ -42,7 +45,7 @@ func (c *Client) AgentRegister(name string, priority string, metaData []string) 
 	}).Info("Registering agent with Buildkite")
 
 	// Register and return the agent
-	err := c.Post(&registration, "/register", registration)
+	err = c.Post(&registration, "/register", registration)
 	if err != nil {
 		return "", err
 	}

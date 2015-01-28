@@ -46,9 +46,6 @@ func (a *Agent) String() string {
 }
 
 func (a *Agent) Setup() {
-	// Set the hostname
-	a.Hostname = MachineHostname()
-
 	// Set the PID of the agent
 	a.PID = os.Getpid()
 
