@@ -7,8 +7,9 @@ then
   exit 1
 fi
 
-GOOS=${1}
-GOARCH=${2}
+export GOOS=${1}
+export GOARCH=${2}
+
 BUILD_VERSION=${3}
 NAME="buildkite-agent"
 
@@ -20,6 +21,7 @@ echo -e "Building $NAME with:\n"
 echo "GOOS=$GOOS"
 echo "GOARCH=$GOARCH"
 echo "BUILD_VERSION=$BUILD_VERSION"
+echo ""
 
 # Add .exe for Windows builds
 if [[ "$GOOS" == "windows" ]]; then
@@ -27,7 +29,7 @@ if [[ "$GOOS" == "windows" ]]; then
 fi
 
 mkdir -p $BUILD_PATH
-go build -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion $BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
+go build -v -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion $BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
 
 chmod +x $BUILD_PATH/$BINARY_FILENAME
 
