@@ -55,6 +55,9 @@ else
   info "Copying binary"
   cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent
 
+  info "Copying templates"
+  cp $TEMPLATE_DIRECTORY/bootstrap.sh $TMP_RELEASE_DIRECTORY
+
   info "Tarring up the files"
   cd $TMP_RELEASE_DIRECTORY
   tar cfvz ../$RELEASE_FILE_NAME .
