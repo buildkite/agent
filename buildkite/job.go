@@ -100,10 +100,13 @@ func (j *Job) Run(agent *Agent) error {
 	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
 	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_VERSION=%s", Version()))
 
-	// We know the BUILDKITE_BIN_DIR dir, because it's the path to the
+	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
 	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	env = append(env, fmt.Sprintf("BUILDKITE_BIN_DIR=%s", dir))
+	env = append(env, fmt.Sprintf("BUILDKITE_BIN_PATH=%s", dir))
+
+	// Also add the BUILDKITE_BUILD_PATH
+	env = append(env, fmt.Sprintf("BUILDKITE_BUILD_PATH=%s", agent.BuildPath))
 
 	// Add the rest environment variables from the API to the process
 	for key, value := range j.Env {

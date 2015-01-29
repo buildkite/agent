@@ -60,6 +60,13 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	buildkite.Logger.Debugf("Using bootstrap script: %s", bootstrapScript)
 
+	// Expand the build path. We don't bother checking to see if it can be
+	// written to, because it'll show up in the agent logs if it doesn't
+	// work.
+	buildPath := os.ExpandEnv(c.String("build-path"))
+
+	buildkite.Logger.Debugf("Using build path: %s", buildPath)
+
 	// Create a client so we can register the agent
 	var client buildkite.Client
 	client.AuthorizationToken = agentRegistrationToken
@@ -88,7 +95,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Start the agent using the token we have
-	agent := setupAgent(agentAccessToken, bootstrapScript, !c.Bool("no-pty"), c.String("endpoint"))
+	agent := setupAgent(agentAccessToken, bootstrapScript, buildPath, !c.Bool("no-pty"), c.String("endpoint"))
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
@@ -97,10 +104,11 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.Start()
 }
 
-func setupAgent(agentAccessToken string, bootstrapScript string, runInPty bool, url string) *buildkite.Agent {
+func setupAgent(agentAccessToken string, bootstrapScript string, buildPath string, runInPty bool, url string) *buildkite.Agent {
 	// Set the agent options
 	var agent buildkite.Agent
 	agent.BootstrapScript = bootstrapScript
+	agent.BuildPath = buildPath
 	agent.RunInPty = runInPty
 
 	// Client specific options

@@ -98,13 +98,14 @@ Example:
    $ buildkite-agent build-data get "foo"`
 
 func init() {
-	// This is default location of the bootstrap for unix based operating
-	// systems.
+	// This is default locations of stuff (*nix systems)
 	bootstrapScriptLocation := "$HOME/.buildkite/bootstrap.sh"
+	buildPathLocation := "$HOME/.buildkite/builds"
 
-	// Windows has a slightly modified default bootstrap location
+	// Windows has a slightly modified locations
 	if buildkite.MachineIsWindows() {
 		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\bootstrap.bat"
+		buildPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\builds"
 	}
 
 	Commands = []cli.Command{
@@ -148,6 +149,12 @@ func init() {
 					Value:  bootstrapScriptLocation,
 					Usage:  "Path to the bootstrap script",
 					EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
+				},
+				cli.StringFlag{
+					Name:   "build-path",
+					Value:  buildPathLocation,
+					Usage:  "Path to where the builds will run from",
+					EnvVar: "BUILDKITE_BUILD_PATH",
 				},
 				cli.StringFlag{
 					Name:   "endpoint",

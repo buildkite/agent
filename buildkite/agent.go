@@ -23,6 +23,9 @@ type Agent struct {
 	// The boostrap script to run
 	BootstrapScript string
 
+	// The path to the run the builds in
+	BuildPath string
+
 	// Run jobs in a PTY
 	RunInPty bool
 
