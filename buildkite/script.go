@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -40,11 +39,12 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	var process Process
 	process.RunInPty = runInPty
 
-	process.command = exec.Command(scriptPath)
+	// Find the script to run
+	absolutePath, _ := filepath.Abs(scriptPath)
+	scriptDirectory := filepath.Dir(absolutePath)
 
-	// Set the working directory of the process
-	pathToScript, _ := filepath.Abs(path.Dir(scriptPath))
-	process.command.Dir = pathToScript
+	process.command = exec.Command(absolutePath)
+	process.command.Dir = scriptDirectory
 
 	// Children of the forked process will inherit its process group
 	// This is to make sure that all grandchildren dies when this Process instance is killed
