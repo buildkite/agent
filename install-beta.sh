@@ -121,7 +121,7 @@ fi
 
 : ${TOKEN:="token123"}
 
-echo -e "\n--\n\n\033[32mSuccessfully installed to $DESTINATION\033[0m
+echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
 You can now run the Buildkite Agent like so:
 
