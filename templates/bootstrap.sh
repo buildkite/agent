@@ -11,7 +11,8 @@
 #                                                                                 |_|
 # https://github.com/buildkite/agent/blob/master/templates/bootstrap.sh
 
-BUILDKITE_BOOTSTRAP_VERSION="buildkite-bootstrap version 1.0-beta.1"
+# Causes this script to exit if a variable isn't present
+set -u
 
 ##############################################################
 #
@@ -44,15 +45,8 @@ function buildkite-run {
 #
 ##############################################################
 
-: ${BUILDKITE_PATH:="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"}
-: ${BUILDKITE_BIN_PATH:="$BUILDKITE_PATH/bin"}
-: ${BUILDKITE_BUILD_PATH:="$BUILDKITE_PATH/builds"}
-
-# Add the $BUILDKITE_BIN to the $PATH
+# Add the $BUILDKITE_BIN_PATH to the $PATH
 export PATH="$BUILDKITE_BIN_PATH:$PATH"
-
-# Send the bootstrap version back to Buildkite
-buildkite-agent build-data set "buildkite:bootstrap:version" $BUILDKITE_BOOTSTRAP_VERSION
 
 # Come up with the place that the repository will be checked out to
 SANITIZED_AGENT_NAME=$(echo $BUILDKITE_AGENT_NAME | tr -d '"')
@@ -68,7 +62,7 @@ BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
 ##############################################################
 
 # Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
-if [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
+if [[ ! -z "${BUILDKITE_CLEAN_CHECKOUT:-}" ]] && [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
   echo '--- Cleaning project checkout'
 
   buildkite-run "rm -rf \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
@@ -130,7 +124,7 @@ if [[ "$BUILDKITE_SCRIPT_PATH" == "" ]]; then
 fi
 
 ## Docker
-if [[ "$BUILDKITE_DOCKER" != "" ]]; then
+if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
   DOCKER_CONTAINER="buildkite_"$BUILDKITE_JOB_ID"_container"
   DOCKER_IMAGE="buildkite_"$BUILDKITE_JOB_ID"_image"
 
@@ -156,7 +150,7 @@ if [[ "$BUILDKITE_DOCKER" != "" ]]; then
   buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
 
 ## Fig
-elif [[ "$BUILDKITE_FIG_CONTAINER" != "" ]]; then
+elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" != "" ]]; then
   # Fig strips dashes and underscores, so we'll remove them to match the docker container names
   FIG_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
   # The name of the docker container fig creates when it creates the adhoc run
@@ -216,13 +210,8 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
   # export AWS_S3_ACL=private
   # buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID\""
 
-  # Show the output of the artifact uploder when in debug mode
-  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-    echo '--- Uploading artifacts'
-    buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
-  else
-    buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" > /dev/null 2>&1"
-  fi
+  echo '--- Uploading artifacts'
+  buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
 fi
 
 # Be sure to exit this script with the same exit status that the users build
