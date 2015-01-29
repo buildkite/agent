@@ -144,6 +144,10 @@ func init() {
 					Usage:  "Meta data for the agent",
 					EnvVar: "BUILDKITE_AGENT_META_DATA",
 				},
+				cli.BoolFlag{
+					Name:  "meta-data-ec2-tags",
+					Usage: "Populate the meta data from the current instances EC2 Tags",
+				},
 				cli.StringFlag{
 					Name:   "bootstrap-script",
 					Value:  bootstrapScriptLocation,
@@ -156,19 +160,19 @@ func init() {
 					Usage:  "Path to where the builds will run from",
 					EnvVar: "BUILDKITE_BUILD_PATH",
 				},
+				cli.BoolFlag{
+					Name:  "no-pty",
+					Usage: "Do not run jobs within a pseudo terminal",
+				},
+				cli.BoolFlag{
+					Name:  "no-ssh-keyscan",
+					Usage: "Don't automatically perform an ssh-keyscan on hosts before cloning",
+				},
 				cli.StringFlag{
 					Name:   "endpoint",
 					Value:  "https://agent.buildkite.com/v2",
 					Usage:  "The agent API endpoint",
 					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
-				},
-				cli.BoolFlag{
-					Name:  "meta-data-ec2-tags",
-					Usage: "Populate the meta data from the current instances EC2 Tags",
-				},
-				cli.BoolFlag{
-					Name:  "no-pty",
-					Usage: "Do not run jobs within a pseudo terminal",
 				},
 				cli.BoolFlag{
 					Name:   "debug",

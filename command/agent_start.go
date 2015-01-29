@@ -94,29 +94,23 @@ func AgentStartCommandAction(c *cli.Context) {
 		buildkite.Logger.Fatal(err)
 	}
 
-	// Start the agent using the token we have
-	agent := setupAgent(agentAccessToken, bootstrapScript, buildPath, !c.Bool("no-pty"), c.String("endpoint"))
+	// Set the agent options
+	var agent buildkite.Agent
+	agent.BootstrapScript = bootstrapScript
+	agent.BuildPath = buildPath
+	agent.RunInPty = !c.Bool("no-pty")
+	agent.SSHKeyScan = !c.Bool("no-ssh-keyscan")
+
+	// Client specific options
+	agent.Client.AuthorizationToken = agentAccessToken
+	agent.Client.URL = c.String("endpoint")
+
+	// Setup the agent
+	agent.Setup()
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
 
 	// Start the agent
 	agent.Start()
-}
-
-func setupAgent(agentAccessToken string, bootstrapScript string, buildPath string, runInPty bool, url string) *buildkite.Agent {
-	// Set the agent options
-	var agent buildkite.Agent
-	agent.BootstrapScript = bootstrapScript
-	agent.BuildPath = buildPath
-	agent.RunInPty = runInPty
-
-	// Client specific options
-	agent.Client.AuthorizationToken = agentAccessToken
-	agent.Client.URL = url
-
-	// Setup the agent
-	agent.Setup()
-
-	return &agent
 }

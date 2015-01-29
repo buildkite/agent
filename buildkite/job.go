@@ -108,6 +108,9 @@ func (j *Job) Run(agent *Agent) error {
 	// Also add the BUILDKITE_BUILD_PATH
 	env = append(env, fmt.Sprintf("BUILDKITE_BUILD_PATH=%s", agent.BuildPath))
 
+	// The ssh-keyscan config gear
+	env = append(env, fmt.Sprintf("BUILDKITE_ENABLE_SSH_KEYSCAN=%t", agent.SSHKeyScan))
+
 	// Add the rest environment variables from the API to the process
 	for key, value := range j.Env {
 		env = append(env, fmt.Sprintf("%s=%s", key, value))
