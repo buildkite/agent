@@ -74,46 +74,54 @@ DOWNLOAD="buildkite-agent-$PLATFORM-$ARCH.tar.gz"
 URL="https://github.com/buildkite/agent/releases/download/v$VERSION/$DOWNLOAD"
 echo -e "\nDownloading $URL"
 
-# Remove the download if it already exists
-rm -f $DESTINATION/$DOWNLOAD
+# Create a temporary folder to download the binary to
+INSTALL_TMP=/tmp/buildkite-agent-install-$$
+mkdir -p $INSTALL_TMP
 
-# If the file already exists in a folder called pkg, just use that. :)
-if [[ -e pkg/$DOWNLOAD ]]
+# If the file already exists in a folder called releases. This is useful for
+# local testing of this file.
+if [[ -e releases/$DOWNLOAD ]]
 then
-  cp pkg/$DOWNLOAD $DESTINATION/$DOWNLOAD
+  echo "Using existing release: releases/$DOWNLOAD"
+  cp releases/$DOWNLOAD $INSTALL_TMP
 else
-  buildkite-download "$URL" "$DESTINATION/$DOWNLOAD"
+  buildkite-download "$URL" "$INSTALL_TMP/$DOWNLOAD"
 fi
 
-# Extract the download to the destination folder
-tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
+# Extract the download to a tmp folder inside the $DESTINATION
+# folder
+tar -C $INSTALL_TMP -zxf $INSTALL_TMP/$DOWNLOAD
 
 # Move the buildkite binary into a bin folder
 mkdir -p $DESTINATION/bin
-mv $DESTINATION/buildkite-agent $DESTINATION/bin
+mv $INSTALL_TMP/buildkite-agent $DESTINATION/bin
 chmod +x $DESTINATION/bin/buildkite-agent
 
-# Clean up the download
-rm -f $DESTINATION/$DOWNLOAD
+function buildkite-copy-bootstrap {
+  mv $INSTALL_TMP/bootstrap.sh $DESTINATION
+  chmod +x $DESTINATION/bootstrap.sh
+}
 
 # Copy the bootstrap sample and make sure it's executable
 if [[ -e $DESTINATION/bootstrap.sh ]]
 then
-  echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
+  echo -e "\n\033[36mWe've detected an existing bootstrap.sh in $DESTINATION\033[0m"
+  echo -en "\nWould you like us to replace it with the latest version? (y/n) "
+  read answer < /dev/tty
+
+  if echo "$answer" | grep -iq "^y" ;then
+    echo -e "\nGood choice! We'll replace your current bootstrap.sh with the new one."
+    buildkite-copy-bootstrap
+  else
+    echo -e "\nGot it, we'll leave it alone."
+  fi
 else
-  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildkite/agent/master/templates/bootstrap.sh
-  BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
-
-  echo -e "Downloading $BOOTSTRAP_URL"
-
-  buildkite-download "$BOOTSTRAP_URL" "$BOOTSTRAP_DESTINATION"
-
-  chmod +x $DESTINATION/bootstrap.sh
+  buildkite-copy-bootstrap
 fi
 
 : ${TOKEN:="token123"}
 
-echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
+echo -e "\n--\n\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
 You can now run the Buildkite Agent like so:
 
