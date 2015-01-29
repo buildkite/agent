@@ -129,12 +129,12 @@ if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
   DOCKER_IMAGE="buildkite_"$BUILDKITE_JOB_ID"_image"
 
   function docker-cleanup {
-    docker rm -f $DOCKER_CONTAINER
+    docker rm -f -v $DOCKER_CONTAINER
 
     # Enabling the following line will prevent your build server from filling up,
     # but will slow down your builds because it'll be built from scratch each time.
     #
-    # docker rmi -f $DOCKER_IMAGE
+    # docker rmi -f -v $DOCKER_IMAGE
   }
 
   trap docker-cleanup EXIT
@@ -158,16 +158,16 @@ elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" 
 
   function fig-cleanup {
     fig -p $FIG_PROJ_NAME kill
-    fig -p $FIG_PROJ_NAME rm --force
+    fig -p $FIG_PROJ_NAME rm -f -v
 
     # The adhoc run container isn't cleaned up by fig, so we have to do it ourselves
     echo "Killing "$FIG_CONTAINER_NAME"_run_1..."
-    docker rm -f $FIG_CONTAINER_NAME"_run_1"
+    docker rm -f -v $FIG_CONTAINER_NAME"_run_1"
 
     # Enabling the following line will prevent your build server from filling up,
     # but will slow down your builds because it'll be built from scratch each time.
     #
-    # docker rmi -f $FIG_CONTAINER_NAME
+    # docker rmi -f -v $FIG_CONTAINER_NAME
   }
 
   trap fig-cleanup EXIT
