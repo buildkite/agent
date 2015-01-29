@@ -28,20 +28,6 @@ function buildkite-download {
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh\`\""
 
-LATEST_BETA="1.0-beta.6"
-
-if [ "$VERSION" = "1.0-beta.1" ]
-then
-  echo "NOTICE: Installing 1.0-beta.1 is no longer supported...sorry. Please install 1.0-beta.6"
-  exit 1
-fi
-
-if [ "$VERSION" = "1.0-beta.2" ]
-then
-  echo "NOTICE: Installing 1.0-beta.2 is no longer supported...sorry. Please install 1.0-beta.6"
-  exit 1
-fi
-
 if [ "$BETA" = "true" ]
 then
   BETA_URL="https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh"
@@ -57,10 +43,15 @@ then
   exit 0
 fi
 
-# Allow custom setting of the version
-if [ -z "$VERSION" ]; then
-  VERSION="0.2"
+LATEST_VERSION="0.2"
+
+if [ ! -z "$VERSION" ]; then
+  echo "Sorry, we don't support specifying installation versions anymore via the \$VERSION variable."
+  echo "Please remove it and run this command again to install v$LATEST_VERSION"
+  exit 1
 fi
+
+VERSION=$LATEST_VERSION
 
 echo -e "\033[33m
 
@@ -136,41 +127,6 @@ tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
 
 INSTALLED_VERSION=`$DESTINATION/buildbox-agent --version`
 
-if [[ "$INSTALLED_VERSION" = "buildbox-agent version $LATEST_BETA" ]]
-then
-  # Move the buildbox binary into a bin folder
-  mkdir -p $DESTINATION/bin
-  mv $DESTINATION/buildbox-agent $DESTINATION/bin
-  chmod +x $DESTINATION/bin/buildbox-agent
-
-  function shim {
-    echo "#!/bin/bash
-DIR=\$(cd \"\$( dirname \"\${BASH_SOURCE[0]}\" )\" && pwd)
-echo \"###################################################################
-DEPRECATED: This binary is deprecated.
-
-Please use: \\\`$DESTINATION/bin/buildbox-agent$1\\\`
-###################################################################
-\"
-exit 1"
-  }
-
-  # Deprecate the old 1.0-beta.1 binary.
-  if [[ -e $DESTINATION/bin/buildbox ]]
-  then
-    shim "" > $DESTINATION/bin/buildbox
-    chmod +x $DESTINATION/bin/buildbox
-  fi
-
-  # Was there a previous agent installed?
-  if [[ -e $DESTINATION/buildbox-artifact ]]
-  then
-    shim " start --token 123" > $DESTINATION/buildbox-agent
-    shim " build-artifact" > $DESTINATION/buildbox-artifact
-    shim " build-data" > $DESTINATION/buildbox-data
-  fi
-fi
-
 chmod +x $DESTINATION/buildbox-*
 
 # Clean up the download
@@ -181,14 +137,7 @@ if [[ -e $DESTINATION/bootstrap.sh ]]
 then
   echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
 else
-  # Switch between the old bootstrap, and the new one.
-  if [[ "$VERSION" == *"1.0"* ]]; then
-    BOOTSTRAP_NAME="1.0-beta.1-6/bootstrap.sh"
-  else
-    BOOTSTRAP_NAME="0.2/bootstrap.sh"
-  fi
-
-  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildkite/agent/master/templates/$BOOTSTRAP_NAME
+  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildkite/agent/master/templates/0.2/bootstrap.sh
   BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
 
   echo -e "Downloading $BOOTSTRAP_URL"
@@ -203,19 +152,11 @@ if [ -z "$TOKEN" ]; then
   TOKEN="token123"
 fi
 
-# Switch the start command depending on the version
-if [[ -e $DESTINATION/bin/buildbox-agent ]]
-then
-  START_COMMAND="bin/buildbox-agent start --token $TOKEN"
-else
-  START_COMMAND="buildbox-agent start --access-token $TOKEN"
-fi
-
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
 You can now run the Buildkite agent like so:
 
-  $DESTINATION/$START_COMMAND
+  $DESTINATION/buildbox-agent start --access-token $TOKEN
 
 You can find your agent's Access Token on your Account Settings
 page under \"Agents\".
