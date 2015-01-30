@@ -91,29 +91,35 @@ func (j *Job) Kill() error {
 func (j *Job) Run(agent *Agent) error {
 	Logger.Infof("Starting job %s", j.ID)
 
-	// Create the environment that the script will use
-	env := []string{}
+	// Create a clone of our jobs environment. We'll then set the
+	// environment variables provided by the agent, which will override any
+	// sent by Buildkite. The variables below should always take
+	// precedence.
+	env := make(map[string]string)
+	for key, value := range j.Env {
+		env[key] = value
+	}
 
-	// These are client specific
-	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", agent.Client.URL))
-	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_DEBUG=%t", InDebugMode()))
-	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_ACCESS_TOKEN=%s", agent.Client.AuthorizationToken))
-	env = append(env, fmt.Sprintf("BUILDKITE_AGENT_VERSION=%s", Version()))
+	// Add agent environment variables
+	env["BUILDKITE_AGENT_ENDPOINT"] = agent.Client.URL
+	env["BUILDKITE_AGENT_ACCESS_TOKEN=%s"] = agent.Client.AuthorizationToken
+	env["BUILDKITE_AGENT_VERSION"] = Version()
+	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", InDebugMode())
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
 	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	env = append(env, fmt.Sprintf("BUILDKITE_BIN_PATH=%s", dir))
+	env["BUILDKITE_BIN_PATH"] = dir
 
-	// Also add the BUILDKITE_BUILD_PATH
-	env = append(env, fmt.Sprintf("BUILDKITE_BUILD_PATH=%s", agent.BuildPath))
+	// Add misc options
+	env["BUILDKITE_BUILD_PATH"] = agent.BuildPath
+	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", agent.AutoSSHFingerprintVerification)
 
-	// The ssh-keyscan config gear
-	env = append(env, fmt.Sprintf("BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION=%t", agent.AutoSSHFingerprintVerification))
-
-	// Add the rest environment variables from the API to the process
-	for key, value := range j.Env {
-		env = append(env, fmt.Sprintf("%s=%s", key, value))
+	// Convert the env map into a slice (which is what the script gear
+	// needs)
+	envSlice := []string{}
+	for key, value := range env {
+		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
 	// Mark the build as started
@@ -142,7 +148,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Initialze our process to run
-	process := InitProcess(agent.BootstrapScript, env, agent.RunInPty, callback)
+	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, callback)
 
 	// Store the process so we can cancel it later.
 	j.process = process
