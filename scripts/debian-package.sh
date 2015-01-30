@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+echo $PATH
+whoami
+env
+
 if [[ "$CODENAME" == "" ]]; then
   echo "Error: Missing \$CODENAME (stable or unstable)"
   exit 1
