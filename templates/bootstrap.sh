@@ -81,8 +81,8 @@ buildkite-run "cd \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 
 # If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
 # a yes/no promp from appearing when cloning/fetching
-if [[ ! -z "${BUILDKITE_ENABLE_SSH_KEYSCAN:-}" ]] && [[ "$BUILDKITE_ENABLE_SSH_KEYSCAN" == "true" ]]; then
-  if [[ ! -z "${BUILDKITE_ENABLE_SSH_KEYSCAN:-}" ]]; then
+if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION" == "true" ]]; then
+  if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]]; then
     : ${BUILDKITE_SSH_DIRECTORY:="$HOME/.ssh"}
     : ${BUILDKITE_SSH_KNOWN_HOST_PATH:="$BUILDKITE_SSH_DIRECTORY/known_hosts"}
 

@@ -165,8 +165,8 @@ func init() {
 					Usage: "Do not run jobs within a pseudo terminal",
 				},
 				cli.BoolFlag{
-					Name:  "no-ssh-keyscan",
-					Usage: "Don't automatically perform an ssh-keyscan on hosts before cloning",
+					Name:  "no-automatic-ssh-fingerprint-verification",
+					Usage: "Don't automatically verify SSH fingerprints",
 				},
 				cli.StringFlag{
 					Name:   "endpoint",

@@ -26,8 +26,9 @@ type Agent struct {
 	// The path to the run the builds in
 	BuildPath string
 
-	// Whether or not the agent is allowed to run an ssh keyscan
-	SSHKeyScan bool
+	// Whether or not the agent is allowed to automatically accept SSH
+	// fingerprints
+	AutoSSHFingerprintVerification bool
 
 	// Run jobs in a PTY
 	RunInPty bool
