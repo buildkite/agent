@@ -179,7 +179,7 @@ elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" 
 
   function fig-cleanup {
     fig -p $FIG_PROJ_NAME kill
-    fig -p $FIG_PROJ_NAME rm -f -v
+    fig -p $FIG_PROJ_NAME rm --force -v
 
     # The adhoc run container isn't cleaned up by fig, so we have to do it ourselves
     echo "Killing "$FIG_CONTAINER_NAME"_run_1..."
