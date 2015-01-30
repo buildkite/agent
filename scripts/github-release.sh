@@ -10,7 +10,7 @@ echo '--- Downloading binaries'
 
 rm -rf pkg
 mkdir -p pkg
-buildbox-agent build-artifact download "pkg/*" .
+buildkite-agent build-artifact download "pkg/*" .
 
 function build() {
   echo "--- Building release for: $1"
@@ -29,7 +29,7 @@ ls pkg/* | xargs -I {} bash -c "build {}"
 
 echo '--- Getting agent version from build meta data'
 
-FULL_AGENT_VERSION=$(buildbox-agent build-data get "agent-version")
+FULL_AGENT_VERSION=$(buildkite-agent build-data get "agent-version")
 AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
 
 echo "Version is $FULL_AGENT_VERSION"
