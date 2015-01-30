@@ -51,7 +51,9 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
-	// so the sub process gets PATH and stuff.
+	// so the sub process gets PATH and stuff. We merge our path in over
+	// the top of the current one so the ENV from Buildkite and the agent
+	// take precedence over the agent
 	currentEnv := os.Environ()
 	process.command.Env = append(currentEnv, env...)
 
