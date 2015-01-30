@@ -53,6 +53,12 @@ SANITIZED_AGENT_NAME=$(echo $BUILDKITE_AGENT_NAME | tr -d '"')
 PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
 BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
 
+if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+  echo '--- Build environment variables'
+
+  buildkite-run "env | grep BUILDKITE | sort"
+fi
+
 ##############################################################
 #
 # REPOSITORY HANDLING
@@ -73,12 +79,27 @@ echo '--- Preparing build folder'
 buildkite-run "mkdir -p \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 buildkite-run "cd \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 
+# If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
+# a yes/no promp from appearing when cloning/fetching
+if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION" == "true" ]]; then
+  if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]]; then
+    : ${BUILDKITE_SSH_DIRECTORY:="$HOME/.ssh"}
+    : ${BUILDKITE_SSH_KNOWN_HOST_PATH:="$BUILDKITE_SSH_DIRECTORY/known_hosts"}
+
+    # Ensure the known_hosts file exists
+    mkdir -p $BUILDKITE_SSH_DIRECTORY
+    touch $BUILDKITE_SSH_KNOWN_HOST_PATH
+
+    # Only add the output from ssh-keyscan if it doesn't already exist in the
+    # known_hosts file
+    if ! ssh-keygen -H -F "$BUILDKITE_REPO_SSH_HOST" | grep --quiet "$BUILDKITE_REPO_SSH_HOST"; then
+      buildkite-run "ssh-keyscan \"$BUILDKITE_REPO_SSH_HOST\" >> \"$BUILDKITE_SSH_KNOWN_HOST_PATH\""
+    fi
+  fi
+fi
+
 # Do we need to do a git checkout?
 if [[ ! -d ".git" ]]; then
-  # If it's a first time SSH git clone it will prompt to accept the host's
-  # fingerprint. To avoid this add the host's key to ~/.ssh/known_hosts ahead
-  # of time:
-  #   ssh-keyscan -H host.com >> ~/.ssh/known_hosts
   buildkite-run "git clone \"$BUILDKITE_REPO\" . -qv"
 fi
 
