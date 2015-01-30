@@ -102,7 +102,7 @@ func (j *Job) Run(agent *Agent) error {
 
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_ENDPOINT"] = agent.Client.URL
-	env["BUILDKITE_AGENT_ACCESS_TOKEN=%s"] = agent.Client.AuthorizationToken
+	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = agent.Client.AuthorizationToken
 	env["BUILDKITE_AGENT_VERSION"] = Version()
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", InDebugMode())
 
