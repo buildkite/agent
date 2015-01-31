@@ -100,6 +100,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.BuildPath = buildPath
 	agent.RunInPty = !c.Bool("no-pty")
 	agent.AutoSSHFingerprintVerification = !c.Bool("no-automatic-ssh-fingerprint-verification")
+	agent.ScriptEval = !c.Bool("no-script-eval")
 
 	// Client specific options
 	agent.Client.AuthorizationToken = agentAccessToken
