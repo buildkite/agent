@@ -101,7 +101,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Register the agent
-	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData)
+	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData, agent.ScriptEval)
 	if err != nil {
 		buildkite.Logger.Fatal(err)
 	}

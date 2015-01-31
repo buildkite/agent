@@ -15,6 +15,9 @@ type AgentRegistration struct {
 	// Operating system for this machine
 	OS string `json:"os"`
 
+	// If this agent is allowed to perform script evaluation
+	ScriptEval bool `json:"script_eval_enabled"`
+
 	// The priority of the agent
 	Priority string `json:"priority,omitempty"`
 
@@ -25,7 +28,7 @@ type AgentRegistration struct {
 	MetaData []string `json:"meta_data"`
 }
 
-func (c *Client) AgentRegister(name string, priority string, metaData []string) (string, error) {
+func (c *Client) AgentRegister(name string, priority string, metaData []string, scriptEval bool) (string, error) {
 	os, err := MachineOSDump()
 	hostname, err := MachineHostname()
 
@@ -36,6 +39,7 @@ func (c *Client) AgentRegister(name string, priority string, metaData []string) 
 	registration.Hostname = hostname
 	registration.OS = os
 	registration.MetaData = metaData
+	registration.ScriptEval = scriptEval
 
 	Logger.WithFields(logrus.Fields{
 		"name":      registration.Name,
