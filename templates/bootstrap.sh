@@ -139,10 +139,21 @@ buildkite-agent build-data set "buildkite:git:branch" "`git branch --contains "$
 #
 ##############################################################
 
+# If we're evaluating a script, save it to the filesystem first
+if [[ "$BUILDKITE_SCRIPT_MODE" == "eval" ]]; then
+  BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
+
+  echo $BUILDKITE_SCRIPT > $BUILDKITE_SCRIPT_PATH
+fi
+
+# Double check the file exists we want to run
 if [[ "$BUILDKITE_SCRIPT_PATH" == "" ]]; then
   echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
 fi
+
+# Make sure the script we're going to run is executable
+chmod +x $BUILDKITE_SCRIPT_PATH
 
 ## Docker
 if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
