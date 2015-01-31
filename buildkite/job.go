@@ -130,41 +130,52 @@ func (j *Job) Run(agent *Agent) error {
 		// starts working during the actual build.
 	}
 
-	// This callback is called every second the build is running. This lets
-	// us do a lazy-person's method of streaming data to Buildkite.
-	callback := func(process *Process) {
-		j.Output = process.Output
+	if env["BUILDKITE_SCRIPT_MODE"] == "eval" && !agent.ScriptEval {
+		Logger.Infof("Job %s is not allowed to run, exiting.", j.ID)
 
-		// Post the update to the API
-		updatedJob, err := agent.Client.JobUpdate(j)
-		if err != nil {
-			// We don't really care if the job couldn't update at this point.
-			// This is just a partial update. We'll just let the job run
-			// and hopefully the host will fix itself before we finish.
-			Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
-		} else if updatedJob.State == "canceled" {
-			j.Kill()
-		}
-	}
+		// Show an error in the output
+		j.Output = "ERROR: This agent has not been allowed to evaluate scripts.\nRe-run this agent and remove the `--no-script-eval` option, or specify a script on the filesystem to run instead."
 
-	// Initialze our process to run
-	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, callback)
-
-	// Store the process so we can cancel it later.
-	j.process = process
-
-	// Start the process. This will block until it finishes.
-	err = process.Start()
-	if err == nil {
-		// Store the final output
-		j.Output = j.process.Output
+		// Mark the build as finished
+		j.FinishedAt = time.Now().Format(time.RFC3339)
+		j.ExitStatus = "1"
 	} else {
-		j.Output = fmt.Sprintf("%s", err)
-	}
+		// This callback is called every second the build is running. This lets
+		// us do a lazy-person's method of streaming data to Buildkite.
+		callback := func(process *Process) {
+			j.Output = process.Output
 
-	// Mark the build as finished
-	j.FinishedAt = time.Now().Format(time.RFC3339)
-	j.ExitStatus = j.process.ExitStatus
+			// Post the update to the API
+			updatedJob, err := agent.Client.JobUpdate(j)
+			if err != nil {
+				// We don't really care if the job couldn't update at this point.
+				// This is just a partial update. We'll just let the job run
+				// and hopefully the host will fix itself before we finish.
+				Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
+			} else if updatedJob.State == "canceled" {
+				j.Kill()
+			}
+		}
+
+		// Initialze our process to run
+		process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, callback)
+
+		// Store the process so we can cancel it later.
+		j.process = process
+
+		// Start the process. This will block until it finishes.
+		err = process.Start()
+		if err == nil {
+			// Store the final output
+			j.Output = j.process.Output
+		} else {
+			j.Output = fmt.Sprintf("%s", err)
+		}
+
+		// Mark the build as finished
+		j.FinishedAt = time.Now().Format(time.RFC3339)
+		j.ExitStatus = j.process.ExitStatus
+	}
 
 	// Keep trying this call until it works. This is the most important one.
 	for {
