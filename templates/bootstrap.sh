@@ -23,11 +23,13 @@ set -u
 
 BUILDKITE_PROMPT="\033[90m$\033[0m"
 
+# Shows the command being run, and runs it
 function buildkite-prompt-and-run {
   echo -e "$BUILDKITE_PROMPT $1"
   eval $1
 }
 
+# Shows the command about to be run, and exits if it fails
 function buildkite-run {
   echo -e "$BUILDKITE_PROMPT $1"
   eval $1
@@ -35,6 +37,28 @@ function buildkite-run {
 
   if [[ $EVAL_EXIT_STATUS -ne 0 ]]; then
     exit $EVAL_EXIT_STATUS
+  fi
+}
+
+# Only shows the command if DEBUG is on
+function buildkite-run-debug {
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    echo -e "$BUILDKITE_PROMPT $1"
+    eval $1
+  else
+    eval $1
+  fi
+}
+
+# Outputs a header
+function buildkite-header {
+  echo -e "--- $1"
+}
+
+# Outputs a header only if DEBUG is on
+function buildkite-header-debug {
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    buildkite-header "$1"
   fi
 }
 
@@ -127,8 +151,9 @@ buildkite-run "git submodule update --init --recursive"
 buildkite-run "git submodule foreach --recursive git reset --hard"
 
 # Grab author and commit information and send it back to Buildkite
-buildkite-agent build-data set "buildkite:git:commit" "`git show "$BUILDKITE_COMMIT" -s --format=fuller --no-color`"
-buildkite-agent build-data set "buildkite:git:branch" "`git branch --contains "$BUILDKITE_COMMIT" --no-color`"
+buildkite-header-debug "Saving Git information"
+buildkite-run-debug "buildkite-agent build-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
+buildkite-run-debug "buildkite-agent build-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
 
 ##############################################################
 #
@@ -137,10 +162,21 @@ buildkite-agent build-data set "buildkite:git:branch" "`git branch --contains "$
 #
 ##############################################################
 
+# If we're evaluating a script, save it to the filesystem first
+if [[ "$BUILDKITE_SCRIPT_MODE" == "eval" ]]; then
+  BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
+
+  echo "$BUILDKITE_SCRIPT_TEXT" > $BUILDKITE_SCRIPT_PATH
+fi
+
+# Double check the file exists we want to run
 if [[ "$BUILDKITE_SCRIPT_PATH" == "" ]]; then
   echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
   exit 1
 fi
+
+# Make sure the script we're going to run is executable
+chmod +x $BUILDKITE_SCRIPT_PATH
 
 ## Docker
 if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then

@@ -168,6 +168,10 @@ func init() {
 					Name:  "no-automatic-ssh-fingerprint-verification",
 					Usage: "Don't automatically verify SSH fingerprints",
 				},
+				cli.BoolFlag{
+					Name:  "no-script-eval",
+					Usage: "Don't allow this agent to evaluate scripts from Buildkite. Only scripts that exist on the file system will be allowed to run",
+				},
 				cli.StringFlag{
 					Name:   "endpoint",
 					Value:  "https://agent.buildkite.com/v2",

@@ -88,18 +88,23 @@ func AgentStartCommandAction(c *cli.Context) {
 		}
 	}
 
-	// Register the agent
-	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData)
-	if err != nil {
-		buildkite.Logger.Fatal(err)
-	}
-
 	// Set the agent options
 	var agent buildkite.Agent
 	agent.BootstrapScript = bootstrapScript
 	agent.BuildPath = buildPath
 	agent.RunInPty = !c.Bool("no-pty")
 	agent.AutoSSHFingerprintVerification = !c.Bool("no-automatic-ssh-fingerprint-verification")
+	agent.ScriptEval = !c.Bool("no-script-eval")
+
+	if !agent.ScriptEval {
+		buildkite.Logger.Info("Evaluating scripts has been disabled for this agent")
+	}
+
+	// Register the agent
+	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData, agent.ScriptEval)
+	if err != nil {
+		buildkite.Logger.Fatal(err)
+	}
 
 	// Client specific options
 	agent.Client.AuthorizationToken = agentAccessToken

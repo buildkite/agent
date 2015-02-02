@@ -30,6 +30,9 @@ type Agent struct {
 	// fingerprints
 	AutoSSHFingerprintVerification bool
 
+	// If this agent is allowed to perform script evaluation
+	ScriptEval bool
+
 	// Run jobs in a PTY
 	RunInPty bool
 
