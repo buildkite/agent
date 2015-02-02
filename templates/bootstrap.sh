@@ -127,10 +127,8 @@ if [[ ! -d ".git" ]]; then
   buildkite-run "git clone \"$BUILDKITE_REPO\" . -qv"
 fi
 
-# Calling `git clean` with the -x will also remove all ignored files, to create
-# a pristine working directory
-buildkite-run "git clean -fdqx"
-buildkite-run "git submodule foreach --recursive git clean -fdqx"
+buildkite-run "git clean -fdq"
+buildkite-run "git submodule foreach --recursive git clean -fdq"
 
 buildkite-run "git fetch -q"
 
