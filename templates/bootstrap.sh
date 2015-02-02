@@ -143,7 +143,7 @@ buildkite-agent build-data set "buildkite:git:branch" "`git branch --contains "$
 if [[ "$BUILDKITE_SCRIPT_MODE" == "eval" ]]; then
   BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
 
-  echo $BUILDKITE_SCRIPT_TEXT > $BUILDKITE_SCRIPT_PATH
+  echo "$BUILDKITE_SCRIPT_TEXT" > $BUILDKITE_SCRIPT_PATH
 fi
 
 # Double check the file exists we want to run
