@@ -122,6 +122,9 @@ if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKI
   fi
 fi
 
+# Disable any interactive Git/SSH prompting
+export GIT_TERMINAL_PROMPT=0
+
 # Do we need to do a git checkout?
 if [[ ! -d ".git" ]]; then
   buildkite-run "git clone \"$BUILDKITE_REPO\" . -qv"
