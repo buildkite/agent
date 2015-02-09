@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/buildkite/agent",
-	"GoVersion": "go1.3.3",
+	"GoVersion": "go1.4.1",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -26,8 +26,8 @@
 		},
 		{
 			"ImportPath": "github.com/kr/pty",
-			"Comment": "release.r56-19-g67e2db2",
-			"Rev": "67e2db24c831afa6c64fc17b4a143390674365ef"
+			"Comment": "release.r56-25-g05017fc",
+			"Rev": "05017fcccf23c823bfdea560dcc958a136e54fb7"
 		}
 	]
 }
