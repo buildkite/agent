@@ -56,11 +56,6 @@ function buildkite-header {
   echo -e "--- $1 { \"time\" : \"`date -u`\" }"
 }
 
-# Output a header that is already expanded
-function buildkite-header-expand {
-  echo -e "+++ $1 { \"time\" : \"`date -u`\" }"
-}
-
 # Outputs a header only if DEBUG is on
 function buildkite-header-debug {
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
@@ -266,7 +261,7 @@ else
     # Build the Docker image, namespaced to the job
     buildkite-run "docker build -t $DOCKER_IMAGE ."
 
-    buildkite-header-expand "Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
+    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
 
     # Run the build script command in a one-off container
     buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
@@ -298,14 +293,14 @@ else
     # Build the Docker images using Fig, namespaced to the job
     buildkite-run "fig -p $FIG_PROJ_NAME build"
 
-    buildkite-header-expand "Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
+    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
 
     # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
     buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
 
   ## Standard
   else
-    buildkite-header-expand "Running build script"
+    buildkite-header "Running build script"
 
     echo -e "$BUILDKITE_PROMPT ./$BUILDKITE_SCRIPT_PATH"
 
