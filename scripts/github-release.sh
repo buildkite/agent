@@ -44,13 +44,17 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   #
   # We don't want the build numbers for GitHub releases, so this command will
   # drop them.
-  AGENT_VERSION=$(echo $AGENT_VERSION | sed -E 's/\.[0-9]+$//')
+  GITHUB_AGENT_VERSION=$(echo $AGENT_VERSION | sed -E 's/\.[0-9]+$//')
 
-  echo "--- 🚀 $AGENT_VERSION (prerelease)"
+  echo "--- 🚀 $GITHUB_AGENT_VERSION (prerelease)"
 
-  github-release "v$AGENT_VERSION" releases/* --prerelease
+  github-release "v$GITHUB_AGENT_VERSION" releases/* --prerelease
+
+  env RELEASE_TYPE="devel" AGENT_VERSION="$AGENT_VERSION" ./scripts/utils/update-homebrew.sh
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   github-release "v$AGENT_VERSION" releases/*
+
+  env RELEASE_TYPE="stable" AGENT_VERSION="$AGENT_VERSION" ./scripts/utils/update-homebrew.sh
 fi
