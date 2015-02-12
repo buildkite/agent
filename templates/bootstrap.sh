@@ -40,14 +40,15 @@ function buildkite-run {
   fi
 }
 
+function buildkite-debug {
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    echo -e "$1"
+  fi
+}
+
 # Only shows the command if DEBUG is on
 function buildkite-run-debug {
-  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-    echo -e "$BUILDKITE_PROMPT $1"
-    eval $1
-  else
-    eval $1
-  fi
+  buildkite-debug "$BUILDKITE_PROMPT $1"
 }
 
 # Outputs a header
@@ -71,6 +72,20 @@ function buildkite-header-debug {
 function buildkite-error {
   echo -e "\033[31mERROR:\033[0m $1"
   exit 1
+}
+
+# Execute a hook script
+function buildkite-hook {
+  HOOK_SCRIPT_PATH="$BUILDKITE_HOOKS_PATH/$1"
+
+  if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
+    buildkite-header "Running $1 hook"
+    echo -e "$BUILDKITE_PROMPT .$HOOK_SCRIPT_PATH"
+    . "$HOOK_SCRIPT_PATH"
+  elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    buildkite-header "Running $1 hook"
+    echo "Skipping, No hook script $HOOK_SCRIPT_PATH found."
+  fi
 }
 
 ##############################################################
@@ -101,6 +116,9 @@ fi
 # build at the right commit.
 #
 ##############################################################
+
+# Run the `pre-checkout` hook
+buildkite-hook "pre-checkout"
 
 # Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 if [[ ! -z "${BUILDKITE_CLEAN_CHECKOUT:-}" ]] && [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
@@ -200,6 +218,9 @@ fi
 # Make sure the script we're going to run is executable
 chmod +x $BUILDKITE_SCRIPT_PATH
 
+# Run the `pre-script`
+buildkite-hook "pre-script"
+
 ## Docker
 if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
   DOCKER_CONTAINER="buildkite_"$BUILDKITE_JOB_ID"_container"
@@ -268,7 +289,10 @@ else
 fi
 
 # Capture the exit status for the end
-EXIT_STATUS=$?
+export BUILDKITE_COMMAND_EXIT_STATUS=$?
+
+# Run the `post-script`
+buildkite-hook "post-script"
 
 ##############################################################
 #
@@ -293,4 +317,4 @@ fi
 
 # Be sure to exit this script with the same exit status that the users build
 # script exited with.
-exit $EXIT_STATUS
+exit $BUILDKITE_COMMAND_EXIT_STATUS
