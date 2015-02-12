@@ -26,6 +26,9 @@ type Agent struct {
 	// The path to the run the builds in
 	BuildPath string
 
+	// Where bootstrap hooks are found
+	HooksPath string
+
 	// Whether or not the agent is allowed to automatically accept SSH
 	// fingerprints
 	AutoSSHFingerprintVerification bool
