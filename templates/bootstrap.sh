@@ -52,7 +52,11 @@ function buildkite-run-debug {
 
 # Outputs a header
 function buildkite-header {
-  echo -e "--- $1"
+  echo -e "--- $1 { \"time\" : \"`date -u`\" }"
+}
+
+function buildkite-header-expand {
+  echo -e "+++ $1 { \"time\" : \"`date -u`\" }"
 }
 
 # Outputs a header only if DEBUG is on
@@ -78,7 +82,7 @@ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
 BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
 
 if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-  echo '--- Build environment variables'
+  buildkite-header "Build environment variables"
 
   buildkite-run "env | grep BUILDKITE | sort"
 fi
@@ -93,12 +97,12 @@ fi
 
 # Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 if [[ ! -z "${BUILDKITE_CLEAN_CHECKOUT:-}" ]] && [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
-  echo '--- Cleaning project checkout'
+  buildkite-header "Cleaning project checkout"
 
   buildkite-run "rm -rf \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 fi
 
-echo '--- Preparing build folder'
+buildkite-header "Preparing build folder"
 
 buildkite-run "mkdir -p \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 buildkite-run "cd \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
@@ -197,12 +201,12 @@ if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
 
   trap docker-cleanup EXIT
 
-  echo "--- Building Docker image $DOCKER_IMAGE"
+  buildkite-header "Building Docker image $DOCKER_IMAGE"
 
   # Build the Docker image, namespaced to the job
   buildkite-run "docker build -t $DOCKER_IMAGE ."
 
-  echo "+++ Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
+  buildkite-header-expand "Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
 
   # Run the build script command in a one-off container
   buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
@@ -229,19 +233,20 @@ elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" 
 
   trap fig-cleanup EXIT
 
-  echo "--- Building Fig Docker images"
+  buildkite-header "Building Fig Docker images"
 
   # Build the Docker images using Fig, namespaced to the job
   buildkite-run "fig -p $FIG_PROJ_NAME build"
 
-  echo "+++ Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
+  buildkite-header-expand "Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
 
   # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
   buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
 
 ## Standard
 else
-  echo "+++ Running build script"
+  buildkite-header-expand "Running build script"
+
   echo -e "$BUILDKITE_PROMPT ./$BUILDKITE_SCRIPT_PATH"
 
   ."/$BUILDKITE_SCRIPT_PATH"
@@ -267,7 +272,7 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
   # export AWS_S3_ACL=private
   # buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID\""
 
-  echo '--- Uploading artifacts'
+  buildkite-header "Uploading artifacts"
   buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
 fi
 
