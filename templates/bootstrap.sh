@@ -75,7 +75,7 @@ function buildkite-error {
 }
 
 # Execute a hook script
-function buildkite-hook {
+function buildkite-global-hook {
   HOOK_SCRIPT_PATH="$BUILDKITE_HOOKS_PATH/$1"
 
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
@@ -130,7 +130,7 @@ fi
 ##############################################################
 
 # Run the `pre-checkout` hook
-buildkite-hook "pre-checkout"
+buildkite-global-hook "pre-checkout"
 
 # Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 if [[ ! -z "${BUILDKITE_CLEAN_CHECKOUT:-}" ]] && [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
@@ -146,7 +146,7 @@ buildkite-run "cd \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 
 # If the user has specificed their own checkout hook
 if [[ -e "$BUILDKITE_HOOKS_PATH/checkout" ]]; then
-  buildkite-hook "checkout"
+  buildkite-global-hook "checkout"
 else
   # If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
   # a yes/no promp from appearing when cloning/fetching
@@ -205,7 +205,7 @@ else
 fi
 
 # Run the `post-checkout` hook
-buildkite-hook "post-checkout"
+buildkite-global-hook "post-checkout"
 
 ##############################################################
 #
@@ -239,11 +239,11 @@ fi
 chmod +x $BUILDKITE_SCRIPT_PATH
 
 # Run the `pre-run-command` hook
-buildkite-hook "pre-run-command"
+buildkite-global-hook "pre-run-command"
 
 # If the user has specificed their own run-command hook
 if [[ -e "$BUILDKITE_HOOKS_PATH/run-command" ]]; then
-  buildkite-hook "run-command"
+  buildkite-global-hook "run-command"
 else
   ## Docker
   if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
@@ -317,7 +317,7 @@ else
 fi
 
 # Run the `post-command` hook
-buildkite-hook "post-command"
+buildkite-global-hook "post-command"
 
 ##############################################################
 #
