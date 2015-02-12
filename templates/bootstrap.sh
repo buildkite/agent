@@ -55,6 +55,7 @@ function buildkite-header {
   echo -e "--- $1 { \"time\" : \"`date -u`\" }"
 }
 
+# Output a header that is already expanded
 function buildkite-header-expand {
   echo -e "+++ $1 { \"time\" : \"`date -u`\" }"
 }
@@ -64,6 +65,12 @@ function buildkite-header-debug {
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     buildkite-header "$1"
   fi
+}
+
+# Show an error and exit
+function buildkite-error {
+  echo -e "\033[31mERROR:\033[0m $1"
+  exit 1
 }
 
 ##############################################################
@@ -169,17 +176,25 @@ buildkite-run-debug "buildkite-agent build-data set \"buildkite:git:branch\" \"\
 #
 ##############################################################
 
-# If we're evaluating a script, save it to the filesystem first
-if [[ "$BUILDKITE_SCRIPT_MODE" == "eval" ]]; then
-  BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
-
-  echo "$BUILDKITE_SCRIPT_TEXT" > $BUILDKITE_SCRIPT_PATH
+# Make sure we actually have a command to run
+if [[ "$BUILDKITE_COMMAND" == "" ]]; then
+  buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
 fi
 
-# Double check the file exists we want to run
-if [[ "$BUILDKITE_SCRIPT_PATH" == "" ]]; then
-  echo "ERROR: No script to run. Please go to \"Project Settings\" and configure your build step's \"Script to Run\""
-  exit 1
+# If the command is a file on the filesystem, that's the script we're going to
+# run
+if [[ -e "$BUILDKITE_COMMAND" ]]; then
+  BUILDKITE_SCRIPT_PATH=$BUILDKITE_COMMAND
+else
+  # If the command isn't a file, then it's probably a command with arguments we
+  # need to run.
+  if [[ "$BUILDKITE_SCRIPT_EVAL" == "true" ]]; then
+    BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
+
+    echo "$BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
+  else
+    buildkite-error "This agent has not been allowed to evaluate scripts. Re-run this agent and remove the \`--no-script-eval\` option, or specify a script on the file system to run instead."
+  fi
 fi
 
 # Make sure the script we're going to run is executable
