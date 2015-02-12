@@ -79,10 +79,22 @@ function buildkite-hook {
   HOOK_SCRIPT_PATH="$BUILDKITE_HOOKS_PATH/$1"
 
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
+    # Print to the screen we're going to run the hook
     buildkite-header "Running $1 hook"
     echo -e "$BUILDKITE_PROMPT .$HOOK_SCRIPT_PATH"
+
+    # Run the hook
     . "$HOOK_SCRIPT_PATH"
+    HOOK_EXIT_STATUS=$?
+
+    # Exit from the bootstrap.sh script if the hook exits with a non-0 exit
+    # status
+    if [[ $HOOK_EXIT_STATUS -ne 0 ]]; then
+      echo "Hook returned an exit status of $HOOK_EXIT_STATUS, exiting..."
+      exit $HOOK_EXIT_STATUS
+    fi
   elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    # When in debug mode, show that we've skipped a hook
     buildkite-header "Running $1 hook"
     echo "Skipping, No hook script $HOOK_SCRIPT_PATH found."
   fi
