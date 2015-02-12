@@ -182,6 +182,9 @@ buildkite-run "git submodule sync"
 buildkite-run "git submodule update --init --recursive"
 buildkite-run "git submodule foreach --recursive git reset --hard"
 
+# Run the `post-checkout` hook
+buildkite-hook "post-checkout"
+
 # Grab author and commit information and send it back to Buildkite
 buildkite-header-debug "Saving Git information"
 buildkite-run-debug "buildkite-agent build-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
@@ -218,8 +221,8 @@ fi
 # Make sure the script we're going to run is executable
 chmod +x $BUILDKITE_SCRIPT_PATH
 
-# Run the `pre-script`
-buildkite-hook "pre-script"
+# Run the `pre-command` hook
+buildkite-hook "pre-command"
 
 ## Docker
 if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
@@ -291,8 +294,8 @@ fi
 # Capture the exit status for the end
 export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
-# Run the `post-script`
-buildkite-hook "post-script"
+# Run the `post-command` hook
+buildkite-hook "post-command"
 
 ##############################################################
 #
