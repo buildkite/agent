@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# The `pre-checkout` hook will run just before your projects source code is
+# checked out from your SCM provider

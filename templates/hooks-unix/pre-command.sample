@@ -1,0 +1,3 @@
+#!/bin/sh
+
+# The `pre-command` hook will run just before your build command runs

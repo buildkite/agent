@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# The `post-checkout` hook will run after the bootstrap script has checked out
+# your projects source code.

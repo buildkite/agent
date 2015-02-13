@@ -101,11 +101,13 @@ func init() {
 	// This is default locations of stuff (*nix systems)
 	bootstrapScriptLocation := "$HOME/.buildkite/bootstrap.sh"
 	buildPathLocation := "$HOME/.buildkite/builds"
+	hookPathLocation := "$HOME/.buildkite/hooks"
 
 	// Windows has a slightly modified locations
 	if buildkite.MachineIsWindows() {
 		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\bootstrap.bat"
 		buildPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\builds"
+		hookPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\hooks"
 	}
 
 	Commands = []cli.Command{
@@ -159,6 +161,12 @@ func init() {
 					Value:  buildPathLocation,
 					Usage:  "Path to where the builds will run from",
 					EnvVar: "BUILDKITE_BUILD_PATH",
+				},
+				cli.StringFlag{
+					Name:   "hooks-path",
+					Value:  hookPathLocation,
+					Usage:  "Directory where the hook scripts are found",
+					EnvVar: "BUILDKITE_HOOKS_PATH",
 				},
 				cli.BoolFlag{
 					Name:  "no-pty",

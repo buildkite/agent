@@ -113,6 +113,7 @@ func (j *Job) Run(agent *Agent) error {
 
 	// Add misc options
 	env["BUILDKITE_BUILD_PATH"] = agent.BuildPath
+	env["BUILDKITE_HOOKS_PATH"] = agent.HooksPath
 	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", agent.AutoSSHFingerprintVerification)
 	env["BUILDKITE_SCRIPT_EVAL"] = fmt.Sprintf("%t", agent.ScriptEval)
 
