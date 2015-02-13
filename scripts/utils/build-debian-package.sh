@@ -52,6 +52,7 @@ bundle exec fpm -s "dir" \
   --description "$DEB_DESCRIPTION" \
   --vendor "$DEB_VENDOR" \
   --depends "git-core" \
+  --config-files "/etc/buildkite-agent/buildkite-agent.env" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
   --before-remove "templates/apt-package/before-remove.sh" \
   --after-upgrade "templates/apt-package/after-upgrade.sh" \
