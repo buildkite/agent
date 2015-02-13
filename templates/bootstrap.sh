@@ -265,7 +265,7 @@ else
     buildkite-run "docker build -t $DOCKER_IMAGE ."
 
     # Run the build script command in a one-off container
-    echo "--- Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
+    echo "--- Running build script (in Docker container)"
     buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
@@ -298,7 +298,7 @@ else
     buildkite-run "fig -p $FIG_PROJ_NAME build"
 
     # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
-    echo "--- Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
+    echo "--- Running build script (in Fig container)"
     buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
