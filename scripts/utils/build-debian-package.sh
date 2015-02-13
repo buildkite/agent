@@ -61,7 +61,13 @@ bundle exec fpm -s "dir" \
   -v "$DEB_VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
   "templates/apt-package/buildkite-agent.env=/etc/buildkite-agent/buildkite-agent.env" \
-  "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh"
+  "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh" \
+  "templates/hooks/checkout.sample=/etc/buildkite-agent/hooks/checkout.sample" \
+  "templates/hooks/command.sample=/etc/buildkite-agent/hooks/command.sample" \
+  "templates/hooks/post-checkout.sample=/etc/buildkite-agent/hooks/post-checkout.sample" \
+  "templates/hooks/pre-checkout.sample=/etc/buildkite-agent/hooks/pre-checkout.sample" \
+  "templates/hooks/post-command.sample=/etc/buildkite-agent/hooks/post-command.sample" \
+  "templates/hooks/pre-command.sample=/etc/buildkite-agent/hooks/pre-command.sample"
 
 echo ""
 echo -e "Successfully created \033[33m$PACKAGE_PATH\033[0m 👏"
