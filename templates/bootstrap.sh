@@ -250,6 +250,7 @@ else
     DOCKER_IMAGE="buildkite_"$BUILDKITE_JOB_ID"_image"
 
     function docker-cleanup {
+      echo "--- Cleaning up Docker containers"
       buildkite-run "docker rm -f -v $DOCKER_CONTAINER"
 
       # Enabling the following line will prevent your build server from filling up,
@@ -279,6 +280,7 @@ else
     FIG_CONTAINER_NAME=$FIG_PROJ_NAME"_"$BUILDKITE_FIG_CONTAINER
 
     function fig-cleanup {
+      echo "--- Cleaning up Fig Docker containers"
       buildkite-run "fig -p $FIG_PROJ_NAME kill"
       buildkite-run "fig -p $FIG_PROJ_NAME rm --force -v"
 
