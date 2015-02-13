@@ -68,9 +68,16 @@ function buildkite-hook {
     echo "--- Running $HOOK_LABEL hook"
     echo -e "$BUILDKITE_PROMPT . \"$HOOK_SCRIPT_PATH\""
 
+    # Store the current folder, so after the hook, we can return back to the
+    # current working directory
+    HOOK_PREVIOUS_WORKING_DIR=$(pwd)
+
     # Run the hook
     . "$HOOK_SCRIPT_PATH"
     HOOK_EXIT_STATUS=$?
+
+    # Return back to the working dir
+    cd $HOOK_PREVIOUS_WORKING_DIR
 
     # Exit from the bootstrap.sh script if the hook exits with a non-0 exit
     # status
