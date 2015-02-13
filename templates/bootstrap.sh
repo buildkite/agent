@@ -46,21 +46,10 @@ function buildkite-debug {
   fi
 }
 
-# Only shows the command if DEBUG is on
+# Runs the command, but only output what it's doing if we're in DEBUG mode
 function buildkite-run-debug {
   buildkite-debug "$BUILDKITE_PROMPT $1"
-}
-
-# Outputs a header
-function buildkite-header {
-  echo -e "--- $1"
-}
-
-# Outputs a header only if DEBUG is on
-function buildkite-header-debug {
-  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-    buildkite-header "$1"
-  fi
+  eval $1
 }
 
 # Show an error and exit
@@ -76,7 +65,7 @@ function buildkite-hook {
 
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
     # Print to the screen we're going to run the hook
-    buildkite-header "Running $HOOK_LABEL hook"
+    echo "--- Running $HOOK_LABEL hook"
     echo -e "$BUILDKITE_PROMPT . \"$HOOK_SCRIPT_PATH\""
 
     # Run the hook
@@ -91,7 +80,7 @@ function buildkite-hook {
     fi
   elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     # When in debug mode, show that we've skipped a hook
-    buildkite-header "Running $HOOK_LABEL hook"
+    echo "--- Running $HOOK_LABEL hook"
     echo "Skipping, no hook script found at: $HOOK_SCRIPT_PATH"
   fi
 }
@@ -120,7 +109,7 @@ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
 BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
 
 if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-  buildkite-header "Build environment variables"
+  echo "--- Build environment variables"
 
   buildkite-run "env | grep BUILDKITE | sort"
 fi
@@ -138,12 +127,12 @@ buildkite-global-hook "pre-checkout"
 
 # Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 if [[ ! -z "${BUILDKITE_CLEAN_CHECKOUT:-}" ]] && [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
-  buildkite-header "Cleaning project checkout"
+  echo "--- Cleaning project checkout"
 
   buildkite-run "rm -rf \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 fi
 
-buildkite-header "Preparing build folder"
+echo "--- Preparing build folder"
 
 buildkite-run "mkdir -p \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 buildkite-run "cd \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
@@ -203,7 +192,7 @@ else
   buildkite-run "git submodule foreach --recursive git reset --hard"
 
   # Grab author and commit information and send it back to Buildkite
-  buildkite-header-debug "Saving Git information"
+  buildkite-debug "--- Saving Git information"
   buildkite-run-debug "buildkite-agent build-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
   buildkite-run-debug "buildkite-agent build-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
 fi
@@ -272,11 +261,11 @@ else
     trap docker-cleanup EXIT
 
     # Build the Docker image, namespaced to the job
-    buildkite-header "Building Docker image $DOCKER_IMAGE"
+    echo "--- Building Docker image $DOCKER_IMAGE"
     buildkite-run "docker build -t $DOCKER_IMAGE ."
 
     # Run the build script command in a one-off container
-    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
+    echo "--- Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
     buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
@@ -305,11 +294,11 @@ else
     trap fig-cleanup EXIT
 
     # Build the Docker images using Fig, namespaced to the job
-    buildkite-header "Building Fig Docker images"
+    echo "--- Building Fig Docker images"
     buildkite-run "fig -p $FIG_PROJ_NAME build"
 
     # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
-    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
+    echo "--- Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
     buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
@@ -317,8 +306,8 @@ else
 
   ## Standard
   else
-    buildkite-header "Running build script"
-    echo -e "$BUILDKITE_PROMPT ./$BUILDKITE_SCRIPT_PATH"
+    echo "--- Running build script"
+    echo -e "$BUILDKITE_PROMPT . \"$BUILDKITE_SCRIPT_PATH\""
     ."/$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
@@ -349,7 +338,7 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
   # export AWS_S3_ACL=private
   # buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID\""
 
-  buildkite-header "Uploading artifacts"
+  echo "--- Uploading artifacts"
   buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
 fi
 
