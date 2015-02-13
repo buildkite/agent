@@ -77,7 +77,7 @@ function buildkite-hook {
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
     # Print to the screen we're going to run the hook
     buildkite-header "Running $HOOK_LABEL hook"
-    echo -e "$BUILDKITE_PROMPT .$HOOK_SCRIPT_PATH"
+    echo -e "$BUILDKITE_PROMPT . \"$HOOK_SCRIPT_PATH\""
 
     # Run the hook
     . "$HOOK_SCRIPT_PATH"
