@@ -53,7 +53,7 @@ function buildkite-run-debug {
 
 # Outputs a header
 function buildkite-header {
-  echo -e "--- $1 { \"time\" : \"`date -u`\" }"
+  echo -e "--- $1"
 }
 
 # Outputs a header only if DEBUG is on
