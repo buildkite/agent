@@ -21,7 +21,12 @@ script
 set -a
 . $ENVFILE
 set +a
-exec start-stop-daemon --start --quiet --chuid $BUILDKITE_USER --pidfile $PIDFILE --make-pidfile --exec /usr/bin/buildkite-agent -- start
+exec start-stop-daemon --start \
+                       --quiet \
+                       --chuid $BUILDKITE_USER \
+                       --pidfile $PIDFILE \
+                       --make-pidfile \
+                       --exec /usr/bin/buildkite-agent -- start
 end script
 
 post-stop exec rm -f $PIDFILE
