@@ -69,13 +69,14 @@ function buildkite-error {
   exit 1
 }
 
-# Execute a hook script
-function buildkite-global-hook {
-  HOOK_SCRIPT_PATH="$BUILDKITE_HOOKS_PATH/$1"
+# Run a hook script
+function buildkite-hook {
+  HOOK_LABEL="$1"
+  HOOK_SCRIPT_PATH="$2"
 
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
     # Print to the screen we're going to run the hook
-    buildkite-header "Running $1 hook"
+    buildkite-header "Running $HOOK_LABEL hook"
     echo -e "$BUILDKITE_PROMPT .$HOOK_SCRIPT_PATH"
 
     # Run the hook
@@ -90,9 +91,17 @@ function buildkite-global-hook {
     fi
   elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     # When in debug mode, show that we've skipped a hook
-    buildkite-header "Running $1 hook"
-    echo "Skipping, No hook script $HOOK_SCRIPT_PATH found."
+    buildkite-header "Running $HOOK_LABEL hook"
+    echo "Skipping, no hook script found at: $HOOK_SCRIPT_PATH"
   fi
+}
+
+function buildkite-global-hook {
+  buildkite-hook "global $1" "$BUILDKITE_HOOKS_PATH/$1"
+}
+
+function buildkite-local-hook {
+  buildkite-hook "local $1" ".buildkite/hooks/$1"
 }
 
 ##############################################################
@@ -233,12 +242,18 @@ fi
 # Make sure the script we're going to run is executable
 chmod +x $BUILDKITE_SCRIPT_PATH
 
-# Run the `pre-run-command` hook
-buildkite-global-hook "pre-run-command"
+# Run the global `pre-command` hook
+buildkite-global-hook "pre-command"
 
-# If the user has specificed their own run-command hook
-if [[ -e "$BUILDKITE_HOOKS_PATH/run-command" ]]; then
-  buildkite-global-hook "run-command"
+# Run the per-checkout `pre-command` hook
+buildkite-local-hook "pre-command"
+
+# If the user has specificed their own command hook
+if [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
+  buildkite-global-hook "command"
+
+  # Capture the exit status from the build script
+  export BUILDKITE_COMMAND_EXIT_STATUS=$?
 else
   ## Docker
   if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
@@ -256,15 +271,16 @@ else
 
     trap docker-cleanup EXIT
 
-    buildkite-header "Building Docker image $DOCKER_IMAGE"
-
     # Build the Docker image, namespaced to the job
+    buildkite-header "Building Docker image $DOCKER_IMAGE"
     buildkite-run "docker build -t $DOCKER_IMAGE ."
 
-    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
-
     # Run the build script command in a one-off container
+    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Docker container $DOCKER_IMAGE)"
     buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
+
+    # Capture the exit status from the build script
+    export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
   ## Fig
   elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" != "" ]]; then
@@ -288,30 +304,32 @@ else
 
     trap fig-cleanup EXIT
 
-    buildkite-header "Building Fig Docker images"
-
     # Build the Docker images using Fig, namespaced to the job
+    buildkite-header "Building Fig Docker images"
     buildkite-run "fig -p $FIG_PROJ_NAME build"
 
-    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
-
     # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
+    buildkite-header "Running $BUILDKITE_SCRIPT_PATH (in Fig container '$BUILDKITE_FIG_CONTAINER')"
     buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
+
+    # Capture the exit status from the build script
+    export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
   ## Standard
   else
     buildkite-header "Running build script"
-
     echo -e "$BUILDKITE_PROMPT ./$BUILDKITE_SCRIPT_PATH"
-
     ."/$BUILDKITE_SCRIPT_PATH"
-  fi
 
-  # Capture the exit status for the end
-  export BUILDKITE_COMMAND_EXIT_STATUS=$?
+    # Capture the exit status from the build script
+    export BUILDKITE_COMMAND_EXIT_STATUS=$?
+  fi
 fi
 
-# Run the `post-command` hook
+# Run the per-checkout `post-command` hook
+buildkite-local-hook "post-command"
+
+# Run the global `post-command` hook
 buildkite-global-hook "post-command"
 
 ##############################################################
