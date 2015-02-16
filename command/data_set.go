@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -10,7 +11,12 @@ import (
 func DataSetCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildkite.LoggerInitDebug()
+		logger.SetLevel(logger.DEBUG)
+	}
+
+	// Toggle colors
+	if c.Bool("no-color") {
+		logger.SetColors(false)
 	}
 
 	agentAccessToken := c.String("agent-access-token")
@@ -33,7 +39,7 @@ func DataSetCommandAction(c *cli.Context) {
 	// Find the job
 	job, err := client.JobFind(jobId)
 	if err != nil {
-		buildkite.Logger.Fatalf("Could not find job: %s", jobId)
+		logger.Fatal("Could not find job: %s", jobId)
 	}
 
 	// Grab the key and value to set
@@ -43,6 +49,6 @@ func DataSetCommandAction(c *cli.Context) {
 	// Set the data through the API
 	_, err = client.DataSet(job, key, value)
 	if err != nil {
-		buildkite.Logger.Fatalf("Failed to set data: %s", err)
+		logger.Fatal("Failed to set data: %s", err)
 	}
 }

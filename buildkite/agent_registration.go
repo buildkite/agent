@@ -2,7 +2,7 @@ package buildkite
 
 import (
 	"fmt"
-	"github.com/Sirupsen/logrus"
+	"github.com/buildkite/agent/buildkite/logger"
 )
 
 type AgentRegistration struct {
@@ -41,18 +41,15 @@ func (c *Client) AgentRegister(name string, priority string, metaData []string, 
 	registration.MetaData = metaData
 	registration.ScriptEval = scriptEval
 
-	Logger.WithFields(logrus.Fields{
-		"name":      registration.Name,
-		"hostname":  registration.Hostname,
-		"meta-data": registration.MetaData,
-		"priority":  registration.Priority,
-	}).Info("Registering agent with Buildkite")
+	logger.Info("Registering Agent with Buildkite...")
 
 	// Register and return the agent
 	err = c.Post(&registration, "/register", registration)
 	if err != nil {
 		return "", err
 	}
+
+	logger.Info("Agent successfully registered")
 
 	return registration.AccessToken, nil
 }

@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/buildkite/agent/buildkite/logger"
 	"io"
 	"os"
 	"os/exec"
@@ -69,7 +70,7 @@ func (p *Process) Start() error {
 
 	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
 
-	Logger.Infof("Starting to run script: %s", p.command.Path)
+	logger.Info("Starting to run script: %s", p.command.Path)
 
 	// Toggle between running in a pty
 	if p.RunInPty {
@@ -85,7 +86,7 @@ func (p *Process) Start() error {
 		waitGroup.Add(1)
 
 		go func() {
-			Logger.Debug("Starting to copy PTY to the buffer")
+			logger.Debug("Starting to copy PTY to the buffer")
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
@@ -99,9 +100,9 @@ func (p *Process) Start() error {
 			}
 
 			if err != nil {
-				Logger.Errorf("PTY output copy failed with error: %T: %v", err, err)
+				logger.Error("PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				Logger.Debug("PTY has finished being copied to the buffer")
+				logger.Debug("PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
@@ -120,13 +121,13 @@ func (p *Process) Start() error {
 		p.Running = true
 	}
 
-	Logger.Infof("Process is running with PID: %d", p.Pid)
+	logger.Info("Process is running with PID: %d", p.Pid)
 
 	// Add the line callback routine to the waitGroup
 	waitGroup.Add(1)
 
 	go func() {
-		Logger.Debug("Starting the line scanner")
+		logger.Debug("Starting the line scanner")
 
 		scanner := bufio.NewScanner(lineReaderPipe)
 		for scanner.Scan() {
@@ -134,10 +135,10 @@ func (p *Process) Start() error {
 		}
 
 		if err := scanner.Err(); err != nil {
-			Logger.Errorf("Failed to scan lines: (%T: %v)", err, err)
+			logger.Error("Failed to scan lines: (%T: %v)", err, err)
 		}
 
-		Logger.Debug("Line scanner has finished")
+		logger.Debug("Line scanner has finished")
 
 		waitGroup.Done()
 	}()
@@ -158,14 +159,14 @@ func (p *Process) Start() error {
 	// Find the exit status of the script
 	p.ExitStatus = getExitStatus(waitResult)
 
-	Logger.Infof("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	Logger.Debug("Waiting for routines to finish")
+	logger.Debug("Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		Logger.Debugf("Timed out waiting for wait group: (%T: %v)", err, err)
+		logger.Debug("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
 	// No error occured so we can return nil
@@ -191,13 +192,13 @@ func (p *Process) Kill() error {
 	// is still alive.
 	go func() {
 		for checking {
-			Logger.Debugf("Checking to see if PID: %d is still alive", p.Pid)
+			logger.Debug("Checking to see if PID: %d is still alive", p.Pid)
 
 			foundProcess, err := os.FindProcess(p.Pid)
 
 			// Can't find the process at all
 			if err != nil {
-				Logger.Debugf("Could not find process with PID: %d", p.Pid)
+				logger.Debug("Could not find process with PID: %d", p.Pid)
 
 				break
 			}
@@ -207,7 +208,7 @@ func (p *Process) Kill() error {
 				processState, err := foundProcess.Wait()
 
 				if err != nil || processState.Exited() {
-					Logger.Debugf("Process with PID: %d has exited.", p.Pid)
+					logger.Debug("Process with PID: %d has exited.", p.Pid)
 
 					break
 				}
@@ -241,11 +242,11 @@ func (p *Process) Kill() error {
 }
 
 func (p *Process) signal(sig os.Signal) error {
-	Logger.Debugf("Sending signal: %s to PID: %d", sig.String(), p.Pid)
+	logger.Debug("Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
 	err := p.command.Process.Signal(syscall.SIGTERM)
 	if err != nil {
-		Logger.Errorf("Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
+		logger.Error("Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
 		return err
 	}
 
@@ -262,7 +263,7 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				Logger.Error("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				logger.Error("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		}
 	} else {

@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -12,6 +13,11 @@ func AgentStartCommandAction(c *cli.Context) {
 	agentName, err := buildkite.MachineHostname()
 	if c.String("name") != "" {
 		agentName = c.String("name")
+	}
+
+	// Toggle colors
+	if c.Bool("no-color") {
+		logger.SetColors(false)
 	}
 
 	welcomeMessage := "                _._\n" +
@@ -34,7 +40,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Init debugging
 	if c.Bool("debug") {
-		buildkite.LoggerInitDebug()
+		logger.SetLevel(logger.DEBUG)
 	}
 
 	// Create the agent
@@ -58,17 +64,17 @@ func AgentStartCommandAction(c *cli.Context) {
 		os.Exit(1)
 	}
 
-	buildkite.Logger.Debugf("Bootstrap script: %s", bootstrapScript)
+	logger.Debug("Bootstrap script: %s", bootstrapScript)
 
 	// Expand the build path. We don't bother checking to see if it can be
 	// written to, because it'll show up in the agent logs if it doesn't
 	// work.
 	buildPath := os.ExpandEnv(c.String("build-path"))
-	buildkite.Logger.Debugf("Build path: %s", buildPath)
+	logger.Debug("Build path: %s", buildPath)
 
 	// Expand the hooks path that is used by the bootstrap script
 	hooksPath := os.ExpandEnv(c.String("hooks-path"))
-	buildkite.Logger.Debugf("Hooks directory: %s", hooksPath)
+	logger.Debug("Hooks directory: %s", hooksPath)
 
 	// Create a client so we can register the agent
 	var client buildkite.Client
@@ -83,7 +89,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
-			buildkite.Logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
 				agentMetaData = append(agentMetaData, fmt.Sprintf("%s=%s", tag, value))
@@ -107,13 +113,13 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.ScriptEval = !c.Bool("no-script-eval")
 
 	if !agent.ScriptEval {
-		buildkite.Logger.Info("Evaluating scripts has been disabled for this agent")
+		logger.Info("Evaluating scripts has been disabled for this agent")
 	}
 
 	// Register the agent
 	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData, agent.ScriptEval)
 	if err != nil {
-		buildkite.Logger.Fatal(err)
+		logger.Fatal("%s", err)
 	}
 
 	// Client specific options

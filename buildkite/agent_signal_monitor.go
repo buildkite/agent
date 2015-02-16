@@ -3,6 +3,7 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/buildkite/logger"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,12 +68,12 @@ func (a *Agent) MonitorSignals() {
 		// This will block until a signal is sent
 		sig := <-signals
 
-		Logger.Debugf("Received signal `%s`", sig.String())
+		logger.Debug("Received signal `%s`", sig.String())
 
 		// Ignore SIGHUP, some terminals seem to send it when they get resized,
 		// killing the process here would just be silly.
 		if sig == syscall.SIGHUP {
-			Logger.Debugf("Ignoring signal `%s`", sig.String())
+			logger.Debug("Ignoring signal `%s`", sig.String())
 
 			// Start monitoring signals again
 			a.MonitorSignals()
@@ -82,16 +83,16 @@ func (a *Agent) MonitorSignals() {
 
 		// If we've received a SIGKILL, die immediately.
 		if sig == syscall.SIGKILL {
-			Logger.Debugf("Exiting immediately", sig.String())
+			logger.Debug("Exiting immediately", sig.String())
 
 			os.Exit(1)
 		}
 
 		// Show debug information with SIGUSR1
 		if sig == syscall.SIGUSR1 {
-			Logger.Debugf("======DEBUG===== %s", a)
+			logger.Debug("======DEBUG===== %s", a)
 			if a.Job != nil {
-				Logger.Debugf("======DEBUG===== %s", a.Job)
+				logger.Debug("======DEBUG===== %s", a.Job)
 			}
 
 			// Start monitoring signals again
@@ -111,7 +112,7 @@ func (a *Agent) MonitorSignals() {
 			} else {
 				// We should warn the user before they try and shut down the
 				// agent while it's performing a job
-				Logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
+				logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
 
 				a.stopping = true
 			}

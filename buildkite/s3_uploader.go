@@ -3,6 +3,7 @@ package buildkite
 import (
 	"errors"
 	"fmt"
+	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/crowdmob/goamz/aws"
 	"github.com/crowdmob/goamz/s3"
 	"io/ioutil"
@@ -79,18 +80,18 @@ func (u *S3Uploader) Upload(artifact *Artifact) error {
 		permission != "authenticated-read" &&
 		permission != "bucket-owner-read" &&
 		permission != "bucket-owner-full-control" {
-		Logger.Fatalf("Invalid S3 ACL `%s`", permission)
+		logger.Fatal("Invalid S3 ACL `%s`", permission)
 	}
 
 	Perms := s3.ACL(permission)
 
-	Logger.Debugf("Reading file %s", artifact.AbsolutePath)
+	logger.Debug("Reading file %s", artifact.AbsolutePath)
 	data, err := ioutil.ReadFile(artifact.AbsolutePath)
 	if err != nil {
 		return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
 	}
 
-	Logger.Debugf("Putting to %s with permission %s", u.artifactPath(artifact), permission)
+	logger.Debug("Putting to %s with permission %s", u.artifactPath(artifact), permission)
 	err = u.Bucket.Put(u.artifactPath(artifact), data, artifact.MimeType(), Perms, s3.Options{})
 	if err != nil {
 		return errors.New("Failed to PUT file " + u.artifactPath(artifact) + " (" + err.Error() + ")")

@@ -2,6 +2,7 @@ package buildkite
 
 import (
 	"fmt"
+	"github.com/buildkite/agent/buildkite/logger"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -78,13 +79,13 @@ func (j *Job) Kill() error {
 	if j.cancelled {
 		// Already cancelled
 	} else {
-		Logger.Infof("Cancelling job %s", j.ID)
+		logger.Info("Cancelling job %s", j.ID)
 		j.cancelled = true
 
 		if j.process != nil {
 			j.process.Kill()
 		} else {
-			Logger.Errorf("No process to kill")
+			logger.Error("No process to kill")
 		}
 	}
 
@@ -92,7 +93,7 @@ func (j *Job) Kill() error {
 }
 
 func (j *Job) Run(agent *Agent) error {
-	Logger.Infof("Starting job %s", j.ID)
+	logger.Info("Starting job %s", j.ID)
 
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
@@ -107,7 +108,7 @@ func (j *Job) Run(agent *Agent) error {
 	env["BUILDKITE_AGENT_ENDPOINT"] = agent.Client.URL
 	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = agent.Client.AuthorizationToken
 	env["BUILDKITE_AGENT_VERSION"] = Version()
-	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", InDebugMode())
+	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", logger.GetLevel() == logger.DEBUG)
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
@@ -149,7 +150,7 @@ func (j *Job) Run(agent *Agent) error {
 					// We don't really care if the job couldn't update at this point.
 					// This is just a partial update. We'll just let the job run
 					// and hopefully the host will fix itself before we finish.
-					Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
+					logger.Warn("Problem with updating job %s (%s)", j.ID, err)
 				} else if updatedJob.State == "canceled" {
 					j.Kill()
 				}
@@ -158,20 +159,20 @@ func (j *Job) Run(agent *Agent) error {
 				time.Sleep(1000 * time.Millisecond)
 			}
 
-			Logger.Debug("Routine that sends job updates has finished")
+			logger.Debug("Routine that sends job updates has finished")
 		}()
 	}
 
 	// The regular expression used to match headers
 	headerRegexp, err := regexp.Compile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
 	if err != nil {
-		Logger.Errorf("Failed to compile header regular expression (%T: %v)", err, err)
+		logger.Error("Failed to compile header regular expression (%T: %v)", err, err)
 	}
 
 	// This callback is called for every line that is output by the process
 	lineCallback := func(process *Process, line string) {
 		if headerRegexp.MatchString(line) {
-			// Logger.Debugf("Found header \"%s\", capturing current time", line)
+			// logger.Debug("Found header \"%s\", capturing current time", line)
 			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339))
 		}
 	}
@@ -199,7 +200,7 @@ func (j *Job) Run(agent *Agent) error {
 	for {
 		_, err = agent.Client.JobUpdate(j)
 		if err != nil {
-			Logger.Errorf("Problem with updating final job information %s (%s)", j.ID, err)
+			logger.Error("Problem with updating final job information %s (%s)", j.ID, err)
 
 			// How long should we wait until we try again?
 			idleSeconds := 5
@@ -212,7 +213,7 @@ func (j *Job) Run(agent *Agent) error {
 		}
 	}
 
-	Logger.Infof("Finished job %s", j.ID)
+	logger.Info("Finished job %s", j.ID)
 
 	return nil
 }
