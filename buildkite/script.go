@@ -1,5 +1,3 @@
-// +build !windows
-
 package buildkite
 
 // Logic for this file is largely based on:
@@ -10,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/kr/pty"
 	"io"
 	"os"
 	"os/exec"
@@ -47,9 +44,8 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	process.command = exec.Command(absolutePath)
 	process.command.Dir = scriptDirectory
 
-	// Children of the forked process will inherit its process group
-	// This is to make sure that all grandchildren dies when this Process instance is killed
-	process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Do cross-platform things to prepare this process to run
+	PrepareCommandProcess(&process)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -78,7 +74,7 @@ func (p *Process) Start() error {
 	if p.RunInPty {
 		Logger.Debugf("Process is running in a PTY")
 
-		pty, err := pty.Start(p.command)
+		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
 			return err

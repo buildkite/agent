@@ -96,7 +96,13 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.BootstrapScript = bootstrapScript
 	agent.BuildPath = buildPath
 	agent.HooksPath = hooksPath
-	agent.RunInPty = !c.Bool("no-pty")
+
+	if buildkite.MachineIsWindows() {
+		agent.RunInPty = false
+	} else {
+		agent.RunInPty = !c.Bool("no-pty")
+	}
+
 	agent.AutoSSHFingerprintVerification = !c.Bool("no-automatic-ssh-fingerprint-verification")
 	agent.ScriptEval = !c.Bool("no-script-eval")
 
