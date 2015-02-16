@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -21,6 +22,8 @@ type Job struct {
 	Env map[string]string
 
 	Output string `json:"output,omitempty"`
+
+	HeaderTimes []string `json:"header_times,omitempty"`
 
 	ExitStatus string `json:"exit_status,omitempty"`
 
@@ -125,7 +128,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Mark the build as started
-	j.StartedAt = time.Now().Format(time.RFC3339)
+	j.StartedAt = time.Now().UTC().Format(time.RFC3339)
 	_, err := agent.Client.JobUpdate(j)
 	if err != nil {
 		// We don't care if the HTTP request failed here. We hope that it
@@ -159,9 +162,18 @@ func (j *Job) Run(agent *Agent) error {
 		}()
 	}
 
+	// The regular expression used to match headers
+	headerRegexp, err := regexp.Compile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
+	if err != nil {
+		Logger.Errorf("Failed to compile header regular expression (%T: %v)", err, err)
+	}
+
 	// This callback is called for every line that is output by the process
 	lineCallback := func(process *Process, line string) {
-		// fmt.Printf("ZOMG LINE %s\n", line)
+		if headerRegexp.MatchString(line) {
+			// Logger.Debugf("Found header \"%s\", capturing current time", line)
+			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339))
+		}
 	}
 
 	// Initialze our process to run
@@ -180,7 +192,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Mark the build as finished
-	j.FinishedAt = time.Now().Format(time.RFC3339)
+	j.FinishedAt = time.Now().UTC().Format(time.RFC3339)
 	j.ExitStatus = j.process.ExitStatus
 
 	// Keep trying this call until it works. This is the most important one.
