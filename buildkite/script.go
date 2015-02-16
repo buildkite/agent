@@ -6,6 +6,7 @@ package buildkite
 // https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -65,15 +66,18 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 
 func (p *Process) Start() error {
 	var buffer bytes.Buffer
-	var buffer2 bytes.Buffer
 	var waitGroup sync.WaitGroup
 
-	multiWriter := io.MultiWriter(&buffer, &buffer2)
+	lineReadr, lineWritr := io.Pipe()
+
+	multiWriter := io.MultiWriter(&buffer, lineWritr)
 
 	Logger.Infof("Starting to run script: %s", p.command.Path)
 
 	// Toggle between running in a pty
 	if p.RunInPty {
+		Logger.Debugf("Process is running in a PTY")
+
 		pty, err := pty.Start(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
@@ -105,6 +109,8 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
+		Logger.Debugf("Process is running without a PTY")
+
 		p.command.Stdout = multiWriter
 		p.command.Stderr = multiWriter
 
@@ -143,14 +149,18 @@ func (p *Process) Start() error {
 	}()
 
 	go func() {
-		for p.Running {
-			line, err := buffer2.ReadString('\n')
-			if err != nil {
-				continue
-			}
+		Logger.Infof("SCANNING TIME")
 
-			fmt.Printf("line: %s", line)
+		scanner := bufio.NewScanner(lineReadr)
+		for scanner.Scan() {
+			fmt.Printf("line %s\n", scanner.Text()) // Println will add back the final '\n'
 		}
+
+		if err := scanner.Err(); err != nil {
+			Logger.Errorf("ZOMG ERR %s", err)
+		}
+
+		Logger.Infof("BOO FIN")
 
 		waitGroup.Done()
 	}()
