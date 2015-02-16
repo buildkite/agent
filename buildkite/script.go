@@ -18,13 +18,14 @@ import (
 )
 
 type Process struct {
-	Output     string
-	Pid        int
-	Running    bool
-	RunInPty   bool
-	ExitStatus string
-	command    *exec.Cmd
-	callback   func(*Process)
+	Pid           int
+	Running       bool
+	RunInPty      bool
+	ExitStatus    string
+	buffer        bytes.Buffer
+	command       *exec.Cmd
+	startCallback func(*Process)
+	lineCallback  func(*Process, string)
 }
 
 // Implement the Stringer thingy
@@ -32,7 +33,7 @@ func (p Process) String() string {
 	return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*Process)) *Process {
+func InitProcess(scriptPath string, env []string, runInPty bool, startCallback func(*Process), lineCallback func(*Process, string)) *Process {
 	// Create a new instance of our process struct
 	var process Process
 	process.RunInPty = runInPty
@@ -54,25 +55,25 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	currentEnv := os.Environ()
 	process.command.Env = append(currentEnv, env...)
 
-	// Set the callback
-	process.callback = callback
+	// Set the callbacks
+	process.lineCallback = lineCallback
+	process.startCallback = startCallback
 
 	return &process
 }
 
 func (p *Process) Start() error {
-	var buffer bytes.Buffer
 	var waitGroup sync.WaitGroup
 
 	lineReadr, lineWritr := io.Pipe()
 
-	multiWriter := io.MultiWriter(&buffer, lineWritr)
+	multiWriter := io.MultiWriter(&p.buffer, lineWritr)
 
 	Logger.Infof("Starting to run script: %s", p.command.Path)
 
 	// Toggle between running in a pty
 	if p.RunInPty {
-		Logger.Debugf("Process is running in a PTY")
+		Logger.Debugf("Starting TTY Session")
 
 		pty, err := StartPTY(p.command)
 		if err != nil {
@@ -83,19 +84,19 @@ func (p *Process) Start() error {
 		p.Pid = p.command.Process.Pid
 		p.Running = true
 
-		waitGroup.Add(3)
+		waitGroup.Add(1)
 
 		go func() {
 			Logger.Debug("Starting to copy PTY to the buffer")
 
-			// Copy the pty to our buffer. This will block until it EOF's
-			// or something breaks.
+			// Copy the pty to our buffer. This will block until it
+			// EOF's or something breaks.
 			_, err = io.Copy(multiWriter, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
-				// successfully.
-				// See: https://github.com/buildkite/agent/pull/34#issuecomment-46080419
+				// successfully.  See:
+				// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 			} else if err != nil {
 				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
 			} else {
@@ -105,8 +106,6 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
-		Logger.Debugf("Process is running without a PTY")
-
 		p.command.Stdout = multiWriter
 		p.command.Stderr = multiWriter
 
@@ -118,45 +117,29 @@ func (p *Process) Start() error {
 
 		p.Pid = p.command.Process.Pid
 		p.Running = true
-
-		// We only have to wait for 2 things if we're not running in a PTY.
-		waitGroup.Add(2)
 	}
 
 	Logger.Infof("Process is running with PID: %d", p.Pid)
 
-	go func() {
-		for p.Running {
-			Logger.Debug("Copying buffer to the process output")
+	// Call the startCallback
+	p.startCallback(p)
 
-			// Convert the stdout buffer to a string
-			p.Output = buffer.String()
-
-			// Call the callback and pass in our process object
-			p.callback(p)
-
-			// Sleep for 1 second
-			time.Sleep(1000 * time.Millisecond)
-		}
-
-		Logger.Debug("Finished routine that copies the buffer to the process output")
-
-		waitGroup.Done()
-	}()
+	// Add the line callback routine to the waitGroup
+	waitGroup.Add(1)
 
 	go func() {
-		Logger.Infof("SCANNING TIME")
+		Logger.Debug("Starting the line scanner")
 
 		scanner := bufio.NewScanner(lineReadr)
 		for scanner.Scan() {
-			fmt.Printf("line %s\n", scanner.Text()) // Println will add back the final '\n'
+			p.lineCallback(p, scanner.Text())
 		}
 
 		if err := scanner.Err(); err != nil {
-			Logger.Errorf("ZOMG ERR %s", err)
+			Logger.Errorf("Failed to scan lines: (%T: %v)", err, err)
 		}
 
-		Logger.Infof("BOO FIN")
+		Logger.Debug("Line scanner has finished")
 
 		waitGroup.Done()
 	}()
@@ -175,17 +158,18 @@ func (p *Process) Start() error {
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	Logger.Debug("Waiting for io.Copy and incremental output to finish")
+	Logger.Debug("Waiting for buffer routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		Logger.Errorf("Timed out waiting for wait group: (%T: %v)", err, err)
+		Logger.Debugf("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
-
-	// Copy the final output back to the process
-	p.Output = buffer.String()
 
 	// No error occured so we can return nil
 	return nil
+}
+
+func (p *Process) Output() string {
+	return p.buffer.String()
 }
 
 func (p *Process) Kill() error {

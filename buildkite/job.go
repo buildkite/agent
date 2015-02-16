@@ -132,25 +132,40 @@ func (j *Job) Run(agent *Agent) error {
 		// starts working during the actual build.
 	}
 
-	// This callback is called every second the build is running. This lets
-	// us do a lazy-person's method of streaming data to Buildkite.
-	callback := func(process *Process) {
-		j.Output = process.Output
+	// This callback is called when the process starts
+	startCallback := func(process *Process) {
+		// Start a routine that will grab the output every few seconds and send it back to Buildkite
+		go func() {
+			for process.Running {
+				// Save the output to the job
+				j.Output = process.Output()
 
-		// Post the update to the API
-		updatedJob, err := agent.Client.JobUpdate(j)
-		if err != nil {
-			// We don't really care if the job couldn't update at this point.
-			// This is just a partial update. We'll just let the job run
-			// and hopefully the host will fix itself before we finish.
-			Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
-		} else if updatedJob.State == "canceled" {
-			j.Kill()
-		}
+				// Post the update to the API
+				updatedJob, err := agent.Client.JobUpdate(j)
+				if err != nil {
+					// We don't really care if the job couldn't update at this point.
+					// This is just a partial update. We'll just let the job run
+					// and hopefully the host will fix itself before we finish.
+					Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
+				} else if updatedJob.State == "canceled" {
+					j.Kill()
+				}
+
+				// Sleep for 1 second
+				time.Sleep(1000 * time.Millisecond)
+			}
+
+			Logger.Debug("Routine that sends job updates has finished")
+		}()
+	}
+
+	// This callback is called for every line that is output by the process
+	lineCallback := func(process *Process, line string) {
+		// fmt.Printf("ZOMG LINE %s\n", line)
 	}
 
 	// Initialze our process to run
-	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, callback)
+	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, startCallback, lineCallback)
 
 	// Store the process so we can cancel it later.
 	j.process = process
@@ -159,7 +174,7 @@ func (j *Job) Run(agent *Agent) error {
 	err = process.Start()
 	if err == nil {
 		// Store the final output
-		j.Output = j.process.Output
+		j.Output = process.Output()
 	} else {
 		j.Output = fmt.Sprintf("%s", err)
 	}
