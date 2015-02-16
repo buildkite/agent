@@ -65,7 +65,10 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 
 func (p *Process) Start() error {
 	var buffer bytes.Buffer
+	var buffer2 bytes.Buffer
 	var waitGroup sync.WaitGroup
+
+	multiWriter := io.MultiWriter(&buffer, &buffer2)
 
 	Logger.Infof("Starting to run script: %s", p.command.Path)
 
@@ -80,14 +83,14 @@ func (p *Process) Start() error {
 		p.Pid = p.command.Process.Pid
 		p.Running = true
 
-		waitGroup.Add(2)
+		waitGroup.Add(3)
 
 		go func() {
 			Logger.Debug("Starting to copy PTY to the buffer")
 
 			// Copy the pty to our buffer. This will block until it EOF's
 			// or something breaks.
-			_, err = io.Copy(&buffer, pty)
+			_, err = io.Copy(multiWriter, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
@@ -102,8 +105,8 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
-		p.command.Stdout = &buffer
-		p.command.Stderr = &buffer
+		p.command.Stdout = multiWriter
+		p.command.Stderr = multiWriter
 
 		err := p.command.Start()
 		if err != nil {
@@ -114,8 +117,8 @@ func (p *Process) Start() error {
 		p.Pid = p.command.Process.Pid
 		p.Running = true
 
-		// We only have to wait for 1 thing if we're not running in a PTY.
-		waitGroup.Add(1)
+		// We only have to wait for 2 things if we're not running in a PTY.
+		waitGroup.Add(2)
 	}
 
 	Logger.Infof("Process is running with PID: %d", p.Pid)
@@ -135,6 +138,19 @@ func (p *Process) Start() error {
 		}
 
 		Logger.Debug("Finished routine that copies the buffer to the process output")
+
+		waitGroup.Done()
+	}()
+
+	go func() {
+		for p.Running {
+			line, err := buffer2.ReadString('\n')
+			if err != nil {
+				continue
+			}
+
+			fmt.Printf("line: %s", line)
+		}
 
 		waitGroup.Done()
 	}()
