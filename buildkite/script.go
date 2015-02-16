@@ -65,16 +65,14 @@ func InitProcess(scriptPath string, env []string, runInPty bool, startCallback f
 func (p *Process) Start() error {
 	var waitGroup sync.WaitGroup
 
-	lineReadr, lineWritr := io.Pipe()
+	lineReaderPipe, lineWriterPipe := io.Pipe()
 
-	multiWriter := io.MultiWriter(&p.buffer, lineWritr)
+	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
 
 	Logger.Infof("Starting to run script: %s", p.command.Path)
 
 	// Toggle between running in a pty
 	if p.RunInPty {
-		Logger.Debugf("Starting TTY Session")
-
 		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
@@ -97,10 +95,13 @@ func (p *Process) Start() error {
 				// it's just the PTY telling us that it closed
 				// successfully.  See:
 				// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
-			} else if err != nil {
-				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
+				err = nil
+			}
+
+			if err != nil {
+				Logger.Errorf("PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				Logger.Debug("io.Copy finsihed")
+				Logger.Debug("PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
@@ -121,16 +122,13 @@ func (p *Process) Start() error {
 
 	Logger.Infof("Process is running with PID: %d", p.Pid)
 
-	// Call the startCallback
-	p.startCallback(p)
-
 	// Add the line callback routine to the waitGroup
 	waitGroup.Add(1)
 
 	go func() {
 		Logger.Debug("Starting the line scanner")
 
-		scanner := bufio.NewScanner(lineReadr)
+		scanner := bufio.NewScanner(lineReaderPipe)
 		for scanner.Scan() {
 			p.lineCallback(p, scanner.Text())
 		}
@@ -144,9 +142,15 @@ func (p *Process) Start() error {
 		waitGroup.Done()
 	}()
 
+	// Call the startCallback
+	p.startCallback(p)
+
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
 	waitResult := p.command.Wait()
+
+	// Close the line writer pipe
+	lineWriterPipe.Close()
 
 	// The process is no longer running at this point
 	p.Running = false
@@ -158,7 +162,7 @@ func (p *Process) Start() error {
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	Logger.Debug("Waiting for buffer routines to finish")
+	Logger.Debug("Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
 		Logger.Debugf("Timed out waiting for wait group: (%T: %v)", err, err)
@@ -281,7 +285,7 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	select {
 	case _ = <-c:
 		return nil
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		return errors.New("Timeout")
 	}
 
