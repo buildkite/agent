@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -21,6 +22,8 @@ type Job struct {
 	Env map[string]string
 
 	Output string `json:"output,omitempty"`
+
+	HeaderTimes []string `json:"header_times,omitempty"`
 
 	ExitStatus string `json:"exit_status,omitempty"`
 
@@ -125,32 +128,56 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Mark the build as started
-	j.StartedAt = time.Now().Format(time.RFC3339)
+	j.StartedAt = time.Now().UTC().Format(time.RFC3339)
 	_, err := agent.Client.JobUpdate(j)
 	if err != nil {
 		// We don't care if the HTTP request failed here. We hope that it
 		// starts working during the actual build.
 	}
 
-	// This callback is called every second the build is running. This lets
-	// us do a lazy-person's method of streaming data to Buildkite.
-	callback := func(process *Process) {
-		j.Output = process.Output
+	// This callback is called when the process starts
+	startCallback := func(process *Process) {
+		// Start a routine that will grab the output every few seconds and send it back to Buildkite
+		go func() {
+			for process.Running {
+				// Save the output to the job
+				j.Output = process.Output()
 
-		// Post the update to the API
-		updatedJob, err := agent.Client.JobUpdate(j)
-		if err != nil {
-			// We don't really care if the job couldn't update at this point.
-			// This is just a partial update. We'll just let the job run
-			// and hopefully the host will fix itself before we finish.
-			Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
-		} else if updatedJob.State == "canceled" {
-			j.Kill()
+				// Post the update to the API
+				updatedJob, err := agent.Client.JobUpdate(j)
+				if err != nil {
+					// We don't really care if the job couldn't update at this point.
+					// This is just a partial update. We'll just let the job run
+					// and hopefully the host will fix itself before we finish.
+					Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
+				} else if updatedJob.State == "canceled" {
+					j.Kill()
+				}
+
+				// Sleep for 1 second
+				time.Sleep(1000 * time.Millisecond)
+			}
+
+			Logger.Debug("Routine that sends job updates has finished")
+		}()
+	}
+
+	// The regular expression used to match headers
+	headerRegexp, err := regexp.Compile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
+	if err != nil {
+		Logger.Errorf("Failed to compile header regular expression (%T: %v)", err, err)
+	}
+
+	// This callback is called for every line that is output by the process
+	lineCallback := func(process *Process, line string) {
+		if headerRegexp.MatchString(line) {
+			// Logger.Debugf("Found header \"%s\", capturing current time", line)
+			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339))
 		}
 	}
 
 	// Initialze our process to run
-	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, callback)
+	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, startCallback, lineCallback)
 
 	// Store the process so we can cancel it later.
 	j.process = process
@@ -159,13 +186,13 @@ func (j *Job) Run(agent *Agent) error {
 	err = process.Start()
 	if err == nil {
 		// Store the final output
-		j.Output = j.process.Output
+		j.Output = process.Output()
 	} else {
 		j.Output = fmt.Sprintf("%s", err)
 	}
 
 	// Mark the build as finished
-	j.FinishedAt = time.Now().Format(time.RFC3339)
+	j.FinishedAt = time.Now().UTC().Format(time.RFC3339)
 	j.ExitStatus = j.process.ExitStatus
 
 	// Keep trying this call until it works. This is the most important one.
