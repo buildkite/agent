@@ -340,17 +340,12 @@ buildkite-global-hook "post-command"
 ##############################################################
 
 if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
-  # If you want to upload artifacts to your own server, uncomment the lines below
-  # and replace the AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY with keys to your
-  # own bucket.
-  #
-  # export AWS_SECRET_ACCESS_KEY=yyy
-  # export AWS_ACCESS_KEY_ID=xxx
-  # export AWS_S3_ACL=private
-  # buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID\""
-
   echo "--- Uploading artifacts"
-  buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
+  if [[ ! -z "${BUILDKITE_ARTIFACT_UPLOAD_DESTINATION:-}" ]] && [[ "$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION" != "" ]]; then
+    buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION\""
+  else
+    buildkite-run "buildkite-agent build-artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
+  fi
 fi
 
 # Be sure to exit this script with the same exit status that the users build
