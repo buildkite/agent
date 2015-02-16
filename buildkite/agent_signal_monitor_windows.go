@@ -1,6 +1,7 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/buildkite/logger"
 	"os"
 	"os/signal"
 )
