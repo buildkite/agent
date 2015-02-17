@@ -51,8 +51,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	agentRegistrationToken := c.String("token")
 	if agentRegistrationToken == "" {
-		fmt.Println("buildkite-agent: missing token\nSee 'buildkite-agent start --help'")
-		os.Exit(1)
+		logger.Fatal("Missing --token. See 'buildkite-agent start --help'")
 	}
 
 	// Expand the envionment variable.
@@ -60,8 +59,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Make sure the boostrap script exists.
 	if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
-		fmt.Printf("buildkite-agent: could not find bootstrap script %s\n", bootstrapScript)
-		os.Exit(1)
+		logger.Fatal("Could not find a bootstrap script located at: %s", bootstrapScript)
 	}
 
 	logger.Debug("Bootstrap script: %s", bootstrapScript)
