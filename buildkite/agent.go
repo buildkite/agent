@@ -2,6 +2,7 @@ package buildkite
 
 import (
 	"fmt"
+	"github.com/buildkite/agent/buildkite/logger"
 	"os"
 	"time"
 )
@@ -25,6 +26,9 @@ type Agent struct {
 
 	// The path to the run the builds in
 	BuildPath string
+
+	// Where bootstrap hooks are found
+	HooksPath string
 
 	// Whether or not the agent is allowed to automatically accept SSH
 	// fingerprints
@@ -59,14 +63,17 @@ func (a *Agent) Setup() {
 	// Set the PID of the agent
 	a.PID = os.Getpid()
 
+	logger.Info("Connecting to Buildkite...")
+
 	// Get agent information from API. It will populate the
 	// current agent struct with data.
 	err := a.Client.AgentConnect(a)
 	if err != nil {
-		Logger.Fatal(err)
+		logger.Fatal("%s", err)
 	}
 
-	Logger.Infof("Agent successfully connected. Ready for work...")
+	logger.Info("Agent successfully connected. You can press Ctrl-C to disconnect the agent.")
+	logger.Info("Waiting for work...")
 }
 
 func (a *Agent) Start() {
@@ -89,7 +96,7 @@ func (a *Agent) Start() {
 
 func (a *Agent) Stop() {
 	// Disconnect from Buildkite
-	Logger.Info("Disconnecting...")
+	logger.Info("Disconnecting...")
 	a.Client.AgentDisconnect(a)
 
 	// Kill the process
@@ -99,7 +106,7 @@ func (a *Agent) Stop() {
 func (a *Agent) performNextJob() {
 	job, err := a.Client.JobNext()
 	if err != nil {
-		Logger.Warningf("Failed to get job (%s)", err)
+		logger.Warn("Failed to get job (%s)", err)
 		return
 	}
 
@@ -108,18 +115,18 @@ func (a *Agent) performNextJob() {
 		return
 	}
 
-	Logger.Infof("Assigned job %s. Accepting...", job.ID)
+	logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job
 	job, err = a.Client.JobAccept(job)
 	if err != nil {
-		Logger.Errorf("Failed to accept the job (%s)", err)
+		logger.Error("Failed to accept the job (%s)", err)
 		return
 	}
 
 	// Confirm that it's been accepted
 	if job.State != "accepted" {
-		Logger.Errorf("Can not accept job with state `%s`", job.State)
+		logger.Error("Can not accept job with state `%s`", job.State)
 		return
 	}
 

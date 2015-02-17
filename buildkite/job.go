@@ -2,8 +2,10 @@ package buildkite
 
 import (
 	"fmt"
+	"github.com/buildkite/agent/buildkite/logger"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -21,6 +23,8 @@ type Job struct {
 	Env map[string]string
 
 	Output string `json:"output,omitempty"`
+
+	HeaderTimes []string `json:"header_times,omitempty"`
 
 	ExitStatus string `json:"exit_status,omitempty"`
 
@@ -75,13 +79,13 @@ func (j *Job) Kill() error {
 	if j.cancelled {
 		// Already cancelled
 	} else {
-		Logger.Infof("Cancelling job %s", j.ID)
+		logger.Info("Cancelling job %s", j.ID)
 		j.cancelled = true
 
 		if j.process != nil {
 			j.process.Kill()
 		} else {
-			Logger.Errorf("No process to kill")
+			logger.Error("No process to kill")
 		}
 	}
 
@@ -89,7 +93,7 @@ func (j *Job) Kill() error {
 }
 
 func (j *Job) Run(agent *Agent) error {
-	Logger.Infof("Starting job %s", j.ID)
+	logger.Info("Starting job %s", j.ID)
 
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
@@ -104,7 +108,7 @@ func (j *Job) Run(agent *Agent) error {
 	env["BUILDKITE_AGENT_ENDPOINT"] = agent.Client.URL
 	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = agent.Client.AuthorizationToken
 	env["BUILDKITE_AGENT_VERSION"] = Version()
-	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", InDebugMode())
+	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", logger.GetLevel() == logger.DEBUG)
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)
@@ -113,7 +117,9 @@ func (j *Job) Run(agent *Agent) error {
 
 	// Add misc options
 	env["BUILDKITE_BUILD_PATH"] = agent.BuildPath
+	env["BUILDKITE_HOOKS_PATH"] = agent.HooksPath
 	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", agent.AutoSSHFingerprintVerification)
+	env["BUILDKITE_SCRIPT_EVAL"] = fmt.Sprintf("%t", agent.ScriptEval)
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
@@ -123,65 +129,78 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Mark the build as started
-	j.StartedAt = time.Now().Format(time.RFC3339)
+	j.StartedAt = time.Now().UTC().Format(time.RFC3339)
 	_, err := agent.Client.JobUpdate(j)
 	if err != nil {
 		// We don't care if the HTTP request failed here. We hope that it
 		// starts working during the actual build.
 	}
 
-	if env["BUILDKITE_SCRIPT_MODE"] == "eval" && !agent.ScriptEval {
-		Logger.Infof("Job %s is not allowed to run, exiting.", j.ID)
+	// This callback is called when the process starts
+	startCallback := func(process *Process) {
+		// Start a routine that will grab the output every few seconds and send it back to Buildkite
+		go func() {
+			for process.Running {
+				// Save the output to the job
+				j.Output = process.Output()
 
-		// Show an error in the output
-		j.Output = "ERROR: This agent has not been allowed to evaluate scripts.\nRe-run this agent and remove the `--no-script-eval` option, or specify a script on the filesystem to run instead."
+				// Post the update to the API
+				updatedJob, err := agent.Client.JobUpdate(j)
+				if err != nil {
+					// We don't really care if the job couldn't update at this point.
+					// This is just a partial update. We'll just let the job run
+					// and hopefully the host will fix itself before we finish.
+					logger.Warn("Problem with updating job %s (%s)", j.ID, err)
+				} else if updatedJob.State == "canceled" {
+					j.Kill()
+				}
 
-		// Mark the build as finished
-		j.FinishedAt = time.Now().Format(time.RFC3339)
-		j.ExitStatus = "1"
-	} else {
-		// This callback is called every second the build is running. This lets
-		// us do a lazy-person's method of streaming data to Buildkite.
-		callback := func(process *Process) {
-			j.Output = process.Output
-
-			// Post the update to the API
-			updatedJob, err := agent.Client.JobUpdate(j)
-			if err != nil {
-				// We don't really care if the job couldn't update at this point.
-				// This is just a partial update. We'll just let the job run
-				// and hopefully the host will fix itself before we finish.
-				Logger.Warnf("Problem with updating job %s (%s)", j.ID, err)
-			} else if updatedJob.State == "canceled" {
-				j.Kill()
+				// Sleep for 1 second
+				time.Sleep(1000 * time.Millisecond)
 			}
-		}
 
-		// Initialze our process to run
-		process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, callback)
-
-		// Store the process so we can cancel it later.
-		j.process = process
-
-		// Start the process. This will block until it finishes.
-		err = process.Start()
-		if err == nil {
-			// Store the final output
-			j.Output = j.process.Output
-		} else {
-			j.Output = fmt.Sprintf("%s", err)
-		}
-
-		// Mark the build as finished
-		j.FinishedAt = time.Now().Format(time.RFC3339)
-		j.ExitStatus = j.process.ExitStatus
+			logger.Debug("Routine that sends job updates has finished")
+		}()
 	}
+
+	// The regular expression used to match headers
+	headerRegexp, err := regexp.Compile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
+	if err != nil {
+		logger.Error("Failed to compile header regular expression (%T: %v)", err, err)
+	}
+
+	// This callback is called for every line that is output by the process
+	lineCallback := func(process *Process, line string) {
+		if headerRegexp.MatchString(line) {
+			// logger.Debug("Found header \"%s\", capturing current time", line)
+			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339))
+		}
+	}
+
+	// Initialze our process to run
+	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, startCallback, lineCallback)
+
+	// Store the process so we can cancel it later.
+	j.process = process
+
+	// Start the process. This will block until it finishes.
+	err = process.Start()
+	if err == nil {
+		// Store the final output
+		j.Output = process.Output()
+	} else {
+		j.Output = fmt.Sprintf("%s", err)
+	}
+
+	// Mark the build as finished
+	j.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+	j.ExitStatus = j.process.ExitStatus
 
 	// Keep trying this call until it works. This is the most important one.
 	for {
 		_, err = agent.Client.JobUpdate(j)
 		if err != nil {
-			Logger.Errorf("Problem with updating final job information %s (%s)", j.ID, err)
+			logger.Error("Problem with updating final job information %s (%s)", j.ID, err)
 
 			// How long should we wait until we try again?
 			idleSeconds := 5
@@ -194,7 +213,7 @@ func (j *Job) Run(agent *Agent) error {
 		}
 	}
 
-	Logger.Infof("Finished job %s", j.ID)
+	logger.Info("Finished job %s", j.ID)
 
 	return nil
 }

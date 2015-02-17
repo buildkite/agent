@@ -55,8 +55,12 @@ else
   info "Copying binary"
   cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent
 
-  info "Copying templates"
+  info "Copying bootstrap"
   cp $TEMPLATE_DIRECTORY/bootstrap.sh $TMP_RELEASE_DIRECTORY
+
+  info "Copying hooks"
+  mkdir -p $TMP_RELEASE_DIRECTORY/hooks
+  cp $TEMPLATE_DIRECTORY/hooks-unix/* $TMP_RELEASE_DIRECTORY/hooks
 
   info "Tarring up the files"
   cd $TMP_RELEASE_DIRECTORY

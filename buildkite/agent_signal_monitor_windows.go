@@ -1,6 +1,7 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/buildkite/logger"
 	"os"
 	"os/signal"
 )
@@ -15,11 +16,11 @@ func (a *Agent) MonitorSignals() {
 		// This will block until a signal is sent
 		sig := <-signals
 
-		Logger.Debugf("Received signal `%s`", sig.String())
+		logger.Debug("Received signal `%s`", sig.String())
 
 		// If we've received a SIGKILL, die immediately.
 		// if sig == syscall.SIGKILL {
-		// 	Logger.Debugf("Exiting immediately", sig.String())
+		// 	logger.Debug("Exiting immediately", sig.String())
 
 		// 	os.Exit(1)
 		// }
@@ -35,7 +36,7 @@ func (a *Agent) MonitorSignals() {
 			} else {
 				// We should warn the user before they try and shut down the
 				// agent while it's performing a job
-				Logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
+				logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
 
 				a.stopping = true
 			}

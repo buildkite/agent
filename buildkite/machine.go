@@ -3,6 +3,7 @@ package buildkite
 import (
 	"bytes"
 	"fmt"
+	"github.com/buildkite/agent/buildkite/logger"
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ func MachineHostname() (string, error) {
 	hostname, err := run("hostname")
 
 	if err != nil {
-		Logger.Fatalf("Could not retrieve hostname: %s", hostname)
+		logger.Fatal("Could not retrieve hostname: %s", hostname)
 	}
 
 	return hostname, err
@@ -45,7 +46,7 @@ func cat(pathToRead string) string {
 	files, err := filepath.Glob(pathToRead)
 
 	if err != nil {
-		Logger.Debugf("Failed to get list of files for OS Dump: %s", pathToRead)
+		logger.Debug("Failed to get list of files for OS Dump: %s", pathToRead)
 
 		return ""
 	} else {
@@ -55,7 +56,7 @@ func cat(pathToRead string) string {
 			data, err := ioutil.ReadFile(file)
 
 			if err != nil {
-				Logger.Debugf("Could not read file for OS Dump: %s (%T: %v)", file, err, err)
+				logger.Debug("Could not read file for OS Dump: %s (%T: %v)", file, err, err)
 			} else {
 				buffer.WriteString(string(data))
 			}
@@ -69,7 +70,7 @@ func run(command string, arg ...string) (string, error) {
 	output, err := exec.Command(command, arg...).Output()
 
 	if err != nil {
-		Logger.Debugf("Could not run: %s %s (returned %s) (%T: %v)", command, arg, output, err, err)
+		logger.Debug("Could not run: %s %s (returned %s) (%T: %v)", command, arg, output, err, err)
 		return "", err
 	}
 

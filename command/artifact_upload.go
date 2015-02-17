@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -10,7 +11,12 @@ import (
 func ArtifactUploadCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildkite.LoggerInitDebug()
+		logger.SetLevel(logger.DEBUG)
+	}
+
+	// Toggle colors
+	if c.Bool("no-color") {
+		logger.SetColors(false)
 	}
 
 	agentAccessToken := c.String("agent-access-token")
@@ -51,23 +57,23 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 	// Find the actual job now
 	job, err := agent.Client.JobFind(jobId)
 	if err != nil {
-		buildkite.Logger.Fatalf("Could not find job: %s", jobId)
+		logger.Fatal("Could not find job: %s", jobId)
 	}
 
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := buildkite.CollectArtifacts(job, paths)
 	if err != nil {
-		buildkite.Logger.Fatalf("Failed to collect artifacts: %s", err)
+		logger.Fatal("Failed to collect artifacts: %s", err)
 	}
 
 	if len(artifacts) == 0 {
-		buildkite.Logger.Infof("No files matched paths: %s", paths)
+		logger.Info("No files matched paths: %s", paths)
 	} else {
-		buildkite.Logger.Infof("Found %d files that match \"%s\"", len(artifacts), paths)
+		logger.Info("Found %d files that match \"%s\"", len(artifacts), paths)
 
 		err := buildkite.UploadArtifacts(agent.Client, job, artifacts, destination)
 		if err != nil {
-			buildkite.Logger.Fatalf("Failed to upload artifacts: %s", err)
+			logger.Fatal("Failed to upload artifacts: %s", err)
 		}
 	}
 }

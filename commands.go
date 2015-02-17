@@ -101,11 +101,13 @@ func init() {
 	// This is default locations of stuff (*nix systems)
 	bootstrapScriptLocation := "$HOME/.buildkite/bootstrap.sh"
 	buildPathLocation := "$HOME/.buildkite/builds"
+	hookPathLocation := "$HOME/.buildkite/hooks"
 
 	// Windows has a slightly modified locations
 	if buildkite.MachineIsWindows() {
 		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\bootstrap.bat"
 		buildPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\builds"
+		hookPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\hooks"
 	}
 
 	Commands = []cli.Command{
@@ -119,12 +121,6 @@ func init() {
 					Value:  "",
 					Usage:  "Your account agent token",
 					EnvVar: "BUILDKITE_AGENT_TOKEN",
-				},
-				cli.StringFlag{
-					Name:   "access-token",
-					Value:  "",
-					Usage:  "DEPRECATED: The agents access token",
-					EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 				},
 				cli.StringFlag{
 					Name:   "name",
@@ -160,6 +156,12 @@ func init() {
 					Usage:  "Path to where the builds will run from",
 					EnvVar: "BUILDKITE_BUILD_PATH",
 				},
+				cli.StringFlag{
+					Name:   "hooks-path",
+					Value:  hookPathLocation,
+					Usage:  "Directory where the hook scripts are found",
+					EnvVar: "BUILDKITE_HOOKS_PATH",
+				},
 				cli.BoolFlag{
 					Name:  "no-pty",
 					Usage: "Do not run jobs within a pseudo terminal",
@@ -182,6 +184,11 @@ func init() {
 					Name:   "debug",
 					Usage:  "Enable debug mode.",
 					EnvVar: "BUILDKITE_AGENT_DEBUG",
+				},
+				cli.BoolFlag{
+					Name:   "no-color",
+					Usage:  "Don't show colors in logging",
+					EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 				},
 			},
 			Action: command.AgentStartCommandAction,
@@ -226,6 +233,11 @@ func init() {
 							Usage:  "Enable debug mode",
 							EnvVar: "BUILDKITE_AGENT_DEBUG",
 						},
+						cli.BoolFlag{
+							Name:   "no-color",
+							Usage:  "Don't show colors in logging",
+							EnvVar: "BUILDKITE_AGENT_NO_COLOR",
+						},
 					},
 					Action: command.ArtifactDownloadCommandAction,
 				},
@@ -256,6 +268,11 @@ func init() {
 							Name:   "debug",
 							Usage:  "Enable debug mode",
 							EnvVar: "BUILDKITE_AGENT_DEBUG",
+						},
+						cli.BoolFlag{
+							Name:   "no-color",
+							Usage:  "Don't show colors in logging",
+							EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 						},
 					},
 					Action: command.ArtifactUploadCommandAction,
@@ -294,6 +311,11 @@ func init() {
 							Usage:  "Enable debug mode",
 							EnvVar: "BUILDKITE_AGENT_DEBUG",
 						},
+						cli.BoolFlag{
+							Name:   "no-color",
+							Usage:  "Don't show colors in logging",
+							EnvVar: "BUILDKITE_AGENT_NO_COLOR",
+						},
 					},
 					Action: command.DataSetCommandAction,
 				},
@@ -324,6 +346,11 @@ func init() {
 							Name:   "debug",
 							Usage:  "Enable debug mode",
 							EnvVar: "BUILDKITE_AGENT_DEBUG",
+						},
+						cli.BoolFlag{
+							Name:   "no-color",
+							Usage:  "Don't show colors in logging",
+							EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 						},
 					},
 					Action: command.DataGetCommandAction,

@@ -5,8 +5,8 @@ import (
 	_ "crypto/sha512" // import sha512 to make sha512 ssl certs work
 	"encoding/json"
 	"errors"
+	"github.com/buildkite/agent/buildkite/logger"
 	"io"
-	// "io/ioutil"
 	"net/http"
 	"runtime"
 	"strings"
@@ -105,7 +105,7 @@ func (c *Client) NewRequest(method string, path string, body interface{}) (*http
 // Submits an HTTP request, checks its response, and deserializes
 // the response into v.
 func (c *Client) DoReq(req *http.Request, v interface{}) error {
-	Logger.Debugf("%s %s", req.Method, req.URL)
+	logger.Debug("%s %s", req.Method, req.URL)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *Client) DoReq(req *http.Request, v interface{}) error {
 	}
 
 	// body, err := ioutil.ReadAll(res.Body)
-	// Logger.Debugf("%s", body)
+	// logger.Debug("%s", body)
 
 	// Decode the response
 	return json.NewDecoder(res.Body).Decode(v)

@@ -6,7 +6,7 @@
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh\`\""
 
-VERSION="1.0-beta.9"
+VERSION="1.0-beta.11"
 
 set -e
 
@@ -96,6 +96,10 @@ tar -C $INSTALL_TMP -zxf $INSTALL_TMP/$DOWNLOAD
 mkdir -p $DESTINATION/bin
 mv $INSTALL_TMP/buildkite-agent $DESTINATION/bin
 chmod +x $DESTINATION/bin/buildkite-agent
+
+# Copy the hook samples
+mkdir -p $DESTINATION/hooks
+mv $INSTALL_TMP/hooks/*.sample $DESTINATION/hooks
 
 function buildkite-copy-bootstrap {
   mv $INSTALL_TMP/bootstrap.sh $DESTINATION

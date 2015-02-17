@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"
@@ -11,7 +12,12 @@ import (
 func ArtifactDownloadCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildkite.LoggerInitDebug()
+		logger.SetLevel(logger.DEBUG)
+	}
+
+	// Toggle colors
+	if c.Bool("no-color") {
+		logger.SetColors(false)
 	}
 
 	agentAccessToken := c.String("agent-access-token")
@@ -41,10 +47,10 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 	downloadDestination, _ = filepath.Abs(downloadDestination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
-		buildkite.Logger.Fatalf("Could not find information about destination: %s", downloadDestination)
+		logger.Fatal("Could not find information about destination: %s", downloadDestination)
 	}
 	if !fileInfo.IsDir() {
-		buildkite.Logger.Fatalf("%s is not a directory", downloadDestination)
+		logger.Fatal("%s is not a directory", downloadDestination)
 	}
 
 	// Set the agent options
@@ -58,25 +64,25 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 	agent.Setup()
 
 	if jobQuery == "" {
-		buildkite.Logger.Infof("Searching for artifacts: \"%s\"", searchQuery)
+		logger.Info("Searching for artifacts: \"%s\"", searchQuery)
 	} else {
-		buildkite.Logger.Infof("Searching for artifacts: \"%s\" within job: \"%s\"", searchQuery, jobQuery)
+		logger.Info("Searching for artifacts: \"%s\" within job: \"%s\"", searchQuery, jobQuery)
 	}
 
 	// Search for artifacts (only those that have finished uploaded) to download
 	artifacts, err := agent.Client.SearchArtifacts(buildId, searchQuery, jobQuery, "finished")
 	if err != nil {
-		buildkite.Logger.Fatalf("Failed to find artifacts: %s", err)
+		logger.Fatal("Failed to find artifacts: %s", err)
 	}
 
 	if len(artifacts) == 0 {
-		buildkite.Logger.Info("No artifacts found for downloading")
+		logger.Info("No artifacts found for downloading")
 	} else {
-		buildkite.Logger.Infof("Found %d artifacts. Starting to download to: %s", len(artifacts), downloadDestination)
+		logger.Info("Found %d artifacts. Starting to download to: %s", len(artifacts), downloadDestination)
 
 		err := buildkite.DownloadArtifacts(artifacts, downloadDestination)
 		if err != nil {
-			buildkite.Logger.Fatalf("Failed to download artifacts: %s", err)
+			logger.Fatal("Failed to download artifacts: %s", err)
 		}
 	}
 }

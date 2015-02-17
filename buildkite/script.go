@@ -1,15 +1,14 @@
-// +build !windows
-
 package buildkite
 
 // Logic for this file is largely based on:
 // https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/kr/pty"
+	"github.com/buildkite/agent/buildkite/logger"
 	"io"
 	"os"
 	"os/exec"
@@ -20,13 +19,14 @@ import (
 )
 
 type Process struct {
-	Output     string
-	Pid        int
-	Running    bool
-	RunInPty   bool
-	ExitStatus string
-	command    *exec.Cmd
-	callback   func(*Process)
+	Pid           int
+	Running       bool
+	RunInPty      bool
+	ExitStatus    string
+	buffer        bytes.Buffer
+	command       *exec.Cmd
+	startCallback func(*Process)
+	lineCallback  func(*Process, string)
 }
 
 // Implement the Stringer thingy
@@ -34,7 +34,7 @@ func (p Process) String() string {
 	return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
 }
 
-func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*Process)) *Process {
+func InitProcess(scriptPath string, env []string, runInPty bool, startCallback func(*Process), lineCallback func(*Process, string)) *Process {
 	// Create a new instance of our process struct
 	var process Process
 	process.RunInPty = runInPty
@@ -46,9 +46,8 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	process.command = exec.Command(absolutePath)
 	process.command.Dir = scriptDirectory
 
-	// Children of the forked process will inherit its process group
-	// This is to make sure that all grandchildren dies when this Process instance is killed
-	process.command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Do cross-platform things to prepare this process to run
+	PrepareCommandProcess(&process)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -57,21 +56,25 @@ func InitProcess(scriptPath string, env []string, runInPty bool, callback func(*
 	currentEnv := os.Environ()
 	process.command.Env = append(currentEnv, env...)
 
-	// Set the callback
-	process.callback = callback
+	// Set the callbacks
+	process.lineCallback = lineCallback
+	process.startCallback = startCallback
 
 	return &process
 }
 
 func (p *Process) Start() error {
-	var buffer bytes.Buffer
 	var waitGroup sync.WaitGroup
 
-	Logger.Infof("Starting to run script: %s", p.command.Path)
+	lineReaderPipe, lineWriterPipe := io.Pipe()
+
+	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
+
+	logger.Info("Starting to run script: %s", p.command.Path)
 
 	// Toggle between running in a pty
 	if p.RunInPty {
-		pty, err := pty.Start(p.command)
+		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
 			return err
@@ -80,30 +83,33 @@ func (p *Process) Start() error {
 		p.Pid = p.command.Process.Pid
 		p.Running = true
 
-		waitGroup.Add(2)
+		waitGroup.Add(1)
 
 		go func() {
-			Logger.Debug("Starting to copy PTY to the buffer")
+			logger.Debug("Starting to copy PTY to the buffer")
 
-			// Copy the pty to our buffer. This will block until it EOF's
-			// or something breaks.
-			_, err = io.Copy(&buffer, pty)
+			// Copy the pty to our buffer. This will block until it
+			// EOF's or something breaks.
+			_, err = io.Copy(multiWriter, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
-				// successfully.
-				// See: https://github.com/buildkite/agent/pull/34#issuecomment-46080419
-			} else if err != nil {
-				Logger.Errorf("io.Copy failed with error: %T: %v", err, err)
+				// successfully.  See:
+				// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
+				err = nil
+			}
+
+			if err != nil {
+				logger.Error("PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				Logger.Debug("io.Copy finsihed")
+				logger.Debug("PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
 		}()
 	} else {
-		p.command.Stdout = &buffer
-		p.command.Stderr = &buffer
+		p.command.Stdout = multiWriter
+		p.command.Stderr = multiWriter
 
 		err := p.command.Start()
 		if err != nil {
@@ -113,35 +119,39 @@ func (p *Process) Start() error {
 
 		p.Pid = p.command.Process.Pid
 		p.Running = true
-
-		// We only have to wait for 1 thing if we're not running in a PTY.
-		waitGroup.Add(1)
 	}
 
-	Logger.Infof("Process is running with PID: %d", p.Pid)
+	logger.Info("Process is running with PID: %d", p.Pid)
+
+	// Add the line callback routine to the waitGroup
+	waitGroup.Add(1)
 
 	go func() {
-		for p.Running {
-			Logger.Debug("Copying buffer to the process output")
+		logger.Debug("Starting the line scanner")
 
-			// Convert the stdout buffer to a string
-			p.Output = buffer.String()
-
-			// Call the callback and pass in our process object
-			p.callback(p)
-
-			// Sleep for 1 second
-			time.Sleep(1000 * time.Millisecond)
+		scanner := bufio.NewScanner(lineReaderPipe)
+		for scanner.Scan() {
+			p.lineCallback(p, scanner.Text())
 		}
 
-		Logger.Debug("Finished routine that copies the buffer to the process output")
+		if err := scanner.Err(); err != nil {
+			logger.Error("Failed to scan lines: (%T: %v)", err, err)
+		}
+
+		logger.Debug("Line scanner has finished")
 
 		waitGroup.Done()
 	}()
 
+	// Call the startCallback
+	p.startCallback(p)
+
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
 	waitResult := p.command.Wait()
+
+	// Close the line writer pipe
+	lineWriterPipe.Close()
 
 	// The process is no longer running at this point
 	p.Running = false
@@ -149,21 +159,22 @@ func (p *Process) Start() error {
 	// Find the exit status of the script
 	p.ExitStatus = getExitStatus(waitResult)
 
-	Logger.Infof("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	Logger.Debug("Waiting for io.Copy and incremental output to finish")
+	logger.Debug("Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		Logger.Errorf("Timed out waiting for wait group: (%T: %v)", err, err)
+		logger.Debug("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
-
-	// Copy the final output back to the process
-	p.Output = buffer.String()
 
 	// No error occured so we can return nil
 	return nil
+}
+
+func (p *Process) Output() string {
+	return p.buffer.String()
 }
 
 func (p *Process) Kill() error {
@@ -181,13 +192,13 @@ func (p *Process) Kill() error {
 	// is still alive.
 	go func() {
 		for checking {
-			Logger.Debugf("Checking to see if PID: %d is still alive", p.Pid)
+			logger.Debug("Checking to see if PID: %d is still alive", p.Pid)
 
 			foundProcess, err := os.FindProcess(p.Pid)
 
 			// Can't find the process at all
 			if err != nil {
-				Logger.Debugf("Could not find process with PID: %d", p.Pid)
+				logger.Debug("Could not find process with PID: %d", p.Pid)
 
 				break
 			}
@@ -197,7 +208,7 @@ func (p *Process) Kill() error {
 				processState, err := foundProcess.Wait()
 
 				if err != nil || processState.Exited() {
-					Logger.Debugf("Process with PID: %d has exited.", p.Pid)
+					logger.Debug("Process with PID: %d has exited.", p.Pid)
 
 					break
 				}
@@ -231,11 +242,11 @@ func (p *Process) Kill() error {
 }
 
 func (p *Process) signal(sig os.Signal) error {
-	Logger.Debugf("Sending signal: %s to PID: %d", sig.String(), p.Pid)
+	logger.Debug("Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
 	err := p.command.Process.Signal(syscall.SIGTERM)
 	if err != nil {
-		Logger.Errorf("Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
+		logger.Error("Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
 		return err
 	}
 
@@ -252,7 +263,7 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				Logger.Error("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				logger.Error("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		}
 	} else {
@@ -275,7 +286,7 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	select {
 	case _ = <-c:
 		return nil
-	case <-time.After(5 * time.Second):
+	case <-time.After(10 * time.Second):
 		return errors.New("Timeout")
 	}
 

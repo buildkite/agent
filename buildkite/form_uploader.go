@@ -9,6 +9,7 @@ import (
 	"net/http"
 	// "net/http/httputil"
 	"errors"
+	"github.com/buildkite/agent/buildkite/logger"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -38,7 +39,7 @@ func (u *FormUploader) Upload(artifact *Artifact) error {
 	client := &http.Client{}
 
 	// Perform the request
-	Logger.Debugf("%s %s", request.Method, request.URL)
+	logger.Debug("%s %s", request.Method, request.URL)
 	response, err := client.Do(request)
 
 	// Check for errors

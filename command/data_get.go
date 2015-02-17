@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -10,7 +11,12 @@ import (
 func DataGetCommandAction(c *cli.Context) {
 	// Init debugging
 	if c.Bool("debug") {
-		buildkite.LoggerInitDebug()
+		logger.SetLevel(logger.DEBUG)
+	}
+
+	// Toggle colors
+	if c.Bool("no-color") {
+		logger.SetColors(false)
 	}
 
 	agentAccessToken := c.String("agent-access-token")
@@ -33,7 +39,7 @@ func DataGetCommandAction(c *cli.Context) {
 	// Find the job
 	job, err := client.JobFind(jobId)
 	if err != nil {
-		buildkite.Logger.Fatalf("Could not find job: %s", jobId)
+		logger.Fatal("Could not find job: %s", jobId)
 	}
 
 	// Grab the key
@@ -42,7 +48,7 @@ func DataGetCommandAction(c *cli.Context) {
 	// Get the data through the API
 	data, err := client.DataGet(job, key)
 	if err != nil {
-		buildkite.Logger.Fatalf("Failed to get data: %s", err)
+		logger.Fatal("Failed to get data: %s", err)
 	}
 
 	// Output it

@@ -1,6 +1,7 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/buildkite/logger"
 	"io"
 	"net/http"
 	"os"
@@ -49,12 +50,12 @@ func StartDownload(quit chan string, download Download) {
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
-	Logger.Debugf("Downloading %s to %s", download.URL, targetFile)
+	logger.Debug("Downloading %s to %s", download.URL, targetFile)
 
 	// Start by downloading the file
 	response, err := http.Get(download.URL)
 	if err != nil {
-		Logger.Errorf("Error while downloading %s (%T: %v)", download.URL, err, err)
+		logger.Error("Error while downloading %s (%T: %v)", download.URL, err, err)
 		return
 	}
 	defer response.Body.Close()
@@ -62,14 +63,14 @@ func StartDownload(quit chan string, download Download) {
 	// Now make the folder for our file
 	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
-		Logger.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
+		logger.Error("Failed to create folder for %s (%T: %v)", targetFile, err, err)
 		return
 	}
 
 	// Create a file to handle the file
 	fileBuffer, err := os.Create(targetFile)
 	if err != nil {
-		Logger.Errorf("Failed to create file %s (%T: %v)", targetFile, err, err)
+		logger.Error("Failed to create file %s (%T: %v)", targetFile, err, err)
 		return
 	}
 	defer fileBuffer.Close()
@@ -77,11 +78,11 @@ func StartDownload(quit chan string, download Download) {
 	// Copy the data to the file
 	bytes, err := io.Copy(fileBuffer, response.Body)
 	if err != nil {
-		Logger.Errorf("Error when copying data %s (%T: %v)", download.URL, err, err)
+		logger.Error("Error when copying data %s (%T: %v)", download.URL, err, err)
 		return
 	}
 
-	Logger.Infof("Successfully downloaded %s (%d bytes)", download.Path, bytes)
+	logger.Info("Successfully downloaded %s (%d bytes)", download.Path, bytes)
 
 	// We can notify the channel that this routine has finished now
 	quit <- "finished"
