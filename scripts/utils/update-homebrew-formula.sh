@@ -1,24 +1,12 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-if [[ "$GITHUB_RELEASE_ACCESS_TOKEN" == "" ]]; then
-  echo "Error: Missing \$GITHUB_RELEASE_ACCESS_TOKEN"
-  exit 1
-fi
-
-if [[ "$AGENT_VERSION" == "" ]]; then
-  echo "Error: Missing \$AGENT_VERSION"
-  exit 1
-fi
-
-if [[ "$RELEASE_TYPE" == "" ]]; then
-  echo "Error: Missing \$RELEASE_TYPE"
-  exit 1
-fi
+set -euo pipefail
 
 # Check and SHA the release
 
-RELEASE_FILE=./releases/buildkite-agent-darwin-386.tar.gz
+BINARY_NAME=buildkite-agent-darwin-386.tar.gz
+RELEASE_FILE="./releases/$BINARY_NAME"
+DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$AGENT_VERSION/$BINARY_NAME"
 
 if [[ ! -f $RELEASE_FILE ]]; then
   echo "Error: Missing file $RELEASE_FILE"
@@ -27,9 +15,12 @@ fi
 
 RELEASE_SHA=($(shasum $RELEASE_FILE))
 
+echo $RELEASE_SHA
+
 # Grab the formula from master
 
 FORMULA_FILE=./releases/buildkite-agent.rb
+UPDATED_FORMULA_FILE=./releases/buildkite-agent-updated.rb
 
 curl https://raw.githubusercontent.com/buildkite/homebrew-buildkite/master/buildkite-agent.rb -o $FORMULA_FILE
 
@@ -51,15 +42,23 @@ MASTER_FORMULA_SHA=($(shasum $FORMULA_FILE))
 #     sha1    "..."
 #   end
 
-# TODO: Update the formula
+if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
+  BREW_RELEASE_TYPE=devel
+else
+  BREW_RELEASE_TYPE=stable
+fi
 
-NEW_FORMULA_BASE64=$(base64 $FORMULA_FILE)
+cat $FORMULA_FILE |
+  ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $AGENT_VERSION $DOWNLOAD_URL $RELEASE_SHA \
+  > $UPDATED_FORMULA_FILE
+
+UPDATED_FORMULA_BASE64=$(base64 $UPDATED_FORMULA_FILE)
 
 # Update Github
 
 curl -X PUT https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb \
      -d "message=buildkite-agent $AGENT_VERSION" \
      -d "sha=$MASTER_FORMULA_SHA" \
-     -d "content=$NEW_FORMULA_BASE64" \
+     -d "content=$UPDATED_FORMULA_BASE64" \
      -d "branch=master" \
      -d "access_token=$GITHUB_RELEASE_ACCESS_TOKEN"
