@@ -129,7 +129,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Mark the build as started
-	j.StartedAt = time.Now().UTC().Format(time.RFC3339)
+	j.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := agent.Client.JobUpdate(j)
 	if err != nil {
 		// We don't care if the HTTP request failed here. We hope that it
@@ -173,7 +173,7 @@ func (j *Job) Run(agent *Agent) error {
 	lineCallback := func(process *Process, line string) {
 		if headerRegexp.MatchString(line) {
 			// logger.Debug("Found header \"%s\", capturing current time", line)
-			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339))
+			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339Nano))
 		}
 	}
 
@@ -193,7 +193,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Mark the build as finished
-	j.FinishedAt = time.Now().UTC().Format(time.RFC3339)
+	j.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	j.ExitStatus = j.process.ExitStatus
 
 	// Keep trying this call until it works. This is the most important one.
