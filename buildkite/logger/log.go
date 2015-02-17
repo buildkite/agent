@@ -80,8 +80,11 @@ func log(l Level, format string, v ...interface{}) {
 			prefixColor = cyan
 		} else if l == WARN {
 			prefixColor = yellow
-		} else if l == ERROR || l == FATAL {
+		} else if l == ERROR {
 			prefixColor = red
+		} else if l == FATAL {
+			prefixColor = red
+			messageColor = red
 		}
 
 		line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m\n", prefixColor, now, level, messageColor, message)
