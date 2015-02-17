@@ -84,9 +84,9 @@ func log(l Level, format string, v ...interface{}) {
 			prefixColor = red
 		}
 
-		line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m  \x1b[%sm%s\x1b[0m\n", prefixColor, now, level, messageColor, message)
+		line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m\n", prefixColor, now, level, messageColor, message)
 	} else {
-		line = fmt.Sprintf("%s %-6s  %s\n", now, level, message)
+		line = fmt.Sprintf("%s %-6s %s\n", now, level, message)
 	}
 
 	if l == DEBUG {

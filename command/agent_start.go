@@ -23,19 +23,20 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	welcomeMessage :=
 		"\n" +
-			"\x1b[32m _           _ _     _ _    _ _                                _\n" +
-			"| |         (_) |   | | |  (_) |                              | |\n" +
-			"| |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
-			"| '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
-			"| |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
-			"|_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
-			"                                               __/ |\n" +
-			"http://buildkite.com/agent                    |___/\n\x1b[0m\n"
+			"\x1b[32m  _           _ _     _ _    _ _                                _\n" +
+			" | |         (_) |   | | |  (_) |                              | |\n" +
+			" | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
+			" | '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
+			" | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
+			" |_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
+			"                                                __/ |\n" +
+			" http://buildkite.com/agent                    |___/\n\x1b[0m\n"
 
 	fmt.Printf(welcomeMessage)
 
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
 	logger.Notice("Copyright (c) 2014-%d, Buildkite Pty Ltd. See LICENSE and for more details.", time.Now().Year())
+	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	// Init debugging
 	if c.Bool("debug") {
