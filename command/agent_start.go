@@ -43,12 +43,6 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.SetLevel(logger.DEBUG)
 	}
 
-	// Create the agent
-	if c.String("access-token") != "" {
-		fmt.Println("buildkite-agent: use of --access-token is now deprecated\nSee 'buildkite-agent start --help'")
-		os.Exit(1)
-	}
-
 	agentRegistrationToken := c.String("token")
 	if agentRegistrationToken == "" {
 		logger.Fatal("Missing --token. See 'buildkite-agent start --help'")

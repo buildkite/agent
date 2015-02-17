@@ -123,12 +123,6 @@ func init() {
 					EnvVar: "BUILDKITE_AGENT_TOKEN",
 				},
 				cli.StringFlag{
-					Name:   "access-token",
-					Value:  "",
-					Usage:  "DEPRECATED: The agents access token",
-					EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
-				},
-				cli.StringFlag{
 					Name:   "name",
 					Value:  "",
 					Usage:  "The name of the agent",
