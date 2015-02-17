@@ -10,10 +10,11 @@ import (
 const (
 	nocolor = "0"
 	red     = "31"
-	green   = "32"
+	green   = "1;32"
 	yellow  = "33"
 	blue    = "34"
 	gray    = "1;30"
+	cyan    = "1;36"
 )
 
 var level = INFO
@@ -50,6 +51,10 @@ func Fatal(format string, v ...interface{}) {
 	os.Exit(1)
 }
 
+func Notice(format string, v ...interface{}) {
+	log(NOTICE, format, v...)
+}
+
 func Info(format string, v ...interface{}) {
 	log(INFO, format, v...)
 }
@@ -71,15 +76,17 @@ func log(l Level, format string, v ...interface{}) {
 		if l == DEBUG {
 			prefixColor = gray
 			messageColor = gray
+		} else if l == NOTICE {
+			prefixColor = cyan
 		} else if l == WARN {
 			prefixColor = yellow
 		} else if l == ERROR || l == FATAL {
 			prefixColor = red
 		}
 
-		line = fmt.Sprintf("\x1b[%sm%s [%-5s]\x1b[0m \x1b[%sm%s\x1b[0m\n", prefixColor, now, level, messageColor, message)
+		line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m  \x1b[%sm%s\x1b[0m\n", prefixColor, now, level, messageColor, message)
 	} else {
-		line = fmt.Sprintf("%s [%-5s] %s\n", now, level, message)
+		line = fmt.Sprintf("%s %-6s  %s\n", now, level, message)
 	}
 
 	if l == DEBUG {

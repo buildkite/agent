@@ -6,37 +6,36 @@ import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
+	"time"
 )
 
 func AgentStartCommandAction(c *cli.Context) {
 	// For display purposes, come up with what the name of the agent is.
-	agentName, err := buildkite.MachineHostname()
-	if c.String("name") != "" {
-		agentName = c.String("name")
-	}
+	// agentName, err := buildkite.MachineHostname()
+	// if c.String("name") != "" {
+	// 	agentName = c.String("name")
+	// }
 
 	// Toggle colors
 	if c.Bool("no-color") {
 		logger.SetColors(false)
 	}
 
-	welcomeMessage := "                _._\n" +
-		"           _.-``   ''-._\n" +
-		"      _.-``             ''-._\n" +
-		"  .-``                       ''-._      Buildkite Agent " + buildkite.Version() + "\n" +
-		" |        _______________         |\n" +
-		" |      .'  ___________  '.       |     Name: " + agentName + "\n" +
-		" |        .'  _______  '.         |     PID: " + fmt.Sprintf("%d", os.Getpid()) + "\n" +
-		" |          .'  ___  '.           |\n" +
-		" |            .' | '.             |     https://buildkite.com/agent\n" +
-		" |               |                |\n" +
-		" |               |                |\n" +
-		"  ``._           |            _.''\n" +
-		"      `._        |         _.'\n" +
-		"         `._     |      _.'\n" +
-		"            ``. _|_ . ''\n\n"
+	welcomeMessage :=
+		"\n" +
+			"\x1b[32m _           _ _     _ _    _ _                                _\n" +
+			"| |         (_) |   | | |  (_) |                              | |\n" +
+			"| |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
+			"| '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
+			"| |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
+			"|_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
+			"                                               __/ |\n" +
+			"http://buildkite.com/agent                    |___/\n\x1b[0m\n"
 
 	fmt.Printf(welcomeMessage)
+
+	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
+	logger.Notice("Copyright (c) 2014-%d, Buildkite Pty Ltd. See LICENSE and for more details.", time.Now().Year())
 
 	// Init debugging
 	if c.Bool("debug") {

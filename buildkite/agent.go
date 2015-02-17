@@ -72,7 +72,8 @@ func (a *Agent) Setup() {
 		logger.Fatal("%s", err)
 	}
 
-	logger.Info("Agent successfully connected. Waiting for work...")
+	logger.Info("Agent successfully connected. You can press Ctrl-C to disconnect the agent.")
+	logger.Info("Waiting for work...")
 }
 
 func (a *Agent) Start() {

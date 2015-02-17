@@ -41,15 +41,20 @@ func (c *Client) AgentRegister(name string, priority string, metaData []string, 
 	registration.MetaData = metaData
 	registration.ScriptEval = scriptEval
 
-	logger.Info("Registering Agent with Buildkite...")
+	// Show the name that the agent is probably going to use (ultimatley
+	// decided by Buildkite)
+	displayName := registration.Hostname
+	if registration.Name != "" {
+		displayName = registration.Name
+	}
+
+	logger.Info("Registering Agent \"%s\" with meta-data %s", displayName, metaData)
 
 	// Register and return the agent
 	err = c.Post(&registration, "/register", registration)
 	if err != nil {
 		return "", err
 	}
-
-	logger.Info("Agent successfully registered")
 
 	return registration.AccessToken, nil
 }

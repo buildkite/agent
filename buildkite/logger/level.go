@@ -4,6 +4,7 @@ type Level int
 
 const (
 	INFO Level = iota
+	NOTICE
 	DEBUG
 	ERROR
 	WARN
@@ -12,6 +13,7 @@ const (
 
 var levelNames = []string{
 	"INFO",
+	"NOTICE",
 	"DEBUG",
 	"ERROR",
 	"WARN",
