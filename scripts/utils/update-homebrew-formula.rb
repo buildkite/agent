@@ -20,10 +20,10 @@ release, version, url, sha1 = ARGV
 
 print $stdin.read.sub(%r{
   (
-    #{release} \s+ do     \s+
-      version \s+ ").*?("  \s+
-      url     \s+ ").*?("  \s+
-      sha1    \s+ ").*?("  \s+
+    #{release} \s+ do      .*?
+      version \s+ ").*?("  .*?
+      url     \s+ ").*?("  .*?
+      sha1    \s+ ").*?("  .*?
     end
   )
 }xm, "\\1#{version}\\2#{url}\\3#{sha1}\\4")
