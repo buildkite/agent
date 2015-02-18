@@ -5,9 +5,15 @@ set -x
 
 # Allows you to pipe JSON in and fetch keys using Ruby hash syntax
 #
-# Example: echo '{"key":"value"}' | parse_json '["key"]'
+# Examples:
+#
+#   # From STDIN
+#   echo '{"key":{"subkey": ["value"]}}' | parse_json '["key"]["subkey"].first'
+#
+#   # From a file
+#   parse_json '["key"]["subkey"].first' file.json
 function parse_json {
-  ruby -rjson -e "print JSON.parse(\$<.read)$1"
+  ruby -rjson -e "print JSON.parse(\$<.read)$1" $2
 }
 
 BINARY_NAME=buildkite-agent-darwin-386.tar.gz
