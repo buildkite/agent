@@ -194,7 +194,9 @@ else
     buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
   fi
 
-  buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
+  if [[ "$BUILDKITE_BRANCH" != "$BUILDKITE_COMMIT" ]]; then
+    buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
+  fi
 
   # `submodule sync` will ensure the .git/config matches the .gitmodules file
   buildkite-run "git submodule sync"
