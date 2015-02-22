@@ -187,8 +187,9 @@ else
   if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
     buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
   elif [[ "$BUILDKITE_TAG" == "" ]]; then
-    # Default empty branch names
+    # Default empty branch name and commit
     : ${BUILDKITE_BRANCH:=master}
+    : ${BUILDKITE_COMMIT:=$BUILDKITE_BRANCH}
 
     buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
   fi
