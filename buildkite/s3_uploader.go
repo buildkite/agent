@@ -3,9 +3,9 @@ package buildkite
 import (
 	"errors"
 	"fmt"
+	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/s3"
 	"github.com/buildkite/agent/buildkite/logger"
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/s3"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -33,7 +33,7 @@ func (u *S3Uploader) Setup(destination string) error {
 	}
 
 	// Decide what region to use
-	// https://github.com/crowdmob/goamz/blob/master/aws/regions.go
+	// https://github.com/AdRoll/goamz/blob/master/aws/regions.go
 	// I think S3 defaults to us-east-1
 	regionName := "us-east-1"
 	if os.Getenv("AWS_DEFAULT_REGION") != "" {
