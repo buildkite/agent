@@ -27,7 +27,7 @@ Example:
 
 var DownloadHelpDescription = `Usage:
 
-   buildkite-agent build-artifact download [arguments...]
+   buildkite-agent artifact download [arguments...]
 
 Description:
 
@@ -39,7 +39,7 @@ Description:
 
 Example:
 
-   $ buildkite-agent build-artifact download "pkg/*.tar.gz" . --build xxx
+   $ buildkite-agent artifact download "pkg/*.tar.gz" . --build xxx
 
    This will search across all the artifacts for the build with files that match that part.
    The first argument is the search query, and the second argument is the download destination.
@@ -47,13 +47,13 @@ Example:
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the paticular job you want to download the artifact from:
 
-   $ buildkite-agent build-artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
+   $ buildkite-agent artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
 
    You can also use the job's id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 var UploadHelpDescription = `Usage:
 
-   buildkite-agent build-artifact upload <pattern> <destination> [arguments...]
+   buildkite-agent artifact upload <pattern> <destination> [arguments...]
 
 Description:
 
@@ -65,17 +65,17 @@ Description:
 
 Example:
 
-   $ buildkite-agent build-artifact upload "log/**/*.log"
+   $ buildkite-agent artifact upload "log/**/*.log"
 
    You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
 
    $ export AWS_SECRET_ACCESS_KEY=yyy
    $ export AWS_ACCESS_KEY_ID=xxx
-   $ buildkite-agent build-artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
+   $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
 
 var SetHelpDescription = `Usage:
 
-   buildkite-agent build-data set <key> <value> [arguments...]
+   buildkite-agent meta-data set <key> <value> [arguments...]
 
 Description:
 
@@ -83,11 +83,11 @@ Description:
 
 Example:
 
-   $ buildkite-agent build-data set "foo" "bar"`
+   $ buildkite-agent meta-data set "foo" "bar"`
 
 var GetHelpDescription = `Usage:
 
-   buildkite-agent build-data get <key> [arguments...]
+   buildkite-agent meta-data get <key> [arguments...]
 
 Description:
 
@@ -95,7 +95,7 @@ Description:
 
 Example:
 
-   $ buildkite-agent build-data get "foo"`
+   $ buildkite-agent meta-data get "foo"`
 
 func init() {
 	// This is default locations of stuff (*nix systems)
@@ -194,12 +194,12 @@ func init() {
 			Action: command.AgentStartCommandAction,
 		},
 		{
-			Name:  "build-artifact",
-			Usage: "Upload/download artifacts from buildkite jobs",
+			Name:  "artifact",
+			Usage: "Upload/download artifacts from Buildkite jobs",
 			Subcommands: []cli.Command{
 				{
 					Name:        "download",
-					Usage:       "Downloads artifacts from buildkite to the local machine.",
+					Usage:       "Downloads artifacts from Buildkite to the local machine.",
 					Description: DownloadHelpDescription,
 					Flags: []cli.Flag{
 						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
@@ -280,8 +280,8 @@ func init() {
 			},
 		},
 		{
-			Name:  "build-data",
-			Usage: "Get/set data from buildkite jobs",
+			Name:  "meta-data",
+			Usage: "Get/set data from Buildkite jobs",
 			Subcommands: []cli.Command{
 				{
 					Name:        "set",

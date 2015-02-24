@@ -83,16 +83,16 @@ IF NOT "%BUILDBOX_ARTIFACT_PATHS%" == "" (
   REM SET AWS_SECRET_ACCESS_KEY=yyy
   REM SET AWS_ACCESS_KEY_ID=xxx
   REM SET AWS_S3_ACL=private
-  REM call buildbox-agent build-artifact upload "%BUILDBOX_ARTIFACT_PATHS%" "s3://name-of-your-s3-bucket/%BUILDBOX_JOB_ID%"
+  REM call buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%" "s3://name-of-your-s3-bucket/%BUILDBOX_JOB_ID%"
 
   REM Show the output of the artifact uploder when in debug mode
   IF "%BUILDBOX_AGENT_DEBUG%" == "true" (
     ECHO --- Uploading Artifacts
     ECHO ^> %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%"
-    call %BUILDBOX_DIR%\buildbox-agent build-artifact upload "%BUILDBOX_ARTIFACT_PATHS%"
+    call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%"
     IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
   ) ELSE (
-    call %BUILDBOX_DIR%\buildbox-agent build-artifact upload "%BUILDBOX_ARTIFACT_PATHS%" > nul 2>&1
+    call %BUILDBOX_DIR%\buildbox-agent artifact upload "%BUILDBOX_ARTIFACT_PATHS%" > nul 2>&1
     IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
   )
 )
