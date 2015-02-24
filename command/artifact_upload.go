@@ -51,9 +51,6 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 	agent.Client.AuthorizationToken = agentAccessToken
 	agent.Client.URL = c.String("endpoint")
 
-	// Setup the agent
-	agent.Setup()
-
 	// Find the actual job now
 	job, err := agent.Client.JobFind(jobId)
 	if err != nil {
