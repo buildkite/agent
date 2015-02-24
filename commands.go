@@ -249,7 +249,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "job",
 							Value:  "",
-							Usage:  "Which job should the artifacts be downloaded from",
+							Usage:  "Which job should the artifacts be uploaded to",
 							EnvVar: "BUILDKITE_JOB_ID",
 						},
 						cli.StringFlag{
