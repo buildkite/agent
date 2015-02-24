@@ -37,6 +37,6 @@ REM Read in the agent token
 SET /p AGENT_TOKEN=<token.txt
 
 REM Start the buildbox-agent
-CALL buildbox-agent start --token "%AGENT_TOKEN%" --bootstrap-script bootstrap.bat --meta-data windows --debug
+CALL buildbox-agent start --token "%AGENT_TOKEN%" --bootstrap-script bootstrap.bat --debug
 
 PAUSE
