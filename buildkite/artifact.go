@@ -250,14 +250,14 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
 	// Show a nice message that we're starting to upload the file
-	logger.Info("Uploading %s (%d bytes)", artifact.Path, artifact.FileSize)
+	logger.Info("Uploading \"%s\" (%d bytes)", artifact.Path, artifact.FileSize)
 
 	// Upload the artifact and then set the state depending on whether or not
 	// it passed.
 	err := uploader.Upload(&artifact)
 	if err != nil {
 		artifact.State = "error"
-		logger.Error("Error uploading artifact %s (%s)", artifact.Path, err)
+		logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 	} else {
 		artifact.State = "finished"
 	}
@@ -265,7 +265,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
 	// Update the state of the artifact on Buildkite
 	_, err = client.ArtifactUpdate(job, artifact)
 	if err != nil {
-		logger.Error("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
+		logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
 	}
 
 	// We can notify the channel that this routine has finished now
