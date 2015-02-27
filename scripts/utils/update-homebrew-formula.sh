@@ -30,7 +30,7 @@ CONTENTS_API_RESPONSE=$(curl "https://api.github.com/repos/buildkite/homebrew-bu
 
 echo "Decoding into $FORMULA_FILE"
 
-echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -D > $FORMULA_FILE
+echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FILE
 
 echo "Writing updated formula to $UPDATED_FORMULA_FILE"
 
