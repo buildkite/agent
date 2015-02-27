@@ -7,13 +7,9 @@ set -x
 #
 # Examples:
 #
-#   # From STDIN
 #   echo '{"key":{"subkey": ["value"]}}' | parse_json '["key"]["subkey"].first'
-#
-#   # From a file
-#   parse_json '["key"]["subkey"].first' file.json
 function parse_json {
-  ruby -rjson -e "print JSON.parse(\$<.read)$1" $2
+  ruby -rjson -e "print JSON.parse(\$<.read)$1"
 }
 
 BINARY_NAME=buildkite-agent-darwin-386.tar.gz
