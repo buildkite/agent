@@ -340,6 +340,12 @@ buildkite-global-hook "post-command"
 ##############################################################
 
 if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
+  # Run the per-checkout `pre-artifact` hook
+  buildkite-local-hook "pre-artifact"
+
+  # Run the global `pre-artifact` hook
+  buildkite-global-hook "pre-artifact"
+
   echo "~~~ Uploading artifacts"
   if [[ ! -z "${BUILDKITE_ARTIFACT_UPLOAD_DESTINATION:-}" ]] && [[ "$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION" != "" ]]; then
     buildkite-run "buildkite-agent artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION\""
