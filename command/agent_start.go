@@ -6,7 +6,6 @@ import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
-	"time"
 )
 
 func AgentStartCommandAction(c *cli.Context) {
@@ -35,7 +34,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	fmt.Printf(welcomeMessage)
 
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
-	logger.Notice("Copyright (c) 2014-%d, Buildkite Pty Ltd. See LICENSE and for more details.", time.Now().Year())
+	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	// Init debugging
