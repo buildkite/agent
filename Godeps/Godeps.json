@@ -23,6 +23,10 @@
 			"ImportPath": "github.com/kr/pty",
 			"Comment": "release.r56-25-g05017fc",
 			"Rev": "05017fcccf23c823bfdea560dcc958a136e54fb7"
+		},
+		{
+			"ImportPath": "golang.org/x/crypto/ssh/terminal",
+			"Rev": "f7445b17d61953e333441674c2d11e91ae4559d3"
 		}
 	]
 }
