@@ -25,6 +25,33 @@ Example:
 
    $ buildkite-agent start --token xxx`
 
+var ShasumHelpDescription = `Usage:
+
+   buildkite-agent artifact shasum [arguments...]
+
+Description:
+
+   Prints to STDOUT the SHA-1 for the artifact provided. If your search query
+   for artifacts matches multiple agents, and error will be raised.
+
+   Note: You need to ensure that your search query is surrounded by quotes if
+   using a wild card as the built-in shell path globbing will provide files,
+   which will break the download.
+
+Example:
+
+   $ buildkite-agent artifact shasum "pkg/release.tar.gz" --build xxx
+
+   This will search for all the files in the build with the path "pkg/release.tar.gz" and will
+   print to STDOUT it's SHA-1 checksum.
+
+   If you would like to target artifacts from a specific build step, you can do
+   so by using the --job argument.
+
+   $ buildkite-agent artifact shasum "pkg/release.tar.gz" --job "release" --build xxx
+
+   You can also use the job's id (provided by the environment variable $BUILDKITE_JOB_ID)`
+
 var DownloadHelpDescription = `Usage:
 
    buildkite-agent artifact download [arguments...]
@@ -33,7 +60,7 @@ Description:
 
    Downloads artifacts from Buildkite to the local machine.
 
-   You need to ensure that your search query is surrounded by quotes if
+   Note: You need to ensure that your search query is surrounded by quotes if
    using a wild card as the built-in shell path globbing will provide files,
    which will break the download.
 
@@ -182,7 +209,7 @@ func init() {
 				},
 				cli.BoolFlag{
 					Name:   "debug",
-					Usage:  "Enable debug mode.",
+					Usage:  "Enable debug mode",
 					EnvVar: "BUILDKITE_AGENT_DEBUG",
 				},
 				cli.BoolFlag{
@@ -199,7 +226,7 @@ func init() {
 			Subcommands: []cli.Command{
 				{
 					Name:        "download",
-					Usage:       "Downloads artifacts from Buildkite to the local machine.",
+					Usage:       "Downloads artifacts from Buildkite to the local machine",
 					Description: DownloadHelpDescription,
 					Flags: []cli.Flag{
 						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
@@ -243,7 +270,7 @@ func init() {
 				},
 				{
 					Name:        "upload",
-					Usage:       "Uploads files to a job as artifacts.",
+					Usage:       "Uploads files to a job as artifacts",
 					Description: UploadHelpDescription,
 					Flags: []cli.Flag{
 						cli.StringFlag{
@@ -276,6 +303,50 @@ func init() {
 						},
 					},
 					Action: command.ArtifactUploadCommandAction,
+				},
+				{
+					Name:        "shasum",
+					Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",
+					Description: ShasumHelpDescription,
+					Flags: []cli.Flag{
+						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
+						// default to all the jobs on the build, not just the current one. --job is used
+						// to scope to a paticular job if you
+						cli.StringFlag{
+							Name:  "job",
+							Value: "",
+							Usage: "Used to target a specific job to download artifacts from",
+						},
+						cli.StringFlag{
+							Name:   "build",
+							Value:  "",
+							Usage:  "Which build should the artifacts be downloaded from",
+							EnvVar: "BUILDKITE_BUILD_ID",
+						},
+						cli.StringFlag{
+							Name:   "agent-access-token",
+							Value:  "",
+							Usage:  "The access token used to identify the agent",
+							EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
+						},
+						cli.StringFlag{
+							Name:   "endpoint",
+							Value:  "https://agent.buildkite.com/v2",
+							Usage:  "The agent API endpoint",
+							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
+						},
+						cli.BoolFlag{
+							Name:   "debug",
+							Usage:  "Enable debug mode",
+							EnvVar: "BUILDKITE_AGENT_DEBUG",
+						},
+						cli.BoolFlag{
+							Name:   "no-color",
+							Usage:  "Don't show colors in logging",
+							EnvVar: "BUILDKITE_AGENT_NO_COLOR",
+						},
+					},
+					Action: command.ArtifactShasumCommandAction,
 				},
 			},
 		},
