@@ -134,8 +134,14 @@ func (p *Process) Start() error {
 			p.lineCallback(p, scanner.Text())
 		}
 
+		// Was there an error from scanning?
 		if err := scanner.Err(); err != nil {
-			logger.Error("Failed to scan lines: (%T: %v)", err, err)
+			// We ignore ErrTooLong too long errors. Because we're just
+			// scanning lines to find the `--- headers`, a line that is
+			// over the scanning limit probably won't be a header.
+			if err != bufio.ErrTooLong {
+				logger.Error("Failed to scan lines: (%T: %v)", err, err)
+			}
 		}
 
 		logger.Debug("Line scanner has finished")
