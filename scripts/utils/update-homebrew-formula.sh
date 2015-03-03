@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
-set -x
 
 # Allows you to pipe JSON in and fetch keys using Ruby hash syntax
 #
@@ -52,4 +51,4 @@ curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/
           \"content\": \"$UPDATED_FORMULA_BASE64\",
           \"branch\": \"master\"
         }" \
-     -i
+     --fail
