@@ -10,7 +10,7 @@ echo '--- Downloading binaries'
 
 rm -rf pkg
 mkdir -p pkg
-buildkite-agent build-artifact download "pkg/*" .
+buildkite-agent artifact download "pkg/*" .
 
 function build() {
   echo "--- Building release for: $1"
