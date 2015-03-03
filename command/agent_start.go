@@ -33,9 +33,9 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Don't do colors on the banner if they aren't enabled in the logger
 	if logger.ColorsEnabled() {
-		fmt.Printf(welcomeMessage, "\x1b[32m", "\x1b[0m")
+		fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "\x1b[32m", "\x1b[0m")
 	} else {
-		fmt.Printf(welcomeMessage, "", "")
+		fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "", "")
 	}
 
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))

@@ -3,6 +3,7 @@ package logger
 import (
 	"fmt"
 	"golang.org/x/crypto/ssh/terminal"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -50,6 +51,11 @@ func ColorsEnabled() bool {
 			return false
 		}
 	}
+}
+
+func OutputPipe() io.Writer {
+	// All logging, all the time, goes to STDERR
+	return os.Stderr
 }
 
 func Debug(format string, v ...interface{}) {
@@ -108,9 +114,5 @@ func log(l Level, format string, v ...interface{}) {
 		line = fmt.Sprintf("%s %-6s %s\n", now, level, message)
 	}
 
-	if l == DEBUG {
-		fmt.Fprintf(os.Stderr, line)
-	} else {
-		fmt.Fprintf(os.Stdout, line)
-	}
+	fmt.Fprintf(OutputPipe(), line)
 }
