@@ -22,16 +22,21 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	welcomeMessage :=
 		"\n" +
-			"\x1b[32m  _           _ _     _ _    _ _                                _\n" +
+			"%s  _           _ _     _ _    _ _                                _\n" +
 			" | |         (_) |   | | |  (_) |                              | |\n" +
 			" | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
 			" | '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
 			" | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
 			" |_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
 			"                                                __/ |\n" +
-			" http://buildkite.com/agent                    |___/\n\x1b[0m\n"
+			" http://buildkite.com/agent                    |___/\n%s\n"
 
-	fmt.Printf(welcomeMessage)
+	// Don't do colors on the banner if they aren't enabled in the logger
+	if logger.ColorsEnabled() {
+		fmt.Printf(welcomeMessage, "\x1b[32m", "\x1b[0m")
+	} else {
+		fmt.Printf(welcomeMessage, "", "")
+	}
 
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
 	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")

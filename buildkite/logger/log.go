@@ -2,7 +2,9 @@ package logger
 
 import (
 	"fmt"
+	"golang.org/x/crypto/ssh/terminal"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -34,6 +36,20 @@ func SetLevel(l Level) {
 
 func SetColors(b bool) {
 	colors = b
+}
+
+func ColorsEnabled() bool {
+	if runtime.GOOS == "windows" {
+		// Boo, no colors on Windows.
+		return false
+	} else {
+		// Colors can only be shown if STDOUT is a terminal
+		if terminal.IsTerminal(int(os.Stdout.Fd())) {
+			return colors
+		} else {
+			return false
+		}
+	}
 }
 
 func Debug(format string, v ...interface{}) {
@@ -69,7 +85,7 @@ func log(l Level, format string, v ...interface{}) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	line := ""
 
-	if colors {
+	if ColorsEnabled() {
 		prefixColor := green
 		messageColor := nocolor
 
