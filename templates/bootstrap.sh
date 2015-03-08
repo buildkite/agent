@@ -260,12 +260,7 @@ else
 
     function docker-cleanup {
       echo "~~~ Cleaning up Docker containers"
-      buildkite-run "docker rm -f -v $DOCKER_CONTAINER"
-
-      # Enabling the following line will prevent your build server from filling up,
-      # but will slow down your builds because it'll be built from scratch each time.
-      #
-      # docker rmi -f -v $DOCKER_IMAGE
+      buildkite-run "docker rm -f -v $DOCKER_CONTAINER || true"
     }
 
     trap docker-cleanup EXIT
@@ -290,16 +285,11 @@ else
 
     function fig-cleanup {
       echo "~~~ Cleaning up Fig Docker containers"
-      buildkite-run "fig -p $FIG_PROJ_NAME kill"
-      buildkite-run "fig -p $FIG_PROJ_NAME rm --force -v"
+      buildkite-run "fig -p $FIG_PROJ_NAME kill || true"
+      buildkite-run "fig -p $FIG_PROJ_NAME rm --force -v || true"
 
       # The adhoc run container isn't cleaned up by fig, so we have to do it ourselves
-      buildkite-run "docker rm -f -v "$FIG_CONTAINER_NAME"_run_1"
-
-      # Enabling the following line will prevent your build server from filling up,
-      # but will slow down your builds because it'll be built from scratch each time.
-      #
-      # docker rmi -f -v $FIG_CONTAINER_NAME
+      buildkite-run "docker rm -f -v "$FIG_CONTAINER_NAME"_run_1 || true"
     }
 
     trap fig-cleanup EXIT
