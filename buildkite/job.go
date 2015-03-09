@@ -43,15 +43,6 @@ func (b Job) String() string {
 	return fmt.Sprintf("Job{ID: %s, State: %s, StartedAt: %s, FinishedAt: %s, Process: %s}", b.ID, b.State, b.StartedAt, b.FinishedAt, b.process)
 }
 
-func (c *Client) JobNext() (*Job, error) {
-	// Create a new instance of a job that will be populated
-	// by the client.
-	var job Job
-
-	// Return the job.
-	return &job, c.Get(&job, "jobs/next")
-}
-
 func (c *Client) JobFind(id string) (*Job, error) {
 	// Create a new instance of a job that will be populated
 	// by the client.

@@ -86,7 +86,7 @@ func (a *Agent) Start() {
 		if a.stopping {
 			a.Stop()
 		} else {
-			a.performNextJob()
+			a.Ping()
 		}
 
 		// Sleep for a while before we check again
@@ -94,31 +94,35 @@ func (a *Agent) Start() {
 	}
 }
 
-func (a *Agent) Stop() {
-	// Disconnect from Buildkite
-	logger.Info("Disconnecting...")
-	a.Client.AgentDisconnect(a)
-
-	// Kill the process
-	os.Exit(0)
-}
-
-func (a *Agent) performNextJob() {
-	job, err := a.Client.JobNext()
+func (a *Agent) Ping() {
+	ping, err := a.Client.AgentPing()
 	if err != nil {
-		logger.Warn("Failed to get job (%s)", err)
+		logger.Warn("Failed to ping (%s)", err)
 		return
 	}
 
-	// If there's no ID, then there's no job.
-	if job.ID == "" {
+	logger.Debug("%s", ping)
+
+	// Is there a message that should be shown in the logs?
+	if ping.Message != "" {
+		logger.Info(ping.Message)
+	}
+
+	// Should the agent disconnect?
+	if ping.Action == "disconnect" {
+		a.Stop()
 		return
 	}
 
-	logger.Info("Assigned job %s. Accepting...", job.ID)
+	// Do nothing if there's no job
+	if ping.Job == nil {
+		return
+	}
+
+	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
 	// Accept the job
-	job, err = a.Client.JobAccept(job)
+	job, err := a.Client.JobAccept(ping.Job)
 	if err != nil {
 		logger.Error("Failed to accept the job (%s)", err)
 		return
@@ -133,4 +137,13 @@ func (a *Agent) performNextJob() {
 	a.Job = job
 	job.Run(a)
 	a.Job = nil
+}
+
+func (a *Agent) Stop() {
+	// Disconnect from Buildkite
+	logger.Info("Disconnecting...")
+	a.Client.AgentDisconnect(a)
+
+	// Kill the process
+	os.Exit(0)
 }
