@@ -101,8 +101,6 @@ func (a *Agent) Ping() {
 		return
 	}
 
-	logger.Debug("%s", ping)
-
 	// Is there a message that should be shown in the logs?
 	if ping.Message != "" {
 		logger.Info(ping.Message)
