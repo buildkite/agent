@@ -11,8 +11,21 @@
 #                                                                                 |_|
 # https://github.com/buildkite/agent/blob/master/templates/bootstrap.sh
 
-# Causes this script to exit if a variable isn't present
-set -u
+# It's possible for a hook or a build script to change things like `set -eou
+# pipefail`, causing our bootstrap.sh to misbehave, so this function will set
+# them back to what we expect them to be.
+function buildkite-flags-reset {
+  # Causes this script to exit if a variable isn't present
+  set -u
+
+  # Turn off debugging
+  set +x
+
+  # If a command fails, don't exit, just keep on truckin'
+  set +e
+}
+
+buildkite-flags-reset
 
 ##############################################################
 #
@@ -75,6 +88,9 @@ function buildkite-hook {
     # Run the hook
     . "$HOOK_SCRIPT_PATH"
     HOOK_EXIT_STATUS=$?
+
+    # Reset the bootstrap.sh flags
+    buildkite-flags-reset
 
     # Return back to the working dir
     cd $HOOK_PREVIOUS_WORKING_DIR
@@ -313,6 +329,9 @@ else
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
+
+    # Reset the bootstrap.sh flags
+    buildkite-flags-reset
   fi
 fi
 
