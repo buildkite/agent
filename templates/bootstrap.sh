@@ -66,7 +66,7 @@ function buildkite-hook {
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
     # Print to the screen we're going to run the hook
     echo "~~~ Running $HOOK_LABEL hook"
-    echo -e "$BUILDKITE_PROMPT . \"$HOOK_SCRIPT_PATH\""
+    echo -e "$BUILDKITE_PROMPT .\"$HOOK_SCRIPT_PATH\""
 
     # Store the current folder, so after the hook, we can return back to the
     # current working directory
