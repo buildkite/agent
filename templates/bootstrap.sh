@@ -308,7 +308,7 @@ else
   ## Standard
   else
     echo "~~~ Running build script"
-    echo -e "$BUILDKITE_PROMPT . \"$BUILDKITE_SCRIPT_PATH\""
+    echo -e "$BUILDKITE_PROMPT .\"$BUILDKITE_SCRIPT_PATH\""
     ."/$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
