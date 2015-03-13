@@ -292,6 +292,35 @@ else
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
+  ## Docker Compose
+  elif [[ ! -z "${BUILDKITE_DOCKER_COMPOSE_CONTAINER:-}" ]] && [[ "$BUILDKITE_DOCKER_COMPOSE_CONTAINER" != "" ]]; then
+    # Compose strips dashes and underscores, so we'll remove them to match the docker container names
+    COMPOSE_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
+    # The name of the docker container compose creates when it creates the adhoc run
+    COMPOSE_CONTAINER_NAME=$COMPOSE_PROJ_NAME"_"$BUILDKITE_DOCKER_COMPOSE_CONTAINER
+
+    function compose-cleanup {
+      echo "~~~ Cleaning up Docker containers"
+      buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME kill || true"
+      buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME rm --force -v || true"
+
+      # The adhoc run container isn't cleaned up by compose, so we have to do it ourselves
+      buildkite-run "docker rm -f -v "$COMPOSE_CONTAINER_NAME"_run_1 || true"
+    }
+
+    trap compose-cleanup EXIT
+
+    # Build the Docker images using Compose, namespaced to the job
+    echo "~~~ Building Docker images"
+    buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME build"
+
+    # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
+    echo "~~~ Running build script (in Docker Compose container)"
+    buildkite-prompt-and-run "docker-compose -p $COMPOSE_PROJ_NAME run $BUILDKITE_DOCKER_COMPOSE_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
+
+    # Capture the exit status from the build script
+    export BUILDKITE_COMMAND_EXIT_STATUS=$?
+
   ## Fig
   elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" != "" ]]; then
     # Fig strips dashes and underscores, so we'll remove them to match the docker container names
@@ -309,6 +338,8 @@ else
     }
 
     trap fig-cleanup EXIT
+
+    echo "~~~ :warn: \$BUILDKITE_FIG_CONTAINER has been deprecated. Please use Docker Compose and \$BUILDKITE_DOCKER_COMPOSE_CONTAINER"
 
     # Build the Docker images using Fig, namespaced to the job
     echo "~~~ Building Fig Docker images"
