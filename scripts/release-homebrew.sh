@@ -26,20 +26,22 @@ BINARY_NAME=buildkite-agent-darwin-386.tar.gz
 ARTIFACT_PATH="pkg/$BINARY_NAME"
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$AGENT_VERSION/$BINARY_NAME"
-FORMULA_FILE=./releases/buildkite-agent.rb
-UPDATED_FORMULA_FILE=./releases/buildkite-agent-updated.rb
+FORMULA_FILE=./pkg/buildkite-agent.rb
+UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
+RELEASE_SHA=$(buildkite-agent artifact shasum $ARTIFACT_PATH)
+
+echo "Release download URL: $DOWNLOAD_URL"
+echo "Release SHA1: $RELEASE_SHA"
 
 echo "Fetching master formula from Github Contents API"
 
 CONTENTS_API_RESPONSE=$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN")
 
-echo "Decoding into $FORMULA_FILE"
+echo "Base64 decoding Github response into $FORMULA_FILE"
 
 echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FILE
 
-echo "Writing updated formula to $UPDATED_FORMULA_FILE"
-
-RELEASE_SHA=$(buildkite-agent artifact shasum $ARTIFACT_PATH)
+echo "Updating formula into $UPDATED_FORMULA_FILE"
 
 cat $FORMULA_FILE |
   ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $AGENT_VERSION $DOWNLOAD_URL $RELEASE_SHA \
@@ -50,11 +52,16 @@ echo "Updating master formula via Github Contents API"
 UPDATED_FORMULA_BASE64=$(base64 $UPDATED_FORMULA_FILE)
 MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
+POST_DATA = "{
+  \"message\": \"buildkite-agent $AGENT_VERSION\",
+  \"sha\": \"$MASTER_FORMULA_SHA\",
+  \"content\": \"$UPDATED_FORMULA_BASE64\",
+  \"branch\": \"master\"
+}"
+
+echo "Posting JSON to Github Contents API:\n$POST_DATA"
+
 curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
-     -d "{
-          \"message\": \"buildkite-agent $AGENT_VERSION\",
-          \"sha\": \"$MASTER_FORMULA_SHA\",
-          \"content\": \"$UPDATED_FORMULA_BASE64\",
-          \"branch\": \"master\"
-        }" \
+     -d $POST_DATA \
+     -i \
      --fail
