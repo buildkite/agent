@@ -52,11 +52,11 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
 
   buildkite-agent meta-data set github_release_type "prerelease"
 
-  github-release "v$GITHUB_AGENT_VERSION" releases/* --prerelease
+  github-release "v$GITHUB_AGENT_VERSION" releases/* --prerelease || true
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   buildkite-agent meta-data set github_release_type "stable"
 
-  github-release "v$AGENT_VERSION" releases/*
+  github-release "v$AGENT_VERSION" releases/* || true
 fi
