@@ -28,9 +28,13 @@ ARTIFACT_PATH="pkg/$BINARY_NAME"
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$AGENT_VERSION/$BINARY_NAME"
 FORMULA_FILE=./pkg/buildkite-agent.rb
 UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
-RELEASE_SHA=$(buildkite-agent artifact shasum $ARTIFACT_PATH)
 
 echo "Release download URL: $DOWNLOAD_URL"
+
+echo "Fetching release artifact"
+buildkite-agent artifact download $ARTIFACT_PATH $ARTIFACT_PATH
+RELEASE_SHA=($(shasum $ARTIFACT_PATH))
+
 echo "Release SHA1: $RELEASE_SHA"
 
 echo "Fetching master formula from Github Contents API"
