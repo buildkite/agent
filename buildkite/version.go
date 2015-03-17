@@ -9,7 +9,7 @@ import "strings"
 //
 // On CI, the binaries are always build with the buildVersion variable set.
 
-var baseVersion string = "1.0-beta.17"
+var baseVersion string = "1.0-beta.18"
 var buildVersion string = ""
 
 func Version() string {
