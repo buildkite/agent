@@ -1,6 +1,17 @@
-#!/usr/bin/env bash
+#!/usr/bin/env/bash
 
-set -euo pipefail
+# Must be executed after github-release.sh as it depends on release meta-data
+
+set -eu
+
+$AGENT_VERSION=$(buildkite-agent meta-data get agent_version)
+$GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
+
+if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
+  $BREW_RELEASE_TYPE == "devel"
+else
+  $BREW_RELEASE_TYPE == "stable"
+fi
 
 # Allows you to pipe JSON in and fetch keys using Ruby hash syntax
 #
@@ -12,12 +23,7 @@ function parse_json {
 }
 
 BINARY_NAME=buildkite-agent-darwin-386.tar.gz
-RELEASE_FILE="./releases/$BINARY_NAME"
-
-if [[ ! -f $RELEASE_FILE ]]; then
-  echo "Error: Missing file $RELEASE_FILE"
-  exit 1
-fi
+ARTIFACT_PATH="pkg/$BINARY_NAME"
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$AGENT_VERSION/$BINARY_NAME"
 FORMULA_FILE=./releases/buildkite-agent.rb
@@ -33,7 +39,7 @@ echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FI
 
 echo "Writing updated formula to $UPDATED_FORMULA_FILE"
 
-RELEASE_SHA=($(shasum $RELEASE_FILE))
+RELEASE_SHA=$(buildkite-agent artifact shasum $ARTIFACT_PATH)
 
 cat $FORMULA_FILE |
   ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $AGENT_VERSION $DOWNLOAD_URL $RELEASE_SHA \
