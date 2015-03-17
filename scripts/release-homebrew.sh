@@ -1,4 +1,4 @@
-#!/usr/bin/env/bash
+#!/usr/bin/env bash
 
 # Must be executed after github-release.sh as it depends on release meta-data
 
