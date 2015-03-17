@@ -339,7 +339,10 @@ else
 
     trap fig-cleanup EXIT
 
-    echo "~~~ :warn: \$BUILDKITE_FIG_CONTAINER has been deprecated. Please use Docker Compose and \$BUILDKITE_DOCKER_COMPOSE_CONTAINER"
+    echo "~~~ :warning: Fig support has been deprecated for Docker Compose (expand for upgrade instructions)"
+    echo "To upgrade: "
+    echo "1) Install Docker Compose on your agent server: http://docs.docker.com/compose/"
+    echo "2) Replace \$BUILDKITE_DOCKER_FIG_CONTAINER environment variables with \$BUILDKITE_DOCKER_COMPOSE_CONTAINER"
 
     # Build the Docker images using Fig, namespaced to the job
     echo "~~~ Building Fig Docker images"
