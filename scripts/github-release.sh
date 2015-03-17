@@ -51,12 +51,12 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   github-release "v$GITHUB_AGENT_VERSION" releases/* --prerelease
 
   # Turning off until I can fix what ever is wrong with it
-  # env BREW_RELEASE_TYPE="devel" AGENT_VERSION="$AGENT_VERSION" ./scripts/utils/update-homebrew-formula.sh
+  env BREW_RELEASE_TYPE="devel" AGENT_VERSION="$AGENT_VERSION" ./scripts/utils/update-homebrew-formula.sh
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   github-release "v$AGENT_VERSION" releases/*
 
   # Turning off until I can fix what ever is wrong with it
-  # env BREW_RELEASE_TYPE="stable" AGENT_VERSION="$AGENT_VERSION" ./scripts/utils/update-homebrew-formula.sh
+  env BREW_RELEASE_TYPE="stable" AGENT_VERSION="$AGENT_VERSION" ./scripts/utils/update-homebrew-formula.sh
 fi
