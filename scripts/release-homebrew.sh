@@ -8,9 +8,9 @@ AGENT_VERSION=$(buildkite-agent meta-data get agent_version)
 GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
 
 if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
-  BREW_RELEASE_TYPE = "devel"
+  BREW_RELEASE_TYPE="devel"
 else
-  BREW_RELEASE_TYPE = "stable"
+  BREW_RELEASE_TYPE="stable"
 fi
 
 # Allows you to pipe JSON in and fetch keys using Ruby hash syntax
