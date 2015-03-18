@@ -30,17 +30,10 @@ UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 
 echo "--- :package: Fetching artifact SHA from Github release step"
 
-echo "Downloading"
-buildkite-agent artifact download "releases/$BINARY_NAME" pkg
-
 echo "Fetching SHA"
 RELEASE_SHA=$(buildkite-agent artifact shasum "releases/$BINARY_NAME")
 
 echo "Release SHA1: $RELEASE_SHA"
-
-INVALID_SHA=$(buildkite-agent artifact shasum "invalid_artifact.gz")
-
-echo "Invalid SHA: $INVALID_SHA"
 
 echo "--- :octocat: Fetching current homebrew formula from Github Contents API"
 
