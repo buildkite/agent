@@ -23,7 +23,8 @@ function parse_json {
 }
 
 BINARY_NAME=buildkite-agent-darwin-386.tar.gz
-ARTIFACT_PATH="pkg/$BINARY_NAME"
+RELEASES_DIR=releases
+RELEASE_ARTIFACT_PATH="$RELEASES_DIR/$BINARY_NAME"
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$AGENT_VERSION/$BINARY_NAME"
 FORMULA_FILE=./pkg/buildkite-agent.rb
@@ -32,8 +33,8 @@ UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 echo "Release download URL: $DOWNLOAD_URL"
 
 echo "Fetching release artifact"
-buildkite-agent artifact download $ARTIFACT_PATH pkg
-RELEASE_SHA=($(shasum $ARTIFACT_PATH))
+buildkite-agent artifact download $RELEASE_ARTIFACT_PATH $RELEASES_DIR
+RELEASE_SHA=($(shasum $RELEASE_ARTIFACT_PATH))
 
 echo "Release SHA1: $RELEASE_SHA"
 
