@@ -60,7 +60,7 @@ cat $FORMULA_FILE |
 
 echo "--- :rocket: Commiting new formula to master via Github Contents API"
 
-UPDATED_FORMULA_BASE64=$(base64 --break=0 $UPDATED_FORMULA_FILE)
+UPDATED_FORMULA_BASE64=$(base64 --wrap=0 $UPDATED_FORMULA_FILE)
 MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
 echo "Old formula SHA: $MASTER_FORMULA_SHA"
