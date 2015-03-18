@@ -57,16 +57,16 @@ echo "Updating master formula via Github Contents API"
 UPDATED_FORMULA_BASE64=$(base64 $UPDATED_FORMULA_FILE)
 MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
-POST_DATA="{
-  \"message\": \"buildkite-agent $AGENT_VERSION\",
-  \"sha\": \"$MASTER_FORMULA_SHA\",
-  \"content\": \"$UPDATED_FORMULA_BASE64\",
-  \"branch\": \"master\"
-}"
+POST_DATA=
 
 echo "Posting JSON to Github Contents API:\n$POST_DATA"
 
 curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
-     -d $POST_DATA \
      -i \
-     --fail
+     --fail \
+     -d "{
+       \"message\": \"buildkite-agent $AGENT_VERSION\",
+       \"sha\": \"$MASTER_FORMULA_SHA\",
+       \"content\": \"$UPDATED_FORMULA_BASE64\",
+       \"branch\": \"master\"
+     }"
