@@ -4,7 +4,7 @@
 
 set -eu
 
-AGENT_VERSION=$(buildkite-agent meta-data get agent_version)
+GITHUB_RELEASE_VERSION=$(buildkite-agent meta-data get github_release_version)
 GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
 
 if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
@@ -26,7 +26,7 @@ BINARY_NAME=buildkite-agent-darwin-386.tar.gz
 RELEASES_DIR=releases
 RELEASE_ARTIFACT_PATH="$RELEASES_DIR/$BINARY_NAME"
 
-DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$AGENT_VERSION/$BINARY_NAME"
+DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME"
 FORMULA_FILE=./pkg/buildkite-agent.rb
 UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 
@@ -49,7 +49,7 @@ echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FI
 echo "Updating formula into $UPDATED_FORMULA_FILE"
 
 cat $FORMULA_FILE |
-  ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $AGENT_VERSION $DOWNLOAD_URL $RELEASE_SHA \
+  ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $GITHUB_RELEASE_VERSION $DOWNLOAD_URL $RELEASE_SHA \
   > $UPDATED_FORMULA_FILE
 
 echo "Updating master formula via Github Contents API"
@@ -65,7 +65,7 @@ curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/
      -i \
      --fail \
      -d "{
-       \"message\": \"buildkite-agent $AGENT_VERSION\",
+       \"message\": \"buildkite-agent $GITHUB_RELEASE_VERSION\",
        \"sha\": \"$MASTER_FORMULA_SHA\",
        \"content\": \"$UPDATED_FORMULA_BASE64\",
        \"branch\": \"master\"

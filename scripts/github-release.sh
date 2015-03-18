@@ -36,8 +36,6 @@ echo "Version is $FULL_AGENT_VERSION"
 
 export GITHUB_RELEASE_REPOSITORY="buildkite/agent"
 
-buildkite-agent meta-data set agent_version $AGENT_VERSION
-
 if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   # Beta versions of the agent will have the build number at the end of them
   # like this:
@@ -51,12 +49,14 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   echo "--- 🚀 $GITHUB_AGENT_VERSION (prerelease)"
 
   buildkite-agent meta-data set github_release_type "prerelease"
+  buildkite-agent meta-data set github_release_version $GITHUB_AGENT_VERSION
 
   github-release "v$GITHUB_AGENT_VERSION" releases/* --prerelease || true
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   buildkite-agent meta-data set github_release_type "stable"
+  buildkite-agent meta-data set github_release_version $AGENT_VERSION
 
   github-release "v$AGENT_VERSION" releases/* || true
 fi
