@@ -65,7 +65,7 @@ MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
 echo "Old formula SHA: $MASTER_FORMULA_SHA"
 
-cat "{
+echo "{
        \"message\": \"buildkite-agent $GITHUB_RELEASE_VERSION\",
        \"sha\": \"$MASTER_FORMULA_SHA\",
        \"content\": \"$UPDATED_FORMULA_BASE64\",
