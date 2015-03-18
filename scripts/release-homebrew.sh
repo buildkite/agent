@@ -22,6 +22,10 @@ function parse_json {
   ruby -rjson -e "print JSON.parse(\$<.read)$1"
 }
 
+function to_json {
+  ruby -rjson -e "print \$<.read.to_json"
+}
+
 BINARY_NAME=buildkite-agent-darwin-386.tar.gz
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME"
@@ -56,27 +60,22 @@ cat $FORMULA_FILE |
 
 echo "--- :rocket: Commiting new formula to master via Github Contents API"
 
-UPDATED_FORMULA_BASE64=$(base64 $UPDATED_FORMULA_FILE)
+UPDATED_FORMULA_BASE64=$(base64 --break=0 $UPDATED_FORMULA_FILE)
 MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
 echo "Old formula SHA: $MASTER_FORMULA_SHA"
 
-echo "Posting:
-     {
+cat "{
        \"message\": \"buildkite-agent $GITHUB_RELEASE_VERSION\",
        \"sha\": \"$MASTER_FORMULA_SHA\",
        \"content\": \"$UPDATED_FORMULA_BASE64\",
        \"branch\": \"master\"
-     }"
+     }" > pkg/github_post_data.json
+
 
 echo "Posting JSON to Github Contents API"
 curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
-     -v \
-     --fail \
      -H "Content-Type: application/json" \
-     -d "{
-       \"message\": \"buildkite-agent $GITHUB_RELEASE_VERSION\",
-       \"sha\": \"$MASTER_FORMULA_SHA\",
-       \"content\": \"$UPDATED_FORMULA_BASE64\",
-       \"branch\": \"master\"
-     }"
+     --data-binary "@pkg/github_post_data.json" \
+     -v \
+     --fail
