@@ -10,7 +10,7 @@ var AppHelpTemplate = `Usage:
 
   {{.Name}} <command> [arguments...]
 
-Available comamnds are:
+Available commands are:
 
   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}
@@ -22,7 +22,7 @@ var SubcommandHelpTemplate = `Usage:
 
   {{.Name}} {{if .Flags}}<command>{{end}} [arguments...]
 
-Available comamnds are:
+Available commands are:
 
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
