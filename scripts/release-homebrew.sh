@@ -30,6 +30,8 @@ DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELE
 FORMULA_FILE=./pkg/buildkite-agent.rb
 UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 
+echo "--- :package: Downloading artifacts from Github Release step"
+
 echo "Release download URL: $DOWNLOAD_URL"
 
 echo "Fetching release artifact"
@@ -38,7 +40,7 @@ RELEASE_SHA=($(shasum $RELEASE_ARTIFACT_PATH))
 
 echo "Release SHA1: $RELEASE_SHA"
 
-echo "Fetching master formula from Github Contents API"
+echo "--- :github: Fetching current homebrew formula from Github Contents API"
 
 CONTENTS_API_RESPONSE=$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN")
 
@@ -46,20 +48,20 @@ echo "Base64 decoding Github response into $FORMULA_FILE"
 
 echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FILE
 
-echo "Updating formula into $UPDATED_FORMULA_FILE"
+echo "--- :ruby: Updating formula file"
 
 cat $FORMULA_FILE |
   ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $GITHUB_RELEASE_VERSION $DOWNLOAD_URL $RELEASE_SHA \
   > $UPDATED_FORMULA_FILE
 
-echo "Updating master formula via Github Contents API"
+echo "--- :rocket: Commiting new formula to master via Github Contents API"
 
 UPDATED_FORMULA_BASE64=$(base64 $UPDATED_FORMULA_FILE)
 MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
-POST_DATA=
+echo "Old formula SHA: $MASTER_FORMULA_SHA"
 
-echo "Posting JSON to Github Contents API:\n$POST_DATA"
+echo "Posting JSON to Github Contents API"
 
 curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
      -i \
