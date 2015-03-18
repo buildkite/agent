@@ -32,7 +32,7 @@ UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 echo "Release download URL: $DOWNLOAD_URL"
 
 echo "Fetching release artifact"
-buildkite-agent artifact download $ARTIFACT_PATH $ARTIFACT_PATH
+buildkite-agent artifact download $ARTIFACT_PATH pkg
 RELEASE_SHA=($(shasum $ARTIFACT_PATH))
 
 echo "Release SHA1: $RELEASE_SHA"
