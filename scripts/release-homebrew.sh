@@ -73,6 +73,7 @@ echo "Posting JSON to Github Contents API"
 curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
      -v \
      --fail \
+     -H "Content-Type: application/json" \
      -d "{
        \"message\": \"buildkite-agent $GITHUB_RELEASE_VERSION\",
        \"sha\": \"$MASTER_FORMULA_SHA\",
