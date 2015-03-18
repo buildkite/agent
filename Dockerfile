@@ -1,9 +1,5 @@
 FROM golang:cross
 
-# Install buildkite-agent
-RUN C=1 BETA=true bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh`"
-RUN ln -s /root/.buildkite/bin/buildkite-agent /usr/local/bin/buildkite-agent
-
 # We need to Ruby to run FPM and the Homebrew update script
 RUN echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list
 RUN apt-get update
