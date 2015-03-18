@@ -57,7 +57,7 @@ echo "Updating master formula via Github Contents API"
 UPDATED_FORMULA_BASE64=$(base64 $UPDATED_FORMULA_FILE)
 MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
 
-POST_DATA = "{
+POST_DATA="{
   \"message\": \"buildkite-agent $AGENT_VERSION\",
   \"sha\": \"$MASTER_FORMULA_SHA\",
   \"content\": \"$UPDATED_FORMULA_BASE64\",
