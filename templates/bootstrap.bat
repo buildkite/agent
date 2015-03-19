@@ -1,5 +1,8 @@
 @echo off
 
+REM enable delayed expansion so that ERRORLEVEL is evaluated properly inside IF blocks
+SETLOCAL ENABLEDELAYEDEXPANSION
+
 REM echo --- Environment Variables
 REM SET
 
@@ -18,18 +21,18 @@ REM Create the build directory
 SET SANITIED_PROJECT_SLUG=%BUILDKITE_PROJECT_SLUG:/=\%
 SET BUILDKITE_BUILD_DIR=%BUILDKITE_DIR%%BUILDKITE_AGENT_NAME%\%SANITIED_PROJECT_SLUG%
 
-IF NOT EXIST %BUILDKITE_BUILD_DIR% (
+IF NOT EXIST "%BUILDKITE_BUILD_DIR%" (
   REM Create the build directory
 
-  ECHO ^> MKDIR %BUILDKITE_BUILD_DIR%
-  MKDIR %BUILDKITE_BUILD_DIR%
-  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+  ECHO ^> MKDIR "%BUILDKITE_BUILD_DIR%"
+  MKDIR "%BUILDKITE_BUILD_DIR%"
+  IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
 )
 
 REM Move to the build directory
 
-ECHO ^> CD %BUILDKITE_BUILD_DIR%
-CD %BUILDKITE_BUILD_DIR%
+ECHO ^> CD "%BUILDKITE_BUILD_DIR%"
+CD "%BUILDKITE_BUILD_DIR%"
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
 REM Do we need to do a git checkout?
@@ -37,7 +40,7 @@ REM Do we need to do a git checkout?
 IF NOT EXIST ".git" (
   ECHO ^> git clone %BUILDKITE_REPO%
   CALL git clone "%BUILDKITE_REPO%" . -v
-  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+  IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
 )
 
 REM Clean the repo
@@ -57,8 +60,9 @@ REM Only reset to the branch if we're not on a tag
 IF "%BUILDKITE_TAG%" == "" (
   ECHO ^> git reset --hard origin/%BUILDKITE_BRANCH%
   CALL git reset --hard origin/%BUILDKITE_BRANCH%
-  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+  IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
 )
+
 
 ECHO ^> git checkout -qf "%BUILDKITE_COMMIT%"
 CALL git checkout -qf "%BUILDKITE_COMMIT%"
@@ -72,7 +76,7 @@ IF "%BUILDKITE_SCRIPT_PATH%" == "" (
 ) ELSE (
   ECHO ^> CALL %BUILDKITE_SCRIPT_PATH%
   CALL %BUILDKITE_SCRIPT_PATH%
-  SET EXIT_STATUS=%ERRORLEVEL%
+  SET EXIT_STATUS=!ERRORLEVEL!
 )
 
 IF NOT "%BUILDKITE_ARTIFACT_PATHS%" == "" (
@@ -90,10 +94,10 @@ IF NOT "%BUILDKITE_ARTIFACT_PATHS%" == "" (
     ECHO --- Uploading Artifacts
     ECHO ^> %BUILDKITE_DIR%\buildkite-agent artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
     call %BUILDKITE_DIR%\buildkite-agent artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
-    IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+    IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
   ) ELSE (
     call %BUILDKITE_DIR%\buildkite-agent artifact upload "%BUILDKITE_ARTIFACT_PATHS%" > nul 2>&1
-    IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+    IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
   )
 )
 
