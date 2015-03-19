@@ -8,18 +8,35 @@ import (
 )
 
 type Agent struct {
-	// The name of the agent
-	Name string
+	// The name of the new agent
+	Name string `json:"name"`
 
-	// The client the agent will use to communicate to
-	// the API
-	Client Client
+	// The access token for the agent
+	AccessToken string `json:"access_token"`
+
+	// Hostname of the machine
+	Hostname string `json:"hostname"`
+
+	// Operating system for this machine
+	OS string `json:"os"`
+
+	// If this agent is allowed to perform script evaluation
+	ScriptEval bool `json:"script_eval_enabled"`
+
+	// The priority of the agent
+	Priority string `json:"priority,omitempty"`
+
+	// The version of this agent
+	Version string `json:"version"`
+
+	// Meta data for the agent
+	MetaData []string `json:"meta_data"`
 
 	// The PID of the agent
 	PID int `json:"pid,omitempty"`
 
-	// The hostname of the agent
-	Hostname string `json:"hostname,omitempty"`
+	// The client the agent will use to communicate to the API
+	Client Client
 
 	// The boostrap script to run
 	BootstrapScript string
@@ -34,9 +51,6 @@ type Agent struct {
 	// fingerprints
 	AutoSSHFingerprintVerification bool
 
-	// If this agent is allowed to perform script evaluation
-	ScriptEval bool
-
 	// Run jobs in a PTY
 	RunInPty bool
 
@@ -45,6 +59,10 @@ type Agent struct {
 
 	// This is true if the agent should no longer accept work
 	stopping bool
+}
+
+func (c *Client) AgentRegister(agent *Agent) error {
+	return c.Post(&agent, "/register", agent)
 }
 
 func (c *Client) AgentConnect(agent *Agent) error {
@@ -57,23 +75,6 @@ func (c *Client) AgentDisconnect(agent *Agent) error {
 
 func (a *Agent) String() string {
 	return fmt.Sprintf("Agent{Name: %s, Hostname: %s, PID: %d, RunInPty: %t}", a.Name, a.Hostname, a.PID, a.RunInPty)
-}
-
-func (a *Agent) Setup() {
-	// Set the PID of the agent
-	a.PID = os.Getpid()
-
-	logger.Info("Connecting to Buildkite...")
-
-	// Get agent information from API. It will populate the
-	// current agent struct with data.
-	err := a.Client.AgentConnect(a)
-	if err != nil {
-		logger.Fatal("%s", err)
-	}
-
-	logger.Info("Agent successfully connected. You can press Ctrl-C to disconnect the agent.")
-	logger.Info("Waiting for work...")
 }
 
 func (a *Agent) Start() {
