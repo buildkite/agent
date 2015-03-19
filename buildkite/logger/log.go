@@ -114,5 +114,5 @@ func log(l Level, format string, v ...interface{}) {
 		line = fmt.Sprintf("%s %-6s %s\n", now, level, message)
 	}
 
-	fmt.Fprintf(OutputPipe(), line)
+	fmt.Fprint(OutputPipe(), line)
 }
