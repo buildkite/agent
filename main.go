@@ -50,8 +50,14 @@ func main() {
 	app.Version = buildkite.Version()
 	app.Commands = Commands
 
-	// Default the default action
+	// When no sub command is used
 	app.Action = func(c *cli.Context) {
+		cli.ShowAppHelp(c)
+		os.Exit(1)
+	}
+
+	// When a sub command can't be found
+	app.CommandNotFound = func(c *cli.Context, command string) {
 		cli.ShowAppHelp(c)
 		os.Exit(1)
 	}
