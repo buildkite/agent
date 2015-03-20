@@ -8,8 +8,11 @@ fi
 
 echo '--- Getting agent version from build meta data'
 
-FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+
+echo "Full agent version: $FULL_AGENT_VERSION"
+echo "Agent version: $AGENT_VERSION"
 
 echo '--- Downloading binaries'
 
