@@ -6,7 +6,8 @@
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh\`\""
 
-VERSION="1.0-beta.19"
+VERSION="1.0-beta.20"
+FULL_VERSION="1.0-beta.20.426"
 
 set -e
 
@@ -70,7 +71,7 @@ fi
 echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
 # Download and unzip the file to the destination
-DOWNLOAD="buildkite-agent-$PLATFORM-$ARCH.tar.gz"
+DOWNLOAD="buildkite-agent-$PLATFORM-$ARCH-$FULL_VERSION.tar.gz"
 URL="https://github.com/buildkite/agent/releases/download/v$VERSION/$DOWNLOAD"
 echo -e "\nDownloading $URL"
 
