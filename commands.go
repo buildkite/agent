@@ -190,16 +190,19 @@ func init() {
 					EnvVar: "BUILDKITE_HOOKS_PATH",
 				},
 				cli.BoolFlag{
-					Name:  "no-pty",
-					Usage: "Do not run jobs within a pseudo terminal",
+					Name:   "no-pty",
+					Usage:  "Do not run jobs within a pseudo terminal",
+					EnvVar: "BUILDKITE_NO_PTY",
 				},
 				cli.BoolFlag{
-					Name:  "no-automatic-ssh-fingerprint-verification",
-					Usage: "Don't automatically verify SSH fingerprints",
+					Name:   "no-automatic-ssh-fingerprint-verification",
+					Usage:  "Don't automatically verify SSH fingerprints",
+					EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
 				},
 				cli.BoolFlag{
-					Name:  "no-script-eval",
-					Usage: "Don't allow this agent to evaluate scripts from Buildkite. Only scripts that exist on the file system will be allowed to run",
+					Name:   "no-script-eval",
+					Usage:  "Don't allow this agent to evaluate scripts from Buildkite. Only scripts that exist on the file system will be allowed to run",
+					EnvVar: "BUILDKITE_NO_SCRIPT_EVAL",
 				},
 				cli.StringFlag{
 					Name:   "endpoint",
