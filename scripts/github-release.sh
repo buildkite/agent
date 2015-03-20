@@ -6,6 +6,11 @@ if [[ "$GITHUB_RELEASE_ACCESS_TOKEN" == "" ]]; then
   exit 1
 fi
 
+echo '--- Getting agent version from build meta data'
+
+FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+
 echo '--- Downloading binaries'
 
 rm -rf pkg
@@ -15,7 +20,7 @@ buildkite-agent artifact download "pkg/*" .
 function build() {
   echo "--- Building release for: $1"
 
-  ./scripts/utils/build-github-release.sh $1
+  ./scripts/utils/build-github-release.sh $1 $AGENT_VERSION
 }
 
 # Export the function so we can use it in xargs
@@ -24,13 +29,8 @@ export -f build
 # Make sure the releases directory is empty
 rm -rf releases
 
-# Loop over all the .deb files and build them
+# Loop over all the binaries and build them
 ls pkg/* | xargs -I {} bash -c "build {}"
-
-echo '--- Getting agent version from build meta data'
-
-FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
 
 echo "Version is $FULL_AGENT_VERSION"
 
