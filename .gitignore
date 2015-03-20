@@ -6,3 +6,4 @@ deb
 .bundle
 .envrc
 vendor/bundle
+.agent.conf
