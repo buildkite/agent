@@ -211,6 +211,9 @@ func (j *Job) Run(agent *Agent) error {
 	return nil
 }
 
+// Replaces ~/ with the users home directory. The builds path may be configured
+// as ~/.buildkite/hooks, and if it's set in a configration file (not on the
+// command line) the OS won't automatically expand it.
 func normalizePath(path string) string {
 	if len(path) > 2 && path[:2] == "~/" {
 		usr, _ := user.Current()
