@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-if [[ ${#} -ne 2 ]]
+if [[ ${#} -lt 2 ]]
 then
   echo "Usage: ${0} [file] [version]" >&2
   exit 1
