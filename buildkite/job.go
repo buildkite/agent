@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -107,10 +109,10 @@ func (j *Job) Run(agent *Agent) error {
 	env["BUILDKITE_BIN_PATH"] = dir
 
 	// Add misc options
-	env["BUILDKITE_BUILD_PATH"] = agent.BuildPath
-	env["BUILDKITE_HOOKS_PATH"] = agent.HooksPath
+	env["BUILDKITE_BUILD_PATH"] = normalizePath(agent.BuildPath)
+	env["BUILDKITE_HOOKS_PATH"] = normalizePath(agent.HooksPath)
 	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", agent.AutoSSHFingerprintVerification)
-	env["BUILDKITE_SCRIPT_EVAL"] = fmt.Sprintf("%t", agent.ScriptEval)
+	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", agent.CommandEval)
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
@@ -207,4 +209,14 @@ func (j *Job) Run(agent *Agent) error {
 	logger.Info("Finished job %s", j.ID)
 
 	return nil
+}
+
+func normalizePath(path string) string {
+	if len(path) > 2 && path[:2] == "~/" {
+		usr, _ := user.Current()
+		dir := usr.HomeDir
+		return strings.Replace(path, "~", dir, 1)
+	} else {
+		return path
+	}
 }
