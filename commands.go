@@ -144,6 +144,12 @@ func init() {
 			Description: AgentDescription,
 			Flags: []cli.Flag{
 				cli.StringFlag{
+					Name:   "config",
+					Value:  "",
+					Usage:  "Path to a configration file",
+					EnvVar: "BUILDKITE_AGENT_CONFIG",
+				},
+				cli.StringFlag{
 					Name:   "token",
 					Value:  "",
 					Usage:  "Your account agent token",

@@ -8,9 +8,39 @@ import (
 	"os"
 )
 
+type AgentStartConfiguration struct {
+	Token                            string   `cli:"token"`
+	Name                             string   `cli:"name"`
+	Priority                         string   `cli:"priority"`
+	BootstrapScript                  string   `cli:"bootstrap-script"`
+	BuildPath                        string   `cli:"build-path"`
+	HooksPath                        string   `cli:"hooks-path"`
+	MetaData                         []string `cli:"meta-data"`
+	MetaDataEC2Tags                  bool     `cli:"meta-data-ec2-tags"`
+	NoColor                          bool     `cli:"no-color"`
+	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
+	NoScriptEval                     bool     `cli:"no-script-eval"`
+	NoPTY                            bool     `cli:"no-pty"`
+	Endpoint                         string   `cli:"endpoint"`
+	Debug                            bool     `cli:"debug"`
+}
+
+func loadConfiguration(c *cli.Context) AgentStartConfiguration {
+	var configuration AgentStartConfiguration
+
+	return configuration
+}
+
 func AgentStartCommandAction(c *cli.Context) {
+	// Load the configration
+	var configuration AgentStartConfiguration
+	err := buildkite.LoadConfiguration(&configuration, c)
+	if err != nil {
+		logger.Fatal("Failed to load configuration: %s", err)
+	}
+
 	// Toggle colors
-	if c.Bool("no-color") {
+	if configuration.NoColor {
 		logger.SetColors(false)
 	}
 
@@ -37,11 +67,11 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	// Init debugging
-	if c.Bool("debug") {
+	if configuration.Debug {
 		logger.SetLevel(logger.DEBUG)
 	}
 
-	agentRegistrationToken := c.String("token")
+	agentRegistrationToken := configuration.Token
 	if agentRegistrationToken == "" {
 		logger.Fatal("Missing --token. See 'buildkite-agent start --help'")
 	}
@@ -49,7 +79,10 @@ func AgentStartCommandAction(c *cli.Context) {
 	var agent buildkite.Agent
 
 	// Expand the envionment variable
-	agent.BootstrapScript = os.ExpandEnv(c.String("bootstrap-script"))
+	agent.BootstrapScript = os.ExpandEnv(configuration.BootstrapScript)
+	if agent.BootstrapScript == "" {
+		logger.Fatal("Bootstrap script is missing")
+	}
 	logger.Debug("Bootstrap script: %s", agent.BootstrapScript)
 
 	// Just double check that the bootstrap script exists
@@ -60,18 +93,18 @@ func AgentStartCommandAction(c *cli.Context) {
 	// Expand the build path. We don't bother checking to see if it can be
 	// written to, because it'll show up in the agent logs if it doesn't
 	// work.
-	agent.BuildPath = os.ExpandEnv(c.String("build-path"))
+	agent.BuildPath = os.ExpandEnv(configuration.BuildPath)
 	logger.Debug("Build path: %s", agent.BuildPath)
 
 	// Expand the hooks path that is used by the bootstrap script
-	agent.HooksPath = os.ExpandEnv(c.String("hooks-path"))
+	agent.HooksPath = os.ExpandEnv(configuration.HooksPath)
 	logger.Debug("Hooks directory: %s", agent.HooksPath)
 
 	// Set the agents meta data
-	agent.MetaData = c.StringSlice("meta-data")
+	agent.MetaData = configuration.MetaData
 
 	// Should we try and grab the ec2 tags as well?
-	if c.Bool("meta-data-ec2-tags") {
+	if configuration.MetaDataEC2Tags {
 		tags, err := buildkite.EC2InstanceTags()
 
 		if err != nil {
@@ -85,17 +118,17 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// More CLI options
-	agent.Name = c.String("name")
-	agent.Priority = c.String("priority")
+	agent.Name = configuration.Name
+	agent.Priority = configuration.Priority
 
 	// Set auto fingerprint option
-	agent.AutoSSHFingerprintVerification = !c.Bool("no-automatic-ssh-fingerprint-verification")
+	agent.AutoSSHFingerprintVerification = !configuration.NoAutoSSHFingerprintVerification
 	if !agent.AutoSSHFingerprintVerification {
 		logger.Debug("Automatic SSH fingerprint verification has been disabled")
 	}
 
 	// Set script eval option
-	agent.ScriptEval = !c.Bool("no-script-eval")
+	agent.ScriptEval = !configuration.NoScriptEval
 	if !agent.ScriptEval {
 		logger.Debug("Evaluating scripts has been disabled")
 	}
@@ -109,7 +142,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	if buildkite.MachineIsWindows() {
 		agent.RunInPty = false
 	} else {
-		agent.RunInPty = !c.Bool("no-pty")
+		agent.RunInPty = !configuration.NoPTY
 
 		if !agent.RunInPty {
 			logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
@@ -121,8 +154,8 @@ func AgentStartCommandAction(c *cli.Context) {
 	// Register the agent
 	var registrationClient buildkite.Client
 	registrationClient.AuthorizationToken = agentRegistrationToken
-	registrationClient.URL = c.String("endpoint")
-	err := registrationClient.AgentRegister(&agent)
+	registrationClient.URL = configuration.Endpoint
+	err = registrationClient.AgentRegister(&agent)
 	if err != nil {
 		logger.Fatal("%s", err)
 	}
@@ -131,7 +164,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Configure the agent's client
 	agent.Client.AuthorizationToken = agent.AccessToken
-	agent.Client.URL = c.String("endpoint")
+	agent.Client.URL = configuration.Endpoint
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
