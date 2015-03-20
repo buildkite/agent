@@ -67,7 +67,8 @@ function buildkite-run-debug {
 
 # Show an error and exit
 function buildkite-error {
-  echo -e "\033[31mERROR:\033[0m $1"
+  echo -e "~~~ :rotating_light: \033[31mBuildkite Error\033[0m"
+  echo "$1"
   exit 1
 }
 
@@ -241,15 +242,17 @@ fi
 # run
 if [[ -e "$BUILDKITE_COMMAND" ]]; then
   BUILDKITE_SCRIPT_PATH=$BUILDKITE_COMMAND
+  BUILDKITE_COMMAND_DISPLAY=".\"$BUILDKITE_COMMAND\""
 else
   # If the command isn't a file, then it's probably a command with arguments we
   # need to run.
   if [[ "$BUILDKITE_SCRIPT_EVAL" == "true" ]]; then
     BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
+    BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
 
     echo "$BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
   else
-    buildkite-error "This agent has not been allowed to evaluate scripts. Re-run this agent and remove the \`--no-script-eval\` option, or specify a script on the file system to run instead."
+    buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-script-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
   fi
 fi
 
@@ -358,7 +361,7 @@ else
   ## Standard
   else
     echo "~~~ Running build script"
-    echo -e "$BUILDKITE_PROMPT .\"$BUILDKITE_SCRIPT_PATH\""
+    echo -e "$BUILDKITE_PROMPT $BUILDKITE_COMMAND_DISPLAY"
     ."/$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
