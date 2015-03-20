@@ -206,9 +206,9 @@ func init() {
 					EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
 				},
 				cli.BoolFlag{
-					Name:   "no-script-eval",
-					Usage:  "Don't allow this agent to evaluate scripts from Buildkite. Only scripts that exist on the file system will be allowed to run",
-					EnvVar: "BUILDKITE_NO_SCRIPT_EVAL",
+					Name:   "no-command-eval",
+					Usage:  "Don't allow this agent to run arbitrary console commands",
+					EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 				},
 				cli.StringFlag{
 					Name:   "endpoint",

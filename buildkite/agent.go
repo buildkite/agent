@@ -20,8 +20,8 @@ type Agent struct {
 	// Operating system for this machine
 	OS string `json:"os"`
 
-	// If this agent is allowed to perform script evaluation
-	ScriptEval bool `json:"script_eval_enabled"`
+	// If this agent is allowed to perform command evaluation
+	CommandEval bool `json:"script_eval_enabled"`
 
 	// The priority of the agent
 	Priority string `json:"priority,omitempty"`

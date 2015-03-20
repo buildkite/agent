@@ -246,13 +246,13 @@ if [[ -e "$BUILDKITE_COMMAND" ]]; then
 else
   # If the command isn't a file, then it's probably a command with arguments we
   # need to run.
-  if [[ "$BUILDKITE_SCRIPT_EVAL" == "true" ]]; then
+  if [[ "$BUILDKITE_COMMAND_EVAL" == "true" ]]; then
     BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
     BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
 
     echo "$BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
   else
-    buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-script-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
+    buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
   fi
 fi
 

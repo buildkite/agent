@@ -19,16 +19,10 @@ type AgentStartConfiguration struct {
 	MetaDataEC2Tags                  bool     `cli:"meta-data-ec2-tags"`
 	NoColor                          bool     `cli:"no-color"`
 	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
-	NoScriptEval                     bool     `cli:"no-script-eval"`
+	NoCommandEval                    bool     `cli:"no-command-eval"`
 	NoPTY                            bool     `cli:"no-pty"`
 	Endpoint                         string   `cli:"endpoint"`
 	Debug                            bool     `cli:"debug"`
-}
-
-func loadConfiguration(c *cli.Context) AgentStartConfiguration {
-	var configuration AgentStartConfiguration
-
-	return configuration
 }
 
 func AgentStartCommandAction(c *cli.Context) {
@@ -128,9 +122,9 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// Set script eval option
-	agent.ScriptEval = !configuration.NoScriptEval
-	if !agent.ScriptEval {
-		logger.Debug("Evaluating scripts has been disabled")
+	agent.CommandEval = !configuration.NoCommandEval
+	if !agent.CommandEval {
+		logger.Debug("Evaluating console commands has been disabled")
 	}
 
 	agent.OS, _ = buildkite.MachineOSDump()
