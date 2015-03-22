@@ -43,7 +43,20 @@ func LoadConfiguration(obj interface{}, c *cli.Context) error {
 
 		var value interface{}
 
-		// Is the value set in the config file?
+		// Start by defaulting the value to what ever was provided by
+		// the CLI, or the ENV
+		if fieldKind == reflect.String {
+			value = c.String(cliName)
+		} else if fieldKind == reflect.Slice {
+			value = c.StringSlice(cliName)
+		} else if fieldKind == reflect.Bool {
+			value = c.Bool(cliName)
+		} else {
+			return errors.New(fmt.Sprintf("Unable to handle type: %s", fieldKind))
+		}
+
+		// Now, override with what ever is in the conf file (if one has
+		// been provided)
 		if configFileValue, ok := configFileMap[cliName]; ok {
 			// Convert the config file value to it's correct type
 			if fieldKind == reflect.String {
@@ -54,21 +67,6 @@ func LoadConfiguration(obj interface{}, c *cli.Context) error {
 				value, _ = strconv.ParseBool(configFileValue)
 			} else {
 				return errors.New(fmt.Sprintf("Unable to convert string to type %s", fieldKind))
-			}
-		}
-
-		// If the value was set in the cli and extract it's value. This
-		// will override any value set from the config file.
-		if c.IsSet(cliName) {
-			// Extract the value from the cliContext
-			if fieldKind == reflect.String {
-				value = c.String(cliName)
-			} else if fieldKind == reflect.Slice {
-				value = c.StringSlice(cliName)
-			} else if fieldKind == reflect.Bool {
-				value = c.Bool(cliName)
-			} else {
-				return errors.New(fmt.Sprintf("Unable to handle type: %s", fieldKind))
 			}
 		}
 
