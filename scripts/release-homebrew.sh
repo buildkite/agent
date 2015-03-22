@@ -26,7 +26,15 @@ function to_json {
   ruby -rjson -e "print \$<.read.to_json"
 }
 
-BINARY_NAME=buildkite-agent-darwin-386.tar.gz
+echo '--- Getting agent version from build meta data'
+
+export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+
+echo "Full agent version: $FULL_AGENT_VERSION"
+echo "Agent version: $AGENT_VERSION"
+
+BINARY_NAME=buildkite-agent-darwin-386-$AGENT_VERSION.tar.gz
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME"
 FORMULA_FILE=./pkg/buildkite-agent.rb
