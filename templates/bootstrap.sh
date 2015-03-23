@@ -213,7 +213,7 @@ else
   buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
 
   # `submodule sync` will ensure the .git/config matches the .gitmodules file
-  buildkite-run "git submodule sync"
+  buildkite-run "git submodule sync --recursive"
   buildkite-run "git submodule update --init --recursive"
   buildkite-run "git submodule foreach --recursive git reset --hard"
 
