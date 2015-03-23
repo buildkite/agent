@@ -6,8 +6,8 @@
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh\`\""
 
-VERSION="1.0-beta.20"
-FULL_VERSION="1.0-beta.20.426"
+VERSION="1.0-beta.21"
+FULL_VERSION="1.0-beta.21.432"
 
 set -e
 
