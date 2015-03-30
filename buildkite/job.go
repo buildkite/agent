@@ -24,8 +24,6 @@ type Job struct {
 
 	Env map[string]string
 
-	Output string `json:"output,omitempty"`
-
 	HeaderTimes []string `json:"header_times,omitempty"`
 
 	ExitStatus string `json:"exit_status,omitempty"`
@@ -121,13 +119,9 @@ func (j *Job) Run(agent *Agent) error {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Mark the build as started
-	j.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := agent.Client.JobUpdate(j)
-	if err != nil {
-		// We don't care if the HTTP request failed here. We hope that it
-		// starts working during the actual build.
-	}
+	// Create and start our log streamer
+	logStreamer, _ := NewLogStreamer(&agent.Client)
+	logStreamer.Start()
 
 	// This callback is called when the process starts
 	startCallback := func(process *Process) {
@@ -135,7 +129,7 @@ func (j *Job) Run(agent *Agent) error {
 		go func() {
 			for process.Running {
 				// Save the output to the job
-				j.Output = process.Output()
+				logStreamer.Process(process.Output())
 
 				// Post the update to the API
 				updatedJob, err := agent.Client.JobUpdate(j)
@@ -176,18 +170,30 @@ func (j *Job) Run(agent *Agent) error {
 	// Store the process so we can cancel it later.
 	j.process = process
 
+	// Mark the build as started
+	j.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = agent.Client.JobUpdate(j)
+	if err != nil {
+		// We don't care if the HTTP request failed here. We hope that it
+		// starts working during the actual build.
+	}
+
 	// Start the process. This will block until it finishes.
 	err = process.Start()
 	if err == nil {
-		// Store the final output
-		j.Output = process.Output()
+		// Add the final output to the streamer
+		logStreamer.Process(process.Output())
 	} else {
-		j.Output = fmt.Sprintf("%s", err)
+		// Send the error as output
+		logStreamer.Process(fmt.Sprintf("%s", err))
 	}
 
 	// Mark the build as finished
 	j.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	j.ExitStatus = j.process.ExitStatus
+
+	// Wait for the log streamer to finish
+	logStreamer.Wait()
 
 	// Keep trying this call until it works. This is the most important one.
 	for {
