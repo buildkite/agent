@@ -3,6 +3,7 @@ package buildkite
 import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/goinggo/work"
+	"math"
 	"time"
 )
 
@@ -56,29 +57,47 @@ func (streamer *LogStreamer) Process(output string) error {
 	bytes := len(output)
 
 	if streamer.bytes != bytes {
+		maximumBlobSize := 100000
+
 		// Grab the part of the log that we haven't seen yet
 		blob := output[streamer.bytes:bytes]
 
-		// Increment the order
-		streamer.order += 1
+		// How many 100kb chunks are in the blob?
+		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(maximumBlobSize)))
 
-		// Create the chunk and append it to our list
-		chunk := LogStreamerChunk{
-			Order: streamer.order,
-			Blob:  blob,
-			Bytes: len(blob),
+		for i := 0; i < numberOfChunks; i++ {
+			// Find the upper limit of the blob
+			upperLimit := (i + 1) * maximumBlobSize
+			if upperLimit > len(blob) {
+				upperLimit = len(blob)
+			}
+
+			// Grab the 100kb section of the blob
+			partialBlob := blob[i*maximumBlobSize : upperLimit]
+
+			// Increment the order
+			streamer.order += 1
+
+			logger.Debug("Creating %d byte chunk", len(partialBlob))
+
+			// Create the chunk and append it to our list
+			chunk := LogStreamerChunk{
+				Order: streamer.order,
+				Blob:  partialBlob,
+				Bytes: len(partialBlob),
+			}
+
+			// Append the chunk to our list
+			streamer.chunks = append(streamer.chunks, &chunk)
+
+			// Create the worker and run it
+			worker := LogStreamerWorker{Chunk: &chunk}
+			go func() {
+				// Add the chunk worker to the queue. Run will block until it
+				// is successfully added to the queue.
+				streamer.Queue.Run(&worker)
+			}()
 		}
-
-		// Append the chunk to our list
-		streamer.chunks = append(streamer.chunks, &chunk)
-
-		// Create the worker and run it
-		worker := LogStreamerWorker{Chunk: &chunk}
-		go func() {
-			// Add the chunk worker to the queue. Run will block until it
-			// is successfully added to the queue.
-			streamer.Queue.Run(&worker)
-		}()
 
 		// Save the new amount of bytes
 		streamer.bytes = bytes
