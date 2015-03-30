@@ -132,15 +132,15 @@ func (j *Job) Run(agent *Agent) error {
 				logStreamer.Process(process.Output())
 
 				// Post the update to the API
-				updatedJob, err := agent.Client.JobUpdate(j)
-				if err != nil {
-					// We don't really care if the job couldn't update at this point.
-					// This is just a partial update. We'll just let the job run
-					// and hopefully the host will fix itself before we finish.
-					logger.Warn("Problem with updating job %s (%s)", j.ID, err)
-				} else if updatedJob.State == "canceled" {
-					j.Kill()
-				}
+				// updatedJob, err := agent.Client.JobUpdate(j)
+				// if err != nil {
+				// 	// We don't really care if the job couldn't update at this point.
+				// 	// This is just a partial update. We'll just let the job run
+				// 	// and hopefully the host will fix itself before we finish.
+				// 	logger.Warn("Problem with updating job %s (%s)", j.ID, err)
+				// } else if updatedJob.State == "canceled" {
+				// 	j.Kill()
+				// }
 
 				// Sleep for 1 second
 				time.Sleep(1000 * time.Millisecond)
@@ -192,8 +192,8 @@ func (j *Job) Run(agent *Agent) error {
 	j.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	j.ExitStatus = j.process.ExitStatus
 
-	// Wait for the log streamer to finish
-	logStreamer.Wait()
+	// Stop the log streamer
+	logStreamer.Stop()
 
 	// Keep trying this call until it works. This is the most important one.
 	for {

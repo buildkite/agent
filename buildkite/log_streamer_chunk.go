@@ -8,7 +8,7 @@ type LogStreamerChunk struct {
 	Order int `json:"order"`
 
 	// The contents of the chunk
-	Contents string `json:"contents"`
+	Blob string `json:"blob"`
 
 	// The size of the chunk
 	Bytes int `json:"bytes"`
