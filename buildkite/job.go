@@ -3,6 +3,7 @@ package buildkite
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -120,7 +121,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Create and start our log streamer
-	logStreamer, _ := NewLogStreamer(&agent.Client)
+	logStreamer, _ := logstreamer.New()
 	logStreamer.Start()
 
 	// This callback is called when the process starts

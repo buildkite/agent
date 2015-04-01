@@ -1,6 +1,11 @@
-package buildkite
+package logstreamer
 
-type LogStreamerChunk struct {
+import (
+	"github.com/buildkite/agent/buildkite/logger"
+	"time"
+)
+
+type Chunk struct {
 	// The ID of the chunk as assigned by Buildkite
 	ID string `json:"id,omitempty`
 
@@ -15,4 +20,10 @@ type LogStreamerChunk struct {
 
 	// If this chunk has been uploaded
 	Uploaded bool
+}
+
+func (chunk *Chunk) Upload() {
+	logger.Debug("Uploading %d bytes of content at order %d", chunk.Bytes, chunk.Order)
+	time.Sleep(time.Second * 5)
+	logger.Debug("Finished %d", chunk.Order)
 }
