@@ -286,7 +286,11 @@ else
 
     # Build the Docker image, namespaced to the job
     echo "~~~ Building Docker image $DOCKER_IMAGE"
-    buildkite-run "docker build -t $DOCKER_IMAGE ."
+
+    # We pipe into cat because the default tty output kills our renderer.
+    # If there was a wget-style --progress=dot we'd use it instead.
+    # https://github.com/docker/docker/issues/3694
+    buildkite-run "docker build -t $DOCKER_IMAGE . | cat"
 
     # Run the build script command in a one-off container
     echo "~~~ Running build script (in Docker container)"
@@ -315,7 +319,11 @@ else
 
     # Build the Docker images using Compose, namespaced to the job
     echo "~~~ Building Docker images"
-    buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME build"
+
+    # We pipe into cat because the default tty output kills our renderer.
+    # If there was a wget-style --progress=dot we'd use it instead.
+    # https://github.com/docker/docker/issues/3694
+    buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME build | cat"
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
     echo "~~~ Running build script (in Docker Compose container)"
