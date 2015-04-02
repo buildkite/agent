@@ -94,12 +94,10 @@ func (streamer *Streamer) Process(output string) error {
 
 // Waits for all the chunks to be uploaded, then shuts down all the workers
 func (streamer *Streamer) Stop() error {
-	logger.Debug("Log streamer is waiting for all the chunks to be added to the queue")
+	logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
 	streamer.chunkWaitGroup.Wait()
 
-	logger.Debug("Log streamer is waiting for all the chunks to be uploaded")
-	// all work is done
-	// signal workers there is no more work
+	logger.Debug("[LogStreamer] Shutting down all workers")
 	for n := 0; n < streamer.Concurrency; n++ {
 		streamer.queue <- nil
 	}
@@ -109,7 +107,7 @@ func (streamer *Streamer) Stop() error {
 
 // The actual log streamer worker
 func Worker(id int, streamer *Streamer) {
-	logger.Debug("Streamer worker %d is running", id)
+	logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
 	var chunk *Chunk
 	for {
@@ -122,12 +120,12 @@ func Worker(id int, streamer *Streamer) {
 			break
 		}
 
-		// Actually upload the chunk
+		// Upload the chunk
 		chunk.Upload()
 
 		// Signal to the chunkWaitGroup that this one is done
 		streamer.chunkWaitGroup.Done()
 	}
 
-	logger.Debug("Streamer worker %d has shut down", id)
+	logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
 }
