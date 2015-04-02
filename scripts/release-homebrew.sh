@@ -2,7 +2,7 @@
 
 # Must be executed after github-release.sh as it depends on release meta-data
 
-set -eu
+set -euo pipefail
 
 GITHUB_RELEASE_VERSION=$(buildkite-agent meta-data get github_release_version)
 GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
