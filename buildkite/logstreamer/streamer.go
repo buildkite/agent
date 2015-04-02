@@ -6,24 +6,16 @@ import (
 	"sync"
 )
 
-type Streamer struct {
-	// The client we should use to stream the logs
-	// Client Client
+const MaxChunkSize = 100000 // 100kb
 
+type Streamer struct {
 	// How many log streamer workers are running at any one time
 	Concurrency int
-
-	// The streaming work queue
-	// Queue *work.Work
-	//pool interface{}
 
 	queue chan *Chunk
 
 	// Total size in bytes of the log
 	bytes int
-
-	// The chunks of the log
-	chunks []*Chunk
 
 	// Each chunk is assigned an order
 	order int
@@ -34,6 +26,7 @@ type Streamer struct {
 	chunkWaitGroup sync.WaitGroup
 }
 
+// Creates a new instance of the log streamer
 func New() (*Streamer, error) {
 	// Create a new log streamer and default the concurrency to 5, seems
 	// like a good number?
@@ -44,8 +37,8 @@ func New() (*Streamer, error) {
 	return streamer, nil
 }
 
+// Spins up x number of log streamer workers
 func (streamer *Streamer) Start() error {
-	// spawn workers
 	for i := 0; i < streamer.Concurrency; i++ {
 		go Worker(i, streamer)
 	}
@@ -53,6 +46,68 @@ func (streamer *Streamer) Start() error {
 	return nil
 }
 
+// Takes the full process output, grabs the portion we don't have, and adds it
+// to the stream queue
+func (streamer *Streamer) Process(output string) error {
+	bytes := len(output)
+
+	if streamer.bytes != bytes {
+		// Grab the part of the log that we haven't seen yet
+		blob := output[streamer.bytes:bytes]
+
+		// How many chunks do we have that fit within the MaxChunkSize?
+		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(MaxChunkSize)))
+
+		// Increase the wait group by the amount of chunks we're going
+		// to add
+		streamer.chunkWaitGroup.Add(numberOfChunks)
+
+		for i := 0; i < numberOfChunks; i++ {
+			// Find the upper limit of the blob
+			upperLimit := (i + 1) * MaxChunkSize
+			if upperLimit > len(blob) {
+				upperLimit = len(blob)
+			}
+
+			// Grab the 100kb section of the blob
+			partialBlob := blob[i*MaxChunkSize : upperLimit]
+
+			// Increment the order
+			streamer.order += 1
+
+			// Create the chunk and append it to our list
+			chunk := Chunk{
+				Order: streamer.order,
+				Blob:  partialBlob,
+				Bytes: len(partialBlob),
+			}
+
+			streamer.queue <- &chunk
+		}
+
+		// Save the new amount of bytes
+		streamer.bytes = bytes
+	}
+
+	return nil
+}
+
+// Waits for all the chunks to be uploaded, then shuts down all the workers
+func (streamer *Streamer) Stop() error {
+	logger.Debug("Log streamer is waiting for all the chunks to be added to the queue")
+	streamer.chunkWaitGroup.Wait()
+
+	logger.Debug("Log streamer is waiting for all the chunks to be uploaded")
+	// all work is done
+	// signal workers there is no more work
+	for n := 0; n < streamer.Concurrency; n++ {
+		streamer.queue <- nil
+	}
+
+	return nil
+}
+
+// The actual log streamer worker
 func Worker(id int, streamer *Streamer) {
 	logger.Debug("Streamer worker %d is running", id)
 
@@ -67,90 +122,12 @@ func Worker(id int, streamer *Streamer) {
 			break
 		}
 
+		// Actually upload the chunk
 		chunk.Upload()
-	}
 
-	streamer.chunkWaitGroup.Done()
+		// Signal to the chunkWaitGroup that this one is done
+		streamer.chunkWaitGroup.Done()
+	}
 
 	logger.Debug("Streamer worker %d has shut down", id)
-}
-
-// Takes the full process output, grabs the portion we don't have, and adds it
-// to the stream queue
-func (streamer *Streamer) Process(output string) error {
-	bytes := len(output)
-
-	if streamer.bytes != bytes {
-		maximumBlobSize := 100000
-
-		// Grab the part of the log that we haven't seen yet
-		blob := output[streamer.bytes:bytes]
-
-		// How many 100kb chunks are in the blob?
-		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(maximumBlobSize)))
-
-		// Increase the wait group by the amount of chunks we're going
-		// to add
-		streamer.chunkWaitGroup.Add(numberOfChunks)
-
-		for i := 0; i < numberOfChunks; i++ {
-			// Find the upper limit of the blob
-			upperLimit := (i + 1) * maximumBlobSize
-			if upperLimit > len(blob) {
-				upperLimit = len(blob)
-			}
-
-			// Grab the 100kb section of the blob
-			partialBlob := blob[i*maximumBlobSize : upperLimit]
-
-			// Increment the order
-			streamer.order += 1
-
-			// logger.Debug("Creating %d byte chunk and adding work %d", len(partialBlob), streamer.order)
-
-			// Create the chunk and append it to our list
-			chunk := Chunk{
-				Order: streamer.order,
-				Blob:  partialBlob,
-				Bytes: len(partialBlob),
-			}
-
-			// Append the chunk to our list
-			streamer.chunks = append(streamer.chunks, &chunk)
-
-			// Create the worker and run it
-			//worker := Worker{Chunk: &chunk}
-			//go func() {
-			// Add the chunk worker to the queue. Run will
-			// block until it is successfully added to the
-			// queue.
-			//streamer.Queue.Run(&worker)
-			// streamer.pool.SendWork(chunk)
-			streamer.queue <- &chunk
-
-			// Tell the wait group that this job has been
-			// added to the queue
-			//streamer.chunkWaitGroup.Done()
-			//}()
-		}
-
-		// Save the new amount of bytes
-		streamer.bytes = bytes
-	}
-
-	return nil
-}
-
-func (streamer *Streamer) Stop() error {
-	logger.Debug("Log streamer is waiting for all the chunks to be added to the queue")
-	streamer.chunkWaitGroup.Wait()
-
-	logger.Debug("Log streamer is waiting for all the chunks to be uploaded")
-	// all work is done
-	// signal workers there is no more work
-	for n := 0; n < streamer.Concurrency; n++ {
-		streamer.queue <- nil
-	}
-
-	return nil
 }

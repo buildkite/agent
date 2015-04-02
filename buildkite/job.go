@@ -129,19 +129,20 @@ func (j *Job) Run(agent *Agent) error {
 		// Start a routine that will grab the output every few seconds and send it back to Buildkite
 		go func() {
 			for process.Running {
-				// Save the output to the job
+				// Send the output of the process to the log streamer for processing
 				logStreamer.Process(process.Output())
 
-				// Post the update to the API
-				// updatedJob, err := agent.Client.JobUpdate(j)
-				// if err != nil {
-				// 	// We don't really care if the job couldn't update at this point.
-				// 	// This is just a partial update. We'll just let the job run
-				// 	// and hopefully the host will fix itself before we finish.
-				// 	logger.Warn("Problem with updating job %s (%s)", j.ID, err)
-				// } else if updatedJob.State == "canceled" {
-				// 	j.Kill()
-				// }
+				// Get the latest job status so we can see if
+				// the job has been cancelled
+				updatedJob, err := agent.Client.JobUpdate(j)
+				if err != nil {
+					// We don't really care if it fails,
+					// we'll just try again in a second
+					// anyway
+					logger.Warn("Problem with getting job status %s (%s)", j.ID, err)
+				} else if updatedJob.State == "canceled" {
+					j.Kill()
+				}
 
 				// Sleep for 1 second
 				time.Sleep(1000 * time.Millisecond)
