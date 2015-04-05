@@ -2,6 +2,7 @@ package buildkite
 
 import (
 	"fmt"
+	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
@@ -120,8 +121,14 @@ func (j *Job) Run(agent *Agent) error {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
+	// The HTTP request we'll be sending it to
+	logStreamerRequest := http.Request{
+		Session: agent.Client.GetSession(),
+		Path:    "jobs/" + j.ID + "/log",
+	}
+
 	// Create and start our log streamer
-	logStreamer, _ := logstreamer.New()
+	logStreamer, _ := logstreamer.New(logStreamerRequest)
 	logStreamer.Start()
 
 	// This callback is called when the process starts

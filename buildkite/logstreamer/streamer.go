@@ -1,6 +1,7 @@
 package logstreamer
 
 import (
+	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"math"
 	"sync"
@@ -11,6 +12,9 @@ const MaxChunkSize = 100000 // 100kb
 type Streamer struct {
 	// How many log streamer workers are running at any one time
 	Concurrency int
+
+	// The base HTTP request we'll keep sending logs to
+	Request http.Request
 
 	queue chan *Chunk
 
@@ -27,11 +31,12 @@ type Streamer struct {
 }
 
 // Creates a new instance of the log streamer
-func New() (*Streamer, error) {
+func New(request http.Request) (*Streamer, error) {
 	// Create a new log streamer and default the concurrency to 5, seems
 	// like a good number?
 	streamer := new(Streamer)
 	streamer.Concurrency = 5
+	streamer.Request = request
 	streamer.queue = make(chan *Chunk, 1024)
 
 	return streamer, nil
@@ -77,9 +82,10 @@ func (streamer *Streamer) Process(output string) error {
 
 			// Create the chunk and append it to our list
 			chunk := Chunk{
-				Order: streamer.order,
-				Blob:  partialBlob,
-				Bytes: len(partialBlob),
+				Order:   streamer.order,
+				Blob:    partialBlob,
+				Bytes:   len(partialBlob),
+				Request: streamer.Request,
 			}
 
 			streamer.queue <- &chunk
