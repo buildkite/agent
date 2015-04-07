@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -41,15 +43,6 @@ type Job struct {
 
 func (b Job) String() string {
 	return fmt.Sprintf("Job{ID: %s, State: %s, StartedAt: %s, FinishedAt: %s, Process: %s}", b.ID, b.State, b.StartedAt, b.FinishedAt, b.process)
-}
-
-func (c *Client) JobNext() (*Job, error) {
-	// Create a new instance of a job that will be populated
-	// by the client.
-	var job Job
-
-	// Return the job.
-	return &job, c.Get(&job, "jobs/next")
 }
 
 func (c *Client) JobFind(id string) (*Job, error) {
@@ -116,10 +109,10 @@ func (j *Job) Run(agent *Agent) error {
 	env["BUILDKITE_BIN_PATH"] = dir
 
 	// Add misc options
-	env["BUILDKITE_BUILD_PATH"] = agent.BuildPath
-	env["BUILDKITE_HOOKS_PATH"] = agent.HooksPath
+	env["BUILDKITE_BUILD_PATH"] = normalizePath(agent.BuildPath)
+	env["BUILDKITE_HOOKS_PATH"] = normalizePath(agent.HooksPath)
 	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", agent.AutoSSHFingerprintVerification)
-	env["BUILDKITE_SCRIPT_EVAL"] = fmt.Sprintf("%t", agent.ScriptEval)
+	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", agent.CommandEval)
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
@@ -216,4 +209,17 @@ func (j *Job) Run(agent *Agent) error {
 	logger.Info("Finished job %s", j.ID)
 
 	return nil
+}
+
+// Replaces ~/ with the users home directory. The builds path may be configured
+// as ~/.buildkite/hooks, and if it's set in a configration file (not on the
+// command line) the OS won't automatically expand it.
+func normalizePath(path string) string {
+	if len(path) > 2 && path[:2] == "~/" {
+		usr, _ := user.Current()
+		dir := usr.HomeDir
+		return strings.Replace(path, "~", dir, 1)
+	} else {
+		return path
+	}
 }

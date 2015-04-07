@@ -3,8 +3,8 @@ package buildkite
 import (
 	"errors"
 	"fmt"
-	"github.com/crowdmob/goamz/aws"
-	"github.com/crowdmob/goamz/ec2"
+	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/ec2"
 	"time"
 )
 

@@ -10,7 +10,7 @@ var AppHelpTemplate = `Usage:
 
   {{.Name}} <command> [arguments...]
 
-Available comamnds are:
+Available commands are:
 
   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}
@@ -22,7 +22,7 @@ var SubcommandHelpTemplate = `Usage:
 
   {{.Name}} {{if .Flags}}<command>{{end}} [arguments...]
 
-Available comamnds are:
+Available commands are:
 
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .Flags}}
@@ -50,8 +50,14 @@ func main() {
 	app.Version = buildkite.Version()
 	app.Commands = Commands
 
-	// Default the default action
+	// When no sub command is used
 	app.Action = func(c *cli.Context) {
+		cli.ShowAppHelp(c)
+		os.Exit(1)
+	}
+
+	// When a sub command can't be found
+	app.CommandNotFound = func(c *cli.Context, command string) {
 		cli.ShowAppHelp(c)
 		os.Exit(1)
 	}

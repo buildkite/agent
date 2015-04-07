@@ -31,4 +31,4 @@ build-binary "darwin" "amd64"
 echo '--- Saving agent version to build meta data'
 VERSION=`pkg/buildkite-agent-linux-386 --version`
 echo "Version found was: $VERSION"
-buildkite-agent build-data set "agent-version" "$VERSION"
+buildkite-agent meta-data set "agent-version" "$VERSION"

@@ -4,4 +4,6 @@ releases
 deb
 .vagrant
 .bundle
+.envrc
 vendor/bundle
+.agent.conf

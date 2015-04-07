@@ -8,18 +8,35 @@ import (
 )
 
 type Agent struct {
-	// The name of the agent
-	Name string
+	// The name of the new agent
+	Name string `json:"name"`
 
-	// The client the agent will use to communicate to
-	// the API
-	Client Client
+	// The access token for the agent
+	AccessToken string `json:"access_token"`
+
+	// Hostname of the machine
+	Hostname string `json:"hostname"`
+
+	// Operating system for this machine
+	OS string `json:"os"`
+
+	// If this agent is allowed to perform command evaluation
+	CommandEval bool `json:"script_eval_enabled"`
+
+	// The priority of the agent
+	Priority string `json:"priority,omitempty"`
+
+	// The version of this agent
+	Version string `json:"version"`
+
+	// Meta data for the agent
+	MetaData []string `json:"meta_data"`
 
 	// The PID of the agent
 	PID int `json:"pid,omitempty"`
 
-	// The hostname of the agent
-	Hostname string `json:"hostname,omitempty"`
+	// The client the agent will use to communicate to the API
+	Client Client
 
 	// The boostrap script to run
 	BootstrapScript string
@@ -34,9 +51,6 @@ type Agent struct {
 	// fingerprints
 	AutoSSHFingerprintVerification bool
 
-	// If this agent is allowed to perform script evaluation
-	ScriptEval bool
-
 	// Run jobs in a PTY
 	RunInPty bool
 
@@ -45,6 +59,10 @@ type Agent struct {
 
 	// This is true if the agent should no longer accept work
 	stopping bool
+}
+
+func (c *Client) AgentRegister(agent *Agent) error {
+	return c.Post(&agent, "/register", agent)
 }
 
 func (c *Client) AgentConnect(agent *Agent) error {
@@ -59,23 +77,6 @@ func (a *Agent) String() string {
 	return fmt.Sprintf("Agent{Name: %s, Hostname: %s, PID: %d, RunInPty: %t}", a.Name, a.Hostname, a.PID, a.RunInPty)
 }
 
-func (a *Agent) Setup() {
-	// Set the PID of the agent
-	a.PID = os.Getpid()
-
-	logger.Info("Connecting to Buildkite...")
-
-	// Get agent information from API. It will populate the
-	// current agent struct with data.
-	err := a.Client.AgentConnect(a)
-	if err != nil {
-		logger.Fatal("%s", err)
-	}
-
-	logger.Info("Agent successfully connected. You can press Ctrl-C to disconnect the agent.")
-	logger.Info("Waiting for work...")
-}
-
 func (a *Agent) Start() {
 	// How long the agent will wait when no jobs can be found.
 	idleSeconds := 5
@@ -86,7 +87,7 @@ func (a *Agent) Start() {
 		if a.stopping {
 			a.Stop()
 		} else {
-			a.performNextJob()
+			a.Ping()
 		}
 
 		// Sleep for a while before we check again
@@ -94,31 +95,33 @@ func (a *Agent) Start() {
 	}
 }
 
-func (a *Agent) Stop() {
-	// Disconnect from Buildkite
-	logger.Info("Disconnecting...")
-	a.Client.AgentDisconnect(a)
-
-	// Kill the process
-	os.Exit(0)
-}
-
-func (a *Agent) performNextJob() {
-	job, err := a.Client.JobNext()
+func (a *Agent) Ping() {
+	ping, err := a.Client.AgentPing()
 	if err != nil {
-		logger.Warn("Failed to get job (%s)", err)
+		logger.Warn("Failed to ping (%s)", err)
 		return
 	}
 
-	// If there's no ID, then there's no job.
-	if job.ID == "" {
+	// Is there a message that should be shown in the logs?
+	if ping.Message != "" {
+		logger.Info(ping.Message)
+	}
+
+	// Should the agent disconnect?
+	if ping.Action == "disconnect" {
+		a.Stop()
 		return
 	}
 
-	logger.Info("Assigned job %s. Accepting...", job.ID)
+	// Do nothing if there's no job
+	if ping.Job == nil {
+		return
+	}
+
+	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
 	// Accept the job
-	job, err = a.Client.JobAccept(job)
+	job, err := a.Client.JobAccept(ping.Job)
 	if err != nil {
 		logger.Error("Failed to accept the job (%s)", err)
 		return
@@ -133,4 +136,13 @@ func (a *Agent) performNextJob() {
 	a.Job = job
 	job.Run(a)
 	a.Job = nil
+}
+
+func (a *Agent) Stop() {
+	// Disconnect from Buildkite
+	logger.Info("Disconnecting...")
+	a.Client.AgentDisconnect(a)
+
+	// Kill the process
+	os.Exit(0)
 }

@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-if [[ ${#} -ne 1 ]]
+if [[ ${#} -lt 2 ]]
 then
-  echo "Usage: ${0} [file]" >&2
+  echo "Usage: ${0} [file] [version]" >&2
   exit 1
 fi
 
@@ -26,7 +26,7 @@ fi
 
 # Find the base name of the binary without the extension (if there is one)
 RELEASE_NAME=$(basename "$BINARY_PATH")
-RELEASE_NAME="${RELEASE_NAME%.*}"
+RELEASE_NAME="${RELEASE_NAME%.*}-$2"
 
 # Where we will construct the release
 TMP_RELEASE_DIRECTORY=$TMP_DIRECTORY/$RELEASE_NAME

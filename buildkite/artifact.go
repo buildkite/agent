@@ -1,9 +1,11 @@
 package buildkite
 
 import (
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
+	"io"
 	"mime"
 	"net/url"
 	"os"
@@ -29,6 +31,9 @@ type Artifact struct {
 
 	// The size of the file
 	FileSize int64 `json:"file_size"`
+
+	// The sha1sum of the file
+	Sha1Sum string `json:"sha1sum"`
 
 	// Where we should upload the artifact to. If nil,
 	// it will upload to Buildkite.
@@ -58,7 +63,7 @@ type Artifact struct {
 }
 
 func (a Artifact) String() string {
-	return fmt.Sprintf("Artifact{ID: %s, Path: %s, URL: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d}", a.ID, a.Path, a.URL, a.AbsolutePath, a.GlobPath, a.FileSize)
+	return fmt.Sprintf("Artifact{ID: %s, Path: %s, URL: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d, Sha1Sum: %s}", a.ID, a.Path, a.URL, a.AbsolutePath, a.GlobPath, a.FileSize, a.Sha1Sum)
 }
 
 func (a Artifact) MimeType() string {
@@ -160,6 +165,11 @@ func BuildArtifact(relativePath string, absolutePath string, globPath string) (*
 		return nil, err
 	}
 
+	// Generate a sha1 checksum for the file
+	hash := sha1.New()
+	io.Copy(hash, file)
+	checksum := fmt.Sprintf("%x", hash.Sum(nil))
+
 	// Create our new artifact data structure
 	artifact := new(Artifact)
 	artifact.State = "new"
@@ -167,6 +177,7 @@ func BuildArtifact(relativePath string, absolutePath string, globPath string) (*
 	artifact.AbsolutePath = absolutePath
 	artifact.GlobPath = globPath
 	artifact.FileSize = fileInfo.Size()
+	artifact.Sha1Sum = checksum
 
 	return artifact, nil
 }
@@ -250,14 +261,14 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
 	// Show a nice message that we're starting to upload the file
-	logger.Info("Uploading %s (%d bytes)", artifact.Path, artifact.FileSize)
+	logger.Info("Uploading \"%s\" (%d bytes)", artifact.Path, artifact.FileSize)
 
 	// Upload the artifact and then set the state depending on whether or not
 	// it passed.
 	err := uploader.Upload(&artifact)
 	if err != nil {
 		artifact.State = "error"
-		logger.Error("Error uploading artifact %s (%s)", artifact.Path, err)
+		logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 	} else {
 		artifact.State = "finished"
 	}
@@ -265,7 +276,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
 	// Update the state of the artifact on Buildkite
 	_, err = client.ArtifactUpdate(job, artifact)
 	if err != nil {
-		logger.Error("Error marking artifact %s as uploaded (%s)", artifact.Path, err)
+		logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
 	}
 
 	// We can notify the channel that this routine has finished now

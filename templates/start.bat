@@ -1,6 +1,6 @@
 @ECHO off
 
-TITLE Buildbox Agent
+TITLE Buildkite Agent
 
 REM If the token file already exists, we can skip the setup
 IF EXIST token.txt (
@@ -36,7 +36,7 @@ ECHO.
 REM Read in the agent token
 SET /p AGENT_TOKEN=<token.txt
 
-REM Start the buildbox-agent
-CALL buildbox-agent start --token "%AGENT_TOKEN%" --bootstrap-script bootstrap.bat --debug
+REM Start the buildkite-agent
+CALL buildkite-agent start --token "%AGENT_TOKEN%" --bootstrap-script bootstrap.bat --debug
 
 PAUSE

@@ -6,77 +6,99 @@ import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
-	"time"
 )
 
+type AgentStartConfiguration struct {
+	Token                            string   `cli:"token"`
+	Name                             string   `cli:"name"`
+	Priority                         string   `cli:"priority"`
+	BootstrapScript                  string   `cli:"bootstrap-script"`
+	BuildPath                        string   `cli:"build-path"`
+	HooksPath                        string   `cli:"hooks-path"`
+	MetaData                         []string `cli:"meta-data"`
+	MetaDataEC2Tags                  bool     `cli:"meta-data-ec2-tags"`
+	NoColor                          bool     `cli:"no-color"`
+	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
+	NoCommandEval                    bool     `cli:"no-command-eval"`
+	NoPTY                            bool     `cli:"no-pty"`
+	Endpoint                         string   `cli:"endpoint"`
+	Debug                            bool     `cli:"debug"`
+}
+
 func AgentStartCommandAction(c *cli.Context) {
-	// For display purposes, come up with what the name of the agent is.
-	// agentName, err := buildkite.MachineHostname()
-	// if c.String("name") != "" {
-	// 	agentName = c.String("name")
-	// }
+	// Load the configration
+	var configuration AgentStartConfiguration
+	err := buildkite.LoadConfiguration(&configuration, c)
+	if err != nil {
+		logger.Fatal("Failed to load configuration: %s", err)
+	}
 
 	// Toggle colors
-	if c.Bool("no-color") {
+	if configuration.NoColor {
 		logger.SetColors(false)
 	}
 
 	welcomeMessage :=
 		"\n" +
-			"\x1b[32m  _           _ _     _ _    _ _                                _\n" +
+			"%s  _           _ _     _ _    _ _                                _\n" +
 			" | |         (_) |   | | |  (_) |                              | |\n" +
 			" | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
 			" | '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
 			" | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
 			" |_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
 			"                                                __/ |\n" +
-			" http://buildkite.com/agent                    |___/\n\x1b[0m\n"
+			" http://buildkite.com/agent                    |___/\n%s\n"
 
-	fmt.Printf(welcomeMessage)
+	// Don't do colors on the banner if they aren't enabled in the logger
+	if logger.ColorsEnabled() {
+		fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "\x1b[32m", "\x1b[0m")
+	} else {
+		fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "", "")
+	}
 
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
-	logger.Notice("Copyright (c) 2014-%d, Buildkite Pty Ltd. See LICENSE and for more details.", time.Now().Year())
+	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	// Init debugging
-	if c.Bool("debug") {
+	if configuration.Debug {
 		logger.SetLevel(logger.DEBUG)
 	}
 
-	agentRegistrationToken := c.String("token")
+	agentRegistrationToken := configuration.Token
 	if agentRegistrationToken == "" {
 		logger.Fatal("Missing --token. See 'buildkite-agent start --help'")
 	}
 
-	// Expand the envionment variable.
-	bootstrapScript := os.ExpandEnv(c.String("bootstrap-script"))
+	var agent buildkite.Agent
 
-	// Make sure the boostrap script exists.
-	if _, err := os.Stat(bootstrapScript); os.IsNotExist(err) {
-		logger.Fatal("Could not find a bootstrap script located at: %s", bootstrapScript)
+	// Expand the envionment variable
+	agent.BootstrapScript = os.ExpandEnv(configuration.BootstrapScript)
+	if agent.BootstrapScript == "" {
+		logger.Fatal("Bootstrap script is missing")
 	}
+	logger.Debug("Bootstrap script: %s", agent.BootstrapScript)
 
-	logger.Debug("Bootstrap script: %s", bootstrapScript)
+	// Just double check that the bootstrap script exists
+	if _, err := os.Stat(agent.BootstrapScript); os.IsNotExist(err) {
+		logger.Fatal("Could not find a bootstrap script located at: %s", agent.BootstrapScript)
+	}
 
 	// Expand the build path. We don't bother checking to see if it can be
 	// written to, because it'll show up in the agent logs if it doesn't
 	// work.
-	buildPath := os.ExpandEnv(c.String("build-path"))
-	logger.Debug("Build path: %s", buildPath)
+	agent.BuildPath = os.ExpandEnv(configuration.BuildPath)
+	logger.Debug("Build path: %s", agent.BuildPath)
 
 	// Expand the hooks path that is used by the bootstrap script
-	hooksPath := os.ExpandEnv(c.String("hooks-path"))
-	logger.Debug("Hooks directory: %s", hooksPath)
+	agent.HooksPath = os.ExpandEnv(configuration.HooksPath)
+	logger.Debug("Hooks directory: %s", agent.HooksPath)
 
-	// Create a client so we can register the agent
-	var client buildkite.Client
-	client.AuthorizationToken = agentRegistrationToken
-	client.URL = c.String("endpoint")
-
-	agentMetaData := c.StringSlice("meta-data")
+	// Set the agents meta data
+	agent.MetaData = configuration.MetaData
 
 	// Should we try and grab the ec2 tags as well?
-	if c.Bool("meta-data-ec2-tags") {
+	if configuration.MetaDataEC2Tags {
 		tags, err := buildkite.EC2InstanceTags()
 
 		if err != nil {
@@ -84,45 +106,73 @@ func AgentStartCommandAction(c *cli.Context) {
 			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
-				agentMetaData = append(agentMetaData, fmt.Sprintf("%s=%s", tag, value))
+				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
 			}
 		}
 	}
 
-	// Set the agent options
-	var agent buildkite.Agent
-	agent.BootstrapScript = bootstrapScript
-	agent.BuildPath = buildPath
-	agent.HooksPath = hooksPath
+	// More CLI options
+	agent.Name = configuration.Name
+	agent.Priority = configuration.Priority
 
+	// Set auto fingerprint option
+	agent.AutoSSHFingerprintVerification = !configuration.NoAutoSSHFingerprintVerification
+	if !agent.AutoSSHFingerprintVerification {
+		logger.Debug("Automatic SSH fingerprint verification has been disabled")
+	}
+
+	// Set script eval option
+	agent.CommandEval = !configuration.NoCommandEval
+	if !agent.CommandEval {
+		logger.Debug("Evaluating console commands has been disabled")
+	}
+
+	agent.OS, _ = buildkite.MachineOSDump()
+	agent.Hostname, _ = buildkite.MachineHostname()
+	agent.Version = buildkite.Version()
+	agent.PID = os.Getpid()
+
+	// Toggle PTY
 	if buildkite.MachineIsWindows() {
 		agent.RunInPty = false
 	} else {
-		agent.RunInPty = !c.Bool("no-pty")
+		agent.RunInPty = !configuration.NoPTY
+
+		if !agent.RunInPty {
+			logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
+		}
 	}
 
-	agent.AutoSSHFingerprintVerification = !c.Bool("no-automatic-ssh-fingerprint-verification")
-	agent.ScriptEval = !c.Bool("no-script-eval")
-
-	if !agent.ScriptEval {
-		logger.Info("Evaluating scripts has been disabled for this agent")
-	}
+	logger.Info("Registering agent with Buildkite...")
 
 	// Register the agent
-	agentAccessToken, err := client.AgentRegister(c.String("name"), c.String("priority"), agentMetaData, agent.ScriptEval)
+	var registrationClient buildkite.Client
+	registrationClient.AuthorizationToken = agentRegistrationToken
+	registrationClient.URL = configuration.Endpoint
+	err = registrationClient.AgentRegister(&agent)
 	if err != nil {
 		logger.Fatal("%s", err)
 	}
 
-	// Client specific options
-	agent.Client.AuthorizationToken = agentAccessToken
-	agent.Client.URL = c.String("endpoint")
+	logger.Info("Successfully registred agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
 
-	// Setup the agent
-	agent.Setup()
+	// Configure the agent's client
+	agent.Client.AuthorizationToken = agent.AccessToken
+	agent.Client.URL = configuration.Endpoint
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
+
+	// Connect the agent
+	logger.Info("Connecting to Buildkite...")
+	err = agent.Client.AgentConnect(&agent)
+	if err != nil {
+		logger.Fatal("%s", err)
+	}
+
+	logger.Info("Agent successfully connected")
+	logger.Info("You can press Ctrl-C to stop the agent")
+	logger.Info("Waiting for work...")
 
 	// Start the agent
 	agent.Start()

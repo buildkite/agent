@@ -60,9 +60,6 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 	agent.Client.AuthorizationToken = agentAccessToken
 	agent.Client.URL = c.String("endpoint")
 
-	// Setup the agent
-	agent.Setup()
-
 	if jobQuery == "" {
 		logger.Info("Searching for artifacts: \"%s\"", searchQuery)
 	} else {
