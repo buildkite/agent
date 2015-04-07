@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"net/url"
 )
 
 type S3Uploader struct {
@@ -84,7 +85,11 @@ func (u *S3Uploader) Setup(destination string) error {
 }
 
 func (u *S3Uploader) URL(artifact *Artifact) string {
-	return "http://" + u.bucketName() + ".s3.amazonaws.com/" + u.artifactPath(artifact)
+  url, _ := url.Parse("http://" + u.bucketName() + ".s3.amazonaws.com")
+
+	url.Path += u.artifactPath(artifact)
+
+	return url.String()
 }
 
 func (u *S3Uploader) Upload(artifact *Artifact) error {
