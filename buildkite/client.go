@@ -26,17 +26,18 @@ type Client struct {
 	UserAgent string
 }
 
-func (c *Client) GetSession() bkhttp.Session {
-	return bkhttp.Session{
-		Endpoint:  c.URL,
-		UserAgent: c.UserAgent,
-		Headers: []bkhttp.Header{
-			bkhttp.Header{
-				Name:  "Authorization",
-				Value: "Token " + c.AuthorizationToken,
-			},
+func (c *Client) GetSession() *bkhttp.Session {
+	session := new(bkhttp.Session)
+	session.Endpoint = c.URL
+	session.UserAgent = c.UserAgent
+	session.Headers = []bkhttp.Header{
+		bkhttp.Header{
+			Name:  "Authorization",
+			Value: "Token " + c.AuthorizationToken,
 		},
 	}
+
+	return session
 }
 
 func (c *Client) Get(v interface{}, path string) error {

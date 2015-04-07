@@ -11,3 +11,10 @@ type Session struct {
 	UserAgent string
 	Headers   []Header
 }
+
+func (s *Session) NewRequest(method string, path string) Request {
+	request := NewRequest(method, path)
+	request.Session = s
+
+	return request
+}

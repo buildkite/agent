@@ -28,6 +28,10 @@ type Streamer struct {
 	// queue so when the streamer shuts down, we can block until all work
 	// has been added.
 	chunkWaitGroup sync.WaitGroup
+
+	// A wait group that ensures we don't end up processing multiple
+	// outputs at the same time
+	chunkProcessWaitGroup sync.WaitGroup
 }
 
 // Creates a new instance of the log streamer
@@ -56,6 +60,13 @@ func (streamer *Streamer) Start() error {
 func (streamer *Streamer) Process(output string) error {
 	bytes := len(output)
 
+	// Wait for any previous process output to finish. If we're already
+	// processing another bit of output, this will block until it finishes.
+	streamer.chunkProcessWaitGroup.Wait()
+
+	// Add in this process to the wait group
+	streamer.chunkProcessWaitGroup.Add(1)
+
 	if streamer.bytes != bytes {
 		// Grab the part of the log that we haven't seen yet
 		blob := output[streamer.bytes:bytes]
@@ -75,17 +86,16 @@ func (streamer *Streamer) Process(output string) error {
 			}
 
 			// Grab the 100kb section of the blob
-			partialBlob := blob[i*MaxChunkSize : upperLimit]
+			partialChunk := blob[i*MaxChunkSize : upperLimit]
 
 			// Increment the order
 			streamer.order += 1
 
 			// Create the chunk and append it to our list
 			chunk := Chunk{
-				Order:   streamer.order,
-				Blob:    partialBlob,
-				Bytes:   len(partialBlob),
 				Request: streamer.Request,
+				Data:    partialChunk,
+				Order:   streamer.order,
 			}
 
 			streamer.queue <- &chunk
@@ -94,6 +104,8 @@ func (streamer *Streamer) Process(output string) error {
 		// Save the new amount of bytes
 		streamer.bytes = bytes
 	}
+
+	streamer.chunkProcessWaitGroup.Done()
 
 	return nil
 }

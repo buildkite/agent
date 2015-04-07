@@ -2,7 +2,6 @@ package buildkite
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
@@ -122,10 +121,13 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// The HTTP request we'll be sending it to
-	logStreamerRequest := http.Request{
-		Session: agent.Client.GetSession(),
-		Path:    "jobs/" + j.ID + "/log",
-	}
+	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/log")
+
+	// Chunks will keep on retrying until they upload
+	logStreamerRequest.MaxElapsedTime = 0
+
+	// Maximum wait time between upload attempts
+	logStreamerRequest.MaxIntervalTime = 20 * time.Second
 
 	// Create and start our log streamer
 	logStreamer, _ := logstreamer.New(logStreamerRequest)
