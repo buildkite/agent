@@ -2,10 +2,8 @@ package http
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
-	"github.com/cenkalti/backoff"
 	"mime/multipart"
 	stdhttp "net/http"
 	"reflect"
@@ -13,30 +11,46 @@ import (
 )
 
 type Request struct {
-	Session         *Session // A session to inherit defaults from
-	Endpoint        string   // Endpoint can include a path, i.e. https://agent.buildkite.com/v2
-	Path            string
-	Method          string
-	Headers         []Header
-	Params          map[string]interface{}
-	ContentType     string
-	Accept          string
-	UserAgent       string
-	Timeout         time.Duration
-	MaxElapsedTime  time.Duration
-	MaxIntervalTime time.Duration
+	Session     *Session // A session to inherit defaults from
+	Endpoint    string   // Endpoint can include a path, i.e. https://agent.buildkite.com/v2
+	Path        string
+	Method      string
+	Headers     []Header
+	Params      map[string]interface{}
+	ContentType string
+	Accept      string
+	UserAgent   string
+	Timeout     time.Duration
+	Retries     int
 }
 
 func NewRequest(method string, path string) Request {
 	return Request{
-		Method: method,
-		Path:   path,
-		Params: map[string]interface{}{},
+		Method:  method,
+		Path:    path,
+		Params:  map[string]interface{}{},
+		Retries: 1,
 	}
 }
 
 func (r *Request) String() string {
 	return fmt.Sprintf("http.Request{Method: %s, URL: %s}", r.Method, r.URL())
+}
+
+func (r *Request) Copy() Request {
+	return Request{
+		Session:     r.Session,
+		Endpoint:    r.Endpoint,
+		Path:        r.Path,
+		Method:      r.Method,
+		Headers:     r.Headers,
+		Params:      r.Params,
+		ContentType: r.ContentType,
+		Accept:      r.Accept,
+		UserAgent:   r.UserAgent,
+		Timeout:     r.Timeout,
+		Retries:     r.Retries,
+	}
 }
 
 func (r *Request) AddHeader(name string, value string) {
@@ -47,9 +61,45 @@ func (r *Request) AddHeader(name string, value string) {
 	r.Headers = append(r.Headers, Header{Name: name, Value: value})
 }
 
-func (r *Request) Do() (*Response, error) {
-	logger.Debug("Performing request: %s", r.URL())
+func (r *Request) URL() string {
+	if r.Session != nil && r.Session.Endpoint != "" {
+		return r.Session.Endpoint + r.Path
+	} else {
+		return r.Endpoint + r.Path
+	}
+}
 
+func (r *Request) Do() (*Response, error) {
+	var response *Response
+	var err error
+
+	seconds := 3 * time.Second
+	ticker := time.NewTicker(seconds)
+	retries := 1
+
+	for {
+		logger.Debug("%s %s (%d/%d)", r.Method, r.URL(), retries, r.Retries)
+
+		response, err = r.send()
+		if err == nil {
+			break
+		}
+
+		if retries >= r.Retries {
+			logger.Error("%s %s (%d/%d) (%T: %v)", r.Method, r.URL(), retries, r.Retries, err, err)
+			break
+		} else {
+			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s seconds", r.Method, r.URL(), retries, r.Retries, err, err, seconds)
+		}
+
+		retries++
+		<-ticker.C
+	}
+
+	return response, err
+}
+
+func (r *Request) send() (*Response, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -82,52 +132,21 @@ func (r *Request) Do() (*Response, error) {
 
 	response := new(Response)
 
-	// The retryable portion of this function
-	retryable := func() error {
-		logger.Debug("%s %s", r.Method, r.URL())
-
-		// Perform the stdhttp request
-		res, err := stdhttp.DefaultClient.Do(req)
-		if err != nil {
-			return err
-		}
-
-		// Be sure to close the response body at the end of
-		// this function
-		defer res.Body.Close()
-
-		// Was the request not a: 200, 201, 202, etc
-		if res.StatusCode/100 != 2 {
-			return errors.New("Unexpected error: " + res.Status)
-		} else {
-			response.StatusCode = res.StatusCode
-		}
-
-		return nil
-	}
-
-	// Is called when ever there is an error
-	notify := func(err error, wait time.Duration) {
-		logger.Error("Failed to %s to %s with error \"%s\". Will try again in %s", r.Method, r.URL(), err, wait)
-	}
-
-	exponentialBackOff := backoff.NewExponentialBackOff()
-	exponentialBackOff.MaxElapsedTime = r.MaxElapsedTime
-	exponentialBackOff.MaxInterval = r.MaxIntervalTime
-
-	err = backoff.RetryNotify(retryable, exponentialBackOff, notify)
+	// Perform the stdhttp request
+	res, err := stdhttp.DefaultClient.Do(req)
 	if err != nil {
-		// Operation has finally failed and will not be retried
 		return nil, err
 	}
 
-	return response, nil
-}
+	// Be sure to close the response body at the end of this function
+	defer res.Body.Close()
 
-func (r *Request) URL() string {
-	if r.Session != nil && r.Session.Endpoint != "" {
-		return r.Session.Endpoint + r.Path
+	// Was the request not a: 200, 201, 202, etc
+	if res.StatusCode/100 != 2 {
+		return nil, Error{Status: res.Status}
 	} else {
-		return r.Endpoint + r.Path
+		response.StatusCode = res.StatusCode
 	}
+
+	return response, nil
 }

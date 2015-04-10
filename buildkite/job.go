@@ -123,11 +123,8 @@ func (j *Job) Run(agent *Agent) error {
 	// The HTTP request we'll be sending it to
 	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/log")
 
-	// Chunks will keep on retrying until they upload
-	logStreamerRequest.MaxElapsedTime = 0
-
-	// Maximum wait time between upload attempts
-	logStreamerRequest.MaxIntervalTime = 20 * time.Second
+	// Set the retry limit for the request
+	logStreamerRequest.Retries = 3
 
 	// Create and start our log streamer
 	logStreamer, _ := logstreamer.New(logStreamerRequest)
