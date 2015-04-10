@@ -89,7 +89,7 @@ func (r *Request) Do() (*Response, error) {
 			logger.Error("%s %s (%d/%d) (%T: %v)", r.Method, r.URL(), retries, r.Retries, err, err)
 			break
 		} else {
-			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s seconds", r.Method, r.URL(), retries, r.Retries, err, err, seconds)
+			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s", r.Method, r.URL(), retries, r.Retries, err, err, seconds)
 		}
 
 		retries++
