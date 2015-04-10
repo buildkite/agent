@@ -86,7 +86,7 @@ func (r *Request) Do() (*Response, error) {
 		}
 
 		if retries >= r.Retries {
-			logger.Error("%s %s (%d/%d) (%T: %v)", r.Method, r.URL(), retries, r.Retries, err, err)
+			logger.Warn("%s %s (%d/%d) (%T: %v)", r.Method, r.URL(), retries, r.Retries, err, err)
 			break
 		} else {
 			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s", r.Method, r.URL(), retries, r.Retries, err, err, seconds)

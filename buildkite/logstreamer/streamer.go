@@ -14,7 +14,7 @@ type Streamer struct {
 	Concurrency int
 
 	// The base HTTP request we'll keep sending logs to
-	Request http.Request
+	Request *http.Request
 
 	queue chan *Chunk
 
@@ -29,9 +29,8 @@ type Streamer struct {
 	// has been added.
 	chunkWaitGroup sync.WaitGroup
 
-	// A wait group that ensures we don't end up processing multiple
-	// outputs at the same time
-	chunkProcessWaitGroup sync.WaitGroup
+	// Only allow processing one at a time
+	processMutex sync.Mutex
 }
 
 // Creates a new instance of the log streamer
@@ -40,7 +39,7 @@ func New(request http.Request) (*Streamer, error) {
 	// like a good number?
 	streamer := new(Streamer)
 	streamer.Concurrency = 5
-	streamer.Request = request
+	streamer.Request = &request
 	streamer.queue = make(chan *Chunk, 1024)
 
 	return streamer, nil
@@ -60,12 +59,8 @@ func (streamer *Streamer) Start() error {
 func (streamer *Streamer) Process(output string) error {
 	bytes := len(output)
 
-	// Wait for any previous process output to finish. If we're already
-	// processing another bit of output, this will block until it finishes.
-	streamer.chunkProcessWaitGroup.Wait()
-
-	// Add in this process to the wait group
-	streamer.chunkProcessWaitGroup.Add(1)
+	// Only allow one streamer process at a time
+	streamer.processMutex.Lock()
 
 	if streamer.bytes != bytes {
 		// Grab the part of the log that we haven't seen yet
@@ -105,7 +100,7 @@ func (streamer *Streamer) Process(output string) error {
 		streamer.bytes = bytes
 	}
 
-	streamer.chunkProcessWaitGroup.Done()
+	streamer.processMutex.Unlock()
 
 	return nil
 }
