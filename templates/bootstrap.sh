@@ -305,11 +305,12 @@ else
     COMPOSE_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
     # The name of the docker container compose creates when it creates the adhoc run
     COMPOSE_CONTAINER_NAME=$COMPOSE_PROJ_NAME"_"$BUILDKITE_DOCKER_COMPOSE_CONTAINER
+    COMPOSE_COMMAND="docker-compose -f ${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml} -p $COMPOSE_PROJ_NAME"
 
     function compose-cleanup {
       echo "~~~ Cleaning up Docker containers"
-      buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME kill || true"
-      buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME rm --force -v || true"
+      buildkite-run "$COMPOSE_COMMAND kill || true"
+      buildkite-run "$COMPOSE_COMMAND rm --force -v || true"
 
       # The adhoc run container isn't cleaned up by compose, so we have to do it ourselves
       buildkite-run "docker rm -f -v "$COMPOSE_CONTAINER_NAME"_run_1 || true"
@@ -323,11 +324,11 @@ else
     # We pipe into cat because the default tty output kills our renderer.
     # If there was a wget-style --progress=dot we'd use it instead.
     # https://github.com/docker/docker/issues/3694
-    buildkite-run "docker-compose -p $COMPOSE_PROJ_NAME build | cat"
+    buildkite-run "$COMPOSE_COMMAND build | cat"
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
     echo "~~~ Running build script (in Docker Compose container)"
-    buildkite-prompt-and-run "docker-compose -p $COMPOSE_PROJ_NAME run $BUILDKITE_DOCKER_COMPOSE_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
+    buildkite-prompt-and-run "$COMPOSE_COMMAND run $BUILDKITE_DOCKER_COMPOSE_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
