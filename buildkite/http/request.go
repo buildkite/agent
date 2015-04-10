@@ -130,6 +130,18 @@ func (r *Request) send() (*Response, error) {
 		return nil, err
 	}
 
+	// Add in the headers
+	for _, header := range r.Headers {
+		req.Header.Set(header.Name, header.Value)
+	}
+
+	// Add in the sessions headers (if we have a session)
+	if r.Session != nil {
+		for _, header := range r.Session.Headers {
+			req.Header.Set(header.Name, header.Value)
+		}
+	}
+
 	response := new(Response)
 
 	// Perform the stdhttp request
