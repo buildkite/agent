@@ -286,6 +286,9 @@ else
     }
 
     trap docker-cleanup EXIT
+    
+    # Run the per-checkout `pre-docker-build` hook
+    buildkite-local-hook "pre-docker-build"
 
     # Build the Docker image, namespaced to the job
     echo "~~~ Building Docker image $DOCKER_IMAGE"
@@ -294,6 +297,9 @@ else
     # If there was a wget-style --progress=dot we'd use it instead.
     # https://github.com/docker/docker/issues/3694
     buildkite-run "docker build -f ${BUILDKITE_DOCKER_FILE:-Dockerfile} -t $DOCKER_IMAGE . | cat"
+    
+    # Run the per-checkout `pre-docker-run` hook
+    buildkite-local-hook "pre-docker-run"
 
     # Run the build script command in a one-off container
     echo "~~~ Running build script (in Docker container)"
