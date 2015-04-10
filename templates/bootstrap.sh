@@ -18,6 +18,9 @@ function buildkite-flags-reset {
   # Causes this script to exit if a variable isn't present
   set -u
 
+  # Ensure command pipes fail if any command fails (e.g. fail-cmd | success-cmd == fail)
+  set -o pipefail
+
   # Turn off debugging
   set +x
 
