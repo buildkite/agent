@@ -124,7 +124,7 @@ func (j *Job) Run(agent *Agent) error {
 	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/log")
 
 	// Set the retry limit for the request
-	logStreamerRequest.Retries = 3
+	logStreamerRequest.Retries = 10
 
 	// Create and start our log streamer
 	logStreamer, _ := logstreamer.New(logStreamerRequest)

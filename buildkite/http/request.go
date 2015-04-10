@@ -73,7 +73,7 @@ func (r *Request) Do() (*Response, error) {
 	var response *Response
 	var err error
 
-	seconds := 3 * time.Second
+	seconds := 5 * time.Second
 	ticker := time.NewTicker(seconds)
 	retries := 1
 
