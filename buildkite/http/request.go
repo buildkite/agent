@@ -6,7 +6,9 @@ import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"mime/multipart"
 	stdhttp "net/http"
+	// stdhttputil "net/http/httputil"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -63,9 +65,11 @@ func (r *Request) AddHeader(name string, value string) {
 
 func (r *Request) URL() string {
 	if r.Session != nil && r.Session.Endpoint != "" {
-		return r.Session.Endpoint + r.Path
+		return r.join(r.Session.Endpoint, r.Path)
+	} else if r.Endpoint != "" {
+		return r.join(r.Endpoint, r.Path)
 	} else {
-		return r.Endpoint + r.Path
+		return r.Path
 	}
 }
 
@@ -115,6 +119,8 @@ func (r *Request) send() (*Response, error) {
 			}
 
 			part.Write([]byte(multiPart.Data))
+		} else if typeOf == "int" {
+			_ = writer.WriteField(name, fmt.Sprintf("%d", value))
 		} else {
 			_ = writer.WriteField(name, fmt.Sprintf("%s", value))
 		}
@@ -130,6 +136,8 @@ func (r *Request) send() (*Response, error) {
 		return nil, err
 	}
 
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
 	// Add in the headers
 	for _, header := range r.Headers {
 		req.Header.Set(header.Name, header.Value)
@@ -143,6 +151,9 @@ func (r *Request) send() (*Response, error) {
 	}
 
 	response := new(Response)
+
+	// debug, _ := stdhttputil.DumpRequest(req, true)
+	// logger.Debug("%s", debug)
 
 	// Perform the stdhttp request
 	res, err := stdhttp.DefaultClient.Do(req)
@@ -161,4 +172,8 @@ func (r *Request) send() (*Response, error) {
 	}
 
 	return response, nil
+}
+
+func (r *Request) join(endpoint string, path string) string {
+	return strings.TrimRight(endpoint, "/") + "/" + strings.TrimLeft(path, "/")
 }
