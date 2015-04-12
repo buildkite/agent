@@ -5,9 +5,8 @@ import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"math"
 	"sync"
+	"sync/atomic"
 )
-
-const MaxChunkSize = 100000 // 100kb
 
 type Streamer struct {
 	// How many log streamer workers are running at any one time
@@ -16,6 +15,13 @@ type Streamer struct {
 	// The base HTTP request we'll keep sending logs to
 	Request *http.Request
 
+	// The maximum size of chunks
+	MaxChunkSizeBytes int
+
+	// A counter of how many chunks failed to upload
+	FailedChunksCount int32
+
+	// The queue of chunks that are needing to be uploaded
 	queue chan *Chunk
 
 	// Total size in bytes of the log
@@ -34,12 +40,13 @@ type Streamer struct {
 }
 
 // Creates a new instance of the log streamer
-func New(request http.Request) (*Streamer, error) {
+func New(request http.Request, maxChunkSizeBytes int) (*Streamer, error) {
 	// Create a new log streamer and default the concurrency to 5, seems
 	// like a good number?
 	streamer := new(Streamer)
 	streamer.Concurrency = 5
 	streamer.Request = &request
+	streamer.MaxChunkSizeBytes = maxChunkSizeBytes
 	streamer.queue = make(chan *Chunk, 1024)
 
 	return streamer, nil
@@ -66,8 +73,8 @@ func (streamer *Streamer) Process(output string) error {
 		// Grab the part of the log that we haven't seen yet
 		blob := output[streamer.bytes:bytes]
 
-		// How many chunks do we have that fit within the MaxChunkSize?
-		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(MaxChunkSize)))
+		// How many chunks do we have that fit within the MaxChunkSizeBytes?
+		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(streamer.MaxChunkSizeBytes)))
 
 		// Increase the wait group by the amount of chunks we're going
 		// to add
@@ -75,13 +82,13 @@ func (streamer *Streamer) Process(output string) error {
 
 		for i := 0; i < numberOfChunks; i++ {
 			// Find the upper limit of the blob
-			upperLimit := (i + 1) * MaxChunkSize
+			upperLimit := (i + 1) * streamer.MaxChunkSizeBytes
 			if upperLimit > len(blob) {
 				upperLimit = len(blob)
 			}
 
 			// Grab the 100kb section of the blob
-			partialChunk := blob[i*MaxChunkSize : upperLimit]
+			partialChunk := blob[i*streamer.MaxChunkSizeBytes : upperLimit]
 
 			// Increment the order
 			streamer.order += 1
@@ -134,7 +141,12 @@ func Worker(id int, streamer *Streamer) {
 		}
 
 		// Upload the chunk
-		chunk.Upload()
+		err := chunk.Upload()
+		if err != nil {
+			atomic.AddInt32(&streamer.FailedChunksCount, 1)
+
+			logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
+		}
 
 		// Signal to the chunkWaitGroup that this one is done
 		streamer.chunkWaitGroup.Done()

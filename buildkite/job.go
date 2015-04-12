@@ -25,6 +25,8 @@ type Job struct {
 
 	Env map[string]string
 
+	MaxChunkSizeBytes int `json:"max_chunk_size_bytes,omitempty"`
+
 	HeaderTimes []string `json:"header_times,omitempty"`
 
 	ExitStatus string `json:"exit_status,omitempty"`
@@ -32,6 +34,8 @@ type Job struct {
 	StartedAt string `json:"started_at,omitempty"`
 
 	FinishedAt string `json:"finished_at,omitempty"`
+
+	FailedChunksCount int `json:"failed_chunks_count,omitempty"`
 
 	// If the job is currently being cancelled
 	cancelled bool
@@ -121,13 +125,13 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// The HTTP request we'll be sending it to
-	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/chunk")
+	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/chunks")
 
 	// Set the retry limit for the request
 	logStreamerRequest.Retries = 10
 
 	// Create and start our log streamer
-	logStreamer, _ := logstreamer.New(logStreamerRequest)
+	logStreamer, _ := logstreamer.New(logStreamerRequest, j.MaxChunkSizeBytes)
 	logStreamer.Start()
 
 	// This callback is called when the process starts
@@ -202,6 +206,9 @@ func (j *Job) Run(agent *Agent) error {
 
 	// Stop the log streamer
 	logStreamer.Stop()
+
+	// Save how many chunks failed to upload
+	j.FailedChunksCount = int(logStreamer.FailedChunksCount)
 
 	// Keep trying this call until it works. This is the most important one.
 	for {
