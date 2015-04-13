@@ -41,10 +41,9 @@ type Streamer struct {
 
 // Creates a new instance of the log streamer
 func New(request http.Request, maxChunkSizeBytes int) (*Streamer, error) {
-	// Create a new log streamer and default the concurrency to 5, seems
-	// like a good number?
+	// Create a new log streamer and default the concurrency
 	streamer := new(Streamer)
-	streamer.Concurrency = 5
+	streamer.Concurrency = 3
 	streamer.Request = &request
 	streamer.MaxChunkSizeBytes = maxChunkSizeBytes
 	streamer.queue = make(chan *Chunk, 1024)

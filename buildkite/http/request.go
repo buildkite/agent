@@ -82,7 +82,13 @@ func (r *Request) Do() (*Response, error) {
 	retries := 1
 
 	for {
-		logger.Debug("%s %s (%d/%d)", r.Method, r.URL(), retries, r.Retries)
+		// Only show the retries in the log if we're on our second+
+		// attempt
+		if retries > 1 {
+			logger.Debug("%s %s (Attempt %d/%d)", r.Method, r.URL(), retries, r.Retries)
+		} else {
+			logger.Debug("%s %s", r.Method, r.URL(), retries, r.Retries)
+		}
 
 		response, err = r.send()
 		if err == nil {

@@ -35,7 +35,7 @@ type Job struct {
 
 	FinishedAt string `json:"finished_at,omitempty"`
 
-	FailedChunksCount int `json:"failed_chunks_count,omitempty"`
+	FailedChunksCount int `json:"failed_chunks_count"`
 
 	// If the job is currently being cancelled
 	cancelled bool
@@ -69,6 +69,15 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 
 	// Return the job.
 	return &updatedJob, c.Put(&updatedJob, "jobs/"+job.ID, job)
+}
+
+func (c *Client) JobRefresh(job *Job) (*Job, error) {
+	// Create a new instance of a job that will be populated with the
+	// updated data by the client
+	var refreshedJob Job
+
+	// Return the job.
+	return &refreshedJob, c.Get(&refreshedJob, "jobs/"+job.ID)
 }
 
 func (j *Job) Kill() error {
@@ -144,7 +153,7 @@ func (j *Job) Run(agent *Agent) error {
 
 				// Get the latest job status so we can see if
 				// the job has been cancelled
-				updatedJob, err := agent.Client.JobUpdate(j)
+				updatedJob, err := agent.Client.JobRefresh(j)
 				if err != nil {
 					// We don't really care if it fails,
 					// we'll just try again in a second
@@ -154,8 +163,8 @@ func (j *Job) Run(agent *Agent) error {
 					j.Kill()
 				}
 
-				// Sleep for 1 second
-				time.Sleep(1000 * time.Millisecond)
+				// Check for cancelations every few seconds
+				time.Sleep(3 * time.Second)
 			}
 
 			logger.Debug("Routine that sends job updates has finished")
