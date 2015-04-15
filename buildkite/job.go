@@ -25,7 +25,7 @@ type Job struct {
 
 	Env map[string]string
 
-	MaxChunkSizeBytes int `json:"max_chunk_size_bytes,omitempty"`
+	ChunksMaxSizeBytes int `json:"chunks_max_size_bytes,omitempty"`
 
 	HeaderTimes []string `json:"header_times,omitempty"`
 
@@ -35,7 +35,7 @@ type Job struct {
 
 	FinishedAt string `json:"finished_at,omitempty"`
 
-	FailedChunksCount int `json:"failed_chunks_count"`
+	ChunksFailedCount int `json:"chunks_failed_count"`
 
 	// If the job is currently being cancelled
 	cancelled bool
@@ -140,7 +140,11 @@ func (j *Job) Run(agent *Agent) error {
 	logStreamerRequest.Retries = 10
 
 	// Create and start our log streamer
-	logStreamer, _ := logstreamer.New(logStreamerRequest, j.MaxChunkSizeBytes)
+	logStreamer, err := logstreamer.New(logStreamerRequest, j.ChunksMaxSizeBytes)
+	if err != nil {
+		logger.Error("%s", err)
+	}
+
 	logStreamer.Start()
 
 	// This callback is called when the process starts
@@ -151,6 +155,16 @@ func (j *Job) Run(agent *Agent) error {
 				// Send the output of the process to the log streamer for processing
 				logStreamer.Process(process.Output())
 
+				// Check for cancelations every second
+				time.Sleep(1 * time.Second)
+			}
+
+			logger.Debug("Routine that processes the log has finished")
+		}()
+
+		// Start a routine that will grab the output every few seconds and send it back to Buildkite
+		go func() {
+			for process.Running {
 				// Get the latest job status so we can see if
 				// the job has been cancelled
 				updatedJob, err := agent.Client.JobRefresh(j)
@@ -167,7 +181,7 @@ func (j *Job) Run(agent *Agent) error {
 				time.Sleep(3 * time.Second)
 			}
 
-			logger.Debug("Routine that sends job updates has finished")
+			logger.Debug("Routine that refreshes the job has finished")
 		}()
 	}
 
@@ -217,7 +231,11 @@ func (j *Job) Run(agent *Agent) error {
 	logStreamer.Stop()
 
 	// Save how many chunks failed to upload
-	j.FailedChunksCount = int(logStreamer.FailedChunksCount)
+	j.ChunksFailedCount = int(logStreamer.ChunksFailedCount)
+
+	if j.ChunksFailedCount > 0 {
+		logger.Warn("%d chunks failed to upload for this job", j.ChunksFailedCount)
+	}
 
 	// Keep trying this call until it works. This is the most important one.
 	for {

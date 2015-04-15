@@ -87,7 +87,7 @@ func (r *Request) Do() (*Response, error) {
 		if retries > 1 {
 			logger.Debug("%s %s (Attempt %d/%d)", r.Method, r.URL(), retries, r.Retries)
 		} else {
-			logger.Debug("%s %s", r.Method, r.URL(), retries, r.Retries)
+			logger.Debug("%s %s", r.Method, r.URL())
 		}
 
 		response, err = r.send()

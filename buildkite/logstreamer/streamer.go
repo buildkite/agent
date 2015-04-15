@@ -1,6 +1,7 @@
 package logstreamer
 
 import (
+	"errors"
 	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"math"
@@ -19,7 +20,7 @@ type Streamer struct {
 	MaxChunkSizeBytes int
 
 	// A counter of how many chunks failed to upload
-	FailedChunksCount int32
+	ChunksFailedCount int32
 
 	// The queue of chunks that are needing to be uploaded
 	queue chan *Chunk
@@ -47,6 +48,10 @@ func New(request http.Request, maxChunkSizeBytes int) (*Streamer, error) {
 	streamer.Request = &request
 	streamer.MaxChunkSizeBytes = maxChunkSizeBytes
 	streamer.queue = make(chan *Chunk, 1024)
+
+	if maxChunkSizeBytes == 0 {
+		return nil, errors.New("Maximum chunk size must be more than 0. No logs will be sent.")
+	}
 
 	return streamer, nil
 }
@@ -142,7 +147,7 @@ func Worker(id int, streamer *Streamer) {
 		// Upload the chunk
 		err := chunk.Upload()
 		if err != nil {
-			atomic.AddInt32(&streamer.FailedChunksCount, 1)
+			atomic.AddInt32(&streamer.ChunksFailedCount, 1)
 
 			logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
 		}
