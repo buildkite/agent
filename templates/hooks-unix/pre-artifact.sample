@@ -1,3 +1,5 @@
-#!/bin/sh
+#!/bin/bash
 
 # The `pre-artifact` hook will run just artifacts are uploaded
+
+set -e

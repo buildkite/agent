@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
 # The `command` hook script will replace the default implementation of running
 # the build command.
+
+set -e
