@@ -1,6 +1,6 @@
 # Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
 
-The buildkite-agent is a small and reliable daemon that makes it easy to run builds on your own server. The agent is responsible for connecting to buildkite.com, running build jobs, reporting back the status code and output log of the job, and uploading the job's artifacts.
+The buildkite-agent is a small, reliable, and cross-platform build runner that makes it easy to run automated builds on your own infrastructure. It’s main responsibilities are polling [buildkite.com](https://buildkite.com/) for work, running build jobs, reporting back the status code and output log of the job, and uploading the job's artifacts.
 
 ```
 $ buildkite-agent --help
