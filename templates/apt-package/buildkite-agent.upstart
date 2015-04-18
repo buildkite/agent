@@ -9,18 +9,19 @@ kill signal TERM
 reload signal USR2
 
 env PIDFILE=/var/run/buildkite-agent.pid
-env ENVFILE=/etc/buildkite-agent/buildkite-agent.env
+env BUILDKITE_USER=root
+env BUILDKITE_GROUP=root
+env BUILDKITE_CONFIG_PATH=/etc/buildkite-agent/buildkite-agent.cfg
+env BUILDKITE_BUILD_PATH=/var/buildkite-agent/builds
+env BUILDKITE_BOOTSTRAP_SCRIPT_PATH=/etc/buildkite-agent/bootstrap.sh
+env BUILDKITE_HOOKS_PATH=/etc/buildkite-agent/hooks
 
 pre-start script
-. $ENVFILE
 mkdir -p $BUILDKITE_BUILD_PATH
-chown -R $BUILDKITE_USER:$BUILDKITE_USER_GROUP $BUILDKITE_BUILD_PATH
+chown -R $BUILDKITE_USER:$BUILDKITE_GROUP $BUILDKITE_BUILD_PATH
 end script
 
 script
-set -a
-. $ENVFILE
-set +a
 exec start-stop-daemon --start \
                        --quiet \
                        --chuid $BUILDKITE_USER \
