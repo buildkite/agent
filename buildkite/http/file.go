@@ -1,6 +1,6 @@
 package http
 
-type MultiPart struct {
+type File struct {
 	Data     string
 	MimeType string
 	FileName string

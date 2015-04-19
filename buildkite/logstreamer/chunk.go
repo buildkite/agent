@@ -19,15 +19,16 @@ func (chunk *Chunk) Upload() error {
 	// Take a copy of the request and make it our own
 	r := chunk.Request.Copy()
 
-	// Add the chunk to the request as a multipart form upload
-	r.Params["blob"] = http.MultiPart{
-		Data:     chunk.Data,
-		MimeType: "text/plain",
-		FileName: "chunk.txt",
+	r.Body = &http.Form{
+		Params: map[string]interface{}{
+			"blob": http.File{
+				Data:     chunk.Data,
+				MimeType: "text/plain",
+				FileName: "chunk.txt",
+			},
+			"sequence": chunk.Order,
+		},
 	}
-
-	// Set the order as another parameter
-	r.Params["sequence"] = chunk.Order
 
 	// Perform the chunk upload
 	_, err := r.Do()

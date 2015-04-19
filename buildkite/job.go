@@ -2,6 +2,7 @@ package buildkite
 
 import (
 	"fmt"
+	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
@@ -42,6 +43,10 @@ type Job struct {
 
 	// The currently running process of the job
 	process *Process
+
+	// The previous count of header times so we know if we need to upload
+	// them again
+	headerTimesCount int
 }
 
 func (b Job) String() string {
@@ -162,6 +167,19 @@ func (j *Job) Run(agent *Agent) error {
 			logger.Debug("Routine that processes the log has finished")
 		}()
 
+		// Start a routine that will upload header timings
+		go func() {
+			for process.Running {
+				// Upload the header timings
+				j.uploadHeaderTimes(agent)
+
+				// Wait another second before seeeing if there are new header times to send
+				time.Sleep(1 * time.Second)
+			}
+
+			logger.Debug("Routine that processes header timings")
+		}()
+
 		// Start a routine that will grab the output every few seconds and send it back to Buildkite
 		go func() {
 			for process.Running {
@@ -227,6 +245,9 @@ func (j *Job) Run(agent *Agent) error {
 	j.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	j.ExitStatus = j.process.ExitStatus
 
+	// Upload the header timings one last time
+	j.uploadHeaderTimes(agent)
+
 	// Stop the log streamer
 	logStreamer.Stop()
 
@@ -257,6 +278,24 @@ func (j *Job) Run(agent *Agent) error {
 	logger.Info("Finished job %s", j.ID)
 
 	return nil
+}
+
+func (j *Job) uploadHeaderTimes(agent *Agent) {
+	thisHeaderCount := len(j.HeaderTimes)
+
+	// Has the header count changed from last time we checked?
+	if j.headerTimesCount != len(j.HeaderTimes) {
+		// Send the header times to Buildktie
+		r := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/header_times")
+		r.Body = &http.JSON{
+			Payload: map[string][]string{
+				"header_times": j.HeaderTimes,
+			},
+		}
+		r.Do()
+
+		j.headerTimesCount = thisHeaderCount
+	}
 }
 
 // Replaces ~/ with the users home directory. The builds path may be configured

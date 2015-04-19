@@ -1,16 +1,19 @@
 package http
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
-	"mime/multipart"
 	stdhttp "net/http"
 	// stdhttputil "net/http/httputil"
-	"reflect"
+	"bytes"
 	"strings"
 	"time"
 )
+
+type body interface {
+	ToBody() (*bytes.Buffer, error)
+	ContentType() string
+}
 
 type Request struct {
 	Session     *Session // A session to inherit defaults from
@@ -18,7 +21,7 @@ type Request struct {
 	Path        string
 	Method      string
 	Headers     []Header
-	Params      map[string]interface{}
+	Body        body
 	ContentType string
 	Accept      string
 	UserAgent   string
@@ -30,7 +33,6 @@ func NewRequest(method string, path string) Request {
 	return Request{
 		Method:  method,
 		Path:    path,
-		Params:  map[string]interface{}{},
 		Retries: 1,
 	}
 }
@@ -46,7 +48,7 @@ func (r *Request) Copy() Request {
 		Path:        r.Path,
 		Method:      r.Method,
 		Headers:     r.Headers,
-		Params:      r.Params,
+		Body:        r.Body,
 		ContentType: r.ContentType,
 		Accept:      r.Accept,
 		UserAgent:   r.UserAgent,
@@ -110,29 +112,7 @@ func (r *Request) Do() (*Response, error) {
 }
 
 func (r *Request) send() (*Response, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	for name, value := range r.Params {
-		typeOf := reflect.TypeOf(value).String()
-
-		if typeOf == "http.MultiPart" {
-			multiPart, _ := value.(MultiPart)
-
-			part, err := writer.CreateFormFile(name, multiPart.FileName)
-			if err != nil {
-				return nil, err
-			}
-
-			part.Write([]byte(multiPart.Data))
-		} else if typeOf == "int" {
-			_ = writer.WriteField(name, fmt.Sprintf("%d", value))
-		} else {
-			_ = writer.WriteField(name, fmt.Sprintf("%s", value))
-		}
-	}
-
-	err := writer.Close()
+	body, err := r.Body.ToBody()
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +122,7 @@ func (r *Request) send() (*Response, error) {
 		return nil, err
 	}
 
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", r.Body.ContentType())
 
 	// Add in the headers
 	for _, header := range r.Headers {
