@@ -6,6 +6,7 @@ import (
 	stdhttp "net/http"
 	// stdhttputil "net/http/httputil"
 	"bytes"
+	"net"
 	"strings"
 	"time"
 )
@@ -141,8 +142,27 @@ func (r *Request) send() (*Response, error) {
 	// debug, _ := stdhttputil.DumpRequest(req, true)
 	// logger.Debug("%s", debug)
 
+	// Construct a new dialer and bump the default timeout
+	dialer := &net.Dialer{
+		Timeout: 60 * time.Second,
+	}
+
+	// Set the custom timeout
+	if r.Timeout > 0 {
+		dialer.Timeout = r.Timeout
+	}
+
+	// New transport and bump the TLSHandshakeTimeout
+	transport := &stdhttp.Transport{
+		Dial:                dialer.Dial,
+		Proxy:               stdhttp.ProxyFromEnvironment,
+		TLSHandshakeTimeout: 60 * time.Second,
+	}
+
+	client := &stdhttp.Client{Transport: transport}
+
 	// Perform the stdhttp request
-	res, err := stdhttp.DefaultClient.Do(req)
+	res, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
