@@ -112,7 +112,7 @@ func (u *S3Uploader) Upload(artifact *Artifact) error {
 
 func awsS3Auth() (aws.Auth, error) {
 	// First try to authenticate using the BUILDKITE_ ENV variables
-	buildkiteAuth, buildkiteErr := buildkiteAwsEnvAuth()
+	buildkiteAuth, buildkiteErr := buildkiteS3EnvAuth()
 	if buildkiteErr == nil {
 		return buildkiteAuth, nil
 	}
@@ -137,7 +137,7 @@ func awsS3Auth() (aws.Auth, error) {
 	return aws.Auth{}, err
 }
 
-func buildkiteAwsEnvAuth() (auth aws.Auth, err error) {
+func buildkiteS3EnvAuth() (auth aws.Auth, err error) {
 	auth.AccessKey = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
 	if auth.AccessKey == "" {
 		auth.AccessKey = os.Getenv("BUILDKITE_S3_ACCESS_KEY")
