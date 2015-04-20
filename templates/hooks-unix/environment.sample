@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# The `environment` hook will run before all other commands, and can be used
+# to set up secrets, data, etc. Anything exported in hooks will be available
+# to the build script.
+#
+# For example:
+#
+# export SECRET_VAR=token
+
+set -e

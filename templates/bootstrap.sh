@@ -143,6 +143,17 @@ fi
 
 ##############################################################
 #
+# ENVIRONMENT SETUP
+# A place for people to set up environment variables that
+# might be needed for their build scripts, such as secret
+# tokens and other information.
+#
+##############################################################
+
+buildkite-global-hook "environment"
+
+##############################################################
+#
 # REPOSITORY HANDLING
 # Creates the build folder and makes sure we're running the
 # build at the right commit.
