@@ -21,7 +21,7 @@ func (chunk *Chunk) Upload() error {
 
 	r.Body = &http.Form{
 		Params: map[string]interface{}{
-			"blob": http.File{
+			"chunk": http.File{
 				Data:     chunk.Data,
 				MimeType: "text/plain",
 				FileName: "chunk.txt",
