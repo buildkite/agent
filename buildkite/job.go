@@ -2,7 +2,9 @@ package buildkite
 
 import (
 	"fmt"
+	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -24,7 +26,7 @@ type Job struct {
 
 	Env map[string]string
 
-	Output string `json:"output,omitempty"`
+	ChunksMaxSizeBytes int `json:"chunks_max_size_bytes,omitempty"`
 
 	HeaderTimes []string `json:"header_times,omitempty"`
 
@@ -34,11 +36,17 @@ type Job struct {
 
 	FinishedAt string `json:"finished_at,omitempty"`
 
+	ChunksFailedCount int `json:"chunks_failed_count"`
+
 	// If the job is currently being cancelled
 	cancelled bool
 
 	// The currently running process of the job
 	process *Process
+
+	// The previous count of header times so we know if we need to upload
+	// them again
+	headerTimesCount int
 }
 
 func (b Job) String() string {
@@ -66,6 +74,15 @@ func (c *Client) JobUpdate(job *Job) (*Job, error) {
 
 	// Return the job.
 	return &updatedJob, c.Put(&updatedJob, "jobs/"+job.ID, job)
+}
+
+func (c *Client) JobRefresh(job *Job) (*Job, error) {
+	// Create a new instance of a job that will be populated with the
+	// updated data by the client
+	var refreshedJob Job
+
+	// Return the job.
+	return &refreshedJob, c.Get(&refreshedJob, "jobs/"+job.ID)
 }
 
 func (j *Job) Kill() error {
@@ -121,38 +138,68 @@ func (j *Job) Run(agent *Agent) error {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	// Mark the build as started
-	j.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	_, err := agent.Client.JobUpdate(j)
+	// The HTTP request we'll be sending it to
+	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/chunks")
+
+	// Set the retry limit for the request
+	logStreamerRequest.Retries = 10
+
+	// Create and start our log streamer
+	logStreamer, err := logstreamer.New(logStreamerRequest, j.ChunksMaxSizeBytes)
 	if err != nil {
-		// We don't care if the HTTP request failed here. We hope that it
-		// starts working during the actual build.
+		logger.Error("%s", err)
 	}
+
+	logStreamer.Start()
 
 	// This callback is called when the process starts
 	startCallback := func(process *Process) {
 		// Start a routine that will grab the output every few seconds and send it back to Buildkite
 		go func() {
 			for process.Running {
-				// Save the output to the job
-				j.Output = process.Output()
+				// Send the output of the process to the log streamer for processing
+				logStreamer.Process(process.Output())
 
-				// Post the update to the API
-				updatedJob, err := agent.Client.JobUpdate(j)
+				// Check for cancelations every second
+				time.Sleep(1 * time.Second)
+			}
+
+			logger.Debug("Routine that processes the log has finished")
+		}()
+
+		// Start a routine that will upload header timings
+		go func() {
+			for process.Running {
+				// Upload the header timings
+				j.uploadHeaderTimes(agent)
+
+				// Wait another second before seeeing if there are new header times to send
+				time.Sleep(1 * time.Second)
+			}
+
+			logger.Debug("Routine that processes header timings")
+		}()
+
+		// Start a routine that will grab the output every few seconds and send it back to Buildkite
+		go func() {
+			for process.Running {
+				// Get the latest job status so we can see if
+				// the job has been cancelled
+				updatedJob, err := agent.Client.JobRefresh(j)
 				if err != nil {
-					// We don't really care if the job couldn't update at this point.
-					// This is just a partial update. We'll just let the job run
-					// and hopefully the host will fix itself before we finish.
-					logger.Warn("Problem with updating job %s (%s)", j.ID, err)
+					// We don't really care if it fails,
+					// we'll just try again in a second
+					// anyway
+					logger.Warn("Problem with getting job status %s (%s)", j.ID, err)
 				} else if updatedJob.State == "canceled" {
 					j.Kill()
 				}
 
-				// Sleep for 1 second
-				time.Sleep(1000 * time.Millisecond)
+				// Check for cancelations every few seconds
+				time.Sleep(3 * time.Second)
 			}
 
-			logger.Debug("Routine that sends job updates has finished")
+			logger.Debug("Routine that refreshes the job has finished")
 		}()
 	}
 
@@ -176,18 +223,40 @@ func (j *Job) Run(agent *Agent) error {
 	// Store the process so we can cancel it later.
 	j.process = process
 
+	// Mark the build as started
+	j.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = agent.Client.JobUpdate(j)
+	if err != nil {
+		// We don't care if the HTTP request failed here. We hope that it
+		// starts working during the actual build.
+	}
+
 	// Start the process. This will block until it finishes.
 	err = process.Start()
 	if err == nil {
-		// Store the final output
-		j.Output = process.Output()
+		// Add the final output to the streamer
+		logStreamer.Process(process.Output())
 	} else {
-		j.Output = fmt.Sprintf("%s", err)
+		// Send the error as output
+		logStreamer.Process(fmt.Sprintf("%s", err))
 	}
 
 	// Mark the build as finished
 	j.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	j.ExitStatus = j.process.ExitStatus
+
+	// Upload the header timings one last time
+	j.uploadHeaderTimes(agent)
+
+	// Stop the log streamer
+	logStreamer.Stop()
+
+	// Save how many chunks failed to upload
+	j.ChunksFailedCount = int(logStreamer.ChunksFailedCount)
+
+	if j.ChunksFailedCount > 0 {
+		logger.Warn("%d chunks failed to upload for this job", j.ChunksFailedCount)
+	}
 
 	// Keep trying this call until it works. This is the most important one.
 	for {
@@ -209,6 +278,24 @@ func (j *Job) Run(agent *Agent) error {
 	logger.Info("Finished job %s", j.ID)
 
 	return nil
+}
+
+func (j *Job) uploadHeaderTimes(agent *Agent) {
+	thisHeaderCount := len(j.HeaderTimes)
+
+	// Has the header count changed from last time we checked?
+	if j.headerTimesCount != len(j.HeaderTimes) {
+		// Send the header times to Buildktie
+		r := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/header_times")
+		r.Body = &http.JSON{
+			Payload: map[string][]string{
+				"header_times": j.HeaderTimes,
+			},
+		}
+		r.Do()
+
+		j.headerTimesCount = thisHeaderCount
+	}
 }
 
 // Replaces ~/ with the users home directory. The builds path may be configured

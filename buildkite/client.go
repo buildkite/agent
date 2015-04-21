@@ -5,6 +5,7 @@ import (
 	_ "crypto/sha512" // import sha512 to make sha512 ssl certs work
 	"encoding/json"
 	"errors"
+	bkhttp "github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"io"
 	"net/http"
@@ -23,6 +24,20 @@ type Client struct {
 	// UserAgent to be provided in API requests. Set to DefaultUserAgent if not
 	// specified.
 	UserAgent string
+}
+
+func (c *Client) GetSession() *bkhttp.Session {
+	session := new(bkhttp.Session)
+	session.Endpoint = c.URL
+	session.UserAgent = c.UserAgent
+	session.Headers = []bkhttp.Header{
+		bkhttp.Header{
+			Name:  "Authorization",
+			Value: "Token " + c.AuthorizationToken,
+		},
+	}
+
+	return session
 }
 
 func (c *Client) Get(v interface{}, path string) error {
