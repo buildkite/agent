@@ -10,6 +10,8 @@ if [[ "$CODENAME" == "" ]]; then
   exit 1
 fi
 
+YUM_TMP_PATH=/var/tmp/buildkite-agent-yum-repo
+
 function build() {
   echo "--- Building rpm package $1/$2"
 
@@ -25,6 +27,23 @@ function build() {
   ./scripts/utils/build-linux-package.sh "rpm" $2 $BINARY_FILENAME
 }
 
+function publish() {
+  echo "--- Creating yum repositories for $CODENAME/$1"
+
+  ARCH_PATH="$YUM_TMP_PATH/buildkite-agent/rpm/$1/$CODENAME"
+  mkdir -p $ARCH_PATH
+  find "rpm" -type f -name "*$1*" | xargs cp -t $ARCH_PATH
+  createrepo $ARCH_PATH --database --unique-md-filenames
+}
+
+function sync() {
+  echo "--- Syncing s3://$RPM_S3_BUCKET"
+
+  mkdir -p $YUM_TMP_PATH
+  cd $YUM_TMP_PATH
+  s3cmd sync $YUM_TMP_PATH "s3://$RPM_S3_BUCKET" --acl-public --verbose --no-guess-mime-type
+}
+
 echo '--- Installing dependencies'
 bundle
 
@@ -35,28 +54,12 @@ rm -rf rpm
 build "linux" "amd64"
 build "linux" "386"
 
-YUM_TMP_PATH=/var/tmp/buildkite-agent-yum-repo
+# Make sure we have a local copy of the yum repo
+sync
 
-echo "--- Downlading yum repository"
+# Move the filees to the right places
+publish "amd64"
+publish "386"
 
-mkdir -p $YUM_TMP_PATH
-cd $YUM_TMP_PATH
-s3cmd sync $YUM_TMP_PATH "s3://$RPM_S3_BUCKET" --acl-public --verbose --no-guess-mime-type
-
-echo "--- Creating yum repositories for $CODENAME/amd64"
-
-ARCH_PATH="$YUM_TMP_PATH/buildkite-agent/rpm/amd64/$CODENAME"
-mkdir -p $ARCH_PATH
-find rpm -type f -name "amd64" | xargs cp -t $ARCH_PATH
-createrepo $ARCH_PATH --database --unique-md-filenames
-
-echo "--- Creating yum repositories for $CODENAME/386"
-
-ARCH_PATH="$YUM_TMP_PATH/buildkite-agent/rpm/386/$CODENAME"
-mkdir -p $ARCH_PATH
-find rpm -type f -name "386" | xargs cp -t $ARCH_PATH
-createrepo $ARCH_PATH --database --unique-md-filenames
-
-echo "--- Syncing to S3"
-
-s3cmd sync $YUM_TMP_PATH "s3://$RPM_S3_BUCKET" --acl-public --verbose --no-guess-mime-type
+# Sync back our changes to S3
+sync

@@ -2,6 +2,7 @@ tmp
 pkg
 releases
 deb
+rpm
 .vagrant
 .bundle
 .envrc
