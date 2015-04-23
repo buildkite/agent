@@ -264,7 +264,7 @@ else
     BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
     BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
 
-    echo -e '#\!/bin/bash'"\n$BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
+    echo -e '#\!/bin/bash'"\nexec $BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
   else
     buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
   fi
