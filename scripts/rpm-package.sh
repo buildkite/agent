@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -x
 
 echo $PATH
 whoami
@@ -30,7 +31,7 @@ function build() {
 function publish() {
   echo "--- Creating yum repositories for $CODENAME/$1"
 
-  ARCH_PATH="$YUM_TMP_PATH/buildkite-agent/rpm/$1/$CODENAME"
+  ARCH_PATH="$YUM_TMP_PATH/buildkite-agent/$CODENAME/$1"
   mkdir -p $ARCH_PATH
   find "rpm/" -type f -name "*$1*" | xargs cp -t $ARCH_PATH
   createrepo $ARCH_PATH --database --unique-md-filenames
