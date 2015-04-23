@@ -52,7 +52,7 @@ bundle exec fpm -s "dir" \
   --description "$DEB_DESCRIPTION" \
   --vendor "$DEB_VENDOR" \
   --depends "git-core" \
-  --config-files "/etc/buildkite-agent/buildkite-agent.env" \
+  --config-files "/etc/buildkite-agent/buildkite-agent.cfg" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
   --before-remove "templates/apt-package/before-remove.sh" \
   --after-upgrade "templates/apt-package/after-upgrade.sh" \
@@ -60,7 +60,7 @@ bundle exec fpm -s "dir" \
   -p "$PACKAGE_PATH" \
   -v "$DEB_VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
-  "templates/apt-package/buildkite-agent.env=/etc/buildkite-agent/buildkite-agent.env" \
+  "templates/buildkite-agent.cfg=/etc/buildkite-agent/buildkite-agent.cfg" \
   "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh" \
   "templates/hooks-unix/checkout.sample=/etc/buildkite-agent/hooks/checkout.sample" \
   "templates/hooks-unix/command.sample=/etc/buildkite-agent/hooks/command.sample" \
