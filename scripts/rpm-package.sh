@@ -32,7 +32,7 @@ function publish() {
 
   ARCH_PATH="$YUM_TMP_PATH/buildkite-agent/rpm/$1/$CODENAME"
   mkdir -p $ARCH_PATH
-  find "rpm" -type f -name "*$1*" | xargs cp -t $ARCH_PATH
+  find "rpm/" -type f -name "*$1*" | xargs cp -t $ARCH_PATH
   createrepo $ARCH_PATH --database --unique-md-filenames
 }
 
