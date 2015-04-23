@@ -54,6 +54,8 @@ bundle exec fpm -s "dir" \
   --description "$DESCRIPTION" \
   --vendor "$VENDOR" \
   --depends "git-core" \
+  --verbose \
+  --debug \
   --config-files "/etc/buildkite-agent/buildkite-agent.env" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
   --before-install "templates/linux-package/before-install.sh" \
@@ -92,7 +94,7 @@ elif [ "$PACKAGE_TYPE" == "rpm" ]; then
   echo "    $ sudo rpm -i $PACKAGE_PATH"
   echo ""
   echo "    # To uninstall"
-  echo "    $ sudo rpm -ev $RPM_NAME"
+  echo "    $ sudo rpm -ev $NAME"
 fi
 
 echo ""
