@@ -57,6 +57,7 @@ bundle exec fpm -s "dir" \
   --verbose \
   --debug \
   --config-files "/etc/buildkite-agent/buildkite-agent.env" \
+  --config-files "/etc/buildkite-agent/buildkite-agent.cfg" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
   --before-install "templates/linux-package/before-install.sh" \
   --after-install "templates/linux-package/after-install.sh" \
@@ -70,6 +71,7 @@ bundle exec fpm -s "dir" \
   -v "$VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
   "templates/linux-package/buildkite-agent.env=/etc/buildkite-agent/buildkite-agent.env" \
+  "templates/linux-package/buildkite-agent.cfg=/etc/buildkite-agent/buildkite-agent.cfg" \
   "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh" \
   "templates/hooks-unix/environment.sample=/etc/buildkite-agent/hooks/environment.sample" \
   "templates/hooks-unix/checkout.sample=/etc/buildkite-agent/hooks/checkout.sample" \
