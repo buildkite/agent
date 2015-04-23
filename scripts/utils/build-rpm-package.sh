@@ -42,6 +42,12 @@ mkdir -p $DESTINATION_PATH
 
 info "Building rpm package $PACKAGE_NAME to $DESTINATION_PATH"
 
+# --config-files "/etc/buildkite-agent/buildkite-agent.env" \
+# --config-files "/etc/buildkite-agent/bootstrap.sh" \
+# --before-remove "templates/apt-package/before-remove.sh" \
+# --after-upgrade "templates/apt-package/after-upgrade.sh" \
+# --rpm-init "templates/apt-package/buildkite-agent.upstart" \
+
 bundle exec fpm -s "dir" \
   -t "rpm" \
   -n "$RPM_NAME" \
@@ -52,11 +58,6 @@ bundle exec fpm -s "dir" \
   --description "$RPM_DESCRIPTION" \
   --vendor "$RPM_VENDOR" \
   --depends "git-core" \
-  # --config-files "/etc/buildkite-agent/buildkite-agent.env" \
-  # --config-files "/etc/buildkite-agent/bootstrap.sh" \
-  # --before-remove "templates/apt-package/before-remove.sh" \
-  # --after-upgrade "templates/apt-package/after-upgrade.sh" \
-  # --rpm-init "templates/apt-package/buildkite-agent.upstart" \
   -p "$PACKAGE_PATH" \
   -v "$RPM_VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
