@@ -56,7 +56,11 @@ bundle exec fpm -s "dir" \
   --depends "git-core" \
   --config-files "/etc/buildkite-agent/buildkite-agent.env" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
+  --before-install "templates/linux-package/before-install.sh" \
+  --after-install "templates/linux-package/after-install.sh" \
   --before-remove "templates/linux-package/before-remove.sh" \
+  --after-remove "templates/linux-package/after-remove.sh" \
+  --before-upgrade "templates/linux-package/before-upgrade.sh" \
   --after-upgrade "templates/linux-package/after-upgrade.sh" \
   --deb-upstart "templates/linux-package/buildkite-agent.upstart" \
   --rpm-init "templates/linux-package/buildkite-agent.init" \
