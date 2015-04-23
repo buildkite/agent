@@ -47,7 +47,8 @@ function sync() {
 echo '--- Installing dependencies'
 bundle
 
-# Make sure we have a clean rpm folder
+# Make sure we have a clean rpm folder and cache folder
+rm -rf $YUM_TMP_PATH
 rm -rf rpm
 
 # Build the packages into rpm/
