@@ -41,7 +41,7 @@ function sync() {
   echo "--- Syncing s3://$RPM_S3_BUCKET"
 
   mkdir -p $YUM_TMP_PATH
-  s3cmd sync $YUM_TMP_PATH "s3://$RPM_S3_BUCKET" --acl-public --verbose --no-guess-mime-type
+  s3cmd sync $YUM_TMP_PATH/ "s3://$RPM_S3_BUCKET" --acl-public --verbose --no-guess-mime-type
 }
 
 echo '--- Installing dependencies'
