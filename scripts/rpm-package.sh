@@ -58,8 +58,8 @@ build "linux" "386"
 sync
 
 # Move the filees to the right places
-publish "amd64"
-publish "386"
+publish "x86_64"
+publish "i386"
 
 # Sync back our changes to S3
 sync
