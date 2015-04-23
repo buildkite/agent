@@ -22,7 +22,7 @@ function build() {
   chmod +x $BINARY_FILENAME
 
   # Build the rpm package using the architectre and binary, they are saved to rpm/
-  ./scripts/utils/build-rpm-package.sh $2 $BINARY_FILENAME rpm
+  ./scripts/utils/build-linux-package.sh "rpm" $2 $BINARY_FILENAME
 }
 
 function publish() {
