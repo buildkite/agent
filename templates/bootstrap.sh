@@ -78,6 +78,8 @@ function buildkite-error {
   exit 1
 }
 
+export -f buildkite-error
+
 # Run a hook script
 function buildkite-hook {
   HOOK_LABEL="$1"
@@ -136,7 +138,7 @@ export PATH="$BUILDKITE_BIN_PATH:$PATH"
 # Come up with the place that the repository will be checked out to
 SANITIZED_AGENT_NAME=$(echo $BUILDKITE_AGENT_NAME | tr -d '"')
 PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
-BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
+export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
 
 if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
   echo "~~~ Build environment variables"
@@ -240,8 +242,26 @@ else
   buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
 fi
 
+# Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
+# one of the post-checkout hooks changed it.
+PREVIOUS_BUILDKITE_BUILD_CHECKOUT_PATH=$BUILDKITE_BUILD_CHECKOUT_PATH
+
 # Run the `post-checkout` hook
 buildkite-global-hook "post-checkout"
+
+# Now that we have a repo, we can perform a `post-checkout` local hook
+buildkite-local-hook "post-checkout"
+
+# If the BUILDKITE_BUILD_CHECKOUT_PATH has been changed, log and switch to it
+if [[ "$PREVIOUS_BUILDKITE_BUILD_CHECKOUT_PATH" != "$BUILDKITE_BUILD_CHECKOUT_PATH" ]]; then
+  echo "~~~ A post-checkout hook has changed the build path to $BUILDKITE_BUILD_CHECKOUT_PATH"
+
+  if [ -d "$BUILDKITE_BUILD_CHECKOUT_PATH" ]; then
+    buildkite-run "cd $BUILDKITE_BUILD_CHECKOUT_PATH"
+  else
+    buildkite-error "Failed to switch to \"$BUILDKITE_BUILD_CHECKOUT_PATH\" as it doesn't exist"
+  fi
+fi
 
 ##############################################################
 #
