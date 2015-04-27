@@ -211,7 +211,9 @@ func (j *Job) Run(agent *Agent) error {
 
 	// This callback is called for every line that is output by the process
 	lineCallback := func(process *Process, line string) {
-		if headerRegexp.MatchString(line) {
+		// We'll also ignore any line over 500 characters (who has a
+		// 500 character header...honestly...)
+		if len(line) < 500 && headerRegexp.MatchString(line) {
 			// logger.Debug("Found header \"%s\", capturing current time", line)
 			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339Nano))
 		}

@@ -127,26 +127,54 @@ func (p *Process) Start() error {
 	waitGroup.Add(1)
 
 	go func() {
-		logger.Debug("Starting the line scanner")
+		logger.Debug("[LineScanner] Starting to read lines")
 
-		scanner := bufio.NewScanner(lineReaderPipe)
-		for scanner.Scan() {
-			p.lineCallback(p, scanner.Text())
-		}
+		reader := bufio.NewReader(lineReaderPipe)
 
-		// Was there an error from scanning?
-		if err := scanner.Err(); err != nil {
-			// We ignore ErrTooLong too long errors. Because we're just
-			// scanning lines to find the `--- headers`, a line that is
-			// over the scanning limit probably won't be a header.
-			if err != bufio.ErrTooLong {
-				logger.Error("Failed to scan lines: (%T: %v)", err, err)
-			} else {
-				logger.Warn("The line scanner encountered a line that was too long to scan. Skipping (%T: %v)", err, err)
+		var appending []byte
+
+		for {
+			line, isPrefix, err := reader.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					logger.Debug("[LineScanner] Encountered EOF")
+					break
+				}
+
+				logger.Error("[LineScanner] Failed to read: (%T: %v)", err, err)
 			}
+
+			// If isPrefix is true, that means we've got a really
+			// long line incoming, and we'll keep appending to it
+			// until isPrefix is false (which means the long line
+			// has ended.
+			if isPrefix && appending == nil {
+				logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
+				appending = line
+
+				continue
+			}
+
+			// Should we be appending?
+			if appending != nil {
+				appending = append(appending, line...)
+
+				// No more isPrefix! Line is finished!
+				if !isPrefix {
+					logger.Debug("[LineScanner] Finished buffering long line")
+					line = appending
+
+					// Reset appending back to nil
+					appending = nil
+				} else {
+					continue
+				}
+			}
+
+			p.lineCallback(p, string(line))
 		}
 
-		logger.Debug("Line scanner has finished")
+		logger.Debug("[LineScanner] Finished")
 
 		waitGroup.Done()
 	}()
