@@ -141,6 +141,8 @@ func (p *Process) Start() error {
 			// over the scanning limit probably won't be a header.
 			if err != bufio.ErrTooLong {
 				logger.Error("Failed to scan lines: (%T: %v)", err, err)
+			} else {
+				logger.Warn("The line scanner encountered a line that was too long to scan. Skipping (%T: %v)", err, err)
 			}
 		}
 
