@@ -56,9 +56,6 @@ function buildkite-run {
   fi
 }
 
-# Allow buildkite-run to be called from hooks
-export -f buildkite-run
-
 function buildkite-debug {
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     echo -e "$1"
@@ -77,8 +74,6 @@ function buildkite-error {
   echo "$1"
   exit 1
 }
-
-export -f buildkite-error
 
 # Run a hook script
 function buildkite-hook {
