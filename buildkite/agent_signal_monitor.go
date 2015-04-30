@@ -59,8 +59,8 @@ func (a *Agent) MonitorSignals() {
 
 		// The SIGUSR1 and SIGUSR2 signals are sent to a process to
 		// indicate user-defined conditions. In this case SIGUSR1 will
-		// show debug information about the agnent, and SIGUSR2 will
-		// restart the agent.
+		// show debug information and SIGUSR2 is ignored for now, but
+		// in the future it may reload logs.
 		syscall.SIGUSR1,
 		syscall.SIGUSR2)
 
@@ -69,17 +69,6 @@ func (a *Agent) MonitorSignals() {
 		sig := <-signals
 
 		logger.Debug("Received signal `%s`", sig.String())
-
-		// Ignore SIGHUP, some terminals seem to send it when they get resized,
-		// killing the process here would just be silly.
-		if sig == syscall.SIGHUP {
-			logger.Debug("Ignoring signal `%s`", sig.String())
-
-			// Start monitoring signals again
-			a.MonitorSignals()
-
-			return
-		}
 
 		// If we've received a SIGKILL, die immediately.
 		if sig == syscall.SIGKILL {
@@ -101,24 +90,36 @@ func (a *Agent) MonitorSignals() {
 			return
 		}
 
-		// If theres no job, then we can just shut down right away.
-		if a.Job == nil {
-			a.Stop()
-		} else {
-			// The user is trying to forcefully kill the agent, so we need
-			// to kill any active job.
-			if a.stopping {
-				a.Job.Kill()
+		// Exit the agent when it's not doing any work.
+		if sig == syscall.SIGTERM || sig == syscall.SIGINT || sig == syscall.SIGQUIT {
+			// If theres no job, then we can just shut down right away.
+			if a.Job == nil {
+				a.Stop()
 			} else {
-				// We should warn the user before they try and shut down the
-				// agent while it's performing a job
-				logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
+				// The user is trying to forcefully kill the agent, so we need
+				// to kill any active job.
+				if a.stopping {
+					a.Job.Kill()
+				} else {
+					// We should warn the user before they try and shut down the
+					// agent while it's performing a job
+					logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
 
-				a.stopping = true
+					a.stopping = true
+				}
 			}
+
+			// Start monitoring signals again
+			a.MonitorSignals()
+
+			return
 		}
+
+		logger.Debug("Ignoring signal `%s`", sig.String())
 
 		// Start monitoring signals again
 		a.MonitorSignals()
+
+		return
 	}()
 }
