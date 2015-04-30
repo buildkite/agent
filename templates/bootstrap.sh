@@ -270,26 +270,48 @@ if [[ "$BUILDKITE_COMMAND" == "" ]]; then
   buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
 fi
 
-# If the command is a file on the filesystem, that's the script we're going to
-# run
-if [[ -e "$BUILDKITE_COMMAND" ]]; then
-  BUILDKITE_SCRIPT_PATH=$BUILDKITE_COMMAND
-  BUILDKITE_COMMAND_DISPLAY=".\"$BUILDKITE_COMMAND\""
-else
-  # If the command isn't a file, then it's probably a command with arguments we
-  # need to run.
-  if [[ "$BUILDKITE_COMMAND_EVAL" == "true" ]]; then
-    BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
-    BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
+# Generate a temporary build script containing what to actually run.
+buildkite-debug "~~~ Preparing build script"
+BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
 
-    echo -e '#!/bin/bash'"\nexec $BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
-  else
-    buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
-  fi
+# Generate a different script depending on whether or not it's a script to
+# execute
+if [[ -f "$BUILDKITE_COMMAND" ]]; then
+  echo -e '#!/bin/bash'"\nchmod +x \"$BUILDKITE_COMMAND\"\n./\"$BUILDKITE_COMMAND\"" > $BUILDKITE_SCRIPT_PATH
+else
+  echo -e '#!/bin/bash'"\n$BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
 fi
 
-# Make sure the script we're going to run is executable
-chmod +x $BUILDKITE_SCRIPT_PATH
+if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+  buildkite-run "cat $BUILDKITE_SCRIPT_PATH"
+fi
+
+# Ensure the temporary build script can be executed
+chmod +x "$BUILDKITE_SCRIPT_PATH"
+
+# If the command isn't a file on the filesystem, then it's something we need to
+# eval. But before we even try running it, we should double check that the
+# agent is allowed to eval commands.
+#
+# NOTE: There is a slight problem with this check - and it's with usage with
+# Docker. If you specify a script to run inside the docker container, and that
+# isn't on the file system at the same path, then it won't match, and it'll be
+# treated as an eval. For example, you mount your repository at /app, and tell
+# the agent run `app/ci.sh`, ci.sh won't exist on the filesytem at this point
+# at app/ci.sh. The soltion is to make sure the `workdir` directroy of the
+# docker container is at /app in that case.
+if [[ ! -f "$BUILDKITE_COMMAND" ]]; then
+  # Make sure the agent is even allowed to eval commands
+  if [[ "$BUILDKITE_COMMAND_EVAL" != "true" ]]; then
+    buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
+  fi
+
+  BUILDKITE_COMMAND_ACTION="Running command"
+  BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
+else
+  BUILDKITE_COMMAND_ACTION="Running build script"
+  BUILDKITE_COMMAND_DISPLAY="./\"$BUILDKITE_COMMAND\""
+fi
 
 # Run the global `pre-command` hook
 buildkite-global-hook "pre-command"
@@ -322,8 +344,8 @@ else
     buildkite-run "docker build -f ${BUILDKITE_DOCKER_FILE:-Dockerfile} -t $DOCKER_IMAGE ."
 
     # Run the build script command in a one-off container
-    echo "~~~ Running build script (in Docker container)"
-    buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE ./$BUILDKITE_SCRIPT_PATH"
+    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker container)"
+    buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE \"./$BUILDKITE_SCRIPT_PATH\""
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
@@ -353,8 +375,8 @@ else
     buildkite-run "$COMPOSE_COMMAND build"
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
-    echo "~~~ Running build script (in Docker Compose container)"
-    buildkite-prompt-and-run "$COMPOSE_COMMAND run $BUILDKITE_DOCKER_COMPOSE_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
+    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
+    buildkite-prompt-and-run "$COMPOSE_COMMAND run $BUILDKITE_DOCKER_COMPOSE_CONTAINER \"./$BUILDKITE_SCRIPT_PATH\""
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
@@ -387,15 +409,15 @@ else
     buildkite-run "fig -p $FIG_PROJ_NAME build"
 
     # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
-    echo "~~~ Running build script (in Fig container)"
-    buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER ./$BUILDKITE_SCRIPT_PATH"
+    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Fig container)"
+    buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER \"./$BUILDKITE_SCRIPT_PATH\""
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
   ## Standard
   else
-    echo "~~~ Running build script"
+    echo "~~~ $BUILDKITE_COMMAND_ACTION"
     echo -e "$BUILDKITE_PROMPT $BUILDKITE_COMMAND_DISPLAY"
     ."/$BUILDKITE_SCRIPT_PATH"
 
