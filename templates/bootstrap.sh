@@ -381,40 +381,6 @@ else
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
-  ## Fig
-  elif [[ ! -z "${BUILDKITE_FIG_CONTAINER:-}" ]] && [[ "$BUILDKITE_FIG_CONTAINER" != "" ]]; then
-    # Fig strips dashes and underscores, so we'll remove them to match the docker container names
-    FIG_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
-    # The name of the docker container fig creates when it creates the adhoc run
-    FIG_CONTAINER_NAME=$FIG_PROJ_NAME"_"$BUILDKITE_FIG_CONTAINER
-
-    function fig-cleanup {
-      echo "~~~ Cleaning up Fig Docker containers"
-      buildkite-run "fig -p $FIG_PROJ_NAME kill || true"
-      buildkite-run "fig -p $FIG_PROJ_NAME rm --force -v || true"
-
-      # The adhoc run container isn't cleaned up by fig, so we have to do it ourselves
-      buildkite-run "docker rm -f -v "$FIG_CONTAINER_NAME"_run_1 || true"
-    }
-
-    trap fig-cleanup EXIT
-
-    echo "~~~ :warning: Fig support has been deprecated for Docker Compose (expand for upgrade instructions)"
-    echo "To upgrade: "
-    echo "1) Install Docker Compose on your agent server: http://docs.docker.com/compose/"
-    echo "2) Replace \$BUILDKITE_DOCKER_FIG_CONTAINER environment variables with \$BUILDKITE_DOCKER_COMPOSE_CONTAINER"
-
-    # Build the Docker images using Fig, namespaced to the job
-    echo "~~~ Building Fig Docker images"
-    buildkite-run "fig -p $FIG_PROJ_NAME build"
-
-    # Run the build script command in the service specified in BUILDKITE_FIG_CONTAINER
-    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Fig container)"
-    buildkite-prompt-and-run "fig -p $FIG_PROJ_NAME run $BUILDKITE_FIG_CONTAINER \"./$BUILDKITE_SCRIPT_PATH\""
-
-    # Capture the exit status from the build script
-    export BUILDKITE_COMMAND_EXIT_STATUS=$?
-
   ## Standard
   else
     echo "~~~ $BUILDKITE_COMMAND_ACTION"
