@@ -6,7 +6,6 @@ start on runlevel [2345]
 stop on runlevel [06]
 
 kill signal TERM
-reload signal USR2
 
 env PIDFILE=/var/run/buildkite-agent.pid
 env ENVFILE=/etc/buildkite-agent/buildkite-agent.env

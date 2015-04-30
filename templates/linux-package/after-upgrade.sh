@@ -1,1 +1,1 @@
-killall -q -USR2 buildkite-agent || true
+killall -q buildkite-agent || true
