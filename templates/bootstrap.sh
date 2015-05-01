@@ -277,7 +277,11 @@ BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
 # Generate a different script depending on whether or not it's a script to
 # execute
 if [[ -f "$BUILDKITE_COMMAND" ]]; then
-  echo -e '#!/bin/bash'"\nchmod +x \"$BUILDKITE_COMMAND\"\n./\"$BUILDKITE_COMMAND\"" > "$BUILDKITE_SCRIPT_PATH"
+  # Make sure the script they're trying to execute has chmod +x. We can't do
+  # this inside the script we generate because it fails within Docker:
+  # https://github.com/docker/docker/issues/9547
+  buildkite-run-debug "chmod +x \"$BUILDKITE_COMMAND\""
+  echo -e '#!/bin/bash'"\n./\"$BUILDKITE_COMMAND\"" > "$BUILDKITE_SCRIPT_PATH"
 else
   echo -e '#!/bin/bash'"\n$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
 fi
