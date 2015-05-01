@@ -42,13 +42,13 @@ BUILDKITE_PROMPT="\033[90m$\033[0m"
 # Shows the command being run, and runs it
 function buildkite-prompt-and-run {
   echo -e "$BUILDKITE_PROMPT $1"
-  eval $1
+  eval "$1"
 }
 
 # Shows the command about to be run, and exits if it fails
 function buildkite-run {
   echo -e "$BUILDKITE_PROMPT $1"
-  eval $1
+  eval "$1"
   EVAL_EXIT_STATUS=$?
 
   if [[ $EVAL_EXIT_STATUS -ne 0 ]]; then
@@ -65,7 +65,7 @@ function buildkite-debug {
 # Runs the command, but only output what it's doing if we're in DEBUG mode
 function buildkite-run-debug {
   buildkite-debug "$BUILDKITE_PROMPT $1"
-  eval $1
+  eval "$1"
 }
 
 # Show an error and exit
@@ -97,7 +97,7 @@ function buildkite-hook {
     buildkite-flags-reset
 
     # Return back to the working dir
-    cd $HOOK_PREVIOUS_WORKING_DIR
+    cd "$HOOK_PREVIOUS_WORKING_DIR"
 
     # Exit from the bootstrap.sh script if the hook exits with a non-0 exit
     # status
@@ -131,7 +131,7 @@ function buildkite-local-hook {
 export PATH="$BUILDKITE_BIN_PATH:$PATH"
 
 # Come up with the place that the repository will be checked out to
-SANITIZED_AGENT_NAME=$(echo $BUILDKITE_AGENT_NAME | tr -d '"')
+SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
 PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
 export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
 
@@ -185,12 +185,12 @@ else
     # Only bother running the keyscan if the SSH host has been provided by
     # Buildkite. It won't be present if the host isn't using the SSH protocol
     if [[ ! -z "${BUILDKITE_REPO_SSH_HOST:-}" ]]; then
-      : ${BUILDKITE_SSH_DIRECTORY:="$HOME/.ssh"}
-      : ${BUILDKITE_SSH_KNOWN_HOST_PATH:="$BUILDKITE_SSH_DIRECTORY/known_hosts"}
+      : "${BUILDKITE_SSH_DIRECTORY:="$HOME/.ssh"}"
+      : "${BUILDKITE_SSH_KNOWN_HOST_PATH:="$BUILDKITE_SSH_DIRECTORY/known_hosts"}"
 
       # Ensure the known_hosts file exists
-      mkdir -p $BUILDKITE_SSH_DIRECTORY
-      touch $BUILDKITE_SSH_KNOWN_HOST_PATH
+      mkdir -p "$BUILDKITE_SSH_DIRECTORY"
+      touch "$BUILDKITE_SSH_KNOWN_HOST_PATH"
 
       # Only add the output from ssh-keyscan if it doesn't already exist in the
       # known_hosts file
@@ -219,7 +219,7 @@ else
     buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
   elif [[ "$BUILDKITE_TAG" == "" ]]; then
     # Default empty branch names
-    : ${BUILDKITE_BRANCH:=master}
+    : "${BUILDKITE_BRANCH:=master}"
 
     buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
   fi
@@ -277,9 +277,9 @@ BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
 # Generate a different script depending on whether or not it's a script to
 # execute
 if [[ -f "$BUILDKITE_COMMAND" ]]; then
-  echo -e '#!/bin/bash'"\nchmod +x \"$BUILDKITE_COMMAND\"\n./\"$BUILDKITE_COMMAND\"" > $BUILDKITE_SCRIPT_PATH
+  echo -e '#!/bin/bash'"\nchmod +x \"$BUILDKITE_COMMAND\"\n./\"$BUILDKITE_COMMAND\"" > "$BUILDKITE_SCRIPT_PATH"
 else
-  echo -e '#!/bin/bash'"\n$BUILDKITE_COMMAND" > $BUILDKITE_SCRIPT_PATH
+  echo -e '#!/bin/bash'"\n$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
 fi
 
 if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
@@ -328,8 +328,8 @@ if [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
 else
   ## Docker
   if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
-    DOCKER_CONTAINER="buildkite_"$BUILDKITE_JOB_ID"_container"
-    DOCKER_IMAGE="buildkite_"$BUILDKITE_JOB_ID"_image"
+    DOCKER_CONTAINER="buildkite_${BUILDKITE_JOB_ID}_container"
+    DOCKER_IMAGE="buildkite_${BUILDKITE_JOB_ID}_image"
 
     function docker-cleanup {
       echo "~~~ Cleaning up Docker containers"
@@ -364,7 +364,7 @@ else
       buildkite-run "$COMPOSE_COMMAND rm --force -v || true"
 
       # The adhoc run container isn't cleaned up by compose, so we have to do it ourselves
-      buildkite-run "docker rm -f -v "$COMPOSE_CONTAINER_NAME"_run_1 || true"
+      buildkite-run "docker rm -f -v ${COMPOSE_CONTAINER_NAME}_run_1 || true"
     }
 
     trap compose-cleanup EXIT
