@@ -21,20 +21,20 @@ func ArtifactUploadCommandAction(c *cli.Context) {
 
 	agentAccessToken := c.String("agent-access-token")
 	if agentAccessToken == "" {
-		fmt.Printf("buildkite-agent: missing agent access token\nSee 'buildkite-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing agent access token\nSee 'buildkite-agent artifact upload --help'\n")
 		os.Exit(1)
 	}
 
 	jobId := c.String("job")
 	if jobId == "" {
-		fmt.Printf("buildkite-agent: missing job\nSee 'buildkite-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing job\nSee 'buildkite-agent artifact upload --help'\n")
 		os.Exit(1)
 	}
 
-	// Grab the first argument and use as paths to download
+	// Grab the first argument and use as paths to upload
 	paths := c.Args().First()
 	if paths == "" {
-		fmt.Printf("buildkite-agent: missing upload paths\nSee 'buildkite-agent artifact download --help'\n")
+		fmt.Printf("buildkite-agent: missing upload paths\nSee 'buildkite-agent artifact upload --help'\n")
 		os.Exit(1)
 	}
 
