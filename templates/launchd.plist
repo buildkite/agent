@@ -53,7 +53,7 @@
       <string>/Users/your-build-user/.buildkite/bin/buildkite-agent</string>
       <string>start</string>
       <string>--token</string>
-      <string>BUILDKITE_AGENT_ACCESS_TOKEN</string>
+      <string>your-agent-access-token</string>
     </array>
 
     <key>KeepAlive</key>
