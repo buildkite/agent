@@ -59,6 +59,7 @@ bundle exec fpm -s "dir" \
   --config-files "/etc/buildkite-agent/buildkite-agent.env" \
   --config-files "/etc/buildkite-agent/buildkite-agent.cfg" \
   --config-files "/etc/buildkite-agent/bootstrap.sh" \
+  --config-files "/etc/buildkite-agent/docker-cleanup.sh" \
   --before-install "templates/linux-package/before-install.sh" \
   --after-install "templates/linux-package/after-install.sh" \
   --before-remove "templates/linux-package/before-remove.sh" \
