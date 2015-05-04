@@ -10,11 +10,20 @@
 #   # m h dom mon dow command
 #   0 0 * * * /etc/buildkite-agent/docker-cleanup.sh
 
-# Delete all exited containers
-docker rm $(docker ps -aq --no-trunc --filter "status=exited") || echo "No finished containers to remove"
+# Delete all exited containers first
+exited_containers=$(docker ps -aq --no-trunc --filter "status=exited")
+if [[ -n "$exited_containers" ]]; then
+  docker rm $exited_containers
+fi
 
-# Delete buildkite* images older than 1 day
-docker rmi $(docker images -a | grep "buildkite.*\(days\|weeks\|months\)" | awk '{ print $3 }') || echo "No old buildkite* images to rmi"
+# Delete all buildkite-created images older than 1 day
+old_buildkite_images=$(docker images -a | grep "buildkite.*\(days\|weeks\|months\)" | awk '{ print $1 }')
+if [[ -n "$old_buildkite_images" ]]; then
+  docker rmi $old_buildkite_images
+fi
 
-# Delete dangling images
-docker rmi $(docker images --filter 'dangling=true' -q --no-trunc) || echo "No dangling images to rmi"
+# Delete all dangling images
+dangling_images=$(docker images --filter 'dangling=true' -q --no-trunc | sort | uniq)
+if [[ -n "$dangling_images" ]]; then
+  docker rmi $dangling_images
+fi
