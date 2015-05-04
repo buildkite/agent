@@ -19,7 +19,7 @@
 
     # Create the agent's log directory with permissions for your user
     mkdir -p ~/.buildkite/log
-    sudo chmod 775 ~/.buildkite/log
+    chmod 775 ~/.buildkite/log
 
     # Add it to launchd (which also starts buildkite-agent)
     launchctl load /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
@@ -73,10 +73,10 @@
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>/usr/local/var/log/buildkite-agent.log</string>
+    <string>/Users/your-build-user/.buildkite/log/buildkite-agent.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/buildkite-agent.log</string>
+    <string>/Users/your-build-user/.buildkite/log/buildkite-agent.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
