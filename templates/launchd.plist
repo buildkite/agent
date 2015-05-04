@@ -6,7 +6,7 @@
   To install:
 
     # Download the launchd config to /Library/LaunchAgents/ (it needs to be owned by root:wheel)
-    sudo curl -o /Library/LaunchAgents/io.buildkite.buildkite-agent.plist https://raw.githubusercontent.com/buildkite/buildkite-agent/master/templates/launchd.plist
+    sudo curl -o /Library/LaunchAgents/io.buildkite.buildkite-agent.plist https://raw.githubusercontent.com/buildkite/agent/master/templates/launchd.plist
 
     # Set the user to run buildkite-agent as (usually `whoami`). It should be a full OS X user created via System Prefs, and the one you installed buildkite-agent under.
     sudo sed -i '' "s/your-build-user/[insert username here]/g" /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
