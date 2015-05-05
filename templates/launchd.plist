@@ -6,23 +6,23 @@
   To install:
 
     # Download the launchd config to /Library/LaunchAgents/ (it needs to be owned by root:wheel)
-    sudo curl -o /Library/LaunchAgents/io.buildkite.buildkite-agent.plist https://raw.githubusercontent.com/buildkite/buildkite-agent/master/templates/launchd.plist
+    sudo curl -o /Library/LaunchAgents/com.buildkite.buildkite-agent.plist https://raw.githubusercontent.com/buildkite/agent/master/templates/launchd.plist
 
     # Set the user to run buildkite-agent as (usually `whoami`). It should be a full OS X user created via System Prefs, and the one you installed buildkite-agent under.
-    sudo sed -i '' "s/your-build-user/[insert username here]/g" /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
+    sudo sed -i '' "s/your-build-user/[insert username here]/g" /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
 
     # Set the agent's name
-    sudo sed -i '' "s/your-agent-name/[insert agent name]/g" /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
+    sudo sed -i '' "s/your-agent-name/[insert agent name]/g" /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
 
     # Set the agent's access token
-    sudo sed -i '' "s/your-agent-access-token/[insert agent access token here]/g" /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
+    sudo sed -i '' "s/your-agent-access-token/[insert agent access token here]/g" /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
 
     # Create the agent's log directory with permissions for your user
     mkdir -p ~/.buildkite/log
-    sudo chmod 775 ~/.buildkite/log
+    chmod 775 ~/.buildkite/log
 
     # Add it to launchd (which also starts buildkite-agent)
-    launchctl load /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
+    launchctl load /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
 
     # Check the logs
     tail -f ~/.buildkite/log/buildkite-agent.log
@@ -37,13 +37,13 @@
   If you need to edit the plist:
 
     # Edit the plist, and then...
-    launchctl unload /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
-    launchctl load /Library/LaunchAgents/io.buildkite.buildkite-agent.plist
+    launchctl unload /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
+    launchctl load /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
 -->
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>io.buildkite.buildkite-agent</string>
+    <string>com.buildkite.buildkite-agent</string>
 
     <key>UserName</key>
     <string>your-build-user</string>
@@ -52,6 +52,8 @@
     <array>
       <string>/Users/your-build-user/.buildkite/bin/buildkite-agent</string>
       <string>start</string>
+      <string>--token</string>
+      <string>your-agent-access-token</string>
     </array>
 
     <key>KeepAlive</key>
@@ -73,18 +75,16 @@
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>/usr/local/var/log/buildkite-agent.log</string>
+    <string>/Users/your-build-user/.buildkite/log/buildkite-agent.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/usr/local/var/log/buildkite-agent.log</string>
+    <string>/Users/your-build-user/.buildkite/log/buildkite-agent.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
       <key>PATH</key>
       <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
 
-      <key>BUILDKITE_AGENT_TOKEN</key>
-      <string>your-agent-access-token</string>
       <key>BUILDKITE_AGENT_NAME</key>
       <string>your-agent-name</string>
     </dict>
