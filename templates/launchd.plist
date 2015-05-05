@@ -85,8 +85,6 @@
       <key>PATH</key>
       <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
 
-      <key>BUILDKITE_AGENT_ACCESS_TOKEN</key>
-      <string>your-agent-access-token</string>
       <key>BUILDKITE_AGENT_NAME</key>
       <string>your-agent-name</string>
     </dict>
