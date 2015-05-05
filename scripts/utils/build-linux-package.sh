@@ -71,6 +71,7 @@ bundle exec fpm -s "dir" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
+  "templates/linux-package/docker-cleanup.sh=/etc/buildkite-agent/docker-cleanup.sh" \
   "templates/linux-package/buildkite-agent.env=/etc/buildkite-agent/buildkite-agent.env" \
   "templates/linux-package/buildkite-agent.cfg=/etc/buildkite-agent/buildkite-agent.cfg" \
   "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh" \
