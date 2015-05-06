@@ -72,8 +72,8 @@ func (a *Agent) Connect() error {
 	return a.API.Post("/connect", &a, a)
 }
 
-func (c *Client) AgentDisconnect(agent *Agent) error {
-	return c.Post(&agent, "/disconnect", agent)
+func (a *Agent) Disconnect() error {
+	return a.API.Post("/disconnect", &a, a)
 }
 
 func (a *Agent) String() string {
@@ -146,7 +146,7 @@ func (a *Agent) Ping() {
 func (a *Agent) Stop() {
 	// Disconnect from Buildkite
 	logger.Info("Disconnecting...")
-	a.Client.AgentDisconnect(a)
+	a.Disconnect()
 
 	// Kill the process
 	os.Exit(0)
