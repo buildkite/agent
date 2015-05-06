@@ -13,8 +13,11 @@ type Session struct {
 }
 
 func (s *Session) NewRequest(method string, path string) Request {
-	request := NewRequest(method, path)
-	request.Session = s
+	request := Request{
+		Method:  method,
+		Path:    path,
+		Session: s,
+	}
 
 	return request
 }

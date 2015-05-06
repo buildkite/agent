@@ -38,6 +38,9 @@ type Agent struct {
 	// The client the agent will use to communicate to the API
 	Client Client
 
+	// The clients API configuration
+	API API
+
 	// The boostrap script to run
 	BootstrapScript string
 
@@ -61,12 +64,12 @@ type Agent struct {
 	stopping bool
 }
 
-func (c *Client) AgentRegister(agent *Agent) error {
-	return c.Post(&agent, "/register", agent)
+func (a *Agent) Register(endpoint string, token string) error {
+	return a.API.Post("/register", &a, a)
 }
 
-func (c *Client) AgentConnect(agent *Agent) error {
-	return c.Post(&agent, "/connect", agent)
+func (a *Agent) Connect() error {
+	return a.API.Post("/connect", &a, a)
 }
 
 func (c *Client) AgentDisconnect(agent *Agent) error {
@@ -96,7 +99,9 @@ func (a *Agent) Start() {
 }
 
 func (a *Agent) Ping() {
-	ping, err := a.Client.AgentPing()
+	// Perform the ping
+	ping := Ping{}
+	err := a.API.Get("/ping", &ping)
 	if err != nil {
 		logger.Warn("Failed to ping (%s)", err)
 		return
