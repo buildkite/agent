@@ -348,7 +348,7 @@ else
     buildkite-run "docker build -f ${BUILDKITE_DOCKER_FILE:-Dockerfile} -t $DOCKER_IMAGE ."
 
     # Run the build script command in a one-off container
-    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker container)"
+    echo "+++ $BUILDKITE_COMMAND_ACTION (in Docker container)"
     buildkite-prompt-and-run "docker run --name $DOCKER_CONTAINER $DOCKER_IMAGE \"./$BUILDKITE_SCRIPT_PATH\""
 
     # Capture the exit status from the build script
@@ -379,7 +379,7 @@ else
     buildkite-run "$COMPOSE_COMMAND build"
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
-    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
+    echo "+++ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
     buildkite-prompt-and-run "$COMPOSE_COMMAND run $BUILDKITE_DOCKER_COMPOSE_CONTAINER \"./$BUILDKITE_SCRIPT_PATH\""
 
     # Capture the exit status from the build script
@@ -387,7 +387,7 @@ else
 
   ## Standard
   else
-    echo "~~~ $BUILDKITE_COMMAND_ACTION"
+    echo "+++ $BUILDKITE_COMMAND_ACTION"
     echo -e "$BUILDKITE_PROMPT $BUILDKITE_COMMAND_DISPLAY"
     ."/$BUILDKITE_SCRIPT_PATH"
 
