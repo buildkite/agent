@@ -157,7 +157,7 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "name",
-					Value:  "",
+					Value:  "agent-%n",
 					Usage:  "The name of the agent",
 					EnvVar: "BUILDKITE_AGENT_NAME",
 				},
