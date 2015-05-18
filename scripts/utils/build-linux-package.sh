@@ -62,6 +62,7 @@ bundle exec fpm -s "dir" \
   --deb-compression bzip2 \
   --rpm-compression bzip2 \
   --rpm-os linux \
+  --config-files "/etc/buildkite-agent/bootstrap.sh" \
   --before-install "packaging/linux/scripts/before-install.sh" \
   --after-install "packaging/linux/scripts/after-install.sh" \
   --before-remove "packaging/linux/scripts/before-remove.sh" \
@@ -71,7 +72,7 @@ bundle exec fpm -s "dir" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
-  "templates/bootstrap.sh=/usr/share/buildkite-agent" \
+  "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh" \
   "packaging/linux/root/=/"
 
 echo ""
