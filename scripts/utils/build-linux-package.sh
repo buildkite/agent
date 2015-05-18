@@ -71,6 +71,7 @@ bundle exec fpm -s "dir" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
+  "templates/bootstrap.sh=/usr/share/buildkite-agent" \
   "packaging/linux/root/=/"
 
 echo ""
