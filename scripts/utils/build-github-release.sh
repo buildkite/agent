@@ -15,6 +15,7 @@ BINARY_PATH=${1}
 
 BASE_DIRECTORY=`pwd`
 TEMPLATE_DIRECTORY=$BASE_DIRECTORY/templates
+PACKAGING_DIRECTORY=$BASE_DIRECTORY/packaging
 TMP_DIRECTORY=$BASE_DIRECTORY/tmp
 RELEASE_DIRECTORY=$BASE_DIRECTORY/releases
 
@@ -44,7 +45,8 @@ if [[ "$BINARY_PATH" == *"windows"* ]]; then
 
   info "Copying templates"
   cp $TEMPLATE_DIRECTORY/bootstrap.bat $TMP_RELEASE_DIRECTORY
-  cp $TEMPLATE_DIRECTORY/start.bat $TMP_RELEASE_DIRECTORY
+  cp $PACKAGING_DIRECTORY/github/windows/start.bat $TMP_RELEASE_DIRECTORY
+  cp $PACKAGING_DIRECTORY/github/windows/buildkite-agent.cfg $TMP_RELEASE_DIRECTORY
 
   info "Zipping up the files"
   cd $TMP_RELEASE_DIRECTORY
@@ -58,9 +60,12 @@ else
   info "Copying bootstrap"
   cp $TEMPLATE_DIRECTORY/bootstrap.sh $TMP_RELEASE_DIRECTORY
 
+  info "Copying config"
+  cp $PACKAGING_DIRECTORY/github/linux/buildkite-agent.cfg $TMP_RELEASE_DIRECTORY
+
   info "Copying hooks"
   mkdir -p $TMP_RELEASE_DIRECTORY/hooks
-  cp $TEMPLATE_DIRECTORY/hooks-unix/* $TMP_RELEASE_DIRECTORY/hooks
+  cp $PACKAGING_DIRECTORY/github/linux/hooks/* $TMP_RELEASE_DIRECTORY/hooks
 
   info "Tarring up the files"
   cd $TMP_RELEASE_DIRECTORY
