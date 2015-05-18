@@ -164,13 +164,13 @@ func init() {
 				cli.StringFlag{
 					Name:   "priority",
 					Value:  "",
-					Usage:  "The priority of the agent",
+					Usage:  "The priority of the agent (higher priorities are assigned work first)",
 					EnvVar: "BUILDKITE_AGENT_PRIORITY",
 				},
 				cli.StringSliceFlag{
 					Name:   "meta-data",
 					Value:  &cli.StringSlice{},
-					Usage:  "Meta data for the agent",
+					Usage:  "Meta data for the agent (default is \"queue=default\")",
 					EnvVar: "BUILDKITE_AGENT_META_DATA",
 				},
 				cli.BoolFlag{
