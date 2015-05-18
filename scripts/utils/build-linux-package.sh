@@ -56,32 +56,22 @@ bundle exec fpm -s "dir" \
   --depends "git-core" \
   --verbose \
   --debug \
-  --config-files "/etc/buildkite-agent/buildkite-agent.env" \
-  --config-files "/etc/buildkite-agent/buildkite-agent.cfg" \
-  --config-files "/etc/buildkite-agent/bootstrap.sh" \
-  --config-files "/etc/buildkite-agent/docker-cleanup.sh" \
-  --before-install "templates/linux-package/before-install.sh" \
-  --after-install "templates/linux-package/after-install.sh" \
-  --before-remove "templates/linux-package/before-remove.sh" \
-  --after-remove "templates/linux-package/after-remove.sh" \
-  --before-upgrade "templates/linux-package/before-upgrade.sh" \
-  --after-upgrade "templates/linux-package/after-upgrade.sh" \
-  --deb-upstart "templates/linux-package/buildkite-agent.upstart" \
-  --rpm-init "templates/linux-package/buildkite-agent.init" \
+  --force \
+  --category admin \
+  --deb-priority optional \
+  --deb-compression bzip2 \
+  --rpm-compression bzip2 \
+  --rpm-os linux \
+  --before-install "packaging/linux/scripts/before-install.sh" \
+  --after-install "packaging/linux/scripts/after-install.sh" \
+  --before-remove "packaging/linux/scripts/before-remove.sh" \
+  --after-remove "packaging/linux/scripts/after-remove.sh" \
+  --before-upgrade "packaging/linux/scripts/before-upgrade.sh" \
+  --after-upgrade "packaging/linux/scripts/after-upgrade.sh" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
-  "templates/linux-package/docker-cleanup.sh=/etc/buildkite-agent/docker-cleanup.sh" \
-  "templates/linux-package/buildkite-agent.env=/etc/buildkite-agent/buildkite-agent.env" \
-  "templates/linux-package/buildkite-agent.cfg=/etc/buildkite-agent/buildkite-agent.cfg" \
-  "templates/bootstrap.sh=/etc/buildkite-agent/bootstrap.sh" \
-  "templates/hooks-unix/environment.sample=/etc/buildkite-agent/hooks/environment.sample" \
-  "templates/hooks-unix/checkout.sample=/etc/buildkite-agent/hooks/checkout.sample" \
-  "templates/hooks-unix/command.sample=/etc/buildkite-agent/hooks/command.sample" \
-  "templates/hooks-unix/post-checkout.sample=/etc/buildkite-agent/hooks/post-checkout.sample" \
-  "templates/hooks-unix/pre-checkout.sample=/etc/buildkite-agent/hooks/pre-checkout.sample" \
-  "templates/hooks-unix/post-command.sample=/etc/buildkite-agent/hooks/post-command.sample" \
-  "templates/hooks-unix/pre-command.sample=/etc/buildkite-agent/hooks/pre-command.sample"
+  "packaging/linux/root/=/"
 
 echo ""
 echo -e "Successfully created \033[33m$PACKAGE_PATH\033[0m 👏"
