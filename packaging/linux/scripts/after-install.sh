@@ -20,8 +20,8 @@ if [ ! -d /etc/buildkite-agent ]; then
 fi
 
 # Install the config template if it's not there
-if [ ! -f /lib/systemd/system/buildkite-agent.service ]; then
-  cp /usr/share/buildkite-agent/buildkite-agent.cfg /lib/systemd/system/buildkite-agent.service
+if [ ! -f /etc/buildkite-agent/buildkite-agent.cfg ]; then
+  cp /usr/share/buildkite-agent/buildkite-agent.cfg /etc/buildkite-agent/buildkite-agent.cfg
 fi
 
 # Copy the hooks if they aren't there
