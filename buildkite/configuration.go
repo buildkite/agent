@@ -39,11 +39,16 @@ func FindDefaultConfiguration() string {
 	return ""
 }
 
-func LoadConfiguration(pathToConfigFile string, obj interface{}, c *cli.Context) error {
-	// Load the file
-	configFileMap, err := readFile(pathToConfigFile)
-	if err != nil {
-		return errors.New(fmt.Sprintf("Failed to load config file: %s", err))
+func LoadConfiguration(obj interface{}, optionalPathToConfigFile string, c *cli.Context) error {
+	configFileMap := map[string]string{}
+
+	// If a config file was passed, load it into a map
+	if optionalPathToConfigFile != "" {
+		loadedConfigFileMap, err := readFile(optionalPathToConfigFile)
+		if err != nil {
+			return errors.New(fmt.Sprintf("Failed to load config file: %s", err))
+		}
+		configFileMap = loadedConfigFileMap
 	}
 
 	// Get all the fields from the configuration interface

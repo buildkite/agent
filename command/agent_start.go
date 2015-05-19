@@ -39,12 +39,10 @@ func AgentStartCommandAction(c *cli.Context) {
 		pathToConfigFile = buildkite.FindDefaultConfiguration()
 	}
 
-	// Load the configration from file if we have one
-	if pathToConfigFile != "" {
-		err := buildkite.LoadConfiguration(pathToConfigFile, &configuration, c)
-		if err != nil {
-			logger.Fatal("Failed to load configuration: %s", err)
-		}
+	// Load the configration from either the file, or the cli.Context
+	err := buildkite.LoadConfiguration(&configuration, pathToConfigFile, c)
+	if err != nil {
+		logger.Fatal("Failed to load configuration: %s", err)
 	}
 
 	// Toggle colors
@@ -168,7 +166,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	var registrationClient buildkite.Client
 	registrationClient.AuthorizationToken = agentRegistrationToken
 	registrationClient.URL = configuration.Endpoint
-	err := registrationClient.AgentRegister(&agent)
+	err = registrationClient.AgentRegister(&agent)
 	if err != nil {
 		logger.Fatal("%s", err)
 	}
