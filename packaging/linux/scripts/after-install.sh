@@ -24,11 +24,6 @@ if [ ! -f /etc/buildkite-agent/buildkite-agent.cfg ]; then
   cp /usr/share/buildkite-agent/buildkite-agent.cfg /etc/buildkite-agent/buildkite-agent.cfg
 fi
 
-# Install the bootstrap.sh file if it doesn't exist
-if [ ! -f /etc/buildkite-agent/bootstrap.sh ]; then
-  cp /usr/share/buildkite-agent/bootstrap.sh /etc/buildkite-agent/bootstrap.sh
-fi
-
 # Copy the hooks if they aren't there
 if [ ! -d /etc/buildkite-agent/hooks ]; then
   cp -r /usr/share/buildkite-agent/hooks /etc/buildkite-agent
