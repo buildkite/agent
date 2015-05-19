@@ -26,11 +26,25 @@ type AgentStartConfiguration struct {
 }
 
 func AgentStartCommandAction(c *cli.Context) {
-	// Load the configration
 	var configuration AgentStartConfiguration
-	err := buildkite.LoadConfiguration(&configuration, c)
-	if err != nil {
-		logger.Fatal("Failed to load configuration: %s", err)
+
+	var pathToConfigFile string
+
+	// If a config file was passed, load it into a map
+	if c.String("config") != "" {
+		pathToConfigFile = os.ExpandEnv(c.String("config"))
+	} else {
+		// If no config was passed, look at the default locations to
+		// try and find one that exists
+		pathToConfigFile = buildkite.FindDefaultConfiguration()
+	}
+
+	// Load the configration from file if we have one
+	if pathToConfigFile != "" {
+		err := buildkite.LoadConfiguration(pathToConfigFile, &configuration, c)
+		if err != nil {
+			logger.Fatal("Failed to load configuration: %s", err)
+		}
 	}
 
 	// Toggle colors
@@ -59,6 +73,11 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
 	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
+
+	// then it's been loaded and we should show which one we loaded.
+	if pathToConfigFile != "" {
+		logger.Info("Configuration loaded from: %s", pathToConfigFile)
+	}
 
 	// Init debugging
 	if configuration.Debug {
@@ -149,7 +168,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	var registrationClient buildkite.Client
 	registrationClient.AuthorizationToken = agentRegistrationToken
 	registrationClient.URL = configuration.Endpoint
-	err = registrationClient.AgentRegister(&agent)
+	err := registrationClient.AgentRegister(&agent)
 	if err != nil {
 		logger.Fatal("%s", err)
 	}

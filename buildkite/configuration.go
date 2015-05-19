@@ -12,16 +12,38 @@ import (
 	"strings"
 )
 
-func LoadConfiguration(obj interface{}, c *cli.Context) error {
-	// If a config file was passed, load it into a map
-	configFileMap := map[string]string{}
-	configFile := os.ExpandEnv(c.String("config"))
-	if configFile != "" {
-		loadedConfigFileMap, err := readFile(configFile)
-		if err != nil {
-			return errors.New(fmt.Sprintf("Failed to load config file: %s", err))
+func FindDefaultConfiguration() string {
+	var paths []string
+
+	if MachineIsWindows() {
+		paths = []string{
+			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
 		}
-		configFileMap = loadedConfigFileMap
+	} else {
+		paths = []string{
+			"$HOME/.buildkite-agent/buildkite-agent.cfg",
+			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
+			"/etc/buildkite-agent/buildkite-agent.cfg",
+		}
+	}
+
+	// Return the first configration file that exists
+	for _, path := range paths {
+		expandedPath := os.ExpandEnv(path)
+
+		if _, err := os.Stat(expandedPath); err == nil {
+			return expandedPath
+		}
+	}
+
+	return ""
+}
+
+func LoadConfiguration(pathToConfigFile string, obj interface{}, c *cli.Context) error {
+	// Load the file
+	configFileMap, err := readFile(pathToConfigFile)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to load config file: %s", err))
 	}
 
 	// Get all the fields from the configuration interface
