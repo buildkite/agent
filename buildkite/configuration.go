@@ -74,7 +74,7 @@ func LoadConfiguration(obj interface{}, c *cli.Context) error {
 		}
 
 		// Now, override with what ever is in the cli or the ENV
-		if c.IsSet(cliName) {
+		if c.IsSet(cliName) || isSetByEnv(c, cliName) {
 			if fieldKind == reflect.String {
 				value = c.String(cliName)
 			} else if fieldKind == reflect.Slice {
@@ -96,6 +96,26 @@ func LoadConfiguration(obj interface{}, c *cli.Context) error {
 	}
 
 	return nil
+}
+
+// cli.Context#IsSet only checks to see if the command was set via the cli, not
+// via the environment. So here we do some hacks to find out the name of the
+// EnvVar, and return true if it was set.
+func isSetByEnv(c *cli.Context, cliName string) bool {
+	for _, flag := range c.Command.Flags {
+		name, _ := reflections.GetField(flag, "Name")
+		envVar, _ := reflections.GetField(flag, "EnvVar")
+		if name == cliName && envVar != "" {
+			// Make sure envVar is a string
+			if envVarStr, ok := envVar.(string); ok {
+				envVarStr = strings.TrimSpace(string(envVarStr))
+
+				return os.Getenv(envVarStr) != ""
+			}
+		}
+	}
+
+	return false
 }
 
 func findDefaultConfiguration() string {
