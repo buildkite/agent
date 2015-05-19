@@ -12,43 +12,31 @@ import (
 	"strings"
 )
 
-func FindDefaultConfiguration() string {
-	var paths []string
-
-	if MachineIsWindows() {
-		paths = []string{
-			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
-		}
-	} else {
-		paths = []string{
-			"$HOME/.buildkite-agent/buildkite-agent.cfg",
-			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
-			"/etc/buildkite-agent/buildkite-agent.cfg",
-		}
-	}
-
-	// Return the first configration file that exists
-	for _, path := range paths {
-		expandedPath := os.ExpandEnv(path)
-
-		if _, err := os.Stat(expandedPath); err == nil {
-			return expandedPath
-		}
-	}
-
-	return ""
-}
-
-func LoadConfiguration(obj interface{}, optionalPathToConfigFile string, c *cli.Context) error {
+func LoadConfiguration(obj interface{}, c *cli.Context) error {
 	configFileMap := map[string]string{}
 
+	var pathToConfigFile string
+
 	// If a config file was passed, load it into a map
-	if optionalPathToConfigFile != "" {
-		loadedConfigFileMap, err := readFile(optionalPathToConfigFile)
+	if c.String("config") != "" {
+		pathToConfigFile = os.ExpandEnv(c.String("config"))
+	} else {
+		// If no config was passed, look at the default locations to
+		// try and find one that exists
+		pathToConfigFile = findDefaultConfiguration()
+	}
+
+	// If we need to load from a config file
+	if pathToConfigFile != "" {
+		loadedConfigFileMap, err := readFile(pathToConfigFile)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Failed to load config file: %s", err))
 		}
+
 		configFileMap = loadedConfigFileMap
+
+		// Store the loaded file in the configuration object
+		_ = reflections.SetField(obj, "File", pathToConfigFile)
 	}
 
 	// Get all the fields from the configuration interface
@@ -56,10 +44,10 @@ func LoadConfiguration(obj interface{}, optionalPathToConfigFile string, c *cli.
 	fields, _ = reflections.Fields(obj)
 
 	for _, name := range fields {
-		// Find the name of the config we need to load from the cli.Context
+		// Check if the value needs to be loaded from the cli.Context
 		cliName, err := reflections.GetFieldTag(obj, name, "cli")
 		if err != nil || cliName == "" {
-			return errors.New(fmt.Sprintf("Failed to find `cli` tag for struct field \"%s\"", name))
+			continue
 		}
 
 		// Get the kind of field we need to set
@@ -107,6 +95,33 @@ func LoadConfiguration(obj interface{}, optionalPathToConfigFile string, c *cli.
 	}
 
 	return nil
+}
+
+func findDefaultConfiguration() string {
+	var paths []string
+
+	if MachineIsWindows() {
+		paths = []string{
+			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
+		}
+	} else {
+		paths = []string{
+			"$HOME/.buildkite-agent/buildkite-agent.cfg",
+			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
+			"/etc/buildkite-agent/buildkite-agent.cfg",
+		}
+	}
+
+	// Return the first configration file that exists
+	for _, path := range paths {
+		expandedPath := os.ExpandEnv(path)
+
+		if _, err := os.Stat(expandedPath); err == nil {
+			return expandedPath
+		}
+	}
+
+	return ""
 }
 
 // This file parsing code was copied from:

@@ -9,6 +9,7 @@ import (
 )
 
 type AgentStartConfiguration struct {
+	File                             string
 	Token                            string   `cli:"token"`
 	Name                             string   `cli:"name"`
 	Priority                         string   `cli:"priority"`
@@ -28,19 +29,8 @@ type AgentStartConfiguration struct {
 func AgentStartCommandAction(c *cli.Context) {
 	var configuration AgentStartConfiguration
 
-	var pathToConfigFile string
-
-	// If a config file was passed, load it into a map
-	if c.String("config") != "" {
-		pathToConfigFile = os.ExpandEnv(c.String("config"))
-	} else {
-		// If no config was passed, look at the default locations to
-		// try and find one that exists
-		pathToConfigFile = buildkite.FindDefaultConfiguration()
-	}
-
-	// Load the configration from either the file, or the cli.Context
-	err := buildkite.LoadConfiguration(&configuration, pathToConfigFile, c)
+	// Load the configration
+	err := buildkite.LoadConfiguration(&configuration, c)
 	if err != nil {
 		logger.Fatal("Failed to load configuration: %s", err)
 	}
@@ -73,8 +63,8 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	// then it's been loaded and we should show which one we loaded.
-	if pathToConfigFile != "" {
-		logger.Info("Configuration loaded from: %s", pathToConfigFile)
+	if configuration.File != "" {
+		logger.Info("Configuration loaded from: %s", configuration.File)
 	}
 
 	// Init debugging
