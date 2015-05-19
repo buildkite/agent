@@ -9,6 +9,7 @@ import (
 )
 
 type AgentStartConfiguration struct {
+	File                             string
 	Token                            string   `cli:"token"`
 	Name                             string   `cli:"name"`
 	Priority                         string   `cli:"priority"`
@@ -26,8 +27,9 @@ type AgentStartConfiguration struct {
 }
 
 func AgentStartCommandAction(c *cli.Context) {
-	// Load the configration
 	var configuration AgentStartConfiguration
+
+	// Load the configration
 	err := buildkite.LoadConfiguration(&configuration, c)
 	if err != nil {
 		logger.Fatal("Failed to load configuration: %s", err)
@@ -59,6 +61,11 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
 	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
+
+	// then it's been loaded and we should show which one we loaded.
+	if configuration.File != "" {
+		logger.Info("Configuration loaded from: %s", configuration.File)
+	}
 
 	// Init debugging
 	if configuration.Debug {
