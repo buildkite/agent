@@ -22,7 +22,7 @@ func EC2InstanceTags() (map[string]string, error) {
 	region := aws.GetRegion(aws.InstanceRegion())
 	ec2Client := ec2.New(auth, region)
 
-	// Filter by the current machinces instance-id
+	// Filter by the current machines instance-id
 	filter := ec2.NewFilter()
 	filter.Add("resource-id", aws.InstanceId())
 

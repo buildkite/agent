@@ -205,7 +205,7 @@ func (p *Process) Start() error {
 		logger.Debug("Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
-	// No error occured so we can return nil
+	// No error occurred so we can return nil
 	return nil
 }
 
@@ -220,7 +220,7 @@ func (p *Process) Kill() error {
 		return err
 	}
 
-	// Make a chanel that we'll use as a timeout
+	// Make a channel that we'll use as a timeout
 	c := make(chan int, 1)
 	checking := true
 
@@ -239,7 +239,7 @@ func (p *Process) Kill() error {
 				break
 			}
 
-			// We have some information about the procss
+			// We have some information about the process
 			if foundProcess != nil {
 				processState, err := foundProcess.Wait()
 

@@ -87,9 +87,9 @@ func (c *Client) JobRefresh(job *Job) (*Job, error) {
 
 func (j *Job) Kill() error {
 	if j.cancelled {
-		// Already cancelled
+		// Already canceled
 	} else {
-		logger.Info("Cancelling job %s", j.ID)
+		logger.Info("Canceling job %s", j.ID)
 		j.cancelled = true
 
 		if j.process != nil {
@@ -160,7 +160,7 @@ func (j *Job) Run(agent *Agent) error {
 				// Send the output of the process to the log streamer for processing
 				logStreamer.Process(process.Output())
 
-				// Check for cancelations every second
+				// Check for cancellations every second
 				time.Sleep(1 * time.Second)
 			}
 
@@ -173,7 +173,7 @@ func (j *Job) Run(agent *Agent) error {
 				// Upload the header timings
 				j.uploadHeaderTimes(agent)
 
-				// Wait another second before seeeing if there are new header times to send
+				// Wait another second before seeing if there are new header times to send
 				time.Sleep(1 * time.Second)
 			}
 
@@ -184,7 +184,7 @@ func (j *Job) Run(agent *Agent) error {
 		go func() {
 			for process.Running {
 				// Get the latest job status so we can see if
-				// the job has been cancelled
+				// the job has been canceled
 				updatedJob, err := agent.Client.JobRefresh(j)
 				if err != nil {
 					// We don't really care if it fails,
@@ -195,7 +195,7 @@ func (j *Job) Run(agent *Agent) error {
 					j.Kill()
 				}
 
-				// Check for cancelations every few seconds
+				// Check for cancellations every few seconds
 				time.Sleep(3 * time.Second)
 			}
 
@@ -219,7 +219,7 @@ func (j *Job) Run(agent *Agent) error {
 		}
 	}
 
-	// Initialze our process to run
+	// Initialize our process to run
 	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, startCallback, lineCallback)
 
 	// Store the process so we can cancel it later.
@@ -287,7 +287,7 @@ func (j *Job) uploadHeaderTimes(agent *Agent) {
 
 	// Has the header count changed from last time we checked?
 	if j.headerTimesCount != len(j.HeaderTimes) {
-		// Send the header times to Buildktie
+		// Send the header times to Buildkite
 		r := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/header_times")
 		r.Body = &http.JSON{
 			Payload: map[string][]string{
@@ -301,7 +301,7 @@ func (j *Job) uploadHeaderTimes(agent *Agent) {
 }
 
 // Replaces ~/ with the users home directory. The builds path may be configured
-// as ~/.buildkite/hooks, and if it's set in a configration file (not on the
+// as ~/.buildkite/hooks, and if it's set in a configuration file (not on the
 // command line) the OS won't automatically expand it.
 func normalizePath(path string) string {
 	if len(path) > 2 && path[:2] == "~/" {

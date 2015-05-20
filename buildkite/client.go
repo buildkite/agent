@@ -67,7 +67,7 @@ func (c *Client) APIReq(v interface{}, method string, path string, body interfac
 // Generates an HTTP request for the Buildkite API, but does not
 // perform the request.
 func (c *Client) NewRequest(method string, path string, body interface{}) (*http.Request, error) {
-	// Popualte the request body if we have to
+	// Populate the request body if we have to
 	var requestBody io.Reader
 	var contentType string
 

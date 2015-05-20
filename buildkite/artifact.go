@@ -235,7 +235,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 	count := 0
 	for _, artifact := range createdArtifacts {
-		// Create a channel and apend it to the routines array. Once we've hit our
+		// Create a channel and append it to the routines array. Once we've hit our
 		// concurrency limit, we'll block until one finishes, then this loop will
 		// startup up again.
 		count++
@@ -244,7 +244,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 		routines = append(routines, wait)
 
 		if count >= concurrency {
-			logger.Debug("Maxiumum concurrent threads running. Waiting.")
+			logger.Debug("Maximum concurrent threads running. Waiting.")
 
 			// Wait for all the routines to finish, then reset
 			waitForRoutines(routines)
@@ -292,7 +292,7 @@ func DownloadArtifacts(artifacts []Artifact, destination string) error {
 
 	count := 0
 	for _, artifact := range artifacts {
-		// Create a channel and apend it to the routines array. Once we've hit our
+		// Create a channel and append it to the routines array. Once we've hit our
 		// concurrency limit, we'll block until one finishes, then this loop will
 		// startup up again.
 		count++
@@ -302,7 +302,7 @@ func DownloadArtifacts(artifacts []Artifact, destination string) error {
 		routines = append(routines, wait)
 
 		if count >= concurrency {
-			logger.Debug("Maxiumum concurrent threads running. Waiting.")
+			logger.Debug("Maximum concurrent threads running. Waiting.")
 
 			// Wait for all the routines to finish, then reset
 			waitForRoutines(routines)
