@@ -3,7 +3,7 @@
 REM enable delayed expansion so that ERRORLEVEL is evaluated properly inside IF blocks
 SETLOCAL ENABLEDELAYEDEXPANSION
 
-echo --- Creating Build Environment
+echo ~~~ Preparing build folder
 
 SET SANITIZED_PROJECT_SLUG=%BUILDKITE_PROJECT_SLUG:/=\%
 SET BUILDKITE_BUILD_DIR=%BUILDKITE_BUILD_PATH%\%BUILDKITE_AGENT_NAME%\%SANITIZED_PROJECT_SLUG%
@@ -61,7 +61,7 @@ ECHO ^> git checkout -qf "%BUILDKITE_COMMIT%"
 CALL git checkout -qf "%BUILDKITE_COMMIT%"
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-ECHO --- Running Build Script
+ECHO ~~~ Running build script
 
 IF "%BUILDKITE_SCRIPT_PATH%" == "" (
   echo ERROR: No script path has been set for this project. Please go to \"Project Settings\" and add the path to your build script
@@ -84,7 +84,7 @@ IF NOT "%BUILDKITE_ARTIFACT_PATHS%" == "" (
 
   REM Show the output of the artifact uploder when in debug mode
   IF "%BUILDKITE_AGENT_DEBUG%" == "true" (
-    ECHO --- Uploading Artifacts
+    ECHO ~~~ Uploading Artifacts
     ECHO ^> "%BUILDKITE_DIR%\buildkite-agent" artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
     call "%BUILDKITE_DIR%\buildkite-agent" artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
     IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
