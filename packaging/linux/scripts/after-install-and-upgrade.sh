@@ -51,7 +51,7 @@ elif [ -d /etc/init ]; then
       echo "/etc/buildkite-agent/buildkite-agent.cfg"
       echo ""
       echo "Everything should continue to work as is (we'll still use the .env file for now)."
-      echo "To upgrade, All you need to do is, edit the config file with the settings from"
+      echo "To upgrade, all you need to do is edit the config file with the settings from"
       echo "your .env file, then run:"
       echo ""
       echo "sudo service buildkite-agent stop"

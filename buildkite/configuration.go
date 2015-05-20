@@ -73,8 +73,10 @@ func LoadConfiguration(obj interface{}, c *cli.Context) error {
 			}
 		}
 
-		// Now, override with what ever is in the cli or the ENV
-		if c.IsSet(cliName) || isSetByEnv(c, cliName) {
+		// If a value hasn't been defined, or if it's been overridden
+		// but the ENV or the CLI, use that. We need to check for nil
+		// because the cli also returns the default value.
+		if value == nil || c.IsSet(cliName) || isSetByEnv(c, cliName) {
 			if fieldKind == reflect.String {
 				value = c.String(cliName)
 			} else if fieldKind == reflect.Slice {
