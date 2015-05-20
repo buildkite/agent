@@ -77,7 +77,7 @@ function buildkite-error {
 
 # Show a warning
 function buildkite-warning {
-  echo -e "\033[31mBuildkite Warning:\033[0m $1"
+  echo -e "⚠️ \033[33mBuildkite Warning: $1\033[0m"
 }
 
 # Run a hook script
