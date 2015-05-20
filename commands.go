@@ -72,7 +72,7 @@ Example:
    The first argument is the search query, and the second argument is the download destination.
 
    If you're trying to download a specific file, and there are multiple artifacts from different
-   jobs, you can target the paticular job you want to download the artifact from:
+   jobs, you can target the particular job you want to download the artifact from:
 
    $ buildkite-agent artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
 
@@ -94,7 +94,7 @@ Example:
 
    $ buildkite-agent artifact upload "log/**/*.log"
 
-   You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
+   You can also upload directly to Amazon S3 if you'd like to host your own artifacts:
 
    $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
    $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
@@ -242,7 +242,7 @@ func init() {
 					Flags: []cli.Flag{
 						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
 						// default to all the jobs on the build, not just the current one. --job is used
-						// to scope to a paticular job if you
+						// to scope to a particular job if you
 						cli.StringFlag{
 							Name:  "job",
 							Value: "",
@@ -322,7 +322,7 @@ func init() {
 					Flags: []cli.Flag{
 						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
 						// default to all the jobs on the build, not just the current one. --job is used
-						// to scope to a paticular job if you
+						// to scope to a particular job if you
 						cli.StringFlag{
 							Name:  "job",
 							Value: "",

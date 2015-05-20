@@ -29,7 +29,7 @@ type AgentStartConfiguration struct {
 func AgentStartCommandAction(c *cli.Context) {
 	var configuration AgentStartConfiguration
 
-	// Load the configration
+	// Load the configuration
 	err := buildkite.LoadConfiguration(&configuration, c)
 	if err != nil {
 		logger.Fatal("Failed to load configuration: %s", err)
@@ -79,7 +79,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	var agent buildkite.Agent
 
-	// Expand the envionment variable
+	// Expand the environment variable
 	agent.BootstrapScript = os.ExpandEnv(configuration.BootstrapScript)
 	if agent.BootstrapScript == "" {
 		logger.Fatal("Bootstrap script is missing")
@@ -161,7 +161,7 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.Fatal("%s", err)
 	}
 
-	logger.Info("Successfully registred agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
+	logger.Info("Successfully registered agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
 
 	// Configure the agent's client
 	agent.Client.AuthorizationToken = agent.AccessToken

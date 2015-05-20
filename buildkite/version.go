@@ -3,7 +3,7 @@ package buildkite
 import "fmt"
 import "strings"
 
-// You can overriden buildVersion at compile time by using:
+// You can overridden buildVersion at compile time by using:
 //
 //  go run -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion abc" *.go --version
 //
