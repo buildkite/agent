@@ -63,11 +63,11 @@ bundle exec fpm -s "dir" \
   --rpm-compression bzip2 \
   --rpm-os linux \
   --before-install "packaging/linux/scripts/before-install.sh" \
-  --after-install "packaging/linux/scripts/after-install.sh" \
+  --after-install "packaging/linux/scripts/after-install-and-upgrade.sh" \
   --before-remove "packaging/linux/scripts/before-remove.sh" \
   --after-remove "packaging/linux/scripts/after-remove.sh" \
   --before-upgrade "packaging/linux/scripts/before-upgrade.sh" \
-  --after-upgrade "packaging/linux/scripts/after-upgrade.sh" \
+  --after-upgrade "packaging/linux/scripts/after-install-and-upgrade.sh" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \

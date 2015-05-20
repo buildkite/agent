@@ -2,17 +2,12 @@
 
 set -e
 
-cat <<"TXT"
- _           _ _     _ _    _ _                                _
-| |         (_) |   | | |  (_) |                              | |
-| |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
-| '_ \| | | | | |/ _` | |/ / | __/ _ \  / _` |/ _` |/ _ \ '_ \| __|
-| |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
-|_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
-                                               __/ |
-                                              |___/
-
-TXT
+# $1 will be the version being upgraded from if this is an upgrade
+if [ "$1" = "" ] ; then
+  OPERATION="install"
+else
+  OPERATION="upgrade"
+fi
 
 # Create the /etc/buildkite-agent folder if it's not there
 if [ ! -d /etc/buildkite-agent ]; then
@@ -62,7 +57,29 @@ else
   START_COMMAND="sudo /usr/bin/buildkite-agent start"
 fi
 
-echo "You now need to add your agent token to \"/etc/buildkite-agent/buildkite-agent.cfg\""
-echo "and then you can start your agent by running \"$START_COMMAND\""
+# Nice welcome message on install
+if [ "$OPERATION" = "install" ] ; then
+  cat <<"TXT"
+ _           _ _     _ _    _ _                                _
+| |         (_) |   | | |  (_) |                              | |
+| |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
+| '_ \| | | | | |/ _` | |/ / | __/ _ \  / _` |/ _` |/ _ \ '_ \| __|
+| |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
+|_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
+                                               __/ |
+                                              |___/
+
+TXT
+
+  echo "You now need to add your agent token to \"/etc/buildkite-agent/buildkite-agent.cfg\""
+  echo "and then you can start your agent by running \"$START_COMMAND\""
+fi
+
+# Crude method of causing all the agents to restart
+if [ "$OPERATION" = "upgrade" ] ; then
+  for KILLPID in `ps ax | grep 'buildkite-agent start' | awk ' { print $1;}'`; do
+    kill $KILLPID > /dev/null 2>&1 || true
+  done
+fi
 
 exit 0
