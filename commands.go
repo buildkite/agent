@@ -126,9 +126,9 @@ Example:
 
 func init() {
 	// This is default locations of stuff (*nix systems)
-	bootstrapScriptLocation := "$HOME/.buildkite/bootstrap.sh"
-	buildPathLocation := "$HOME/.buildkite/builds"
-	hookPathLocation := "$HOME/.buildkite/hooks"
+	bootstrapScriptLocation := "$HOME/.buildkite-agent/bootstrap.sh"
+	buildPathLocation := "$HOME/.buildkite-agent/builds"
+	hookPathLocation := "$HOME/.buildkite-agent/hooks"
 
 	// Windows has a slightly modified locations
 	if buildkite.MachineIsWindows() {
