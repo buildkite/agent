@@ -6,8 +6,8 @@
 
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh\`\""
 
-VERSION="1.0-beta.31"
-FULL_VERSION="1.0-beta.31.534"
+VERSION="1.0-beta.32"
+FULL_VERSION="1.0-beta.32.583"
 
 set -e
 
@@ -58,8 +58,36 @@ else
   ARCH="386"
 fi
 
-# Default the destination folder and then create it
-: ${DESTINATION:="$HOME/.buildkite"}
+# Default the destination folder
+: ${DESTINATION:="$HOME/.buildkite-agent"}
+
+# If they have a $HOME/.buildkite folder, rename it to `buildkite-agent` and
+# symlink back to the old one. Since we changed the name of the folder, we
+# don't want any scripts that the user has written that may reference
+# ~/.buildkite to break.
+if [[ -d "$HOME/.buildkite" ]]; then
+  mv "$HOME/.buildkite" "$HOME/.buildkite-agent"
+  ln -s "$HOME/.buildkite-agent" "$HOME/.buildkite"
+
+  echo ""
+  echo "======================= IMPORTANT UPGRADE NOTICE =========================="
+  echo ""
+  echo "Hey!"
+  echo ""
+  echo "Sorry to be a pain, but we've renamed ~/.buildkite to ~/.buildkite-agent"
+  echo ""
+  echo "I've renamed your .buildkite folder to .buildkite-agent, and created a symlink"
+  echo "from the old location to the new location, just in case you had any scripts that"
+  echo "referenced the previous location."
+  echo ""
+  echo "If you have any questions, feel free to email me at: keith@buildkite.com"
+  echo ""
+  echo "~ Keith"
+  echo ""
+  echo "=========================================================================="
+  echo ""
+fi
+
 mkdir -p $DESTINATION
 
 if [ ! -w "$DESTINATION" ]
