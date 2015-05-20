@@ -13,7 +13,7 @@
 ### END INIT INFO
 
 user="root"
-cmd="/usr/bin/buildkite-agent start --config /etc/buildkite-agent/buildkite-agent.cfg"
+cmd="/usr/bin/buildkite-agent start"
 
 name=`basename $0`
 pid_file="/var/run/$name.pid"
