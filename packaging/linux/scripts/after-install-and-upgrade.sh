@@ -33,13 +33,51 @@ if command -v systemctl > /dev/null; then
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
 elif [ -d /etc/init ]; then
   if [ ! -f /etc/init/buildkite-agent.conf ]; then
-    cp -r /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf
+    # If the system has the old .env file, install the old upstart script, and
+    # let them know they should upgrade. Because the upstart script is no
+    # longer considered a `config` file in the debian package, when you upgrade
+    # the agent, it rm's it from /etc/init, boo. So we need to put it back.
+    if [ -f /etc/buildkite-agent/buildkite-agent.env ]; then
+      echo "======================= IMPORTANT UPGRADE NOTICE =========================="
+      echo ""
+      echo "Hey!"
+      echo ""
+      echo "Sorry to be a pain, but we've deprecated use of the"
+      echo "/etc/buildkite-agent/buildkite-agent.env ENV file as a way of configuring the agent."
+      echo "It's had a ton of issues and the approach wasn't very cross platform."
+      echo ""
+      echo "We've switched to using a proper config file, that you can find here:"
+      echo ""
+      echo "/etc/buildkite-agent/buildkite-agent.cfg"
+      echo ""
+      echo "Everything should continue to work as is (we'll still use the .env file for now)."
+      echo "To upgrade, All you need to do is, edit the config file with the settings from"
+      echo "your .env file, then run:"
+      echo ""
+      echo "sudo service buildkite-agent stop"
+      echo "sudo rm /etc/buildkite-agent/buildkite-agent.env"
+      echo "sudo cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf"
+      echo "sudo service buildkite-agent start"
+      echo ""
+      echo "Then next time you upgrade, you won't see this annoying message :)"
+      echo ""
+      echo "If you have any questions, feel free to email me at: keith@buildkite.com"
+      echo ""
+      echo "~ Keith"
+      echo ""
+      echo "=========================================================================="
+      echo ""
+
+      cp /usr/share/buildkite-agent/upstart/buildkite-agent-using-env.conf /etc/init/buildkite-agent.conf
+    else
+      cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf
+    fi
   fi
 
   START_COMMAND="sudo service buildkite-agent start"
 elif [ -d /etc/init.d ]; then
   if [ ! -f /etc/init.d/buildkite-agent ]; then
-    cp -r /usr/share/buildkite-agent/lsb/buildkite-agent.conf /etc/init.d/buildkite-agent
+    cp /usr/share/buildkite-agent/lsb/buildkite-agent.conf /etc/init.d/buildkite-agent
   fi
 
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"
