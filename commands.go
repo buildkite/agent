@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/command"
 	"github.com/codegangsta/cli"
 )
@@ -124,19 +123,9 @@ Example:
 
    $ buildkite-agent meta-data get "foo"`
 
+var DefaultEndpoint = "https://agent.buildkite.com/v2"
+
 func init() {
-	// This is default locations of stuff (*nix systems)
-	bootstrapScriptLocation := "$HOME/.buildkite-agent/bootstrap.sh"
-	buildPathLocation := "$HOME/.buildkite-agent/builds"
-	hookPathLocation := "$HOME/.buildkite-agent/hooks"
-
-	// Windows has a slightly modified locations
-	if buildkite.MachineIsWindows() {
-		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\bootstrap.bat"
-		buildPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\builds"
-		hookPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\hooks"
-	}
-
 	Commands = []cli.Command{
 		{
 			Name:        "start",
@@ -157,7 +146,7 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "name",
-					Value:  "%hostname-%n",
+					Value:  "",
 					Usage:  "The name of the agent",
 					EnvVar: "BUILDKITE_AGENT_NAME",
 				},
@@ -179,19 +168,19 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "bootstrap-script",
-					Value:  bootstrapScriptLocation,
+					Value:  "",
 					Usage:  "Path to the bootstrap script",
 					EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 				},
 				cli.StringFlag{
 					Name:   "build-path",
-					Value:  buildPathLocation,
+					Value:  "",
 					Usage:  "Path to where the builds will run from",
 					EnvVar: "BUILDKITE_BUILD_PATH",
 				},
 				cli.StringFlag{
 					Name:   "hooks-path",
-					Value:  hookPathLocation,
+					Value:  "",
 					Usage:  "Directory where the hook scripts are found",
 					EnvVar: "BUILDKITE_HOOKS_PATH",
 				},
@@ -212,7 +201,7 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "endpoint",
-					Value:  "https://agent.buildkite.com/v2",
+					Value:  DefaultEndpoint,
 					Usage:  "The agent API endpoint",
 					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 				},
@@ -260,7 +249,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -296,7 +285,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -340,7 +329,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -382,7 +371,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -418,7 +407,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
