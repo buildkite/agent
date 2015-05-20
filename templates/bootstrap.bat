@@ -85,11 +85,11 @@ IF NOT "%BUILDKITE_ARTIFACT_PATHS%" == "" (
   REM Show the output of the artifact uploder when in debug mode
   IF "%BUILDKITE_AGENT_DEBUG%" == "true" (
     ECHO ~~~ Uploading Artifacts
-    ECHO ^> "%BUILDKITE_DIR%\buildkite-agent" artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
-    call "%BUILDKITE_DIR%\buildkite-agent" artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
+    ECHO ^> buildkite-agent artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
+    call buildkite-agent artifact upload "%BUILDKITE_ARTIFACT_PATHS%"
     IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
   ) ELSE (
-    call "%BUILDKITE_DIR%\buildkite-agent" artifact upload "%BUILDKITE_ARTIFACT_PATHS%" > nul 2>&1
+    call buildkite-agent artifact upload "%BUILDKITE_ARTIFACT_PATHS%" > nul 2>&1
     IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
   )
 )
