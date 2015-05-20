@@ -7,6 +7,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/oleiade/reflections"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -133,6 +134,14 @@ func findDefaultConfiguration() string {
 			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
 			"/etc/buildkite-agent/buildkite-agent.cfg",
 		}
+	}
+
+	// Also check to see if there's a buildkite-agent.cfg in the folder
+	// that the binary is running in.
+	pathToBinary, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err == nil {
+		pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
+		paths = append([]string{pathToRelativeConfig}, paths...)
 	}
 
 	// Return the first configration file that exists
