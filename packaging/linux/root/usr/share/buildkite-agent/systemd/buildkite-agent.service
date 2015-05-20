@@ -6,7 +6,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/buildkite-agent start --config /etc/init/buildkite-agent/buildkite-agent.cfg
+ExecStart=/usr/bin/buildkite-agent start
 RestartSec=5
 Restart=on-failure
 TimeoutSec=10
