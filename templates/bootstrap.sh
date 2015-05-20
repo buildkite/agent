@@ -236,7 +236,7 @@ else
   # continue the bootstrap script, and show an informative error.
   buildkite-prompt-and-run "git submodule sync --recursive"
   if [[ $? -ne 0 ]]; then
-    buildkite-warning "Failed to recursively sync the git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above"
+    buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If your using submodules, it's highly recommended you upgrade if you can."
   fi
 
   buildkite-run "git submodule update --init --recursive"
