@@ -96,8 +96,10 @@ Example:
 
    You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
 
-   $ export AWS_SECRET_ACCESS_KEY=yyy
-   $ export AWS_ACCESS_KEY_ID=xxx
+   $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
+   $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
+   $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
+   $ export BUILDKITE_S3_ACL=private # default is public-read
    $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
 
 var SetHelpDescription = `Usage:
