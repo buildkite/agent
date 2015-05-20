@@ -75,6 +75,11 @@ function buildkite-error {
   exit 1
 }
 
+# Show a warning
+function buildkite-warning {
+  echo -e "\033[31mBuildkite Warning:\033[0m $1"
+}
+
 # Run a hook script
 function buildkite-hook {
   HOOK_LABEL="$1"
@@ -226,8 +231,14 @@ else
 
   buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
 
-  # `submodule sync` will ensure the .git/config matches the .gitmodules file
-  buildkite-run "git submodule sync --recursive"
+  # `submodule sync` will ensure the .git/config matches the .gitmodules file.
+  # The command is only available in git version 1.8.1, so if the call fails,
+  # continue the bootstrap script, and show an informative error.
+  buildkite-prompt-and-run "git submodule sync --recursive"
+  if [[ $? -ne 0 ]]; then
+    buildkite-warning "Failed to recursively sync the git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above"
+  fi
+
   buildkite-run "git submodule update --init --recursive"
   buildkite-run "git submodule foreach --recursive git reset --hard"
 
