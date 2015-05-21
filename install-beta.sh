@@ -73,7 +73,7 @@ echo -e "Installing Version: \033[35mv$VERSION\033[0m"
 # symlink back to the old one. Since we changed the name of the folder, we
 # don't want any scripts that the user has written that may reference
 # ~/.buildkite to break.
-if [[ -d "$HOME/.buildkite" ]]; then
+if [[ -d "$HOME/.buildkite" && ! -d "$HOME/.buildkite-agent" ]]; then
   mv "$HOME/.buildkite" "$HOME/.buildkite-agent"
   ln -s "$HOME/.buildkite-agent" "$HOME/.buildkite"
 
