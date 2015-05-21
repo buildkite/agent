@@ -44,15 +44,13 @@ Installing Version: \033[35mv$VERSION\033[0m"
 
 UNAME=`uname -sp | awk '{print tolower($0)}'`
 
-if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]
-then
+if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
   PLATFORM="darwin"
 else
   PLATFORM="linux"
 fi
 
-if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]
-then
+if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]; then
   ARCH="amd64"
 else
   ARCH="386"
@@ -90,8 +88,7 @@ fi
 
 mkdir -p $DESTINATION
 
-if [ ! -w "$DESTINATION" ]
-then
+if [[ ! -w "$DESTINATION" ]]; then
   echo -e "\n\033[31mUnable to write to destination \`$DESTINATION\`\n\nYou can change the destination by running:\n\nDESTINATION=/my/path $COMMAND\033[0m\n"
   exit 1
 fi
@@ -109,8 +106,7 @@ mkdir -p $INSTALL_TMP
 
 # If the file already exists in a folder called releases. This is useful for
 # local testing of this file.
-if [[ -e releases/$DOWNLOAD ]]
-then
+if [[ -e releases/$DOWNLOAD ]]; then
   echo "Using existing release: releases/$DOWNLOAD"
   cp releases/$DOWNLOAD $INSTALL_TMP
 else
@@ -126,6 +122,20 @@ mkdir -p $DESTINATION/bin
 mv $INSTALL_TMP/buildkite-agent $DESTINATION/bin
 chmod +x $DESTINATION/bin/buildkite-agent
 
+# Copy the latest config file as dist
+mv $INSTALL_TMP/buildkite-agent.cfg $DESTINATION/buildkite-agent.dist.cfg
+
+# Copy the config file if it doesn't exist
+if [[ ! -f $DESTINATION/buildkite-agent.cfg ]]; then
+  cp $DESTINATION/buildkite-agent.dist.cfg $DESTINATION/buildkite-agent.cfg
+
+  # Set their token for them
+  if [[ -n $TOKEN ]]; then
+    # Need "-i ''" for Mac OS X
+    sed -i '' "s/token=\"xxx\"/token=\"$TOKEN\"/g" $DESTINATION/buildkite-agent.cfg
+  fi
+fi
+
 # Copy the hook samples
 mkdir -p $DESTINATION/hooks
 mv $INSTALL_TMP/hooks/*.sample $DESTINATION/hooks
@@ -135,30 +145,13 @@ function buildkite-copy-bootstrap {
   chmod +x $DESTINATION/bootstrap.sh
 }
 
-# Copy the bootstrap sample and make sure it's executable
-if [[ -e $DESTINATION/bootstrap.sh ]]
-then
-  echo -e "\n\033[36mWe've detected an existing bootstrap.sh in $DESTINATION\033[0m"
-  echo -en "\nWould you like us to replace it with the latest version? (y/n) "
-  read answer < /dev/tty
-
-  if echo "$answer" | grep -iq "^y" ;then
-    echo -e "\nGood choice! We'll replace your current bootstrap.sh with the new one."
-    buildkite-copy-bootstrap
-  else
-    echo -e "\nGot it, we'll leave it alone."
-  fi
-else
-  buildkite-copy-bootstrap
-fi
-
-: ${TOKEN:="token123"}
+buildkite-copy-bootstrap
 
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
 You can now run the Buildkite Agent like so:
 
-  $DESTINATION/bin/buildkite-agent start --token $TOKEN
+  $DESTINATION/bin/buildkite-agent start --token ${TOKEN:="xxx"}
 
 You can find your Agent token by going to your organizations \"Agents\" page
 
