@@ -4,12 +4,47 @@
 #
 # For more information, see: https://github.com/buildkite/agent
 
+set -e
+
 COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh\`\""
 
-VERSION="1.0-beta.32"
-FULL_VERSION="1.0-beta.32.583"
+echo -e "\033[33m
+  _           _ _     _ _    _ _                                _
+ | |         (_) |   | | |  (_) |                              | |
+ | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
+ | '_ \| | | | | |/ _\` | |/ / | __/ _ \  / _\` |/ _\` |/ _ \ '_ \| __|
+ | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
+ |_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
+                                                __/ |
+                                               |___/\033[0m"
 
-set -e
+echo -e "Finding latest release..."
+
+UNAME=`uname -sp | awk '{print tolower($0)}'`
+
+if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
+  PLATFORM="darwin"
+else
+  PLATFORM="linux"
+fi
+
+if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]; then
+  ARCH="amd64"
+else
+  ARCH="386"
+fi
+
+RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?prerelease=true&platform=$PLATFORM&arch=$ARCH"
+
+if command -v wget >/dev/null; then
+  LATEST_RELEASE=$(wget -qO- $RELEASE_INFO_URL)
+else
+  LATEST_RELEASE=$(curl -s $RELEASE_INFO_URL)
+fi
+
+VERSION=$(echo "$LATEST_RELEASE"      | awk -F= '/version=/  { print $2 }')
+DOWNLOAD_FILENAME=$(echo "$LATEST_RELEASE"     | awk -F= '/filename=/ { print $2 }')
+DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | awk -F= '/url=/      { print $2 }')
 
 function buildkite-download {
   BUILDKITE_DOWNLOAD_TMP_FILE="/tmp/buildkite-download-$$.txt"
@@ -29,31 +64,7 @@ function buildkite-download {
   fi
 }
 
-echo -e "\033[33m
-  _           _ _     _ _    _ _                                _
- | |         (_) |   | | |  (_) |                              | |
- | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
- | '_ \| | | | | |/ _\` | |/ / | __/ _ \  / _\` |/ _\` |/ _ \ '_ \| __|
- | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
- |_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
-                                                __/ |
-                                               |___/\033[0m
-
-Installing Version: \033[35mv$VERSION\033[0m"
-
-UNAME=`uname -sp | awk '{print tolower($0)}'`
-
-if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
-  PLATFORM="darwin"
-else
-  PLATFORM="linux"
-fi
-
-if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]; then
-  ARCH="amd64"
-else
-  ARCH="386"
-fi
+echo -e "Installing Version: \033[35mv$VERSION\033[0m"
 
 # Default the destination folder
 : ${DESTINATION:="$HOME/.buildkite-agent"}
@@ -94,10 +105,7 @@ fi
 
 echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
-# Download and unzip the file to the destination
-DOWNLOAD="buildkite-agent-$PLATFORM-$ARCH-$FULL_VERSION.tar.gz"
-URL="https://github.com/buildkite/agent/releases/download/v$VERSION/$DOWNLOAD"
-echo -e "\nDownloading \033[35m$URL\033[0m"
+echo -e "Downloading $DOWNLOAD_URL"
 
 # Create a temporary folder to download the binary to
 INSTALL_TMP=/tmp/buildkite-agent-install-$$
@@ -106,15 +114,15 @@ mkdir -p $INSTALL_TMP
 # If the file already exists in a folder called releases. This is useful for
 # local testing of this file.
 if [[ -e releases/$DOWNLOAD ]]; then
-  echo "Using existing release: releases/$DOWNLOAD"
-  cp releases/$DOWNLOAD $INSTALL_TMP
+  echo "Using existing release: releases/$DOWNLOAD_FILENAME"
+  cp releases/$DOWNLOAD_FILENAME $INSTALL_TMP
 else
-  buildkite-download "$URL" "$INSTALL_TMP/$DOWNLOAD"
+  buildkite-download "$DOWNLOAD_URL" "$INSTALL_TMP/$DOWNLOAD_FILENAME"
 fi
 
 # Extract the download to a tmp folder inside the $DESTINATION
 # folder
-tar -C $INSTALL_TMP -zxf $INSTALL_TMP/$DOWNLOAD
+tar -C $INSTALL_TMP -zxf $INSTALL_TMP/$DOWNLOAD_FILENAME
 
 # Move the buildkite binary into a bin folder
 mkdir -p $DESTINATION/bin
