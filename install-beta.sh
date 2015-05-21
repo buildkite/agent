@@ -30,7 +30,6 @@ function buildkite-download {
 }
 
 echo -e "\033[33m
-
   _           _ _     _ _    _ _                                _
  | |         (_) |   | | |  (_) |                              | |
  | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
@@ -98,7 +97,7 @@ echo -e "Destination: \033[35m$DESTINATION\033[0m"
 # Download and unzip the file to the destination
 DOWNLOAD="buildkite-agent-$PLATFORM-$ARCH-$FULL_VERSION.tar.gz"
 URL="https://github.com/buildkite/agent/releases/download/v$VERSION/$DOWNLOAD"
-echo -e "\nDownloading $URL"
+echo -e "\nDownloading \033[35m$URL\033[0m"
 
 # Create a temporary folder to download the binary to
 INSTALL_TMP=/tmp/buildkite-agent-install-$$
@@ -126,13 +125,19 @@ chmod +x $DESTINATION/bin/buildkite-agent
 mv $INSTALL_TMP/buildkite-agent.cfg $DESTINATION/buildkite-agent.dist.cfg
 
 # Copy the config file if it doesn't exist
-if [[ ! -f $DESTINATION/buildkite-agent.cfg ]]; then
+if [[ -f $DESTINATION/buildkite-agent.cfg ]]; then
+  echo -e "\n\033[36mIgnoring existing buildkite-agent.cfg (see buildkite-agent.dist.cfg for the latest version)\033[0m"
+else
+  echo -e "\n\033[36mA default buildkite-agent.cfg has been created for you in $DESTINATION\033[0m"
+
   cp $DESTINATION/buildkite-agent.dist.cfg $DESTINATION/buildkite-agent.cfg
 
   # Set their token for them
   if [[ -n $TOKEN ]]; then
     # Need "-i ''" for Mac OS X
     sed -i '' "s/token=\"xxx\"/token=\"$TOKEN\"/g" $DESTINATION/buildkite-agent.cfg
+  else
+    echo -e "\n\033[36mDon't forget to update the config with your agent token! You can find it token on your \"Agents\" page in Buildkite\033[0m"
   fi
 fi
 
@@ -149,19 +154,13 @@ buildkite-copy-bootstrap
 
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
-You can now run the Buildkite Agent like so:
+You can now start the agent!
 
-  $DESTINATION/bin/buildkite-agent start --token ${TOKEN:="xxx"}
+  $DESTINATION/bin/buildkite-agent start
 
-You can find your Agent token by going to your organizations \"Agents\" page
+For docs, help and support:
 
-The source code of the agent is available here:
+  https://buildkite.com/docs/agent
 
-  https://github.com/buildkite/agent
-
-If you have any questions or need a hand getting things setup,
-please email us at: hello@buildkite.com
-
-Happy Building!
-
-<3 Buildkite"
+Happy building! <3
+"
