@@ -108,7 +108,7 @@ func (d Download) try() error {
 		return fmt.Errorf("Error when copying data %s (%T: %v)", d.URL, err, err)
 	}
 
-	logger.Info("Successfully downloaded %s (%d bytes)", d.Path, bytes)
+	logger.Info("Successfully downloaded \"%s\" %d bytes", d.Path, bytes)
 
 	return nil
 }
