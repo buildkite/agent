@@ -169,6 +169,10 @@ func (a *ArtifactUploader) upload(artifacts []*Artifact) error {
 	errors := []error{}
 
 	for _, artifact := range artifacts {
+		// Create new instance of the artifact for the goroutine
+		// See: http://golang.org/doc/effective_go.html#channels
+		artifact := artifact
+
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
 			logger.Info("Uploading \"%s\" %d bytes", artifact.Path, artifact.FileSize)

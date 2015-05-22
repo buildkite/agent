@@ -53,6 +53,10 @@ func (a *ArtifactDownloader) Download() error {
 		errors := []error{}
 
 		for _, artifact := range searcher.Artifacts {
+			// Create new instance of the artifact for the goroutine
+			// See: http://golang.org/doc/effective_go.html#channels
+			artifact := artifact
+
 			p.Spawn(func() {
 				err := Download{
 					URL:         artifact.URL,
