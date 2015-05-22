@@ -40,6 +40,11 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.SetColors(false)
 	}
 
+	// Init debugging
+	if configuration.Debug {
+		logger.SetLevel(logger.DEBUG)
+	}
+
 	welcomeMessage :=
 		"\n" +
 			"%s  _           _ _     _ _    _ _                                _\n" +
@@ -65,11 +70,6 @@ func AgentStartCommandAction(c *cli.Context) {
 	// then it's been loaded and we should show which one we loaded.
 	if configuration.File != "" {
 		logger.Info("Configuration loaded from: %s", configuration.File)
-	}
-
-	// Init debugging
-	if configuration.Debug {
-		logger.SetLevel(logger.DEBUG)
 	}
 
 	agentRegistrationToken := configuration.Token
