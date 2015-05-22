@@ -9,6 +9,7 @@ import (
 )
 
 type AgentStartConfiguration struct {
+	File                             string
 	Token                            string   `cli:"token"`
 	Name                             string   `cli:"name"`
 	Priority                         string   `cli:"priority"`
@@ -26,8 +27,9 @@ type AgentStartConfiguration struct {
 }
 
 func AgentStartCommandAction(c *cli.Context) {
-	// Load the configration
 	var configuration AgentStartConfiguration
+
+	// Load the configuration
 	err := buildkite.LoadConfiguration(&configuration, c)
 	if err != nil {
 		logger.Fatal("Failed to load configuration: %s", err)
@@ -60,6 +62,11 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
+	// then it's been loaded and we should show which one we loaded.
+	if configuration.File != "" {
+		logger.Info("Configuration loaded from: %s", configuration.File)
+	}
+
 	// Init debugging
 	if configuration.Debug {
 		logger.SetLevel(logger.DEBUG)
@@ -72,7 +79,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	var agent buildkite.Agent
 
-	// Expand the envionment variable
+	// Expand the environment variable
 	agent.BootstrapScript = os.ExpandEnv(configuration.BootstrapScript)
 	if agent.BootstrapScript == "" {
 		logger.Fatal("Bootstrap script is missing")
@@ -157,7 +164,7 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.Fatal("%s", err)
 	}
 
-	logger.Info("Successfully registred agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
+	logger.Info("Successfully registered agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
 
 	// Configure the agent's client (legacy)
 	agent.Client.AuthorizationToken = agent.AccessToken

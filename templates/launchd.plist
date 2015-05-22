@@ -1,44 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  This is an example launchd config for loading buildkite-agent on system boot on OS X systems using launchd
-
-  To install:
-
-    # Download the launchd config to /Library/LaunchAgents/ (it needs to be owned by root:wheel)
-    sudo curl -o /Library/LaunchAgents/com.buildkite.buildkite-agent.plist https://raw.githubusercontent.com/buildkite/agent/master/templates/launchd.plist
-
-    # Set the user to run buildkite-agent as (usually `whoami`). It should be a full OS X user created via System Prefs, and the one you installed buildkite-agent under.
-    sudo sed -i '' "s/your-build-user/[insert username here]/g" /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
-
-    # Set the agent's name
-    sudo sed -i '' "s/your-agent-name/[insert agent name]/g" /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
-
-    # Set the agent's access token
-    sudo sed -i '' "s/your-agent-access-token/[insert agent access token here]/g" /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
-
-    # Create the agent's log directory with permissions for your user
-    mkdir -p ~/.buildkite/log
-    chmod 775 ~/.buildkite/log
-
-    # Add it to launchd (which also starts buildkite-agent)
-    launchctl load /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
-
-    # Check the logs
-    tail -f ~/.buildkite/log/buildkite-agent.log
-
-    # Troubleshooting
-    If you're setting up a new user for your buildkite-agent, the agent may stall on the first attempt of cloning code from your code host.
-
-    To solve this you need trust the the RSA fingerprint of your code host manually, just run the following.
-
-    ssh github.com
-
-  If you need to edit the plist:
-
-    # Edit the plist, and then...
-    launchctl unload /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
-    launchctl load /Library/LaunchAgents/com.buildkite.buildkite-agent.plist
+  A launchd config for loading buildkite-agent on system boot on OS X
+  systems, and runs without GUI (which starts on system boot, but doesn't allow Xcode UI testing)
 -->
 <plist version="1.0">
   <dict>
@@ -52,8 +16,7 @@
     <array>
       <string>/Users/your-build-user/.buildkite/bin/buildkite-agent</string>
       <string>start</string>
-      <string>--token</string>
-      <string>your-agent-access-token</string>
+      <!-- <string>--debug</string> -->
     </array>
 
     <key>KeepAlive</key>
@@ -85,8 +48,8 @@
       <key>PATH</key>
       <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
 
-      <key>BUILDKITE_AGENT_NAME</key>
-      <string>your-agent-name</string>
+      <key>BUILDKITE_AGENT_CONFIG</key>
+      <string>/Users/your-build-user/.buildkite/buildkite-agent.cfg</string>
     </dict>
   </dict>
 </plist>

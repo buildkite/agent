@@ -3,13 +3,13 @@ package buildkite
 import "fmt"
 import "strings"
 
-// You can overriden buildVersion at compile time by using:
+// You can overridden buildVersion at compile time by using:
 //
 //  go run -ldflags "-X github.com/buildkite/agent/buildkite.buildVersion abc" *.go --version
 //
 // On CI, the binaries are always build with the buildVersion variable set.
 
-var baseVersion string = "1.0-beta.30"
+var baseVersion string = "1.0-beta.32"
 var buildVersion string = ""
 
 func Version() string {

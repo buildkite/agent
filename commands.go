@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/command"
 	"github.com/codegangsta/cli"
 )
@@ -72,7 +71,7 @@ Example:
    The first argument is the search query, and the second argument is the download destination.
 
    If you're trying to download a specific file, and there are multiple artifacts from different
-   jobs, you can target the paticular job you want to download the artifact from:
+   jobs, you can target the particular job you want to download the artifact from:
 
    $ buildkite-agent artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
 
@@ -94,10 +93,12 @@ Example:
 
    $ buildkite-agent artifact upload "log/**/*.log"
 
-   You can also upload directy to Amazon S3 if you'd like to host your own artifacts:
+   You can also upload directly to Amazon S3 if you'd like to host your own artifacts:
 
-   $ export AWS_SECRET_ACCESS_KEY=yyy
-   $ export AWS_ACCESS_KEY_ID=xxx
+   $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
+   $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
+   $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
+   $ export BUILDKITE_S3_ACL=private # default is public-read
    $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
 
 var SetHelpDescription = `Usage:
@@ -124,19 +125,9 @@ Example:
 
    $ buildkite-agent meta-data get "foo"`
 
+var DefaultEndpoint = "https://agent.buildkite.com/v2"
+
 func init() {
-	// This is default locations of stuff (*nix systems)
-	bootstrapScriptLocation := "$HOME/.buildkite/bootstrap.sh"
-	buildPathLocation := "$HOME/.buildkite/builds"
-	hookPathLocation := "$HOME/.buildkite/hooks"
-
-	// Windows has a slightly modified locations
-	if buildkite.MachineIsWindows() {
-		bootstrapScriptLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\bootstrap.bat"
-		buildPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\builds"
-		hookPathLocation = "$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\hooks"
-	}
-
 	Commands = []cli.Command{
 		{
 			Name:        "start",
@@ -164,13 +155,13 @@ func init() {
 				cli.StringFlag{
 					Name:   "priority",
 					Value:  "",
-					Usage:  "The priority of the agent",
+					Usage:  "The priority of the agent (higher priorities are assigned work first)",
 					EnvVar: "BUILDKITE_AGENT_PRIORITY",
 				},
 				cli.StringSliceFlag{
 					Name:   "meta-data",
 					Value:  &cli.StringSlice{},
-					Usage:  "Meta data for the agent",
+					Usage:  "Meta data for the agent (default is \"queue=default\")",
 					EnvVar: "BUILDKITE_AGENT_META_DATA",
 				},
 				cli.BoolFlag{
@@ -179,19 +170,19 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "bootstrap-script",
-					Value:  bootstrapScriptLocation,
+					Value:  "",
 					Usage:  "Path to the bootstrap script",
 					EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 				},
 				cli.StringFlag{
 					Name:   "build-path",
-					Value:  buildPathLocation,
+					Value:  "",
 					Usage:  "Path to where the builds will run from",
 					EnvVar: "BUILDKITE_BUILD_PATH",
 				},
 				cli.StringFlag{
 					Name:   "hooks-path",
-					Value:  hookPathLocation,
+					Value:  "",
 					Usage:  "Directory where the hook scripts are found",
 					EnvVar: "BUILDKITE_HOOKS_PATH",
 				},
@@ -212,7 +203,7 @@ func init() {
 				},
 				cli.StringFlag{
 					Name:   "endpoint",
-					Value:  "https://agent.buildkite.com/v2",
+					Value:  DefaultEndpoint,
 					Usage:  "The agent API endpoint",
 					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 				},
@@ -240,7 +231,7 @@ func init() {
 					Flags: []cli.Flag{
 						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
 						// default to all the jobs on the build, not just the current one. --job is used
-						// to scope to a paticular job if you
+						// to scope to a particular job if you
 						cli.StringFlag{
 							Name:  "job",
 							Value: "",
@@ -260,7 +251,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -296,7 +287,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -320,7 +311,7 @@ func init() {
 					Flags: []cli.Flag{
 						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
 						// default to all the jobs on the build, not just the current one. --job is used
-						// to scope to a paticular job if you
+						// to scope to a particular job if you
 						cli.StringFlag{
 							Name:  "job",
 							Value: "",
@@ -340,7 +331,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -382,7 +373,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
@@ -418,7 +409,7 @@ func init() {
 						},
 						cli.StringFlag{
 							Name:   "endpoint",
-							Value:  "https://agent.buildkite.com/v2",
+							Value:  DefaultEndpoint,
 							Usage:  "The agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},

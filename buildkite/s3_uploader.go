@@ -32,8 +32,6 @@ func (u *S3Uploader) Setup(destination string) error {
 		return errors.New(fmt.Sprintf("Error creating AWS S3 authentication: %s", err.Error()))
 	}
 
-	// Decide what region to use. I think S3 defaults to us-east-1
-	// https://github.com/AdRoll/goamz/blob/master/aws/regions.go
 	regionName := "us-east-1"
 	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
 		regionName = os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
@@ -75,7 +73,6 @@ func (u *S3Uploader) URL(artifact *Artifact) string {
 }
 
 func (u *S3Uploader) Upload(artifact *Artifact) error {
-	// Define the permission to use. Allow override by an ENV variable
 	permission := "public-read"
 	if os.Getenv("BUILDKITE_S3_ACL") != "" {
 		permission = os.Getenv("BUILDKITE_S3_ACL")

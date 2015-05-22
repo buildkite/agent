@@ -75,6 +75,11 @@ function buildkite-error {
   exit 1
 }
 
+# Show a warning
+function buildkite-warning {
+  echo -e "\033[33m⚠️ Buildkite Warning: $1\033[0m"
+}
+
 # Run a hook script
 function buildkite-hook {
   HOOK_LABEL="$1"
@@ -194,7 +199,7 @@ else
 
       # Only add the output from ssh-keyscan if it doesn't already exist in the
       # known_hosts file
-      if ! ssh-keygen -H -F "$BUILDKITE_REPO_SSH_HOST" | grep --quiet "$BUILDKITE_REPO_SSH_HOST"; then
+      if ! ssh-keygen -H -F "$BUILDKITE_REPO_SSH_HOST" | grep -q "$BUILDKITE_REPO_SSH_HOST"; then
         buildkite-run "ssh-keyscan \"$BUILDKITE_REPO_SSH_HOST\" >> \"$BUILDKITE_SSH_KNOWN_HOST_PATH\""
       fi
     fi
@@ -226,8 +231,14 @@ else
 
   buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
 
-  # `submodule sync` will ensure the .git/config matches the .gitmodules file
-  buildkite-run "git submodule sync --recursive"
+  # `submodule sync` will ensure the .git/config matches the .gitmodules file.
+  # The command is only available in git version 1.8.1, so if the call fails,
+  # continue the bootstrap script, and show an informative error.
+  buildkite-prompt-and-run "git submodule sync --recursive"
+  if [[ $? -ne 0 ]]; then
+    buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If your using submodules, it's highly recommended you upgrade if you can."
+  fi
+
   buildkite-run "git submodule update --init --recursive"
   buildkite-run "git submodule foreach --recursive git reset --hard"
 
