@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type Download struct {
@@ -25,6 +26,31 @@ type Download struct {
 }
 
 func (d Download) Start() error {
+	seconds := 5 * time.Second
+	ticker := time.NewTicker(seconds)
+	retries := 1
+	max := d.Retries
+
+	for {
+		err := d.try()
+		if err == nil {
+			break
+		}
+
+		if retries >= max {
+			break
+		} else {
+			logger.Warn("Error trying to download %s (%d/%d) (%T: %v) Trying again in %s", d.URL, retries, max, err, err, seconds)
+		}
+
+		retries++
+		<-ticker.C
+	}
+
+	return nil
+}
+
+func (d Download) try() error {
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
 	// called "pkg", we should merge the two paths together. So, instead of it
 	// downloading to: destination/pkg/pkg/foo.txt, it will just download to
