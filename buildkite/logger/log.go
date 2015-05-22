@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,7 @@ const (
 
 var level = INFO
 var colors = true
+var mutex = sync.Mutex{}
 
 func GetLevel() Level {
 	return level
@@ -114,5 +116,8 @@ func log(l Level, format string, v ...interface{}) {
 		line = fmt.Sprintf("%s %-6s %s\n", now, level, message)
 	}
 
+	// Make sure we're only outputing a line one at a time
+	mutex.Lock()
 	fmt.Fprint(OutputPipe(), line)
+	mutex.Unlock()
 }
