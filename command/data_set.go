@@ -9,9 +9,8 @@ import (
 func DataSetCommandAction(context *cli.Context) {
 	c := buildkite.CLI{
 		Context: context,
-	}
+	}.Setup()
 
-	c.Setup()
 	c.Require("endpoint", "agent-access-token", "job")
 
 	var metaData = buildkite.MetaData{

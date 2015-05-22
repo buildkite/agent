@@ -77,22 +77,22 @@ func (a Artifact) MimeType() string {
 	}
 }
 
-func (c *Client) ArtifactUpdate(job *Job, artifact Artifact) (*Artifact, error) {
+func (c *Client) ArtifactUpdate(jobID string, artifact Artifact) (*Artifact, error) {
 	// Create a new instance of a artifact that will be populated
 	// with the updated data by the client
 	var updatedArtifact Artifact
 
 	// Return the job.
-	return &updatedArtifact, c.Put(&updatedArtifact, "jobs/"+job.ID+"/artifacts/"+artifact.ID, artifact)
+	return &updatedArtifact, c.Put(&updatedArtifact, "jobs/"+jobID+"/artifacts/"+artifact.ID, artifact)
 }
 
 // Sends all the artifacts at once to the Buildkite Agent API. This will allow
 // the UI to show what artifacts will be uploaded. Their state starts out as
 // "new"
-func (c *Client) CreateArtifacts(job *Job, artifacts []*Artifact) ([]Artifact, error) {
+func (c *Client) CreateArtifacts(jobID string, artifacts []*Artifact) ([]Artifact, error) {
 	var createdArtifacts []Artifact
 
-	return createdArtifacts, c.Post(&createdArtifacts, "jobs/"+job.ID+"/artifacts", artifacts)
+	return createdArtifacts, c.Post(&createdArtifacts, "jobs/"+jobID+"/artifacts", artifacts)
 }
 
 // Searches for artifacts on the build
@@ -102,7 +102,7 @@ func (c *Client) SearchArtifacts(buildId string, searchQuery string, jobQuery st
 	return foundArtifacts, c.Get(&foundArtifacts, "builds/"+buildId+"/artifacts/search?query="+url.QueryEscape(searchQuery)+"&job="+url.QueryEscape(jobQuery)+"&state="+url.QueryEscape(stateQuery))
 }
 
-func CollectArtifacts(job *Job, artifactPaths string) (artifacts []*Artifact, err error) {
+func CollectArtifacts(artifactPaths string) (artifacts []*Artifact, err error) {
 	globs := strings.Split(artifactPaths, ";")
 	workingDirectory, _ := os.Getwd()
 
@@ -182,7 +182,7 @@ func BuildArtifact(relativePath string, absolutePath string, globPath string) (*
 	return artifact, nil
 }
 
-func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination string) error {
+func UploadArtifacts(client Client, jobID string, artifacts []*Artifact, destination string) error {
 	var uploader Uploader
 
 	// Determine what uploader to use
@@ -219,7 +219,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 
 		someArtifacts := artifacts[i:j]
 
-		someCreatedArtifacts, err := client.CreateArtifacts(job, someArtifacts)
+		someCreatedArtifacts, err := client.CreateArtifacts(jobID, someArtifacts)
 		if err != nil {
 			return err
 		}
@@ -240,7 +240,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 		// startup up again.
 		count++
 		wait := make(chan string)
-		go uploadRoutine(wait, client, job, artifact, uploader)
+		go uploadRoutine(wait, client, jobID, artifact, uploader)
 		routines = append(routines, wait)
 
 		if count >= concurrency {
@@ -259,7 +259,7 @@ func UploadArtifacts(client Client, job *Job, artifacts []*Artifact, destination
 	return nil
 }
 
-func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact, uploader Uploader) {
+func uploadRoutine(quit chan string, client Client, jobID string, artifact Artifact, uploader Uploader) {
 	// Show a nice message that we're starting to upload the file
 	logger.Info("Uploading \"%s\" (%d bytes)", artifact.Path, artifact.FileSize)
 
@@ -274,7 +274,7 @@ func uploadRoutine(quit chan string, client Client, job *Job, artifact Artifact,
 	}
 
 	// Update the state of the artifact on Buildkite
-	_, err = client.ArtifactUpdate(job, artifact)
+	_, err = client.ArtifactUpdate(jobID, artifact)
 	if err != nil {
 		logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
 	}
