@@ -153,6 +153,11 @@ func (r *Request) send() (*Response, error) {
 		req.Header.Set(header.Name, header.Value)
 	}
 
+	// Add the user agent
+	if r.UserAgent != "" {
+		req.Header.Set("User-Agent", r.UserAgent)
+	}
+
 	// Add in the sessions headers (if we have a session)
 	if r.Session != nil {
 		for _, header := range r.Session.Headers {
