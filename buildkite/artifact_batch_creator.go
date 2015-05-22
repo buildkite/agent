@@ -29,7 +29,7 @@ func (a *ArtifactBatchCreator) Create() error {
 
 		artifacts := a.Artifacts[i:j]
 
-		logger.Info("Creating %d/%d artifacts", i+chunks, length)
+		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
 		err := a.API.Post("jobs/"+a.JobID+"/artifacts", &artifacts, artifacts)
 		if err != nil {
