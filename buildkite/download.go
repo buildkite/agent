@@ -1,6 +1,7 @@
 package buildkite
 
 import (
+	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
 	"io"
 	"net/http"
@@ -18,15 +19,18 @@ type Download struct {
 
 	// The relative path that should be preserved in the download folder
 	Path string
+
+	// How many times should it retry the download before giving up
+	Retries int
 }
 
-func StartDownload(quit chan string, download Download) {
+func (d Download) Start() error {
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
 	// called "pkg", we should merge the two paths together. So, instead of it
 	// downloading to: destination/pkg/pkg/foo.txt, it will just download to
 	// destination/pkg/foo.txt
-	destinationPaths := strings.Split(download.Destination, string(os.PathSeparator))
-	downloadPaths := strings.Split(download.Path, string(os.PathSeparator))
+	destinationPaths := strings.Split(d.Destination, string(os.PathSeparator))
+	downloadPaths := strings.Split(d.Path, string(os.PathSeparator))
 
 	for i := 0; i < len(downloadPaths); i += 100 {
 		// If the last part of the destination path matches
@@ -46,44 +50,39 @@ func StartDownload(quit chan string, download Download) {
 
 	finalizedDestination := strings.Join(destinationPaths, string(os.PathSeparator))
 
-	targetFile := filepath.Join(finalizedDestination, download.Path)
+	targetFile := filepath.Join(finalizedDestination, d.Path)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
-	logger.Debug("Downloading %s to %s", download.URL, targetFile)
+	logger.Debug("Downloading %s to %s", d.URL, targetFile)
 
 	// Start by downloading the file
-	response, err := http.Get(download.URL)
+	response, err := http.Get(d.URL)
 	if err != nil {
-		logger.Error("Error while downloading %s (%T: %v)", download.URL, err, err)
-		return
+		return fmt.Errorf("Error while downloading %s (%T: %v)", d.URL, err, err)
 	}
 	defer response.Body.Close()
 
 	// Now make the folder for our file
 	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
-		logger.Error("Failed to create folder for %s (%T: %v)", targetFile, err, err)
-		return
+		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
 	}
 
 	// Create a file to handle the file
 	fileBuffer, err := os.Create(targetFile)
 	if err != nil {
-		logger.Error("Failed to create file %s (%T: %v)", targetFile, err, err)
-		return
+		return fmt.Errorf("Failed to create file %s (%T: %v)", targetFile, err, err)
 	}
 	defer fileBuffer.Close()
 
 	// Copy the data to the file
 	bytes, err := io.Copy(fileBuffer, response.Body)
 	if err != nil {
-		logger.Error("Error when copying data %s (%T: %v)", download.URL, err, err)
-		return
+		return fmt.Errorf("Error when copying data %s (%T: %v)", d.URL, err, err)
 	}
 
-	logger.Info("Successfully downloaded %s (%d bytes)", download.Path, bytes)
+	logger.Info("Successfully downloaded %s (%d bytes)", d.Path, bytes)
 
-	// We can notify the channel that this routine has finished now
-	quit <- "finished"
+	return nil
 }

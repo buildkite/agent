@@ -56,9 +56,9 @@ func (api API) Do(method string, path string, result interface{}, body interface
 		UserAgent: api.UserAgent(),
 		Retries:   retries,
 		RetryCallback: func(response *http.Response) bool {
-			// Don't bother retrying on a 401 status
-			if response.StatusCode == 401 {
-				return true
+			// Don't bother retrying these statuses
+			if response.StatusCode == 401 || response.StatusCode == 404 {
+				return false
 			}
 
 			if response.Body != nil {

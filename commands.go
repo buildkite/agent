@@ -233,15 +233,14 @@ func init() {
 						// default to all the jobs on the build, not just the current one. --job is used
 						// to scope to a particular job if you
 						cli.StringFlag{
-							Name:  "job",
+							Name:  "step",
 							Value: "",
-							Usage: "Used to target a specific job to download artifacts from",
+							Usage: "Used to scope the artifact search to a paticular step. Either name or id",
 						},
 						cli.StringFlag{
-							Name:   "build",
-							Value:  "",
-							Usage:  "Which build should the artifacts be downloaded from",
-							EnvVar: "BUILDKITE_BUILD_ID",
+							Name:  "job",
+							Value: "BUILDKITE_JOB_ID",
+							Usage: "The current job downloading the artifacts",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",

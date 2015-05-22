@@ -26,13 +26,6 @@ type ArtifactUploader struct {
 }
 
 func (a *ArtifactUploader) Upload() error {
-	// Set the agent options
-	var agent Agent
-
-	// Client specific options
-	agent.Client.AuthorizationToken = a.API.Token
-	agent.Client.URL = a.API.Endpoint
-
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.collect()
 	if err != nil {

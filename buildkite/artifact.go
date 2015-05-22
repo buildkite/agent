@@ -2,7 +2,6 @@ package buildkite
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite/logger"
 	"mime"
 	"net/url"
 	"path/filepath"
@@ -87,44 +86,4 @@ func (c *Client) SearchArtifacts(buildId string, searchQuery string, jobQuery st
 	var foundArtifacts []Artifact
 
 	return foundArtifacts, c.Get(&foundArtifacts, "builds/"+buildId+"/artifacts/search?query="+url.QueryEscape(searchQuery)+"&job="+url.QueryEscape(jobQuery)+"&state="+url.QueryEscape(stateQuery))
-}
-
-func DownloadArtifacts(artifacts []Artifact, destination string) error {
-	// Download the files by spinning up some routines
-	var routines []chan string
-	var concurrency int = 10
-
-	logger.Debug("Spinning up %d concurrent threads for downloads", concurrency)
-
-	count := 0
-	for _, artifact := range artifacts {
-		// Create a channel and append it to the routines array. Once we've hit our
-		// concurrency limit, we'll block until one finishes, then this loop will
-		// startup up again.
-		count++
-		wait := make(chan string)
-		download := Download{URL: artifact.URL, Path: artifact.Path, Destination: destination}
-		go StartDownload(wait, download)
-		routines = append(routines, wait)
-
-		if count >= concurrency {
-			logger.Debug("Maximum concurrent threads running. Waiting.")
-
-			// Wait for all the routines to finish, then reset
-			waitForDownloadRoutines(routines)
-			count = 0
-			routines = routines[0:0]
-		}
-	}
-
-	// Wait for any other routines to finish
-	waitForDownloadRoutines(routines)
-
-	return nil
-}
-
-func waitForDownloadRoutines(routines []chan string) {
-	for _, r := range routines {
-		<-r
-	}
 }

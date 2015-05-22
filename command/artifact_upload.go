@@ -20,7 +20,7 @@ func ArtifactUploadCommandAction(context *cli.Context) {
 		destination = context.Args()[1]
 	}
 
-	var artifactUploader = buildkite.ArtifactUploader{
+	var uploader = buildkite.ArtifactUploader{
 		API: buildkite.API{
 			Endpoint: context.String("endpoint"),
 			Token:    context.String("agent-access-token"),
@@ -30,7 +30,7 @@ func ArtifactUploadCommandAction(context *cli.Context) {
 		Destination: destination,
 	}
 
-	err := artifactUploader.Upload()
+	err := uploader.Upload()
 	if err != nil {
 		logger.Fatal("Failed to upload artifacts: %s", err)
 	}
