@@ -8,8 +8,8 @@ import (
 )
 
 type ArtifactDownloader struct {
-	// The ID of the Job
-	JobID string
+	// The ID of the Build
+	BuildID string
 
 	// The query used to find the artifacts
 	Query string
@@ -42,13 +42,13 @@ func (a *ArtifactDownloader) Download() error {
 	}
 
 	// Find the artifacts that we want to download
-	collection := ArtifactCollection{JobID: a.JobID, API: a.API}
-	err = collection.Search(a.Query, a.Step)
+	searcher := ArtifactSearcher{BuildID: a.BuildID, API: a.API}
+	err = searcher.Search(a.Query, a.Step)
 	if err != nil {
 		return err
 	}
 
-	artifactCount := len(collection.Artifacts)
+	artifactCount := len(searcher.Artifacts)
 
 	if artifactCount == 0 {
 		logger.Info("No artifacts found for downloading")
@@ -58,7 +58,7 @@ func (a *ArtifactDownloader) Download() error {
 		p := pool.New(pool.MaxConcurrencyLimit)
 		errors := []error{}
 
-		for _, artifact := range collection.Artifacts {
+		for _, artifact := range searcher.Artifacts {
 			p.Spawn(func() {
 				err := Download{
 					URL:         artifact.URL,

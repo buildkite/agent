@@ -204,7 +204,7 @@ func init() {
 				cli.StringFlag{
 					Name:   "endpoint",
 					Value:  DefaultEndpoint,
-					Usage:  "The agent API endpoint",
+					Usage:  "The Agent API endpoint",
 					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 				},
 				cli.BoolFlag{
@@ -229,18 +229,15 @@ func init() {
 					Usage:       "Downloads artifacts from Buildkite to the local machine",
 					Description: DownloadHelpDescription,
 					Flags: []cli.Flag{
-						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
-						// default to all the jobs on the build, not just the current one. --job is used
-						// to scope to a particular job if you
 						cli.StringFlag{
 							Name:  "step",
 							Value: "",
-							Usage: "Used to scope the artifact search to a paticular step. Either name or id",
+							Usage: "Scope the search to a paticular step by using either it's name of job ID",
 						},
 						cli.StringFlag{
-							Name:  "job",
+							Name:  "build",
 							Value: "BUILDKITE_JOB_ID",
-							Usage: "The current job downloading the artifacts",
+							Usage: "Which build should the artifacts be downloaded from",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
@@ -251,7 +248,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "endpoint",
 							Value:  DefaultEndpoint,
-							Usage:  "The agent API endpoint",
+							Usage:  "The Agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
@@ -287,7 +284,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "endpoint",
 							Value:  DefaultEndpoint,
-							Usage:  "The agent API endpoint",
+							Usage:  "The Agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
@@ -331,7 +328,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "endpoint",
 							Value:  DefaultEndpoint,
-							Usage:  "The agent API endpoint",
+							Usage:  "The Agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
@@ -361,7 +358,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "job",
 							Value:  "",
-							Usage:  "Which job should the artifacts be downloaded from",
+							Usage:  "Which job should the meta-data be set on",
 							EnvVar: "BUILDKITE_JOB_ID",
 						},
 						cli.StringFlag{
@@ -373,7 +370,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "endpoint",
 							Value:  DefaultEndpoint,
-							Usage:  "The agent API endpoint",
+							Usage:  "The Agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{
@@ -397,7 +394,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "job",
 							Value:  "",
-							Usage:  "Which job should the data be retrieved from",
+							Usage:  "Which job should the meta-data be retrieved from",
 							EnvVar: "BUILDKITE_JOB_ID",
 						},
 						cli.StringFlag{
@@ -409,7 +406,7 @@ func init() {
 						cli.StringFlag{
 							Name:   "endpoint",
 							Value:  DefaultEndpoint,
-							Usage:  "The agent API endpoint",
+							Usage:  "The Agent API endpoint",
 							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 						},
 						cli.BoolFlag{

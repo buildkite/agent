@@ -11,7 +11,7 @@ func ArtifactDownloadCommandAction(context *cli.Context) {
 		Context: context,
 	}.Setup()
 
-	c.Require("endpoint", "agent-access-token", "job")
+	c.Require("endpoint", "agent-access-token", "build")
 	c.RequireArgs("query", "download path")
 
 	downloader := buildkite.ArtifactDownloader{
@@ -19,7 +19,7 @@ func ArtifactDownloadCommandAction(context *cli.Context) {
 			Endpoint: context.String("endpoint"),
 			Token:    context.String("agent-access-token"),
 		},
-		JobID:       context.String("job"),
+		BuildID:     context.String("build"),
 		Query:       context.Args()[0],
 		Destination: context.Args()[1],
 		Step:        context.String("step"),
