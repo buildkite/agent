@@ -3,7 +3,6 @@ package buildkite
 import (
 	"fmt"
 	"mime"
-	"net/url"
 	"path/filepath"
 )
 
@@ -79,11 +78,4 @@ func (a Artifact) MimeType() string {
 	} else {
 		return "binary/octet-stream"
 	}
-}
-
-// Searches for artifacts on the build
-func (c *Client) SearchArtifacts(buildId string, searchQuery string, jobQuery string, stateQuery string) ([]Artifact, error) {
-	var foundArtifacts []Artifact
-
-	return foundArtifacts, c.Get(&foundArtifacts, "builds/"+buildId+"/artifacts/search?query="+url.QueryEscape(searchQuery)+"&job="+url.QueryEscape(jobQuery)+"&state="+url.QueryEscape(stateQuery))
 }
