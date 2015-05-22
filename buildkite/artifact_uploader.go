@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/buildkite/pool"
 	"io"
 	"os"
 	"path/filepath"
@@ -153,90 +154,58 @@ func (a *ArtifactUploader) upload(artifacts []*Artifact) error {
 		artifact.URL = uploader.URL(artifact)
 	}
 
-	// Create artifacts on buildkite in batches to prevent timeouts with many artifacts
-	var lenArtifacts = len(artifacts)
-	var createdArtifacts = []*Artifact{}
-
-	for i := 0; i < lenArtifacts; i += 100 {
-		j := i + 100
-		if lenArtifacts < j {
-			j = lenArtifacts
-		}
-
-		someArtifacts := artifacts[i:j]
-
-		someArtifactsCollection := ArtifactCollection{
-			Artifacts: someArtifacts,
-			API:       a.API,
-			JobID:     a.JobID,
-		}
-
-		err := someArtifactsCollection.Create()
-		if err != nil {
-			return err
-		}
-
-		createdArtifacts = append(createdArtifacts, someArtifactsCollection.Artifacts...)
+	// Create the artifacts on Buildkite
+	batchCreator := ArtifactBatchCreator{
+		API:       a.API,
+		JobID:     a.JobID,
+		Artifacts: artifacts,
+	}
+	err = batchCreator.Create()
+	if err != nil {
+		return err
 	}
 
-	// Upload the artifacts by spinning up some routines
-	var routines []chan string
-	var concurrency int = 10
+	p := pool.New(pool.MaxConcurrencyLimit)
+	errors := []error{}
 
-	logger.Debug("Spinning up %d concurrent threads for uploads", concurrency)
+	for _, artifact := range artifacts {
+		p.Spawn(func() {
+			// Show a nice message that we're starting to upload the file
+			logger.Info("Uploading \"%s\" %d bytes", artifact.Path, artifact.FileSize)
 
-	count := 0
-	for _, artifact := range createdArtifacts {
-		// Create a channel and append it to the routines array. Once we've hit our
-		// concurrency limit, we'll block until one finishes, then this loop will
-		// startup up again.
-		count++
-		wait := make(chan string)
-		go uploadRoutine(wait, artifact, uploader)
-		routines = append(routines, wait)
+			// Upload the artifact and then set the state depending on whether or not
+			// it passed.
+			err := uploader.Upload(artifact)
+			if err != nil {
+				artifact.State = "error"
+				logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 
-		if count >= concurrency {
-			logger.Debug("Maximum concurrent threads running. Waiting.")
+				// Track the error that was raised
+				p.Lock()
+				errors = append(errors, err)
+				p.Unlock()
+			} else {
+				artifact.State = "finished"
+			}
 
-			// Wait for all the routines to finish, then reset
-			waitForUploadRoutines(routines)
-			count = 0
-			routines = routines[0:0]
-		}
+			// Update the state of the artifact on Buildkite
+			err = artifact.Update()
+			if err != nil {
+				logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
+
+				// Track the error that was raised
+				p.Lock()
+				errors = append(errors, err)
+				p.Unlock()
+			}
+		})
 	}
 
-	// Wait for any other routines to finish
-	waitForUploadRoutines(routines)
+	p.Wait()
+
+	if len(errors) > 0 {
+		logger.Fatal("There were errors with uploading some of the artifacts")
+	}
 
 	return nil
-}
-
-func uploadRoutine(quit chan string, artifact *Artifact, uploader Uploader) {
-	// Show a nice message that we're starting to upload the file
-	logger.Info("Uploading \"%s\" (%d bytes)", artifact.Path, artifact.FileSize)
-
-	// Upload the artifact and then set the state depending on whether or not
-	// it passed.
-	err := uploader.Upload(artifact)
-	if err != nil {
-		artifact.State = "error"
-		logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
-	} else {
-		artifact.State = "finished"
-	}
-
-	// Update the state of the artifact on Buildkite
-	err = artifact.Update()
-	if err != nil {
-		logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
-	}
-
-	// We can notify the channel that this routine has finished now
-	quit <- "finished"
-}
-
-func waitForUploadRoutines(routines []chan string) {
-	for _, r := range routines {
-		<-r
-	}
 }
