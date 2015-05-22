@@ -237,7 +237,7 @@ func init() {
 						cli.StringFlag{
 							Name:  "build",
 							Value: "BUILDKITE_JOB_ID",
-							Usage: "Which build should the artifacts be downloaded from",
+							Usage: "The build that the artifacts were uploaded to",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
@@ -305,19 +305,15 @@ func init() {
 					Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",
 					Description: ShasumHelpDescription,
 					Flags: []cli.Flag{
-						// We don't default to $BUILDKITE_JOB_ID with --job because downloading artifacts should
-						// default to all the jobs on the build, not just the current one. --job is used
-						// to scope to a particular job if you
 						cli.StringFlag{
-							Name:  "job",
+							Name:  "step",
 							Value: "",
-							Usage: "Used to target a specific job to download artifacts from",
+							Usage: "Scope the search to a paticular step by using either it's name of job ID",
 						},
 						cli.StringFlag{
-							Name:   "build",
-							Value:  "",
-							Usage:  "Which build should the artifacts be downloaded from",
-							EnvVar: "BUILDKITE_BUILD_ID",
+							Name:  "build",
+							Value: "BUILDKITE_JOB_ID",
+							Usage: "The build that the artifacts were uploaded to",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
