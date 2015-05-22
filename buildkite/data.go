@@ -16,7 +16,7 @@ func (d Data) String() string {
 	return fmt.Sprintf("Data{Key: %s, Value: %s}", d.Key, d.Value)
 }
 
-func (c *Client) DataSet(job *Job, key string, value string) (*Data, error) {
+func (c *Client) DataSet(jobId string, key string, value string) (*Data, error) {
 	// Create the data object we're going to send
 	data := new(Data)
 	data.Key = key
@@ -27,10 +27,10 @@ func (c *Client) DataSet(job *Job, key string, value string) (*Data, error) {
 	var updatedData Data
 
 	// Return the data.
-	return &updatedData, c.Post(&updatedData, "jobs/"+job.ID+"/data/set", data)
+	return &updatedData, c.Post(&updatedData, "jobs/"+jobId+"/data/set", data)
 }
 
-func (c *Client) DataGet(job *Job, key string) (*Data, error) {
+func (c *Client) DataGet(jobId string, key string) (*Data, error) {
 	// Create the data object we're going to send
 	data := new(Data)
 	data.Key = key
@@ -40,5 +40,5 @@ func (c *Client) DataGet(job *Job, key string) (*Data, error) {
 	var updatedData Data
 
 	// Return the data.
-	return &updatedData, c.Post(&updatedData, "jobs/"+job.ID+"/data/get", data)
+	return &updatedData, c.Post(&updatedData, "jobs/"+jobId+"/data/get", data)
 }

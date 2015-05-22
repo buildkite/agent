@@ -36,18 +36,12 @@ func DataSetCommandAction(c *cli.Context) {
 	client.AuthorizationToken = agentAccessToken
 	client.URL = c.String("endpoint")
 
-	// Find the job
-	job, err := client.JobFind(jobId)
-	if err != nil {
-		logger.Fatal("Could not find job: %s", jobId)
-	}
-
 	// Grab the key and value to set
 	key := c.Args()[0]
 	value := c.Args()[1]
 
 	// Set the data through the API
-	_, err = client.DataSet(job, key, value)
+	_, err := client.DataSet(jobId, key, value)
 	if err != nil {
 		logger.Fatal("Failed to set data: %s", err)
 	}

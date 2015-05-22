@@ -36,17 +36,11 @@ func DataGetCommandAction(c *cli.Context) {
 	client.AuthorizationToken = agentAccessToken
 	client.URL = c.String("endpoint")
 
-	// Find the job
-	job, err := client.JobFind(jobId)
-	if err != nil {
-		logger.Fatal("Could not find job: %s", jobId)
-	}
-
 	// Grab the key
 	key := c.Args()[0]
 
 	// Get the data through the API
-	data, err := client.DataGet(job, key)
+	data, err := client.DataGet(jobId, key)
 	if err != nil {
 		logger.Fatal("Failed to get data: %s", err)
 	}
