@@ -19,8 +19,8 @@ func (a *ArtifactCollection) Create() error {
 	return a.API.Post("jobs/"+a.JobID+"/artifacts", &a.Artifacts, a.Artifacts)
 }
 
-func (a *ArtifactCollection) Search(query string, step string) error {
-	queryString := "?query=" + url.QueryEscape(query) + "&step=" + url.QueryEscape(step) + "&state=finished"
+func (a *ArtifactCollection) Search(query string, scope string) error {
+	queryString := "?query=" + url.QueryEscape(query) + "&scope=" + url.QueryEscape(scope) + "&state=finished"
 
 	return a.API.Get("jobs/"+a.JobID+"/artifacts/search"+queryString, &a.Artifacts)
 }
