@@ -51,7 +51,12 @@ func (api API) Do(method string, path string, result interface{}, body interface
 		},
 		UserAgent: api.UserAgent(),
 		Retries:   retries,
-		RetryCallback: func(response *http.Response) {
+		RetryCallback: func(response *http.Response) bool {
+			// Don't bother retrying on a 401 status
+			if response.StatusCode == 401 {
+				return true
+			}
+
 			if response.Body != nil {
 				// Ensure the response body is closed after
 				// this callback
@@ -59,6 +64,9 @@ func (api API) Do(method string, path string, result interface{}, body interface
 
 				api.logError(response)
 			}
+
+			// Returning true will cause it to retry as usuaul
+			return true
 		},
 	}
 

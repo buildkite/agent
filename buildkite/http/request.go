@@ -29,7 +29,7 @@ type Request struct {
 	UserAgent     string
 	Timeout       time.Duration
 	Retries       int
-	RetryCallback func(*Response)
+	RetryCallback func(*Response) bool
 }
 
 func (r *Request) String() string {
@@ -104,11 +104,15 @@ func (r *Request) Do() (*Response, error) {
 			logger.Warn("%s %s (%d/%d) (%T: %v)", r.Method, r.URL(), retries, max, err, err)
 			break
 		} else {
-			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s", r.Method, r.URL(), retries, max, err, err, seconds)
-
 			if r.RetryCallback != nil {
-				r.RetryCallback(response)
+				// If the RetryCallback returns false, don't
+				// bother retrying
+				if r.RetryCallback(response) == false {
+					break
+				}
 			}
+
+			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s", r.Method, r.URL(), retries, max, err, err, seconds)
 		}
 
 		// We don't return this response, so we should make sure we close it's body
