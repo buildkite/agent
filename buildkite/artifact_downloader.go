@@ -35,12 +35,6 @@ func (a *ArtifactDownloader) Download() error {
 		logger.Fatal("%s is not a directory", downloadDestination)
 	}
 
-	if a.Step == "" {
-		logger.Info("Searching for artifacts: \"%s\"", a.Query)
-	} else {
-		logger.Info("Searching for artifacts: \"%s\" within step: \"%s\"", a.Query, a.Step)
-	}
-
 	// Find the artifacts that we want to download
 	searcher := ArtifactSearcher{BuildID: a.BuildID, API: a.API}
 	err = searcher.Search(a.Query, a.Step)

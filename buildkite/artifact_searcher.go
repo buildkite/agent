@@ -1,6 +1,7 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/buildkite/logger"
 	"net/url"
 )
 
@@ -16,7 +17,12 @@ type ArtifactSearcher struct {
 }
 
 func (a *ArtifactSearcher) Search(query string, scope string) error {
-	queryString := "?query=" + url.QueryEscape(query) + "&scope=" + url.QueryEscape(scope) + "&state=finished"
+	if scope == "" {
+		logger.Info("Searching for artifacts: \"%s\"", query)
+	} else {
+		logger.Info("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope)
+	}
 
+	queryString := "?query=" + url.QueryEscape(query) + "&scope=" + url.QueryEscape(scope) + "&state=finished"
 	return a.API.Get("builds/"+a.BuildID+"/artifacts/search"+queryString, &a.Artifacts)
 }
