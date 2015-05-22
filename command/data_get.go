@@ -13,6 +13,7 @@ func DataGetCommandAction(context *cli.Context) {
 	}.Setup()
 
 	c.Require("endpoint", "agent-access-token", "job")
+	c.RequireArgs("key", "value")
 
 	var metaData = buildkite.MetaData{
 		API: buildkite.API{
