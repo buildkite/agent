@@ -31,6 +31,10 @@ func (api API) Post(path string, result interface{}, body interface{}, _retries 
 	return api.Do("POST", path, result, body, _retries...)
 }
 
+func (api API) Put(path string, result interface{}, body interface{}, _retries ...int) error {
+	return api.Do("PUT", path, result, body, _retries...)
+}
+
 func (api API) Do(method string, path string, result interface{}, body interface{}, _retries ...int) error {
 	retries := 10
 	if len(_retries) > 0 {
