@@ -31,7 +31,7 @@ if command -v systemctl > /dev/null; then
   fi
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
-elif [ -d /etc/init ]; then
+elif command -v initctl > /dev/null; then
   if [ ! -f /etc/init/buildkite-agent.conf ]; then
     # If the system has the old .env file, install the old upstart script, and
     # let them know they should upgrade. Because the upstart script is no
