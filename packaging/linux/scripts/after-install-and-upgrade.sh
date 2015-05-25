@@ -77,7 +77,7 @@ elif [ -d /etc/init ]; then
   START_COMMAND="sudo service buildkite-agent start"
 elif [ -d /etc/init.d ]; then
   if [ ! -f /etc/init.d/buildkite-agent ]; then
-    cp /usr/share/buildkite-agent/lsb/buildkite-agent.conf /etc/init.d/buildkite-agent
+    cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
   fi
 
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"
