@@ -2,27 +2,35 @@ package command
 
 import (
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 )
 
-func ArtifactDownloadCommandAction(context *cli.Context) {
-	c := buildkite.CLI{
-		Context: context,
-	}.Setup()
+type ArtifactDownloadConfiguration struct {
+	Query            string `cli:"arg:0" label:"query" validate:"required"`
+	Destination      string `cli:"arg:1" label:"download path" validate:"required"`
+	Build            string `cli:"build" validate:"required"`
+	Step             string `cli:"step"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoColor          bool   `cli:"no-color"`
+	Debug            bool   `cli:"debug"`
+}
 
-	c.Require("endpoint", "agent-access-token", "build")
-	c.RequireArgs("query", "download path")
+func ArtifactDownloadCommandAction(c *cli.Context) {
+	cfg := ArtifactDownloadConfiguration{}
+	config.Loader{Context: c, Configuration: &cfg}.Load()
 
 	downloader := buildkite.ArtifactDownloader{
 		API: buildkite.API{
-			Endpoint: context.String("endpoint"),
-			Token:    context.String("agent-access-token"),
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
 		},
-		BuildID:     context.String("build"),
-		Query:       context.Args()[0],
-		Destination: context.Args()[1],
-		Step:        context.String("step"),
+		Query:       cfg.Query,
+		Destination: cfg.Destination,
+		BuildID:     cfg.Build,
+		Step:        cfg.Step,
 	}
 
 	err := downloader.Download()
