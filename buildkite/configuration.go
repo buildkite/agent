@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"github.com/buildkite/agent/buildkite/machine"
 	"github.com/codegangsta/cli"
 	"github.com/oleiade/reflections"
 	"os"
@@ -124,7 +125,7 @@ func isSetByEnv(c *cli.Context, cliName string) bool {
 func findDefaultConfiguration() string {
 	var paths []string
 
-	if MachineIsWindows() {
+	if machine.IsWindows() {
 		paths = []string{
 			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
 		}

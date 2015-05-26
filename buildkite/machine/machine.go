@@ -1,4 +1,4 @@
-package buildkite
+package machine
 
 import (
 	"bytes"
@@ -12,18 +12,12 @@ import (
 )
 
 // Returns the machines hostname
-func MachineHostname() (string, error) {
-	hostname, err := run("hostname")
-
-	if err != nil {
-		logger.Fatal("Could not retrieve hostname: %s", hostname)
-	}
-
-	return hostname, err
+func Hostname() (string, error) {
+	return run("hostname")
 }
 
 // Returns a dump of the raw operating system information
-func MachineOSDump() (string, error) {
+func OSDump() (string, error) {
 	if runtime.GOOS == "darwin" {
 		return run("sw_vers")
 	} else if runtime.GOOS == "linux" {
@@ -36,7 +30,7 @@ func MachineOSDump() (string, error) {
 }
 
 // Will return true if the machine is Windows
-func MachineIsWindows() bool {
+func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
 

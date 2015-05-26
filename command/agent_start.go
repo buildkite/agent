@@ -5,6 +5,7 @@ import (
 	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/buildkite/ec2"
 	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/buildkite/machine"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -135,13 +136,17 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.Debug("Evaluating console commands has been disabled")
 	}
 
-	agent.OS, _ = buildkite.MachineOSDump()
-	agent.Hostname, _ = buildkite.MachineHostname()
+	agent.Hostname, err = machine.Hostname()
+	if err != nil {
+		logger.Fatal("Could not retrieve hostname: %s", err)
+	}
+
+	agent.OS, _ = machine.OSDump()
 	agent.Version = buildkite.Version()
 	agent.PID = os.Getpid()
 
 	// Toggle PTY
-	if buildkite.MachineIsWindows() {
+	if machine.IsWindows() {
 		agent.RunInPty = false
 	} else {
 		agent.RunInPty = !configuration.NoPTY
