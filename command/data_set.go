@@ -1,54 +1,31 @@
 package command
 
 import (
-	"fmt"
 	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
-	"os"
 )
 
-func DataSetCommandAction(c *cli.Context) {
-	// Init debugging
-	if c.Bool("debug") {
-		logger.SetLevel(logger.DEBUG)
+func DataSetCommandAction(context *cli.Context) {
+	c := buildkite.CLI{
+		Context: context,
+	}.Setup()
+
+	c.Require("endpoint", "agent-access-token", "job")
+	c.RequireArgs("key", "value")
+
+	var metaData = buildkite.MetaData{
+		API: buildkite.API{
+			Endpoint: context.String("endpoint"),
+			Token:    context.String("agent-access-token"),
+		},
+		JobID: context.String("job"),
+		Key:   context.Args()[0],
+		Value: context.Args()[1],
 	}
 
-	// Toggle colors
-	if c.Bool("no-color") {
-		logger.SetColors(false)
-	}
-
-	agentAccessToken := c.String("agent-access-token")
-	if agentAccessToken == "" {
-		fmt.Println("buildkite-agent: missing agent access token\nSee 'buildkite data get --help'")
-		os.Exit(1)
-	}
-
-	jobId := c.String("job")
-	if jobId == "" {
-		fmt.Printf("buildkite-agent: missing job\nSee 'buildkite data get --help'\n")
-		os.Exit(1)
-	}
-
-	// Create a client so we can register the agent
-	var client buildkite.Client
-	client.AuthorizationToken = agentAccessToken
-	client.URL = c.String("endpoint")
-
-	// Find the job
-	job, err := client.JobFind(jobId)
+	err := metaData.Set()
 	if err != nil {
-		logger.Fatal("Could not find job: %s", jobId)
-	}
-
-	// Grab the key and value to set
-	key := c.Args()[0]
-	value := c.Args()[1]
-
-	// Set the data through the API
-	_, err = client.DataSet(job, key, value)
-	if err != nil {
-		logger.Fatal("Failed to set data: %s", err)
+		logger.Fatal("Failed to set meta-data: %s", err)
 	}
 }

@@ -40,6 +40,11 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.SetColors(false)
 	}
 
+	// Init debugging
+	if configuration.Debug {
+		logger.SetLevel(logger.DEBUG)
+	}
+
 	welcomeMessage :=
 		"\n" +
 			"%s  _           _ _     _ _    _ _                                _\n" +
@@ -65,11 +70,6 @@ func AgentStartCommandAction(c *cli.Context) {
 	// then it's been loaded and we should show which one we loaded.
 	if configuration.File != "" {
 		logger.Info("Configuration loaded from: %s", configuration.File)
-	}
-
-	// Init debugging
-	if configuration.Debug {
-		logger.SetLevel(logger.DEBUG)
 	}
 
 	agentRegistrationToken := configuration.Token
@@ -152,27 +152,33 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	logger.Info("Registering agent with Buildkite...")
 
+	// Send the Buildkite API endpoint
+	agent.API.Endpoint = configuration.Endpoint
+
+	// Use the registartion token as the token
+	agent.API.Token = agentRegistrationToken
+
 	// Register the agent
-	var registrationClient buildkite.Client
-	registrationClient.AuthorizationToken = agentRegistrationToken
-	registrationClient.URL = configuration.Endpoint
-	err = registrationClient.AgentRegister(&agent)
+	err = agent.Register(configuration.Endpoint, agentRegistrationToken)
 	if err != nil {
 		logger.Fatal("%s", err)
 	}
 
 	logger.Info("Successfully registered agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
 
-	// Configure the agent's client
+	// Configure the agent's client (legacy)
 	agent.Client.AuthorizationToken = agent.AccessToken
 	agent.Client.URL = configuration.Endpoint
+
+	// Now we can switch to the Agents API access token
+	agent.API.Token = agent.AccessToken
 
 	// Setup signal monitoring
 	agent.MonitorSignals()
 
 	// Connect the agent
 	logger.Info("Connecting to Buildkite...")
-	err = agent.Client.AgentConnect(&agent)
+	err = agent.Connect()
 	if err != nil {
 		logger.Fatal("%s", err)
 	}

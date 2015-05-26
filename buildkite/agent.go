@@ -38,6 +38,9 @@ type Agent struct {
 	// The client the agent will use to communicate to the API
 	Client Client
 
+	// The clients API configuration
+	API API
+
 	// The boostrap script to run
 	BootstrapScript string
 
@@ -61,16 +64,16 @@ type Agent struct {
 	stopping bool
 }
 
-func (c *Client) AgentRegister(agent *Agent) error {
-	return c.Post(&agent, "/register", agent)
+func (a *Agent) Register(endpoint string, token string) error {
+	return a.API.Post("/register", &a, a)
 }
 
-func (c *Client) AgentConnect(agent *Agent) error {
-	return c.Post(&agent, "/connect", agent)
+func (a *Agent) Connect() error {
+	return a.API.Post("/connect", &a, a)
 }
 
-func (c *Client) AgentDisconnect(agent *Agent) error {
-	return c.Post(&agent, "/disconnect", agent)
+func (a *Agent) Disconnect() error {
+	return a.API.Post("/disconnect", &a, a)
 }
 
 func (a *Agent) String() string {
@@ -96,7 +99,9 @@ func (a *Agent) Start() {
 }
 
 func (a *Agent) Ping() {
-	ping, err := a.Client.AgentPing()
+	// Perform the ping
+	ping := Ping{}
+	err := a.API.Get("/ping", &ping)
 	if err != nil {
 		logger.Warn("Failed to ping (%s)", err)
 		return
@@ -120,8 +125,11 @@ func (a *Agent) Ping() {
 
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
+	job := ping.Job
+	job.API = a.API
+
 	// Accept the job
-	job, err := a.Client.JobAccept(ping.Job)
+	err = job.Accept()
 	if err != nil {
 		logger.Error("Failed to accept the job (%s)", err)
 		return
@@ -134,14 +142,18 @@ func (a *Agent) Ping() {
 	}
 
 	a.Job = job
-	job.Run(a)
+	err = job.Run(a)
+	if err != nil {
+		logger.Error("Failed to run job: %s", err)
+	}
+
 	a.Job = nil
 }
 
 func (a *Agent) Stop() {
 	// Disconnect from Buildkite
 	logger.Info("Disconnecting...")
-	a.Client.AgentDisconnect(a)
+	a.Disconnect()
 
 	// Kill the process
 	os.Exit(0)

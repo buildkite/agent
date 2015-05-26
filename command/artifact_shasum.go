@@ -7,66 +7,37 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-func ArtifactShasumCommandAction(c *cli.Context) {
-	// Init debugging
-	if c.Bool("debug") {
-		logger.SetLevel(logger.DEBUG)
+func ArtifactShasumCommandAction(context *cli.Context) {
+	c := buildkite.CLI{
+		Context: context,
+	}.Setup()
+
+	c.Require("endpoint", "agent-access-token", "build")
+	c.RequireArgs("query")
+
+	// Find the artifact we want to show the SHASUM for
+	searcher := buildkite.ArtifactSearcher{
+		BuildID: context.String("build"),
+		API: buildkite.API{
+			Endpoint: context.String("endpoint"),
+			Token:    context.String("agent-access-token"),
+		},
 	}
 
-	// Toggle colors
-	if c.Bool("no-color") {
-		logger.SetColors(false)
-	}
-
-	// Make sure we have an agent access token
-	agentAccessToken := c.String("agent-access-token")
-	if agentAccessToken == "" {
-		logger.Fatal("An agent access token is required")
-	}
-
-	// Validate that an artifact search query was provided
-	if len(c.Args()) != 1 {
-		logger.Fatal("No artifact search query was provided")
-	}
-
-	// Find the build id
-	buildId := c.String("build")
-	if buildId == "" {
-		logger.Fatal("No build was provided")
-	}
-
-	// Get the search query
-	searchQuery := c.Args()[0]
-	jobQuery := c.String("job")
-
-	// Set the agent options
-	var agent buildkite.Agent
-
-	// Client specific options
-	agent.Client.AuthorizationToken = agentAccessToken
-	agent.Client.URL = c.String("endpoint")
-
-	if jobQuery == "" {
-		logger.Info("Searching for artifacts \"%s\"", searchQuery)
-	} else {
-		logger.Info("Searching for artifacts \"%s\" within job \"%s\"", searchQuery, jobQuery)
-	}
-
-	// Search for artifacts (only those that have finished uploaded) to download
-	artifacts, err := agent.Client.SearchArtifacts(buildId, searchQuery, jobQuery, "finished")
+	err := searcher.Search(context.Args()[0], context.String("step"))
 	if err != nil {
 		logger.Fatal("Failed to find artifacts: %s", err)
 	}
 
-	artifactsFoundLength := len(artifacts)
+	artifactsFoundLength := len(searcher.Artifacts)
 
 	if artifactsFoundLength == 0 {
 		logger.Fatal("No artifacts found for downloading")
 	} else if artifactsFoundLength > 1 {
-		logger.Fatal("Multiple artifacts were found. Try being more specific or scope by job")
+		logger.Fatal("Multiple artifacts were found. Try being more specific with the search or scope by step")
 	} else {
-		logger.Debug("Artifact \"%s\" found", artifacts[0].Path)
+		logger.Debug("Artifact \"%s\" found", searcher.Artifacts[0].Path)
 
-		fmt.Printf("%s\n", artifacts[0].Sha1Sum)
+		fmt.Printf("%s\n", searcher.Artifacts[0].Sha1Sum)
 	}
 }
