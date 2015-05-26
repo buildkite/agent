@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"github.com/buildkite/agent/buildkite/glob"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/pool"
 	"io"
@@ -48,16 +49,16 @@ func (a *ArtifactUploader) Upload() error {
 }
 
 func (a *ArtifactUploader) collect() (artifacts []*Artifact, err error) {
-	globs := strings.Split(a.Paths, ";")
+	globPaths := strings.Split(a.Paths, ";")
 	workingDirectory, _ := os.Getwd()
 
-	for _, glob := range globs {
-		glob = strings.TrimSpace(glob)
+	for _, globPath := range globPaths {
+		globPath = strings.TrimSpace(globPath)
 
-		if glob != "" {
-			logger.Debug("Globbing %s for %s", workingDirectory, glob)
+		if globPath != "" {
+			logger.Debug("Globbing %s for %s", workingDirectory, globPath)
 
-			files, err := Glob(workingDirectory, glob)
+			files, err := glob.Glob(workingDirectory, globPath)
 			if err != nil {
 				return nil, err
 			}
@@ -83,7 +84,7 @@ func (a *ArtifactUploader) collect() (artifacts []*Artifact, err error) {
 				relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
 
 				// Build an artifact object using the paths we have.
-				artifact, err := a.build(relativePath, absolutePath, glob)
+				artifact, err := a.build(relativePath, absolutePath, globPath)
 				if err != nil {
 					return nil, err
 				}
