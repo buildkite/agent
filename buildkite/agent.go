@@ -125,8 +125,11 @@ func (a *Agent) Ping() {
 
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
+	job := ping.Job
+	job.API = a.API
+
 	// Accept the job
-	job, err := a.Client.JobAccept(ping.Job)
+	err = job.Accept()
 	if err != nil {
 		logger.Error("Failed to accept the job (%s)", err)
 		return
@@ -139,7 +142,11 @@ func (a *Agent) Ping() {
 	}
 
 	a.Job = job
-	job.Run(a)
+	err = job.Run(a)
+	if err != nil {
+		logger.Error("Failed to run job: %s", err)
+	}
+
 	a.Job = nil
 }
 

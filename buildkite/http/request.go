@@ -32,6 +32,10 @@ type Request struct {
 	RetryCallback func(*Response) bool
 }
 
+const (
+	RetryForever = -999
+)
+
 func (r *Request) String() string {
 	return fmt.Sprintf("http.Request{Method: %s, URL: %s}", r.Method, r.URL())
 }
@@ -78,18 +82,30 @@ func (r *Request) Do() (*Response, error) {
 	seconds := 5 * time.Second
 	ticker := time.NewTicker(seconds)
 	retries := 1
+	forever := false
 
-	// The retires value can't be less than 0
 	max := r.Retries
-	if max <= 0 {
-		max = 1
+	if max == RetryForever {
+		forever = true
+	} else {
+		// The retires value can't be less than 0 if we're not retrying
+		// forever.
+		if max <= 0 {
+			max = 1
+		}
 	}
 
 	for {
+		// What should we show as the `max` in the logger
+		maxDisplay := fmt.Sprintf("%d", max)
+		if forever {
+			maxDisplay = "∞"
+		}
+
 		// Only show the retries in the log if we're on our second+
 		// attempt
 		if retries > 1 {
-			logger.Debug("%s %s (Attempt %d/%d)", r.Method, r.URL(), retries, max)
+			logger.Debug("%s %s (Attempt %d/%s)", r.Method, r.URL(), retries, maxDisplay)
 		} else {
 			logger.Debug("%s %s", r.Method, r.URL())
 		}
@@ -100,8 +116,8 @@ func (r *Request) Do() (*Response, error) {
 			break
 		}
 
-		if retries >= max {
-			logger.Warn("%s %s (%d/%d) (%T: %v)", r.Method, r.URL(), retries, max, err, err)
+		if !forever && retries >= max {
+			logger.Warn("%s %s (%d/%s) (%T: %v)", r.Method, r.URL(), retries, maxDisplay, err, err)
 			break
 		} else {
 			if r.RetryCallback != nil {
@@ -112,7 +128,7 @@ func (r *Request) Do() (*Response, error) {
 				}
 			}
 
-			logger.Warn("%s %s (%d/%d) (%T: %v) Trying again in %s", r.Method, r.URL(), retries, max, err, err, seconds)
+			logger.Warn("%s %s (%d/%s) (%T: %v) Trying again in %s", r.Method, r.URL(), retries, maxDisplay, err, err, seconds)
 		}
 
 		// We don't return this response, so we should make sure we close it's body

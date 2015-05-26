@@ -20,6 +20,8 @@ import (
 // the presence of values in these properties to determine if the build
 // has finished.
 type Job struct {
+	API API
+
 	ID string
 
 	State string
@@ -53,27 +55,20 @@ func (b Job) String() string {
 	return fmt.Sprintf("Job{ID: %s, State: %s, StartedAt: %s, FinishedAt: %s, Process: %s}", b.ID, b.State, b.StartedAt, b.FinishedAt, b.process)
 }
 
-func (c *Client) JobAccept(job *Job) (*Job, error) {
-	// Accept the job
-	return job, c.Put(job, "jobs/"+job.ID+"/accept", job)
+func (j *Job) Accept() error {
+	return j.API.Put("jobs/"+j.ID+"/accept", &j, j)
 }
 
-func (c *Client) JobUpdate(job *Job) (*Job, error) {
-	// Create a new instance of a job that will be populated
-	// with the updated data by the client
-	var updatedJob Job
-
-	// Return the job.
-	return &updatedJob, c.Put(&updatedJob, "jobs/"+job.ID, job)
+func (j *Job) Start() error {
+	return j.API.Put("jobs/"+j.ID, &j, j)
 }
 
-func (c *Client) JobRefresh(job *Job) (*Job, error) {
-	// Create a new instance of a job that will be populated with the
-	// updated data by the client
-	var refreshedJob Job
+func (j *Job) Finish() error {
+	return j.API.Put("jobs/"+j.ID, &j, j, APIInfinityRetires)
+}
 
-	// Return the job.
-	return &refreshedJob, c.Get(&refreshedJob, "jobs/"+job.ID)
+func (j *Job) Refresh() error {
+	return j.API.Get("jobs/"+j.ID, &j)
 }
 
 func (j *Job) Kill() error {
@@ -176,13 +171,13 @@ func (j *Job) Run(agent *Agent) error {
 			for process.Running {
 				// Get the latest job status so we can see if
 				// the job has been canceled
-				updatedJob, err := agent.Client.JobRefresh(j)
+				err := j.Refresh()
 				if err != nil {
 					// We don't really care if it fails,
 					// we'll just try again in a second
 					// anyway
 					logger.Warn("Problem with getting job status %s (%s)", j.ID, err)
-				} else if updatedJob.State == "canceled" {
+				} else if j.State == "canceled" {
 					j.Kill()
 				}
 
@@ -218,10 +213,17 @@ func (j *Job) Run(agent *Agent) error {
 
 	// Mark the build as started
 	j.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
-	_, err = agent.Client.JobUpdate(j)
+
+	// Start the build in the API
+	err = j.Start()
 	if err != nil {
-		// We don't care if the HTTP request failed here. We hope that it
-		// starts working during the actual build.
+		return fmt.Errorf("Failed to start job: %s", err)
+	}
+
+	// If the job's state isn't `started` in the API, we should probably
+	// bail because something's gone wrong.
+	if j.State != "running" {
+		return fmt.Errorf("After starting the job, the state returned from the API was: `%s` but it needed to be: `running`", j.State)
 	}
 
 	// Start the process. This will block until it finishes.
@@ -252,20 +254,9 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Keep trying this call until it works. This is the most important one.
-	for {
-		_, err = agent.Client.JobUpdate(j)
-		if err != nil {
-			logger.Error("Problem with updating final job information %s (%s)", j.ID, err)
-
-			// How long should we wait until we try again?
-			idleSeconds := 5
-
-			// Sleep for a while
-			sleepTime := time.Duration(idleSeconds*1000) * time.Millisecond
-			time.Sleep(sleepTime)
-		} else {
-			break
-		}
+	err = j.Finish()
+	if err != nil {
+		return fmt.Errorf("Failed to finish job: %s", err)
 	}
 
 	logger.Info("Finished job %s", j.ID)

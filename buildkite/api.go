@@ -15,6 +15,12 @@ type API struct {
 	Token string
 }
 
+const (
+	// Passing this constant to retries will tell the API gear that it
+	// should keep retrying the call until it succeeds.
+	APIInfinityRetires = http.RetryForever
+)
+
 type APIErrorResponse struct {
 	Message string `json:"message"`
 }
