@@ -60,11 +60,11 @@ func (j *Job) Accept() error {
 }
 
 func (j *Job) Start() error {
-	return j.API.Put("jobs/"+j.ID, &j, j)
+	return j.API.Put("jobs/"+j.ID+"/start", &j, j)
 }
 
 func (j *Job) Finish() error {
-	return j.API.Put("jobs/"+j.ID, &j, j, APIInfinityRetires)
+	return j.API.Put("jobs/"+j.ID+"/finish", &j, j, APIInfinityRetires)
 }
 
 func (j *Job) Refresh() error {
