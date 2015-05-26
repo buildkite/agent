@@ -3,6 +3,7 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/buildkite/ec2"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 	"os"
@@ -106,7 +107,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Should we try and grab the ec2 tags as well?
 	if configuration.MetaDataEC2Tags {
-		tags, err := buildkite.EC2InstanceTags()
+		tags, err := ec2.GetTags()
 
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.

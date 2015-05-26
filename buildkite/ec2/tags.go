@@ -1,14 +1,14 @@
-package buildkite
+package ec2
 
 import (
 	"errors"
 	"fmt"
 	"github.com/AdRoll/goamz/aws"
-	"github.com/AdRoll/goamz/ec2"
+	awsEC2 "github.com/AdRoll/goamz/ec2"
 	"time"
 )
 
-func EC2InstanceTags() (map[string]string, error) {
+func GetTags() (map[string]string, error) {
 	tags := make(map[string]string)
 
 	// Passing blank values here instructs the AWS library to look at the
@@ -20,10 +20,10 @@ func EC2InstanceTags() (map[string]string, error) {
 
 	// Find the current region and create a new EC2 connection
 	region := aws.GetRegion(aws.InstanceRegion())
-	ec2Client := ec2.New(auth, region)
+	ec2Client := awsEC2.New(auth, region)
 
 	// Filter by the current machines instance-id
-	filter := ec2.NewFilter()
+	filter := awsEC2.NewFilter()
 	filter.Add("resource-id", aws.InstanceId())
 
 	// Describe the tags for the current instance
