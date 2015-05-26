@@ -1,4 +1,4 @@
-package config
+package buildkite
 
 import (
 	"github.com/buildkite/agent/buildkite/logger"
@@ -8,9 +8,6 @@ import (
 type CLI struct {
 	// The cli context for this command
 	Context *cli.Context
-}
-
-func (c CLI) Configure(obj interface{}) {
 }
 
 func (c CLI) Setup() CLI {
