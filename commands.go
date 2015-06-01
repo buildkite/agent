@@ -235,9 +235,10 @@ func init() {
 							Usage: "Scope the search to a paticular step by using either it's name of job ID",
 						},
 						cli.StringFlag{
-							Name:  "build",
-							Value: "BUILDKITE_JOB_ID",
-							Usage: "The build that the artifacts were uploaded to",
+							Name:   "build",
+							Value:  "",
+							EnvVar: "BUILDKITE_BUILD_ID",
+							Usage:  "The build that the artifacts were uploaded to",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
@@ -311,9 +312,10 @@ func init() {
 							Usage: "Scope the search to a paticular step by using either it's name of job ID",
 						},
 						cli.StringFlag{
-							Name:  "build",
-							Value: "BUILDKITE_JOB_ID",
-							Usage: "The build that the artifacts were uploaded to",
+							Name:   "build",
+							Value:  "",
+							EnvVar: "BUILDKITE_BUILD_ID",
+							Usage:  "The build that the artifacts were uploaded to",
 						},
 						cli.StringFlag{
 							Name:   "agent-access-token",
