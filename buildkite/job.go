@@ -2,7 +2,6 @@ package buildkite
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite/http"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
@@ -28,8 +27,6 @@ type Job struct {
 
 	Env map[string]string
 
-	HeaderTimes []string
-
 	ChunksMaxSizeBytes int `json:"chunks_max_size_bytes,omitempty"`
 
 	ExitStatus string `json:"exit_status,omitempty"`
@@ -45,10 +42,6 @@ type Job struct {
 
 	// The currently running process of the job
 	process *Process
-
-	// The previous count of header times so we know if we need to upload
-	// them again
-	headerTimesCount int
 }
 
 func (b Job) String() string {
@@ -138,6 +131,9 @@ func (j *Job) Run(agent *Agent) error {
 
 	logStreamer.Start()
 
+	// Create our header times struct
+	headerTimes := HeaderTimes{Job: j, API: j.API}
+
 	// This callback is called when the process starts
 	startCallback := func(process *Process) {
 		// Start a routine that will grab the output every few seconds and send it back to Buildkite
@@ -151,19 +147,6 @@ func (j *Job) Run(agent *Agent) error {
 			}
 
 			logger.Debug("Routine that processes the log has finished")
-		}()
-
-		// Start a routine that will upload header timings
-		go func() {
-			for process.Running {
-				// Upload the header timings
-				j.uploadHeaderTimes(agent)
-
-				// Wait another second before seeing if there are new header times to send
-				time.Sleep(1 * time.Second)
-			}
-
-			logger.Debug("Routine that processes header timings")
 		}()
 
 		// Start a routine that will grab the output every few seconds and send it back to Buildkite
@@ -201,7 +184,7 @@ func (j *Job) Run(agent *Agent) error {
 		// 500 character header...honestly...)
 		if len(line) < 500 && headerRegexp.MatchString(line) {
 			// logger.Debug("Found header \"%s\", capturing current time", line)
-			j.HeaderTimes = append(j.HeaderTimes, time.Now().UTC().Format(time.RFC3339Nano))
+			go headerTimes.Now(line)
 		}
 	}
 
@@ -240,8 +223,8 @@ func (j *Job) Run(agent *Agent) error {
 	j.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	j.ExitStatus = j.process.ExitStatus
 
-	// Upload the header timings one last time
-	j.uploadHeaderTimes(agent)
+	// Wait until all the header times have finished uploading
+	headerTimes.Wait()
 
 	// Stop the log streamer
 	logStreamer.Stop()
@@ -262,24 +245,6 @@ func (j *Job) Run(agent *Agent) error {
 	logger.Info("Finished job %s", j.ID)
 
 	return nil
-}
-
-func (j *Job) uploadHeaderTimes(agent *Agent) {
-	thisHeaderCount := len(j.HeaderTimes)
-
-	// Has the header count changed from last time we checked?
-	if j.headerTimesCount != len(j.HeaderTimes) {
-		// Send the header times to Buildkite
-		r := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/header_times")
-		r.Body = &http.JSON{
-			Payload: map[string][]string{
-				"header_times": j.HeaderTimes,
-			},
-		}
-		r.Do()
-
-		j.headerTimesCount = thisHeaderCount
-	}
 }
 
 // Replaces ~/ with the users home directory. The builds path may be configured
