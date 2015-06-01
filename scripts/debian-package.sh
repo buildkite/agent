@@ -16,7 +16,7 @@ function build() {
   BINARY_FILENAME="pkg/buildkite-agent-$1-$2"
 
   # Download the built binary artifact
-  buildkite-agent artifact download $BINARY_FILENAME .
+  buildkite-agent artifact download $BINARY_FILENAME . --job ""
 
   # Make sure it's got execute permissions so we can extract the version out of it
   chmod +x $BINARY_FILENAME
