@@ -14,6 +14,10 @@ func ArtifactDownloadCommandAction(context *cli.Context) {
 	c.Require("endpoint", "agent-access-token", "build")
 	c.RequireArgs("query", "download path")
 
+	if context.String("job") != "" {
+		logger.Fatal("--job is deprecated. Please use --step")
+	}
+
 	downloader := buildkite.ArtifactDownloader{
 		API: buildkite.API{
 			Endpoint: context.String("endpoint"),

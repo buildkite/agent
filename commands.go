@@ -45,11 +45,11 @@ Example:
    print to STDOUT it's SHA-1 checksum.
 
    If you would like to target artifacts from a specific build step, you can do
-   so by using the --job argument.
+   so by using the --step argument.
 
-   $ buildkite-agent artifact shasum "pkg/release.tar.gz" --job "release" --build xxx
+   $ buildkite-agent artifact shasum "pkg/release.tar.gz" --step "release" --build xxx
 
-   You can also use the job's id (provided by the environment variable $BUILDKITE_JOB_ID)`
+   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 var DownloadHelpDescription = `Usage:
 
@@ -73,9 +73,9 @@ Example:
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the particular job you want to download the artifact from:
 
-   $ buildkite-agent artifact download "pkg/*.tar.gz" . --job "tests" --build xxx
+   $ buildkite-agent artifact download "pkg/*.tar.gz" . --step "tests" --build xxx
 
-   You can also use the job's id (provided by the environment variable $BUILDKITE_JOB_ID)`
+   You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 var UploadHelpDescription = `Usage:
 
@@ -230,6 +230,11 @@ func init() {
 					Description: DownloadHelpDescription,
 					Flags: []cli.Flag{
 						cli.StringFlag{
+							Name:  "job",
+							Value: "",
+							Usage: "DEPRECATED",
+						},
+						cli.StringFlag{
 							Name:  "step",
 							Value: "",
 							Usage: "Scope the search to a paticular step by using either it's name of job ID",
@@ -306,6 +311,11 @@ func init() {
 					Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",
 					Description: ShasumHelpDescription,
 					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name:  "job",
+							Value: "",
+							Usage: "DEPRECATED",
+						},
 						cli.StringFlag{
 							Name:  "step",
 							Value: "",

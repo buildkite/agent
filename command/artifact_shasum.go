@@ -15,6 +15,10 @@ func ArtifactShasumCommandAction(context *cli.Context) {
 	c.Require("endpoint", "agent-access-token", "build")
 	c.RequireArgs("query")
 
+	if context.String("job") != "" {
+		logger.Fatal("--job is deprecated. Please use --step")
+	}
+
 	// Find the artifact we want to show the SHASUM for
 	searcher := buildkite.ArtifactSearcher{
 		BuildID: context.String("build"),
