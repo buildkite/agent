@@ -57,6 +57,7 @@ var MetaDataGetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
+		// Create the meta data we want to get
 		metaData := buildkite.MetaData{
 			API: buildkite.API{
 				Endpoint: cfg.Endpoint,
@@ -66,6 +67,7 @@ var MetaDataGetCommand = cli.Command{
 			Key:   cfg.Key,
 		}
 
+		// Get the meta data
 		if err := metaData.Get(); err != nil {
 			logger.Fatal("Failed to get meta-data: %s", err)
 		}

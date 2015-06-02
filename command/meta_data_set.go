@@ -57,7 +57,8 @@ var MetaDataSetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		var metaData = buildkite.MetaData{
+		// Create the meta data to set
+		metaData := buildkite.MetaData{
 			API: buildkite.API{
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
@@ -67,6 +68,7 @@ var MetaDataSetCommand = cli.Command{
 			Value: cfg.Value,
 		}
 
+		// Set the meta data
 		if err := metaData.Set(); err != nil {
 			logger.Fatal("Failed to set meta-data: %s", err)
 		}
