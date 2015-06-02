@@ -144,22 +144,9 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to run arbitrary console commands",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
-		cli.StringFlag{
-			Name:   "endpoint",
-			Value:  DefaultEndpoint,
-			Usage:  "The Agent API endpoint",
-			EnvVar: "BUILDKITE_AGENT_ENDPOINT",
-		},
-		cli.BoolFlag{
-			Name:   "debug",
-			Usage:  "Enable debug mode",
-			EnvVar: "BUILDKITE_AGENT_DEBUG",
-		},
-		cli.BoolFlag{
-			Name:   "no-color",
-			Usage:  "Don't show colors in logging",
-			EnvVar: "BUILDKITE_AGENT_NO_COLOR",
-		},
+		EndpointFlag,
+		DebugFlag,
+		NoColorFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -210,6 +197,9 @@ var AgentStartCommand = cli.Command{
 
 		var agent buildkite.Agent
 		var err error
+
+		agent.BootstrapScript = cfg.BootstrapScript
+		logger.Debug("Bootstrap script: %s", agent.BootstrapScript)
 
 		agent.BuildPath = cfg.BuildPath
 		logger.Debug("Build path: %s", agent.BuildPath)
