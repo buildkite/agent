@@ -36,9 +36,9 @@ Example:
 type ArtifactDownloadConfig struct {
 	Query            string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Destination      string `cli:"arg:1" label:"artifact download path" validate:"required"`
-	Build            string `cli:"build" validate:"required"`
 	Step             string `cli:"step"`
 	Job              string `cli:"job" deprecated:"--job is deprecated. Please use --step"`
+	Build            string `cli:"build" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
