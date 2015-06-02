@@ -2,7 +2,7 @@ package command
 
 import (
 	"github.com/buildkite/agent/buildkite"
-	config2 "github.com/buildkite/agent/buildkite/config"
+	"github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 )
@@ -24,7 +24,7 @@ func ArtifactDownloadCommandAction(c *cli.Context) {
 	cfg := ArtifactDownloadConfig{}
 
 	// Load the configuration
-	if err := config2.Load(c, &cfg); err != nil {
+	if err := config.Load(c, &cfg); err != nil {
 		logger.Fatal("%s", err)
 	}
 
