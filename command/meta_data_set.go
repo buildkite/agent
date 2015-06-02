@@ -2,8 +2,8 @@ package command
 
 import (
 	"github.com/buildkite/agent/buildkite"
-	"github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/cliconfig"
 	"github.com/codegangsta/cli"
 )
 
@@ -68,7 +68,7 @@ var MetaDataSetCommand = cli.Command{
 		cfg := MetaDataSetConfig{}
 
 		// Load the configuration
-		if err := config.Load(c, &cfg); err != nil {
+		if err := cliconfig.Load(c, &cfg); err != nil {
 			logger.Fatal("%s", err)
 		}
 

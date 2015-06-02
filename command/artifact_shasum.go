@@ -3,8 +3,8 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
-	"github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/cliconfig"
 	"github.com/codegangsta/cli"
 )
 
@@ -95,7 +95,7 @@ var ArtifactShasumCommand = cli.Command{
 		cfg := ArtifactShasumConfig{}
 
 		// Load the configuration
-		if err := config.Load(c, &cfg); err != nil {
+		if err := cliconfig.Load(c, &cfg); err != nil {
 			logger.Fatal("%s", err)
 		}
 

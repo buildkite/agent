@@ -3,10 +3,10 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
-	"github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/ec2"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/machine"
+	"github.com/buildkite/agent/cliconfig"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"
@@ -167,7 +167,7 @@ var AgentStartCommand = cli.Command{
 
 		// Setup the config loader. You'll see that we also path paths to
 		// potential config files. The loader will use the first one it finds.
-		loader := config.Loader{
+		loader := cliconfig.Loader{
 			CLI:                    c,
 			Config:                 &cfg,
 			DefaultConfigFilePaths: DefaultConfigFilePaths(),
