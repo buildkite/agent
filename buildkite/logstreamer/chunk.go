@@ -1,7 +1,7 @@
 package logstreamer
 
 import (
-	"github.com/buildkite/agent/buildkite/http"
+	"github.com/buildkite/agent/http"
 )
 
 type Chunk struct {

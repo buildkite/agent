@@ -5,7 +5,7 @@ import (
 	_ "crypto/sha512" // import sha512 to make sha512 ssl certs work
 	"encoding/json"
 	"errors"
-	bkhttp "github.com/buildkite/agent/buildkite/http"
+	bkhttp "github.com/buildkite/agent/http"
 	"github.com/buildkite/agent/logger"
 	"io"
 	"net/http"
