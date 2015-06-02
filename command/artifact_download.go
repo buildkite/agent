@@ -2,35 +2,49 @@ package command
 
 import (
 	"github.com/buildkite/agent/buildkite"
+	config2 "github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 )
 
-func ArtifactDownloadCommandAction(context *cli.Context) {
-	c := buildkite.CLI{
-		Context: context,
-	}.Setup()
+type ArtifactDownloadConfig struct {
+	Query            string `cli:"arg:0" label:"artifact search query" validate:"required"`
+	Destination      string `cli:"arg:1" label:"artifact download path" validate:"required"`
+	Build            string `cli:"build" validate:"required"`
+	Step             string `cli:"step"`
+	Job              string `cli:"job" deprecated:"--job is deprecated. Please use --step"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoColor          bool   `cli:"no-color"`
+	Debug            bool   `cli:"debug"`
+}
 
-	c.Require("endpoint", "agent-access-token", "build")
-	c.RequireArgs("query", "download path")
+func ArtifactDownloadCommandAction(c *cli.Context) {
+	// The configuration will be loaded into this struct
+	cfg := ArtifactDownloadConfig{}
 
-	if context.String("job") != "" {
-		logger.Fatal("--job is deprecated. Please use --step")
+	// Load the configuration
+	if err := config2.Load(c, &cfg); err != nil {
+		logger.Fatal("%s", err)
 	}
 
+	// Setup the any global configuration options
+	SetupGlobalConfiguration(cfg)
+
+	// Setup the downloader
 	downloader := buildkite.ArtifactDownloader{
 		API: buildkite.API{
-			Endpoint: context.String("endpoint"),
-			Token:    context.String("agent-access-token"),
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
 		},
-		BuildID:     context.String("build"),
-		Query:       context.Args()[0],
-		Destination: context.Args()[1],
-		Step:        context.String("step"),
+		Query:       cfg.Query,
+		Destination: cfg.Destination,
+		BuildID:     cfg.Build,
+		Step:        cfg.Step,
 	}
 
-	err := downloader.Download()
-	if err != nil {
+	// Download the artifacts
+	if err := downloader.Download(); err != nil {
 		logger.Fatal("Failed to download artifacts: %s", err)
 	}
 }
