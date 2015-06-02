@@ -7,23 +7,6 @@ import (
 
 var Commands []cli.Command
 
-var AgentDescription = `Usage:
-
-   buildkite-agent start [arguments...]
-
-Description:
-
-   When a job is ready to run it will call the "bootstrap-script"
-   and pass it all the environment variables required for the job to run.
-   This script is responsible for checking out the code, and running the
-   actual build script defined in the project.
-
-   The agent will run any jobs within a PTY (pseudo terminal) if available.
-
-Example:
-
-   $ buildkite-agent start --token xxx`
-
 var SetHelpDescription = `Usage:
 
    buildkite-agent meta-data set <key> <value> [arguments...]
@@ -52,97 +35,7 @@ var DefaultEndpoint = "https://agent.buildkite.com/v2"
 
 func init() {
 	Commands = []cli.Command{
-		{
-			Name:        "start",
-			Usage:       "Starts a Buildkite agent",
-			Description: AgentDescription,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:   "config",
-					Value:  "",
-					Usage:  "Path to a configration file",
-					EnvVar: "BUILDKITE_AGENT_CONFIG",
-				},
-				cli.StringFlag{
-					Name:   "token",
-					Value:  "",
-					Usage:  "Your account agent token",
-					EnvVar: "BUILDKITE_AGENT_TOKEN",
-				},
-				cli.StringFlag{
-					Name:   "name",
-					Value:  "",
-					Usage:  "The name of the agent",
-					EnvVar: "BUILDKITE_AGENT_NAME",
-				},
-				cli.StringFlag{
-					Name:   "priority",
-					Value:  "",
-					Usage:  "The priority of the agent (higher priorities are assigned work first)",
-					EnvVar: "BUILDKITE_AGENT_PRIORITY",
-				},
-				cli.StringSliceFlag{
-					Name:   "meta-data",
-					Value:  &cli.StringSlice{},
-					Usage:  "Meta data for the agent (default is \"queue=default\")",
-					EnvVar: "BUILDKITE_AGENT_META_DATA",
-				},
-				cli.BoolFlag{
-					Name:  "meta-data-ec2-tags",
-					Usage: "Populate the meta data from the current instances EC2 Tags",
-				},
-				cli.StringFlag{
-					Name:   "bootstrap-script",
-					Value:  "",
-					Usage:  "Path to the bootstrap script",
-					EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
-				},
-				cli.StringFlag{
-					Name:   "build-path",
-					Value:  "",
-					Usage:  "Path to where the builds will run from",
-					EnvVar: "BUILDKITE_BUILD_PATH",
-				},
-				cli.StringFlag{
-					Name:   "hooks-path",
-					Value:  "",
-					Usage:  "Directory where the hook scripts are found",
-					EnvVar: "BUILDKITE_HOOKS_PATH",
-				},
-				cli.BoolFlag{
-					Name:   "no-pty",
-					Usage:  "Do not run jobs within a pseudo terminal",
-					EnvVar: "BUILDKITE_NO_PTY",
-				},
-				cli.BoolFlag{
-					Name:   "no-automatic-ssh-fingerprint-verification",
-					Usage:  "Don't automatically verify SSH fingerprints",
-					EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
-				},
-				cli.BoolFlag{
-					Name:   "no-command-eval",
-					Usage:  "Don't allow this agent to run arbitrary console commands",
-					EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
-				},
-				cli.StringFlag{
-					Name:   "endpoint",
-					Value:  DefaultEndpoint,
-					Usage:  "The Agent API endpoint",
-					EnvVar: "BUILDKITE_AGENT_ENDPOINT",
-				},
-				cli.BoolFlag{
-					Name:   "debug",
-					Usage:  "Enable debug mode",
-					EnvVar: "BUILDKITE_AGENT_DEBUG",
-				},
-				cli.BoolFlag{
-					Name:   "no-color",
-					Usage:  "Don't show colors in logging",
-					EnvVar: "BUILDKITE_AGENT_NO_COLOR",
-				},
-			},
-			Action: command.AgentStartCommandAction,
-		},
+		command.AgentStartCommand,
 		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",
