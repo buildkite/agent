@@ -211,14 +211,10 @@ var AgentStartCommand = cli.Command{
 		var agent buildkite.Agent
 		var err error
 
-		// Expand the build path. We don't bother checking to see if it can be
-		// written to, because it'll show up in the agent logs if it doesn't
-		// work.
-		agent.BuildPath = os.ExpandEnv(cfg.BuildPath)
+		agent.BuildPath = cfg.BuildPath
 		logger.Debug("Build path: %s", agent.BuildPath)
 
-		// Expand the hooks path that is used by the bootstrap script
-		agent.HooksPath = os.ExpandEnv(cfg.HooksPath)
+		agent.HooksPath = cfg.HooksPath
 		logger.Debug("Hooks directory: %s", agent.HooksPath)
 
 		// Set the agents meta data
