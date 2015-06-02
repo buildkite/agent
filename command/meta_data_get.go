@@ -1,15 +1,15 @@
 package command
 
 import (
+	"fmt"
 	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/codegangsta/cli"
 )
 
-type ArtifactUploadConfig struct {
-	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`
-	Destination      string `cli:"arg:1" label:"destination"`
+type MetaDataGetConfig struct {
+	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -17,39 +17,27 @@ type ArtifactUploadConfig struct {
 	Debug            bool   `cli:"debug"`
 }
 
-var UploadHelpDescription = `Usage:
+var MetaDataGetHelpDescription = `Usage:
 
-   buildkite-agent artifact upload <pattern> <destination> [arguments...]
+   buildkite-agent meta-data get <key> [arguments...]
 
 Description:
 
-   Uploads files to a job as artifacts.
-
-   You need to ensure that the paths are surrounded by quotes otherwise the
-   built-in shell path globbing will provide the files, which is currently not
-   supported.
+   Get data from a builds key/value store.
 
 Example:
 
-   $ buildkite-agent artifact upload "log/**/*.log"
+   $ buildkite-agent meta-data get "foo"`
 
-   You can also upload directly to Amazon S3 if you'd like to host your own artifacts:
-
-   $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
-   $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
-   $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
-   $ export BUILDKITE_S3_ACL=private # default is public-read
-   $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
-
-var ArtifactUploadCommand = cli.Command{
-	Name:        "upload",
-	Usage:       "Uploads files to a job as artifacts",
-	Description: UploadHelpDescription,
+var MetaDataGetCommand = cli.Command{
+	Name:        "get",
+	Usage:       "Get data from a build",
+	Description: MetaDataGetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "Which job should the artifacts be uploaded to",
+			Usage:  "Which job should the meta-data be retrieved from",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 		cli.StringFlag{
@@ -77,7 +65,7 @@ var ArtifactUploadCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
-		cfg := ArtifactUploadConfig{}
+		cfg := MetaDataGetConfig{}
 
 		// Load the configuration
 		if err := config.Load(c, &cfg); err != nil {
@@ -87,20 +75,20 @@ var ArtifactUploadCommand = cli.Command{
 		// Setup the any global configuration options
 		SetupGlobalConfiguration(cfg)
 
-		// Setup the uploader
-		uploader := buildkite.ArtifactUploader{
+		metaData := buildkite.MetaData{
 			API: buildkite.API{
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
 			},
-			JobID:       cfg.Job,
-			Paths:       cfg.UploadPaths,
-			Destination: cfg.Destination,
+			JobID: cfg.Job,
+			Key:   cfg.Key,
 		}
 
-		// Upload the artifacts
-		if err := uploader.Upload(); err != nil {
-			logger.Fatal("Failed to upload artifacts: %s", err)
+		if err := metaData.Get(); err != nil {
+			logger.Fatal("Failed to get meta-data: %s", err)
 		}
+
+		// Output the value to STDOUT
+		fmt.Print(metaData.Value)
 	},
 }

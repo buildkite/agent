@@ -64,7 +64,7 @@ type Agent struct {
 	stopping bool
 }
 
-func (a *Agent) Register(endpoint string, token string) error {
+func (a *Agent) Register() error {
 	return a.API.Post("/register", &a, a)
 }
 
