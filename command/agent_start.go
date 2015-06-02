@@ -3,15 +3,17 @@ package command
 import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
+	config2 "github.com/buildkite/agent/buildkite/config"
 	"github.com/buildkite/agent/buildkite/ec2"
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/machine"
 	"github.com/codegangsta/cli"
 	"os"
+	"path/filepath"
 )
 
-type AgentStartConfiguration struct {
-	File                             string
+type AgentStartConfig struct {
+	Config                           string   `cli:"config"`
 	Token                            string   `cli:"token"`
 	Name                             string   `cli:"name"`
 	Priority                         string   `cli:"priority"`
@@ -28,24 +30,50 @@ type AgentStartConfiguration struct {
 	Debug                            bool     `cli:"debug"`
 }
 
+func DefaultConfigFilePaths() (paths []string) {
+	// Toggle beetwen windows an *nix paths
+	if machine.IsWindows() {
+		paths = []string{
+			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
+		}
+	} else {
+		paths = []string{
+			"$HOME/.buildkite-agent/buildkite-agent.cfg",
+			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
+			"/etc/buildkite-agent/buildkite-agent.cfg",
+		}
+	}
+
+	// Also check to see if there's a buildkite-agent.cfg in the folder
+	// that the binary is running in.
+	pathToBinary, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err == nil {
+		pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
+		paths = append([]string{pathToRelativeConfig}, paths...)
+	}
+
+	return
+}
+
 func AgentStartCommandAction(c *cli.Context) {
-	var configuration AgentStartConfiguration
+	// The configuration will be loaded into this struct
+	cfg := AgentStartConfig{}
+
+	// Setup the config loader. You'll see that we also path paths to
+	// potential config files. The loader will use the first one it finds.
+	loader := config2.Loader{
+		CLI:                    c,
+		Config:                 &cfg,
+		DefaultConfigFilePaths: DefaultConfigFilePaths(),
+	}
 
 	// Load the configuration
-	err := buildkite.LoadConfiguration(&configuration, c)
-	if err != nil {
-		logger.Fatal("Failed to load configuration: %s", err)
+	if err := loader.Load(); err != nil {
+		logger.Fatal("%s", err)
 	}
 
-	// Toggle colors
-	if configuration.NoColor {
-		logger.SetColors(false)
-	}
-
-	// Init debugging
-	if configuration.Debug {
-		logger.SetLevel(logger.DEBUG)
-	}
+	// Setup the any global configuration options
+	SetupGlobalConfiguration(cfg)
 
 	welcomeMessage :=
 		"\n" +
@@ -70,19 +98,20 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	// then it's been loaded and we should show which one we loaded.
-	if configuration.File != "" {
-		logger.Info("Configuration loaded from: %s", configuration.File)
+	if loader.File != nil {
+		logger.Info("Configuration loaded from: %s", loader.File.Path)
 	}
 
-	agentRegistrationToken := configuration.Token
+	agentRegistrationToken := cfg.Token
 	if agentRegistrationToken == "" {
 		logger.Fatal("Missing --token. See 'buildkite-agent start --help'")
 	}
 
 	var agent buildkite.Agent
+	var err error
 
 	// Expand the environment variable
-	agent.BootstrapScript = os.ExpandEnv(configuration.BootstrapScript)
+	agent.BootstrapScript = os.ExpandEnv(cfg.BootstrapScript)
 	if agent.BootstrapScript == "" {
 		logger.Fatal("Bootstrap script is missing")
 	}
@@ -96,18 +125,18 @@ func AgentStartCommandAction(c *cli.Context) {
 	// Expand the build path. We don't bother checking to see if it can be
 	// written to, because it'll show up in the agent logs if it doesn't
 	// work.
-	agent.BuildPath = os.ExpandEnv(configuration.BuildPath)
+	agent.BuildPath = os.ExpandEnv(cfg.BuildPath)
 	logger.Debug("Build path: %s", agent.BuildPath)
 
 	// Expand the hooks path that is used by the bootstrap script
-	agent.HooksPath = os.ExpandEnv(configuration.HooksPath)
+	agent.HooksPath = os.ExpandEnv(cfg.HooksPath)
 	logger.Debug("Hooks directory: %s", agent.HooksPath)
 
 	// Set the agents meta data
-	agent.MetaData = configuration.MetaData
+	agent.MetaData = cfg.MetaData
 
 	// Should we try and grab the ec2 tags as well?
-	if configuration.MetaDataEC2Tags {
+	if cfg.MetaDataEC2Tags {
 		tags, err := ec2.GetTags()
 
 		if err != nil {
@@ -121,17 +150,17 @@ func AgentStartCommandAction(c *cli.Context) {
 	}
 
 	// More CLI options
-	agent.Name = configuration.Name
-	agent.Priority = configuration.Priority
+	agent.Name = cfg.Name
+	agent.Priority = cfg.Priority
 
 	// Set auto fingerprint option
-	agent.AutoSSHFingerprintVerification = !configuration.NoAutoSSHFingerprintVerification
+	agent.AutoSSHFingerprintVerification = !cfg.NoAutoSSHFingerprintVerification
 	if !agent.AutoSSHFingerprintVerification {
 		logger.Debug("Automatic SSH fingerprint verification has been disabled")
 	}
 
 	// Set script eval option
-	agent.CommandEval = !configuration.NoCommandEval
+	agent.CommandEval = !cfg.NoCommandEval
 	if !agent.CommandEval {
 		logger.Debug("Evaluating console commands has been disabled")
 	}
@@ -149,7 +178,7 @@ func AgentStartCommandAction(c *cli.Context) {
 	if machine.IsWindows() {
 		agent.RunInPty = false
 	} else {
-		agent.RunInPty = !configuration.NoPTY
+		agent.RunInPty = !cfg.NoPTY
 
 		if !agent.RunInPty {
 			logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
@@ -159,13 +188,13 @@ func AgentStartCommandAction(c *cli.Context) {
 	logger.Info("Registering agent with Buildkite...")
 
 	// Send the Buildkite API endpoint
-	agent.API.Endpoint = configuration.Endpoint
+	agent.API.Endpoint = cfg.Endpoint
 
 	// Use the registartion token as the token
 	agent.API.Token = agentRegistrationToken
 
 	// Register the agent
-	err = agent.Register(configuration.Endpoint, agentRegistrationToken)
+	err = agent.Register(cfg.Endpoint, agentRegistrationToken)
 	if err != nil {
 		logger.Fatal("%s", err)
 	}
@@ -174,7 +203,7 @@ func AgentStartCommandAction(c *cli.Context) {
 
 	// Configure the agent's client (legacy)
 	agent.Client.AuthorizationToken = agent.AccessToken
-	agent.Client.URL = configuration.Endpoint
+	agent.Client.URL = cfg.Endpoint
 
 	// Now we can switch to the Agents API access token
 	agent.API.Token = agent.AccessToken

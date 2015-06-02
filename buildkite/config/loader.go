@@ -12,18 +12,65 @@ import (
 )
 
 type Loader struct {
-	CLI    *cli.Context
+	// The context that is passed when using a codegangsta/cli action
+	CLI *cli.Context
+
+	// The struct that the config values will be loaded into
 	Config interface{}
+
+	// A slice of paths to files that should be used as config files
+	DefaultConfigFilePaths []string
+
+	// The file that was used when loading this configuration
+	File *File
 }
 
 var CLISpecialNameRegex = regexp.MustCompile(`(arg):(\d+)`)
 
+// A shortcut for loading a config from the CLI
 func Load(c *cli.Context, cfg interface{}) error {
-	return Loader{CLI: c, Config: cfg}.Load()
+	l := Loader{CLI: c, Config: cfg}
+
+	return l.Load()
 }
 
-func (l Loader) Load() error {
-	// Get all the fields from the configuration interface
+// Loads the config from the CLI and config files that are present.
+func (l *Loader) Load() error {
+
+	// Try and find a config file, either passed in the command line using
+	// --config, or in one of the default configuration file paths.
+	if l.CLI.String("config") != "" {
+		file := File{Path: l.CLI.String("config")}
+
+		// Because this file was passed in manually, we should throw an error
+		// if it doesn't exist.
+		if file.Exists() {
+			l.File = &file
+		} else {
+			return fmt.Errorf("A configuration file could not be found at: %s", file.AbsolutePath())
+		}
+	} else if len(l.DefaultConfigFilePaths) > 0 {
+		for _, path := range l.DefaultConfigFilePaths {
+			file := File{Path: path}
+
+			// If the config file exists, save it to the loader and
+			// don't bother checking the others.
+			if file.Exists() {
+				l.File = &file
+				break
+			}
+		}
+	}
+
+	if l.File != nil {
+		// Attempt to load the config file we've found
+		if err := l.File.Load(); err != nil {
+			return err
+		}
+	}
+
+	// Now it's onto actually setting the fields. We start by getting all
+	// the fields from the configuration interface
 	var fields []string
 	fields, _ = reflections.Fields(l.Config)
 
@@ -112,18 +159,20 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 
 		// We start by defaulting the value to what ever was provided
 		// by the configuration file
-		// if configFileValue, ok := configFileMap[cliName]; ok {
-		// 	// Convert the config file value to it's correct type
-		// 	if fieldKind == reflect.String {
-		// 		value = configFileValue
-		// 	} else if fieldKind == reflect.Slice {
-		// 		value = strings.Split(configFileValue, ",")
-		// 	} else if fieldKind == reflect.Bool {
-		// 		value, _ = strconv.ParseBool(configFileValue)
-		// 	} else {
-		// 		return fmt.Errorf("Unable to convert string to type %s", fieldKind)
-		// 	}
-		// }
+		if l.File != nil {
+			if configFileValue, ok := l.File.Config[cliName]; ok {
+				// Convert the config file value to it's correct type
+				if fieldKind == reflect.String {
+					value = configFileValue
+				} else if fieldKind == reflect.Slice {
+					value = strings.Split(configFileValue, ",")
+				} else if fieldKind == reflect.Bool {
+					value, _ = strconv.ParseBool(configFileValue)
+				} else {
+					return fmt.Errorf("Unable to convert string to type %s", fieldKind)
+				}
+			}
+		}
 
 		// If a value hasn't been found in a config file, but there
 		// _is_ one provided by the CLI context, then use that.
