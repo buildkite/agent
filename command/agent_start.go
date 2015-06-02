@@ -179,7 +179,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Setup the any global configuration options
-		SetupGlobalConfiguration(cfg)
+		HandleGlobalFlags(cfg)
 
 		welcomeMessage :=
 			"\n" +

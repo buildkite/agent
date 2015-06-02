@@ -66,28 +66,10 @@ var ArtifactDownloadCommand = cli.Command{
 			EnvVar: "BUILDKITE_BUILD_ID",
 			Usage:  "The build that the artifacts were uploaded to",
 		},
-		cli.StringFlag{
-			Name:   "agent-access-token",
-			Value:  "",
-			Usage:  "The access token used to identify the agent",
-			EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
-		},
-		cli.StringFlag{
-			Name:   "endpoint",
-			Value:  DefaultEndpoint,
-			Usage:  "The Agent API endpoint",
-			EnvVar: "BUILDKITE_AGENT_ENDPOINT",
-		},
-		cli.BoolFlag{
-			Name:   "debug",
-			Usage:  "Enable debug mode",
-			EnvVar: "BUILDKITE_AGENT_DEBUG",
-		},
-		cli.BoolFlag{
-			Name:   "no-color",
-			Usage:  "Don't show colors in logging",
-			EnvVar: "BUILDKITE_AGENT_NO_COLOR",
-		},
+		AgentAccessTokenFlag,
+		EndpointFlag,
+		DebugFlag,
+		NoColorFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -99,7 +81,7 @@ var ArtifactDownloadCommand = cli.Command{
 		}
 
 		// Setup the any global configuration options
-		SetupGlobalConfiguration(cfg)
+		HandleGlobalFlags(cfg)
 
 		// Setup the downloader
 		downloader := buildkite.ArtifactDownloader{
