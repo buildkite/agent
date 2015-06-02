@@ -8,15 +8,6 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-type MetaDataGetConfig struct {
-	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-}
-
 var MetaDataGetHelpDescription = `Usage:
 
    buildkite-agent meta-data get <key> [arguments...]
@@ -28,6 +19,15 @@ Description:
 Example:
 
    $ buildkite-agent meta-data get "foo"`
+
+type MetaDataGetConfig struct {
+	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
+	Job              string `cli:"job" validate:"required"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoColor          bool   `cli:"no-color"`
+	Debug            bool   `cli:"debug"`
+}
 
 var MetaDataGetCommand = cli.Command{
 	Name:        "get",

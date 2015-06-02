@@ -12,6 +12,23 @@ import (
 	"path/filepath"
 )
 
+var StartDescription = `Usage:
+
+   buildkite-agent start [arguments...]
+
+Description:
+
+   When a job is ready to run it will call the "bootstrap-script"
+   and pass it all the environment variables required for the job to run.
+   This script is responsible for checking out the code, and running the
+   actual build script defined in the project.
+
+   The agent will run any jobs within a PTY (pseudo terminal) if available.
+
+Example:
+
+   $ buildkite-agent start --token xxx`
+
 type AgentStartConfig struct {
 	Config                           string   `cli:"config"`
 	Token                            string   `cli:"token" validate:"required"`
@@ -54,23 +71,6 @@ func DefaultConfigFilePaths() (paths []string) {
 
 	return
 }
-
-var StartDescription = `Usage:
-
-   buildkite-agent start [arguments...]
-
-Description:
-
-   When a job is ready to run it will call the "bootstrap-script"
-   and pass it all the environment variables required for the job to run.
-   This script is responsible for checking out the code, and running the
-   actual build script defined in the project.
-
-   The agent will run any jobs within a PTY (pseudo terminal) if available.
-
-Example:
-
-   $ buildkite-agent start --token xxx`
 
 var AgentStartCommand = cli.Command{
 	Name:        "start",

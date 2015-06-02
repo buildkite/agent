@@ -7,16 +7,6 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-type MetaDataSetConfig struct {
-	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Value            string `cli:"arg:1" label:"meta-data value validate:"required"`
-	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-}
-
 var MetaDataSetHelpDescription = `Usage:
 
    buildkite-agent meta-data set <key> <value> [arguments...]
@@ -28,6 +18,16 @@ Description:
 Example:
 
    $ buildkite-agent meta-data set "foo" "bar"`
+
+type MetaDataSetConfig struct {
+	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
+	Value            string `cli:"arg:1" label:"meta-data value validate:"required"`
+	Job              string `cli:"job" validate:"required"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoColor          bool   `cli:"no-color"`
+	Debug            bool   `cli:"debug"`
+}
 
 var MetaDataSetCommand = cli.Command{
 	Name:        "set",

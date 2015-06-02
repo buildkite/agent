@@ -7,16 +7,6 @@ import (
 	"github.com/codegangsta/cli"
 )
 
-type ArtifactUploadConfig struct {
-	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`
-	Destination      string `cli:"arg:1" label:"destination"`
-	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-}
-
 var UploadHelpDescription = `Usage:
 
    buildkite-agent artifact upload <pattern> <destination> [arguments...]
@@ -40,6 +30,16 @@ Example:
    $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
    $ export BUILDKITE_S3_ACL=private # default is public-read
    $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
+
+type ArtifactUploadConfig struct {
+	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`
+	Destination      string `cli:"arg:1" label:"destination"`
+	Job              string `cli:"job" validate:"required"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoColor          bool   `cli:"no-color"`
+	Debug            bool   `cli:"debug"`
+}
 
 var ArtifactUploadCommand = cli.Command{
 	Name:        "upload",
