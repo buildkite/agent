@@ -3,7 +3,7 @@ package logstreamer
 import (
 	"errors"
 	"github.com/buildkite/agent/buildkite/http"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"math"
 	"sync"
 	"sync/atomic"

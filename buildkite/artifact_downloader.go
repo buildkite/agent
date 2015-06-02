@@ -1,8 +1,8 @@
 package buildkite
 
 import (
-	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/pool"
+	"github.com/buildkite/agent/logger"
 	"os"
 	"path/filepath"
 )

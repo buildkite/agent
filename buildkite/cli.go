@@ -1,7 +1,7 @@
 package buildkite
 
 import (
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
 )
 

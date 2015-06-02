@@ -9,7 +9,7 @@ import (
 	"net/http"
 	// "net/http/httputil"
 	"errors"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"net/url"
 	"os"
 	"path/filepath"

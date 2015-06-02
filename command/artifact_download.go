@@ -2,8 +2,8 @@ package command
 
 import (
 	"github.com/buildkite/agent/buildkite"
-	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
 )
 

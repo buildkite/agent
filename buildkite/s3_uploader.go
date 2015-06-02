@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/s3"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"io/ioutil"
 	"net/url"
 	"os"

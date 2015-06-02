@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"io"
 	"os"
 	"os/exec"

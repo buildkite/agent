@@ -1,7 +1,7 @@
 package command
 
 import (
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"github.com/oleiade/reflections"
 )
 

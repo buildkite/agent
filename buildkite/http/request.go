@@ -2,7 +2,7 @@ package http
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	stdhttp "net/http"
 	// stdhttputil "net/http/httputil"
 	"bytes"

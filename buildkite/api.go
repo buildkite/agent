@@ -2,7 +2,7 @@ package buildkite
 
 import (
 	"github.com/buildkite/agent/buildkite/http"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"runtime"
 )
 

@@ -3,7 +3,7 @@ package machine
 import (
 	"bytes"
 	"fmt"
-	"github.com/buildkite/agent/buildkite/logger"
+	"github.com/buildkite/agent/logger"
 	"io/ioutil"
 	"os/exec"
 	"path/filepath"

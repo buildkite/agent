@@ -2,8 +2,8 @@ package buildkite
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/logstreamer"
+	"github.com/buildkite/agent/logger"
 	"os"
 	"path/filepath"
 	"regexp"
