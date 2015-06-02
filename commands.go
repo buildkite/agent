@@ -77,30 +77,6 @@ Example:
 
    You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
-var UploadHelpDescription = `Usage:
-
-   buildkite-agent artifact upload <pattern> <destination> [arguments...]
-
-Description:
-
-   Uploads files to a job as artifacts.
-
-   You need to ensure that the paths are surrounded by quotes otherwise the
-   built-in shell path globbing will provide the files, which is currently not
-   supported.
-
-Example:
-
-   $ buildkite-agent artifact upload "log/**/*.log"
-
-   You can also upload directly to Amazon S3 if you'd like to host your own artifacts:
-
-   $ export BUILDKITE_S3_ACCESS_KEY_ID=xxx
-   $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
-   $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
-   $ export BUILDKITE_S3_ACL=private # default is public-read
-   $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
-
 var SetHelpDescription = `Usage:
 
    buildkite-agent meta-data set <key> <value> [arguments...]
@@ -270,42 +246,7 @@ func init() {
 					},
 					Action: command.ArtifactDownloadCommandAction,
 				},
-				{
-					Name:        "upload",
-					Usage:       "Uploads files to a job as artifacts",
-					Description: UploadHelpDescription,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name:   "job",
-							Value:  "",
-							Usage:  "Which job should the artifacts be uploaded to",
-							EnvVar: "BUILDKITE_JOB_ID",
-						},
-						cli.StringFlag{
-							Name:   "agent-access-token",
-							Value:  "",
-							Usage:  "The access token used to identify the agent",
-							EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
-						},
-						cli.StringFlag{
-							Name:   "endpoint",
-							Value:  DefaultEndpoint,
-							Usage:  "The Agent API endpoint",
-							EnvVar: "BUILDKITE_AGENT_ENDPOINT",
-						},
-						cli.BoolFlag{
-							Name:   "debug",
-							Usage:  "Enable debug mode",
-							EnvVar: "BUILDKITE_AGENT_DEBUG",
-						},
-						cli.BoolFlag{
-							Name:   "no-color",
-							Usage:  "Don't show colors in logging",
-							EnvVar: "BUILDKITE_AGENT_NO_COLOR",
-						},
-					},
-					Action: command.ArtifactUploadCommandAction,
-				},
+				command.ArtifactUploadCommand,
 				{
 					Name:        "shasum",
 					Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",

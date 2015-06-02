@@ -5,6 +5,10 @@ import (
 	"github.com/oleiade/reflections"
 )
 
+const (
+	DefaultEndpoint = "https://agent.buildkite.com/v2"
+)
+
 func SetupGlobalConfiguration(cfg interface{}) {
 	// Enable debugging if a Debug option is present
 	debug, err := reflections.GetField(cfg, "Debug")
