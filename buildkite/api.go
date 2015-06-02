@@ -62,21 +62,26 @@ func (api API) Do(method string, path string, result interface{}, body interface
 		UserAgent: api.UserAgent(),
 		Retries:   retries,
 		RetryCallback: func(response *http.Response) bool {
-			// Don't bother retrying these statuses
-			if response.StatusCode == 401 || response.StatusCode == 404 {
+			if response != nil {
+				// Don't bother retrying these statuses
+				if response.StatusCode == 401 || response.StatusCode == 404 {
+					return false
+				}
+
+				if response.Body != nil {
+					// Ensure the response body is closed after
+					// this callback
+					defer response.Body.Close()
+
+					api.logError(response)
+				}
+
+				// Returning true will cause it to retry as usuaul
+				return true
+			} else {
+				// No response object at all? Something must have gone very wrong.
 				return false
 			}
-
-			if response.Body != nil {
-				// Ensure the response body is closed after
-				// this callback
-				defer response.Body.Close()
-
-				api.logError(response)
-			}
-
-			// Returning true will cause it to retry as usuaul
-			return true
 		},
 	}
 
@@ -89,13 +94,13 @@ func (api API) Do(method string, path string, result interface{}, body interface
 	response, err := request.Do()
 
 	// If a body was returned, make sure we close it at the end of this function
-	if response.Body != nil {
+	if response != nil && response.Body != nil {
 		defer response.Body.Close()
 	}
 
 	// Bail if there was an error
 	if err != nil {
-		if response.Body != nil {
+		if response != nil && response.Body != nil {
 			api.logError(response)
 		}
 
