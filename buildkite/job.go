@@ -5,10 +5,8 @@ import (
 	"github.com/buildkite/agent/buildkite/logger"
 	"github.com/buildkite/agent/buildkite/logstreamer"
 	"os"
-	"os/user"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -105,8 +103,8 @@ func (j *Job) Run(agent *Agent) error {
 	env["BUILDKITE_BIN_PATH"] = dir
 
 	// Add misc options
-	env["BUILDKITE_BUILD_PATH"] = normalizePath(agent.BuildPath)
-	env["BUILDKITE_HOOKS_PATH"] = normalizePath(agent.HooksPath)
+	env["BUILDKITE_BUILD_PATH"] = agent.BuildPath
+	env["BUILDKITE_HOOKS_PATH"] = agent.HooksPath
 	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", agent.AutoSSHFingerprintVerification)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", agent.CommandEval)
 
@@ -245,17 +243,4 @@ func (j *Job) Run(agent *Agent) error {
 	logger.Info("Finished job %s", j.ID)
 
 	return nil
-}
-
-// Replaces ~/ with the users home directory. The builds path may be configured
-// as ~/.buildkite/hooks, and if it's set in a configuration file (not on the
-// command line) the OS won't automatically expand it.
-func normalizePath(path string) string {
-	if len(path) > 2 && path[:2] == "~/" {
-		usr, _ := user.Current()
-		dir := usr.HomeDir
-		return strings.Replace(path, "~", dir, 1)
-	} else {
-		return path
-	}
 }

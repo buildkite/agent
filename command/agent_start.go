@@ -14,19 +14,19 @@ import (
 
 type AgentStartConfig struct {
 	Config                           string   `cli:"config"`
-	Token                            string   `cli:"token"`
+	Token                            string   `cli:"token" validate:"required"`
 	Name                             string   `cli:"name"`
 	Priority                         string   `cli:"priority"`
-	BootstrapScript                  string   `cli:"bootstrap-script"`
-	BuildPath                        string   `cli:"build-path"`
-	HooksPath                        string   `cli:"hooks-path"`
+	BootstrapScript                  string   `cli:"bootstrap-script" normalize:"filepath" validate:"required,file-exists"`
+	BuildPath                        string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                        string   `cli:"hooks-path" normalize:"filepath"`
 	MetaData                         []string `cli:"meta-data"`
 	MetaDataEC2Tags                  bool     `cli:"meta-data-ec2-tags"`
 	NoColor                          bool     `cli:"no-color"`
 	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                    bool     `cli:"no-command-eval"`
 	NoPTY                            bool     `cli:"no-pty"`
-	Endpoint                         string   `cli:"endpoint"`
+	Endpoint                         string   `cli:"endpoint" validate:"required"`
 	Debug                            bool     `cli:"debug"`
 }
 
@@ -102,25 +102,8 @@ func AgentStartCommandAction(c *cli.Context) {
 		logger.Info("Configuration loaded from: %s", loader.File.Path)
 	}
 
-	agentRegistrationToken := cfg.Token
-	if agentRegistrationToken == "" {
-		logger.Fatal("Missing --token. See 'buildkite-agent start --help'")
-	}
-
 	var agent buildkite.Agent
 	var err error
-
-	// Expand the environment variable
-	agent.BootstrapScript = os.ExpandEnv(cfg.BootstrapScript)
-	if agent.BootstrapScript == "" {
-		logger.Fatal("Bootstrap script is missing")
-	}
-	logger.Debug("Bootstrap script: %s", agent.BootstrapScript)
-
-	// Just double check that the bootstrap script exists
-	if _, err := os.Stat(agent.BootstrapScript); os.IsNotExist(err) {
-		logger.Fatal("Could not find a bootstrap script located at: %s", agent.BootstrapScript)
-	}
 
 	// Expand the build path. We don't bother checking to see if it can be
 	// written to, because it'll show up in the agent logs if it doesn't
@@ -191,11 +174,10 @@ func AgentStartCommandAction(c *cli.Context) {
 	agent.API.Endpoint = cfg.Endpoint
 
 	// Use the registartion token as the token
-	agent.API.Token = agentRegistrationToken
+	agent.API.Token = cfg.Token
 
 	// Register the agent
-	err = agent.Register(cfg.Endpoint, agentRegistrationToken)
-	if err != nil {
+	if err := agent.Register(); err != nil {
 		logger.Fatal("%s", err)
 	}
 

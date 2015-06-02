@@ -51,7 +51,7 @@ func (f *File) Load() error {
 }
 
 func (f File) AbsolutePath() string {
-	return os.ExpandEnv(f.Path)
+	return NormalizeFilePath(f.Path)
 }
 
 func (f File) Exists() bool {

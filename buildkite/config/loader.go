@@ -36,7 +36,6 @@ func Load(c *cli.Context, cfg interface{}) error {
 
 // Loads the config from the CLI and config files that are present.
 func (l *Loader) Load() error {
-
 	// Try and find a config file, either passed in the command line using
 	// --config, or in one of the default configuration file paths.
 	if l.CLI.String("config") != "" {
@@ -62,6 +61,7 @@ func (l *Loader) Load() error {
 		}
 	}
 
+	// If a file was found, then we should load it
 	if l.File != nil {
 		// Attempt to load the config file we've found
 		if err := l.File.Load(); err != nil {
@@ -88,6 +88,16 @@ func (l *Loader) Load() error {
 			}
 		}
 
+		// Are there any normalizations we need to make?
+		normalization, _ := reflections.GetFieldTag(l.Config, fieldName, "normalize")
+		if normalization != "" {
+			// Apply the normalization
+			err := l.normalizeField(fieldName, normalization)
+			if err != nil {
+				return err
+			}
+		}
+
 		// Check for field deprecation
 		deprecationError, _ := reflections.GetFieldTag(l.Config, fieldName, "deprecated")
 		if deprecationError != "" {
@@ -108,7 +118,7 @@ func (l *Loader) Load() error {
 				// doesn't, just default to the structs field
 				// name. Not great, but works!
 				if cliName != "" {
-					label = "--" + cliName
+					label = cliName
 				} else {
 					label = fieldName
 				}
@@ -253,9 +263,43 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 			if l.fieldValueIsEmpty(fieldName) {
 				return fmt.Errorf("Missing %s. See: `%s %s --help`", label, l.CLI.App.Name, l.CLI.Command.Name)
 			}
+		} else if rule == "file-exists" {
+			value, _ := reflections.GetField(l.Config, fieldName)
+
+			// Make sure the value is converted to a string
+			if valueAsString, ok := value.(string); ok {
+				// Return an error if the path doesn't exist
+				if _, err := os.Stat(valueAsString); err != nil {
+					return fmt.Errorf("Could not find %s located at %s", label, value)
+				}
+			}
 		} else {
 			return fmt.Errorf("Unknown config validation rule `%s`", rule)
 		}
+	}
+
+	return nil
+}
+
+func (l Loader) normalizeField(fieldName string, normalization string) error {
+	if normalization == "filepath" {
+		value, _ := reflections.GetField(l.Config, fieldName)
+		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
+
+		// Make sure we're normalizing a string filed
+		if fieldKind != reflect.String {
+			return fmt.Errorf("filepath normalization only works on string fields")
+		}
+
+		// Normalize the field to be a filepath
+		if valueAsString, ok := value.(string); ok {
+			normalizedPath := NormalizeFilePath(valueAsString)
+			if err := reflections.SetField(l.Config, fieldName, normalizedPath); err != nil {
+				return err
+			}
+		}
+	} else {
+		return fmt.Errorf("Unknown normalization `%s`", normalization)
 	}
 
 	return nil
