@@ -1,6 +1,9 @@
 {
 	"ImportPath": "github.com/buildkite/agent",
 	"GoVersion": "go1.4.2",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/AdRoll/goamz/aws",
@@ -28,6 +31,11 @@
 			"ImportPath": "github.com/oleiade/reflections",
 			"Comment": "0.1.2-2-g632977f",
 			"Rev": "632977f98cd34d217c4b57d0840ec188b3d3dcaf"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/assert",
+			"Comment": "v1.0-5-g3c81d9b",
+			"Rev": "3c81d9b268122b3a8fa245f907518d716f503d2c"
 		},
 		{
 			"ImportPath": "golang.org/x/crypto/ssh/terminal",
