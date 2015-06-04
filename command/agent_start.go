@@ -80,7 +80,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "config",
 			Value:  "",
-			Usage:  "Path to a configration file",
+			Usage:  "Path to a configuration file",
 			EnvVar: "BUILDKITE_AGENT_CONFIG",
 		},
 		cli.StringFlag{
