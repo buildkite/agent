@@ -63,17 +63,14 @@ func (api API) Do(method string, path string, result interface{}, body interface
 		Retries:   retries,
 		RetryCallback: func(response *http.Response) bool {
 			if response != nil {
+				// Try an log an error
+				if response.Body != nil {
+					api.logError(response)
+				}
+
 				// Don't bother retrying these statuses
 				if response.StatusCode == 401 || response.StatusCode == 404 {
 					return false
-				}
-
-				if response.Body != nil {
-					// Ensure the response body is closed after
-					// this callback
-					defer response.Body.Close()
-
-					api.logError(response)
 				}
 
 				// Returning true will cause it to retry as usuaul
@@ -93,11 +90,6 @@ func (api API) Do(method string, path string, result interface{}, body interface
 	// Perform the request
 	response, err := request.Do()
 
-	// If a body was returned, make sure we close it at the end of this function
-	if response != nil && response.Body != nil {
-		defer response.Body.Close()
-	}
-
 	// Bail if there was an error
 	if err != nil {
 		if response != nil && response.Body != nil {
@@ -107,11 +99,17 @@ func (api API) Do(method string, path string, result interface{}, body interface
 		return err
 	}
 
+	// After decoding from JSON, ensure the response has been closed
+	defer response.Body.Close()
+
 	// Copy the JSON response to our agent record
 	return response.Body.DecodeFromJSON(&result)
 }
 
 func (api API) logError(response *http.Response) {
+	// Ensure the response body is closed after showing the error
+	defer response.Body.Close()
+
 	// See if there was an error embedded in the JSON that we should show
 	var err APIErrorResponse
 	response.Body.DecodeFromJSON(&err)
