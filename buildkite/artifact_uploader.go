@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -48,15 +49,32 @@ func (a *ArtifactUploader) Upload() error {
 	return nil
 }
 
+func (a *ArtifactUploader) WorkingDirectory(path string) string {
+	if filepath.IsAbs(path) {
+		if runtime.GOOS == "windows" {
+			return filepath.VolumeName(path)
+		} else {
+			return "/"
+		}
+	} else {
+		dir, _ := os.Getwd()
+		return dir
+	}
+}
+
+func (a *ArtifactUploader) NormalizedPath(path string) string {
+	return filepath.Join(a.WorkingDirectory(path), path)
+}
+
 func (a *ArtifactUploader) collect() (artifacts []*Artifact, err error) {
 	globPaths := strings.Split(a.Paths, ";")
-	workingDirectory, _ := os.Getwd()
 
 	for _, globPath := range globPaths {
+		workingDirectory := a.WorkingDirectory(globPath)
 		globPath = strings.TrimSpace(globPath)
 
 		if globPath != "" {
-			logger.Debug("Globbing %s for %s", workingDirectory, globPath)
+			logger.Debug("Searching for %s", a.NormalizedPath(globPath))
 
 			files, err := glob.Glob(workingDirectory, globPath)
 			if err != nil {
