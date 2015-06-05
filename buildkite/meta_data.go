@@ -1,17 +1,10 @@
 package buildkite
 
 type MetaData struct {
-	// The ID of the Job
+	API   API
 	JobID string
-
-	// The key of the data
-	Key string `json:"key,omitempty"`
-
-	// The value of the data
+	Key   string `json:"key,omitempty"`
 	Value string `json:"value,omitempty"`
-
-	// The API used for communication
-	API API
 }
 
 func (d *MetaData) Set() error {

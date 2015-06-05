@@ -12,9 +12,35 @@ import (
 )
 
 type JobRunner struct {
-	Agent     *Agent
-	Job       *Job
-	process   *process2.Process
+	// The agent running the job
+	Agent *Agent
+
+	// The job being run
+	Job *Job
+
+	// The boostrap script to run
+	BootstrapScript string
+
+	// The path to the run the builds in
+	BuildPath string
+
+	// Where bootstrap hooks are found
+	HooksPath string
+
+	// If this agent is allowed to perform command evaluation
+	CommandEval bool
+
+	// Whether or not the agent is allowed to automatically accept SSH
+	// fingerprints
+	AutoSSHFingerprintVerification bool
+
+	// Run jobs in a PTY
+	RunInPty bool
+
+	// The interal process of the job
+	process *process2.Process
+
+	// If the job is being cancelled
 	cancelled bool
 }
 
@@ -59,10 +85,10 @@ func (r *JobRunner) Run() error {
 	env["BUILDKITE_BIN_PATH"] = dir
 
 	// Add misc options
-	env["BUILDKITE_BUILD_PATH"] = r.Agent.BuildPath
-	env["BUILDKITE_HOOKS_PATH"] = r.Agent.HooksPath
-	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.Agent.AutoSSHFingerprintVerification)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.Agent.CommandEval)
+	env["BUILDKITE_BUILD_PATH"] = r.BuildPath
+	env["BUILDKITE_HOOKS_PATH"] = r.HooksPath
+	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AutoSSHFingerprintVerification)
+	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.CommandEval)
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
@@ -140,7 +166,7 @@ func (r *JobRunner) Run() error {
 	}
 
 	// Initialize our process to run
-	process := process2.InitProcess(r.Agent.BootstrapScript, envSlice, r.Agent.RunInPty, startCallback, lineCallback)
+	process := process2.InitProcess(r.BootstrapScript, envSlice, r.RunInPty, startCallback, lineCallback)
 
 	// Store the process so we can cancel it later.
 	r.process = process

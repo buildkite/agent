@@ -1,51 +1,16 @@
 package buildkite
 
 type Agent struct {
-	// The agents API configuration
-	API API
-
-	// The name of the new agent
-	Name string `json:"name"`
-
-	// The access token for the agent
-	AccessToken string `json:"access_token"`
-
-	// Hostname of the machine
-	Hostname string `json:"hostname"`
-
-	// Operating system for this machine
-	OS string `json:"os"`
-
-	// If this agent is allowed to perform command evaluation
-	CommandEval bool `json:"script_eval_enabled"`
-
-	// The priority of the agent
-	Priority string `json:"priority,omitempty"`
-
-	// The version of this agent
-	Version string `json:"version"`
-
-	// Meta data for the agent
-	MetaData []string `json:"meta_data"`
-
-	// The PID of the agent
-	PID int `json:"pid,omitempty"`
-
-	// The boostrap script to run
-	BootstrapScript string
-
-	// The path to the run the builds in
-	BuildPath string
-
-	// Where bootstrap hooks are found
-	HooksPath string
-
-	// Whether or not the agent is allowed to automatically accept SSH
-	// fingerprints
-	AutoSSHFingerprintVerification bool
-
-	// Run jobs in a PTY
-	RunInPty bool
+	API         API
+	Name        string   `json:"name"`
+	AccessToken string   `json:"access_token"`
+	Hostname    string   `json:"hostname"`
+	OS          string   `json:"os"`
+	CommandEval bool     `json:"script_eval_enabled"`
+	Priority    string   `json:"priority,omitempty"`
+	Version     string   `json:"version"`
+	MetaData    []string `json:"meta_data"`
+	PID         int      `json:"pid,omitempty"`
 }
 
 func (a *Agent) Register() error {

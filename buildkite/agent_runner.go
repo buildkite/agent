@@ -10,21 +10,21 @@ import (
 )
 
 type AgentRunner struct {
-	API                              API
-	ConfigFilePath                   string
-	Name                             string
-	Priority                         string
-	BootstrapScript                  string
-	BuildPath                        string
-	HooksPath                        string
-	MetaData                         []string
-	MetaDataEC2Tags                  bool
-	NoAutoSSHFingerprintVerification bool
-	NoCommandEval                    bool
-	NoPTY                            bool
-	Endpoint                         string
-	jobRunner                        *JobRunner
-	stopping                         bool
+	API                            API
+	ConfigFilePath                 string
+	Name                           string
+	Priority                       string
+	BootstrapScript                string
+	BuildPath                      string
+	HooksPath                      string
+	MetaData                       []string
+	MetaDataEC2Tags                bool
+	AutoSSHFingerprintVerification bool
+	CommandEval                    bool
+	RunInPty                       bool
+	Endpoint                       string
+	jobRunner                      *JobRunner
+	stopping                       bool
 }
 
 func (a *AgentRunner) Stop(agent *Agent) {
@@ -79,7 +79,17 @@ func (a *AgentRunner) Ping(agent *Agent) {
 		return
 	}
 
-	jobRunner := JobRunner{Job: job, Agent: agent}
+	jobRunner := JobRunner{
+		Job:                            job,
+		Agent:                          agent,
+		BootstrapScript:                a.BootstrapScript,
+		BuildPath:                      a.BuildPath,
+		HooksPath:                      a.HooksPath,
+		AutoSSHFingerprintVerification: a.AutoSSHFingerprintVerification,
+		CommandEval:                    a.CommandEval,
+		RunInPty:                       a.RunInPty,
+	}
+
 	a.jobRunner = &jobRunner
 
 	err = a.jobRunner.Run()
@@ -121,14 +131,9 @@ func (a *AgentRunner) Run() error {
 	var agent Agent
 	var err error
 
-	agent.BootstrapScript = a.BootstrapScript
-	logger.Debug("Bootstrap script: %s", agent.BootstrapScript)
-
-	agent.BuildPath = a.BuildPath
-	logger.Debug("Build path: %s", agent.BuildPath)
-
-	agent.HooksPath = a.HooksPath
-	logger.Debug("Hooks directory: %s", agent.HooksPath)
+	logger.Debug("Bootstrap script: %s", a.BootstrapScript)
+	logger.Debug("Build path: %s", a.BuildPath)
+	logger.Debug("Hooks directory: %s", a.HooksPath)
 
 	// Set the agents meta data
 	agent.MetaData = a.MetaData
@@ -151,15 +156,13 @@ func (a *AgentRunner) Run() error {
 	agent.Name = a.Name
 	agent.Priority = a.Priority
 
-	// Set auto fingerprint option
-	agent.AutoSSHFingerprintVerification = !a.NoAutoSSHFingerprintVerification
-	if !agent.AutoSSHFingerprintVerification {
+	if !a.AutoSSHFingerprintVerification {
 		logger.Debug("Automatic SSH fingerprint verification has been disabled")
 	}
 
 	// Set script eval option
-	agent.CommandEval = !a.NoCommandEval
-	if !agent.CommandEval {
+	agent.CommandEval = !a.CommandEval
+	if !a.CommandEval {
 		logger.Debug("Evaluating console commands has been disabled")
 	}
 
@@ -174,13 +177,9 @@ func (a *AgentRunner) Run() error {
 
 	// Toggle PTY
 	if runtime.GOOS == "windows" {
-		agent.RunInPty = false
-	} else {
-		agent.RunInPty = !a.NoPTY
-
-		if !agent.RunInPty {
-			logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
-		}
+		a.RunInPty = false
+	} else if !a.RunInPty {
+		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
 
 	logger.Info("Registering agent with Buildkite...")
