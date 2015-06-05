@@ -57,7 +57,7 @@ type Agent struct {
 	Job *Job
 
 	// This is true if the agent should no longer accept work
-	stopping bool
+	Stopping bool
 }
 
 func (a *Agent) Register() error {
@@ -79,7 +79,7 @@ func (a *Agent) Start() {
 
 	for {
 		// Did the agent try and stop during the last job run?
-		if a.stopping {
+		if a.Stopping {
 			a.Stop()
 		} else {
 			a.Ping()

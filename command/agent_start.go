@@ -7,6 +7,7 @@ import (
 	"github.com/buildkite/agent/buildkite/machine"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/signalwatcher"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"
@@ -278,8 +279,25 @@ var AgentStartCommand = cli.Command{
 		// Now we can switch to the Agents API access token
 		agent.API.Token = agent.AccessToken
 
-		// Setup signal monitoring
-		agent.MonitorSignals()
+		// Start the signal watcher
+		signalwatcher.Watch(func(sig signalwatcher.Signal) {
+			logger.Debug("Received signal `%s`", sig.String())
+
+			if sig == signalwatcher.QUIT {
+				// If this is the second quit signal, or if the
+				// agent doesnt' have a job.
+				if agent.Stopping || agent.Job == nil {
+					agent.Stop()
+				}
+
+				if agent.Job != nil {
+					logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
+					agent.Job.Kill()
+				}
+
+				agent.Stopping = true
+			}
+		})
 
 		// Connect the agent
 		logger.Info("Connecting to Buildkite...")
