@@ -131,7 +131,7 @@ func (a *AgentRunner) Run() error {
 
 	// Should we try and grab the ec2 tags as well?
 	if a.MetaDataEC2Tags {
-		tags, err := GetEC2Tags()
+		tags, err := EC2Tags{}.Get()
 
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.

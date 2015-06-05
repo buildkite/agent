@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-func GetEC2Tags() (map[string]string, error) {
+type EC2Tags struct {
+}
+
+func (e EC2Tags) Get() (map[string]string, error) {
 	tags := make(map[string]string)
 
 	// Passing blank values here instructs the AWS library to look at the
