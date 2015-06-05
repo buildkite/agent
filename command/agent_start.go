@@ -1,13 +1,9 @@
 package command
 
 import (
-	"fmt"
 	"github.com/buildkite/agent/buildkite"
-	"github.com/buildkite/agent/buildkite/ec2"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/process"
-	"github.com/buildkite/agent/signalwatcher"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"
@@ -170,163 +166,33 @@ var AgentStartCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		welcomeMessage :=
-			"\n" +
-				"%s  _           _ _     _ _    _ _                                _\n" +
-				" | |         (_) |   | | |  (_) |                              | |\n" +
-				" | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
-				" | '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
-				" | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
-				" |_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
-				"                                                __/ |\n" +
-				" http://buildkite.com/agent                    |___/\n%s\n"
-
-		// Don't do colors on the banner if they aren't enabled in the logger
-		if logger.ColorsEnabled() {
-			fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "\x1b[32m", "\x1b[0m")
-		} else {
-			fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "", "")
+		// Setup the agent
+		runner := buildkite.AgentRunner{
+			API: buildkite.API{
+				Endpoint: cfg.Endpoint,
+				Token:    cfg.Token,
+			},
+			Name:                             cfg.Name,
+			Priority:                         cfg.Priority,
+			BootstrapScript:                  cfg.BootstrapScript,
+			BuildPath:                        cfg.BuildPath,
+			HooksPath:                        cfg.HooksPath,
+			MetaData:                         cfg.MetaData,
+			MetaDataEC2Tags:                  cfg.MetaDataEC2Tags,
+			NoAutoSSHFingerprintVerification: cfg.NoAutoSSHFingerprintVerification,
+			NoCommandEval:                    cfg.NoCommandEval,
+			NoPTY:                            cfg.NoPTY,
 		}
 
-		logger.Notice("Starting buildkite-agent v%s with PID: %s", buildkite.Version(), fmt.Sprintf("%d", os.Getpid()))
-		logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
-		logger.Notice("For questions and support, email us at: hello@buildkite.com")
-
-		// then it's been loaded and we should show which one we loaded.
+		// Store the loaded config file path on the runner so we can
+		// show it when the agent starts
 		if loader.File != nil {
-			logger.Info("Configuration loaded from: %s", loader.File.Path)
+			runner.ConfigFilePath = loader.File.Path
 		}
 
-		var agent buildkite.Agent
-		var err error
-
-		agent.BootstrapScript = cfg.BootstrapScript
-		logger.Debug("Bootstrap script: %s", agent.BootstrapScript)
-
-		agent.BuildPath = cfg.BuildPath
-		logger.Debug("Build path: %s", agent.BuildPath)
-
-		agent.HooksPath = cfg.HooksPath
-		logger.Debug("Hooks directory: %s", agent.HooksPath)
-
-		// Set the agents meta data
-		agent.MetaData = cfg.MetaData
-
-		// Should we try and grab the ec2 tags as well?
-		if cfg.MetaDataEC2Tags {
-			tags, err := ec2.GetTags()
-
-			if err != nil {
-				// Don't blow up if we can't find them, just show a nasty error.
-				logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
-			} else {
-				for tag, value := range tags {
-					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
-				}
-			}
-		}
-
-		// More CLI options
-		agent.Name = cfg.Name
-		agent.Priority = cfg.Priority
-
-		// Set auto fingerprint option
-		agent.AutoSSHFingerprintVerification = !cfg.NoAutoSSHFingerprintVerification
-		if !agent.AutoSSHFingerprintVerification {
-			logger.Debug("Automatic SSH fingerprint verification has been disabled")
-		}
-
-		// Set script eval option
-		agent.CommandEval = !cfg.NoCommandEval
-		if !agent.CommandEval {
-			logger.Debug("Evaluating console commands has been disabled")
-		}
-
-		agent.Hostname, err = os.Hostname()
-		if err != nil {
-			logger.Fatal("Could not retrieve hostname: %s", err)
-		}
-
-		agent.OS, _ = OSDump()
-		agent.Version = buildkite.Version()
-		agent.PID = os.Getpid()
-
-		// Toggle PTY
-		if runtime.GOOS == "windows" {
-			agent.RunInPty = false
-		} else {
-			agent.RunInPty = !cfg.NoPTY
-
-			if !agent.RunInPty {
-				logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
-			}
-		}
-
-		logger.Info("Registering agent with Buildkite...")
-
-		// Send the Buildkite API endpoint
-		agent.API.Endpoint = cfg.Endpoint
-
-		// Use the registartion token as the token
-		agent.API.Token = cfg.Token
-
-		// Register the agent
-		if err := agent.Register(); err != nil {
+		// Run the agent
+		if err := runner.Run(); err != nil {
 			logger.Fatal("%s", err)
 		}
-
-		logger.Info("Successfully registered agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
-
-		// Now we can switch to the Agents API access token
-		agent.API.Token = agent.AccessToken
-
-		// Start the signal watcher
-		signalwatcher.Watch(func(sig signalwatcher.Signal) {
-			if sig == signalwatcher.QUIT {
-				logger.Debug("Received signal `%s`", sig.String())
-
-				// If this is the second quit signal, or if the
-				// agent doesnt' have a job.
-				if agent.Stopping || agent.Job == nil {
-					agent.Stop()
-				}
-
-				if agent.Job != nil {
-					logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
-					agent.Job.Kill()
-				}
-
-				agent.Stopping = true
-			} else {
-				logger.Debug("Ignoring signal `%s`", sig.String())
-			}
-		})
-
-		// Connect the agent
-		logger.Info("Connecting to Buildkite...")
-		err = agent.Connect()
-		if err != nil {
-			logger.Fatal("%s", err)
-		}
-
-		logger.Info("Agent successfully connected")
-		logger.Info("You can press Ctrl-C to stop the agent")
-		logger.Info("Waiting for work...")
-
-		// Start the agent
-		agent.Start()
 	},
-}
-
-// Returns a dump of the raw operating system information
-func OSDump() (string, error) {
-	if runtime.GOOS == "darwin" {
-		return process.Run("sw_vers")
-	} else if runtime.GOOS == "linux" {
-		return process.Cat("/etc/*-release"), nil
-	} else if runtime.GOOS == "windows" {
-		return process.Run("ver")
-	}
-
-	return "", nil
 }

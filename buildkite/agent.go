@@ -1,12 +1,9 @@
 package buildkite
 
-import (
-	"github.com/buildkite/agent/logger"
-	"os"
-	"time"
-)
-
 type Agent struct {
+	// The agents API configuration
+	API API
+
 	// The name of the new agent
 	Name string `json:"name"`
 
@@ -33,9 +30,6 @@ type Agent struct {
 
 	// The PID of the agent
 	PID int `json:"pid,omitempty"`
-
-	// The clients API configuration
-	API API
 
 	// The boostrap script to run
 	BootstrapScript string
@@ -70,83 +64,4 @@ func (a *Agent) Connect() error {
 
 func (a *Agent) Disconnect() error {
 	return a.API.Post("/disconnect", &a, a)
-}
-
-func (a *Agent) Start() {
-	// How long the agent will wait when no jobs can be found.
-	idleSeconds := 5
-	sleepTime := time.Duration(idleSeconds*1000) * time.Millisecond
-
-	for {
-		// Did the agent try and stop during the last job run?
-		if a.Stopping {
-			a.Stop()
-		} else {
-			a.Ping()
-		}
-
-		// Sleep for a while before we check again
-		time.Sleep(sleepTime)
-	}
-}
-
-func (a *Agent) Ping() {
-	// Perform the ping
-	ping := Ping{Agent: a}
-	err := ping.Perform()
-	if err != nil {
-		logger.Warn("Failed to ping (%s)", err)
-		return
-	}
-
-	// Is there a message that should be shown in the logs?
-	if ping.Message != "" {
-		logger.Info(ping.Message)
-	}
-
-	// Should the agent disconnect?
-	if ping.Action == "disconnect" {
-		a.Stop()
-		return
-	}
-
-	// Do nothing if there's no job
-	if ping.Job == nil {
-		return
-	}
-
-	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
-
-	job := ping.Job
-	job.API = a.API
-
-	// Accept the job
-	err = job.Accept()
-	if err != nil {
-		logger.Error("Failed to accept the job (%s)", err)
-		return
-	}
-
-	// Confirm that it's been accepted
-	if job.State != "accepted" {
-		logger.Error("Can not accept job with state `%s`", job.State)
-		return
-	}
-
-	a.Job = job
-	err = job.Run(a)
-	if err != nil {
-		logger.Error("Failed to run job: %s", err)
-	}
-
-	a.Job = nil
-}
-
-func (a *Agent) Stop() {
-	// Disconnect from Buildkite
-	logger.Info("Disconnecting...")
-	a.Disconnect()
-
-	// Kill the process
-	os.Exit(0)
 }
