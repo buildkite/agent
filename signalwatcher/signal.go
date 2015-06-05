@@ -7,5 +7,6 @@ func (s Signal) String() string {
 }
 
 const (
+	HUP  = Signal("HUP")
 	QUIT = Signal("QUIT")
 )

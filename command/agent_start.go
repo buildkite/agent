@@ -281,9 +281,9 @@ var AgentStartCommand = cli.Command{
 
 		// Start the signal watcher
 		signalwatcher.Watch(func(sig signalwatcher.Signal) {
-			logger.Debug("Received signal `%s`", sig.String())
-
 			if sig == signalwatcher.QUIT {
+				logger.Debug("Received signal `%s`", sig.String())
+
 				// If this is the second quit signal, or if the
 				// agent doesnt' have a job.
 				if agent.Stopping || agent.Job == nil {
@@ -296,6 +296,8 @@ var AgentStartCommand = cli.Command{
 				}
 
 				agent.Stopping = true
+			} else {
+				logger.Debug("Ignoring signal `%s`", sig.String())
 			}
 		})
 

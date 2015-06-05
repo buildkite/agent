@@ -11,10 +11,9 @@ func Watch(callback func(Signal)) {
 	signal.Notify(signals, os.Interrupt)
 
 	go func() {
-		// This will block until a signal is received
 		<-signals
 
-		callback(QUIT)
+		go callback(QUIT)
 		Watch(callback)
 	}()
 }
