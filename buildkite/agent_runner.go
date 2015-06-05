@@ -2,7 +2,6 @@ package buildkite
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite/ec2"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/signalwatcher"
 	"os"
@@ -132,7 +131,7 @@ func (a *AgentRunner) Run() error {
 
 	// Should we try and grab the ec2 tags as well?
 	if a.MetaDataEC2Tags {
-		tags, err := ec2.GetTags()
+		tags, err := GetEC2Tags()
 
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
