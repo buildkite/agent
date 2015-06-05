@@ -275,10 +275,6 @@ var AgentStartCommand = cli.Command{
 
 		logger.Info("Successfully registered agent \"%s\" with meta-data %s", agent.Name, agent.MetaData)
 
-		// Configure the agent's client (legacy)
-		agent.Client.AuthorizationToken = agent.AccessToken
-		agent.Client.URL = cfg.Endpoint
-
 		// Now we can switch to the Agents API access token
 		agent.API.Token = agent.AccessToken
 

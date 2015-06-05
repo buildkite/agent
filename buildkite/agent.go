@@ -34,9 +34,6 @@ type Agent struct {
 	// The PID of the agent
 	PID int `json:"pid,omitempty"`
 
-	// The client the agent will use to communicate to the API
-	Client Client
-
 	// The clients API configuration
 	API API
 

@@ -41,15 +41,8 @@ func (api API) Put(path string, result interface{}, body interface{}, _retries .
 	return api.Do("PUT", path, result, body, _retries...)
 }
 
-func (api API) Do(method string, path string, result interface{}, body interface{}, _retries ...int) error {
-	retries := 10
-	if len(_retries) > 0 {
-		retries = _retries[0]
-	}
-
-	// We can't use a pre-existing http.Session here, because registration
-	// uses a different authorization token
-	request := http.Request{
+func (api API) NewRequest(method string, path string, retries int) http.Request {
+	return http.Request{
 		Endpoint: api.Endpoint,
 		Method:   method,
 		Path:     path,
@@ -81,6 +74,17 @@ func (api API) Do(method string, path string, result interface{}, body interface
 			}
 		},
 	}
+}
+
+func (api API) Do(method string, path string, result interface{}, body interface{}, _retries ...int) error {
+	retries := 10
+	if len(_retries) > 0 {
+		retries = _retries[0]
+	}
+
+	// We can't use a pre-existing http.Session here, because registration
+	// uses a different authorization token
+	request := api.NewRequest(method, path, retries)
 
 	// Add the body if it's present
 	if body != nil {

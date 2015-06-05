@@ -89,8 +89,8 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Add agent environment variables
-	env["BUILDKITE_AGENT_ENDPOINT"] = agent.Client.URL
-	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = agent.Client.AuthorizationToken
+	env["BUILDKITE_AGENT_ENDPOINT"] = j.API.Endpoint
+	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = j.API.Token
 	env["BUILDKITE_AGENT_VERSION"] = Version()
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", logger.GetLevel() == logger.DEBUG)
 
@@ -113,10 +113,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// The HTTP request we'll be sending it to
-	logStreamerRequest := agent.Client.GetSession().NewRequest("POST", "jobs/"+j.ID+"/chunks")
-
-	// Set the retry limit for the request
-	logStreamerRequest.Retries = 10
+	logStreamerRequest := j.API.NewRequest("POST", "jobs/"+j.ID+"/chunks", 10)
 
 	// Create and start our log streamer
 	logStreamer, err := logstreamer.New(logStreamerRequest, j.ChunksMaxSizeBytes)
