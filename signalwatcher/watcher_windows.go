@@ -3,7 +3,6 @@ package signalwatcher
 import (
 	"os"
 	"os/signal"
-	"syscall"
 )
 
 func Watch(callback func(Signal)) {
