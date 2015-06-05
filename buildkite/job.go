@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite/logstreamer"
 	"github.com/buildkite/agent/logger"
+	process2 "github.com/buildkite/agent/process"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -39,7 +40,7 @@ type Job struct {
 	cancelled bool
 
 	// The currently running process of the job
-	process *Process
+	process *process2.Process
 }
 
 func (j *Job) Accept() error {
@@ -129,7 +130,7 @@ func (j *Job) Run(agent *Agent) error {
 	headerTimes := HeaderTimes{Job: j, API: j.API}
 
 	// This callback is called when the process starts
-	startCallback := func(process *Process) {
+	startCallback := func(process *process2.Process) {
 		// Start a routine that will grab the output every few seconds and send it back to Buildkite
 		go func() {
 			for process.Running {
@@ -173,7 +174,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// This callback is called for every line that is output by the process
-	lineCallback := func(process *Process, line string) {
+	lineCallback := func(process *process2.Process, line string) {
 		// We'll also ignore any line over 500 characters (who has a
 		// 500 character header...honestly...)
 		if len(line) < 500 && headerRegexp.MatchString(line) {
@@ -183,7 +184,7 @@ func (j *Job) Run(agent *Agent) error {
 	}
 
 	// Initialize our process to run
-	process := InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, startCallback, lineCallback)
+	process := process2.InitProcess(agent.BootstrapScript, envSlice, agent.RunInPty, startCallback, lineCallback)
 
 	// Store the process so we can cancel it later.
 	j.process = process

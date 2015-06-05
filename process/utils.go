@@ -1,6 +1,6 @@
 // +build !windows
 
-package buildkite
+package process
 
 import (
 	"github.com/kr/pty"

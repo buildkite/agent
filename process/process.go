@@ -1,4 +1,4 @@
-package buildkite
+package process
 
 // Logic for this file is largely based on:
 // https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
