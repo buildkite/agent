@@ -36,10 +36,6 @@ const (
 	RetryForever = -999
 )
 
-func (r *Request) String() string {
-	return fmt.Sprintf("http.Request{Method: %s, URL: %s}", r.Method, r.URL())
-}
-
 func (r *Request) Copy() Request {
 	return Request{
 		Session:       r.Session,

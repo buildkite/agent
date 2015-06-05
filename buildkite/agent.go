@@ -1,7 +1,6 @@
 package buildkite
 
 import (
-	"fmt"
 	"github.com/buildkite/agent/logger"
 	"os"
 	"time"
@@ -74,10 +73,6 @@ func (a *Agent) Connect() error {
 
 func (a *Agent) Disconnect() error {
 	return a.API.Post("/disconnect", &a, a)
-}
-
-func (a *Agent) String() string {
-	return fmt.Sprintf("Agent{Name: %s, Hostname: %s, PID: %d, RunInPty: %t}", a.Name, a.Hostname, a.PID, a.RunInPty)
 }
 
 func (a *Agent) Start() {

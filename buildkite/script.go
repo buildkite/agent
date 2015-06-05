@@ -29,11 +29,6 @@ type Process struct {
 	lineCallback  func(*Process, string)
 }
 
-// Implement the Stringer thingy
-func (p Process) String() string {
-	return fmt.Sprintf("Process{Pid: %d, Running: %t, ExitStatus: %s}", p.Pid, p.Running, p.ExitStatus)
-}
-
 func InitProcess(scriptPath string, env []string, runInPty bool, startCallback func(*Process), lineCallback func(*Process, string)) *Process {
 	// Create a new instance of our process struct
 	var process Process

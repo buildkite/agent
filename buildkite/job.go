@@ -42,10 +42,6 @@ type Job struct {
 	process *Process
 }
 
-func (b Job) String() string {
-	return fmt.Sprintf("Job{ID: %s, State: %s, StartedAt: %s, FinishedAt: %s, Process: %s}", b.ID, b.State, b.StartedAt, b.FinishedAt, b.process)
-}
-
 func (j *Job) Accept() error {
 	return j.API.Put("jobs/"+j.ID+"/accept", &j, j)
 }

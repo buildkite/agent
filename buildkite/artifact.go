@@ -1,7 +1,6 @@
 package buildkite
 
 import (
-	"fmt"
 	"mime"
 	"path/filepath"
 )
@@ -59,10 +58,6 @@ type Artifact struct {
 
 	// The API used for communication
 	API API
-}
-
-func (a Artifact) String() string {
-	return fmt.Sprintf("Artifact{ID: %s, Path: %s, URL: %s, AbsolutePath: %s, GlobPath: %s, FileSize: %d, Sha1Sum: %s}", a.ID, a.Path, a.URL, a.AbsolutePath, a.GlobPath, a.FileSize, a.Sha1Sum)
 }
 
 func (a *Artifact) Update() error {

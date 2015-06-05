@@ -1,9 +1,5 @@
 package buildkite
 
-import (
-	"fmt"
-)
-
 type MetaData struct {
 	// The ID of the Job
 	JobID string
@@ -16,10 +12,6 @@ type MetaData struct {
 
 	// The API used for communication
 	API API
-}
-
-func (d MetaData) String() string {
-	return fmt.Sprintf("MetaData{Key: %s, Value: %s}", d.Key, d.Value)
 }
 
 func (d *MetaData) Set() error {
