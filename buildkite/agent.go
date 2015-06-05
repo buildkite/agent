@@ -100,8 +100,8 @@ func (a *Agent) Start() {
 
 func (a *Agent) Ping() {
 	// Perform the ping
-	ping := Ping{}
-	err := a.API.Get("/ping", &ping)
+	ping := Ping{Agent: a}
+	err := ping.Perform()
 	if err != nil {
 		logger.Warn("Failed to ping (%s)", err)
 		return

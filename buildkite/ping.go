@@ -1,10 +1,9 @@
 package buildkite
 
-import (
-	"fmt"
-)
-
 type Ping struct {
+	// The Agent making the ping
+	Agent *Agent
+
 	// The action that Buildkite wants this agent to do next time it checks
 	// in
 	Action string `json:"action"`
@@ -16,6 +15,6 @@ type Ping struct {
 	Job *Job `json:"job"`
 }
 
-func (a *Ping) String() string {
-	return fmt.Sprintf("Ping{Action: %s, Message: %s, Job: %s}", a.Action, a.Message, a.Job)
+func (p *Ping) Perform() error {
+	return p.Agent.API.Get("/ping", &p)
 }
