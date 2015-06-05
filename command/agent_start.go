@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/buildkite/ec2"
-	"github.com/buildkite/agent/buildkite/machine"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/signalwatcher"
 	"github.com/codegangsta/cli"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 var StartDescription = `Usage:
@@ -50,7 +51,7 @@ type AgentStartConfig struct {
 
 func DefaultConfigFilePaths() (paths []string) {
 	// Toggle beetwen windows an *nix paths
-	if machine.IsWindows() {
+	if runtime.GOOS == "windows" {
 		paths = []string{
 			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
 		}
@@ -241,17 +242,17 @@ var AgentStartCommand = cli.Command{
 			logger.Debug("Evaluating console commands has been disabled")
 		}
 
-		agent.Hostname, err = machine.Hostname()
+		agent.Hostname, err = os.Hostname()
 		if err != nil {
 			logger.Fatal("Could not retrieve hostname: %s", err)
 		}
 
-		agent.OS, _ = machine.OSDump()
+		agent.OS, _ = OSDump()
 		agent.Version = buildkite.Version()
 		agent.PID = os.Getpid()
 
 		// Toggle PTY
-		if machine.IsWindows() {
+		if runtime.GOOS == "windows" {
 			agent.RunInPty = false
 		} else {
 			agent.RunInPty = !cfg.NoPTY
@@ -315,4 +316,17 @@ var AgentStartCommand = cli.Command{
 		// Start the agent
 		agent.Start()
 	},
+}
+
+// Returns a dump of the raw operating system information
+func OSDump() (string, error) {
+	if runtime.GOOS == "darwin" {
+		return process.Run("sw_vers")
+	} else if runtime.GOOS == "linux" {
+		return process.Cat("/etc/*-release"), nil
+	} else if runtime.GOOS == "windows" {
+		return process.Run("ver")
+	}
+
+	return "", nil
 }
