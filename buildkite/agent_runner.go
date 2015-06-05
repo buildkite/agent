@@ -27,79 +27,6 @@ type AgentRunner struct {
 	stopping                       bool
 }
 
-func (a *AgentRunner) Stop(agent *Agent) {
-	// Disconnect from Buildkite
-	logger.Info("Disconnecting...")
-	agent.Disconnect()
-
-	// Kill the process
-	os.Exit(0)
-}
-
-func (a *AgentRunner) Ping(agent *Agent) {
-	// Perform the ping
-	ping := Ping{Agent: agent}
-	err := ping.Perform()
-	if err != nil {
-		logger.Warn("Failed to ping (%s)", err)
-		return
-	}
-
-	// Is there a message that should be shown in the logs?
-	if ping.Message != "" {
-		logger.Info(ping.Message)
-	}
-
-	// Should the agent disconnect?
-	if ping.Action == "disconnect" {
-		a.Stop(agent)
-		return
-	}
-
-	// Do nothing if there's no job
-	if ping.Job == nil {
-		return
-	}
-
-	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
-
-	job := ping.Job
-	job.API = agent.API
-
-	// Accept the job
-	err = job.Accept()
-	if err != nil {
-		logger.Error("Failed to accept the job (%s)", err)
-		return
-	}
-
-	// Confirm that it's been accepted
-	if job.State != "accepted" {
-		logger.Error("Can not accept job with state `%s`", job.State)
-		return
-	}
-
-	jobRunner := JobRunner{
-		Job:                            job,
-		Agent:                          agent,
-		BootstrapScript:                a.BootstrapScript,
-		BuildPath:                      a.BuildPath,
-		HooksPath:                      a.HooksPath,
-		AutoSSHFingerprintVerification: a.AutoSSHFingerprintVerification,
-		CommandEval:                    a.CommandEval,
-		RunInPty:                       a.RunInPty,
-	}
-
-	a.jobRunner = &jobRunner
-
-	err = a.jobRunner.Run()
-	if err != nil {
-		logger.Error("Failed to run job: %s", err)
-	}
-
-	a.jobRunner = nil
-}
-
 func (a *AgentRunner) Run() error {
 	welcomeMessage :=
 		"\n" +
@@ -128,12 +55,12 @@ func (a *AgentRunner) Run() error {
 		logger.Info("Configuration loaded from: %s", a.ConfigFilePath)
 	}
 
-	var agent Agent
-	var err error
-
 	logger.Debug("Bootstrap script: %s", a.BootstrapScript)
 	logger.Debug("Build path: %s", a.BuildPath)
 	logger.Debug("Hooks directory: %s", a.HooksPath)
+
+	var err error
+	var agent Agent
 
 	// Set the agents meta data
 	agent.MetaData = a.MetaData
@@ -175,7 +102,6 @@ func (a *AgentRunner) Run() error {
 	agent.Version = Version()
 	agent.PID = os.Getpid()
 
-	// Toggle PTY
 	if runtime.GOOS == "windows" {
 		a.RunInPty = false
 	} else if !a.RunInPty {
@@ -247,4 +173,77 @@ func (a *AgentRunner) Run() error {
 	}
 
 	return nil
+}
+
+func (a *AgentRunner) Stop(agent *Agent) {
+	// Disconnect from Buildkite
+	logger.Info("Disconnecting...")
+	agent.Disconnect()
+
+	// Kill the process
+	os.Exit(0)
+}
+
+func (a *AgentRunner) Ping(agent *Agent) {
+	// Perform the ping
+	ping := Ping{Agent: agent}
+	err := ping.Perform()
+	if err != nil {
+		logger.Warn("Failed to ping (%s)", err)
+		return
+	}
+
+	// Is there a message that should be shown in the logs?
+	if ping.Message != "" {
+		logger.Info(ping.Message)
+	}
+
+	// Should the agent disconnect?
+	if ping.Action == "disconnect" {
+		a.Stop(agent)
+		return
+	}
+
+	// Do nothing if there's no job
+	if ping.Job == nil {
+		return
+	}
+
+	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
+
+	job := ping.Job
+	job.API = agent.API
+
+	// Accept the job
+	err = job.Accept()
+	if err != nil {
+		logger.Error("Failed to accept the job (%s)", err)
+		return
+	}
+
+	// Confirm that it's been accepted
+	if job.State != "accepted" {
+		logger.Error("Can not accept job with state `%s`", job.State)
+		return
+	}
+
+	jobRunner := JobRunner{
+		Job:                            job,
+		Agent:                          agent,
+		BootstrapScript:                a.BootstrapScript,
+		BuildPath:                      a.BuildPath,
+		HooksPath:                      a.HooksPath,
+		AutoSSHFingerprintVerification: a.AutoSSHFingerprintVerification,
+		CommandEval:                    a.CommandEval,
+		RunInPty:                       a.RunInPty,
+	}
+
+	a.jobRunner = &jobRunner
+
+	err = a.jobRunner.Run()
+	if err != nil {
+		logger.Error("Failed to run job: %s", err)
+	}
+
+	a.jobRunner = nil
 }
