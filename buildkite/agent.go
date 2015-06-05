@@ -46,12 +46,6 @@ type Agent struct {
 
 	// Run jobs in a PTY
 	RunInPty bool
-
-	// The currently running Job
-	Job *Job
-
-	// This is true if the agent should no longer accept work
-	Stopping bool
 }
 
 func (a *Agent) Register() error {

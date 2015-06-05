@@ -23,6 +23,8 @@ type AgentRunner struct {
 	NoCommandEval                    bool
 	NoPTY                            bool
 	Endpoint                         string
+	jobRunner                        *JobRunner
+	stopping                         bool
 }
 
 func (a *AgentRunner) Stop(agent *Agent) {
@@ -77,13 +79,15 @@ func (a *AgentRunner) Ping(agent *Agent) {
 		return
 	}
 
-	agent.Job = job
-	err = job.Run(agent)
+	jobRunner := JobRunner{Job: job, Agent: agent}
+	a.jobRunner = &jobRunner
+
+	err = a.jobRunner.Run()
 	if err != nil {
 		logger.Error("Failed to run job: %s", err)
 	}
 
-	agent.Job = nil
+	a.jobRunner = nil
 }
 
 func (a *AgentRunner) Run() error {
@@ -201,16 +205,16 @@ func (a *AgentRunner) Run() error {
 
 			// If this is the second quit signal, or if the
 			// agent doesnt' have a job.
-			if agent.Stopping || agent.Job == nil {
+			if a.stopping || a.jobRunner == nil {
 				a.Stop(&agent)
 			}
 
-			if agent.Job != nil {
+			if a.jobRunner != nil {
 				logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
-				agent.Job.Kill()
+				a.jobRunner.Kill()
 			}
 
-			agent.Stopping = true
+			a.stopping = true
 		} else {
 			logger.Debug("Ignoring signal `%s`", sig.String())
 		}
@@ -233,7 +237,7 @@ func (a *AgentRunner) Run() error {
 
 	for {
 		// Did the agent try and stop during the last job run?
-		if agent.Stopping {
+		if a.stopping {
 			a.Stop(&agent)
 		} else {
 			a.Ping(&agent)
