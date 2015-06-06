@@ -1,4 +1,4 @@
-VERSION := $(shell cat buildkite/version.go  | grep Version | head -n1 | cut -d \" -f 2)
+VERSION := $(shell cat agent/version.go  | grep Version | head -n1 | cut -d \" -f 2)
 
 build: deps
 	@echo "building ${VERSION}"
