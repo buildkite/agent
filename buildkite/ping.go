@@ -16,5 +16,6 @@ type Ping struct {
 }
 
 func (p *Ping) Perform() error {
-	return p.Agent.API.Get("/ping", &p)
+	// return p.Agent.API.Get("/ping", &p)
+	return nil
 }

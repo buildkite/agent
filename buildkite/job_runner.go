@@ -12,9 +12,6 @@ import (
 )
 
 type JobRunner struct {
-	// The agent running the job
-	Agent *Agent
-
 	// The job being run
 	Job *Job
 
