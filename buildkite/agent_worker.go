@@ -17,9 +17,16 @@ type AgentWorker struct {
 	// The registred agent API record
 	Agent *api.Agent
 
+	// The configuration of the agent from the CLI
+	AgentConfiguration *AgentConfiguration
+
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
 	stop   chan bool
+
+	// When this worker runs a job, we'll store an instance of the
+	// JobRunner here
+	jobRunner *JobRunner
 }
 
 // Creates the agent worker and initializes it's API Client
@@ -35,8 +42,9 @@ func (a *AgentWorker) Start() error {
 	a.ticker = time.NewTicker(5 * time.Second)
 	a.stop = make(chan bool, 1)
 
+	// Continue this loop until the the ticker is stopped, and we received
+	// a message on the stop channel.
 	for {
-		// Perform the ping
 		a.Ping()
 
 		select {
@@ -60,18 +68,17 @@ func (a *AgentWorker) Stop() {
 	}
 }
 
-// Connects the agent to the Buildkite Agent API
+// Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
+// fails.
 func (a *AgentWorker) Connect() error {
-	connector := func(s *retry.Stats) error {
+	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
 		if err != nil {
 			logger.Warn("%s (%s)", err, s)
 		}
 
 		return err
-	}
-
-	return retry.Do(connector, &retry.Config{Maximum: 30})
+	}, &retry.Config{Maximum: 30})
 }
 
 // Performs a ping, which returns what action the agent should take next.
@@ -95,12 +102,14 @@ func (a *AgentWorker) Ping() {
 		return
 	}
 
-	// Do nothing if there's no job
+	// If we don't have a job, there's nothing to do!
 	if ping.Job == nil {
 		return
 	}
 
-	// Accept the job
+	// Accept the job. We don't bother retrying the accept. It it fails,
+	// the ping will fail, and we'll just try this whole process all over
+	// again.
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 	accepted, _, err := a.APIClient.Jobs.Accept(ping.Job)
 	if err != nil {
@@ -108,41 +117,38 @@ func (a *AgentWorker) Ping() {
 		return
 	}
 
-	logger.Debug("%+v", ping)
+	// Now that the job has been accepted, we can start it.
+	a.jobRunner, err = JobRunner{
+		Endpoint:           a.Endpoint,
+		Agent:              a.Agent,
+		AgentConfiguration: a.AgentConfiguration,
+		Job:                accepted,
+	}.Create()
 
-	//job := ping.Job
-	//job.API = agent.API
+	// Was there an error creating the job runner?
+	if err != nil {
+		logger.Error("Failed to initialize job: %s", err)
+		return
+	}
 
-	//jobRunner := JobRunner{
-	//	Job:                            job,
-	//	Agent:                          agent,
-	//	BootstrapScript:                r.BootstrapScript,
-	//	BuildPath:                      r.BuildPath,
-	//	HooksPath:                      r.HooksPath,
-	//	AutoSSHFingerprintVerification: r.AutoSSHFingerprintVerification,
-	//	CommandEval:                    r.CommandEval,
-	//	RunInPty:                       r.RunInPty,
-	//}
+	// Start running the job
+	if err = a.jobRunner.Run(); err != nil {
+		logger.Error("Failed to run job: %s", err)
+	}
 
-	//r.jobRunner = &jobRunner
-
-	//err = r.jobRunner.Run()
-	//if err != nil {
-	//	logger.Error("Failed to run job: %s", err)
-	//}
-
-	//r.jobRunner = nil
+	// No more job, no more runner.
+	a.jobRunner = nil
 }
 
+// Disconnects the agent from the Buildkite Agent API, retrying up to 30 times
+// if it fails.
 func (a *AgentWorker) Disconnect() error {
-	disconnector := func(s *retry.Stats) error {
+	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Disconnect()
 		if err != nil {
 			logger.Warn("%s (%s)", err, s)
 		}
 
 		return err
-	}
-
-	return retry.Do(disconnector, &retry.Config{Maximum: 30})
+	}, &retry.Config{Maximum: 30})
 }

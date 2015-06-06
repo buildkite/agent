@@ -2,7 +2,6 @@ package logstreamer
 
 import (
 	"errors"
-	"github.com/buildkite/agent/http"
 	"github.com/buildkite/agent/logger"
 	"math"
 	"sync"
@@ -13,14 +12,14 @@ type Streamer struct {
 	// How many log streamer workers are running at any one time
 	Concurrency int
 
-	// The base HTTP request we'll keep sending logs to
-	Request *http.Request
-
 	// The maximum size of chunks
 	MaxChunkSizeBytes int
 
 	// A counter of how many chunks failed to upload
 	ChunksFailedCount int32
+
+	// The callback called when a chunk is ready for upload
+	Callback func(chunk *Chunk) error
 
 	// The queue of chunks that are needing to be uploaded
 	queue chan *Chunk
@@ -40,12 +39,20 @@ type Streamer struct {
 	processMutex sync.Mutex
 }
 
+type Chunk struct {
+	// The contents of the chunk
+	Data string
+
+	// The sequence number of this chunk
+	Order int
+}
+
 // Creates a new instance of the log streamer
-func New(request http.Request, maxChunkSizeBytes int) (*Streamer, error) {
+func New(maxChunkSizeBytes int, callback func(chunk *Chunk) error) (*Streamer, error) {
 	// Create a new log streamer and default the concurrency
 	streamer := new(Streamer)
 	streamer.Concurrency = 3
-	streamer.Request = &request
+	streamer.Callback = callback
 	streamer.MaxChunkSizeBytes = maxChunkSizeBytes
 	streamer.queue = make(chan *Chunk, 1024)
 
@@ -99,9 +106,8 @@ func (streamer *Streamer) Process(output string) error {
 
 			// Create the chunk and append it to our list
 			chunk := Chunk{
-				Request: streamer.Request,
-				Data:    partialChunk,
-				Order:   streamer.order,
+				Data:  partialChunk,
+				Order: streamer.order,
 			}
 
 			streamer.queue <- &chunk
@@ -145,7 +151,7 @@ func Worker(id int, streamer *Streamer) {
 		}
 
 		// Upload the chunk
-		err := chunk.Upload()
+		err := streamer.Callback(chunk)
 		if err != nil {
 			atomic.AddInt32(&streamer.ChunksFailedCount, 1)
 

@@ -1,7 +1,6 @@
 package buildkite
 
 import (
-	_ "github.com/buildkite/agent/http"
 	"github.com/buildkite/agent/logger"
 	"strconv"
 	"sync"

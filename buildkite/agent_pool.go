@@ -10,20 +10,15 @@ import (
 )
 
 type AgentPool struct {
-	APIClient                      *api.Client
-	Token                          string
-	ConfigFilePath                 string
-	Name                           string
-	Priority                       string
-	BootstrapScript                string
-	BuildPath                      string
-	HooksPath                      string
-	MetaData                       []string
-	MetaDataEC2Tags                bool
-	AutoSSHFingerprintVerification bool
-	CommandEval                    bool
-	RunInPty                       bool
-	Endpoint                       string
+	APIClient          *api.Client
+	Token              string
+	ConfigFilePath     string
+	Name               string
+	Priority           string
+	MetaData           []string
+	MetaDataEC2Tags    bool
+	Endpoint           string
+	AgentConfiguration *AgentConfiguration
 }
 
 func (r *AgentPool) Start() error {
@@ -49,7 +44,7 @@ func (r *AgentPool) Start() error {
 
 	// Now that we have a registereted agent, we can connect it to the API,
 	// and start running jobs.
-	worker := AgentWorker{Agent: registered, Endpoint: r.Endpoint}.Create()
+	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint}.Create()
 
 	logger.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {
@@ -92,7 +87,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Name:              r.Name,
 		Priority:          r.Priority,
 		MetaData:          r.MetaData,
-		ScriptEvalEnabled: r.CommandEval,
+		ScriptEvalEnabled: r.AgentConfiguration.CommandEval,
 		Version:           Version(),
 		PID:               os.Getpid(),
 	}
@@ -168,19 +163,19 @@ func (r *AgentPool) ShowBanner() {
 		logger.Info("Configuration loaded from: %s", r.ConfigFilePath)
 	}
 
-	logger.Debug("Bootstrap script: %s", r.BootstrapScript)
-	logger.Debug("Build path: %s", r.BuildPath)
-	logger.Debug("Hooks directory: %s", r.HooksPath)
+	logger.Debug("Bootstrap script: %s", r.AgentConfiguration.BootstrapScript)
+	logger.Debug("Build path: %s", r.AgentConfiguration.BuildPath)
+	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
 
-	if !r.AutoSSHFingerprintVerification {
+	if !r.AgentConfiguration.AutoSSHFingerprintVerification {
 		logger.Debug("Automatic SSH fingerprint verification has been disabled")
 	}
 
-	if !r.CommandEval {
+	if !r.AgentConfiguration.CommandEval {
 		logger.Debug("Evaluating console commands has been disabled")
 	}
 
-	if !r.RunInPty {
+	if !r.AgentConfiguration.RunInPty {
 		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
 }

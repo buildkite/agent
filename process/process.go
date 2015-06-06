@@ -21,41 +21,36 @@ import (
 type Process struct {
 	Pid           int
 	Running       bool
-	RunInPty      bool
+	PTY           bool
+	Script        string
+	Env           []string
 	ExitStatus    string
 	buffer        bytes.Buffer
 	command       *exec.Cmd
-	startCallback func(*Process)
-	lineCallback  func(*Process, string)
+	StartCallback func()
+	LineCallback  func(string)
 }
 
-func InitProcess(scriptPath string, env []string, runInPty bool, startCallback func(*Process), lineCallback func(*Process, string)) *Process {
-	// Create a new instance of our process struct
-	var process Process
-	process.RunInPty = runInPty
-
+func (p Process) Create() *Process {
 	// Find the script to run
-	absolutePath, _ := filepath.Abs(scriptPath)
+	absolutePath, _ := filepath.Abs(p.Script)
 	scriptDirectory := filepath.Dir(absolutePath)
 
-	process.command = exec.Command(absolutePath)
-	process.command.Dir = scriptDirectory
+	// Create the command that will be run
+	p.command = exec.Command(absolutePath)
+	p.command.Dir = scriptDirectory
 
 	// Do cross-platform things to prepare this process to run
-	PrepareCommandProcess(&process)
+	PrepareCommandProcess(&p)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
 	// the top of the current one so the ENV from Buildkite and the agent
 	// take precedence over the agent
 	currentEnv := os.Environ()
-	process.command.Env = append(currentEnv, env...)
+	p.command.Env = append(currentEnv, p.Env...)
 
-	// Set the callbacks
-	process.lineCallback = lineCallback
-	process.startCallback = startCallback
-
-	return &process
+	return &p
 }
 
 func (p *Process) Start() error {
@@ -68,7 +63,7 @@ func (p *Process) Start() error {
 	logger.Info("Starting to run script: %s", p.command.Path)
 
 	// Toggle between running in a pty
-	if p.RunInPty {
+	if p.PTY {
 		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
@@ -166,7 +161,7 @@ func (p *Process) Start() error {
 				}
 			}
 
-			p.lineCallback(p, string(line))
+			p.LineCallback(string(line))
 		}
 
 		logger.Debug("[LineScanner] Finished")
@@ -175,7 +170,7 @@ func (p *Process) Start() error {
 	}()
 
 	// Call the startCallback
-	p.startCallback(p)
+	p.StartCallback()
 
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
