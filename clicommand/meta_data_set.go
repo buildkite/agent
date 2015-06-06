@@ -1,8 +1,8 @@
 package clicommand
 
 import (
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
@@ -59,7 +59,7 @@ var MetaDataSetCommand = cli.Command{
 		HandleGlobalFlags(cfg)
 
 		// Create the API client
-		client := buildkite.APIClient{
+		client := agent.APIClient{
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
 		}.Create()

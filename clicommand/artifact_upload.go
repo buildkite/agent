@@ -1,7 +1,7 @@
 package clicommand
 
 import (
-	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
@@ -70,8 +70,8 @@ var ArtifactUploadCommand = cli.Command{
 		HandleGlobalFlags(cfg)
 
 		// Setup the uploader
-		uploader := buildkite.ArtifactUploader{
-			APIClient: buildkite.APIClient{
+		uploader := agent.ArtifactUploader{
+			APIClient: agent.APIClient{
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
 			}.Create(),

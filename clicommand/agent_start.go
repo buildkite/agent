@@ -1,7 +1,7 @@
 package clicommand
 
 import (
-	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
@@ -167,14 +167,14 @@ var AgentStartCommand = cli.Command{
 		HandleGlobalFlags(cfg)
 
 		// Setup the agent
-		pool := buildkite.AgentPool{
+		pool := agent.AgentPool{
 			Token:           cfg.Token,
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
 			MetaData:        cfg.MetaData,
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
 			Endpoint:        cfg.Endpoint,
-			AgentConfiguration: &buildkite.AgentConfiguration{
+			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:                cfg.BootstrapScript,
 				BuildPath:                      cfg.BuildPath,
 				HooksPath:                      cfg.HooksPath,

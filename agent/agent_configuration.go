@@ -1,4 +1,4 @@
-package buildkite
+package agent
 
 type AgentConfiguration struct {
 	BootstrapScript                string

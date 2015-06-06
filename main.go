@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/clicommand"
 	"github.com/codegangsta/cli"
 	"os"
@@ -48,7 +48,7 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "buildkite-agent"
-	app.Version = buildkite.Version()
+	app.Version = agent.Version()
 	app.Commands = []cli.Command{
 		clicommand.AgentStartCommand,
 		{

@@ -2,7 +2,7 @@ package clicommand
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/buildkite"
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
@@ -85,8 +85,8 @@ var ArtifactShasumCommand = cli.Command{
 		HandleGlobalFlags(cfg)
 
 		// Find the artifact we want to show the SHASUM for
-		searcher := buildkite.ArtifactSearcher{
-			APIClient: buildkite.APIClient{
+		searcher := agent.ArtifactSearcher{
+			APIClient: agent.APIClient{
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
 			}.Create(),

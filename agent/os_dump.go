@@ -1,4 +1,4 @@
-package buildkite
+package agent
 
 import (
 	"github.com/buildkite/agent/process"
