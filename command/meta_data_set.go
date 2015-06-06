@@ -1,6 +1,7 @@
 package command
 
 import (
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/buildkite"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
@@ -57,19 +58,20 @@ var MetaDataSetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
+		// Create the API client
+		client := buildkite.APIClient{
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
+		}.Create()
+
 		// Create the meta data to set
-		metaData := buildkite.MetaData{
-			API: buildkite.API{
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			},
-			JobID: cfg.Job,
+		metaData := &api.MetaData{
 			Key:   cfg.Key,
 			Value: cfg.Value,
 		}
 
 		// Set the meta data
-		if err := metaData.Set(); err != nil {
+		if _, _, err := client.MetaData.Set(cfg.Job, metaData); err != nil {
 			logger.Fatal("Failed to set meta-data: %s", err)
 		}
 	},
