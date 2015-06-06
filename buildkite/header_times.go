@@ -8,7 +8,6 @@ import (
 )
 
 type HeaderTimes struct {
-	Job   *Job
 	API   API
 	Times []string
 
@@ -87,7 +86,7 @@ func (h *HeaderTimes) Upload() {
 		logger.Debug("[HeaderTimes] Uploading %d..%d (%d)", c+1, length, timesToUpload)
 
 		// Send the timings to the API
-		h.API.Post("jobs/"+h.Job.ID+"/header_times", &payload, payload)
+		// h.API.Post("jobs/"+h.Job.ID+"/header_times", &payload, payload)
 
 		// Decrement the wait group for every time we've uploaded
 		for _, _ = range times {

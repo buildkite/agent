@@ -22,6 +22,24 @@ type Job struct {
 	ChunksFailedCount  int               `json:"chunks_failed_count"`
 }
 
+// Fetches a job
+func (js *JobsService) Get(id string) (*Job, *Response, error) {
+	u := fmt.Sprintf("v2/jobs/%s", id)
+
+	req, err := js.client.NewRequest("GET", u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	job := new(Job)
+	resp, err := js.client.Do(req, job)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return job, resp, err
+}
+
 // Accepts the passed in job
 func (js *JobsService) Accept(job *Job) (*Job, *Response, error) {
 	u := fmt.Sprintf("v2/jobs/%s/accept", job.ID)

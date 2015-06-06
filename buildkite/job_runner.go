@@ -184,27 +184,26 @@ func (r *JobRunner) onProcessStartCallback() {
 		logger.Debug("Routine that processes the log has finished")
 	}()
 
-	// 	// Start a routine that will grab the output every few seconds and send it back to Buildkite
-	// 	go func() {
-	// 		for process.Running {
-	// 			// Get the latest job status so we can see if
-	// 			// the job has been canceled
-	// 			err := r.Job.Refresh()
-	// 			if err != nil {
-	// 				// We don't really care if it fails,
-	// 				// we'll just try again in a second
-	// 				// anyway
-	// 				logger.Warn("Problem with getting job status %s (%s)", r.Job.ID, err)
-	// 			} else if r.Job.State == "canceled" {
-	// 				r.Kill()
-	// 			}
+	// Start a routine that will grab the output every few seconds and send it back to Buildkite
+	go func() {
+		for r.process.Running {
+			// Re-get the job and check it's status to see if it's been
+			// cancelled
+			job, _, err := r.APIClient.Jobs.Get(r.Job.ID)
+			if err != nil {
+				// We don't really care if it fails, we'll just
+				// try again in a second anyway
+				logger.Warn("Problem with getting job status %s (%s)", r.Job.ID, err)
+			} else if job.State == "canceled" {
+				r.Kill()
+			}
 
-	// 			// Check for cancellations every few seconds
-	// 			time.Sleep(3 * time.Second)
-	// 		}
+			// Check for cancellations every few seconds
+			time.Sleep(3 * time.Second)
+		}
 
-	// 		logger.Debug("Routine that refreshes the job has finished")
-	// 	}()
+		logger.Debug("Routine that refreshes the job has finished")
+	}()
 }
 
 func (r *JobRunner) onLineCallback(line string) {
@@ -239,18 +238,18 @@ func (r *JobRunner) onUploadChunk(chunk *logstreamer.Chunk) error {
 }
 
 func (r *JobRunner) Kill() error {
-	// if r.cancelled {
-	// 	// Already canceled
-	// } else {
-	// 	logger.Info("Canceling job %s", r.Job.ID)
-	// 	r.cancelled = true
+	if r.cancelled {
+		// Already canceled
+	} else {
+		logger.Info("Canceling job %s", r.Job.ID)
+		r.cancelled = true
 
-	// 	if r.process != nil {
-	// 		r.process.Kill()
-	// 	} else {
-	// 		logger.Error("No process to kill")
-	// 	}
-	// }
+		if r.process != nil {
+			r.process.Kill()
+		} else {
+			logger.Error("No process to kill")
+		}
+	}
 
 	return nil
 }
