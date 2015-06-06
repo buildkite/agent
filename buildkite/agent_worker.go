@@ -17,46 +17,50 @@ type AgentWorker struct {
 	// The registred agent API record
 	Agent *api.Agent
 
-	// How long should the agent wait between pings
-	Interval time.Duration
-
-	// Whether or not the agent is running
-	running bool
+	// Used by the Start call to control the looping of the pings
+	ticker *time.Ticker
+	stop   chan bool
 }
 
+// Creates the agent worker and initializes it's API Client
 func (a AgentWorker) Create() AgentWorker {
 	a.APIClient = APIClient{Endpoint: a.Endpoint, Token: a.Agent.AccessToken}.Create()
-	a.Interval = 5 * time.Second
 
 	return a
 }
 
-func (a *AgentWorker) Run() error {
-	a.running = true
+// Starts the agent worker
+func (a *AgentWorker) Start() error {
+	// Create the ticker and stop channels
+	a.ticker = time.NewTicker(5 * time.Second)
+	a.stop = make(chan bool, 1)
 
-	// for a.running {
-	// }
-	///////////////
+	for {
+		// Perform the ping
+		a.Ping()
 
-	// How long the agent will wait when no jobs can be found.
-	// idleSeconds := 5
-	// sleepTime := time.Duration(idleSeconds*1000) * time.Millisecond
-
-	// for {
-	// 	// Did the agent try and stop during the last job run?
-	// 	if r.stopping {
-	// 		r.Stop(&agent)
-	// 	} else {
-	// 		r.Ping(&agent)
-	// 	}
-
-	// 	// Sleep for a while before we check again
-	// 	time.Sleep(sleepTime)
-	// }
+		select {
+		case <-a.ticker.C:
+			continue
+		case <-a.stop:
+			return nil
+		}
+	}
 
 	return nil
 }
 
+// Stops the agent from accepting new work
+func (a *AgentWorker) Stop() {
+	// If we have a ticker, stop it, and send a signal to the stop channel,
+	// which will cause the agent worker to stop looping immediatly.
+	if a.ticker != nil {
+		a.stop <- true
+		a.ticker.Stop()
+	}
+}
+
+// Connects the agent to the Buildkite Agent API
 func (a *AgentWorker) Connect() error {
 	connector := func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
@@ -70,48 +74,44 @@ func (a *AgentWorker) Connect() error {
 	return retry.Do(connector, &retry.Config{Maximum: 30})
 }
 
+// Performs a ping, which returns what action the agent should take next.
 func (a *AgentWorker) Ping() {
-	// Perform the ping
-	//ping := Ping{Agent: agent}
-	//err := ping.Perform()
-	//if err != nil {
-	//	logger.Warn("Failed to ping (%s)", err)
-	//	return
-	//}
+	ping, _, err := a.APIClient.Pings.Get()
+	if err != nil {
+		// If a ping fails, we don't really care, because it'll
+		// ping again after the interval.
+		logger.Warn("Failed to ping: %s", err)
+		return
+	}
 
-	//// Is there a message that should be shown in the logs?
-	//if ping.Message != "" {
-	//	logger.Info(ping.Message)
-	//}
+	// Is there a message that should be shown in the logs?
+	if ping.Message != "" {
+		logger.Info(ping.Message)
+	}
 
-	//// Should the agent disconnect?
-	//if ping.Action == "disconnect" {
-	//	r.Stop(agent)
-	//	return
-	//}
+	// Should the agent disconnect?
+	if ping.Action == "disconnect" {
+		a.Stop()
+		return
+	}
 
-	//// Do nothing if there's no job
-	//if ping.Job == nil {
-	//	return
-	//}
+	// Do nothing if there's no job
+	if ping.Job == nil {
+		return
+	}
 
-	//logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
+	// Accept the job
+	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
+	accepted, _, err := a.APIClient.Jobs.Accept(ping.Job)
+	if err != nil {
+		logger.Error("Failed to accept the job (%s)", err)
+		return
+	}
+
+	logger.Debug("%+v", ping)
 
 	//job := ping.Job
 	//job.API = agent.API
-
-	//// Accept the job
-	//err = job.Accept()
-	//if err != nil {
-	//	logger.Error("Failed to accept the job (%s)", err)
-	//	return
-	//}
-
-	//// Confirm that it's been accepted
-	//if job.State != "accepted" {
-	//	logger.Error("Can not accept job with state `%s`", job.State)
-	//	return
-	//}
 
 	//jobRunner := JobRunner{
 	//	Job:                            job,

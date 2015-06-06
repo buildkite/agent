@@ -52,7 +52,6 @@ func (r *AgentPool) Start() error {
 	worker := AgentWorker{Agent: registered, Endpoint: r.Endpoint}.Create()
 
 	logger.Info("Connecting to Buildkite...")
-
 	if err := worker.Connect(); err != nil {
 		logger.Fatal("%s", err)
 	}
@@ -61,41 +60,33 @@ func (r *AgentPool) Start() error {
 	logger.Info("You can press Ctrl-C to stop the agent")
 	logger.Info("Waiting for work...")
 
-	if err := worker.Run(); err != nil {
-		logger.Fatal("%s", err)
-	}
-
-	logger.Info("Disconnecting...")
-
-	worker.Disconnect()
-
-	return nil
-
-	// // Start the signal watcher
+	// Now that the agent has connected, we need to start the signal
+	// watcher so in the event of a QUIT signal, we can gracefully
+	// disconnect the agent.
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
 		if sig == signalwatcher.QUIT {
 			logger.Debug("Received signal `%s`", sig.String())
-
-			// If this is the second quit signal, or if the
-			// agent doesnt' have a job.
-			//if r.stopping || r.jobRunner == nil {
-			//	// r.Stop(&agent)
-			//}
-
-			//if r.jobRunner != nil {
-			//	logger.Warn("Waiting for job to finish before stopping. Send the signal again to exit immediately.")
-			//	r.jobRunner.Kill()
-			//}
-
-			//r.stopping = true
+			worker.Stop()
 		} else {
 			logger.Debug("Ignoring signal `%s`", sig.String())
 		}
 	})
 
+	// Starts the agent worker. This will block until the agent has
+	// finished or is stopped.
+	if err := worker.Start(); err != nil {
+		logger.Fatal("%s", err)
+	}
+
+	// Now that the agent has stopped, we can disconnect it
+	logger.Info("Disconnecting %s...", worker.Agent.Name)
+	worker.Disconnect()
+
 	return nil
 }
 
+// Takes the options passed to the CLI, and creates an api.Agent record that
+// will be sent to the Buildkite Agent API for registration.
 func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	agent := &api.Agent{
 		Name:              r.Name,
@@ -128,6 +119,9 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	return agent
 }
 
+// Takes the agent template and returns a registered agent. The registered
+// agent includes the Access Token used to communicate with the Buildkite Agent
+// API
 func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 	var registered *api.Agent
 	var err error
@@ -146,6 +140,8 @@ func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 	return registered, err
 }
 
+// Shows the welcome banner and the configuration options used when starting
+// this agent.
 func (r *AgentPool) ShowBanner() {
 	welcomeMessage :=
 		"\n" +
