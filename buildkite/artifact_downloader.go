@@ -1,6 +1,7 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/pool"
 	"os"
@@ -8,6 +9,9 @@ import (
 )
 
 type ArtifactDownloader struct {
+	// The APIClient that will be used when uploading jobs
+	APIClient *api.Client
+
 	// The ID of the Build
 	BuildID string
 
@@ -36,13 +40,13 @@ func (a *ArtifactDownloader) Download() error {
 	}
 
 	// Find the artifacts that we want to download
-	searcher := ArtifactSearcher{BuildID: a.BuildID, API: a.API}
-	err = searcher.Search(a.Query, a.Step)
+	searcher := ArtifactSearcher{BuildID: a.BuildID, APIClient: a.APIClient}
+	artifacts, err := searcher.Search(a.Query, a.Step)
 	if err != nil {
 		return err
 	}
 
-	artifactCount := len(searcher.Artifacts)
+	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
 		logger.Info("No artifacts found for downloading")
@@ -52,7 +56,7 @@ func (a *ArtifactDownloader) Download() error {
 		p := pool.New(pool.MaxConcurrencyLimit)
 		errors := []error{}
 
-		for _, artifact := range searcher.Artifacts {
+		for _, artifact := range artifacts {
 			// Create new instance of the artifact for the goroutine
 			// See: http://golang.org/doc/effective_go.html#channels
 			artifact := artifact

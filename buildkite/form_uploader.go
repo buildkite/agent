@@ -9,6 +9,7 @@ import (
 	"net/http"
 	// "net/http/httputil"
 	"errors"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"net/url"
 	"os"
@@ -24,11 +25,11 @@ func (u *FormUploader) Setup(destination string) error {
 
 // The FormUploader doens't specify a URL, as one is provided by Buildkite
 // after uploading
-func (u *FormUploader) URL(artifact *Artifact) string {
+func (u *FormUploader) URL(artifact *api.Artifact) string {
 	return ""
 }
 
-func (u *FormUploader) Upload(artifact *Artifact) error {
+func (u *FormUploader) Upload(artifact *api.Artifact) error {
 	// Create a HTTP request for uploading the file
 	request, err := createUploadRequest(artifact)
 	if err != nil {
@@ -67,7 +68,7 @@ func (u *FormUploader) Upload(artifact *Artifact) error {
 }
 
 // Creates a new file upload http request with optional extra params
-func createUploadRequest(artifact *Artifact) (*http.Request, error) {
+func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 	file, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
 		return nil, err
