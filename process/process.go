@@ -161,7 +161,7 @@ func (p *Process) Start() error {
 				}
 			}
 
-			p.LineCallback(string(line))
+			go p.LineCallback(string(line))
 		}
 
 		logger.Debug("[LineScanner] Finished")
@@ -169,8 +169,8 @@ func (p *Process) Start() error {
 		waitGroup.Done()
 	}()
 
-	// Call the startCallback
-	p.StartCallback()
+	// Call the StartCallback
+	go p.StartCallback()
 
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.

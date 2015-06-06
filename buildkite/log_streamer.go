@@ -121,9 +121,11 @@ func (ls *LogStreamer) Process(output string) error {
 // Waits for all the chunks to be uploaded, then shuts down all the workers
 func (ls *LogStreamer) Stop() error {
 	logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
+
 	ls.chunkWaitGroup.Wait()
 
 	logger.Debug("[LogStreamer] Shutting down all workers")
+
 	for n := 0; n < ls.Concurrency; n++ {
 		ls.queue <- nil
 	}

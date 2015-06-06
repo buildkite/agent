@@ -1,15 +1,21 @@
 package buildkite
 
 import (
-	"github.com/buildkite/agent/logger"
+	"regexp"
 	"strconv"
 	"sync"
 	"time"
 )
 
-type HeaderTimes struct {
-	API   API
-	Times []string
+var HeaderRegex = regexp.MustCompile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
+
+type HeaderTimesStreamer struct {
+	// The callback that will be called when a header time is ready for
+	// upload
+	Callback func(int, int, map[string]string)
+
+	// The times that have found while scanning lines
+	times []string
 
 	// Every time we get a new time, we increment the wait group, and
 	// decrement it after it has been uploaded.
@@ -29,15 +35,19 @@ type HeaderTimes struct {
 	mutex sync.Mutex
 }
 
-type HeaderTimesJSONPayload struct {
-	Times map[string]string `json:"header_times"`
+func (h *HeaderTimesStreamer) Scan(line string) {
+	// To avoid running the regex over every single line, we'll first do a
+	// length check. Hopefully there are no heeaders over 500 characters!
+	if len(line) < 500 && HeaderRegex.MatchString(line) {
+		go h.Now(line)
+	}
 }
 
-func (h *HeaderTimes) Now(line string) {
+func (h *HeaderTimesStreamer) Now(line string) {
 	// logger.Debug("Found header \"%s\", capturing current time", line)
 
 	// Add the current time to our times slice
-	h.Times = append(h.Times, time.Now().UTC().Format(time.RFC3339Nano))
+	h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
 
 	// Add the time to the wait group
 	h.waitGroup.Add(1)
@@ -54,7 +64,7 @@ func (h *HeaderTimes) Now(line string) {
 	}
 }
 
-func (h *HeaderTimes) Upload() {
+func (h *HeaderTimesStreamer) Upload() {
 	// Store the current cursor value
 	c := h.cursor
 
@@ -63,13 +73,13 @@ func (h *HeaderTimes) Upload() {
 	h.mutex.Lock()
 
 	// Grab only the times that we haven't uploaded yet
-	length := len(h.Times)
-	times := h.Times[h.cursor:length]
+	length := len(h.times)
+	times := h.times[h.cursor:length]
 
 	// Construct the payload to send to the server
-	payload := HeaderTimesJSONPayload{Times: map[string]string{}}
+	payload := map[string]string{}
 	for index, time := range times {
-		payload.Times[strconv.Itoa(h.cursor+index)] = time
+		payload[strconv.Itoa(h.cursor+index)] = time
 	}
 
 	// Save the new cursor length
@@ -83,10 +93,8 @@ func (h *HeaderTimes) Upload() {
 
 	// Do we even have some times to upload
 	if timesToUpload > 0 {
-		logger.Debug("[HeaderTimes] Uploading %d..%d (%d)", c+1, length, timesToUpload)
-
-		// Send the timings to the API
-		// h.API.Post("jobs/"+h.Job.ID+"/header_times", &payload, payload)
+		// Call our callback with the times for upload
+		h.Callback(c, length, payload)
 
 		// Decrement the wait group for every time we've uploaded
 		for _, _ = range times {
@@ -95,8 +103,6 @@ func (h *HeaderTimes) Upload() {
 	}
 }
 
-func (h *HeaderTimes) Wait() {
-	logger.Debug("[HeaderTimes] Waiting for all times to finish uploading")
-
+func (h *HeaderTimesStreamer) Wait() {
 	h.waitGroup.Wait()
 }

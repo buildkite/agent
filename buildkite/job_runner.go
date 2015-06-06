@@ -31,6 +31,9 @@ type JobRunner struct {
 	// The interal process of the job
 	process *process.Process
 
+	// The internal header time streamer
+	headerTimesStreamer *HeaderTimesStreamer
+
 	// The internal log streamer
 	logStreamer *LogStreamer
 
@@ -46,7 +49,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
 
 	// // Create our header times struct
-	// headerTimes := HeaderTimes{Job: r.Job, API: r.Job.API}
+	runner.headerTimesStreamer = &HeaderTimesStreamer{Callback: r.onUploadHeaderTime}
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
@@ -58,7 +61,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		Env:           r.createEnvironment(),
 		PTY:           r.AgentConfiguration.RunInPty,
 		StartCallback: r.onProcessStartCallback,
-		LineCallback:  r.onLineCallback,
+		LineCallback:  runner.headerTimesStreamer.Scan,
 	}.Create()
 
 	return
@@ -74,7 +77,7 @@ func (r *JobRunner) Run() error {
 	}
 
 	// Start the build in the Buildkite Agent API
-	if err := r.startJobInAPI(); err != nil {
+	if err := r.startJob(time.Now()); err != nil {
 		return err
 	}
 
@@ -87,8 +90,13 @@ func (r *JobRunner) Run() error {
 		r.logStreamer.Process(r.process.Output())
 	}
 
-	// // Wait until all the header times have finished uploading
-	// headerTimes.Wait()
+	// Store the finished at time
+	finishedAt := time.Now()
+
+	// Wait until all the header times have finished uploading
+	logger.Debug("[HeaderTimes] Waiting for all times to finish uploading")
+
+	r.headerTimesStreamer.Wait()
 
 	// Stop the log streamer. This will block until all the chunks have
 	// been uploaded
@@ -100,9 +108,24 @@ func (r *JobRunner) Run() error {
 	}
 
 	// Finish the build in the Buildkite Agent API
-	r.finishJobInAPI(r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
+	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
 
 	logger.Info("Finished job %s", r.Job.ID)
+
+	return nil
+}
+
+func (r *JobRunner) Kill() error {
+	if !r.cancelled {
+		logger.Info("Canceling job %s", r.Job.ID)
+		r.cancelled = true
+
+		if r.process != nil {
+			r.process.Kill()
+		} else {
+			logger.Error("No process to kill")
+		}
+	}
 
 	return nil
 }
@@ -145,8 +168,8 @@ func (r *JobRunner) createEnvironment() []string {
 }
 
 // Starts the job in the Buildkite Agent API
-func (r *JobRunner) startJobInAPI() error {
-	r.Job.StartedAt = time.Now().UTC().Format(time.RFC3339Nano)
+func (r *JobRunner) startJob(startedAt time.Time) error {
+	r.Job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 	_, _, err := r.APIClient.Jobs.Start(r.Job)
 
 	return err
@@ -154,8 +177,8 @@ func (r *JobRunner) startJobInAPI() error {
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
 // forever until it finally gets a successfull response from the API.
-func (r *JobRunner) finishJobInAPI(exitStatus string, failedChunkCount int) error {
-	r.Job.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
+func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChunkCount int) error {
+	r.Job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.Job.ExitStatus = exitStatus
 	r.Job.ChunksFailedCount = failedChunkCount
 
@@ -207,21 +230,21 @@ func (r *JobRunner) onProcessStartCallback() {
 	}()
 }
 
-func (r *JobRunner) onLineCallback(line string) {
-	// // The regular expression used to match headers
-	// headerRegexp, err := regexp.Compile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
-	// if err != nil {
-	// 	logger.Error("Failed to compile header regular expression (%T: %v)", err, err)
-	// }
-	// 	// We'll also ignore any line over 500 characters (who has a
-	// 	// 500 character header...honestly...)
-	// 	if len(line) < 500 && headerRegexp.MatchString(line) {
-	// 		// logger.Debug("Found header \"%s\", capturing current time", line)
-	// 		go headerTimes.Now(line)
-	// 	}
+func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
+	retry.Do(func(s *retry.Stats) error {
+		logger.Debug("Uploading header times %d..%d (%d)", cursor+1, total, len(times))
+
+		_, err := r.APIClient.HeaderTimes.Save(r.Job.ID, &api.HeaderTimes{Times: times})
+		if err != nil {
+			logger.Warn("%s (%s)", err, s)
+		}
+
+		return err
+	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 }
 
-// Call when a chunk is ready for upload
+// Call when a chunk is ready for upload. It retry the chunk upload with an
+// interval before giving up.
 func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := r.APIClient.Chunks.Upload(&api.Chunk{
@@ -229,28 +252,10 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 		})
-
 		if err != nil {
 			logger.Warn("%s (%s)", err, s)
 		}
 
 		return err
-	}, &retry.Config{Forever: true, Interval: 1 * time.Second})
-}
-
-func (r *JobRunner) Kill() error {
-	if r.cancelled {
-		// Already canceled
-	} else {
-		logger.Info("Canceling job %s", r.Job.ID)
-		r.cancelled = true
-
-		if r.process != nil {
-			r.process.Kill()
-		} else {
-			logger.Error("No process to kill")
-		}
-	}
-
-	return nil
+	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 }
