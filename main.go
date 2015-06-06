@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/buildkite/agent/buildkite"
-	"github.com/buildkite/agent/command"
+	"github.com/buildkite/agent/clicommand"
 	"github.com/codegangsta/cli"
 	"os"
 )
@@ -50,22 +50,22 @@ func main() {
 	app.Name = "buildkite-agent"
 	app.Version = buildkite.Version()
 	app.Commands = []cli.Command{
-		command.AgentStartCommand,
+		clicommand.AgentStartCommand,
 		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",
 			Subcommands: []cli.Command{
-				command.ArtifactUploadCommand,
-				command.ArtifactDownloadCommand,
-				command.ArtifactShasumCommand,
+				clicommand.ArtifactUploadCommand,
+				clicommand.ArtifactDownloadCommand,
+				clicommand.ArtifactShasumCommand,
 			},
 		},
 		{
 			Name:  "meta-data",
 			Usage: "Get/set data from Buildkite jobs",
 			Subcommands: []cli.Command{
-				command.MetaDataSetCommand,
-				command.MetaDataGetCommand,
+				clicommand.MetaDataSetCommand,
+				clicommand.MetaDataGetCommand,
 			},
 		},
 	}

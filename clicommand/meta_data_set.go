@@ -1,4 +1,4 @@
-package command
+package clicommand
 
 import (
 	"github.com/buildkite/agent/api"
