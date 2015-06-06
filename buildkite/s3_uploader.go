@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/s3"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"io/ioutil"
+	"mime"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -64,7 +67,7 @@ func (u *S3Uploader) Setup(destination string) error {
 	return nil
 }
 
-func (u *S3Uploader) URL(artifact *Artifact) string {
+func (u *S3Uploader) URL(artifact *api.Artifact) string {
 	url, _ := url.Parse("http://" + u.bucketName() + ".s3.amazonaws.com")
 
 	url.Path += u.artifactPath(artifact)
@@ -72,7 +75,7 @@ func (u *S3Uploader) URL(artifact *Artifact) string {
 	return url.String()
 }
 
-func (u *S3Uploader) Upload(artifact *Artifact) error {
+func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	permission := "public-read"
 	if os.Getenv("BUILDKITE_S3_ACL") != "" {
 		permission = os.Getenv("BUILDKITE_S3_ACL")
@@ -99,7 +102,7 @@ func (u *S3Uploader) Upload(artifact *Artifact) error {
 	}
 
 	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
-	err = u.Bucket.Put(u.artifactPath(artifact), data, artifact.MimeType(), Perms, s3.Options{})
+	err = u.Bucket.Put(u.artifactPath(artifact), data, u.mimeType(artifact), Perms, s3.Options{})
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%s)", u.artifactPath(artifact), err.Error()))
 	}
@@ -155,7 +158,7 @@ func buildkiteS3EnvAuth() (auth aws.Auth, err error) {
 	return
 }
 
-func (u *S3Uploader) artifactPath(artifact *Artifact) string {
+func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
 	parts := []string{u.bucketPath(), artifact.Path}
 
 	return strings.Join(parts, "/")
@@ -173,4 +176,15 @@ func (u *S3Uploader) destinationParts() []string {
 	trimmed_string := strings.TrimLeft(u.Destination, "s3://")
 
 	return strings.Split(trimmed_string, "/")
+}
+
+func (u *S3Uploader) mimeType(a *api.Artifact) string {
+	extension := filepath.Ext(a.Path)
+	mimeType := mime.TypeByExtension(extension)
+
+	if mimeType != "" {
+		return mimeType
+	} else {
+		return "binary/octet-stream"
+	}
 }

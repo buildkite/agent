@@ -57,18 +57,15 @@ var MetaDataGetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		// Create the meta data we want to get
-		metaData := buildkite.MetaData{
-			API: buildkite.API{
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			},
-			JobID: cfg.Job,
-			Key:   cfg.Key,
-		}
+		// Create the API client
+		client := buildkite.APIClient{
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
+		}.Create()
 
-		// Get the meta data
-		if err := metaData.Get(); err != nil {
+		// Find the meta data value
+		metaData, _, err := client.MetaData.Get(cfg.Job, cfg.Key)
+		if err != nil {
 			logger.Fatal("Failed to get meta-data: %s", err)
 		}
 

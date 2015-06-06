@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/glob"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/pool"
@@ -15,6 +16,9 @@ import (
 )
 
 type ArtifactUploader struct {
+	// The APIClient that will be used when uploading jobs
+	APIClient *api.Client
+
 	// The ID of the Job
 	JobID string
 
@@ -23,9 +27,6 @@ type ArtifactUploader struct {
 
 	// Where we'll be uploading artifacts
 	Destination string
-
-	// The API used for communication
-	API API
 }
 
 func (a *ArtifactUploader) Upload() error {
@@ -66,7 +67,7 @@ func (a *ArtifactUploader) NormalizedPath(path string) string {
 	return filepath.Join(a.WorkingDirectory(path), path)
 }
 
-func (a *ArtifactUploader) collect() (artifacts []*Artifact, err error) {
+func (a *ArtifactUploader) collect() (artifacts []*api.Artifact, err error) {
 	globPaths := strings.Split(a.Paths, ";")
 
 	for _, globPath := range globPaths {
@@ -115,7 +116,7 @@ func (a *ArtifactUploader) collect() (artifacts []*Artifact, err error) {
 	return artifacts, nil
 }
 
-func (a *ArtifactUploader) build(relativePath string, absolutePath string, globPath string) (*Artifact, error) {
+func (a *ArtifactUploader) build(relativePath string, absolutePath string, globPath string) (*api.Artifact, error) {
 	// Temporarily open the file to get it's size
 	file, err := os.Open(absolutePath)
 	if err != nil {
@@ -135,20 +136,19 @@ func (a *ArtifactUploader) build(relativePath string, absolutePath string, globP
 	checksum := fmt.Sprintf("%x", hash.Sum(nil))
 
 	// Create our new artifact data structure
-	artifact := new(Artifact)
-	artifact.API = a.API
-	artifact.JobID = a.JobID
-	artifact.State = "new"
-	artifact.Path = relativePath
-	artifact.AbsolutePath = absolutePath
-	artifact.GlobPath = globPath
-	artifact.FileSize = fileInfo.Size()
-	artifact.Sha1Sum = checksum
+	artifact := &api.Artifact{
+		State:        "new",
+		Path:         relativePath,
+		AbsolutePath: absolutePath,
+		GlobPath:     globPath,
+		FileSize:     fileInfo.Size(),
+		Sha1Sum:      checksum,
+	}
 
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(artifacts []*Artifact) error {
+func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	var uploader Uploader
 
 	// Determine what uploader to use
@@ -175,11 +175,11 @@ func (a *ArtifactUploader) upload(artifacts []*Artifact) error {
 
 	// Create the artifacts on Buildkite
 	batchCreator := ArtifactBatchCreator{
-		API:       a.API,
+		APIClient: a.APIClient,
 		JobID:     a.JobID,
 		Artifacts: artifacts,
 	}
-	err = batchCreator.Create()
+	artifacts, err = batchCreator.Create()
 	if err != nil {
 		return err
 	}
@@ -212,7 +212,8 @@ func (a *ArtifactUploader) upload(artifacts []*Artifact) error {
 			}
 
 			// Update the state of the artifact on Buildkite
-			err = artifact.Update()
+			_, _, err = a.APIClient.Artifacts.Update(a.JobID, artifact)
+			err = nil
 			if err != nil {
 				logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
 

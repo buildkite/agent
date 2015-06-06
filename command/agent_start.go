@@ -167,31 +167,31 @@ var AgentStartCommand = cli.Command{
 		HandleGlobalFlags(cfg)
 
 		// Setup the agent
-		runner := buildkite.AgentRunner{
-			API: buildkite.API{
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.Token,
+		pool := buildkite.AgentPool{
+			Token:           cfg.Token,
+			Name:            cfg.Name,
+			Priority:        cfg.Priority,
+			MetaData:        cfg.MetaData,
+			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
+			Endpoint:        cfg.Endpoint,
+			AgentConfiguration: &buildkite.AgentConfiguration{
+				BootstrapScript:                cfg.BootstrapScript,
+				BuildPath:                      cfg.BuildPath,
+				HooksPath:                      cfg.HooksPath,
+				AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
+				CommandEval:                    !cfg.NoCommandEval,
+				RunInPty:                       !cfg.NoPTY,
 			},
-			Name:                           cfg.Name,
-			Priority:                       cfg.Priority,
-			BootstrapScript:                cfg.BootstrapScript,
-			BuildPath:                      cfg.BuildPath,
-			HooksPath:                      cfg.HooksPath,
-			MetaData:                       cfg.MetaData,
-			MetaDataEC2Tags:                cfg.MetaDataEC2Tags,
-			AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
-			CommandEval:                    !cfg.NoCommandEval,
-			RunInPty:                       !cfg.NoPTY,
 		}
 
-		// Store the loaded config file path on the runner so we can
+		// Store the loaded config file path on the pool so we can
 		// show it when the agent starts
 		if loader.File != nil {
-			runner.ConfigFilePath = loader.File.Path
+			pool.ConfigFilePath = loader.File.Path
 		}
 
-		// Run the agent
-		if err := runner.Run(); err != nil {
+		// Start the agent pool
+		if err := pool.Start(); err != nil {
 			logger.Fatal("%s", err)
 		}
 	},

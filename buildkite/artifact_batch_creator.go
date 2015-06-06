@@ -1,23 +1,25 @@
 package buildkite
 
 import (
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 )
 
 type ArtifactBatchCreator struct {
+	// The APIClient that will be used when uploading jobs
+	APIClient *api.Client
+
 	// The ID of the Job that these artifacts belong to
 	JobID string
 
-	// The API used for communication
-	API API
-
 	// All the artifacts that need to be created
-	Artifacts []*Artifact
+	Artifacts []*api.Artifact
 }
 
-func (a *ArtifactBatchCreator) Create() error {
+func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 	length := len(a.Artifacts)
 	chunks := 10
+	uploaded := []*api.Artifact{}
 
 	// Split into the artifacts into chunks so we're not uploading a ton of
 	// files at once.
@@ -31,11 +33,13 @@ func (a *ArtifactBatchCreator) Create() error {
 
 		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
-		err := a.API.Post("jobs/"+a.JobID+"/artifacts", &artifacts, artifacts)
+		u, _, err := a.APIClient.Artifacts.Create(a.JobID, artifacts)
 		if err != nil {
-			return err
+			return nil, err
 		}
+
+		uploaded = append(uploaded, u...)
 	}
 
-	return nil
+	return uploaded, nil
 }

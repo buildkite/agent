@@ -85,10 +85,10 @@ var ArtifactDownloadCommand = cli.Command{
 
 		// Setup the downloader
 		downloader := buildkite.ArtifactDownloader{
-			API: buildkite.API{
+			APIClient: buildkite.APIClient{
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
-			},
+			}.Create(),
 			Query:       cfg.Query,
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,

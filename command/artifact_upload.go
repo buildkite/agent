@@ -71,10 +71,10 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := buildkite.ArtifactUploader{
-			API: buildkite.API{
+			APIClient: buildkite.APIClient{
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
-			},
+			}.Create(),
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
