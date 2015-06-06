@@ -49,17 +49,25 @@ func (r *AgentPool) Start() error {
 
 	// Now that we have a registereted agent, we can connect it to the API,
 	// and start running jobs.
-	agent := Agent{Agent: registered, Endpoint: r.Endpoint}.Create()
+	worker := AgentWorker{Agent: registered, Endpoint: r.Endpoint}.Create()
 
 	logger.Info("Connecting to Buildkite...")
 
-	if err := agent.Connect(); err != nil {
+	if err := worker.Connect(); err != nil {
 		logger.Fatal("%s", err)
 	}
 
 	logger.Info("Agent successfully connected")
 	logger.Info("You can press Ctrl-C to stop the agent")
 	logger.Info("Waiting for work...")
+
+	if err := worker.Run(); err != nil {
+		logger.Fatal("%s", err)
+	}
+
+	logger.Info("Disconnecting...")
+
+	worker.Disconnect()
 
 	return nil
 

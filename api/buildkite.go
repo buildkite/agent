@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultBaseURL = "https://agent.buildkite.com/"
-	userAgent      = "go-buildkite/blah"
+	userAgent      = "buildkite-agent/api"
 )
 
 // A Client manages communication with the Buildkite Agent API.
@@ -31,6 +31,8 @@ type Client struct {
 
 	// Services used for talking to different parts of the Buildkite Agent API.
 	Agents *AgentsService
+	Pings  *PingsService
+	Jobs   *JobsService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -44,6 +46,8 @@ func NewClient(httpClient *http.Client) *Client {
 	}
 
 	c.Agents = &AgentsService{c}
+	c.Pings = &PingsService{c}
+	c.Jobs = &JobsService{c}
 
 	return c
 }

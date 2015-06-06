@@ -4,10 +4,10 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
-	_ "time"
+	"time"
 )
 
-type Agent struct {
+type AgentWorker struct {
 	// The API Client used when this agent is communicating with the API
 	APIClient *api.Client
 
@@ -16,15 +16,26 @@ type Agent struct {
 
 	// The registred agent API record
 	Agent *api.Agent
+
+	// How long should the agent wait between pings
+	Interval time.Duration
+
+	// Whether or not the agent is running
+	running bool
 }
 
-func (a Agent) Create() Agent {
+func (a AgentWorker) Create() AgentWorker {
 	a.APIClient = APIClient{Endpoint: a.Endpoint, Token: a.Agent.AccessToken}.Create()
+	a.Interval = 5 * time.Second
 
 	return a
 }
 
-func (a *Agent) Run() error {
+func (a *AgentWorker) Run() error {
+	a.running = true
+
+	// for a.running {
+	// }
 	///////////////
 
 	// How long the agent will wait when no jobs can be found.
@@ -46,7 +57,7 @@ func (a *Agent) Run() error {
 	return nil
 }
 
-func (a *Agent) Connect() error {
+func (a *AgentWorker) Connect() error {
 	connector := func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
 		if err != nil {
@@ -59,7 +70,7 @@ func (a *Agent) Connect() error {
 	return retry.Do(connector, &retry.Config{Maximum: 30})
 }
 
-func (a *Agent) Ping() {
+func (a *AgentWorker) Ping() {
 	// Perform the ping
 	//ping := Ping{Agent: agent}
 	//err := ping.Perform()
@@ -123,6 +134,15 @@ func (a *Agent) Ping() {
 	//r.jobRunner = nil
 }
 
-func (a *Agent) Disconnect() {
-	logger.Info("Disconnecting...")
+func (a *AgentWorker) Disconnect() error {
+	disconnector := func(s *retry.Stats) error {
+		_, err := a.APIClient.Agents.Disconnect()
+		if err != nil {
+			logger.Warn("%s (%s)", err, s)
+		}
+
+		return err
+	}
+
+	return retry.Do(disconnector, &retry.Config{Maximum: 30})
 }
