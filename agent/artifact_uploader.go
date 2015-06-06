@@ -8,11 +8,13 @@ import (
 	"github.com/buildkite/agent/glob"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/pool"
+	"github.com/buildkite/agent/retry"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type ArtifactUploader struct {
@@ -196,9 +198,17 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			// Show a nice message that we're starting to upload the file
 			logger.Info("Uploading \"%s\" %d bytes", artifact.Path, artifact.FileSize)
 
-			// Upload the artifact and then set the state depending on whether or not
-			// it passed.
-			err := uploader.Upload(artifact)
+			// Upload the artifact and then set the state depending
+			// on whether or not it passed. We'll retry the upload
+			// a couple of times before giving up.
+			err = retry.Do(func(s *retry.Stats) error {
+				err := uploader.Upload(artifact)
+				if err != nil {
+					logger.Warn("%s (%s)", err, s)
+				}
+
+				return err
+			}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 			if err != nil {
 				artifact.State = "error"
 				logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
@@ -211,9 +221,16 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				artifact.State = "finished"
 			}
 
-			// Update the state of the artifact on Buildkite
-			_, _, err = a.APIClient.Artifacts.Update(a.JobID, artifact)
-			err = nil
+			// Update the state of the artifact on Buildkite, we
+			// retry this as well.
+			err = retry.Do(func(s *retry.Stats) error {
+				_, _, err = a.APIClient.Artifacts.Update(a.JobID, artifact)
+				if err != nil {
+					logger.Warn("%s (%s)", err, s)
+				}
+
+				return err
+			}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 			if err != nil {
 				logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
 
