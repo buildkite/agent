@@ -3,7 +3,6 @@ package buildkite
 import (
 	"fmt"
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/buildkite/logstreamer"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
@@ -33,7 +32,7 @@ type JobRunner struct {
 	process *process.Process
 
 	// The internal log streamer
-	logStreamer *logstreamer.Streamer
+	logStreamer *LogStreamer
 
 	// If the job is being cancelled
 	cancelled bool
@@ -51,7 +50,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
-	runner.logStreamer, err = logstreamer.New(r.Job.ChunksMaxSizeBytes, r.onUploadChunk)
+	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
 	// The process that will run the bootstrap script
 	runner.process = process.Process{
@@ -70,7 +69,9 @@ func (r *JobRunner) Run() error {
 	logger.Info("Starting job %s", r.Job.ID)
 
 	// Start the log streamer
-	r.logStreamer.Start()
+	if err := r.logStreamer.Start(); err != nil {
+		return err
+	}
 
 	// Start the build in the Buildkite Agent API
 	if err := r.startJobInAPI(); err != nil {
@@ -221,7 +222,7 @@ func (r *JobRunner) onLineCallback(line string) {
 }
 
 // Call when a chunk is ready for upload
-func (r *JobRunner) onUploadChunk(chunk *logstreamer.Chunk) error {
+func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := r.APIClient.Chunks.Upload(&api.Chunk{
 			Job:      r.Job,
