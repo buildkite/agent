@@ -58,8 +58,14 @@ func (a *AgentWorker) Start() error {
 	return nil
 }
 
-// Stops the agent from accepting new work
+// Stops the agent from accepting new work and cancels any current work it's
+// running
 func (a *AgentWorker) Stop() {
+	// If ther'es a running job, kill it.
+	if a.jobRunner != nil {
+		a.jobRunner.Kill()
+	}
+
 	// If we have a ticker, stop it, and send a signal to the stop channel,
 	// which will cause the agent worker to stop looping immediatly.
 	if a.ticker != nil {
