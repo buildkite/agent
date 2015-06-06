@@ -23,9 +23,6 @@ type ArtifactDownloader struct {
 
 	// Where we'll be downloading artifacts to
 	Destination string
-
-	// The API used for communication
-	API API
 }
 
 func (a *ArtifactDownloader) Download() error {

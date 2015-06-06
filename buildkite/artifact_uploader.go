@@ -27,9 +27,6 @@ type ArtifactUploader struct {
 
 	// Where we'll be uploading artifacts
 	Destination string
-
-	// The API used for communication
-	API API
 }
 
 func (a *ArtifactUploader) Upload() error {
