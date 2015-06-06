@@ -33,6 +33,7 @@ type Client struct {
 	Agents *AgentsService
 	Pings  *PingsService
 	Jobs   *JobsService
+	Chunks *ChunksService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -48,13 +49,14 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Agents = &AgentsService{c}
 	c.Pings = &PingsService{c}
 	c.Jobs = &JobsService{c}
+	c.Chunks = &ChunksService{c}
 
 	return c
 }
 
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
 // in which case it is resolved relative to the BaseURL of the Client.
-// Relative URLs should always be specified without a preceding slash.  If
+// Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
 func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Request, error) {
@@ -74,6 +76,30 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 	}
 
 	req, err := http.NewRequest(method, u.String(), buf)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.UserAgent != "" {
+		req.Header.Add("User-Agent", c.UserAgent)
+	}
+
+	return req, nil
+}
+
+// NewFormRequest creates an mutli-part form request. A relative URL can be
+// provided in urlStr, in which case it is resolved relative to the UploadURL
+// of the Client. Relative URLs should always be specified without a preceding
+// slash.
+func (c *Client) NewFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
+	rel, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, err
+	}
+
+	u := c.BaseURL.ResolveReference(rel)
+
+	req, err := http.NewRequest(method, u.String(), body)
 	if err != nil {
 		return nil, err
 	}

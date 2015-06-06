@@ -223,16 +223,19 @@ func (r *JobRunner) onLineCallback(line string) {
 
 // Call when a chunk is ready for upload
 func (r *JobRunner) onUploadChunk(chunk *logstreamer.Chunk) error {
-	// logStreamerRequest := r.Job.API.NewRequest("POST", "jobs/"+r.Job.ID+"/chunks", 10)
-	// "chunk": http.File{
-	// 	Data:     chunk.Data,
-	// 	MimeType: "text/plain",
-	// 	FileName: "chunk.txt",
-	// },
-	// "sequence": chunk.Order,
-	logger.Debug("%+v", chunk)
+	return retry.Do(func(s *retry.Stats) error {
+		_, err := r.APIClient.Chunks.Upload(&api.Chunk{
+			Job:      r.Job,
+			Data:     chunk.Data,
+			Sequence: chunk.Order,
+		})
 
-	return nil
+		if err != nil {
+			logger.Warn("%s (%s)", err, s)
+		}
+
+		return err
+	}, &retry.Config{Forever: true, Interval: 1 * time.Second})
 }
 
 func (r *JobRunner) Kill() error {

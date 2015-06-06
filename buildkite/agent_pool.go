@@ -7,6 +7,7 @@ import (
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/signalwatcher"
 	"os"
+	"time"
 )
 
 type AgentPool struct {
@@ -130,7 +131,7 @@ func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 		return err
 	}
 
-	err = retry.Do(register, &retry.Config{Maximum: 30})
+	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
 
 	return registered, err
 }
