@@ -210,6 +210,12 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	return nil
 }
 
+func (l Loader) Errorf(format string, v ...interface{}) error {
+	suffix := fmt.Sprintf(" See: `%s %s --help`", l.CLI.App.Name, l.CLI.Command.Name)
+
+	return fmt.Errorf(format+suffix, v...)
+}
+
 func (l Loader) cliValueIsSet(cliName string) bool {
 	if l.CLI.IsSet(cliName) {
 		return true
@@ -261,7 +267,7 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 	for _, rule := range rules {
 		if rule == "required" {
 			if l.fieldValueIsEmpty(fieldName) {
-				return fmt.Errorf("Missing %s. See: `%s %s --help`", label, l.CLI.App.Name, l.CLI.Command.Name)
+				return l.Errorf("Missing %s.", label)
 			}
 		} else if rule == "file-exists" {
 			value, _ := reflections.GetField(l.Config, fieldName)
