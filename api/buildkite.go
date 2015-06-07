@@ -7,9 +7,12 @@ import (
 	"github.com/google/go-querystring/query"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"reflect"
+	"strings"
 )
 
 const (
@@ -216,4 +219,22 @@ func addOptions(s string, opt interface{}) (string, error) {
 
 	u.RawQuery = qs.Encode()
 	return u.String(), nil
+}
+
+// Copied from http://golang.org/src/mime/multipart/writer.go
+var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
+
+func escapeQuotes(s string) string {
+	return quoteEscaper.Replace(s)
+}
+
+// createFormFileWithContentType is a copy of the CreateFormFile method, except
+// you can change the content type it uses (by default you can't)
+func createFormFileWithContentType(w *multipart.Writer, fieldname, contentType, filename string) (io.Writer, error) {
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition",
+		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
+			escapeQuotes(fieldname), escapeQuotes(filename)))
+	h.Set("Content-Type", contentType)
+	return w.CreatePart(h)
 }

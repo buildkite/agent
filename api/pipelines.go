@@ -24,7 +24,7 @@ func (cs *PipelinesService) Upload(buildId string, pipeline *Pipeline) (*Respons
 	writer := multipart.NewWriter(body)
 
 	// Write the pipeline to the form
-	part, _ := writer.CreateFormFile("pipeline", "pipeline.txt")
+	part, _ := createFormFileWithContentType(writer, "pipeline", "pipeline.json", "application/json")
 	part.Write([]byte(pipeline.Data))
 
 	// Close the writer because we don't need to add any more values to it
