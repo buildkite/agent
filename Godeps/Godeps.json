@@ -18,6 +18,10 @@
 			"Rev": "c73835dc8fc6958baf8df8656864ee4d6d04b130"
 		},
 		{
+			"ImportPath": "github.com/andrew-d/go-termutil",
+			"Rev": "91702f30b7f6d63f574b486457bae6acb1534dce"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-24-g7381bc4",
 			"Rev": "7381bc4e62942763475703c7edd405f1e42adf4f"

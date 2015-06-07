@@ -68,6 +68,13 @@ func main() {
 				clicommand.MetaDataGetCommand,
 			},
 		},
+		{
+			Name:  "pipeline",
+			Usage: "Make changes to the pipeline of the currently running build",
+			Subcommands: []cli.Command{
+				clicommand.PipelineUploadCommand,
+			},
+		},
 	}
 
 	// When no sub command is used

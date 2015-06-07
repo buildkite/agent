@@ -37,6 +37,7 @@ type Client struct {
 	MetaData    *MetaDataService
 	HeaderTimes *HeaderTimesService
 	Artifacts   *ArtifactsService
+	Pipelines   *PipelinesService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -56,6 +57,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c.MetaData = &MetaDataService{c}
 	c.HeaderTimes = &HeaderTimesService{c}
 	c.Artifacts = &ArtifactsService{c}
+	c.Pipelines = &PipelinesService{c}
 
 	return c
 }
