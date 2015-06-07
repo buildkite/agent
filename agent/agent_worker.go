@@ -146,15 +146,13 @@ func (a *AgentWorker) Ping() {
 	a.jobRunner = nil
 }
 
-// Disconnects the agent from the Buildkite Agent API, retrying up to 30 times
-// if it fails.
+// Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
+// because we want to disconnect as fast as possible.
 func (a *AgentWorker) Disconnect() error {
-	return retry.Do(func(s *retry.Stats) error {
-		_, err := a.APIClient.Agents.Disconnect()
-		if err != nil {
-			logger.Warn("%s (%s)", err, s)
-		}
+	_, err := a.APIClient.Agents.Disconnect()
+	if err != nil {
+		logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
+	}
 
-		return err
-	}, &retry.Config{Maximum: 30})
+	return err
 }
