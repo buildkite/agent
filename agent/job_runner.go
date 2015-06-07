@@ -247,8 +247,7 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 // interval before giving up.
 func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	return retry.Do(func(s *retry.Stats) error {
-		_, err := r.APIClient.Chunks.Upload(&api.Chunk{
-			Job:      r.Job,
+		_, err := r.APIClient.Chunks.Upload(r.Job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 		})

@@ -14,14 +14,13 @@ type ChunksService struct {
 
 // Chunk represents a Buildkite Agent API Chunk
 type Chunk struct {
-	Job      *Job
 	Data     string
 	Sequence int
 }
 
 // Uploads the chunk to the Buildkite Agent API. This request doesn't use JSON,
 // but a multi-part HTTP form upload
-func (cs *ChunksService) Upload(chunk *Chunk) (*Response, error) {
+func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -38,7 +37,7 @@ func (cs *ChunksService) Upload(chunk *Chunk) (*Response, error) {
 		return nil, err
 	}
 
-	u := fmt.Sprintf("v2/jobs/%s/chunks", chunk.Job.ID)
+	u := fmt.Sprintf("v2/jobs/%s/chunks", jobId)
 	req, err := cs.client.NewFormRequest("POST", u, body)
 	if err != nil {
 		return nil, err
