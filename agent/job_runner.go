@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/retry"
 	"os"
 	"path/filepath"
-	_ "regexp"
+	"sync"
 	"time"
 )
 
@@ -39,6 +39,9 @@ type JobRunner struct {
 
 	// If the job is being cancelled
 	cancelled bool
+
+	// Used to wait on various routines that we spin up
+	wg sync.WaitGroup
 }
 
 // Initializes the job runner
@@ -71,13 +74,15 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 func (r *JobRunner) Run() error {
 	logger.Info("Starting job %s", r.Job.ID)
 
-	// Start the log streamer
-	if err := r.logStreamer.Start(); err != nil {
+	// Start the build in the Buildkite Agent API. This is the first thing
+	// we do so if it fails, we don't have to worry about cleaning things
+	// up like started log streamer workers, etc.
+	if err := r.startJob(time.Now()); err != nil {
 		return err
 	}
 
-	// Start the build in the Buildkite Agent API
-	if err := r.startJob(time.Now()); err != nil {
+	// Start the log streamer
+	if err := r.logStreamer.Start(); err != nil {
 		return err
 	}
 
@@ -94,7 +99,7 @@ func (r *JobRunner) Run() error {
 	finishedAt := time.Now()
 
 	// Wait until all the header times have finished uploading
-	logger.Debug("[HeaderTimes] Waiting for all times to finish uploading")
+	logger.Debug("Waiting for header times to finish uploading")
 
 	r.headerTimesStreamer.Wait()
 
@@ -109,6 +114,10 @@ func (r *JobRunner) Run() error {
 
 	// Finish the build in the Buildkite Agent API
 	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
+
+	// Wait for the routines that we spun up to finish
+	logger.Debug("Waiting for all other routines to finish")
+	r.wg.Wait()
 
 	logger.Info("Finished job %s", r.Job.ID)
 
@@ -210,6 +219,9 @@ func (r *JobRunner) onProcessStartCallback() {
 	// Start a routine that will grab the output every few seconds and send
 	// it back to Buildkite
 	go func() {
+		// Add to the wait group
+		r.wg.Add(1)
+
 		for r.process.Running {
 			// Send the output of the process to the log streamer
 			// for processing
@@ -219,11 +231,17 @@ func (r *JobRunner) onProcessStartCallback() {
 			time.Sleep(1 * time.Second)
 		}
 
+		// Mark this routine as done in the wait group
+		r.wg.Done()
+
 		logger.Debug("Routine that processes the log has finished")
 	}()
 
 	// Start a routine that will grab the output every few seconds and send it back to Buildkite
 	go func() {
+		// Add to the wait group
+		r.wg.Add(1)
+
 		for r.process.Running {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
@@ -239,6 +257,9 @@ func (r *JobRunner) onProcessStartCallback() {
 			// Check for cancellations every few seconds
 			time.Sleep(3 * time.Second)
 		}
+
+		// Mark this routine as done in the wait group
+		r.wg.Done()
 
 		logger.Debug("Routine that refreshes the job has finished")
 	}()
