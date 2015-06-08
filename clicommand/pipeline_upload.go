@@ -32,7 +32,7 @@ Example:
 
 type PipelineUploadConfig struct {
 	FilePath         string `cli:"arg:0" label:"upload paths"`
-	Build            string `cli:"build" validate:"required"`
+	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
@@ -45,10 +45,10 @@ var PipelineUploadCommand = cli.Command{
 	Description: PipelineUploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "build",
+			Name:   "job",
 			Value:  "",
-			Usage:  "The build that the pipeline should modify",
-			EnvVar: "BUILDKITE_BUILD_ID",
+			Usage:  "The job that is making the changes to it's build",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -72,7 +72,10 @@ var PipelineUploadCommand = cli.Command{
 		// argument
 		var input []byte
 		var err error
+		var filename string
+
 		if cfg.FilePath != "" {
+			filename = filepath.Base(cfg.FilePath)
 			input, err = ioutil.ReadFile(cfg.FilePath)
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
@@ -84,7 +87,8 @@ var PipelineUploadCommand = cli.Command{
 			}
 		} else {
 			// Default to opening .buildkite/steps.json
-			path, _ := filepath.Abs(".buildkite/steps.json")
+			filename = "steps.json"
+			path, _ := filepath.Abs(".buildkite/" + filename)
 			input, err = ioutil.ReadFile(path)
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
@@ -99,7 +103,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Build, &api.Pipeline{Data: input})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{Data: input, FileName: filename})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}

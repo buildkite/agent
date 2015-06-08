@@ -230,7 +230,7 @@ func escapeQuotes(s string) string {
 
 // createFormFileWithContentType is a copy of the CreateFormFile method, except
 // you can change the content type it uses (by default you can't)
-func createFormFileWithContentType(w *multipart.Writer, fieldname, contentType, filename string) (io.Writer, error) {
+func createFormFileWithContentType(w *multipart.Writer, fieldname, filename, contentType string) (io.Writer, error) {
 	h := make(textproto.MIMEHeader)
 	h.Set("Content-Disposition",
 		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
