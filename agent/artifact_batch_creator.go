@@ -3,6 +3,8 @@ package agent
 import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/retry"
+	"time"
 )
 
 type ArtifactBatchCreator struct {
@@ -33,7 +35,18 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 
 		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
-		u, _, err := a.APIClient.Artifacts.Create(a.JobID, artifacts)
+		var u []*api.Artifact
+		var err error
+
+		// Retry the batch upload a couple of times
+		err = retry.Do(func(s *retry.Stats) error {
+			u, _, err = a.APIClient.Artifacts.Create(a.JobID, artifacts)
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			}
+
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 		if err != nil {
 			return nil, err
 		}
