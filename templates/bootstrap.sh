@@ -433,9 +433,15 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
 
   echo "~~~ Uploading artifacts"
   if [[ ! -z "${BUILDKITE_ARTIFACT_UPLOAD_DESTINATION:-}" ]] && [[ "$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION" != "" ]]; then
-    buildkite-run "buildkite-agent artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION\""
+    buildkite-prompt-and-run "buildkite-agent artifact upload \"$BUILDKITE_ARTIFACT_PATHS\" \"$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION\""
   else
-    buildkite-run "buildkite-agent artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
+    buildkite-prompt-and-run "buildkite-agent artifact upload \"$BUILDKITE_ARTIFACT_PATHS\""
+  fi
+
+  # If the artifact upload fails, open the current group and exit with an error
+  if [[ $? -ne 0 ]]; then
+    echo "^^^ +++"
+    exit 1
   fi
 fi
 
