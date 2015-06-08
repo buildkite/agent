@@ -176,7 +176,10 @@ func (r *JobRunner) createEnvironment() []string {
 	return envSlice
 }
 
-// Starts the job in the Buildkite Agent API
+// Starts the job in the Buildkite Agent API. We don't bother retrying with
+// this call, because if it fails, the agent will just go get another job to
+// work on (which may be the same job, at which point it will try to start it
+// again)
 func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.Job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 	_, _, err := r.APIClient.Jobs.Start(r.Job)
