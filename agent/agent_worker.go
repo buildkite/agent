@@ -84,7 +84,7 @@ func (a *AgentWorker) Connect() error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30})
+	}, &retry.Config{Maximum: 10})
 }
 
 // Performs a ping, which returns what action the agent should take next.

@@ -121,11 +121,17 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 	var registered *api.Agent
 	var err error
+	var resp *api.Response
 
 	register := func(s *retry.Stats) error {
-		registered, _, err = r.APIClient.Agents.Register(agent)
+		registered, resp, err = r.APIClient.Agents.Register(agent)
 		if err != nil {
-			logger.Warn("%s (%s)", err, s)
+			if resp.StatusCode == 401 {
+				logger.Warn("Buildkite rejected the registration (%s)", err)
+				s.Break()
+			} else {
+				logger.Warn("%s (%s)", err, s)
+			}
 		}
 
 		return err

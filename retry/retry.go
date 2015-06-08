@@ -7,8 +7,9 @@ import (
 )
 
 type Stats struct {
-	Attempt int
-	Config  *Config
+	Attempt   int
+	Config    *Config
+	breakNext bool
 }
 
 type Config struct {
@@ -32,6 +33,11 @@ func (s *Stats) String() string {
 	}
 
 	return str
+}
+
+// Allow a retry loop to break out of itself
+func (s *Stats) Break() {
+	s.breakNext = true
 }
 
 func Do(callback func(*Stats) error, config *Config) error {
@@ -61,6 +67,12 @@ func Do(callback func(*Stats) error, config *Config) error {
 		err = callback(stats)
 		if err == nil {
 			return nil
+		}
+
+		// If the loop has callen stats.Break(), we should cancel out
+		// of the loop
+		if stats.breakNext {
+			return err
 		}
 
 		time.Sleep(config.Interval)

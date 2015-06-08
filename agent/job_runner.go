@@ -196,7 +196,7 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 			// go find some more work to do.
 			if response.StatusCode == 422 {
 				logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
-				return nil
+				s.Break()
 			} else {
 				logger.Warn("%s (%s)", err, s)
 			}
