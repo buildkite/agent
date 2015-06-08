@@ -183,9 +183,23 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 	r.Job.ChunksFailedCount = failedChunkCount
 
 	return retry.Do(func(s *retry.Stats) error {
-		_, _, err := r.APIClient.Jobs.Finish(r.Job)
+		_, response, err := r.APIClient.Jobs.Finish(r.Job)
 		if err != nil {
-			logger.Warn("%s (%s)", err, s)
+			// If the API returns with a 422, that means that we
+			// succesfully tried to finish the job, but Buildkite
+			// rejected the finish for some reason. This can
+			// sometimes mean that Buildkite has cancelled the job
+			// before we get a chance to send the final API call
+			// (maybe this agent took too long to kill the
+			// process). In that case, we don't want to keep trying
+			// to finish the job forever so we'll just bail out and
+			// go find some more work to do.
+			if response.StatusCode == 422 {
+				logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
+				return nil
+			} else {
+				logger.Warn("%s (%s)", err, s)
+			}
 		}
 
 		return err
