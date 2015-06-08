@@ -76,7 +76,7 @@ func (p *Process) Start() error {
 		waitGroup.Add(1)
 
 		go func() {
-			logger.Debug("Starting to copy PTY to the buffer")
+			logger.Debug("[Process] Starting to copy PTY to the buffer")
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
@@ -90,9 +90,9 @@ func (p *Process) Start() error {
 			}
 
 			if err != nil {
-				logger.Error("PTY output copy failed with error: %T: %v", err, err)
+				logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				logger.Debug("PTY has finished being copied to the buffer")
+				logger.Debug("[Process] PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
@@ -111,7 +111,7 @@ func (p *Process) Start() error {
 		p.Running = true
 	}
 
-	logger.Info("Process is running with PID: %d", p.Pid)
+	logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
 	// Add the line callback routine to the waitGroup
 	waitGroup.Add(1)
@@ -189,10 +189,10 @@ func (p *Process) Start() error {
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	logger.Debug("Waiting for routines to finish")
+	logger.Debug("[Process] Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		logger.Debug("Timed out waiting for wait group: (%T: %v)", err, err)
+		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
 	// No error occurred so we can return nil
@@ -218,13 +218,13 @@ func (p *Process) Kill() error {
 	// is still alive.
 	go func() {
 		for checking {
-			logger.Debug("Checking to see if PID: %d is still alive", p.Pid)
+			logger.Debug("[Process] Checking to see if PID: %d is still alive", p.Pid)
 
 			foundProcess, err := os.FindProcess(p.Pid)
 
 			// Can't find the process at all
 			if err != nil {
-				logger.Debug("Could not find process with PID: %d", p.Pid)
+				logger.Debug("[Process] Could not find process with PID: %d", p.Pid)
 
 				break
 			}
@@ -234,7 +234,7 @@ func (p *Process) Kill() error {
 				processState, err := foundProcess.Wait()
 
 				if err != nil || processState.Exited() {
-					logger.Debug("Process with PID: %d has exited.", p.Pid)
+					logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
 
 					break
 				}
@@ -268,11 +268,11 @@ func (p *Process) Kill() error {
 }
 
 func (p *Process) signal(sig os.Signal) error {
-	logger.Debug("Sending signal: %s to PID: %d", sig.String(), p.Pid)
+	logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
 	err := p.command.Process.Signal(syscall.SIGTERM)
 	if err != nil {
-		logger.Error("Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
+		logger.Error("[Process] Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
 		return err
 	}
 
@@ -289,7 +289,7 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				logger.Error("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		}
 	} else {
