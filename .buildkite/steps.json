@@ -65,7 +65,10 @@
     "branch_configuration": "master",
     "env": {
       "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
-    }
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
   },
   {
     "type": "script",
@@ -115,7 +118,10 @@
     "branch_configuration": "master",
     "env": {
       "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
-    }
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
   },
   {
     "type": "manual"
