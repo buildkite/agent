@@ -1,0 +1,135 @@
+[
+  {
+    "type": "script",
+    "name": "🔨",
+    "command": "scripts/tests.sh",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    }
+  },
+  {
+    "type": "script",
+    "name": "📦",
+    "command": "scripts/build-binaries.sh",
+    "artifact_paths": "pkg/*",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    }
+  },
+  {
+    "type": "waiter"
+  },
+  {
+    "type": "script",
+    "name": ":redhat: experimental",
+    "command": "scripts/rpm-package.sh",
+    "artifact_paths": "rpm/**/*",
+    "branch_configuration": "master",
+    "env": {
+      "CODENAME": "experimental"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  },
+  {
+    "type": "script",
+    "name": ":debian: experimental",
+    "command": "scripts/debian-package.sh",
+    "artifact_paths": "deb/**/*",
+    "branch_configuration": "master",
+    "env": {
+      "CODENAME": " experimental"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  },
+  {
+    "type": "script",
+    "name": ":github: :hammer:",
+    "command": "scripts/build-github-release.sh",
+    "artifact_paths": "releases/**/*",
+    "branch_configuration": "master",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    }
+  },
+  {
+    "type": "manual"
+  },
+  {
+    "type": "script",
+    "name": ":octocat: :rocket:",
+    "command": "scripts/github-release.sh",
+    "branch_configuration": "master",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    }
+  },
+  {
+    "type": "script",
+    "name": ":redhat: unstable",
+    "command": "scripts/rpm-package.sh",
+    "artifact_paths": "rpm/**/*",
+    "branch_configuration": "master",
+    "env": {
+      "CODENAME": "unstable"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  },
+  {
+    "type": "script",
+    "name": ":debian: unstable",
+    "command": "scripts/debian-package.sh",
+    "branch_configuration": "master",
+    "env": {
+      "CODENAME": "unstable"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  },
+  {
+    "type": "waiter"
+  },
+  {
+    "type": "script",
+    "name": ":whale:",
+    "command": "scripts/release-docker.sh",
+    "branch_configuration": "master",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  },
+  {
+    "type": "script",
+    "name": ":beer:",
+    "command": "scripts/release-homebrew.sh",
+    "artifact_paths": "pkg/*.rb;pkg/*.json",
+    "branch_configuration": "master",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    }
+  },
+  {
+    "type": "manual"
+  },
+  {
+    "type": "script",
+    "name": ":debian: stable",
+    "command": "scripts/debian-package.sh",
+    "branch_configuration": "master",
+    "env": {
+      "CODENAME": "stable"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  }
+]
