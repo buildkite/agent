@@ -63,6 +63,9 @@
     "name": ":octocat: :rocket:",
     "command": "scripts/github-release.sh",
     "branch_configuration": "master",
+    "env": {
+      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
+    },
     "agent_query_rules": [
       "queue=deploy"
     ]
