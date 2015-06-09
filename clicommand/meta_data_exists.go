@@ -14,8 +14,8 @@ var MetaDataExistsHelpDescription = `Usage:
 
 Description:
 
-   The command exits with a status of 0 if the key has been set, 1 if it
-   hasn't.
+   The command exits with a status of 0 if the key has been set, or it will
+   exit with a status of 100 if the key doesn't exist.
 
 Example:
 
@@ -72,7 +72,7 @@ var MetaDataExistsCommand = cli.Command{
 
 		// If the meta data didn't exist, exit with an error.
 		if !exists.Exists {
-			os.Exit(1)
+			os.Exit(100)
 		}
 	},
 }

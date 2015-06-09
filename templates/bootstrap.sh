@@ -245,8 +245,13 @@ else
 
   # Grab author and commit information and send it back to Buildkite
   buildkite-debug "~~~ Saving Git information"
-  buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
-  buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
+
+  # Check to see if the meta data exists before setting it
+  buildkite-run-debug "buildkite-agent meta-data exists \"buildkite:git:commit\""
+  if [[ $? -ne 0 ]]; then
+    buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
+    buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
+  fi
 fi
 
 # Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
