@@ -5,7 +5,9 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
+	"time"
 )
 
 var MetaDataSetHelpDescription = `Usage:
@@ -71,7 +73,15 @@ var MetaDataSetCommand = cli.Command{
 		}
 
 		// Set the meta data
-		if _, _, err := client.MetaData.Set(cfg.Job, metaData); err != nil {
+		err := retry.Do(func(s *retry.Stats) error {
+			_, _, err := client.MetaData.Set(cfg.Job, metaData)
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			}
+
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		if err != nil {
 			logger.Fatal("Failed to set meta-data: %s", err)
 		}
 	},

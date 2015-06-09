@@ -3,9 +3,12 @@ package clicommand
 import (
 	"fmt"
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
+	"time"
 )
 
 var MetaDataGetHelpDescription = `Usage:
@@ -64,7 +67,16 @@ var MetaDataGetCommand = cli.Command{
 		}.Create()
 
 		// Find the meta data value
-		metaData, _, err := client.MetaData.Get(cfg.Job, cfg.Key)
+		var metaData *api.MetaData
+		var err error
+		err = retry.Do(func(s *retry.Stats) error {
+			metaData, _, err = client.MetaData.Get(cfg.Job, cfg.Key)
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			}
+
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 		if err != nil {
 			logger.Fatal("Failed to get meta-data: %s", err)
 		}

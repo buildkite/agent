@@ -2,10 +2,13 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
 	"os"
+	"time"
 )
 
 var MetaDataExistsHelpDescription = `Usage:
@@ -65,7 +68,16 @@ var MetaDataExistsCommand = cli.Command{
 		}.Create()
 
 		// Find the meta data value
-		exists, _, err := client.MetaData.Exists(cfg.Job, cfg.Key)
+		var err error
+		var exists *api.MetaDataExists
+		err = retry.Do(func(s *retry.Stats) error {
+			exists, _, err = client.MetaData.Exists(cfg.Job, cfg.Key)
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			}
+
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 		if err != nil {
 			logger.Fatal("Failed to see if meta-data exists: %s", err)
 		}
