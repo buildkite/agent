@@ -28,7 +28,7 @@ Example:
 
    $ buildkite-agent pipeline upload
    $ buildkite-agent pipeline upload my-custom-steps.json
-   $ cat .buildkite/steps.yml | buildkite-agent pipeline upload`
+   $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
 	FilePath         string `cli:"arg:0" label:"upload paths"`
