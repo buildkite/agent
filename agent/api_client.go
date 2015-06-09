@@ -19,9 +19,9 @@ func (a APIClient) Create() *api.Client {
 	transport := &api.AuthenticatedTransport{
 		Token: a.Token,
 		Transport: &httpcontrol.Transport{
-			DialTimeout:           5 * time.Minute,
-			ResponseHeaderTimeout: 5 * time.Minute,
-			RequestTimeout:        5 * time.Minute,
+			DialTimeout:           2 * time.Minute,
+			ResponseHeaderTimeout: 2 * time.Minute,
+			RequestTimeout:        2 * time.Minute,
 			RetryAfterTimeout:     true,
 			MaxTries:              10,
 			Stats: func(s *httpcontrol.Stats) {
