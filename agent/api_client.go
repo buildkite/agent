@@ -6,6 +6,7 @@ import (
 	"github.com/facebookgo/httpcontrol"
 	"net/url"
 	"runtime"
+	"time"
 )
 
 type APIClient struct {
@@ -18,8 +19,11 @@ func (a APIClient) Create() *api.Client {
 	transport := &api.AuthenticatedTransport{
 		Token: a.Token,
 		Transport: &httpcontrol.Transport{
-			RetryAfterTimeout: true,
-			MaxTries:          10,
+			DialTimeout:           5 * time.Minute,
+			ResponseHeaderTimeout: 5 * time.Minute,
+			RequestTimeout:        5 * time.Minute,
+			RetryAfterTimeout:     true,
+			MaxTries:              10,
 			Stats: func(s *httpcontrol.Stats) {
 				logger.Debug("%s (%s)", s, s.Duration.Header+s.Duration.Body)
 			},
