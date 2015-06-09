@@ -63,9 +63,6 @@
     "name": ":octocat: :rocket:",
     "command": "scripts/github-release.sh",
     "branch_configuration": "master",
-    "env": {
-      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
-    },
     "agent_query_rules": [
       "queue=deploy"
     ]
@@ -103,9 +100,6 @@
     "name": ":whale:",
     "command": "scripts/release-docker.sh",
     "branch_configuration": "master",
-    "env": {
-      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
-    },
     "agent_query_rules": [
       "queue=deploy"
     ]
@@ -116,9 +110,6 @@
     "command": "scripts/release-homebrew.sh",
     "artifact_paths": "pkg/*.rb;pkg/*.json",
     "branch_configuration": "master",
-    "env": {
-      "BUILDKITE_DOCKER_COMPOSE_CONTAINER": "agent"
-    },
     "agent_query_rules": [
       "queue=deploy"
     ]
