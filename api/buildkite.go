@@ -2,13 +2,16 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/buildkite/agent/logger"
 	"github.com/google/go-querystring/query"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"net/textproto"
 	"net/url"
 	"reflect"
@@ -79,11 +82,17 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 	u := c.BaseURL.ResolveReference(rel)
 
 	buf := new(bytes.Buffer)
+	g := gzip.NewWriter(buf)
+
 	if body != nil {
-		err := json.NewEncoder(buf).Encode(body)
+		err := json.NewEncoder(g).Encode(body)
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if err := g.Close(); err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(method, u.String(), buf)
@@ -91,9 +100,9 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
-	if c.UserAgent != "" {
-		req.Header.Add("User-Agent", c.UserAgent)
-	}
+	req.Header.Add("Content-Encoding", "gzip")
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("User-Agent", c.UserAgent)
 
 	return req, nil
 }
@@ -140,6 +149,9 @@ func newResponse(r *http.Response) *Response {
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
 func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
+	requestDump, _ := httputil.DumpRequestOut(req, true)
+	logger.Debug("%s", requestDump)
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -148,6 +160,9 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 	defer resp.Body.Close()
 
 	response := newResponse(resp)
+
+	responseDump, _ := httputil.DumpResponse(resp, true)
+	logger.Debug("%s", responseDump)
 
 	err = checkResponse(resp)
 	if err != nil {
