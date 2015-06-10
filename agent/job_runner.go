@@ -2,15 +2,14 @@ package agent
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
-	"sync"
-	"time"
-
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
 )
 
 type JobRunner struct {

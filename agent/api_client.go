@@ -1,13 +1,12 @@
 package agent
 
 import (
-	"net/url"
-	"runtime"
-	"time"
-
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/facebookgo/httpcontrol"
+	"net/url"
+	"runtime"
+	"time"
 )
 
 type APIClient struct {
