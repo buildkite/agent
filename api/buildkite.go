@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	defaultBaseURL = "https://agent.buildkite.com/"
-	userAgent      = "buildkite-agent/api"
+	defaultBaseURL   = "https://agent.buildkite.com/"
+	defaultUserAgent = "buildkite-agent/api"
 )
 
 // A Client manages communication with the Buildkite Agent API.
@@ -53,7 +53,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c := &Client{
 		client:    httpClient,
 		BaseURL:   baseURL,
-		UserAgent: userAgent,
+		UserAgent: defaultUserAgent,
 	}
 
 	c.Agents = &AgentsService{c}
