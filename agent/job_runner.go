@@ -107,7 +107,6 @@ func (r *JobRunner) Run() error {
 
 	// Wait until all the header times have finished uploading
 	logger.Debug("Waiting for header times to finish uploading")
-
 	r.headerTimesStreamer.Wait()
 
 	// Stop the log streamer. This will block until all the chunks have

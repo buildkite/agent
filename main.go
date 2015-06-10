@@ -66,6 +66,7 @@ func main() {
 			Subcommands: []cli.Command{
 				clicommand.MetaDataSetCommand,
 				clicommand.MetaDataGetCommand,
+				clicommand.MetaDataExistsCommand,
 			},
 		},
 		{
