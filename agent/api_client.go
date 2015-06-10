@@ -29,8 +29,7 @@ func (a APIClient) Create() *api.Client {
 			DialTimeout:           2 * time.Minute,
 			ResponseHeaderTimeout: 2 * time.Minute,
 			RequestTimeout:        2 * time.Minute,
-			RetryAfterTimeout:     true,
-			MaxTries:              10,
+			RetryAfterTimeout:     false,
 			DisableCompression:    false,
 			Stats: func(s *httpcontrol.Stats) {
 				logger.Debug("%s (%s)", s, s.Duration.Header+s.Duration.Body)

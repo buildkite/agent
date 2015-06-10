@@ -98,6 +98,23 @@ func (a *AgentWorker) Ping() {
 		return
 	}
 
+	// Should we switch endpoints?
+	if ping.Endpoint != "" && ping.Endpoint != a.Agent.Endpoint {
+		// Before switching to the new one, do a ping test to make sure it's
+		// valid. If it is, switch and carry on, otherwise ignore the switch
+		// for now.
+		newAPIClient := APIClient{Endpoint: ping.Endpoint, Token: a.Agent.AccessToken}.Create()
+		newPing, _, err := newAPIClient.Pings.Get()
+		if err != nil {
+			logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
+		} else {
+			// Replace the APIClient and process the new ping
+			a.APIClient = newAPIClient
+			a.Agent.Endpoint = ping.Endpoint
+			ping = newPing
+		}
+	}
+
 	// Is there a message that should be shown in the logs?
 	if ping.Message != "" {
 		logger.Info(ping.Message)

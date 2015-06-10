@@ -8,9 +8,10 @@ type PingsService struct {
 
 // Ping represents a Buildkite Agent API Ping
 type Ping struct {
-	Action  string `json:"action,omitempty"`
-	Message string `json:"message,omitempty"`
-	Job     *Job   `json:"job,omitempty"`
+	Action   string `json:"action,omitempty"`
+	Message  string `json:"message,omitempty"`
+	Job      *Job   `json:"job,omitempty"`
+	Endpoint string `json:"endpoint,omitempty"`
 }
 
 // Pings the API and returns any work the client needs to perform
