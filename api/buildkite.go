@@ -151,7 +151,17 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 	var err error
 
 	if c.Debug {
-		requestDump, err := httputil.DumpRequestOut(req, true)
+		// If the request is a multi-part form, then it's probably a
+		// file upload, in which case we don't want to spewing out the
+		// file contents into the debug log (especially if it's been
+		// gzipped)
+		var requestDump []byte
+		if strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data") {
+			requestDump, err = httputil.DumpRequestOut(req, false)
+		} else {
+			requestDump, err = httputil.DumpRequestOut(req, true)
+		}
+
 		if c.Logger != nil {
 			c.Logger(string(requestDump), err)
 		}

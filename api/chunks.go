@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"mime/multipart"
 )
@@ -24,9 +25,22 @@ func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
+	// Gzip the chunk data
+	var b bytes.Buffer
+	gz := gzip.NewWriter(&b)
+	if _, err := gz.Write([]byte(chunk.Data)); err != nil {
+		return nil, err
+	}
+	if err := gz.Flush(); err != nil {
+		return nil, err
+	}
+	if err := gz.Close(); err != nil {
+		return nil, err
+	}
+
 	// Write the chunk to the form
-	part, _ := writer.CreateFormFile("chunk", "chunk.txt")
-	part.Write([]byte(chunk.Data))
+	part, _ := writer.CreateFormFile("chunk", "chunk.gz")
+	part.Write(b.Bytes())
 
 	// Write the sequence value to the form
 	writer.WriteField("sequence", fmt.Sprintf("%d", chunk.Sequence))
