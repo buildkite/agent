@@ -11,6 +11,7 @@ type Agent struct {
 	Name              string   `json:"name"`
 	AccessToken       string   `json:"access_token"`
 	Hostname          string   `json:"hostname"`
+	Endpoint          string   `json:"endpoint"`
 	OS                string   `json:"os"`
 	ScriptEvalEnabled bool     `json:"script_eval_enabled"`
 	Priority          string   `json:"priority,omitempty"`
@@ -22,7 +23,7 @@ type Agent struct {
 // Registers the agent against the Buildktie Agent API. The client for this
 // call must be authenticated using an Agent Registration Token
 func (as *AgentsService) Register(agent *Agent) (*Agent, *Response, error) {
-	req, err := as.client.NewRequest("POST", "v2/register", agent)
+	req, err := as.client.NewRequest("POST", "register", agent)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -38,7 +39,7 @@ func (as *AgentsService) Register(agent *Agent) (*Agent, *Response, error) {
 
 // Connects the agent to the Buildkite Agent API
 func (as *AgentsService) Connect() (*Response, error) {
-	req, err := as.client.NewRequest("POST", "v2/connect", nil)
+	req, err := as.client.NewRequest("POST", "connect", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func (as *AgentsService) Connect() (*Response, error) {
 
 // Disconnects the agent to the Buildkite Agent API
 func (as *AgentsService) Disconnect() (*Response, error) {
-	req, err := as.client.NewRequest("POST", "v2/disconnect", nil)
+	req, err := as.client.NewRequest("POST", "disconnect", nil)
 	if err != nil {
 		return nil, err
 	}

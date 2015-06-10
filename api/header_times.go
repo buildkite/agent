@@ -18,7 +18,7 @@ type HeaderTimes struct {
 
 // Saves the header times to the job
 func (hs *HeaderTimesService) Save(jobId string, headerTimes *HeaderTimes) (*Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s/header_times", jobId)
+	u := fmt.Sprintf("jobs/%s/header_times", jobId)
 
 	req, err := hs.client.NewRequest("POST", u, headerTimes)
 	if err != nil {

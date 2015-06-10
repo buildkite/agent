@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultEndpoint = "https://agent.buildkite.com/v2"
+	DefaultEndpoint = "https://agent.buildkite.com/v3"
 )
 
 var AgentAccessTokenFlag = cli.StringFlag{

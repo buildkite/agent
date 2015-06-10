@@ -182,7 +182,7 @@ func (r *JobRunner) createEnvironment() []string {
 // again)
 func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.Job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
-	_, _, err := r.APIClient.Jobs.Start(r.Job)
+	_, err := r.APIClient.Jobs.Start(r.Job)
 
 	return err
 }
@@ -195,7 +195,7 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 	r.Job.ChunksFailedCount = failedChunkCount
 
 	return retry.Do(func(s *retry.Stats) error {
-		_, response, err := r.APIClient.Jobs.Finish(r.Job)
+		response, err := r.APIClient.Jobs.Finish(r.Job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully tried to finish the job, but Buildkite
@@ -206,7 +206,7 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 			// process). In that case, we don't want to keep trying
 			// to finish the job forever so we'll just bail out and
 			// go find some more work to do.
-			if response.StatusCode == 422 {
+			if response != nil && response.StatusCode == 422 {
 				logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
 				s.Break()
 			} else {
@@ -248,12 +248,12 @@ func (r *JobRunner) onProcessStartCallback() {
 		for r.process.Running {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
-			job, _, err := r.APIClient.Jobs.Get(r.Job.ID)
+			jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
 			if err != nil {
 				// We don't really care if it fails, we'll just
 				// try again in a second anyway
-				logger.Warn("Problem with getting job status %s (%s)", r.Job.ID, err)
-			} else if job.State == "canceled" {
+				logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
+			} else if jobState.State == "canceling" || jobState.State == "canceled" {
 				r.Kill()
 			}
 

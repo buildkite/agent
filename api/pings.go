@@ -8,14 +8,14 @@ type PingsService struct {
 
 // Ping represents a Buildkite Agent API Ping
 type Ping struct {
-	Action  string `json:"action"`
-	Message string `json:"message"`
-	Job     *Job   `json:"job"`
+	Action  string `json:"action,omitempty"`
+	Message string `json:"message,omitempty"`
+	Job     *Job   `json:"job,omitempty"`
 }
 
 // Pings the API and returns any work the client needs to perform
 func (ps *PingsService) Get() (*Ping, *Response, error) {
-	req, err := ps.client.NewRequest("GET", "v2/ping", nil)
+	req, err := ps.client.NewRequest("GET", "ping", nil)
 	if err != nil {
 		return nil, nil, err
 	}

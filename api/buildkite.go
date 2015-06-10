@@ -80,12 +80,7 @@ func NewClient(httpClient *http.Client) *Client {
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
 func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Request, error) {
-	rel, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
-
-	u := c.BaseURL.ResolveReference(rel)
+	u := joinURL(c.BaseURL.String(), urlStr)
 
 	buf := new(bytes.Buffer)
 	if body != nil {
@@ -95,13 +90,16 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		}
 	}
 
-	req, err := http.NewRequest(method, u.String(), buf)
+	req, err := http.NewRequest(method, u, buf)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Add("User-Agent", c.UserAgent)
-	req.Header.Add("Content-Type", "application/json")
+
+	if body != nil {
+		req.Header.Add("Content-Type", "application/json")
+	}
 
 	return req, nil
 }
@@ -111,14 +109,9 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 // of the Client. Relative URLs should always be specified without a preceding
 // slash.
 func (c *Client) NewFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
-	rel, err := url.Parse(urlStr)
-	if err != nil {
-		return nil, err
-	}
+	u := joinURL(c.BaseURL.String(), urlStr)
 
-	u := c.BaseURL.ResolveReference(rel)
-
-	req, err := http.NewRequest(method, u.String(), body)
+	req, err := http.NewRequest(method, u, body)
 	if err != nil {
 		return nil, err
 	}
@@ -271,4 +264,8 @@ func createFormFileWithContentType(w *multipart.Writer, fieldname, filename, con
 			escapeQuotes(fieldname), escapeQuotes(filename)))
 	h.Set("Content-Type", contentType)
 	return w.CreatePart(h)
+}
+
+func joinURL(endpoint string, path string) string {
+	return strings.TrimRight(endpoint, "/") + "/" + strings.TrimLeft(path, "/")
 }

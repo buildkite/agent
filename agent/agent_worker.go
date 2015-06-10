@@ -32,7 +32,7 @@ type AgentWorker struct {
 
 // Creates the agent worker and initializes it's API Client
 func (a AgentWorker) Create() AgentWorker {
-	a.APIClient = APIClient{Endpoint: a.Endpoint, Token: a.Agent.AccessToken}.Create()
+	a.APIClient = APIClient{Endpoint: a.Agent.Endpoint, Token: a.Agent.AccessToken}.Create()
 
 	return a
 }
@@ -85,7 +85,7 @@ func (a *AgentWorker) Connect() error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10})
+	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 }
 
 // Performs a ping, which returns what action the agent should take next.
@@ -126,7 +126,7 @@ func (a *AgentWorker) Ping() {
 
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = JobRunner{
-		Endpoint:           a.Endpoint,
+		Endpoint:           accepted.Endpoint,
 		Agent:              a.Agent,
 		AgentConfiguration: a.AgentConfiguration,
 		Job:                accepted,

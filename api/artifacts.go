@@ -40,7 +40,7 @@ type ArtifactSearchOptions struct {
 
 // Accepts a slice of artifacts, and creates them on Buildkite as a batch.
 func (as *ArtifactsService) Create(jobId string, artifacts []*Artifact) ([]*Artifact, *Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s/artifacts", jobId)
+	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 
 	req, err := as.client.NewRequest("POST", u, artifacts)
 	if err != nil {
@@ -58,7 +58,7 @@ func (as *ArtifactsService) Create(jobId string, artifacts []*Artifact) ([]*Arti
 
 // Updates a paticular artifact
 func (as *ArtifactsService) Update(jobId string, artifact *Artifact) (*Artifact, *Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s/artifacts/%s", jobId, artifact.ID)
+	u := fmt.Sprintf("jobs/%s/artifacts/%s", jobId, artifact.ID)
 
 	req, err := as.client.NewRequest("PUT", u, artifact)
 	if err != nil {
@@ -76,7 +76,7 @@ func (as *ArtifactsService) Update(jobId string, artifact *Artifact) (*Artifact,
 
 // Searches Buildkite for a set of artifacts
 func (as *ArtifactsService) Search(buildId string, opt *ArtifactSearchOptions) ([]*Artifact, *Response, error) {
-	u := fmt.Sprintf("v2/builds/%s/artifacts/search", buildId)
+	u := fmt.Sprintf("builds/%s/artifacts/search", buildId)
 	u, err := addOptions(u, opt)
 	if err != nil {
 		return nil, nil, err

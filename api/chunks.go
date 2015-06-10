@@ -51,7 +51,7 @@ func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 		return nil, err
 	}
 
-	u := fmt.Sprintf("v2/jobs/%s/chunks", jobId)
+	u := fmt.Sprintf("jobs/%s/chunks", jobId)
 	req, err := cs.client.NewFormRequest("POST", u, body)
 	if err != nil {
 		return nil, err

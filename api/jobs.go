@@ -12,37 +12,54 @@ type JobsService struct {
 
 // Job represents a Buildkite Agent API Job
 type Job struct {
-	ID                 string            `json:"id"`
-	State              string            `json:"state"`
-	Env                map[string]string `json:"env"`
+	ID                 string            `json:"id,omitempty"`
+	Endpoint           string            `json:"endpoint"`
+	State              string            `json:"state,omitempty"`
+	Env                map[string]string `json:"env,omitempty"`
 	ChunksMaxSizeBytes int               `json:"chunks_max_size_bytes,omitempty"`
 	ExitStatus         string            `json:"exit_status,omitempty"`
 	StartedAt          string            `json:"started_at,omitempty"`
 	FinishedAt         string            `json:"finished_at,omitempty"`
-	ChunksFailedCount  int               `json:"chunks_failed_count"`
+	ChunksFailedCount  int               `json:"chunks_failed_count,omitempty"`
+}
+
+type JobState struct {
+	State string `json:"state,omitempty"`
+}
+
+type jobStartRequest struct {
+	StartedAt string `json:"started_at,omitempty"`
+}
+
+type jobFinishRequest struct {
+	ExitStatus        string `json:"exit_status,omitempty"`
+	FinishedAt        string `json:"finished_at,omitempty"`
+	ChunksFailedCount int    `json:"chunks_failed_count"`
 }
 
 // Fetches a job
-func (js *JobsService) Get(id string) (*Job, *Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s", id)
+func (js *JobsService) GetState(id string) (*JobState, *Response, error) {
+	u := fmt.Sprintf("jobs/%s", id)
 
 	req, err := js.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	job := new(Job)
-	resp, err := js.client.Do(req, job)
+	s := new(JobState)
+	resp, err := js.client.Do(req, s)
 	if err != nil {
 		return nil, resp, err
 	}
 
-	return job, resp, err
+	return s, resp, err
 }
 
-// Accepts the passed in job
+// Accepts the passed in job. Returns the job with it's finalized set of
+// environment variables (when a job is accepted, the agents environment is
+// applied to the job)
 func (js *JobsService) Accept(job *Job) (*Job, *Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s/accept", job.ID)
+	u := fmt.Sprintf("jobs/%s/accept", job.ID)
 
 	req, err := js.client.NewRequest("PUT", u, nil)
 	if err != nil {
@@ -59,37 +76,31 @@ func (js *JobsService) Accept(job *Job) (*Job, *Response, error) {
 }
 
 // Starts the passed in job
-func (js *JobsService) Start(job *Job) (*Job, *Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s/start", job.ID)
+func (js *JobsService) Start(job *Job) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/start", job.ID)
 
-	req, err := js.client.NewRequest("PUT", u, job)
+	req, err := js.client.NewRequest("PUT", u, &jobStartRequest{
+		StartedAt: job.StartedAt,
+	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	j := new(Job)
-	resp, err := js.client.Do(req, j)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return j, resp, err
+	return js.client.Do(req, nil)
 }
 
 // Finishes the passed in job
-func (js *JobsService) Finish(job *Job) (*Job, *Response, error) {
-	u := fmt.Sprintf("v2/jobs/%s/finish", job.ID)
+func (js *JobsService) Finish(job *Job) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/finish", job.ID)
 
-	req, err := js.client.NewRequest("PUT", u, job)
+	req, err := js.client.NewRequest("PUT", u, &jobFinishRequest{
+		FinishedAt:        job.FinishedAt,
+		ExitStatus:        job.ExitStatus,
+		ChunksFailedCount: job.ChunksFailedCount,
+	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	j := new(Job)
-	resp, err := js.client.Do(req, j)
-	if err != nil {
-		return nil, resp, err
-	}
-
-	return j, resp, err
+	return js.client.Do(req, nil)
 }

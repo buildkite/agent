@@ -49,7 +49,7 @@ func (cs *PipelinesService) Upload(jobId string, pipeline *Pipeline) (*Response,
 		return nil, err
 	}
 
-	u := fmt.Sprintf("v2/jobs/%s/pipelines", jobId)
+	u := fmt.Sprintf("jobs/%s/pipelines", jobId)
 	req, err := cs.client.NewFormRequest("POST", u, body)
 	if err != nil {
 		return nil, err

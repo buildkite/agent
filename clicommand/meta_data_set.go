@@ -77,7 +77,7 @@ var MetaDataSetCommand = cli.Command{
 
 		// Set the meta data
 		err := retry.Do(func(s *retry.Stats) error {
-			_, _, err := client.MetaData.Set(cfg.Job, metaData)
+			_, err := client.MetaData.Set(cfg.Job, metaData)
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
