@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"net/textproto"
 	"net/url"
 	"reflect"
@@ -16,8 +17,8 @@ import (
 )
 
 const (
-	defaultBaseURL = "https://agent.buildkite.com/"
-	userAgent      = "buildkite-agent/api"
+	defaultBaseURL   = "https://agent.buildkite.com/"
+	defaultUserAgent = "buildkite-agent/api"
 )
 
 // A Client manages communication with the Buildkite Agent API.
@@ -31,6 +32,13 @@ type Client struct {
 
 	// User agent used when communicating with the Buildkite Agent API.
 	UserAgent string
+
+	// If true, requests and responses will be dumped and set to the logger
+	Debug bool
+
+	// Debug output will be sent to this callback for logging in the
+	// console
+	Logger func(string, error)
 
 	// Services used for talking to different parts of the Buildkite Agent API.
 	Agents      *AgentsService
@@ -50,7 +58,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c := &Client{
 		client:    httpClient,
 		BaseURL:   baseURL,
-		UserAgent: userAgent,
+		UserAgent: defaultUserAgent,
 	}
 
 	c.Agents = &AgentsService{c}
@@ -91,9 +99,8 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
-	if c.UserAgent != "" {
-		req.Header.Add("User-Agent", c.UserAgent)
-	}
+	req.Header.Add("User-Agent", c.UserAgent)
+	req.Header.Add("Content-Type", "application/json")
 
 	return req, nil
 }
@@ -140,6 +147,15 @@ func newResponse(r *http.Response) *Response {
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
 func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
+	var err error
+
+	if c.Debug {
+		requestDump, err := httputil.DumpRequestOut(req, true)
+		if c.Logger != nil {
+			c.Logger(string(requestDump), err)
+		}
+	}
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -148,6 +164,13 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 	defer resp.Body.Close()
 
 	response := newResponse(resp)
+
+	if c.Debug {
+		responseDump, err := httputil.DumpResponse(resp, true)
+		if c.Logger != nil {
+			c.Logger(string(responseDump), err)
+		}
+	}
 
 	err = checkResponse(resp)
 	if err != nil {

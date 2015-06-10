@@ -30,6 +30,7 @@ type MetaDataSetConfig struct {
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
+	DebugHTTP        bool   `cli:"debug-http"`
 }
 
 var MetaDataSetCommand = cli.Command{
@@ -45,8 +46,9 @@ var MetaDataSetCommand = cli.Command{
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
-		DebugFlag,
 		NoColorFlag,
+		DebugFlag,
+		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct

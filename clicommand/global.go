@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
 	"github.com/oleiade/reflections"
@@ -30,6 +31,12 @@ var DebugFlag = cli.BoolFlag{
 	EnvVar: "BUILDKITE_AGENT_DEBUG",
 }
 
+var DebugHTTPFlag = cli.BoolFlag{
+	Name:   "debug-http",
+	Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log",
+	EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
+}
+
 var NoColorFlag = cli.BoolFlag{
 	Name:   "no-color",
 	Usage:  "Don't show colors in logging",
@@ -41,6 +48,12 @@ func HandleGlobalFlags(cfg interface{}) {
 	debug, err := reflections.GetField(cfg, "Debug")
 	if debug == true && err == nil {
 		logger.SetLevel(logger.DEBUG)
+	}
+
+	// Enable HTTP debugging
+	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
+	if debugHTTP == true && err == nil {
+		agent.APIClientEnableHTTPDebug()
 	}
 
 	// Turn off color if a NoColor option is present

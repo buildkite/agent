@@ -43,6 +43,7 @@ type AgentStartConfig struct {
 	NoPTY                            bool     `cli:"no-pty"`
 	Endpoint                         string   `cli:"endpoint" validate:"required"`
 	Debug                            bool     `cli:"debug"`
+	DebugHTTP                        bool     `cli:"debug-http"`
 }
 
 func DefaultConfigFilePaths() (paths []string) {
@@ -143,8 +144,9 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
 		EndpointFlag,
-		DebugFlag,
 		NoColorFlag,
+		DebugFlag,
+		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct

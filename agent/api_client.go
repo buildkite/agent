@@ -9,9 +9,15 @@ import (
 	"time"
 )
 
+var debug = false
+
 type APIClient struct {
 	Endpoint string
 	Token    string
+}
+
+func APIClientEnableHTTPDebug() {
+	debug = true
 }
 
 func (a APIClient) Create() *api.Client {
@@ -24,6 +30,7 @@ func (a APIClient) Create() *api.Client {
 			RequestTimeout:        2 * time.Minute,
 			RetryAfterTimeout:     true,
 			MaxTries:              10,
+			DisableCompression:    false,
 			Stats: func(s *httpcontrol.Stats) {
 				logger.Debug("%s (%s)", s, s.Duration.Header+s.Duration.Body)
 			},
@@ -34,6 +41,10 @@ func (a APIClient) Create() *api.Client {
 	client := api.NewClient(transport.Client())
 	client.BaseURL, _ = url.Parse(a.Endpoint)
 	client.UserAgent = a.UserAgent()
+	client.Debug = debug
+	client.Logger = func(s string, err error) {
+		logger.Debug(s)
+	}
 
 	return client
 }
