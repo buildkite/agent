@@ -13,8 +13,9 @@ import (
 var debug = false
 
 type APIClient struct {
-	Endpoint string
-	Token    string
+	Endpoint   string
+	Token      string
+	StatusFunc func(status string, timeTaken time.Duration)
 }
 
 func APIClientEnableHTTPDebug() {
@@ -32,7 +33,10 @@ func (a APIClient) Create() *api.Client {
 			RetryAfterTimeout:     false,
 			DisableCompression:    false,
 			Stats: func(s *httpcontrol.Stats) {
-				logger.Debug("%s (%s)", s, s.Duration.Header+s.Duration.Body)
+				logger.Info("%s (%s)", s, s.Duration.Header+s.Duration.Body)
+				if a.StatusFunc != nil {
+					a.StatusFunc(s.String(), s.Duration.Header+s.Duration.Body)
+				}
 			},
 		},
 	}

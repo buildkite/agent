@@ -21,6 +21,9 @@ type AgentWorker struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
 
+	// Function which is used to notify other subsystems of job status changes
+	JobUpdateFunc func(job api.Job)
+
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
 	stop   chan bool
@@ -147,6 +150,7 @@ func (a *AgentWorker) Ping() {
 		Agent:              a.Agent,
 		AgentConfiguration: a.AgentConfiguration,
 		Job:                accepted,
+		JobUpdateFunc:      a.JobUpdateFunc,
 	}.Create()
 
 	// Was there an error creating the job runner?

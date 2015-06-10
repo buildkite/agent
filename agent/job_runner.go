@@ -29,6 +29,9 @@ type JobRunner struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
 
+	// Function which is used to notify other subsystems of job status changes
+	JobUpdateFunc func(job api.Job)
+
 	// The interal process of the job
 	process *process.Process
 
@@ -82,6 +85,9 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
+	// update the other components on the state of the job
+	r.JobUpdateFunc(*r.Job)
+
 	// Start the log streamer
 	if err := r.logStreamer.Start(); err != nil {
 		return err
@@ -120,6 +126,9 @@ func (r *JobRunner) Run() error {
 	r.wg.Wait()
 
 	logger.Info("Finished job %s", r.Job.ID)
+
+	// update the other components on the state of the job
+	r.JobUpdateFunc(*r.Job)
 
 	return nil
 }
