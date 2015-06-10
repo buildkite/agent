@@ -1,16 +1,19 @@
 package agent
 
 import (
+	"net/url"
+	"runtime"
+	"time"
+
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/facebookgo/httpcontrol"
-	"net/url"
-	"runtime"
 )
 
 type APIClient struct {
-	Endpoint string
-	Token    string
+	Endpoint   string
+	Token      string
+	StatusFunc func(status string, timeTaken time.Duration)
 }
 
 func (a APIClient) Create() *api.Client {
@@ -21,7 +24,10 @@ func (a APIClient) Create() *api.Client {
 			RetryAfterTimeout: true,
 			MaxTries:          10,
 			Stats: func(s *httpcontrol.Stats) {
-				logger.Debug("%s (%s)", s, s.Duration.Header+s.Duration.Body)
+				logger.Info("%s (%s)", s, s.Duration.Header+s.Duration.Body)
+				if a.StatusFunc != nil {
+					a.StatusFunc(s.String(), s.Duration.Header+s.Duration.Body)
+				}
 			},
 		},
 	}

@@ -2,12 +2,14 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/health"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/signalwatcher"
-	"os"
-	"time"
 )
 
 type AgentPool struct {
@@ -27,7 +29,7 @@ func (r *AgentPool) Start() error {
 	r.ShowBanner()
 
 	// Create the agent registration API Client
-	r.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Token}.Create()
+	r.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Token, StatusFunc: health.UpdateAPIStatus}.Create()
 
 	// Create the agent template. We use pass this template to the register
 	// call, at which point we get back a real agent.
@@ -45,7 +47,10 @@ func (r *AgentPool) Start() error {
 
 	// Now that we have a registereted agent, we can connect it to the API,
 	// and start running jobs.
-	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint}.Create()
+	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint, JobUpdateFunc: health.UpdateJobStatus}.Create()
+
+	// register the health check
+	health.InitHealthCheck(":9999")
 
 	logger.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {
