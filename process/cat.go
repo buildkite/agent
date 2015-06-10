@@ -2,9 +2,10 @@ package process
 
 import (
 	"bytes"
-	"github.com/buildkite/agent/logger"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/buildkite/agent/logger"
 )
 
 // Replicates how the command line tool `cat` works, but is more verbose about

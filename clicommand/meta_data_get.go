@@ -2,13 +2,14 @@ package clicommand
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
-	"time"
 )
 
 var MetaDataGetHelpDescription = `Usage:

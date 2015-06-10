@@ -2,12 +2,13 @@ package agent
 
 import (
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/signalwatcher"
-	"os"
-	"time"
 )
 
 type AgentPool struct {

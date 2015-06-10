@@ -1,6 +1,11 @@
 package clicommand
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"time"
+
 	"github.com/andrew-d/go-termutil"
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
@@ -8,10 +13,6 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"time"
 )
 
 var PipelineUploadHelpDescription = `Usage:

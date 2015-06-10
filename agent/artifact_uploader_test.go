@@ -1,9 +1,10 @@
 package agent
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestWorkingDirectory(t *testing.T) {

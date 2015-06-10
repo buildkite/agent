@@ -1,11 +1,12 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/pool"
-	"os"
-	"path/filepath"
 )
 
 type ArtifactDownloader struct {

@@ -2,13 +2,14 @@ package logger
 
 import (
 	"fmt"
-	"golang.org/x/crypto/ssh/terminal"
 	"io"
 	"os"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 const (

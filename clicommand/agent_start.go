@@ -1,13 +1,14 @@
 package clicommand
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/codegangsta/cli"
-	"os"
-	"path/filepath"
-	"runtime"
 )
 
 var StartDescription = `Usage:

@@ -1,12 +1,13 @@
 package agent
 
 import (
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
-	"github.com/facebookgo/httpcontrol"
 	"net/url"
 	"runtime"
 	"time"
+
+	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/logger"
+	"github.com/facebookgo/httpcontrol"
 )
 
 var debug = false

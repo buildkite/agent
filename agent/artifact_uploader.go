@@ -4,17 +4,18 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/glob"
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/pool"
-	"github.com/buildkite/agent/retry"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/glob"
+	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/pool"
+	"github.com/buildkite/agent/retry"
 )
 
 type ArtifactUploader struct {

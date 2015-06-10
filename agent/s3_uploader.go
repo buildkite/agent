@@ -3,10 +3,6 @@ package agent
 import (
 	"errors"
 	"fmt"
-	"github.com/AdRoll/goamz/aws"
-	"github.com/AdRoll/goamz/s3"
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
 	"io/ioutil"
 	"mime"
 	"net/url"
@@ -14,6 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/AdRoll/goamz/aws"
+	"github.com/AdRoll/goamz/s3"
+	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/logger"
 )
 
 type S3Uploader struct {

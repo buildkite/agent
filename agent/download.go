@@ -2,13 +2,14 @@ package agent
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/logger"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/buildkite/agent/logger"
 )
 
 type Download struct {

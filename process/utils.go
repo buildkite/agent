@@ -3,10 +3,11 @@
 package process
 
 import (
-	"github.com/kr/pty"
 	"os"
 	"os/exec"
 	"syscall"
+
+	"github.com/kr/pty"
 )
 
 func StartPTY(c *exec.Cmd) (*os.File, error) {

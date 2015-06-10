@@ -2,10 +2,11 @@ package agent
 
 import (
 	"errors"
-	"github.com/buildkite/agent/logger"
 	"math"
 	"sync"
 	"sync/atomic"
+
+	"github.com/buildkite/agent/logger"
 )
 
 type LogStreamer struct {

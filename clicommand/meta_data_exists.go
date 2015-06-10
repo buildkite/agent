@@ -1,14 +1,15 @@
 package clicommand
 
 import (
+	"os"
+	"time"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
-	"os"
-	"time"
 )
 
 var MetaDataExistsHelpDescription = `Usage:

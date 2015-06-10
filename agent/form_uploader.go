@@ -9,11 +9,12 @@ import (
 	"net/http"
 	// "net/http/httputil"
 	"errors"
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/logger"
 )
 
 type FormUploader struct {

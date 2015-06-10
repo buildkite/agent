@@ -2,9 +2,10 @@ package process
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/logger"
 	"os/exec"
 	"strings"
+
+	"github.com/buildkite/agent/logger"
 )
 
 func Run(command string, arg ...string) (string, error) {

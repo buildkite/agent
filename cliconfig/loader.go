@@ -2,13 +2,14 @@ package cliconfig
 
 import (
 	"fmt"
-	"github.com/codegangsta/cli"
-	"github.com/oleiade/reflections"
 	"os"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/codegangsta/cli"
+	"github.com/oleiade/reflections"
 )
 
 type Loader struct {

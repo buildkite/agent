@@ -3,9 +3,10 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/ec2"
-	"time"
 )
 
 type EC2Tags struct {

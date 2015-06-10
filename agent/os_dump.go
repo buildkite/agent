@@ -1,8 +1,9 @@
 package agent
 
 import (
-	"github.com/buildkite/agent/process"
 	"runtime"
+
+	"github.com/buildkite/agent/process"
 )
 
 // Returns a dump of the raw operating system information

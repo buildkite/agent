@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"fmt"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
