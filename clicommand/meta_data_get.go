@@ -72,8 +72,12 @@ var MetaDataGetCommand = cli.Command{
 		// Find the meta data value
 		var metaData *api.MetaData
 		var err error
+		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			metaData, _, err = client.MetaData.Get(cfg.Job, cfg.Key)
+			metaData, resp, err = client.MetaData.Get(cfg.Job, cfg.Key)
+			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
+				s.Break()
+			}
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
