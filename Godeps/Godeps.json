@@ -27,14 +27,6 @@
 			"Rev": "7381bc4e62942763475703c7edd405f1e42adf4f"
 		},
 		{
-			"ImportPath": "github.com/facebookgo/httpcontrol",
-			"Rev": "782c3135976e62f9cb1e44f6bf4464219785dbeb"
-		},
-		{
-			"ImportPath": "github.com/facebookgo/pqueue",
-			"Rev": "3e4c2d4610def82da897964a0e70f89322a9da41"
-		},
-		{
 			"ImportPath": "github.com/google/go-querystring/query",
 			"Rev": "547ef5ac979778feb2f760cdb5f4eae1a2207b86"
 		},

@@ -1,13 +1,14 @@
 package agent
 
 import (
+	"net"
+	"net/http"
 	"net/url"
 	"runtime"
 	"time"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"github.com/facebookgo/httpcontrol"
 )
 
 var debug = false
@@ -25,20 +26,24 @@ func (a APIClient) Create() *api.Client {
 	// Create the transport used when making the Buildkite Agent API calls
 	transport := &api.AuthenticatedTransport{
 		Token: a.Token,
-		Transport: &httpcontrol.Transport{
-			DialTimeout:           2 * time.Minute,
-			ResponseHeaderTimeout: 2 * time.Minute,
-			RequestTimeout:        2 * time.Minute,
-			RetryAfterTimeout:     false,
-			DisableCompression:    false,
-			Stats: func(s *httpcontrol.Stats) {
-				logger.Debug("%s (%s)", s, s.Duration.Header+s.Duration.Body)
-			},
+		Transport: &http.Transport{
+			Proxy:              http.ProxyFromEnvironment,
+			DisableKeepAlives:  false,
+			DisableCompression: false,
+			Dial: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).Dial,
+			TLSHandshakeTimeout: 30 * time.Second,
 		},
 	}
 
+	// From the transport, create the a http client
+	httpClient := transport.Client()
+	httpClient.Timeout = 10 * time.Second
+
 	// Create the Buildkite Agent API Client
-	client := api.NewClient(transport.Client())
+	client := api.NewClient(httpClient)
 	client.BaseURL, _ = url.Parse(a.Endpoint)
 	client.UserAgent = a.UserAgent()
 	client.Debug = debug

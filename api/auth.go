@@ -5,14 +5,18 @@ import (
 	"net/http"
 )
 
+type canceler interface {
+	CancelRequest(*http.Request)
+}
+
 // Transport manages injection of the API token
 type AuthenticatedTransport struct {
 	// The Token used for authentication. This can either the be
 	// organizations registration token, or the agents access token.
 	Token string
 
-	// Transport is the underlying HTTP transport to use when making requests.
-	// It will default to http.DefaultTransport if nil.
+	// Transport is the underlying HTTP transport to use when making
+	// requests. It will default to http.DefaultTransport if nil.
 	Transport http.RoundTripper
 }
 
@@ -30,6 +34,12 @@ func (t AuthenticatedTransport) RoundTrip(req *http.Request) (*http.Response, er
 // Client builds a new http client.
 func (t *AuthenticatedTransport) Client() *http.Client {
 	return &http.Client{Transport: t}
+}
+
+// CancelRequest cancels an in-flight request by closing its connection.
+func (t *AuthenticatedTransport) CancelRequest(req *http.Request) {
+	cancelableTransport := t.Transport.(canceler)
+	cancelableTransport.CancelRequest(req)
 }
 
 func (t *AuthenticatedTransport) transport() http.RoundTripper {
