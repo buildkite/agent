@@ -13,7 +13,9 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"time"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/google/go-querystring/query"
 )
 
@@ -35,11 +37,7 @@ type Client struct {
 	UserAgent string
 
 	// If true, requests and responses will be dumped and set to the logger
-	Debug bool
-
-	// Debug output will be sent to this callback for logging in the
-	// console
-	Logger func(string, error)
+	DebugHTTP bool
 
 	// Services used for talking to different parts of the Buildkite Agent API.
 	Agents      *AgentsService
@@ -143,7 +141,7 @@ func newResponse(r *http.Response) *Response {
 func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 	var err error
 
-	if c.Debug {
+	if c.DebugHTTP {
 		// If the request is a multi-part form, then it's probably a
 		// file upload, in which case we don't want to spewing out the
 		// file contents into the debug log (especially if it's been
@@ -155,25 +153,27 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 			requestDump, err = httputil.DumpRequestOut(req, true)
 		}
 
-		if c.Logger != nil {
-			c.Logger(string(requestDump), err)
-		}
+		logger.Debug("ERR: %s\n%s", err, string(requestDump))
 	}
+
+	ts := time.Now()
+
+	logger.Debug("%s %s", req.Method, req.URL)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Debug("↳ %s %s (%s %s)", req.Method, req.URL, resp.Status, time.Now().Sub(ts))
+
 	defer resp.Body.Close()
 
 	response := newResponse(resp)
 
-	if c.Debug {
+	if c.DebugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
-		if c.Logger != nil {
-			c.Logger(string(responseDump), err)
-		}
+		logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 	}
 
 	err = checkResponse(resp)

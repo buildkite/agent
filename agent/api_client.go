@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
 )
 
 var debug = false
@@ -46,10 +45,7 @@ func (a APIClient) Create() *api.Client {
 	client := api.NewClient(httpClient)
 	client.BaseURL, _ = url.Parse(a.Endpoint)
 	client.UserAgent = a.UserAgent()
-	client.Debug = debug
-	client.Logger = func(s string, err error) {
-		logger.Debug(s)
-	}
+	client.DebugHTTP = debug
 
 	return client
 }
