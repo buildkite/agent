@@ -32,7 +32,14 @@ type AgentWorker struct {
 
 // Creates the agent worker and initializes it's API Client
 func (a AgentWorker) Create() AgentWorker {
-	a.APIClient = APIClient{Endpoint: a.Agent.Endpoint, Token: a.Agent.AccessToken}.Create()
+	var endpoint string
+	if a.Agent.Endpoint != "" {
+		endpoint = a.Agent.Endpoint
+	} else {
+		endpoint = a.Endpoint
+	}
+
+	a.APIClient = APIClient{Endpoint: endpoint, Token: a.Agent.AccessToken}.Create()
 
 	return a
 }
