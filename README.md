@@ -10,11 +10,12 @@ Usage:
 
 Available commands are:
 
-  start     Starts a Buildkite agent
-  artifact  Upload/download artifacts from Buildkite jobs
-  meta-data Get/set data from Buildkite jobs
-  help, h   Shows a list of commands or help for one command
-  
+  start		Starts a Buildkite agent
+  artifact	Upload/download artifacts from Buildkite jobs
+  meta-data	Get/set data from Buildkite jobs
+  pipeline	Make changes to the pipeline of the currently running build
+  help, h	Shows a list of commands or help for one command
+
 Use "buildkite-agent <command> --help" for more information about a command.
 ```
 
