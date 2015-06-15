@@ -168,6 +168,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 	logger.Debug("↳ %s %s (%s %s)", req.Method, req.URL, resp.Status, time.Now().Sub(ts))
 
 	defer resp.Body.Close()
+	defer io.Copy(ioutil.Discard, resp.Body)
 
 	response := newResponse(resp)
 
