@@ -153,7 +153,7 @@ if [ "$OPERATION" = "install" ] ; then
     chown -R buildkite-agent:buildkite-agent /etc/buildkite-agent
 
     # Only chown the /var/lib/buildkite-agent folder if it was created
-    if [ ! -d /var/lib/buildkite-agent ]; then
+    if [ -d /var/lib/buildkite-agent ]; then
       chown -R buildkite-agent:buildkite-agent /var/lib/buildkite-agent
     fi
   fi
