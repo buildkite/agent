@@ -9,6 +9,29 @@ else
   OPERATION="upgrade"
 fi
 
+# Find out whether or not the buildkite-agent user exists
+getent passwd buildkite-agent > /dev/null 2&>1
+if [ $? -eq 0 ]; then
+  BK_USER_EXISTS=true
+else
+  BK_USER_EXISTS=false
+fi
+
+# Add the buildkite user if it doesn't exist on installation
+if [ "$OPERATION" = "install" ] ; then
+  if [ "$BK_USER_EXISTS" = "false" ]; then
+    # Create the buildkite system user and set it's home to /var/lib/buildkite
+    useradd --system --no-create-home -d /var/lib/buildkite-agent buildkite-agent
+
+    # We create it's home folder in a seperate command so it doesn't blow up if
+    # the folder already exists
+    mkdir -p /var/lib/buildkite-agent
+
+    # The user exists now!
+    BK_USER_EXISTS=true
+  fi
+fi
+
 # Create the /etc/buildkite-agent folder if it's not there
 if [ ! -d /etc/buildkite-agent ]; then
   mkdir -p /etc/buildkite-agent
@@ -118,6 +141,14 @@ if [ "$OPERATION" = "upgrade" ] ; then
   for KILLPID in `ps ax | grep 'buildkite-agent start' | awk ' { print $1;}'`; do
     kill $KILLPID > /dev/null 2>&1 || true
   done
+fi
+
+# Make sure all the the folders created are owned by the buildkite-agent user #
+# on install
+if [ "$OPERATION" = "install" ] ; then
+  if [ "$BK_USER_EXISTS" = "true" ]; then
+    sudo chown -R buildkite-agent:buildkite-agent /var/lib/buildkite-agent /etc/buildkite-agent
+  fi
 fi
 
 exit 0

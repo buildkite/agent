@@ -6,6 +6,8 @@ After=network.target
 
 [Service]
 Type=simple
+User=buildkite-agent
+Environment=HOME=/var/lib/buildkite-agent
 ExecStart=/usr/bin/buildkite-agent start
 RestartSec=5
 Restart=on-failure

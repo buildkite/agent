@@ -12,7 +12,7 @@
 # Description:       The Buildkite Build Agent
 ### END INIT INFO
 
-user="root"
+user="buildkite-agent"
 cmd="/usr/bin/buildkite-agent start"
 
 name=`basename $0`
