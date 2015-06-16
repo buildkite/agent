@@ -10,11 +10,10 @@ else
 fi
 
 # Find out whether or not the buildkite-agent user exists
-getent passwd buildkite-agent > /dev/null 2&>1
-if [ $? -eq 0 ]; then
-  BK_USER_EXISTS=true
+if [ -z "$(getent passwd buildkite-agent)" ]; then
+  BK_USER_EXISTS="false"
 else
-  BK_USER_EXISTS=false
+  BK_USER_EXISTS="true"
 fi
 
 echo "OPERATION $OPERATION"
@@ -150,7 +149,13 @@ fi
 # on install
 if [ "$OPERATION" = "install" ] ; then
   if [ "$BK_USER_EXISTS" = "true" ]; then
-    sudo chown -R buildkite-agent:buildkite-agent /var/lib/buildkite-agent /etc/buildkite-agent
+    # Make sure /etc/buildkite-agent is owned by the user
+    chown -R buildkite-agent:buildkite-agent /etc/buildkite-agent
+
+    # Only chown the /var/lib/buildkite-agent folder if it was created
+    if [ ! -d /var/lib/buildkite-agent ]; then
+      chown -R buildkite-agent:buildkite-agent /var/lib/buildkite-agent
+    fi
   fi
 fi
 
