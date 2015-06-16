@@ -138,15 +138,26 @@ func (a *AgentWorker) Ping() {
 		return
 	}
 
-	// Accept the job. We don't bother retrying the accept. It it fails,
-	// the ping will fail, and we'll just try this whole process all over
-	// again.
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
-	accepted, _, err := a.APIClient.Jobs.Accept(ping.Job)
-	if err != nil {
-		logger.Error("Failed to accept the job (%s)", err)
-		return
-	}
+
+	// Accept the job. We'll retry on connection related issues, but if
+	// Buildkite returns a 422 or 500 for example, we'll just bail out,
+	// re-ping, and try the whole process again.
+	var accepted *api.Job
+	retry.Do(func(s *retry.Stats) error {
+		accepted, _, err = a.APIClient.Jobs.Accept(ping.Job)
+
+		if err != nil {
+			if api.IsRetryableError(err) {
+				logger.Warn("%s (%s)", err, s)
+			} else {
+				logger.Warn("Buildkite rejected the call to accept the job (%s)", err)
+				s.Break()
+			}
+		}
+
+		return err
+	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
 
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = JobRunner{

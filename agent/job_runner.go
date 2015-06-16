@@ -176,15 +176,27 @@ func (r *JobRunner) createEnvironment() []string {
 	return envSlice
 }
 
-// Starts the job in the Buildkite Agent API. We don't bother retrying with
-// this call, because if it fails, the agent will just go get another job to
-// work on (which may be the same job, at which point it will try to start it
-// again)
+// Starts the job in the Buildkite Agent API. We'll retry on connection-related
+// issues, but if a connection succeeds and we get an error response back from
+// Buildkite, we won't bother retrying. For example, a "no such host" will
+// retry, but a 422 from Buildkite won't.
 func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.Job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
-	_, err := r.APIClient.Jobs.Start(r.Job)
 
-	return err
+	return retry.Do(func(s *retry.Stats) error {
+		_, err := r.APIClient.Jobs.Start(r.Job)
+
+		if err != nil {
+			if api.IsRetryableError(err) {
+				logger.Warn("%s (%s)", err, s)
+			} else {
+				logger.Warn("Buildkite rejected the call to start the job (%s)", err)
+				s.Break()
+			}
+		}
+
+		return err
+	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
 }
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
