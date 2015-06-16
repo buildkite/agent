@@ -17,6 +17,9 @@ else
   BK_USER_EXISTS=false
 fi
 
+echo "OPERATION $OPERATION"
+echo "BK_USER_EXISTS $BK_USER_EXISTS"
+
 # Add the buildkite user if it doesn't exist on installation
 if [ "$OPERATION" = "install" ] ; then
   if [ "$BK_USER_EXISTS" = "false" ]; then
