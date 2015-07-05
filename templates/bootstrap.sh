@@ -215,7 +215,10 @@ else
   fi
 
   buildkite-run "git clean -fdq"
-  buildkite-run "git submodule foreach --recursive git clean -fdq"
+
+  if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
+    buildkite-run "git submodule foreach --recursive git clean -fdq"
+  fi
 
   buildkite-run "git fetch -q"
 
@@ -232,16 +235,18 @@ else
 
   buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
 
-  # `submodule sync` will ensure the .git/config matches the .gitmodules file.
-  # The command is only available in git version 1.8.1, so if the call fails,
-  # continue the bootstrap script, and show an informative error.
-  buildkite-prompt-and-run "git submodule sync --recursive"
-  if [[ $? -ne 0 ]]; then
-    buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If your using submodules, it's highly recommended you upgrade if you can."
-  fi
+  if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
+    # `submodule sync` will ensure the .git/config matches the .gitmodules file.
+    # The command is only available in git version 1.8.1, so if the call fails,
+    # continue the bootstrap script, and show an informative error.
+    buildkite-prompt-and-run "git submodule sync --recursive"
+    if [[ $? -ne 0 ]]; then
+      buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can."
+    fi
 
-  buildkite-run "git submodule update --init --recursive"
-  buildkite-run "git submodule foreach --recursive git reset --hard"
+    buildkite-run "git submodule update --init --recursive"
+    buildkite-run "git submodule foreach --recursive git reset --hard"
+  fi
 
   # Grab author and commit information and send it back to Buildkite
   buildkite-debug "~~~ Saving Git information"
