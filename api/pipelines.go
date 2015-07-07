@@ -2,12 +2,10 @@ package api
 
 import (
 	"bytes"
-	"crypto/sha1"
 	"fmt"
 	"mime"
 	"mime/multipart"
 	"path/filepath"
-	"time"
 )
 
 // PipelinesService handles communication with the pipeline related methods of the
@@ -18,6 +16,7 @@ type PipelinesService struct {
 
 // Pipeline represents a Buildkite Agent API Pipeline
 type Pipeline struct {
+	UUID     string
 	Data     []byte
 	FileName string
 }
@@ -48,10 +47,8 @@ func (cs *PipelinesService) Upload(jobId string, pipeline *Pipeline) (*Response,
 	// The pipeline upload endpoint requires a way for it to uniquely
 	// identify this upload (because it's an idempotent endpoint). If a job
 	// tries to upload a pipeline that matches a previously uploaded one
-	// with a matching id, then it'll just return and not do anything.
-	h := sha1.New()
-	h.Write([]byte(time.Now().String()))
-	writer.WriteField("id", fmt.Sprintf("%x", h.Sum(nil)))
+	// with a matching uuid, then it'll just return and not do anything.
+	writer.WriteField("uuid", pipeline.UUID)
 
 	// Close the writer because we don't need to add any more values to it
 	err := writer.Close()

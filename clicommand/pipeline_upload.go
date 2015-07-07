@@ -104,9 +104,14 @@ var PipelineUploadCommand = cli.Command{
 			Token:    cfg.AgentAccessToken,
 		}.Create()
 
+		// Generate a UUID that will identifiy this pipeline change. We
+		// do this outside of the retry loop because we want this UUID
+		// to be the same for each attempt at updating the pipeline.
+		uuid := api.NewUUID()
+
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{Data: input, FileName: filename})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: input, FileName: filename})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
