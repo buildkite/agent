@@ -269,7 +269,7 @@ func (p *Process) Kill() error {
 }
 
 func (p *Process) signal(sig os.Signal) error {
-	if p.command != nil {
+	if p.command != nil && p.command.Process != nil {
 		logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
 		err := p.command.Process.Signal(syscall.SIGTERM)
