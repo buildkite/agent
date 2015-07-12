@@ -169,8 +169,8 @@ var AgentStartCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		// Force some settings if on Windows
-		if runtime.GOOS != "windows" {
+		// Force some settings if on Windows (these aren't supported yet)
+		if runtime.GOOS == "windows" {
 			cfg.NoAutoSSHFingerprintVerification = true
 			cfg.NoPTY = true
 			cfg.NoCommandEval = true
