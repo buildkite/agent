@@ -58,26 +58,18 @@ func (a *AgentWorker) Start() error {
 	a.running = true
 
 	// Create the intervals we'll be using
-	pingInterval := 5 * time.Second
-	heartbeatInterval := 30 * time.Second
+	pingInterval := time.Second * time.Duration(a.Agent.PingInterval)
+	heartbeatInterval := time.Second * time.Duration(a.Agent.HearbeatInterval)
 
-	// Setup the heartbeat runner
+	// Setup and start the heartbeater
 	go func() {
 		// Keep the heartbeat running as long as the agent is
 		for a.running {
-			// Retry the heartbeat a few times
-			err := retry.Do(func(s *retry.Stats) error {
-				_, _, err := a.APIClient.Heartbeats.Beat()
-				if err != nil {
-					logger.Warn("%s (%s)", err, s)
-				}
-				return err
-			}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+			err := a.Heartbeat()
 			if err != nil {
 				logger.Error("Failed to heartbeat %s. Will try again in %s", err, heartbeatInterval)
 			}
 
-			// Wait for x to heartbeat again
 			time.Sleep(heartbeatInterval)
 		}
 	}()
@@ -148,6 +140,28 @@ func (a *AgentWorker) Connect() error {
 
 		return err
 	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+}
+
+// Performs a heatbeat
+func (a *AgentWorker) Heartbeat() error {
+	var beat *api.Heartbeat
+	var err error
+
+	// Retry the heartbeat a few times
+	err = retry.Do(func(s *retry.Stats) error {
+		beat, _, err = a.APIClient.Heartbeats.Beat()
+		if err != nil {
+			logger.Warn("%s (%s)", err, s)
+		}
+		return err
+	}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+
+	if err != nil {
+		return err
+	}
+
+	logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
+	return nil
 }
 
 // Performs a ping, which returns what action the agent should take next.

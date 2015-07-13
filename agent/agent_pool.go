@@ -44,6 +44,9 @@ func (r *AgentPool) Start() error {
 
 	logger.Info("Successfully registered agent \"%s\" with meta-data %s", registered.Name, registered.MetaData)
 
+	logger.Debug("Ping interval: %ds", registered.PingInterval)
+	logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
+
 	// Now that we have a registereted agent, we can connect it to the API,
 	// and start running jobs.
 	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint}.Create()

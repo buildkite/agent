@@ -12,6 +12,8 @@ type Agent struct {
 	AccessToken       string   `json:"access_token"`
 	Hostname          string   `json:"hostname"`
 	Endpoint          string   `json:"endpoint"`
+	PingInterval      int      `json:"ping_interval"`
+	HearbeatInterval  int      `json:"heartbeat_interval"`
 	OS                string   `json:"os"`
 	ScriptEvalEnabled bool     `json:"script_eval_enabled"`
 	Priority          string   `json:"priority,omitempty"`
