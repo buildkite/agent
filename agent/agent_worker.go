@@ -22,6 +22,9 @@ type AgentWorker struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
 
+	// Whether or not the agent is running
+	running bool
+
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
 
@@ -51,8 +54,36 @@ func (a AgentWorker) Create() AgentWorker {
 
 // Starts the agent worker
 func (a *AgentWorker) Start() error {
+	// Mark the agent as running
+	a.running = true
+
+	// Create the intervals we'll be using
+	pingInterval := 5 * time.Second
+	heartbeatInterval := 30 * time.Second
+
+	// Setup the heartbeat runner
+	go func() {
+		// Keep the heartbeat running as long as the agent is
+		for a.running {
+			// Retry the heartbeat a few times
+			err := retry.Do(func(s *retry.Stats) error {
+				_, _, err := a.APIClient.Heartbeats.Beat()
+				if err != nil {
+					logger.Warn("%s (%s)", err, s)
+				}
+				return err
+			}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+			if err != nil {
+				logger.Error("Failed to heartbeat %s. Will try again in %s", err, heartbeatInterval)
+			}
+
+			// Wait for x to heartbeat again
+			time.Sleep(heartbeatInterval)
+		}
+	}()
+
 	// Create the ticker and stop channels
-	a.ticker = time.NewTicker(5 * time.Second)
+	a.ticker = time.NewTicker(pingInterval)
 	a.stop = make(chan struct{})
 
 	// Continue this loop until the the ticker is stopped, and we received
@@ -68,6 +99,9 @@ func (a *AgentWorker) Start() error {
 			return nil
 		}
 	}
+
+	// Mark the agent as not running anymore
+	a.running = false
 
 	return nil
 }
