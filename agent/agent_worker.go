@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -23,7 +24,11 @@ type AgentWorker struct {
 
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
-	stop   chan struct{}
+
+	// Stop controls
+	stop      chan struct{}
+	stopping  bool
+	stopMutex sync.Mutex
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
@@ -70,7 +75,15 @@ func (a *AgentWorker) Start() error {
 // Stops the agent from accepting new work and cancels any current work it's
 // running
 func (a *AgentWorker) Stop() {
-	logger.Debug("Stopping the agent...")
+	// Only allow one stop to run at a time (because we're playing with channels)
+	a.stopMutex.Lock()
+
+	if a.stopping {
+		logger.Debug("Agent is already stopping...")
+		return
+	} else {
+		logger.Debug("Stopping the agent...")
+	}
 
 	// If ther'es a running job, kill it.
 	if a.jobRunner != nil {
@@ -82,6 +95,12 @@ func (a *AgentWorker) Stop() {
 	if a.ticker != nil {
 		close(a.stop)
 	}
+
+	// Mark the agent as stopping
+	a.stopping = true
+
+	// Unlock the stop mutex
+	a.stopMutex.Unlock()
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
