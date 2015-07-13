@@ -23,7 +23,7 @@ type AgentWorker struct {
 
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
-	stop   chan bool
+	stop   chan struct{}
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
@@ -48,7 +48,7 @@ func (a AgentWorker) Create() AgentWorker {
 func (a *AgentWorker) Start() error {
 	// Create the ticker and stop channels
 	a.ticker = time.NewTicker(5 * time.Second)
-	a.stop = make(chan bool, 1)
+	a.stop = make(chan struct{})
 
 	// Continue this loop until the the ticker is stopped, and we received
 	// a message on the stop channel.
@@ -59,6 +59,7 @@ func (a *AgentWorker) Start() error {
 		case <-a.ticker.C:
 			continue
 		case <-a.stop:
+			a.ticker.Stop()
 			return nil
 		}
 	}
@@ -69,6 +70,8 @@ func (a *AgentWorker) Start() error {
 // Stops the agent from accepting new work and cancels any current work it's
 // running
 func (a *AgentWorker) Stop() {
+	logger.Debug("Stopping the agent...")
+
 	// If ther'es a running job, kill it.
 	if a.jobRunner != nil {
 		a.jobRunner.Kill()
@@ -77,8 +80,7 @@ func (a *AgentWorker) Stop() {
 	// If we have a ticker, stop it, and send a signal to the stop channel,
 	// which will cause the agent worker to stop looping immediatly.
 	if a.ticker != nil {
-		a.stop <- true
-		a.ticker.Stop()
+		close(a.stop)
 	}
 }
 
