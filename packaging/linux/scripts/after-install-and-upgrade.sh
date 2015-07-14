@@ -1,11 +1,3 @@
-#!/bin/bash
-
-# Ensure command pipes fail if any command fails (e.g. fail-cmd | success-cmd == fail)
-set -o pipefail
-
-# If a command fails, don't exit, just keep on truckin'
-set +e
-
 # $1 will be the version being upgraded from if this is an upgrade
 if [ "$1" = "" ] ; then
   OPERATION="install"

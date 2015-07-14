@@ -1,7 +1,3 @@
-#!/bin/sh
-
-set -e
-
 if command -v systemctl > /dev/null; then
   echo "Stopping buildkite-agent systemd service"
 

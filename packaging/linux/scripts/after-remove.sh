@@ -1,7 +1,3 @@
-#!/bin/sh
-
-set -e
-
 # Remove the system service we installed
 if command -v systemctl > /dev/null; then
   rm -f /lib/systemd/system/buildkite-agent.service
