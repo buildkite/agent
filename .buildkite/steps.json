@@ -119,6 +119,19 @@
   },
   {
     "type": "script",
+    "name": ":redhat: stable",
+    "command": "scripts/rpm-package.sh",
+    "artifact_paths": "rpm/**/*",
+    "branch_configuration": "master",
+    "env": {
+      "CODENAME": "stable"
+    },
+    "agent_query_rules": [
+      "queue=deploy"
+    ]
+  },
+  {
+    "type": "script",
     "name": ":debian: stable",
     "command": "scripts/debian-package.sh",
     "branch_configuration": "master",
