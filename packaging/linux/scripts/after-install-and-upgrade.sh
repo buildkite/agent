@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -46,8 +46,17 @@ if [ ! -d /etc/buildkite-agent/hooks ]; then
   cp -r /usr/share/buildkite-agent/hooks /etc/buildkite-agent
 fi
 
+# Check if the system is Ubuntu 14.10. Systemd is broken on this release, so if
+# even if systemd exists on that system, skip using it.
+command -v lsb_release > /dev/null && lsb_release -d | grep -q "Ubuntu 14.10"
+BK_IS_UBUNTU_14_10=$?
+
+# Check if systemd exists
+command -v systemctl > /dev/null
+BK_SYSTEMD_EXITS=$?
+
 # Install the relevant system process
-if command -v systemctl > /dev/null; then
+if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
   if [ ! -f /lib/systemd/system/buildkite-agent.service ]; then
     cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
   fi
