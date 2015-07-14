@@ -19,6 +19,7 @@ type Pipeline struct {
 	UUID     string
 	Data     []byte
 	FileName string
+	Replace  bool
 }
 
 // Uploads the pipeline to the Buildkite Agent API. This request doesn't use JSON,
@@ -43,6 +44,9 @@ func (cs *PipelinesService) Upload(jobId string, pipeline *Pipeline) (*Response,
 	// Write the pipeline to the form
 	part, _ := createFormFileWithContentType(writer, "pipeline", fileName, contentType)
 	part.Write([]byte(pipeline.Data))
+
+	// Add the replace option
+	writer.WriteField("replace", fmt.Sprintf("%t", pipeline.Replace))
 
 	// The pipeline upload endpoint requires a way for it to uniquely
 	// identify this upload (because it's an idempotent endpoint). If a job

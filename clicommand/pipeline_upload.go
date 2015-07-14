@@ -33,6 +33,7 @@ Example:
 
 type PipelineUploadConfig struct {
 	FilePath         string `cli:"arg:0" label:"upload paths"`
+	Replace          bool   `cli:"replace"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -43,9 +44,14 @@ type PipelineUploadConfig struct {
 
 var PipelineUploadCommand = cli.Command{
 	Name:        "upload",
-	Usage:       "Upload a description of the build pipleine and change the running build",
+	Usage:       "Uploads a description of a build pipleine adds it to the currently running build after the current job.",
 	Description: PipelineUploadHelpDescription,
 	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:   "replace",
+			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
+			EnvVar: "BUILDKITE_PIPELINE_REPLACE",
+		},
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
@@ -111,7 +117,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: input, FileName: filename})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: input, FileName: filename, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
