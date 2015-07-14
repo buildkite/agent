@@ -22,13 +22,13 @@ if [ "$OPERATION" = "install" ] ; then
     # Create the buildkite system user and set it's home to /var/lib/buildkite
     useradd --system --no-create-home -d /var/lib/buildkite-agent buildkite-agent
 
-    # We create it's home folder in a seperate command so it doesn't blow up if
-    # the folder already exists
-    mkdir -p /var/lib/buildkite-agent
-
     # The user exists now!
     BK_USER_EXISTS=true
   fi
+
+  # We create it's home folder in a seperate command so it doesn't blow up if
+  # the folder already exists
+  mkdir -p /var/lib/buildkite-agent
 fi
 
 # Create the /etc/buildkite-agent folder if it's not there
