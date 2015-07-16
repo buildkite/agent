@@ -1,12 +1,50 @@
 #!/bin/bash
 #
-# You can install the Buildkite Agent with the following:
-#
-#   bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh`"
+# This is the installer for the Buildkite Agent.
 #
 # For more information, see: https://github.com/buildkite/agent
 
 set -e
+
+COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh\`\""
+
+echo -e "\033[33m
+  _           _ _     _ _    _ _                                _
+ | |         (_) |   | | |  (_) |                              | |
+ | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
+ | '_ \| | | | | |/ _\` | |/ / | __/ _ \  / _\` |/ _\` |/ _ \ '_ \| __|
+ | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
+ |_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
+                                                __/ |
+                                               |___/\033[0m"
+
+echo -e "Finding latest release..."
+
+UNAME=`uname -sp | awk '{print tolower($0)}'`
+
+if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
+  PLATFORM="darwin"
+else
+  PLATFORM="linux"
+fi
+
+if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]; then
+  ARCH="amd64"
+else
+  ARCH="386"
+fi
+
+RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?prerelease=true&platform=$PLATFORM&arch=$ARCH"
+
+if command -v wget >/dev/null; then
+  LATEST_RELEASE=$(wget -qO- $RELEASE_INFO_URL)
+else
+  LATEST_RELEASE=$(curl -s $RELEASE_INFO_URL)
+fi
+
+VERSION=$(echo "$LATEST_RELEASE"      | awk -F= '/version=/  { print $2 }')
+DOWNLOAD_FILENAME=$(echo "$LATEST_RELEASE"     | awk -F= '/filename=/ { print $2 }')
+DOWNLOAD_URL=$(echo "$LATEST_RELEASE" | awk -F= '/url=/      { print $2 }')
 
 function buildkite-download {
   BUILDKITE_DOWNLOAD_TMP_FILE="/tmp/buildkite-download-$$.txt"
@@ -26,155 +64,111 @@ function buildkite-download {
   fi
 }
 
-COMMAND="bash -c \"\`curl -sL https://raw.githubusercontent.com/buildkite/agent/master/install.sh\`\""
+echo -e "Installing Version: \033[35mv$VERSION\033[0m"
 
-if [ "$BETA" = "true" ]
-then
-  BETA_URL="https://raw.githubusercontent.com/buildkite/agent/master/install-beta.sh"
-  BETA_INSTALLER="/tmp/buildkite-install-beta-$$.sh"
+# Default the destination folder
+: ${DESTINATION:="$HOME/.buildkite-agent"}
 
-  echo -e "Downloading and running the beta installer from:\n$BETA_URL"
+# If they have a $HOME/.buildkite folder, rename it to `buildkite-agent` and
+# symlink back to the old one. Since we changed the name of the folder, we
+# don't want any scripts that the user has written that may reference
+# ~/.buildkite to break.
+if [[ -d "$HOME/.buildkite" && ! -d "$HOME/.buildkite-agent" ]]; then
+  mv "$HOME/.buildkite" "$HOME/.buildkite-agent"
+  ln -s "$HOME/.buildkite-agent" "$HOME/.buildkite"
 
-  buildkite-download $BETA_URL $BETA_INSTALLER
-
-  chmod +x $BETA_INSTALLER
-  . $BETA_INSTALLER
-
-  exit 0
+  echo ""
+  echo "======================= IMPORTANT UPGRADE NOTICE =========================="
+  echo ""
+  echo "Hey!"
+  echo ""
+  echo "Sorry to be a pain, but we've renamed ~/.buildkite to ~/.buildkite-agent"
+  echo ""
+  echo "I've renamed your .buildkite folder to .buildkite-agent, and created a symlink"
+  echo "from the old location to the new location, just in case you had any scripts that"
+  echo "referenced the previous location."
+  echo ""
+  echo "If you have any questions, feel free to email me at: keith@buildkite.com"
+  echo ""
+  echo "~ Keith"
+  echo ""
+  echo "=========================================================================="
+  echo ""
 fi
 
-LATEST_VERSION="0.2"
+mkdir -p $DESTINATION
 
-if [ ! -z "$VERSION" ]; then
-  echo "Sorry, we don't support specifying installation versions anymore via the \$VERSION variable."
-  echo "Please remove it and run this command again to install v$LATEST_VERSION"
-  exit 1
-fi
-
-VERSION=$LATEST_VERSION
-
-echo -e "\033[33m
-
-  _           _ _     _ _    _ _                                _
- | |         (_) |   | | |  (_) |                              | |
- | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_
- | '_ \| | | | | |/ _\` | |/ / | __/ _ \  / _\` |/ _\` |/ _ \ '_ \| __|
- | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_
- |_.__/ \__,_|_|_|\__,_|_|\_\_|\__\___|  \__,_|\__, |\___|_| |_|\__|
-                                                __/ |
-                                               |___/\033[0m
-
-\033[1;32m> RENAME NOTICE
->
-> We’ve just changed our company name from Buildbox to Buildkite, so don’t be
-> confused if you see the word “buildbox” in the instructions below. The next
-> version of buildbox-agent will be renamed to buildkite-agent, and we’ll be
-> releasing upgrade instructions when it’s released. In the mean time, just use
-> the instructions below. You can read more about the rename on the blog.
-> https://buildkite.com/blog/introducing-our-new-name\033[0m
-
-Installing Version: \033[35mv$VERSION\033[0m"
-
-UNAME=`uname -sp | awk '{print tolower($0)}'`
-
-if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]
-then
-  PLATFORM="darwin"
-else
-  PLATFORM="linux"
-fi
-
-if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]
-then
-  ARCH="amd64"
-else
-  ARCH="386"
-fi
-
-# Allow custom setting of the destination
-if [ -z "$DESTINATION" ]; then
-  # But default to the home directory
-  DESTINATION="$HOME/.buildbox"
-  mkdir -p $DESTINATION
-fi
-
-if [ ! -w "$DESTINATION" ]
-then
+if [[ ! -w "$DESTINATION" ]]; then
   echo -e "\n\033[31mUnable to write to destination \`$DESTINATION\`\n\nYou can change the destination by running:\n\nDESTINATION=/my/path $COMMAND\033[0m\n"
   exit 1
 fi
 
 echo -e "Destination: \033[35m$DESTINATION\033[0m"
 
-# Download and unzip the file to the destination
-DOWNLOAD="buildbox-agent-$PLATFORM-$ARCH.tar.gz"
-URL="https://github.com/buildkite/agent/releases/download/v$VERSION/$DOWNLOAD"
-echo -e "\nDownloading $URL"
+echo -e "Downloading $DOWNLOAD_URL"
 
-# Remove the download if it already exists
-rm -f $DESTINATION/$DOWNLOAD
+# Create a temporary folder to download the binary to
+INSTALL_TMP=/tmp/buildkite-agent-install-$$
+mkdir -p $INSTALL_TMP
 
-# If the file already exists in a folder called pkg, just use that. :)
-if [[ -e pkg/$DOWNLOAD ]]
-then
-  cp pkg/$DOWNLOAD $DESTINATION/$DOWNLOAD
+# If the file already exists in a folder called releases. This is useful for
+# local testing of this file.
+if [[ -e releases/$DOWNLOAD ]]; then
+  echo "Using existing release: releases/$DOWNLOAD_FILENAME"
+  cp releases/$DOWNLOAD_FILENAME $INSTALL_TMP
 else
-  buildkite-download "$URL" "$DESTINATION/$DOWNLOAD"
+  buildkite-download "$DOWNLOAD_URL" "$INSTALL_TMP/$DOWNLOAD_FILENAME"
 fi
 
-# Extract the download to the destination folder
-tar -C $DESTINATION -zxf $DESTINATION/$DOWNLOAD
+# Extract the download to a tmp folder inside the $DESTINATION
+# folder
+tar -C $INSTALL_TMP -zxf $INSTALL_TMP/$DOWNLOAD_FILENAME
 
-INSTALLED_VERSION=`$DESTINATION/buildbox-agent --version`
+# Move the buildkite binary into a bin folder
+mkdir -p $DESTINATION/bin
+mv $INSTALL_TMP/buildkite-agent $DESTINATION/bin
+chmod +x $DESTINATION/bin/buildkite-agent
 
-chmod +x $DESTINATION/buildbox-*
+# Copy the latest config file as dist
+mv $INSTALL_TMP/buildkite-agent.cfg $DESTINATION/buildkite-agent.dist.cfg
 
-# Clean up the download
-rm -f $DESTINATION/$DOWNLOAD
-
-# Copy the bootstrap sample and make sure it's writable
-if [[ -e $DESTINATION/bootstrap.sh ]]
-then
-  echo -e "\n\033[34mSkipping bootstrap.sh installation as it already exists\033[0m"
+# Copy the config file if it doesn't exist
+if [[ -f $DESTINATION/buildkite-agent.cfg ]]; then
+  echo -e "\n\033[36mIgnoring existing buildkite-agent.cfg (see buildkite-agent.dist.cfg for the latest version)\033[0m"
 else
-  BOOTSTRAP_URL=https://raw.githubusercontent.com/buildkite/agent/master/templates/0.2/bootstrap.sh
-  BOOTSTRAP_DESTINATION=$DESTINATION/bootstrap.sh
+  echo -e "\n\033[36mA default buildkite-agent.cfg has been created for you in $DESTINATION\033[0m"
 
-  echo -e "Downloading $BOOTSTRAP_URL"
+  cp $DESTINATION/buildkite-agent.dist.cfg $DESTINATION/buildkite-agent.cfg
 
-  buildkite-download "$BOOTSTRAP_URL" "$BOOTSTRAP_DESTINATION"
+  # Set their token for them
+  if [[ -n $TOKEN ]]; then
+    # Need "-i ''" for Mac OS X
+    sed -i '' "s/token=\"xxx\"/token=\"$TOKEN\"/g" $DESTINATION/buildkite-agent.cfg
+  else
+    echo -e "\n\033[36mDon't forget to update the config with your agent token! You can find it token on your \"Agents\" page in Buildkite\033[0m"
+  fi
+fi
 
+# Copy the hook samples
+mkdir -p $DESTINATION/hooks
+mv $INSTALL_TMP/hooks/*.sample $DESTINATION/hooks
+
+function buildkite-copy-bootstrap {
+  mv $INSTALL_TMP/bootstrap.sh $DESTINATION
   chmod +x $DESTINATION/bootstrap.sh
-fi
+}
 
-# Allow custom setting of the version
-if [ -z "$TOKEN" ]; then
-  TOKEN="token123"
-fi
+buildkite-copy-bootstrap
 
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
-You can now run the Buildkite agent like so:
+You can now start the agent!
 
-  $DESTINATION/buildbox-agent start --access-token $TOKEN
+  $DESTINATION/bin/buildkite-agent start
 
-You can find your agent's Access Token on your Account Settings
-page under \"Agents\".
+For docs, help and support:
 
-To customize how builds are run on your server, you can edit:
+  https://buildkite.com/docs/agent
 
-  $DESTINATION/bootstrap.sh
-
-This file is run for every build and it's responsible for checking out
-the source code and running the build script.
-
-The source code of the agent is available here:
-
-  https://github.com/buildkite/agent
-
-If you have any questions or need a hand getting things setup,
-please email us at: hello@buildkite.com
-
-Happy Building!
-
-<3 Buildkite"
+Happy building! <3
+"
