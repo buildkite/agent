@@ -34,7 +34,7 @@ else
   ARCH="386"
 fi
 
-RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?prerelease=true&platform=$PLATFORM&arch=$ARCH"
+RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH"
 
 if command -v wget >/dev/null; then
   LATEST_RELEASE=$(wget -qO- $RELEASE_INFO_URL)
