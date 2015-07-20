@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-if [[ ${#} -lt 3 ]]
+if [[ ${#} -lt 4 ]]
 then
-  echo "Usage: ${0} [type] [arch] [binary]" >&2
+  echo "Usage: ${0} [type] [arch] [binary] [version]" >&2
   exit 1
 fi
 
@@ -14,6 +14,7 @@ function info {
 PACKAGE_TYPE=${1}
 BUILD_ARCH=${2}
 BUILD_BINARY_PATH=${3}
+VERSION=${4}
 
 NAME="buildkite-agent"
 MAINTAINER="dev@buildkite.com"
@@ -21,10 +22,6 @@ URL="https://buildkite.com/agent"
 DESCRIPTION="The Buildkite Agent is an open-source toolkit written in Golang for securely running build jobs on any device or network"
 LICENCE="MIT"
 VENDOR="Buildkite"
-
-# Grab the version from the binary. The version spits out as: buildkite-agent
-# version 1.0-beta.6 We cut out the 'buildkite-agent version ' part of it.
-VERSION=$($BUILD_BINARY_PATH --version | sed 's/buildkite-agent version //')
 
 if [ "$BUILD_ARCH" == "amd64" ]; then
   ARCH="x86_64"

@@ -1,14 +1,18 @@
 #!/bin/bash
 set -e
 
-echo $PATH
-whoami
-env
-
 if [[ "$CODENAME" == "" ]]; then
   echo "Error: Missing \$CODENAME (stable or unstable)"
   exit 1
 fi
+
+echo '--- Getting agent version from build meta data'
+
+export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+
+echo "Full agent version: $FULL_AGENT_VERSION"
+echo "Agent version: $AGENT_VERSION"
 
 YUM_TMP_PATH=/var/tmp/buildkite-agent-yum-repo
 
@@ -24,7 +28,7 @@ function build() {
   chmod +x $BINARY_FILENAME
 
   # Build the rpm package using the architectre and binary, they are saved to rpm/
-  ./scripts/utils/build-linux-package.sh "rpm" $2 $BINARY_FILENAME
+  ./scripts/utils/build-linux-package.sh "rpm" $2 $BINARY_FILENAME $AGENT_VERSION
 }
 
 function publish() {
