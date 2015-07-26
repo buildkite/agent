@@ -31,6 +31,11 @@ type Artifact struct {
 	}
 }
 
+type ArtifactBatch struct {
+	UUID      string      `json:"uuid"`
+	Artifacts []*Artifact `json:"artifacts"`
+}
+
 // ArtifactSearchOptions specifies the optional parameters to the
 // ArtifactsService.Search method.
 type ArtifactSearchOptions struct {
@@ -39,21 +44,21 @@ type ArtifactSearchOptions struct {
 }
 
 // Accepts a slice of artifacts, and creates them on Buildkite as a batch.
-func (as *ArtifactsService) Create(jobId string, artifacts []*Artifact) ([]*Artifact, *Response, error) {
+func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*ArtifactBatch, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 
-	req, err := as.client.NewRequest("POST", u, artifacts)
+	req, err := as.client.NewRequest("POST", u, batch)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	a := []*Artifact{}
-	resp, err := as.client.Do(req, &a)
+	b := new(ArtifactBatch)
+	resp, err := as.client.Do(req, b)
 	if err != nil {
 		return nil, resp, err
 	}
 
-	return a, resp, err
+	return b, resp, err
 }
 
 // Updates a paticular artifact
