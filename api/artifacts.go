@@ -20,7 +20,17 @@ type Artifact struct {
 	FileSize     int64  `json:"file_size"`
 	Sha1Sum      string `json:"sha1sum"`
 	URL          string `json:"url,omitempty"`
-	Uploader     struct {
+}
+
+type ArtifactBatch struct {
+	UUID      string      `json:"uuid"`
+	Artifacts []*Artifact `json:"artifacts"`
+}
+
+type ArtifactBatchUploadInstructions struct {
+	UUID          string   `json:"uuid"`
+	ArtifactUUIDs []string `json:"artifact_uuids"`
+	Instructions  struct {
 		Data   map[string]string `json: "data"`
 		Action struct {
 			URL       string `json:"url,omitempty"`
@@ -29,11 +39,6 @@ type Artifact struct {
 			FileInput string `json:"file_input"`
 		}
 	}
-}
-
-type ArtifactBatch struct {
-	UUID      string      `json:"uuid"`
-	Artifacts []*Artifact `json:"artifacts"`
 }
 
 // ArtifactSearchOptions specifies the optional parameters to the
