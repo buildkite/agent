@@ -453,6 +453,12 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
     echo "^^^ +++"
     exit 1
   fi
+  
+  # Run the per-checkout `post-artifact` hook
+  buildkite-local-hook "post-artifact"
+
+  # Run the global `post-artifact` hook
+  buildkite-global-hook "post-artifact"
 fi
 
 # Be sure to exit this script with the same exit status that the users build
