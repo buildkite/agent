@@ -12,6 +12,9 @@ function build-binary {
   ./scripts/utils/build-binary.sh $1 $2 $BUILDKITE_BUILD_NUMBER
 }
 
+echo '--- Setting up GOPATH'
+export GOPATH="$(pwd)/_vendor:$GOPATH"
+
 echo '--- Installing dependencies'
 godep restore
 

@@ -3,8 +3,8 @@ pkg
 releases
 deb
 rpm
+vendor/bundle
 .vagrant
 .bundle
 .envrc
-vendor/bundle
 .agent.conf
