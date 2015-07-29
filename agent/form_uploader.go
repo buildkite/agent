@@ -11,7 +11,6 @@ import (
 	"errors"
 	"net/url"
 	"os"
-	"path/filepath"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -87,10 +86,10 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 		}
 	}
 
-	// It's important that we add the form field last because when uploading to an S3
-	// form, they are really nit-picky about the field order, and the file needs to be
-	// the last one other it doesn't work.
-	part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, filepath.Base(artifact.AbsolutePath))
+	// It's important that we add the form field last because when
+	// uploading to an S3 form, they are really nit-picky about the field
+	// order, and the file needs to be the last one other it doesn't work.
+	part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, artifact.Path)
 	if err != nil {
 		return nil, err
 	}
