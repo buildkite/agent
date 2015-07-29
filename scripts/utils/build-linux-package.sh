@@ -70,7 +70,7 @@ bundle exec fpm -s "dir" \
   --after-upgrade "packaging/linux/scripts/after-install-and-upgrade.sh" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
-  -iteration "$REVISION" \
+  --iteration "$REVISION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
   "templates/bootstrap.sh=/usr/share/buildkite-agent/bootstrap.sh" \
   "packaging/linux/root/=/"

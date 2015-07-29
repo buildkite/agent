@@ -28,11 +28,13 @@ function to_json {
 
 echo '--- Getting agent version from build meta data'
 
-export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-export AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
+export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
+echo "Build version: $BUILD_VERSION"
 
 BINARY_NAME=buildkite-agent-darwin-386-$AGENT_VERSION.tar.gz
 
