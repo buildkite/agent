@@ -2,11 +2,9 @@ package agent
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/ErikDubbelboer/gspt"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
@@ -284,14 +282,5 @@ func (a *AgentWorker) Disconnect() error {
 }
 
 func (a *AgentWorker) UpdateProcTitle(action string) {
-	title := fmt.Sprintf("buildkite-agent v%s (%s) [%s]", Version(), a.Agent.Name, action)
-	length := len(title)
-
-	if length >= 255 {
-		length = 255
-		gspt.SetProcTitle(title[:255])
-	} else {
-		title += strings.Repeat(" ", 255-length)
-		gspt.SetProcTitle(title)
-	}
+	SetProcTitle(fmt.Sprintf("buildkite-agent v%s (%s) [%s]", Version(), a.Agent.Name, action))
 }
