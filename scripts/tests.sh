@@ -5,8 +5,5 @@ echo '--- Setting up GOPATH'
 export GOPATH="$GOPATH:$(pwd)/vendor"
 echo $GOPATH
 
-echo '--- Running golint'
-make lint
-
 echo '--- Running tests'
-make test
+go list ./... | sed '/vendor/d' | PATH=$TEMPDIR:$PATH xargs -n1 go test
