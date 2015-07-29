@@ -21,7 +21,7 @@ type ArtifactBatchCreator struct {
 
 func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 	length := len(a.Artifacts)
-	chunks := 10
+	chunks := 30
 
 	// Split into the artifacts into chunks so we're not uploading a ton of
 	// files at once.
