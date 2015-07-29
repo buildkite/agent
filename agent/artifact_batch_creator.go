@@ -22,7 +22,6 @@ type ArtifactBatchCreator struct {
 func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 	length := len(a.Artifacts)
 	chunks := 10
-	uploaded := []*api.Artifact{}
 
 	// Split into the artifacts into chunks so we're not uploading a ton of
 	// files at once.
@@ -32,22 +31,25 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 			j = length
 		}
 
-		// A UUID is required so Buildkite can ensure this create
-		// operation is idompotent (if we try and upload the same UUID
+		// The artifacts that will be uploaded in this chunk
+		theseArtiacts := a.Artifacts[i:j]
+
+		// An ID is required so Buildkite can ensure this create
+		// operation is idompotent (if we try and upload the same ID
 		// twice, it'll just return the previous data and skip the
 		// upload)
-		batch := &api.ArtifactBatch{api.NewUUID(), a.Artifacts[i:j]}
+		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts}
 
 		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
-		var b *api.ArtifactBatch
-		var err error
+		var creation *api.ArtifactBatchCreateResponse
 		var resp *api.Response
+		var err error
 
 		// Retry the batch upload a couple of times
 		err = retry.Do(func(s *retry.Stats) error {
-			b, resp, err = a.APIClient.Artifacts.Create(a.JobID, batch)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
+			creation, resp, err = a.APIClient.Artifacts.Create(a.JobID, batch)
+			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 500) {
 				s.Break()
 			}
 			if err != nil {
@@ -56,12 +58,20 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+
+		// Did the batch creation eventually fail?
 		if err != nil {
 			return nil, err
 		}
 
-		uploaded = append(uploaded, b.Artifacts...)
+		// Save the id and instructions to each artifact
+		index := 0
+		for _, id := range creation.ArtifactIDs {
+			theseArtiacts[index].ID = id
+			theseArtiacts[index].UploadInstructions = creation.UploadInstructions
+			index += 1
+		}
 	}
 
-	return uploaded, nil
+	return a.Artifacts, nil
 }

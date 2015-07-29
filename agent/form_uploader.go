@@ -80,7 +80,7 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 	writer := multipart.NewWriter(body)
 
 	// Set the post data for the request
-	for key, val := range artifact.Uploader.Data {
+	for key, val := range artifact.UploadInstructions.Data {
 		err = writer.WriteField(key, val)
 		if err != nil {
 			return nil, err
@@ -90,7 +90,7 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 	// It's important that we add the form field last because when uploading to an S3
 	// form, they are really nit-picky about the field order, and the file needs to be
 	// the last one other it doesn't work.
-	part, err := writer.CreateFormFile(artifact.Uploader.Action.FileInput, filepath.Base(artifact.AbsolutePath))
+	part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, filepath.Base(artifact.AbsolutePath))
 	if err != nil {
 		return nil, err
 	}
@@ -106,15 +106,15 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 	}
 
 	// Create the URL that we'll send data to
-	uri, err := url.Parse(artifact.Uploader.Action.URL)
+	uri, err := url.Parse(artifact.UploadInstructions.Action.URL)
 	if err != nil {
 		return nil, err
 	}
 
-	uri.Path = artifact.Uploader.Action.Path
+	uri.Path = artifact.UploadInstructions.Action.Path
 
 	// Create the request
-	req, err := http.NewRequest(artifact.Uploader.Action.Method, uri.String(), body)
+	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), body)
 	if err != nil {
 		return nil, err
 	}

@@ -12,33 +12,36 @@ type ArtifactsService struct {
 
 // Artifact represents an artifact on the Buildkite Agent API
 type Artifact struct {
-	ID           string `json:"id,omitempty"`
-	State        string `json:"state,omitempty"`
-	Path         string `json:"path"`
-	AbsolutePath string `json:"absolute_path"`
-	GlobPath     string `json:"glob_path"`
-	FileSize     int64  `json:"file_size"`
-	Sha1Sum      string `json:"sha1sum"`
-	URL          string `json:"url,omitempty"`
+	ID                 string                      `json:"-"`
+	State              string                      `json:"state,omitempty"`
+	Path               string                      `json:"path"`
+	AbsolutePath       string                      `json:"absolute_path"`
+	GlobPath           string                      `json:"glob_path"`
+	FileSize           int64                       `json:"file_size"`
+	Sha1Sum            string                      `json:"sha1sum"`
+	URL                string                      `json:"url,omitempty"`
+	UploadInstructions *ArtifactUploadInstructions `json:"-"`
 }
 
 type ArtifactBatch struct {
-	UUID      string      `json:"uuid"`
+	ID        string      `json:"id"`
 	Artifacts []*Artifact `json:"artifacts"`
 }
 
-type ArtifactBatchUploadInstructions struct {
-	UUID          string   `json:"uuid"`
-	ArtifactUUIDs []string `json:"artifact_uuids"`
-	Instructions  struct {
-		Data   map[string]string `json: "data"`
-		Action struct {
-			URL       string `json:"url,omitempty"`
-			Method    string `json:"method"`
-			Path      string `json:"path"`
-			FileInput string `json:"file_input"`
-		}
+type ArtifactUploadInstructions struct {
+	Data   map[string]string `json: "data"`
+	Action struct {
+		URL       string `json:"url,omitempty"`
+		Method    string `json:"method"`
+		Path      string `json:"path"`
+		FileInput string `json:"file_input"`
 	}
+}
+
+type ArtifactBatchCreateResponse struct {
+	ID                 string                      `json:"id"`
+	ArtifactIDs        []string                    `json:"artifact_ids"`
+	UploadInstructions *ArtifactUploadInstructions `json:"upload_instructions"`
 }
 
 // ArtifactSearchOptions specifies the optional parameters to the
@@ -49,7 +52,7 @@ type ArtifactSearchOptions struct {
 }
 
 // Accepts a slice of artifacts, and creates them on Buildkite as a batch.
-func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*ArtifactBatch, *Response, error) {
+func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 
 	req, err := as.client.NewRequest("POST", u, batch)
@@ -57,13 +60,13 @@ func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*Artifac
 		return nil, nil, err
 	}
 
-	b := new(ArtifactBatch)
-	resp, err := as.client.Do(req, b)
+	createResponse := new(ArtifactBatchCreateResponse)
+	resp, err := as.client.Do(req, createResponse)
 	if err != nil {
 		return nil, resp, err
 	}
 
-	return b, resp, err
+	return createResponse, resp, err
 }
 
 // Updates a paticular artifact
