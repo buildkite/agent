@@ -13,7 +13,6 @@ type ArtifactsService struct {
 // Artifact represents an artifact on the Buildkite Agent API
 type Artifact struct {
 	ID                 string                      `json:"-"`
-	State              string                      `json:"state,omitempty"`
 	Path               string                      `json:"path"`
 	AbsolutePath       string                      `json:"absolute_path"`
 	GlobPath           string                      `json:"glob_path"`
@@ -51,6 +50,10 @@ type ArtifactSearchOptions struct {
 	Scope string `url:"scope,omitempty"`
 }
 
+type ArtifactUpdateStateRequest struct {
+	State string `json:"state"`
+}
+
 // Accepts a slice of artifacts, and creates them on Buildkite as a batch.
 func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
@@ -70,21 +73,21 @@ func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*Artifac
 }
 
 // Updates a paticular artifact
-func (as *ArtifactsService) Update(jobId string, artifact *Artifact) (*Artifact, *Response, error) {
-	u := fmt.Sprintf("jobs/%s/artifacts/%s", jobId, artifact.ID)
+func (as *ArtifactsService) UpdateState(jobId string, artifactId string, state string) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/artifacts/%s", jobId, artifactId)
+	payload := ArtifactUpdateStateRequest{state}
 
-	req, err := as.client.NewRequest("PUT", u, artifact)
+	req, err := as.client.NewRequest("PUT", u, payload)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	a := new(Artifact)
-	resp, err := as.client.Do(req, a)
+	resp, err := as.client.Do(req, nil)
 	if err != nil {
-		return nil, resp, err
+		return resp, err
 	}
 
-	return a, resp, err
+	return resp, err
 }
 
 // Searches Buildkite for a set of artifacts

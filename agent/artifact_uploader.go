@@ -140,7 +140,6 @@ func (a *ArtifactUploader) build(relativePath string, absolutePath string, globP
 
 	// Create our new artifact data structure
 	artifact := &api.Artifact{
-		State:        "new",
 		Path:         relativePath,
 		AbsolutePath: absolutePath,
 		GlobPath:     globPath,
@@ -199,6 +198,8 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			// Show a nice message that we're starting to upload the file
 			logger.Info("Uploading \"%s\" %d bytes", artifact.Path, artifact.FileSize)
 
+			var state string
+
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
 			// a couple of times before giving up.
@@ -210,8 +211,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 				return err
 			}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+
+			// Did the upload eventually fail?
 			if err != nil {
-				artifact.State = "error"
+				state = "error"
 				logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 
 				// Track the error that was raised
@@ -219,13 +222,13 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				errors = append(errors, err)
 				p.Unlock()
 			} else {
-				artifact.State = "finished"
+				state = "finished"
 			}
 
 			// Update the state of the artifact on Buildkite, we
 			// retry this as well.
 			err = retry.Do(func(s *retry.Stats) error {
-				_, _, err = a.APIClient.Artifacts.Update(a.JobID, artifact)
+				_, err = a.APIClient.Artifacts.UpdateState(a.JobID, artifact.ID, state)
 				if err != nil {
 					logger.Warn("%s (%s)", err, s)
 				}
