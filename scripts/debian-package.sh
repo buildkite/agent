@@ -26,7 +26,7 @@ function build() {
   chmod +x $BINARY_FILENAME
 
   # Build the debian package using the architectre and binary, they are saved to deb/
-  ./scripts/utils/build-linux-package.sh "deb" $2 $BINARY_FILENAME $AGENT_VERSION
+  ./scripts/utils/build-linux-package.sh "deb" $2 $BINARY_FILENAME $AGENT_VERSION $BUILDKITE_BUILD_NUMBER
 }
 
 function publish() {

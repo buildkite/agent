@@ -3,7 +3,7 @@ set -e
 
 if [[ ${#} -lt 4 ]]
 then
-  echo "Usage: ${0} [type] [arch] [binary] [version]" >&2
+  echo "Usage: ${0} [type] [arch] [binary] [version] [revision]" >&2
   exit 1
 fi
 
@@ -36,7 +36,7 @@ fi
 
 DESTINATION_PATH="$PACKAGE_TYPE"
 
-PACKAGE_NAME=$NAME"_"$VERSION"_"$ARCH".$PACKAGE_TYPE"
+PACKAGE_NAME=$NAME"_"$VERSION"-"$REVISION"_"$ARCH".$PACKAGE_TYPE"
 PACKAGE_PATH="$DESTINATION_PATH/$PACKAGE_NAME"
 
 mkdir -p $DESTINATION_PATH
