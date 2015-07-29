@@ -11,7 +11,6 @@ RUN gem install bundler
 RUN apt-get install -y patch
 
 # Install Golang dependencies
-RUN go get github.com/tools/godep
 RUN go get github.com/golang/lint/golint
 RUN go get github.com/buildkite/github-release
 

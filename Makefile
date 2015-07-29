@@ -7,9 +7,6 @@ build: deps
 dist: deps
 	@scripts/build.sh
 
-deps:
-	@godep get ./...
-
 clean:
 	@test ! -e pkg || rm -r pkg
 

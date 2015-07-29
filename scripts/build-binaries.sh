@@ -15,9 +15,6 @@ function build-binary {
 echo '--- Setting up GOPATH'
 export GOPATH="$(pwd)/vendor:$GOPATH"
 
-echo '--- Installing dependencies'
-godep restore
-
 # Clear out the pkg directory
 rm -rf pkg
 

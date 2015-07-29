@@ -51,9 +51,6 @@ brew install mercurial
 export GOPATH="$HOME/Code/go"
 export PATH="$HOME/Code/go/bin:$PATH"
 
-# Install godep
-go get github.com/kr/godep
-
 # Checkout the code
 mkdir -p $GOPATH/src/github.com/buildkite/agent
 git clone git@github.com:buildkite/agent.git $GOPATH/src/github.com/buildkite/agent
