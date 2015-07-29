@@ -14,7 +14,6 @@ RUN apt-get install -y patch
 RUN go get github.com/tools/godep
 RUN go get github.com/golang/lint/golint
 RUN go get github.com/buildkite/github-release
-RUN go get github.com/ErikDubbelboer/gspt
 
 # Install zip which is required for releasing to GitHub
 RUN apt-get install -y zip
