@@ -15,6 +15,7 @@ PACKAGE_TYPE=${1}
 BUILD_ARCH=${2}
 BUILD_BINARY_PATH=${3}
 VERSION=${4}
+REVISION=${5}
 
 NAME="buildkite-agent"
 MAINTAINER="dev@buildkite.com"
