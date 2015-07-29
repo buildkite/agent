@@ -13,7 +13,7 @@ function build-binary {
 }
 
 echo '--- Setting up GOPATH'
-export GOPATH="$(pwd)/_vendor:$GOPATH"
+export GOPATH="$(pwd)/vendor:$GOPATH"
 
 echo '--- Installing dependencies'
 godep restore
