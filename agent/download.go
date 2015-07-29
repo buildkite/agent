@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,6 +91,14 @@ func (d Download) try() error {
 	}
 	defer response.Body.Close()
 
+	// Double check the status
+	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(response.Body)
+
+		return &downloadError{response.Status}
+	}
+
 	// Now make the folder for our file
 	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
@@ -112,4 +121,12 @@ func (d Download) try() error {
 	logger.Info("Successfully downloaded \"%s\" %d bytes", d.Path, bytes)
 
 	return nil
+}
+
+type downloadError struct {
+	s string
+}
+
+func (e *downloadError) Error() string {
+	return e.s
 }
