@@ -2,7 +2,7 @@
 set -e
 
 echo '--- Setting up GOPATH'
-export GOPATH="$GOPATH:$(pwd)/_vendor"
+export GOPATH="$GOPATH:$(pwd)/vendor"
 echo $GOPATH
 
 echo '--- Running golint'
