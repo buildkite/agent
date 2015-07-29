@@ -138,6 +138,9 @@ func (a *AgentWorker) Stop() {
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
 func (a *AgentWorker) Connect() error {
+	// Update the proc title
+	a.UpdateProcTitle("connecting")
+
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
 		if err != nil {
