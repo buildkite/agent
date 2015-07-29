@@ -1,6 +1,7 @@
 package agent
 
 import "fmt"
+import "strings"
 
 // You can overridden buildVersion at compile time by using:
 //
@@ -12,11 +13,16 @@ var baseVersion string = "2.0.3"
 var buildVersion string = ""
 
 func Version() string {
-	// Use a default buildVersion if one doesn't exist
-	actualBuildVersion := buildVersion
-	if actualBuildVersion == "" {
-		actualBuildVersion = "x"
-	}
+	// Only output the build version if a pre-release
+	if strings.Contains(baseVersion, "beta") || strings.Contains(baseVersion, "alpha") {
+		// Use a default buildVersion if one doesn't exist
+		actualBuildVersion := buildVersion
+		if actualBuildVersion == "" {
+			actualBuildVersion = "x"
+		}
 
-	return fmt.Sprintf("%s.%s", baseVersion, actualBuildVersion)
+		return fmt.Sprintf("%s.%s", baseVersion, actualBuildVersion)
+	} else {
+		return baseVersion
+	}
 }
