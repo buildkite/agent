@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"regexp"
 	// "net/http/httputil"
 	"errors"
 	"net/url"
@@ -15,6 +16,8 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 )
+
+var ArtifactFilepathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:filepath\\}")
 
 type FormUploader struct {
 }
@@ -80,7 +83,12 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 
 	// Set the post data for the request
 	for key, val := range artifact.UploadInstructions.Data {
-		err = writer.WriteField(key, val)
+		// Replace the magical ${artifact:filepath} variable with the
+		// artifact's filepath
+		newVal := ArtifactFilepathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
+
+		// Write the new value to the form
+		err = writer.WriteField(key, newVal)
 		if err != nil {
 			return nil, err
 		}
