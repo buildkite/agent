@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/clicommand"
 	"github.com/codegangsta/cli"
-	"os"
 )
 
 var AppHelpTemplate = `Usage:
@@ -41,10 +43,15 @@ Options:
    {{end}}
 `
 
+func printVersion(c *cli.Context) {
+	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, agent.BuildVersion())
+}
+
 func main() {
 	cli.AppHelpTemplate = AppHelpTemplate
 	cli.CommandHelpTemplate = CommandHelpTemplate
 	cli.SubcommandHelpTemplate = SubcommandHelpTemplate
+	cli.VersionPrinter = printVersion
 
 	app := cli.NewApp()
 	app.Name = "buildkite-agent"
