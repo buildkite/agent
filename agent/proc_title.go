@@ -5,7 +5,7 @@ package agent
 import (
 	"strings"
 
-	"github.com/buildkite/agent/vendor/src/github.com/ErikDubbelboer/gspt"
+	"github.com/ErikDubbelboer/gspt"
 )
 
 func SetProcTitle(title string) {
