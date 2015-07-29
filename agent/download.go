@@ -26,7 +26,7 @@ type Download struct {
 	// How many times should it retry the download before giving up
 	Retries int
 
-	// If failed resposnes should be dumped to the log
+	// If failed responses should be dumped to the log
 	DebugHTTP bool
 }
 

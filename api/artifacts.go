@@ -12,13 +12,33 @@ type ArtifactsService struct {
 
 // Artifact represents an artifact on the Buildkite Agent API
 type Artifact struct {
-	ID                 string                      `json:"-"`
-	Path               string                      `json:"path"`
-	AbsolutePath       string                      `json:"absolute_path"`
-	GlobPath           string                      `json:"glob_path"`
-	FileSize           int64                       `json:"file_size"`
-	Sha1Sum            string                      `json:"sha1sum"`
-	URL                string                      `json:"url,omitempty"`
+	// The ID of the artifact. The ID is assigned to it after a successful
+	// batch creation
+	ID string `json:"-"`
+
+	// The path to the artifact relative to the working directory
+	Path string `json:"path"`
+
+	// The absolute path to the artifact
+	AbsolutePath string `json:"absolute_path"`
+
+	// The glob path used to find this artifact
+	GlobPath string `json:"glob_path"`
+
+	// The size of the file in bytes
+	FileSize int64 `json:"file_size"`
+
+	// A Sha1Sum calculation of the file
+	Sha1Sum string `json:"sha1sum"`
+
+	// The HTTP url to this artifact once it's been uploaded
+	URL string `json:"url,omitempty"`
+
+	// The destination specified on the command line when this file was
+	// uploaded
+	UploadDestination string `json:"upload_destination,omitempty"`
+
+	// Information on how to upload this artifact.
 	UploadInstructions *ArtifactUploadInstructions `json:"-"`
 }
 

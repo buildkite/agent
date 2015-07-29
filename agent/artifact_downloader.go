@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -60,13 +61,26 @@ func (a *ArtifactDownloader) Download() error {
 			artifact := artifact
 
 			p.Spawn(func() {
-				err := Download{
-					URL:         artifact.URL,
-					Path:        artifact.Path,
-					Destination: downloadDestination,
-					Retries:     5,
-					DebugHTTP:   a.APIClient.DebugHTTP,
-				}.Start()
+				var err error
+
+				// Handle downloading from S3
+				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
+					err = S3Downloader{
+						Path:        artifact.Path,
+						Bucket:      artifact.UploadDestination,
+						Destination: downloadDestination,
+						Retries:     5,
+						DebugHTTP:   a.APIClient.DebugHTTP,
+					}.Start()
+				} else {
+					err = Download{
+						URL:         artifact.URL,
+						Path:        artifact.Path,
+						Destination: downloadDestination,
+						Retries:     5,
+						DebugHTTP:   a.APIClient.DebugHTTP,
+					}.Start()
+				}
 
 				// If the downloaded encountered an error, lock
 				// the pool, collect it, then unlock the pool

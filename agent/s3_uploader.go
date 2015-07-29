@@ -9,9 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/AdRoll/goamz/aws"
 	"github.com/AdRoll/goamz/s3"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -36,22 +34,13 @@ func (u *S3Uploader) Setup(destination string) error {
 		return errors.New(fmt.Sprintf("Error creating AWS S3 authentication: %s", err.Error()))
 	}
 
-	regionName := "us-east-1"
-	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
-		regionName = os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
-	} else if os.Getenv("AWS_DEFAULT_REGION") != "" {
-		regionName = os.Getenv("AWS_DEFAULT_REGION")
+	// Try and get the region
+	region, err := awsS3Region()
+	if err != nil {
+		return err
 	}
 
-	// Check to make sure the region exists. There is a GetRegion API, but
-	// there doesn't seem to be a way to make it error out if the region
-	// doesn't exist.
-	region, ok := aws.Regions[regionName]
-	if ok == false {
-		return errors.New("Unknown AWS S3 Region `" + regionName + "`")
-	}
-
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), regionName)
+	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), region.Name)
 
 	// Find the bucket
 	s3 := s3.New(auth, region)
@@ -111,54 +100,6 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	return nil
 }
 
-func awsS3Auth() (aws.Auth, error) {
-	// First try to authenticate using the BUILDKITE_ ENV variables
-	buildkiteAuth, buildkiteErr := buildkiteS3EnvAuth()
-	if buildkiteErr == nil {
-		return buildkiteAuth, nil
-	}
-
-	// Passing blank values here instructs the AWS library to look at the
-	// current instances meta data for the security credentials.
-	awsAuth, awsErr := aws.GetAuth("", "", "", time.Time{})
-	if awsErr == nil {
-		return awsAuth, nil
-	}
-
-	var err error
-
-	// If they attempted to use the BUILDKITE_ ENV variables, return them
-	// that error, otherwise default to the error from AWS
-	if buildkiteErr != nil && buildkiteAuth.AccessKey != "" || buildkiteAuth.SecretKey != "" {
-		err = buildkiteErr
-	} else {
-		err = awsErr
-	}
-
-	return aws.Auth{}, err
-}
-
-func buildkiteS3EnvAuth() (auth aws.Auth, err error) {
-	auth.AccessKey = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
-	if auth.AccessKey == "" {
-		auth.AccessKey = os.Getenv("BUILDKITE_S3_ACCESS_KEY")
-	}
-
-	auth.SecretKey = os.Getenv("BUILDKITE_S3_SECRET_ACCESS_KEY")
-	if auth.SecretKey == "" {
-		auth.SecretKey = os.Getenv("BUILDKITE_S3_SECRET_KEY")
-	}
-
-	if auth.AccessKey == "" {
-		err = errors.New("BUILDKITE_S3_ACCESS_KEY_ID or BUILDKITE_S3_ACCESS_KEY not found in environment")
-	}
-	if auth.SecretKey == "" {
-		err = errors.New("BUILDKITE_S3_SECRET_ACCESS_KEY or BUILDKITE_S3_SECRET_KEY not found in environment")
-	}
-
-	return
-}
-
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
 	parts := []string{u.bucketPath(), artifact.Path}
 
@@ -174,9 +115,9 @@ func (u *S3Uploader) bucketName() string {
 }
 
 func (u *S3Uploader) destinationParts() []string {
-	trimmed_string := strings.TrimLeft(u.Destination, "s3://")
+	trimmed := strings.TrimLeft(u.Destination, "s3://")
 
-	return strings.Split(trimmed_string, "/")
+	return strings.Split(trimmed, "/")
 }
 
 func (u *S3Uploader) mimeType(a *api.Artifact) string {
