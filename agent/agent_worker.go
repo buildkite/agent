@@ -284,7 +284,7 @@ func (a *AgentWorker) Disconnect() error {
 }
 
 func (a *AgentWorker) UpdateProcTitle(action string) {
-	title := fmt.Sprintf("buildkite-agent %s (%s) [%s]", Version(), a.Agent.Name, action)
+	title := fmt.Sprintf("buildkite-agent v%s (%s) [%s]", Version(), a.Agent.Name, action)
 	length := len(title)
 
 	if length >= 255 {
