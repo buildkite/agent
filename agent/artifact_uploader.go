@@ -173,14 +173,14 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	// Set the URL's of the artifacts based on the uploader
 	for _, artifact := range artifacts {
 		artifact.URL = uploader.URL(artifact)
-		artifact.UploadDestination = a.Destination
 	}
 
 	// Create the artifacts on Buildkite
 	batchCreator := ArtifactBatchCreator{
-		APIClient: a.APIClient,
-		JobID:     a.JobID,
-		Artifacts: artifacts,
+		APIClient:         a.APIClient,
+		JobID:             a.JobID,
+		Artifacts:         artifacts,
+		UploadDestination: a.Destination,
 	}
 	artifacts, err = batchCreator.Create()
 	if err != nil {

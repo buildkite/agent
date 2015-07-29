@@ -16,7 +16,6 @@ type Artifact struct {
 	Path               string                      `json:"path"`
 	AbsolutePath       string                      `json:"absolute_path"`
 	GlobPath           string                      `json:"glob_path"`
-	UploadDestination  string                      `json:"upload_destination"`
 	FileSize           int64                       `json:"file_size"`
 	Sha1Sum            string                      `json:"sha1sum"`
 	URL                string                      `json:"url,omitempty"`
@@ -24,8 +23,9 @@ type Artifact struct {
 }
 
 type ArtifactBatch struct {
-	ID        string      `json:"id"`
-	Artifacts []*Artifact `json:"artifacts"`
+	ID                string      `json:"id"`
+	Artifacts         []*Artifact `json:"artifacts"`
+	UploadDestination string      `json:"upload_destination"`
 }
 
 type ArtifactUploadInstructions struct {

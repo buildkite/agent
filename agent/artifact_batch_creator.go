@@ -17,6 +17,9 @@ type ArtifactBatchCreator struct {
 
 	// All the artifacts that need to be created
 	Artifacts []*api.Artifact
+
+	// Where the artifacts are being uploaded to on the command line
+	UploadDestination string
 }
 
 func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
@@ -38,7 +41,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		// operation is idompotent (if we try and upload the same ID
 		// twice, it'll just return the previous data and skip the
 		// upload)
-		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts}
+		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts, a.UploadDestination}
 
 		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
