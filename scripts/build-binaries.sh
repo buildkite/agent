@@ -13,7 +13,8 @@ function build-binary {
 }
 
 echo '--- Setting up GOPATH'
-export GOPATH="$(pwd)/vendor:$GOPATH"
+export GOPATH="$GOPATH:$(pwd)/vendor"
+echo $PATH
 
 # Clear out the pkg directory
 rm -rf pkg

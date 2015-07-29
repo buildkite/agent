@@ -2,7 +2,8 @@
 set -e
 
 echo '--- Setting up GOPATH'
-export GOPATH="$(pwd)/vendor:$GOPATH"
+export GOPATH="$GOPATH:$(pwd)/vendor"
+echo $PATH
 
 echo '--- Running golint'
 make lint
