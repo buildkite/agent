@@ -8,11 +8,13 @@ fi
 
 echo '--- Getting agent version from build meta data'
 
-export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-export AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //')
+export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
+export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
+echo "Build version: $BUILD_VERSION"
 
 function build() {
   echo "--- Building debian package $1/$2"
@@ -26,7 +28,7 @@ function build() {
   chmod +x $BINARY_FILENAME
 
   # Build the debian package using the architectre and binary, they are saved to deb/
-  ./scripts/utils/build-linux-package.sh "deb" $2 $BINARY_FILENAME $AGENT_VERSION
+  ./scripts/utils/build-linux-package.sh "deb" $2 $BINARY_FILENAME $AGENT_VERSION $BUILD_VERSION
 }
 
 function publish() {

@@ -3,7 +3,7 @@ set -e
 
 if [[ ${#} -lt 4 ]]
 then
-  echo "Usage: ${0} [type] [arch] [binary] [version]" >&2
+  echo "Usage: ${0} [type] [arch] [binary] [version] [revision]" >&2
   exit 1
 fi
 
@@ -15,6 +15,7 @@ PACKAGE_TYPE=${1}
 BUILD_ARCH=${2}
 BUILD_BINARY_PATH=${3}
 VERSION=${4}
+REVISION=${5}
 
 NAME="buildkite-agent"
 MAINTAINER="dev@buildkite.com"
@@ -36,7 +37,7 @@ fi
 
 DESTINATION_PATH="$PACKAGE_TYPE"
 
-PACKAGE_NAME=$NAME"_"$VERSION"_"$ARCH".$PACKAGE_TYPE"
+PACKAGE_NAME=$NAME"_"$VERSION"-"$REVISION"_"$ARCH".$PACKAGE_TYPE"
 PACKAGE_PATH="$DESTINATION_PATH/$PACKAGE_NAME"
 
 mkdir -p $DESTINATION_PATH
@@ -69,6 +70,7 @@ bundle exec fpm -s "dir" \
   --after-upgrade "packaging/linux/scripts/after-install-and-upgrade.sh" \
   -p "$PACKAGE_PATH" \
   -v "$VERSION" \
+  --iteration "$REVISION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
   "templates/bootstrap.sh=/usr/share/buildkite-agent/bootstrap.sh" \
   "packaging/linux/root/=/"

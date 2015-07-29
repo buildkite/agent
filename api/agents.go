@@ -18,6 +18,7 @@ type Agent struct {
 	ScriptEvalEnabled bool     `json:"script_eval_enabled"`
 	Priority          string   `json:"priority,omitempty"`
 	Version           string   `json:"version"`
+	Build             string   `json:"build"`
 	MetaData          []string `json:"meta_data"`
 	PID               int      `json:"pid,omitempty"`
 }

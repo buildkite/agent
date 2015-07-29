@@ -94,6 +94,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		MetaData:          r.MetaData,
 		ScriptEvalEnabled: r.AgentConfiguration.CommandEval,
 		Version:           Version(),
+		Build:             BuildVersion(),
 		PID:               os.Getpid(),
 	}
 
