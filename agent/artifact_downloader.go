@@ -65,6 +65,7 @@ func (a *ArtifactDownloader) Download() error {
 					Path:        artifact.Path,
 					Destination: downloadDestination,
 					Retries:     5,
+					DebugHTTP:   a.APIClient.DebugHTTP,
 				}.Start()
 
 				// If the downloaded encountered an error, lock

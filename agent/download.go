@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +25,9 @@ type Download struct {
 
 	// How many times should it retry the download before giving up
 	Retries int
+
+	// If failed resposnes should be dumped to the log
+	DebugHTTP bool
 }
 
 func (d Download) Start() error {
@@ -93,8 +96,10 @@ func (d Download) try() error {
 
 	// Double check the status
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(response.Body)
+		if d.DebugHTTP {
+			responseDump, err := httputil.DumpResponse(response, true)
+			logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+		}
 
 		return &downloadError{response.Status}
 	}
