@@ -17,7 +17,7 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-var ArtifactFilepathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:filepath\\}")
+var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
 
 type FormUploader struct {
 }
@@ -83,9 +83,9 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 
 	// Set the post data for the request
 	for key, val := range artifact.UploadInstructions.Data {
-		// Replace the magical ${artifact:filepath} variable with the
-		// artifact's filepath
-		newVal := ArtifactFilepathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
+		// Replace the magical ${artifact:path} variable with the
+		// artifact's path
+		newVal := ArtifactPathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
 
 		// Write the new value to the form
 		err = writer.WriteField(key, newVal)
