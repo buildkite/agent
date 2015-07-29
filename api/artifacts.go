@@ -16,6 +16,7 @@ type Artifact struct {
 	Path               string                      `json:"path"`
 	AbsolutePath       string                      `json:"absolute_path"`
 	GlobPath           string                      `json:"glob_path"`
+	UploadDestination  string                      `json:"upload_destination"`
 	FileSize           int64                       `json:"file_size"`
 	Sha1Sum            string                      `json:"sha1sum"`
 	URL                string                      `json:"url,omitempty"`
