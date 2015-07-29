@@ -12,9 +12,11 @@ var baseVersion string = "2.0.3"
 var buildVersion string = ""
 
 func Version() string {
-	if buildVersion != "" {
-		return fmt.Sprintf("%s.%s", baseVersion, buildVersion)
-	} else {
-		return baseVersion
+	// Use a default buildVersion if one doesn't exist
+	actualBuildVersion := buildVersion
+	if actualBuildVersion == "" {
+		actualBuildVersion = "x"
 	}
+
+	return fmt.Sprintf("%s.%s", baseVersion, actualBuildVersion)
 }
