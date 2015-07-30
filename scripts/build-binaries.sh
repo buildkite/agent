@@ -21,9 +21,9 @@ rm -rf pkg
 
 build-binary "windows" "386"
 build-binary "windows" "amd64"
-CGO_ENABLED=1 build-binary "linux" "amd64"
-CGO_ENABLED=1 build-binary "linux" "386"
-CGO_ENABLED=1 build-binary "linux" "arm"
+build-binary "linux" "amd64"
+build-binary "linux" "386"
+build-binary "linux" "arm"
 build-binary "darwin" "386"
 build-binary "darwin" "amd64"
 
