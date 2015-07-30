@@ -3,7 +3,7 @@ FROM golang:cross
 # We need to Ruby to run FPM and the Homebrew update script
 RUN echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list
 RUN apt-get update
-RUN apt-get install -y ruby-full
+RUN apt-get install -y ruby-full gcc-multilib
 RUN gem install bundler
 
 # When nokogiri installs, it calls out the `patch` command to fix some libxml
