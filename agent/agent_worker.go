@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -112,9 +111,6 @@ func (a *AgentWorker) Stop() {
 		logger.Debug("Stopping the agent...")
 	}
 
-	// Update the proc title
-	a.UpdateProcTitle("stopping")
-
 	// If there's a running job, kill it.
 	if a.jobRunner != nil {
 		a.jobRunner.Kill()
@@ -136,9 +132,6 @@ func (a *AgentWorker) Stop() {
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
 func (a *AgentWorker) Connect() error {
-	// Update the proc title
-	a.UpdateProcTitle("connecting")
-
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
 		if err != nil {
@@ -173,9 +166,6 @@ func (a *AgentWorker) Heartbeat() error {
 
 // Performs a ping, which returns what action the agent should take next.
 func (a *AgentWorker) Ping() {
-	// Update the proc title
-	a.UpdateProcTitle("pinging")
-
 	ping, _, err := a.APIClient.Pings.Get()
 	if err != nil {
 		// If a ping fails, we don't really care, because it'll
@@ -214,14 +204,8 @@ func (a *AgentWorker) Ping() {
 
 	// If we don't have a job, there's nothing to do!
 	if ping.Job == nil {
-		// Update the proc title
-		a.UpdateProcTitle("idle")
-
 		return
 	}
-
-	// Update the proc title
-	a.UpdateProcTitle(fmt.Sprintf("job %s", ping.Job.ID))
 
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
@@ -270,17 +254,10 @@ func (a *AgentWorker) Ping() {
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
 // because we want to disconnect as fast as possible.
 func (a *AgentWorker) Disconnect() error {
-	// Update the proc title
-	a.UpdateProcTitle("disconnecting")
-
 	_, err := a.APIClient.Agents.Disconnect()
 	if err != nil {
 		logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
 	}
 
 	return err
-}
-
-func (a *AgentWorker) UpdateProcTitle(action string) {
-	SetProcTitle(fmt.Sprintf("buildkite-agent v%s (%s) [%s]", Version(), a.Agent.Name, action))
 }
