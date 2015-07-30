@@ -1,4 +1,4 @@
-// +build linux,386 darwin windows
+// +build linux,386 linux,arm darwin windows
 
 package agent
 
