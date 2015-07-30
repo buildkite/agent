@@ -142,7 +142,7 @@ fi
 
 # Crude method of causing all the agents to restart
 if [ "$OPERATION" = "upgrade" ] ; then
-  for KILLPID in `ps ax | grep 'buildkite-agent v' | awk ' { print $1;}'`; do
+  for KILLPID in `ps ax | grep 'buildkite-agent start' | awk ' { print $1;}'`; do
     kill $KILLPID > /dev/null 2>&1 || true
   done
 fi
