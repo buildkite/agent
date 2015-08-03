@@ -71,8 +71,13 @@ type ArtifactSearchOptions struct {
 	Scope string `url:"scope,omitempty"`
 }
 
-type ArtifactUpdateStateRequest struct {
+type ArtifactBatchUpdateArtifact struct {
+	ID    string `json:"id"`
 	State string `json:"state"`
+}
+
+type ArtifactBatchUpdateRequest struct {
+	Artifacts []*ArtifactBatchUpdateArtifact `json:"artifacts"`
 }
 
 // Accepts a slice of artifacts, and creates them on Buildkite as a batch.
@@ -94,9 +99,13 @@ func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*Artifac
 }
 
 // Updates a paticular artifact
-func (as *ArtifactsService) UpdateState(jobId string, artifactId string, state string) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/artifacts/%s", jobId, artifactId)
-	payload := ArtifactUpdateStateRequest{state}
+func (as *ArtifactsService) Update(jobId string, artifactStates map[string]string) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
+	payload := ArtifactBatchUpdateRequest{}
+
+	for id, state := range artifactStates {
+		payload.Artifacts = append(payload.Artifacts, &ArtifactBatchUpdateArtifact{id, state})
+	}
 
 	req, err := as.client.NewRequest("PUT", u, payload)
 	if err != nil {
