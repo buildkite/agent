@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -187,8 +188,66 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		return err
 	}
 
+	// Prepare a concurrency pool to upload the artifacts
 	p := pool.New(pool.MaxConcurrencyLimit)
 	errors := []error{}
+
+	// Create a wait group so we can make sure the uploader waits for all
+	// the artifact states to upload before finishing
+	var stateUploaderWaitGroup sync.WaitGroup
+	stateUploaderWaitGroup.Add(1)
+
+	// A map to keep track of artifact states and how many we've uploaded
+	artifactsStates := make(map[string]string)
+	artifactStatesUploaded := 0
+
+	// Spin up a gourtine that'll uploading artifact statuses every few
+	// seconds in batches
+	go func() {
+		for artifactStatesUploaded < len(artifacts) {
+			statesToUpload := make(map[string]string)
+
+			// Grab all the states we need to upload, and remove
+			// them from the tracking map
+			for id, state := range artifactsStates {
+				statesToUpload[id] = state
+				delete(artifactsStates, id)
+			}
+
+			if len(statesToUpload) > 0 {
+				artifactStatesUploaded += len(statesToUpload)
+				for id, state := range statesToUpload {
+					logger.Debug("Artifact `%s` has state `%s`", id, state)
+				}
+
+				// Update the states of the artifacts in bulk.
+				err = retry.Do(func(s *retry.Stats) error {
+					_, err = a.APIClient.Artifacts.Update(a.JobID, statesToUpload)
+					if err != nil {
+						logger.Warn("%s (%s)", err, s)
+					}
+
+					return err
+				}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+
+				if err != nil {
+					logger.Error("Error uploading artifact states: %s", err)
+
+					// Track the error that was raised
+					p.Lock()
+					errors = append(errors, err)
+					p.Unlock()
+				}
+
+				logger.Debug("Uploaded %d artfact states (%d/%d)", len(statesToUpload), artifactStatesUploaded, len(artifacts))
+			}
+
+			// Check again for states to upload in a few seconds
+			time.Sleep(1 * time.Second)
+		}
+
+		stateUploaderWaitGroup.Done()
+	}()
 
 	for _, artifact := range artifacts {
 		// Create new instance of the artifact for the goroutine
@@ -198,8 +257,6 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
 			logger.Info("Uploading \"%s\" %d bytes", artifact.Path, artifact.FileSize)
-
-			var state string
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
@@ -213,41 +270,31 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				return err
 			}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 
+			var state string
+
 			// Did the upload eventually fail?
 			if err != nil {
-				state = "error"
 				logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 
 				// Track the error that was raised
 				p.Lock()
 				errors = append(errors, err)
 				p.Unlock()
+
+				state = "error"
 			} else {
 				state = "finished"
 			}
 
-			// Update the state of the artifact on Buildkite, we
-			// retry this as well.
-			err = retry.Do(func(s *retry.Stats) error {
-				_, err = a.APIClient.Artifacts.UpdateState(a.JobID, artifact.ID, state)
-				if err != nil {
-					logger.Warn("%s (%s)", err, s)
-				}
-
-				return err
-			}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
-			if err != nil {
-				logger.Error("Error marking artifact %s as uploaded: %s", artifact.Path, err)
-
-				// Track the error that was raised
-				p.Lock()
-				errors = append(errors, err)
-				p.Unlock()
-			}
+			artifactsStates[artifact.ID] = state
 		})
 	}
 
+	// Wait for the pool to finish
 	p.Wait()
+
+	// Wait for the statuses to finish uploading
+	stateUploaderWaitGroup.Wait()
 
 	if len(errors) > 0 {
 		logger.Fatal("There were errors with uploading some of the artifacts")
