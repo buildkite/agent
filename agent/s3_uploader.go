@@ -21,12 +21,16 @@ type S3Uploader struct {
 	// s3://my-bucket-name/foo/bar
 	Destination string
 
+	// Whether or not HTTP calls shoud be debugged
+	DebugHTTP bool
+
 	// The S3 Bucket we're uploading these files to
 	Bucket *s3.Bucket
 }
 
-func (u *S3Uploader) Setup(destination string) error {
+func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 	u.Destination = destination
+	u.DebugHTTP = debugHTTP
 
 	// Try to auth with S3
 	auth, err := awsS3Auth()

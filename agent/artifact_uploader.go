@@ -166,7 +166,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	}
 
 	// Setup the uploader
-	err := uploader.Setup(a.Destination)
+	err := uploader.Setup(a.Destination, a.APIClient.DebugHTTP)
 	if err != nil {
 		return err
 	}

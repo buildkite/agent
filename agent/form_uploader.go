@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"regexp"
 	// "net/http/httputil"
 	"errors"
@@ -20,9 +21,13 @@ import (
 var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
 
 type FormUploader struct {
+	// Whether or not HTTP calls shoud be debugged
+	DebugHTTP bool
 }
 
-func (u *FormUploader) Setup(destination string) error {
+func (u *FormUploader) Setup(destination string, debugHTTP bool) error {
+	u.DebugHTTP = debugHTTP
+
 	return nil
 }
 
@@ -53,6 +58,11 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 		// Be sure to close the response body at the end of
 		// this function
 		defer response.Body.Close()
+
+		if u.DebugHTTP {
+			responseDump, err := httputil.DumpResponse(response, true)
+			logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+		}
 
 		if response.StatusCode/100 != 2 {
 			body := &bytes.Buffer{}
