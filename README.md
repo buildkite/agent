@@ -55,7 +55,6 @@ export PATH="$HOME/Code/go/bin:$PATH"
 mkdir -p $GOPATH/src/github.com/buildkite/agent
 git clone git@github.com:buildkite/agent.git $GOPATH/src/github.com/buildkite/agent
 cd $GOPATH/src/github.com/buildkite/agent
-godep get
 ```
 
 To test the commands locally:
