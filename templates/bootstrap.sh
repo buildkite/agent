@@ -220,7 +220,7 @@ else
     buildkite-run "git submodule foreach --recursive git clean -fdq"
   fi
 
-  buildkite-run "git fetch -q"
+  buildkite-run "git fetch -qp"
 
   # Allow checkouts of forked pull requests on GitHub only. See:
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
@@ -453,7 +453,7 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
     echo "^^^ +++"
     exit 1
   fi
-  
+
   # Run the per-checkout `post-artifact` hook
   buildkite-local-hook "post-artifact"
 
