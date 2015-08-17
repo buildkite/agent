@@ -220,17 +220,18 @@ else
     buildkite-run "git submodule foreach --recursive git clean -fdq"
   fi
 
-  buildkite-run "git fetch -q"
-
   # Allow checkouts of forked pull requests on GitHub only. See:
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
   if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
     buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
-  elif [[ "$BUILDKITE_TAG" == "" ]]; then
-    # Default empty branch names
-    : "${BUILDKITE_BRANCH:=master}"
+  else
+    buildkite-run "git fetch -q origin $BUILDKITE_COMMIT 2> /dev/null || git fetch -q"
 
-    buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
+    if [[ "$BUILDKITE_TAG" == "" ]]; then
+      # Default empty branch names
+      : "${BUILDKITE_BRANCH:=master}"
+      buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
+    fi
   fi
 
   buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
