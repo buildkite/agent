@@ -34,23 +34,26 @@ func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 	u.Destination = destination
 
 	// Generate the AWS config used by the S3 client
-	config := &aws.Config{Credentials: awsS3Credentials(), Region: aws.String(awsS3RegionFromEnv())}
+	region := awsS3RegionFromEnv()
+	config := &aws.Config{Credentials: awsS3Credentials(), Region: aws.String(region)}
 
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), config.Region)
+	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), region)
 
 	// Create the S3 client
 	s3client := s3.New(config)
-	// bucket := s3.Bucket(u.bucketName())
+
+	// Test the authentication by trying to list the first 0 objects in the
+	// bucket.
+	params := &s3.ListObjectsInput{
+		Bucket:  aws.String(u.bucketName()),
+		MaxKeys: aws.Int64(0),
+	}
+	_, err := s3client.ListObjects(params)
+	if err != nil {
+		return fmt.Errorf("Failed to authenticate to bucket `%s` in region `%s` (s)", u.bucketName(), region, err.Error())
+	}
 
 	u.Uploader = s3manager.NewUploader(&s3manager.UploadOptions{S3: s3client})
-
-	// If the list doesn't return an error, then we've got our bucket
-	// _, err = bucket.List("", "", "", 0)
-	// if err != nil {
-	// 	return fmt.Errorf("Could not find bucket `%s` in region `%s` (%s)", u.bucketName(), config.Region, err.Error())
-	// }
-
-	// u.Bucket = bucket
 
 	return nil
 }
