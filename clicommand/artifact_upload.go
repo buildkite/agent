@@ -84,7 +84,7 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Upload the artifacts
 		if err := uploader.Upload(); err != nil {
-			logger.Fatal("Failed to upload artifacts: %s", err)
+			logger.Fatal("%s", err)
 		}
 	},
 }

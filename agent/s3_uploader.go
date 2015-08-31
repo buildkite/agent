@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -33,24 +32,9 @@ type S3Uploader struct {
 func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 	u.Destination = destination
 
-	// Generate the AWS config used by the S3 client
-	region := awsS3RegionFromEnv()
-	config := &aws.Config{Credentials: awsS3Credentials(), Region: aws.String(region)}
-
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), region)
-
-	// Create the S3 client
-	s3client := s3.New(config)
-
-	// Test the authentication by trying to list the first 0 objects in the
-	// bucket.
-	params := &s3.ListObjectsInput{
-		Bucket:  aws.String(u.bucketName()),
-		MaxKeys: aws.Int64(0),
-	}
-	_, err := s3client.ListObjects(params)
+	s3client, err := newS3Client(u.bucketName())
 	if err != nil {
-		return fmt.Errorf("Failed to authenticate to bucket `%s` in region `%s` (s)", u.bucketName(), region, err.Error())
+		return err
 	}
 
 	u.Uploader = s3manager.NewUploader(&s3manager.UploadOptions{S3: s3client})
