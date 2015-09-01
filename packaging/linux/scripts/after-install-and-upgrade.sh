@@ -35,6 +35,9 @@ fi
 # Install the config template if it's not there
 if [ ! -f /etc/buildkite-agent/buildkite-agent.cfg ]; then
   cp /usr/share/buildkite-agent/buildkite-agent.cfg /etc/buildkite-agent/buildkite-agent.cfg
+
+  # Set the default permission to 0600 so only the owning user can read/write to the file
+  chmod 0600 /etc/buildkite-agent/buildkite-agent.cfg
 fi
 
 # Copy the hooks if they aren't there
