@@ -111,11 +111,19 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		}
 	}
 
+	var err error
+
 	// Add the hostname
-	agent.Hostname, _ = os.Hostname()
+	agent.Hostname, err = os.Hostname()
+	if err != nil {
+		logger.Warn("Failed to find hostname: %s", err)
+	}
 
 	// Add the OS dump
-	agent.OS, _ = OSDump()
+	agent.OS, err = OSDump()
+	if err != nil {
+		logger.Warn("Failed to find OS information: %s", err)
+	}
 
 	return agent
 }
