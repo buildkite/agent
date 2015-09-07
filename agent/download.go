@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/retry"
 )
 
 type Download struct {
@@ -31,28 +32,13 @@ type Download struct {
 }
 
 func (d Download) Start() error {
-	seconds := 5 * time.Second
-	ticker := time.NewTicker(seconds)
-	retries := 1
-	max := d.Retries
-
-	for {
+	return retry.Do(func(s *retry.Stats) error {
 		err := d.try()
-		if err == nil {
-			break
+		if err != nil {
+			logger.Warn("Error trying to download %s (%s) %s", d.URL, err, s)
 		}
-
-		if retries >= max {
-			break
-		} else {
-			logger.Warn("Error trying to download %s (%d/%d) (%T: %v) Trying again in %s", d.URL, retries, max, err, err, seconds)
-		}
-
-		retries++
-		<-ticker.C
-	}
-
-	return nil
+		return err
+	}, &retry.Config{Maximum: d.Retries, Interval: 1 * time.Second})
 }
 
 func (d Download) try() error {
