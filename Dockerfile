@@ -24,7 +24,7 @@ ENV GOLANG_CROSSPLATFORMS \
 # (set an explicit GOARM of 5 for maximum ARM compatibility)
 ENV GOARM 5
 
-RUN cd /usr/src/go/src \
+RUN cd /usr/local/go/src \
 	&& set -ex \
 	&& for platform in $GOLANG_CROSSPLATFORMS; do \
 		GOOS=${platform%/*} \
