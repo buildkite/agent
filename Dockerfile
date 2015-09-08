@@ -1,4 +1,4 @@
-FROM golang:cross
+FROM golang:1.5-cross
 
 # We need to Ruby to run FPM and the Homebrew update script
 RUN echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list
