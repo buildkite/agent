@@ -55,6 +55,7 @@ else
 
   info "Copying binary"
   cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent
+  chmod +x $TMP_RELEASE_DIRECTORY/buildkite-agent
 
   info "Copying bootstrap"
   cp $TEMPLATE_DIRECTORY/bootstrap.sh $TMP_RELEASE_DIRECTORY
