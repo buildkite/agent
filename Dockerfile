@@ -86,6 +86,8 @@ RUN go get github.com/golang/lint/golint
 RUN go get github.com/buildkite/github-release
 
 # Install zip which is required for releasing to GitHub
+RUN echo "deb http://http.debian.net/debian jessie contrib" >> /etc/apt/sources.list
+RUN apt-get update
 RUN apt-get install -y zip
 
 # The golang Docker sets the $GOPATH to be /go
