@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -136,9 +137,23 @@ func Glob(root string, pattern string) (matches []string, e error) {
 	return
 }
 
-func isDir(path string) (val bool, err error) {
-	fi, err := os.Stat(path)
+// Calcualtes the glob root for a path.
+func Root(path string) string {
+	if filepath.IsAbs(path) {
+		if runtime.GOOS == "windows" {
+			return filepath.VolumeName(path)
+		} else {
+			return "/"
+		}
+	} else {
+		dir, _ := os.Getwd()
+		return dir
+	}
+}
 
+// Returns whether or not the file is a directory
+func IsDir(path string) (val bool, err error) {
+	fi, err := os.Stat(path)
 	if err != nil {
 		return false, err
 	}
@@ -148,7 +163,7 @@ func isDir(path string) (val bool, err error) {
 
 func getAllSubDirectories(path string) (dirs []string, err error) {
 
-	if dir, err := isDir(path); err != nil || !dir {
+	if dir, err := IsDir(path); err != nil || !dir {
 		return nil, errors.New("Not a directory " + path)
 	}
 
@@ -164,7 +179,7 @@ func getAllSubDirectories(path string) (dirs []string, err error) {
 
 	for _, file := range files {
 		path := filepath.Join(path, file)
-		if dir, err := isDir(path); err == nil && dir {
+		if dir, err := IsDir(path); err == nil && dir {
 			dirs = append(dirs, file)
 		}
 	}

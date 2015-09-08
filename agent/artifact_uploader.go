@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -35,7 +34,7 @@ type ArtifactUploader struct {
 
 func (a *ArtifactUploader) Upload() error {
 	// Create artifact structs for all the files we need to upload
-	artifacts, err := a.collect()
+	artifacts, err := a.Collect()
 	if err != nil {
 		return err
 	}
@@ -54,32 +53,15 @@ func (a *ArtifactUploader) Upload() error {
 	return nil
 }
 
-func (a *ArtifactUploader) WorkingDirectory(path string) string {
-	if filepath.IsAbs(path) {
-		if runtime.GOOS == "windows" {
-			return filepath.VolumeName(path)
-		} else {
-			return "/"
-		}
-	} else {
-		dir, _ := os.Getwd()
-		return dir
-	}
-}
-
-func (a *ArtifactUploader) NormalizedPath(path string) string {
-	return filepath.Join(a.WorkingDirectory(path), path)
-}
-
-func (a *ArtifactUploader) collect() (artifacts []*api.Artifact, err error) {
+func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 	globPaths := strings.Split(a.Paths, ";")
 
 	for _, globPath := range globPaths {
-		workingDirectory := a.WorkingDirectory(globPath)
+		workingDirectory := glob.Root(globPath)
 		globPath = strings.TrimSpace(globPath)
 
 		if globPath != "" {
-			logger.Debug("Searching for %s", a.NormalizedPath(globPath))
+			logger.Debug("Searching for %s", filepath.Join(workingDirectory, globPath))
 
 			files, err := glob.Glob(workingDirectory, globPath)
 			if err != nil {
@@ -93,8 +75,7 @@ func (a *ArtifactUploader) collect() (artifacts []*api.Artifact, err error) {
 					return nil, err
 				}
 
-				fileInfo, err := os.Stat(absolutePath)
-				if fileInfo.IsDir() {
+				if isDir, _ := glob.IsDir(absolutePath); isDir {
 					logger.Debug("Skipping directory %s", file)
 					continue
 				}
