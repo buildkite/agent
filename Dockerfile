@@ -77,9 +77,6 @@ RUN gem install bundler --version "$BUNDLER_VERSION" \
 # Don't create ".bundle" in all our apps
 ENV BUNDLE_APP_CONFIG $GEM_HOME
 
-# Forgot why we need this
-RUN apt-get install -y gcc-multilib
-
 # When nokogiri installs, it calls out the `patch` command to fix some libxml
 # stuffs
 RUN apt-get install -y patch
