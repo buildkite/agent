@@ -346,8 +346,15 @@ buildkite-global-hook "pre-command"
 # Run the per-checkout `pre-command` hook
 buildkite-local-hook "pre-command"
 
-# If the user has specificed their own command hook
-if [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
+# If the user has specificed a local `command` hook
+if [[ -e ".buildkite/hooks/command" ]]; then
+  buildkite-local-hook "command"
+
+  # Capture the exit status from the build script
+  export BUILDKITE_COMMAND_EXIT_STATUS=$?
+
+# Then check for a global hook path
+elif [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
   buildkite-global-hook "command"
 
   # Capture the exit status from the build script
@@ -454,7 +461,7 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
     echo "^^^ +++"
     exit 1
   fi
-  
+
   # Run the per-checkout `post-artifact` hook
   buildkite-local-hook "post-artifact"
 
