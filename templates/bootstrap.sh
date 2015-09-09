@@ -85,10 +85,9 @@ function buildkite-warning {
 # of a build.
 BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY=""
 BUILDKITE_BOOTSTRAP_WD_TMP_FILE=""
-function buildkite-agent-bootstrap-working-directory {
+function buildkite-working-directory {
   echo "$1" > "$BUILDKITE_BOOTSTRAP_WD_TMP_FILE"
 }
-export -f buildkite-agent-bootstrap-working-directory
 
 # Run a hook script. It won't exit on failure. It will store the hooks exit
 # status in BUILDKITE_LAST_HOOK_EXIT_STATUS
@@ -105,14 +104,23 @@ function buildkite-hook {
     echo "~~~ Running $HOOK_LABEL hook"
     echo -e "$BUILDKITE_PROMPT .\"$HOOK_SCRIPT_PATH\""
 
-    # Create a temporary file that the buildkite-agent-bootstrap-working-directory
-    # function will call from a hook.
+    # Create a temporary file that the buildkite-working-directory function
+    # will call from a hook.
     BUILDKITE_BOOTSTRAP_WD_TMP_FILE=$(mktemp "/tmp/buildkite-agent-bootstrap.XXXXXX")
+
+    # Export the function so it's available to the hook
+    function buildkite-agent-bootstrap-working-directory {
+      buildkite-working-directory $1
+    }
+    export -f buildkite-agent-bootstrap-working-directory
 
     # Run the script and store it's exit status. We run it as a subshell so if
     # it exits or modifies the ENV, it doesn't affect anything in here.
     (. "$HOOK_SCRIPT_PATH")
     BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
+
+    # Remove the exported function
+    unset -f buildkite-agent-bootstrap-working-directory
 
     # Read from the checkout path file, and cleanup.
     BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY=$(cat "$BUILDKITE_BOOTSTRAP_WD_TMP_FILE")
