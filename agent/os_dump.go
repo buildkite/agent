@@ -1,3 +1,5 @@
+// +build !windows
+
 package agent
 
 import (
@@ -12,8 +14,6 @@ func OSDump() (string, error) {
 		return process.Run("sw_vers")
 	} else if runtime.GOOS == "linux" {
 		return process.Cat("/etc/*-release"), nil
-	} else if runtime.GOOS == "windows" {
-		return process.Run("ver")
 	}
 
 	return "", nil

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"strings"
+
+	"github.com/buildkite/agent/utils"
 )
 
 type File struct {
@@ -51,7 +53,7 @@ func (f *File) Load() error {
 }
 
 func (f File) AbsolutePath() string {
-	return NormalizeFilePath(f.Path)
+	return utils.NormalizeFilePath(f.Path)
 }
 
 func (f File) Exists() bool {
