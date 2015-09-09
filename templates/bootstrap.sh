@@ -225,7 +225,15 @@ else
   if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
     buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
   else
-    buildkite-run "git fetch -q origin $BUILDKITE_COMMIT 2> /dev/null || git fetch -q"
+    # If the commit is HEAD, we can't do a commit-only fetch, so we'll just do
+    # a full fetch instead.
+    if [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
+      buildkite-run "git fetch -q"
+    else
+      # First try to fetch the commit only (because it's usually much faster).
+      # If that doesn't work, just resort back to a regular fetch.
+      buildkite-run "git fetch -q origin $BUILDKITE_COMMIT 2> /dev/null || git fetch -q"
+    fi
 
     if [[ "$BUILDKITE_TAG" == "" ]]; then
       # Default empty branch names
