@@ -226,7 +226,9 @@ else
   export GIT_TERMINAL_PROMPT=0
 
   # Do we need to do a git checkout?
-  if [[ ! -d ".git" ]]; then
+  if [[ -d ".git" ]]; then
+    buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
+  else
     buildkite-run "git clone \"$BUILDKITE_REPO\" . -qv"
   fi
 
