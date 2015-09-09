@@ -81,36 +81,42 @@ function buildkite-warning {
   echo "^^^ +++"
 }
 
-# Run a hook script
+# A function that a hook script can call to change the checkout path at runtime
+# of a build.
+BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY=""
+BUILDKITE_BOOTSTRAP_WD_TMP_FILE=""
+function buildkite-agent-bootstrap-working-directory {
+  echo "$1" > "$BUILDKITE_BOOTSTRAP_WD_TMP_FILE"
+}
+export -f buildkite-agent-bootstrap-working-directory
+
+# Run a hook script. It won't exit on failure. It will store the hooks exit
+# status in BUILDKITE_LAST_HOOK_EXIT_STATUS
+export BUILDKITE_LAST_HOOK_EXIT_STATUS=""
 function buildkite-hook {
   HOOK_LABEL="$1"
   HOOK_SCRIPT_PATH="$2"
 
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
+    # Make sure the script path is executable
+    chmod +x "$HOOK_SCRIPT_PATH"
+
     # Print to the screen we're going to run the hook
     echo "~~~ Running $HOOK_LABEL hook"
     echo -e "$BUILDKITE_PROMPT .\"$HOOK_SCRIPT_PATH\""
 
-    # Store the current folder, so after the hook, we can return back to the
-    # current working directory
-    HOOK_PREVIOUS_WORKING_DIR=$(pwd)
+    # Create a temporary file that the buildkite-agent-bootstrap-working-directory
+    # function will call from a hook.
+    BUILDKITE_BOOTSTRAP_WD_TMP_FILE=$(mktemp "/tmp/buildkite-agent-bootstrap.XXXXXX")
 
-    # Run the hook
-    . "$HOOK_SCRIPT_PATH"
-    HOOK_EXIT_STATUS=$?
+    # Run the script and store it's exit status. We run it as a subshell so if
+    # it exits or modifies the ENV, it doesn't affect anything in here.
+    (. "$HOOK_SCRIPT_PATH")
+    BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
 
-    # Reset the bootstrap.sh flags
-    buildkite-flags-reset
-
-    # Return back to the working dir
-    cd "$HOOK_PREVIOUS_WORKING_DIR"
-
-    # Exit from the bootstrap.sh script if the hook exits with a non-0 exit
-    # status
-    if [[ $HOOK_EXIT_STATUS -ne 0 ]]; then
-      echo "Hook returned an exit status of $HOOK_EXIT_STATUS, exiting..."
-      exit $HOOK_EXIT_STATUS
-    fi
+    # Read from the checkout path file, and cleanup.
+    BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY=$(cat "$BUILDKITE_BOOTSTRAP_WD_TMP_FILE")
+    rm $BUILDKITE_BOOTSTRAP_WD_TMP_FILE
   elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     # When in debug mode, show that we've skipped a hook
     echo "~~~ Running $HOOK_LABEL hook"
@@ -118,12 +124,22 @@ function buildkite-hook {
   fi
 }
 
+# Exit from the bootstrap.sh script if the hook exits with a non-0 exit status
+function buildkite-hook-exit-on-error {
+  if [[ $BUILDKITE_LAST_HOOK_EXIT_STATUS != "" ]] && [[ $BUILDKITE_LAST_HOOK_EXIT_STATUS -ne 0 ]]; then
+    echo "Hook returned an exit status of $BUILDKITE_LAST_HOOK_EXIT_STATUS, exiting..."
+    exit $BUILDKITE_LAST_HOOK_EXIT_STATUS
+  fi
+}
+
 function buildkite-global-hook {
   buildkite-hook "global $1" "$BUILDKITE_HOOKS_PATH/$1"
+  buildkite-hook-exit-on-error
 }
 
 function buildkite-local-hook {
   buildkite-hook "local $1" ".buildkite/hooks/$1"
+  buildkite-hook-exit-on-error
 }
 
 ##############################################################
@@ -278,9 +294,10 @@ buildkite-global-hook "post-checkout"
 # Now that we have a repo, we can perform a `post-checkout` local hook
 buildkite-local-hook "post-checkout"
 
-# If the BUILDKITE_BUILD_CHECKOUT_PATH has been changed, log and switch to it
-if [[ "$PREVIOUS_BUILDKITE_BUILD_CHECKOUT_PATH" != "$BUILDKITE_BUILD_CHECKOUT_PATH" ]]; then
-  echo "~~~ A post-checkout hook has changed the build path to $BUILDKITE_BUILD_CHECKOUT_PATH"
+# If the working directory has been changed by a hook, log and switch to it
+if [[ "$BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY" != "" ]] && [[ "$BUILDKITE_BUILD_CHECKOUT_PATH" != "$BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY" ]]; then
+  echo "~~~ A post-checkout hook has changed the working directory to $BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY"
+  BUILDKITE_BUILD_CHECKOUT_PATH=$BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY
 
   if [ -d "$BUILDKITE_BUILD_CHECKOUT_PATH" ]; then
     buildkite-run "cd $BUILDKITE_BUILD_CHECKOUT_PATH"
@@ -296,58 +313,6 @@ fi
 #
 ##############################################################
 
-# Make sure we actually have a command to run
-if [[ "$BUILDKITE_COMMAND" == "" ]]; then
-  buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
-fi
-
-# Generate a temporary build script containing what to actually run.
-buildkite-debug "~~~ Preparing build script"
-BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
-
-# Generate a different script depending on whether or not it's a script to
-# execute
-if [[ -f "$BUILDKITE_COMMAND" ]]; then
-  # Make sure the script they're trying to execute has chmod +x. We can't do
-  # this inside the script we generate because it fails within Docker:
-  # https://github.com/docker/docker/issues/9547
-  buildkite-run-debug "chmod +x \"$BUILDKITE_COMMAND\""
-  echo -e '#!/bin/bash'"\n./\"$BUILDKITE_COMMAND\"" > "$BUILDKITE_SCRIPT_PATH"
-else
-  echo -e '#!/bin/bash'"\n$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
-fi
-
-if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-  buildkite-run "cat $BUILDKITE_SCRIPT_PATH"
-fi
-
-# Ensure the temporary build script can be executed
-chmod +x "$BUILDKITE_SCRIPT_PATH"
-
-# If the command isn't a file on the filesystem, then it's something we need to
-# eval. But before we even try running it, we should double check that the
-# agent is allowed to eval commands.
-#
-# NOTE: There is a slight problem with this check - and it's with usage with
-# Docker. If you specify a script to run inside the docker container, and that
-# isn't on the file system at the same path, then it won't match, and it'll be
-# treated as an eval. For example, you mount your repository at /app, and tell
-# the agent run `app/ci.sh`, ci.sh won't exist on the filesytem at this point
-# at app/ci.sh. The soltion is to make sure the `workdir` directroy of the
-# docker container is at /app in that case.
-if [[ ! -f "$BUILDKITE_COMMAND" ]]; then
-  # Make sure the agent is even allowed to eval commands
-  if [[ "$BUILDKITE_COMMAND_EVAL" != "true" ]]; then
-    buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
-  fi
-
-  BUILDKITE_COMMAND_ACTION="Running command"
-  BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
-else
-  BUILDKITE_COMMAND_ACTION="Running build script"
-  BUILDKITE_COMMAND_DISPLAY="./\"$BUILDKITE_COMMAND\""
-fi
-
 # Run the global `pre-command` hook
 buildkite-global-hook "pre-command"
 
@@ -356,18 +321,71 @@ buildkite-local-hook "pre-command"
 
 # If the user has specificed a local `command` hook
 if [[ -e ".buildkite/hooks/command" ]]; then
-  buildkite-local-hook "command"
+  # Manually run the hook to avoid it from exiting on failure
+  buildkite-hook "local command" ".buildkite/hooks/command"
 
   # Capture the exit status from the build script
-  export BUILDKITE_COMMAND_EXIT_STATUS=$?
-
+  export BUILDKITE_COMMAND_EXIT_STATUS=$BUILDKITE_LAST_HOOK_EXIT_STATUS
 # Then check for a global hook path
 elif [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
-  buildkite-global-hook "command"
+  # Manually run the hook to avoid it from exiting on failure
+  buildkite-hook "global command" "$BUILDKITE_HOOKS_PATH/command"
 
   # Capture the exit status from the build script
-  export BUILDKITE_COMMAND_EXIT_STATUS=$?
+  export BUILDKITE_COMMAND_EXIT_STATUS=$BUILDKITE_LAST_HOOK_EXIT_STATUS
 else
+  # Make sure we actually have a command to run
+  if [[ "$BUILDKITE_COMMAND" == "" ]]; then
+    buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
+  fi
+
+  # Generate a temporary build script containing what to actually run.
+  buildkite-debug "~~~ Preparing build script"
+  BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
+
+  # Generate a different script depending on whether or not it's a script to
+  # execute
+  if [[ -f "$BUILDKITE_COMMAND" ]]; then
+    # Make sure the script they're trying to execute has chmod +x. We can't do
+    # this inside the script we generate because it fails within Docker:
+    # https://github.com/docker/docker/issues/9547
+    buildkite-run-debug "chmod +x \"$BUILDKITE_COMMAND\""
+    echo -e '#!/bin/bash'"\n./\"$BUILDKITE_COMMAND\"" > "$BUILDKITE_SCRIPT_PATH"
+  else
+    echo -e '#!/bin/bash'"\n$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
+  fi
+
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    buildkite-run "cat $BUILDKITE_SCRIPT_PATH"
+  fi
+
+  # Ensure the temporary build script can be executed
+  chmod +x "$BUILDKITE_SCRIPT_PATH"
+
+  # If the command isn't a file on the filesystem, then it's something we need to
+  # eval. But before we even try running it, we should double check that the
+  # agent is allowed to eval commands.
+  #
+  # NOTE: There is a slight problem with this check - and it's with usage with
+  # Docker. If you specify a script to run inside the docker container, and that
+  # isn't on the file system at the same path, then it won't match, and it'll be
+  # treated as an eval. For example, you mount your repository at /app, and tell
+  # the agent run `app/ci.sh`, ci.sh won't exist on the filesytem at this point
+  # at app/ci.sh. The soltion is to make sure the `workdir` directroy of the
+  # docker container is at /app in that case.
+  if [[ ! -f "$BUILDKITE_COMMAND" ]]; then
+    # Make sure the agent is even allowed to eval commands
+    if [[ "$BUILDKITE_COMMAND_EVAL" != "true" ]]; then
+      buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
+    fi
+
+    BUILDKITE_COMMAND_ACTION="Running command"
+    BUILDKITE_COMMAND_DISPLAY=$BUILDKITE_COMMAND
+  else
+    BUILDKITE_COMMAND_ACTION="Running build script"
+    BUILDKITE_COMMAND_DISPLAY="./\"$BUILDKITE_COMMAND\""
+  fi
+
   ## Docker
   if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
     DOCKER_CONTAINER="buildkite_${BUILDKITE_JOB_ID}_container"
