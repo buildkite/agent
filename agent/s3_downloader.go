@@ -1,5 +1,21 @@
 package agent
 
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/buildkite/agent/logger"
+)
+
+var (
+	globalS3DownloaderManagerByBucket = map[string]*s3manager.Downloader{}
+	globalS3Mutex                     sync.Mutex
+)
+
 type S3Downloader struct {
 	// The name of the bucket
 	Bucket string
@@ -16,48 +32,68 @@ type S3Downloader struct {
 
 	// If failed responses should be dumped to the log
 	DebugHTTP bool
+
+	// The S3 download manager
+	Downloader *s3manager.Downloader
 }
 
 func (d S3Downloader) Start() error {
-	// Try to auth with S3
-	// auth, err := awsS3Creds()
-	// if err != nil {
-	// 	return errors.New(fmt.Sprintf("Error creating AWS S3 authentication: %s", err.Error()))
-	// }
+	var downloader *s3manager.Downloader
 
-	// // Try and get the region
-	// region, err := awsS3Region()
-	// if err != nil {
-	// 	return err
-	// }
+	// Split apart the bucket
+	bucketParts := strings.Split(strings.TrimLeft(d.Bucket, "s3://"), "/")
+	bucketName := bucketParts[0]
+	bucketPath := strings.Join(bucketParts[1:len(bucketParts)], "/")
 
-	// // Split apart the bucket
-	// bucketParts := strings.Split(strings.TrimLeft(d.Bucket, "s3://"), "/")
-	// bucketName := bucketParts[0]
-	// bucketPath := strings.Join(bucketParts[1:len(bucketParts)], "/")
+	// Lock the global s3 bucket cache using a mutex. We do this because if
+	// multiple threads are all using the s3 downloader, they may all start
+	// at the same time, and all try and populate the cache at the same
+	// time.
+	globalS3Mutex.Lock()
 
-	// logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucketName, region.Name)
+	if globalS3DownloaderManagerByBucket[bucketName] == nil {
+		// Initialize the s3 client, and authenticate it. Once it's
+		// successfully auths, create a downloader and store it in the
+		// global cache.
+		s3Client, err := newS3Client(bucketName)
+		if err != nil {
+			return err
+		}
 
-	// // Find the bucket
-	// s3 := s3.New(auth, region)
-	// bucket := s3.Bucket(bucketName)
+		downloader = s3manager.NewDownloader(&s3manager.DownloadOptions{S3: s3Client})
+		globalS3DownloaderManagerByBucket[bucketName] = downloader
+	} else {
+		downloader = globalS3DownloaderManagerByBucket[bucketName]
+	}
 
-	// // If the list doesn't return an error, then we've got our bucket
-	// _, err = bucket.List("", "", "", 0)
-	// if err != nil {
-	// 	return errors.New("Could not find bucket `" + bucketName + "` in region `" + region.Name + "` (" + err.Error() + ")")
-	// }
+	// Release the mutex now we've got the downloader
+	globalS3Mutex.Unlock()
 
-	// // Create the location of the file
-	// var s3Location string
-	// if bucketPath != "" {
-	// 	s3Location = strings.TrimRight(bucketPath, "/") + "/" + strings.TrimLeft(d.Path, "/")
-	// } else {
-	// 	s3Location = d.Path
-	// }
+	// Create the location of the file
+	var s3Location string
+	if bucketPath != "" {
+		s3Location = strings.TrimRight(bucketPath, "/") + "/" + strings.TrimLeft(d.Path, "/")
+	} else {
+		s3Location = d.Path
+	}
 
-	// // Generate a Signed URL
-	// signedURL := bucket.SignedURL(s3Location, time.Now().Add(time.Hour))
+	targetFile := filepath.Join(d.Destination, d.Path)
+	targetDirectory, _ := filepath.Split(targetFile)
+
+	// Ensure we have a folder to download into
+	err := os.MkdirAll(targetDirectory, 0777)
+	if err != nil {
+		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
+	}
+
+	logger.Debug("Downloading %s/%s to %s", d.Bucket, s3Location, targetFile)
+
+	logger.Debug("%s", d.Destination)
+	logger.Debug("%s", d.Destination)
+	logger.Debug("%s", downloader)
+	logger.Debug("%s", s3Location)
+	logger.Debug("%s", d.Path)
+	logger.Debug("---")
 
 	// // We can now cheat and pass the URL onto our regular downloader
 	// return Download{
@@ -67,5 +103,6 @@ func (d S3Downloader) Start() error {
 	// 	Retries:     d.Retries,
 	// 	DebugHTTP:   d.DebugHTTP,
 	// }.Start()
+
 	return nil
 }
