@@ -8,4 +8,4 @@ vendor/bundle
 .bundle
 .envrc
 .agent.conf
-.agent.local.conf
+.agent.*.conf
