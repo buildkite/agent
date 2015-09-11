@@ -37,7 +37,6 @@ type ArtifactDownloadConfig struct {
 	Query            string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Destination      string `cli:"arg:1" label:"artifact download path" validate:"required"`
 	Step             string `cli:"step"`
-	Job              string `cli:"job" deprecated:"--job is deprecated. Please use --step"`
 	Build            string `cli:"build" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -51,11 +50,6 @@ var ArtifactDownloadCommand = cli.Command{
 	Usage:       "Downloads artifacts from Buildkite to the local machine",
 	Description: DownloadHelpDescription,
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  "job",
-			Value: "",
-			Usage: "DEPRECATED",
-		},
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",

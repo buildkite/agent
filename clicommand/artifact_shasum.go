@@ -39,7 +39,6 @@ Example:
 type ArtifactShasumConfig struct {
 	Query            string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Step             string `cli:"step"`
-	Job              string `cli:"job" deprecated:"--job is deprecated. Please use --step"`
 	Build            string `cli:"build" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -53,11 +52,6 @@ var ArtifactShasumCommand = cli.Command{
 	Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",
 	Description: ShasumHelpDescription,
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:  "job",
-			Value: "",
-			Usage: "DEPRECATED",
-		},
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
