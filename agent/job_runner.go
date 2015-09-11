@@ -165,6 +165,7 @@ func (r *JobRunner) createEnvironment() []string {
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
 	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.AutoSSHFingerprintVerification)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
+	env["BUILDKITE_ARTIFACT_UNIX_SYNTAX"] = fmt.Sprintf("%t", r.AgentConfiguration.ArtifactUnixSyntax)
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
