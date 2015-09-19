@@ -1,0 +1,98 @@
+steps:
+  -
+    name: "🔨"
+    command: "scripts/tests.sh"
+    env:
+      BUILDKITE_DOCKER_COMPOSE_CONTAINER: "agent"
+  -
+    name: "📦"
+    command: "scripts/build-binaries.sh"
+    artifact_paths: "pkg/*"
+    env:
+      BUILDKITE_DOCKER_COMPOSE_CONTAINER: "agent"
+  -
+    type: "waiter"
+  -
+    name: ":redhat: experimental"
+    command: "scripts/rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    branches: "master"
+    env:
+      CODENAME: "experimental"
+    agents:
+      - "queue=deploy"
+  -
+    name: ":debian: experimental"
+    command: "scripts/debian-package.sh"
+    artifact_paths: "deb/**/*"
+    branches: "master"
+    env:
+      CODENAME: " experimental"
+    agents:
+      - "queue=deploy"
+  -
+    name: ":github: :hammer:"
+    command: "scripts/build-github-release.sh"
+    artifact_paths: "releases/**/*"
+    branches: "master"
+    env:
+      BUILDKITE_DOCKER_COMPOSE_CONTAINER: "agent"
+  -
+    type: "manual"
+  -
+    name: ":octocat: :rocket:"
+    command: "scripts/github-release.sh"
+    branches: "master"
+    agents:
+      - "queue=deploy"
+  -
+    name: ":redhat: unstable"
+    command: "scripts/rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    branches: "master"
+    env:
+      CODENAME: "unstable"
+    agents:
+      - "queue=deploy"
+  -
+    name: ":debian: unstable"
+    command: "scripts/debian-package.sh"
+    branches: "master"
+    env:
+      CODENAME: "unstable"
+    agents:
+      - "queue=deploy"
+  -
+    type: "waiter"
+  -
+    name: ":whale:"
+    command: "scripts/release-docker.sh"
+    branches: "master"
+    agents:
+      - "queue=deploy"
+  -
+    name: ":beer:"
+    command: "scripts/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    branches: "master"
+    agents:
+      - "queue=deploy"
+  -
+    type: "manual"
+  -
+    name: ":redhat: stable"
+    command: "scripts/rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    branches: "master"
+    env:
+      CODENAME: "stable"
+    agents:
+      - "queue=deploy"
+  -
+    name: ":debian: stable"
+    command: "scripts/debian-package.sh"
+    branches: "master"
+    env:
+      CODENAME: "stable"
+    agents:
+      - "queue=deploy"
