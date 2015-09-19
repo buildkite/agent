@@ -3,7 +3,9 @@ package clicommand
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/andrew-d/go-termutil"
@@ -21,9 +23,18 @@ var PipelineUploadHelpDescription = `Usage:
 
 Description:
 
-   Allows you to change the pipeline of a running build by uploading a
-   JSON configuration file. By default, we try to upload
-   .buildkite/steps.json, but you can customize which file to use.
+   Allows you to change the pipeline of a running build by uploading either a
+   JSON or Yaml configuration file. If no configuration file is provided,
+   we look for the file in the following locations:
+
+   - buildkite.yml
+   - buildkite.json
+   - .buildkite/pipeline.yml
+   - .buildkite/pipeline.json
+   - .buildkite/steps.json (deprecated, removed in v2.2)
+
+   You can also pipe build pipelines to the command, allowing you to create scripts
+   that generate dynamic pipelines.
 
 Example:
 
@@ -95,12 +106,42 @@ var PipelineUploadCommand = cli.Command{
 				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
 		} else {
-			// Default to opening .buildkite/steps.json
-			filename = "steps.json"
-			path, _ := filepath.Abs(".buildkite/" + filename)
-			input, err = ioutil.ReadFile(path)
+			paths := []string{
+				"buildkite.yml",
+				"buildkite.json",
+				".buildkite/pipeline.yml",
+				".buildkite/pipeline.json",
+				".buildkite/steps.json",
+			}
+
+			// Collect all the files that exist
+			exists := []string{}
+			for _, path := range paths {
+				if _, err := os.Stat(path); err == nil {
+					exists = append(exists, path)
+				}
+			}
+
+			// If more than 1 of the config files exist, throw an
+			// error. There can only be one!!
+			if len(exists) > 1 {
+				logger.Fatal("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
+			} else if len(exists) == 0 {
+				logger.Fatal("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
+			}
+
+			found := exists[0]
+
+			// Warn about the deprecated steps.json
+			if found == ".buildkite/steps.json" {
+				logger.Warn("The default steps.json file has been deprecated and will be removed in v2.2. Please rename to .buildkite/pipeline.json and wrap the steps array in a `steps` property: { \"steps\": [ ... ] } }")
+			}
+
+			// Read the default file
+			filename = path.Base(found)
+			input, err = ioutil.ReadFile(found)
 			if err != nil {
-				logger.Fatal("Failed to read file: %s", err)
+				logger.Fatal("Failed to read file %s: %s", found, err)
 			}
 		}
 

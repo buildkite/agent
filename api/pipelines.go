@@ -3,9 +3,10 @@ package api
 import (
 	"bytes"
 	"fmt"
-	"mime"
 	"mime/multipart"
 	"path/filepath"
+
+	"github.com/buildkite/agent/mime"
 )
 
 // PipelinesService handles communication with the pipeline related methods of the
