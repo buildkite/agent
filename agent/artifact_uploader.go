@@ -237,7 +237,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
-			logger.Info("Uploading \"%s\" %d bytes", artifact.Path, artifact.FileSize)
+			logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
