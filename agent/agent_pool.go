@@ -60,9 +60,7 @@ func (r *AgentPool) Start() error {
 	logger.Info("You can press Ctrl-C to stop the agent")
 	logger.Info("Waiting for work...")
 
-	// Now that the agent has connected, we need to start the signal
-	// watcher so in the event of a QUIT signal, we can gracefully
-	// disconnect the agent.
+	// Start a signalwatcher so we can monitor signals and handle shutdowns
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
 		if sig == signalwatcher.QUIT {
 			logger.Debug("Received signal `%s`", sig.String())
