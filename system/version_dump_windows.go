@@ -1,11 +1,11 @@
-package agent
+package system
 
 import (
 	"fmt"
 	"syscall"
 )
 
-func OSDump() (string, error) {
+func VersionDump() (string, error) {
 	dll := syscall.MustLoadDLL("kernel32.dll")
 	p := dll.MustFindProc("GetVersion")
 	v, _, _ := p.Call()

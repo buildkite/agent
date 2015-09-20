@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/signalwatcher"
+	"github.com/buildkite/agent/system"
 )
 
 type AgentPool struct {
@@ -121,7 +122,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	}
 
 	// Add the OS dump
-	agent.OS, err = OSDump()
+	agent.OS, err = system.VersionDump()
 	if err != nil {
 		logger.Warn("Failed to find OS information: %s", err)
 	}
