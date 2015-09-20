@@ -21,6 +21,10 @@ func Watch(callback func(Signal)) {
 
 		if sig == syscall.SIGHUP {
 			go callback(HUP)
+		} else if sig == syscall.SIGTERM {
+			go callback(TERM)
+		} else if sig == syscall.SIGINT {
+			go callback(INT)
 		} else {
 			go callback(QUIT)
 		}

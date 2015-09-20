@@ -154,6 +154,7 @@ func (r *JobRunner) createEnvironment() []string {
 	env["BUILDKITE_AGENT_ENDPOINT"] = r.Endpoint
 	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.Agent.AccessToken
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", logger.GetLevel() == logger.DEBUG)
+	env["BUILDKITE_AGENT_PID"] = fmt.Sprintf("%d", os.Getpid())
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
 	// currently running file (there is only 1 binary)

@@ -101,24 +101,46 @@ func (a *AgentWorker) Start() error {
 
 // Stops the agent from accepting new work and cancels any current work it's
 // running
-func (a *AgentWorker) Stop() {
-	// Only allow one stop to run at a time (because we're playing with channels)
+func (a *AgentWorker) Stop(graceful bool) {
+	// Only allow one stop to run at a time (because we're playing with
+	// channels)
 	a.stopMutex.Lock()
+	defer a.stopMutex.Unlock()
 
-	if a.stopping {
-		logger.Debug("Agent is already stopping...")
-		return
+	if graceful {
+		if a.stopping {
+			logger.Warn("Agent is already gracefully stopping...")
+		} else {
+			// If we have a job, tell the user that we'll wait for
+			// it to finish before disconnecting
+			if a.jobRunner != nil {
+				logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
+			} else {
+				logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+			}
+		}
 	} else {
-		logger.Debug("Stopping the agent...")
+		// If there's a job running, kill it, then disconnect
+		if a.jobRunner != nil {
+			logger.Info("Forefully stopping agent. The current job will be canceled before disconnecting...")
+
+			// Kill the current job. Doesn't do anything if the job
+			// is already being killed, so it's safe to call
+			// multiple times.
+			a.jobRunner.Kill()
+		} else {
+			logger.Info("Forefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+		}
+	}
+
+	// We don't need to do the below operations again since we've already
+	// done them before
+	if a.stopping {
+		return
 	}
 
 	// Update the proc title
 	a.UpdateProcTitle("stopping")
-
-	// If there's a running job, kill it.
-	if a.jobRunner != nil {
-		a.jobRunner.Kill()
-	}
 
 	// If we have a ticker, stop it, and send a signal to the stop channel,
 	// which will cause the agent worker to stop looping immediatly.
@@ -128,9 +150,6 @@ func (a *AgentWorker) Stop() {
 
 	// Mark the agent as stopping
 	a.stopping = true
-
-	// Unlock the stop mutex
-	a.stopMutex.Unlock()
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
@@ -208,7 +227,7 @@ func (a *AgentWorker) Ping() {
 
 	// Should the agent disconnect?
 	if ping.Action == "disconnect" {
-		a.Stop()
+		a.Stop(false)
 		return
 	}
 

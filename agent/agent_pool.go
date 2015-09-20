@@ -66,7 +66,10 @@ func (r *AgentPool) Start() error {
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
 		if sig == signalwatcher.QUIT {
 			logger.Debug("Received signal `%s`", sig.String())
-			worker.Stop()
+			worker.Stop(false)
+		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
+			logger.Debug("Received signal `%s`", sig.String())
+			worker.Stop(true)
 		} else {
 			logger.Debug("Ignoring signal `%s`", sig.String())
 		}

@@ -9,4 +9,6 @@ func (s Signal) String() string {
 const (
 	HUP  = Signal("HUP")
 	QUIT = Signal("QUIT")
+	TERM = Signal("TERM")
+	INT  = Signal("INT")
 )
