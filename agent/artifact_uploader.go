@@ -192,7 +192,9 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			// them from the tracking map
 			for id, state := range artifactsStates {
 				statesToUpload[id] = state
+				p.Lock()
 				delete(artifactsStates, id)
+				p.Unlock()
 			}
 
 			if len(statesToUpload) > 0 {
@@ -267,7 +269,9 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				state = "finished"
 			}
 
+			p.Lock()
 			artifactsStates[artifact.ID] = state
+			p.Unlock()
 		})
 	}
 
