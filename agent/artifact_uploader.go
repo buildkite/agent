@@ -172,6 +172,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	// Prepare a concurrency pool to upload the artifacts
 	p := pool.New(pool.MaxConcurrencyLimit)
 	errors := []error{}
+	var errorsMutex sync.Mutex
 
 	// Create a wait group so we can make sure the uploader waits for all
 	// the artifact states to upload before finishing
@@ -179,8 +180,9 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	stateUploaderWaitGroup.Add(1)
 
 	// A map to keep track of artifact states and how many we've uploaded
-	artifactsStates := make(map[string]string)
+	artifactStates := make(map[string]string)
 	artifactStatesUploaded := 0
+	var artifactStatesMutex sync.Mutex
 
 	// Spin up a gourtine that'll uploading artifact statuses every few
 	// seconds in batches
@@ -190,12 +192,16 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 			// Grab all the states we need to upload, and remove
 			// them from the tracking map
-			for id, state := range artifactsStates {
+			//
+			// Since we mutate the artifactStates variable in
+			// multiple routines, we need to lock it to make sure
+			// nothing else is changing it at the same time.
+			artifactStatesMutex.Lock()
+			for id, state := range artifactStates {
 				statesToUpload[id] = state
-				p.Lock()
-				delete(artifactsStates, id)
-				p.Unlock()
+				delete(artifactStates, id)
 			}
+			artifactStatesMutex.Unlock()
 
 			if len(statesToUpload) > 0 {
 				artifactStatesUploaded += len(statesToUpload)
@@ -216,10 +222,12 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				if err != nil {
 					logger.Error("Error uploading artifact states: %s", err)
 
-					// Track the error that was raised
-					p.Lock()
+					// Track the error that was raised. We need to
+					// aquire a lock since we mutate the errors
+					// slice in mutliple routines.
+					errorsMutex.Lock()
 					errors = append(errors, err)
-					p.Unlock()
+					errorsMutex.Unlock()
 				}
 
 				logger.Debug("Uploaded %d artfact states (%d/%d)", len(statesToUpload), artifactStatesUploaded, len(artifacts))
@@ -259,19 +267,24 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			if err != nil {
 				logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 
-				// Track the error that was raised
-				p.Lock()
+				// Track the error that was raised. We need to
+				// aquire a lock since we mutate the errors
+				// slice in mutliple routines.
+				errorsMutex.Lock()
 				errors = append(errors, err)
-				p.Unlock()
+				errorsMutex.Unlock()
 
 				state = "error"
 			} else {
 				state = "finished"
 			}
 
-			p.Lock()
-			artifactsStates[artifact.ID] = state
-			p.Unlock()
+			// Since we mutate the artifactStates variable in
+			// multiple routines, we need to lock it to make sure
+			// nothing else is changing it at the same time.
+			artifactStatesMutex.Lock()
+			artifactStates[artifact.ID] = state
+			artifactStatesMutex.Unlock()
 		})
 	}
 
