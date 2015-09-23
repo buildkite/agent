@@ -1,15 +1,14 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/AdRoll/goamz/s3"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/mime"
@@ -24,39 +23,21 @@ type S3Uploader struct {
 	// Whether or not HTTP calls shoud be debugged
 	DebugHTTP bool
 
+	Uploader *s3manager.Uploader
+
 	// The S3 Bucket we're uploading these files to
-	Bucket *s3.Bucket
+	// Bucket *s3.Bucket
 }
 
 func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 	u.Destination = destination
-	u.DebugHTTP = debugHTTP
 
-	// Try to auth with S3
-	auth, err := awsS3Auth()
-	if err != nil {
-		return errors.New(fmt.Sprintf("Error creating AWS S3 authentication: %s", err.Error()))
-	}
-
-	// Try and get the region
-	region, err := awsS3Region()
+	s3client, err := newS3Client(u.bucketName())
 	if err != nil {
 		return err
 	}
 
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), region.Name)
-
-	// Find the bucket
-	s3 := s3.New(auth, region)
-	bucket := s3.Bucket(u.bucketName())
-
-	// If the list doesn't return an error, then we've got our bucket
-	_, err = bucket.List("", "", "", 0)
-	if err != nil {
-		return errors.New("Could not find bucket `" + u.bucketName() + "` in region `" + region.Name + "` (" + err.Error() + ")")
-	}
-
-	u.Bucket = bucket
+	u.Uploader = s3manager.NewUploader(&s3manager.UploadOptions{S3: s3client})
 
 	return nil
 }
@@ -70,36 +51,33 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 }
 
 func (u *S3Uploader) Upload(artifact *api.Artifact) error {
-	permission := "public-read"
-	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
-	} else if os.Getenv("AWS_S3_ACL") != "" {
-		permission = os.Getenv("AWS_S3_ACL")
-	}
+	logger.Debug("Opening file \"%s\"", artifact.AbsolutePath)
 
-	// The dirtiest validation method ever...
-	if permission != "private" &&
-		permission != "public-read" &&
-		permission != "public-read-write" &&
-		permission != "authenticated-read" &&
-		permission != "bucket-owner-read" &&
-		permission != "bucket-owner-full-control" {
-		logger.Fatal("Invalid S3 ACL `%s`", permission)
-	}
-
-	Perms := s3.ACL(permission)
-
-	logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
-	data, err := ioutil.ReadFile(artifact.AbsolutePath)
+	// Open the file (but don't read it's contents into memory)
+	file, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
-		return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
+		return fmt.Errorf("Failed to open file \"%s\" (%s)", artifact.AbsolutePath, err.Error())
+	}
+	defer file.Close()
+
+	// Construct the file upload options
+	uploadInput := &s3manager.UploadInput{
+		Bucket:      aws.String(u.bucketName()),
+		Key:         aws.String(u.artifactPath(artifact)),
+		ACL:         aws.String(awsS3PermissionFromEnv()),
+		ContentType: aws.String(u.mimeType(artifact)),
+		Body:        file,
 	}
 
-	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
-	err = u.Bucket.Put(u.artifactPath(artifact), data, u.mimeType(artifact), Perms, s3.Options{})
+	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), &uploadInput.ACL)
+
+	// Now upload the file
+	result, err := u.Uploader.Upload(uploadInput)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%s)", u.artifactPath(artifact), err.Error()))
+		return fmt.Errorf("Failed to upload file \"%s\" (%s)", u.artifactPath(artifact), err.Error())
 	}
+
+	logger.Debug("Successfully uploaded to: %s", result.Location)
 
 	return nil
 }
