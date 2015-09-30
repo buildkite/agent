@@ -114,7 +114,11 @@ function buildkite-hook {
     }
     export -f buildkite-agent-bootstrap-working-directory
 
-    # Run the script and store it's exit status.
+    # Run the script and store it's exit status. We don't run the hook in a
+    # subshell because we want the hook scripts to be able to modify the
+    # bootstrap's ENV variables. The only downside with this approach, is if
+    # they call `exit`, the bootstrap script will exit as well. We this is an
+    # acceptable tradeoff.
     . "$HOOK_SCRIPT_PATH"
     BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
 
