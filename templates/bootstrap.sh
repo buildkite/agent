@@ -114,9 +114,8 @@ function buildkite-hook {
     }
     export -f buildkite-agent-bootstrap-working-directory
 
-    # Run the script and store it's exit status. We run it as a subshell so if
-    # it exits or modifies the ENV, it doesn't affect anything in here.
-    (. "$HOOK_SCRIPT_PATH")
+    # Run the script and store it's exit status.
+    . "$HOOK_SCRIPT_PATH"
     BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
 
     # Remove the exported function
