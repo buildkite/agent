@@ -105,6 +105,7 @@ func (r *JobRunner) Run() error {
 
 	// Stop the log streamer. This will block until all the chunks have
 	// been uploaded
+	logger.Debug("Waiting for job log chunks to finish uploading")
 	r.logStreamer.Stop()
 
 	// Warn about failed chunks
