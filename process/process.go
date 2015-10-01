@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -20,16 +21,25 @@ import (
 )
 
 type Process struct {
-	Pid           int
-	Running       bool
-	PTY           bool
-	Script        string
-	Env           []string
-	ExitStatus    string
-	buffer        bytes.Buffer
-	command       *exec.Cmd
+	Pid        int
+	PTY        bool
+	Script     string
+	Env        []string
+	ExitStatus string
+
+	buffer  bytes.Buffer
+	command *exec.Cmd
+
+	// This callback is called when the process offically starts
 	StartCallback func()
-	LineCallback  func(string)
+
+	// For every line in the process output, this callback will be called
+	// with the contents of the line
+	LineCallback func(string)
+
+	// Running is stored as an int32 so we can use atomic operations to
+	// set/get it (it's accessed by multiple goroutines)
+	running int32
 }
 
 func (p Process) Create() *Process {
@@ -72,7 +82,7 @@ func (p *Process) Start() error {
 		}
 
 		p.Pid = p.command.Process.Pid
-		p.Running = true
+		p.setRunning(true)
 
 		waitGroup.Add(1)
 
@@ -109,7 +119,7 @@ func (p *Process) Start() error {
 		}
 
 		p.Pid = p.command.Process.Pid
-		p.Running = true
+		p.setRunning(true)
 	}
 
 	logger.Info("[Process] Process is running with PID: %d", p.Pid)
@@ -181,7 +191,7 @@ func (p *Process) Start() error {
 	lineWriterPipe.Close()
 
 	// The process is no longer running at this point
-	p.Running = false
+	p.setRunning(false)
 
 	// Find the exit status of the script
 	p.ExitStatus = getExitStatus(waitResult)
@@ -282,6 +292,22 @@ func (p *Process) signal(sig os.Signal) error {
 	}
 
 	return nil
+}
+
+// Returns whether or not the process is running
+func (p *Process) IsRunning() bool {
+	return atomic.LoadInt32(&p.running) != 0
+}
+
+// Sets the running flag of the process
+func (p *Process) setRunning(r bool) {
+	// Use the atomic package to avoid race conditions when setting the
+	// `running` value from multiple routines
+	if r {
+		atomic.StoreInt32(&p.running, 1)
+	} else {
+		atomic.StoreInt32(&p.running, 0)
+	}
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29

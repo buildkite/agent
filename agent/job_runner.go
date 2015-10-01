@@ -243,7 +243,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		// Add to the wait group
 		r.wg.Add(1)
 
-		for r.process.Running {
+		for r.process.IsRunning() {
 			// Send the output of the process to the log streamer
 			// for processing
 			r.logStreamer.Process(r.process.Output())
@@ -263,7 +263,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		// Add to the wait group
 		r.wg.Add(1)
 
-		for r.process.Running {
+		for r.process.IsRunning() {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
 			jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
