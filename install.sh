@@ -24,6 +24,8 @@ UNAME=`uname -sp | awk '{print tolower($0)}'`
 
 if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
   PLATFORM="darwin"
+elif [[ ($UNAME == *"freebsd"*) ]]; then
+  PLATFORM="freebsd"
 else
   PLATFORM="linux"
 fi
