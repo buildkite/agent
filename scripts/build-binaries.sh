@@ -26,6 +26,7 @@ build-binary "linux" "386"
 build-binary "linux" "arm"
 build-binary "darwin" "386"
 build-binary "darwin" "amd64"
+build-binary "freebsd" "amd64"
 
 # Grab the version of the binary while we're here (we need it if we deploy this
 # commit to GitHub)
