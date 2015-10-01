@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/buildkite/agent/logger"
 )
 
 var HeaderRegex = regexp.MustCompile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
@@ -12,55 +14,75 @@ var HeaderRegex = regexp.MustCompile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
 type HeaderTimesStreamer struct {
 	// The callback that will be called when a header time is ready for
 	// upload
-	Callback func(int, int, map[string]string)
+	UploadCallback func(int, int, map[string]string)
 
 	// The times that have found while scanning lines
-	times []string
+	times      []string
+	timesMutex sync.Mutex
 
 	// Every time we get a new time, we increment the wait group, and
 	// decrement it after it has been uploaded.
-	waitGroup sync.WaitGroup
+	uploadWaitGroup sync.WaitGroup
+
+	// Every time we go to scan a line, we increment the wait group, then
+	// decrement after it's finished scanning. That way when we stop the
+	// streamer, we can wait for all the lines to finish scanning first.
+	scanWaitGroup sync.WaitGroup
+
+	// A boolean to keep track if we're currently streaming header times
+	streaming      bool
+	streamingMutex sync.Mutex
 
 	// We store the last index we uploaded to, so we don't have to keep
 	// uploading the same times
 	cursor int
+}
 
-	// A boolean to keep track if a save has been scheduled
-	scheduled bool
+func (h *HeaderTimesStreamer) Start() error {
+	h.streaming = true
 
-	// When calculating the delta between the previous upload, and the
-	// current upload, we lock this mutex so multiple routines don't try
-	// and calculate the deltas at the same time (which could lead to weird
-	// things happening).
-	mutex sync.Mutex
+	go func() {
+		logger.Debug("[HeaderTimesStreamer] Streamer has started...")
+
+		for true {
+			// Break out of streaming if it's finished. We also
+			// need to aquire a read lock on the flag because it
+			// can be modified by other routines.
+			h.streamingMutex.Lock()
+			if !h.streaming {
+				break
+			}
+			h.streamingMutex.Unlock()
+
+			// Upload any pending header times
+			h.Upload()
+
+			// Sleep for a second and try upload some more later
+			time.Sleep(1 * time.Second)
+		}
+
+		logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
+	}()
+
+	return nil
 }
 
 func (h *HeaderTimesStreamer) Scan(line string) {
+	// Keep track of how many line scans we need to do
+	h.scanWaitGroup.Add(1)
+	defer h.scanWaitGroup.Done()
+
 	// To avoid running the regex over every single line, we'll first do a
 	// length check. Hopefully there are no heeaders over 500 characters!
 	if len(line) < 500 && HeaderRegex.MatchString(line) {
-		go h.Now(line)
-	}
-}
+		// Aquire a lock on the times and then add the current time to
+		// our times slice.
+		h.timesMutex.Lock()
+		h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
+		h.timesMutex.Unlock()
 
-func (h *HeaderTimesStreamer) Now(line string) {
-	// logger.Debug("Found header \"%s\", capturing current time", line)
-
-	// Add the current time to our times slice
-	h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
-
-	// Add the time to the wait group
-	h.waitGroup.Add(1)
-
-	// Wait for a second to see if any more header times come in, and then
-	// save. This is super hacky way of implementing a throttler.
-	if !h.scheduled {
-		h.scheduled = true
-
-		time.AfterFunc(time.Second*1, func() {
-			h.scheduled = false
-			go h.Upload()
-		})
+		// Add the time to the wait group
+		h.uploadWaitGroup.Add(1)
 	}
 }
 
@@ -68,13 +90,12 @@ func (h *HeaderTimesStreamer) Upload() {
 	// Store the current cursor value
 	c := h.cursor
 
-	// Lock the mutex while we figure out what to upload so another routine
-	// doesn't try to do it at the same time
-	h.mutex.Lock()
-
-	// Grab only the times that we haven't uploaded yet
+	// Grab only the times that we haven't uploaded yet. We need to aquire
+	// a lock since other routines may be adding to it.
+	h.timesMutex.Lock()
 	length := len(h.times)
 	times := h.times[h.cursor:length]
+	h.timesMutex.Unlock()
 
 	// Construct the payload to send to the server
 	payload := map[string]string{}
@@ -82,11 +103,8 @@ func (h *HeaderTimesStreamer) Upload() {
 		payload[strconv.Itoa(h.cursor+index)] = time
 	}
 
-	// Save the new cursor length
+	// Save the cursor we're up to
 	h.cursor = length
-
-	// Unlock the mutex so another routine can kick off a save
-	h.mutex.Unlock()
 
 	// How many times are we uploading this time
 	timesToUpload := len(times)
@@ -94,15 +112,25 @@ func (h *HeaderTimesStreamer) Upload() {
 	// Do we even have some times to upload
 	if timesToUpload > 0 {
 		// Call our callback with the times for upload
-		h.Callback(c, length, payload)
+		logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
+		h.UploadCallback(c, length, payload)
+		logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
 
-		// Decrement the wait group for every time we've uploaded
-		for _, _ = range times {
-			h.waitGroup.Done()
-		}
+		// Decrement the wait group for every time we've uploaded.
+		h.uploadWaitGroup.Add(timesToUpload * -1)
 	}
 }
 
-func (h *HeaderTimesStreamer) Wait() {
-	h.waitGroup.Wait()
+func (h *HeaderTimesStreamer) Stop() {
+	logger.Debug("[HeaderTimesStreamer] Waiting for all the lines to be scanned")
+	h.scanWaitGroup.Wait()
+
+	logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
+	h.uploadWaitGroup.Wait()
+
+	// Since we're modifying the waitGroup and the streaming flag, we need
+	// to aquire a write lock.
+	h.streamingMutex.Lock()
+	h.streaming = false
+	h.streamingMutex.Unlock()
 }

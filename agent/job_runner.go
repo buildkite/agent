@@ -53,7 +53,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
 
 	// // Create our header times struct
-	runner.headerTimesStreamer = &HeaderTimesStreamer{Callback: r.onUploadHeaderTime}
+	runner.headerTimesStreamer = &HeaderTimesStreamer{UploadCallback: r.onUploadHeaderTime}
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
@@ -82,6 +82,11 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
+	// Start the header time streamer
+	if err := r.headerTimesStreamer.Start(); err != nil {
+		return err
+	}
+
 	// Start the log streamer
 	if err := r.logStreamer.Start(); err != nil {
 		return err
@@ -99,13 +104,12 @@ func (r *JobRunner) Run() error {
 	// Store the finished at time
 	finishedAt := time.Now()
 
-	// Wait until all the header times have finished uploading
-	logger.Debug("Waiting for header times to finish uploading")
-	r.headerTimesStreamer.Wait()
+	// Stop the header time streamer. This will block until all the chunks
+	// have been uploaded
+	r.headerTimesStreamer.Stop()
 
 	// Stop the log streamer. This will block until all the chunks have
 	// been uploaded
-	logger.Debug("Waiting for job log chunks to finish uploading")
 	r.logStreamer.Stop()
 
 	// Warn about failed chunks
@@ -117,7 +121,7 @@ func (r *JobRunner) Run() error {
 	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
 
 	// Wait for the routines that we spun up to finish
-	logger.Debug("Waiting for all other routines to finish")
+	logger.Debug("[JobRunner] Waiting for all other routines to finish")
 	r.wg.Wait()
 
 	logger.Info("Finished job %s", r.Job.ID)
@@ -251,7 +255,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		// Mark this routine as done in the wait group
 		r.wg.Done()
 
-		logger.Debug("Routine that processes the log has finished")
+		logger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 
 	// Start a routine that will grab the output every few seconds and send it back to Buildkite
@@ -278,14 +282,12 @@ func (r *JobRunner) onProcessStartCallback() {
 		// Mark this routine as done in the wait group
 		r.wg.Done()
 
-		logger.Debug("Routine that refreshes the job has finished")
+		logger.Debug("[JobRunner] Routine that refreshes the job has finished")
 	}()
 }
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
 	retry.Do(func(s *retry.Stats) error {
-		logger.Debug("Uploading header times %d..%d (%d)", cursor+1, total, len(times))
-
 		_, err := r.APIClient.HeaderTimes.Save(r.Job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			logger.Warn("%s (%s)", err, s)
