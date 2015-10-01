@@ -27,8 +27,7 @@ type Process struct {
 	Env        []string
 	ExitStatus string
 
-	buffer        bytes.Buffer
-	bufferRWMutex sync.RWMutex
+	buffer bytes.Buffer
 
 	command *exec.Cmd
 
@@ -72,9 +71,6 @@ func (p *Process) Start() error {
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
 	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
-
-	p.bufferRWMutex.Lock()
-	defer p.bufferRWMutex.Unlock()
 
 	logger.Info("Starting to run script: %s", p.command.Path)
 
@@ -216,9 +212,6 @@ func (p *Process) Start() error {
 }
 
 func (p *Process) Output() string {
-	p.bufferRWMutex.RLock()
-	defer p.bufferRWMutex.RUnlock()
-
 	return p.buffer.String()
 }
 
