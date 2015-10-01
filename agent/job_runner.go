@@ -42,7 +42,7 @@ type JobRunner struct {
 	cancelled bool
 
 	// Used to wait on various routines that we spin up
-	wg sync.WaitGroup
+	routineWaitGroup sync.WaitGroup
 }
 
 // Initializes the job runner
@@ -122,7 +122,7 @@ func (r *JobRunner) Run() error {
 
 	// Wait for the routines that we spun up to finish
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
-	r.wg.Wait()
+	r.routineWaitGroup.Wait()
 
 	logger.Info("Finished job %s", r.Job.ID)
 
@@ -237,12 +237,13 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 }
 
 func (r *JobRunner) onProcessStartCallback() {
+	// Since we're spinning up 2 routines here, we might as well add them
+	// to the routine wait group here.
+	r.routineWaitGroup.Add(2)
+
 	// Start a routine that will grab the output every few seconds and send
 	// it back to Buildkite
 	go func() {
-		// Add to the wait group
-		r.wg.Add(1)
-
 		for r.process.IsRunning() {
 			// Send the output of the process to the log streamer
 			// for processing
@@ -253,16 +254,14 @@ func (r *JobRunner) onProcessStartCallback() {
 		}
 
 		// Mark this routine as done in the wait group
-		r.wg.Done()
+		r.routineWaitGroup.Done()
 
 		logger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 
-	// Start a routine that will grab the output every few seconds and send it back to Buildkite
+	// Start a routine that will constantly ping Buildkite to see if the
+	// job has been canceled
 	go func() {
-		// Add to the wait group
-		r.wg.Add(1)
-
 		for r.process.IsRunning() {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
@@ -280,7 +279,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		}
 
 		// Mark this routine as done in the wait group
-		r.wg.Done()
+		r.routineWaitGroup.Done()
 
 		logger.Debug("[JobRunner] Routine that refreshes the job has finished")
 	}()
