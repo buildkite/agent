@@ -263,6 +263,12 @@ func (a *AgentWorker) Ping() {
 		return err
 	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
 
+	// If `accepted` is nil, then the job was never accepted
+	if accepted == nil {
+		logger.Error("Failed to accept job")
+		return
+	}
+
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = JobRunner{
 		Endpoint:           accepted.Endpoint,
