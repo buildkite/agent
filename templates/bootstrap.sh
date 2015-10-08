@@ -121,6 +121,9 @@ function buildkite-hook {
     # acceptable tradeoff.
     . "$HOOK_SCRIPT_PATH"
     BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
+    
+    # Reset the bootstrap.sh flags
+    buildkite-flags-reset
 
     # Remove the exported function
     unset -f buildkite-agent-bootstrap-working-directory
