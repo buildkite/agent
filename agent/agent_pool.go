@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -98,6 +99,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Version:           Version(),
 		Build:             BuildVersion(),
 		PID:               os.Getpid(),
+		Arch:              runtime.GOARCH,
 	}
 
 	// Attempt to add the EC2 tags

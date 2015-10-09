@@ -15,6 +15,7 @@ type Agent struct {
 	PingInterval      int      `json:"ping_interval"`
 	HearbeatInterval  int      `json:"heartbeat_interval"`
 	OS                string   `json:"os"`
+	Arch              string   `json:"arch"`
 	ScriptEvalEnabled bool     `json:"script_eval_enabled"`
 	Priority          string   `json:"priority,omitempty"`
 	Version           string   `json:"version"`
