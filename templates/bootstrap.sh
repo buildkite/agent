@@ -121,7 +121,7 @@ function buildkite-hook {
     # acceptable tradeoff.
     . "$HOOK_SCRIPT_PATH"
     BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
-    
+
     # Reset the bootstrap.sh flags
     buildkite-flags-reset
 
@@ -243,8 +243,9 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
   else
+    # Attempt to clone just a single branch so first time clones are fast
     if git clone --help | grep -- --single-branch &> /dev/null; then
-      buildkite-run "git clone -qv --single-branch \"$BUILDKITE_BRANCH\" -- \"$BUILDKITE_REPO\" ."
+      buildkite-run "git clone -qv --single-branch -b \"$BUILDKITE_BRANCH\" -- \"$BUILDKITE_REPO\" ."
     else
       buildkite-run "git clone -qv -- \"$BUILDKITE_REPO\" ."
     fi
