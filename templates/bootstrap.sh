@@ -243,7 +243,11 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
   else
-    buildkite-run "git clone \"$BUILDKITE_REPO\" . -qv"
+    if git clone --help | grep -- --single-branch &> /dev/null; then
+      buildkite-run "git clone -qv --single-branch \"$BUILDKITE_BRANCH\" -- \"$BUILDKITE_REPO\" ."
+    else
+      buildkite-run "git clone -qv -- \"$BUILDKITE_REPO\" ."
+    fi
   fi
 
   buildkite-run "git clean -fdq"
