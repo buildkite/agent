@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -240,7 +241,7 @@ func (a *AgentWorker) Ping() {
 	}
 
 	// Update the proc title
-	a.UpdateProcTitle(fmt.Sprintf("job %s", ping.Job.ID))
+	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(ping.Job.ID, "-")[0]))
 
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
@@ -307,5 +308,5 @@ func (a *AgentWorker) Disconnect() error {
 }
 
 func (a *AgentWorker) UpdateProcTitle(action string) {
-	SetProcTitle(fmt.Sprintf("buildkite-agent v%s (%s) [%s]", Version(), a.Agent.Name, action))
+	SetProcTitle(fmt.Sprintf("buildkite-agent v%s [%s]", Version(), action))
 }
