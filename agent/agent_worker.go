@@ -8,6 +8,7 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/proctitle"
 	"github.com/buildkite/agent/retry"
 )
 
@@ -308,5 +309,5 @@ func (a *AgentWorker) Disconnect() error {
 }
 
 func (a *AgentWorker) UpdateProcTitle(action string) {
-	SetProcTitle(fmt.Sprintf("buildkite-agent v%s [%s]", Version(), action))
+	proctitle.Replace(fmt.Sprintf("buildkite-agent v%s [%s]", Version(), action))
 }
