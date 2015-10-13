@@ -401,6 +401,7 @@ func (b Bootstrap) Start() error {
 	printf("Switching working directroy to build directroy")
 	b.wd = b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
 
+	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else {
@@ -444,8 +445,23 @@ func (b Bootstrap) Start() error {
 	// Run the `pre-command` local hook
 	b.executeLocalHook("pre-command")
 
-	// TODO
-	commandExitStatus := 0
+	var commandExitStatus int
+
+	// Run either a custom `command` hook, or the default command runner.
+	// We need to manually run these hooks so we can customize their
+	// `exitOnError` behaviour
+	localCommandHookPath := b.localHookPath("command")
+	globalCommandHookPath := b.localHookPath("command")
+
+	if fileExists(localCommandHookPath) {
+		commandExitStatus = b.executeHook("local command", localCommandHookPath, false)
+	} else if fileExists(globalCommandHookPath) {
+		commandExitStatus = b.executeHook("global command", globalCommandHookPath, false)
+	} else {
+		commandExitStatus = 0
+	}
+
+	// Save the command exit status to the env so hooks + plugins can access it
 	b.env["BUILDKITE_COMMAND_EXIT_STATUS"] = fmt.Sprintf("%d", commandExitStatus)
 
 	// Run the `post-command` global hook
