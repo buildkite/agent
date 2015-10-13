@@ -23,8 +23,7 @@ Example:
    $ buildkite-agent bootstrap ...`
 
 type BootstrapConfig struct {
-	NoColor bool `cli:"no-color"`
-	Debug   bool `cli:"debug"`
+	Debug bool `cli:"debug"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -32,7 +31,6 @@ var BootstrapCommand = cli.Command{
 	Usage:       "Run a Buildkite job locally",
 	Description: BootstrapHelpDescription,
 	Flags: []cli.Flag{
-		NoColorFlag,
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
@@ -44,10 +42,9 @@ var BootstrapCommand = cli.Command{
 			logger.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
-
 		// Run the bootstrap
-		agent.Bootstrap{}.Run()
+		agent.Bootstrap{
+			Debug: cfg.Debug,
+		}.Run()
 	},
 }
