@@ -41,6 +41,12 @@ type Bootstrap struct {
 	// Path to the global hooks
 	HooksPath string
 
+	// Paths to automatically upload as artifacts when the build finishes
+	AutomaticArtifactUploadPaths string
+
+	// A custom destination to upload artifacts to (i.e. s3://...)
+	ArtifactUploadDestination string
+
 	// The running environment for the bootstrap file as each task runs
 	env map[string]string
 
@@ -60,11 +66,25 @@ func headerf(format string, v ...interface{}) {
 	fmt.Printf("~~~ %s\n", fmt.Sprintf(format, v...))
 }
 
-// Shows the error text and exits the bootstrap
-func fatalf(format string, v ...interface{}) {
+// Shows a buildkite boostrap error
+func errorf(format string, v ...interface{}) {
 	headerf(":rotating_light: \033[31mBuildkite Error\033[0m")
 	printf(format, v...)
+}
+
+// Shows the error text and exits the bootstrap
+func fatalf(format string, v ...interface{}) {
+	errorf(format, v...)
 	os.Exit(1)
+}
+
+// Prints a shell prompt
+func promptf(format string, v ...interface{}) {
+	if runtime.GOOS == "windows" {
+		fmt.Printf("^> %s\n", fmt.Sprintf(format, v...))
+	} else {
+		fmt.Printf("\033[90m$\033[0m %s\n", fmt.Sprintf(format, v...))
+	}
 }
 
 // Returns whether or not a file exists on the filesystem
@@ -116,11 +136,13 @@ func diffEnvMaps(beforeEnv map[string]string, afterEnv map[string]string) map[st
 	return diff
 }
 
-// Executes a shell function
-func (b Bootstrap) shell(command string, args ...string) (string, string) {
-	// Come up with a nice way of showing the command if we need to
-	display := strings.Join(append([]string{command}, args...), " ")
+// Come up with a nice way of showing the command if we need to
+func formatCommandAndArgs(command string, args ...string) string {
+	return strings.Join(append([]string{command}, args...), " ")
+}
 
+// Executes a shell function
+func (b Bootstrap) shell(command string, args ...string) (int, string) {
 	// Execute the command
 	c := exec.Command(command, args...)
 	c.Env = append(os.Environ(), convertEnvMapIntoSlice(b.env)...)
@@ -130,11 +152,13 @@ func (b Bootstrap) shell(command string, args ...string) (string, string) {
 	var buffer bytes.Buffer
 	multiWriter := io.MultiWriter(&buffer, os.Stdout)
 
+	formattedCommand := formatCommandAndArgs(command, args...)
+
 	if b.RunInPty {
 		// Start our process in a PTY
 		f, err := b.shellPTYStart(c)
 		if err != nil {
-			fatalf("There was an error running `%s` on a PTY (%s)", display, err)
+			fatalf("There was an error running `%s` on a PTY (%s)", formattedCommand, err)
 		}
 
 		// Copy the pty to our buffer. This will block until it
@@ -153,7 +177,7 @@ func (b Bootstrap) shell(command string, args ...string) (string, string) {
 
 		err := c.Start()
 		if err != nil {
-			fatalf("There was an error running `%s` (%s)", display, err)
+			fatalf("There was an error running `%s` (%s)", formattedCommand, err)
 		}
 	}
 
@@ -163,10 +187,16 @@ func (b Bootstrap) shell(command string, args ...string) (string, string) {
 	// Get the exit status
 	exitStatus, err := process.GetExitStatusFromWaitResult(waitResult)
 	if err != nil {
-		fatalf("There was an error getting the exit status for `%s` (%s)", display, err)
+		fatalf("There was an error getting the exit status for `%s` (%s)", formattedCommand, err)
 	}
 
 	return exitStatus, buffer.String()
+}
+
+// Runs a shell command, but prints the command to STDOUT before doing so
+func (b Bootstrap) shellAndPrompt(command string, args ...string) (int, string) {
+	promptf(formatCommandAndArgs(command, args...))
+	return b.shell(command, args...)
 }
 
 // Executes a hook and applyes any environment changes. The tricky thing with
@@ -176,7 +206,7 @@ func (b Bootstrap) shell(command string, args ...string) (string, string) {
 // the ENV to a file, runs the hook, then writes the ENV back to another file.
 // Once all that has finished, we compare the files, and apply what ever
 // changes to our running env. Cool huh?
-func (b Bootstrap) executeHook(name string, path string) {
+func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 	// Check if the hook exists
 	if fileExists(path) {
 		// Create a temporary file that we'll put the hook runner code in
@@ -207,24 +237,42 @@ func (b Bootstrap) executeHook(name string, path string) {
 			hookScript = "SET > \"" + tempEnvBeforeFile.Name() + "\"\n" +
 				"call \"" + path + "\"\n" +
 				"BUILDKITE_LAST_HOOK_EXIT_STATUS=!ERRORLEVEL!\n" +
-				"SET > \"" + tempEnvAfterFile.Name() + "\""
+				"SET > \"" + tempEnvAfterFile.Name() + "\"\n" +
+				"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
 		} else {
 			hookScript = "#!/bin/bash\n" +
 				"env > \"" + tempEnvBeforeFile.Name() + "\"\n" +
 				". \"" + path + "\"\n" +
-				"export BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
-				"env > \"" + tempEnvAfterFile.Name() + "\""
+				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
+				"env > \"" + tempEnvAfterFile.Name() + "\"\n" +
+				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
 		}
 
 		// Write the hook script to the runner
 		tempHookRunnerFile.WriteString(hookScript)
 		tempHookRunnerFile.Sync()
 
+		if b.Debug {
+			headerf("Preparing %s hook", name)
+			printf("A hook runner was written to \"%s\" with the following:", tempHookRunnerFile.Name())
+			printf(hookScript)
+		}
+
 		// Print to the screen we're going to run the hook
-		headerf("Running %s hook", path)
+		headerf("Running %s hook", name)
 
 		// Run the hook
-		b.shell(tempHookRunnerFile.Name())
+		hookExitStatus, _ := b.shell(tempHookRunnerFile.Name())
+
+		// Exit from the bootstrapper if the hook exited
+		if exitOnError && hookExitStatus != 0 {
+			errorf("The %s hook exited with a status of %d", name, hookExitStatus)
+			os.Exit(hookExitStatus)
+		}
+
+		// Save the hook exit status so other hooks can get access to
+		// it
+		b.env["BUILDKITE_LAST_HOOK_EXIT_STATUS"] = fmt.Sprintf("%s", hookExitStatus)
 
 		// Compare the ENV current env with the after shots, then
 		// modify the running env map with the changes.
@@ -240,20 +288,43 @@ func (b Bootstrap) executeHook(name string, path string) {
 				}
 			}
 		}
+
+		return hookExitStatus
 	} else {
 		if b.Debug {
 			headerf("Running %s hook", name)
 			printf("Skipping, no hook script found at: %s", path)
 		}
+
+		return 0
 	}
 }
 
-func (b Bootstrap) executeGlobalHook(name string) {
-	b.executeHook("global "+name, path.Join(b.HooksPath, name))
+// Returns the absolute path to a global hook
+func (b Bootstrap) globalHookPath(name string) string {
+	return path.Join(b.HooksPath, name)
 }
 
-func (b Bootstrap) executeLocalHook(name string) {
-	b.executeHook("local "+name, path.Join(b.wd, ".buildkite", "hooks", name))
+// Executes a global hook
+func (b Bootstrap) executeGlobalHook(name string) int {
+	return b.executeHook("global "+name, b.globalHookPath(name), true)
+}
+
+// Returns the absolute path to a local hook
+func (b Bootstrap) localHookPath(name string) string {
+	return path.Join(b.wd, ".buildkite", "hooks", name)
+}
+
+// Executes a local hook
+func (b Bootstrap) executeLocalHook(name string) int {
+	return b.executeHook("local "+name, b.localHookPath(name), true)
+}
+
+// Checkouts source code a paticular revision on the file system. It will do a
+// fresh clone if it doesn't exist, or update an existing repository if it
+// does.
+func (b Bootstrap) checkoutRepository(repository string, revision string) {
+	// TODO
 }
 
 func (b Bootstrap) Start() error {
@@ -322,17 +393,103 @@ func (b Bootstrap) Start() error {
 
 	headerf("Preparing build folder")
 
+	// Create the build directory
 	printf("Creating %s", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
 	os.MkdirAll(b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], 0777)
 
+	// Switch the internal wd to it
 	printf("Switching working directroy to build directroy")
 	b.wd = b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
+
+	if fileExists(b.globalHookPath("checkout")) {
+		b.executeGlobalHook("checkout")
+	} else {
+		b.checkoutRepository("", "")
+	}
+
+	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
+	// one of the post-checkout hooks changed it.
+	previousCheckoutPath := b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
 
 	// Run the `post-checkout` global hook
 	b.executeGlobalHook("post-checkout")
 
 	// Run the `post-checkout` local hook
 	b.executeLocalHook("post-checkout")
+
+	// Capture the new checkout path so we can see if it's changed
+	newCheckoutPath := b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
+
+	// If the working directory has been changed by a hook, log and switch to it
+	if b.wd != "" && previousCheckoutPath != newCheckoutPath {
+		headerf("A post-checkout hook has changed the working directory to %s", newCheckoutPath)
+
+		if fileExists(newCheckoutPath) {
+			b.wd = newCheckoutPath
+		} else {
+			fatalf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPath)
+		}
+	}
+
+	//////////////////////////////////////////////////////////////
+	//
+	// RUN THE BUILD
+	// Determines how to run the build, and then runs it
+	//
+	//////////////////////////////////////////////////////////////
+
+	// Run the `pre-command` global hook
+	b.executeGlobalHook("pre-command")
+
+	// Run the `pre-command` local hook
+	b.executeLocalHook("pre-command")
+
+	// TODO
+	commandExitStatus := 0
+	b.env["BUILDKITE_COMMAND_EXIT_STATUS"] = fmt.Sprintf("%d", commandExitStatus)
+
+	// Run the `post-command` global hook
+	b.executeGlobalHook("post-command")
+
+	// Run the `post-command` local hook
+	b.executeLocalHook("post-command")
+
+	//////////////////////////////////////////////////////////////
+	//
+	// ARTIFACTS
+	// Uploads and build artifacts associated with this build
+	//
+	//////////////////////////////////////////////////////////////
+
+	if b.AutomaticArtifactUploadPaths != "" {
+		// Run the `pre-artifact` global hook
+		b.executeGlobalHook("pre-artifact")
+
+		// Run the `pre-artifact` local hook
+		b.executeLocalHook("pre-artifact")
+
+		// Run the artifact upload command
+		headerf("Uploading artifacts")
+		artifactUploadExitStatus, _ := b.shellAndPrompt("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination)
+
+		// If the artifact upload fails, open the current group and
+		// exit with an error
+		if artifactUploadExitStatus != 0 {
+			printf("^^^ +++")
+			os.Exit(1)
+		}
+
+		// Run the `post-artifact` global hook
+		b.executeGlobalHook("post-artifact")
+
+		// Run the `post-artifact` local hook
+		b.executeLocalHook("post-artifact")
+
+	}
+
+	// Be sure to exit this script with the same exit status that the users
+	// build script exited with.
+	os.Exit(commandExitStatus)
 
 	return nil
 }

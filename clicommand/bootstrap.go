@@ -25,15 +25,17 @@ Example:
    $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
-	AgentName     string `cli:"agent"`
-	PipelineSlug  string `cli:"pipeline"`
-	ProjectSlug   string `cli:"project"`
-	CleanCheckout bool   `cli:"clean-checkout"`
-	BinPath       string `cli:"bin-path" normalize:"filepath"`
-	BuildPath     string `cli:"build-path" normalize:"filepath"`
-	HooksPath     string `cli:"hooks-path" normalize:"filepath"`
-	NoPTY         bool   `cli:"no-pty"`
-	Debug         bool   `cli:"debug"`
+	AgentName                    string `cli:"agent"`
+	PipelineSlug                 string `cli:"pipeline"`
+	ProjectSlug                  string `cli:"project"`
+	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
+	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
+	CleanCheckout                bool   `cli:"clean-checkout"`
+	BinPath                      string `cli:"bin-path" normalize:"filepath"`
+	BuildPath                    string `cli:"build-path" normalize:"filepath"`
+	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
+	NoPTY                        bool   `cli:"no-pty"`
+	Debug                        bool   `cli:"debug"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -58,6 +60,18 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "The slug of the project that the job is a part of [DEPRECATED]",
 			EnvVar: "BUILDKITE_PROJECT_SLUG",
+		},
+		cli.StringFlag{
+			Name:   "artifact-upload-paths",
+			Value:  "",
+			Usage:  "Paths to files to automatically upload at the end of a job",
+			EnvVar: "BUILDKITE_ARTIFACT_PATHS",
+		},
+		cli.StringFlag{
+			Name:   "artifact-upload-destination",
+			Value:  "",
+			Usage:  "A custom location to upload artifact paths to (i.e. s3://my-custom-bucket)",
+			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION",
 		},
 		cli.BoolFlag{
 			Name:   "clean-checkout",
@@ -108,14 +122,16 @@ var BootstrapCommand = cli.Command{
 
 		// Start the bootstraper
 		agent.Bootstrap{
-			AgentName:     cfg.AgentName,
-			PipelineSlug:  pipelineSlug,
-			CleanCheckout: cfg.CleanCheckout,
-			BuildPath:     cfg.BuildPath,
-			BinPath:       cfg.BinPath,
-			HooksPath:     cfg.HooksPath,
-			Debug:         cfg.Debug,
-			RunInPty:      !cfg.NoPTY,
+			AgentName:                    cfg.AgentName,
+			PipelineSlug:                 pipelineSlug,
+			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
+			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
+			CleanCheckout:                cfg.CleanCheckout,
+			BuildPath:                    cfg.BuildPath,
+			BinPath:                      cfg.BinPath,
+			HooksPath:                    cfg.HooksPath,
+			Debug:                        cfg.Debug,
+			RunInPty:                     !cfg.NoPTY,
 		}.Start()
 	},
 }

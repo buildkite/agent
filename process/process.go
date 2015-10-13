@@ -200,7 +200,7 @@ func (p *Process) Start() error {
 		logger.Error("[Process] %s", err)
 	}
 
-	p.ExitStatus = exitStatus
+	p.ExitStatus = fmt.Sprintf("%d", exitStatus)
 
 	logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
@@ -318,7 +318,7 @@ func (p *Process) setRunning(r bool) {
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
 // TODO: Can this be better?
-func GetExitStatusFromWaitResult(waitResult error) (string, error) {
+func GetExitStatusFromWaitResult(waitResult error) (int, error) {
 	exitStatus := -1
 
 	if waitResult != nil {
@@ -326,14 +326,14 @@ func GetExitStatusFromWaitResult(waitResult error) (string, error) {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				return "", errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				return -1, errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		}
 	} else {
 		exitStatus = 0
 	}
 
-	return fmt.Sprintf("%d", exitStatus), nil
+	return exitStatus, nil
 }
 
 func timeoutWait(waitGroup *sync.WaitGroup) error {
