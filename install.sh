@@ -30,11 +30,11 @@ else
   PLATFORM="linux"
 fi
 
-if [[ ($UNAME == *x86_64*) || ($UNAME == *amd64*) ]]; then
-  ARCH="amd64"
-else
-  ARCH="386"
-fi
+case $UNAME in
+  *x86_64*) ARCH="amd64" ;;
+  *arm*)    ARCH="arm"   ;;
+  *)        ARCH="386"   ;;
+esac
 
 if [[ "$BETA" == "true" ]]; then
   RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true"
