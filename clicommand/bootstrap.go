@@ -20,10 +20,14 @@ Description:
 
 Example:
 
-   $ buildkite-agent bootstrap ...`
+   $ export $(curl -s -H "Authorization: Bearer xxx" \
+     "https://api.buildkite.com/v1/organizations/[org]/projects/[proj]/builds/[build]/jobs/[job]/env.txt" | xargs)
+   $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
-	Debug bool `cli:"debug"`
+	Debug     bool   `cli:"debug"`
+	HooksPath string `cli:"hooks-path" normalize:"filepath"`
+	NoPTY     bool   `cli:"no-pty"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -31,6 +35,17 @@ var BootstrapCommand = cli.Command{
 	Usage:       "Run a Buildkite job locally",
 	Description: BootstrapHelpDescription,
 	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:   "hooks-path",
+			Value:  "",
+			Usage:  "Directory where the hook scripts are found",
+			EnvVar: "BUILDKITE_HOOKS_PATH",
+		},
+		cli.BoolFlag{
+			Name:   "no-pty",
+			Usage:  "Do not run jobs within a pseudo terminal",
+			EnvVar: "BUILDKITE_NO_PTY",
+		},
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
@@ -42,9 +57,11 @@ var BootstrapCommand = cli.Command{
 			logger.Fatal("%s", err)
 		}
 
-		// Run the bootstrap
+		// Start the bootstraper
 		agent.Bootstrap{
-			Debug: cfg.Debug,
-		}.Run()
+			HooksPath: cfg.HooksPath,
+			Debug:     cfg.Debug,
+			RunInPty:  !cfg.NoPTY,
+		}.Start()
 	},
 }

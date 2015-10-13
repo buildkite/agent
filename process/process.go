@@ -195,14 +195,19 @@ func (p *Process) Start() error {
 	p.setRunning(false)
 
 	// Find the exit status of the script
-	p.ExitStatus = getExitStatus(waitResult)
+	exitStatus, err := GetExitStatusFromWaitResult(waitResult)
+	if err != nil {
+		logger.Error("[Process] %s", err)
+	}
+
+	p.ExitStatus = exitStatus
 
 	logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
 	logger.Debug("[Process] Waiting for routines to finish")
-	err := timeoutWait(&waitGroup)
+	err = timeoutWait(&waitGroup)
 	if err != nil {
 		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
@@ -313,7 +318,7 @@ func (p *Process) setRunning(r bool) {
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
 // TODO: Can this be better?
-func getExitStatus(waitResult error) string {
+func GetExitStatusFromWaitResult(waitResult error) (string, error) {
 	exitStatus := -1
 
 	if waitResult != nil {
@@ -321,14 +326,14 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				return "", errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		}
 	} else {
 		exitStatus = 0
 	}
 
-	return fmt.Sprintf("%d", exitStatus)
+	return fmt.Sprintf("%d", exitStatus), nil
 }
 
 func timeoutWait(waitGroup *sync.WaitGroup) error {
