@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -13,8 +14,23 @@ type Bootstrap struct {
 	// If the bootstrap is in debug mode
 	Debug bool
 
+	// Slug of the current pipeline
+	PipelineSlug string
+
+	// Name of the agent running the bootstrap
+	AgentName string
+
+	// Should the bootstrap remove an existing checkout before running the job
+	CleanCheckout bool
+
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
+
+	// Path where the builds will be run
+	BuildPath string
+
+	// Path to the buildkite-agent binary
+	BinPath string
 
 	// Path to the global hooks
 	HooksPath string
@@ -22,6 +38,8 @@ type Bootstrap struct {
 	// The running environment for the bootstrap file as each task runs
 	env map[string]string
 }
+
+var agentNameCleanupRegex = regexp.MustCompile("\"")
 
 // Prints a line of output
 func printf(format string, v ...interface{}) {
@@ -40,18 +58,21 @@ func fatalf(format string, v ...interface{}) {
 	os.Exit(1)
 }
 
+// Returns whether or not a file exists on the filesystem
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 
 	return !os.IsNotExist(err)
 }
 
+// Returns the current working directroy
 func getWorkingDirectory() string {
 	wd, _ := os.Getwd()
 
 	return wd
 }
 
+// Reads a file into an ENV map
 func readEnvFileIntoMap(filename string) map[string]string {
 	env := make(map[string]string)
 
@@ -71,6 +92,7 @@ func readEnvFileIntoMap(filename string) map[string]string {
 	return env
 }
 
+// Turns a ENV map into a K=V slice
 func convertEnvMapIntoSlice(env map[string]string) []string {
 	slice := []string{}
 	for k, v := range env {
@@ -79,6 +101,7 @@ func convertEnvMapIntoSlice(env map[string]string) []string {
 	return slice
 }
 
+// Comapres 2 env maps and returns the diff
 func diffEnvMaps(beforeEnv map[string]string, afterEnv map[string]string) map[string]string {
 	diff := make(map[string]string)
 
@@ -182,10 +205,23 @@ func (b Bootstrap) Start() error {
 	// Create an empty env for us to keep track of our env changes in
 	b.env = make(map[string]string)
 
-	// Show BUILDKITE_* environment variables if in debug mode
+	// Add the $BUILDKITE_BIN_PATH to the $PATH
+	b.env["PATH"] = fmt.Sprintf("%s:%s", b.BinPath, os.Getenv("PATH"))
+
+	// Come up with the place that the repository will be checked out to
+	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
+	b.env["BUILDKITE_BUILD_CHECKOUT_PATH"] = path.Join(b.BuildPath, cleanedUpAgentName, b.PipelineSlug)
+
+	// $ SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
+	// $ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
+	// $ export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
+
+	// Show BUILDKITE_* environment variables if in debug mode. Also
+	// include any custom BUILDKITE_ variables that have been added to our
+	// running env map.
 	if b.Debug {
 		headerf("Build environment variables")
-		for _, e := range os.Environ() {
+		for _, e := range append(convertEnvMapIntoSlice(b.env), os.Environ()...) {
 			if strings.HasPrefix(e, "BUILDKITE") {
 				printf(e)
 			}
@@ -214,6 +250,17 @@ func (b Bootstrap) Start() error {
 
 	// Run the `pre-checkout` global hook
 	b.executeGlobalHook("pre-checkout")
+
+	// Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
+	if b.CleanCheckout {
+		headerf("Cleaning project checkout")
+		printf("Removing %s", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
+
+		err := os.RemoveAll(b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
+		if err != nil {
+			fatalf("Failed to remove `%s` (%s)", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], err)
+		}
+	}
 
 	// Run the `post-checkout` global hook
 	b.executeGlobalHook("post-checkout")
