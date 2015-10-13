@@ -1,13 +1,19 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
+
+	"github.com/buildkite/agent/process"
 )
 
 type Bootstrap struct {
@@ -37,6 +43,9 @@ type Bootstrap struct {
 
 	// The running environment for the bootstrap file as each task runs
 	env map[string]string
+
+	// Current working directory that shell commands get executed in
+	wd string
 }
 
 var agentNameCleanupRegex = regexp.MustCompile("\"")
@@ -63,13 +72,6 @@ func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 
 	return !os.IsNotExist(err)
-}
-
-// Returns the current working directroy
-func getWorkingDirectory() string {
-	wd, _ := os.Getwd()
-
-	return wd
 }
 
 // Reads a file into an ENV map
@@ -112,6 +114,59 @@ func diffEnvMaps(beforeEnv map[string]string, afterEnv map[string]string) map[st
 	}
 
 	return diff
+}
+
+// Executes a shell function
+func (b Bootstrap) shell(command string, args ...string) (string, string) {
+	// Come up with a nice way of showing the command if we need to
+	display := strings.Join(append([]string{command}, args...), " ")
+
+	// Execute the command
+	c := exec.Command(command, args...)
+	c.Env = append(os.Environ(), convertEnvMapIntoSlice(b.env)...)
+	c.Dir = b.wd
+
+	// A buffer and multi writer so we can capture shell output
+	var buffer bytes.Buffer
+	multiWriter := io.MultiWriter(&buffer, os.Stdout)
+
+	if b.RunInPty {
+		// Start our process in a PTY
+		f, err := b.shellPTYStart(c)
+		if err != nil {
+			fatalf("There was an error running `%s` on a PTY (%s)", display, err)
+		}
+
+		// Copy the pty to our buffer. This will block until it
+		// EOF's or something breaks.
+		_, err = io.Copy(multiWriter, f)
+		if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
+			// We can safely ignore this error, because
+			// it's just the PTY telling us that it closed
+			// successfully.  See:
+			// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
+			err = nil
+		}
+	} else {
+		c.Stdout = multiWriter
+		c.Stderr = multiWriter
+
+		err := c.Start()
+		if err != nil {
+			fatalf("There was an error running `%s` (%s)", display, err)
+		}
+	}
+
+	// Wait for the command to finish
+	waitResult := c.Wait()
+
+	// Get the exit status
+	exitStatus, err := process.GetExitStatusFromWaitResult(waitResult)
+	if err != nil {
+		fatalf("There was an error getting the exit status for `%s` (%s)", display, err)
+	}
+
+	return exitStatus, buffer.String()
 }
 
 // Executes a hook and applyes any environment changes. The tricky thing with
@@ -169,7 +224,7 @@ func (b Bootstrap) executeHook(name string, path string) {
 		headerf("Running %s hook", path)
 
 		// Run the hook
-		b.shell(b.env, tempHookRunnerFile.Name())
+		b.shell(tempHookRunnerFile.Name())
 
 		// Compare the ENV current env with the after shots, then
 		// modify the running env map with the changes.
@@ -198,10 +253,13 @@ func (b Bootstrap) executeGlobalHook(name string) {
 }
 
 func (b Bootstrap) executeLocalHook(name string) {
-	b.executeHook("local "+name, path.Join(getWorkingDirectory(), ".buildkite", "hooks", name))
+	b.executeHook("local "+name, path.Join(b.wd, ".buildkite", "hooks", name))
 }
 
 func (b Bootstrap) Start() error {
+	// Set the working directroy
+	b.wd, _ = os.Getwd()
+
 	// Create an empty env for us to keep track of our env changes in
 	b.env = make(map[string]string)
 
@@ -261,6 +319,14 @@ func (b Bootstrap) Start() error {
 			fatalf("Failed to remove `%s` (%s)", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], err)
 		}
 	}
+
+	headerf("Preparing build folder")
+
+	printf("Creating %s", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
+	os.MkdirAll(b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], 0777)
+
+	printf("Switching working directroy to build directroy")
+	b.wd = b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
 
 	// Run the `post-checkout` global hook
 	b.executeGlobalHook("post-checkout")
