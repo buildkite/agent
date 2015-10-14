@@ -48,14 +48,20 @@ ECHO ^> git fetch -q
 CALL git fetch -q
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-REM Only reset to the branch if we're not on a tag
+REM Build open-source Github pull requests
 
-IF "%BUILDKITE_TAG%" == "" (
-  ECHO ^> git reset --hard origin/%BUILDKITE_BRANCH%
-  CALL git reset --hard origin/%BUILDKITE_BRANCH%
-  IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
+REM Allow checkouts of forked pull requests on GitHub only
+IF NOT "%BUILDKITE_PULL_REQUEST%" == "false" AND ECHO.%BUILDKITE_PROJECT_PROVIDER% | FIND /I "github">Nul (
+  CALL git fetch origin "+refs/pull/%BUILDKITE_PULL_REQUEST%/head:"
+) ELSE (
+  REM Only reset to the branch if we're not on a tag
+
+  IF "%BUILDKITE_TAG%" == "" (
+    ECHO ^> git reset --hard origin/%BUILDKITE_BRANCH%
+    CALL git reset --hard origin/%BUILDKITE_BRANCH%
+    IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
+  )
 )
-
 
 ECHO ^> git checkout -qf "%BUILDKITE_COMMIT%"
 CALL git checkout -qf "%BUILDKITE_COMMIT%"
