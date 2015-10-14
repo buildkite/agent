@@ -20,6 +20,15 @@ type Bootstrap struct {
 	// If the bootstrap is in debug mode
 	Debug bool
 
+	// The repository that needs to be cloned
+	Repository string
+
+	// The commit being built
+	Commit string
+
+	// The branch of the commit
+	Branch string
+
 	// Slug of the current pipeline
 	PipelineSlug string
 
@@ -87,6 +96,13 @@ func promptf(format string, v ...interface{}) {
 	}
 }
 
+// Will exit the bootstrap if the exit status is non successfull
+func exitOnExitStatusError(exitStatus int) {
+	if exitStatus != 0 {
+		os.Exit(exitStatus)
+	}
+}
+
 // Returns whether or not a file exists on the filesystem
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
@@ -142,19 +158,15 @@ func formatCommandAndArgs(command string, args ...string) string {
 }
 
 // Executes a shell function
-func (b Bootstrap) shell(command string, args ...string) (int, string) {
+func (b Bootstrap) shell(writer io.Writer, pty bool, command string, args ...string) int {
 	// Execute the command
 	c := exec.Command(command, args...)
 	c.Env = append(os.Environ(), convertEnvMapIntoSlice(b.env)...)
 	c.Dir = b.wd
 
-	// A buffer and multi writer so we can capture shell output
-	var buffer bytes.Buffer
-	multiWriter := io.MultiWriter(&buffer, os.Stdout)
-
 	formattedCommand := formatCommandAndArgs(command, args...)
 
-	if b.RunInPty {
+	if pty {
 		// Start our process in a PTY
 		f, err := b.shellPTYStart(c)
 		if err != nil {
@@ -163,7 +175,7 @@ func (b Bootstrap) shell(command string, args ...string) (int, string) {
 
 		// Copy the pty to our buffer. This will block until it
 		// EOF's or something breaks.
-		_, err = io.Copy(multiWriter, f)
+		_, err = io.Copy(writer, f)
 		if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 			// We can safely ignore this error, because
 			// it's just the PTY telling us that it closed
@@ -172,8 +184,8 @@ func (b Bootstrap) shell(command string, args ...string) (int, string) {
 			err = nil
 		}
 	} else {
-		c.Stdout = multiWriter
-		c.Stderr = multiWriter
+		c.Stdout = writer
+		c.Stderr = writer
 
 		err := c.Start()
 		if err != nil {
@@ -190,13 +202,14 @@ func (b Bootstrap) shell(command string, args ...string) (int, string) {
 		fatalf("There was an error getting the exit status for `%s` (%s)", formattedCommand, err)
 	}
 
-	return exitStatus, buffer.String()
+	return exitStatus
 }
 
 // Runs a shell command, but prints the command to STDOUT before doing so
-func (b Bootstrap) shellAndPrompt(command string, args ...string) (int, string) {
+func (b Bootstrap) shellAndPrompt(writer io.Writer, pty bool, command string, args ...string) int {
 	promptf(formatCommandAndArgs(command, args...))
-	return b.shell(command, args...)
+
+	return b.shell(writer, pty, command, args...)
 }
 
 // Executes a hook and applyes any environment changes. The tricky thing with
@@ -211,7 +224,6 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 	if fileExists(path) {
 		// Create a temporary file that we'll put the hook runner code in
 		tempHookRunnerFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-runner")
-		defer tempHookRunnerFile.Close()
 
 		// Mark the temporary hook runner file as writable
 		s, err := os.Stat(tempHookRunnerFile.Name())
@@ -225,11 +237,11 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 
 		// We'll pump the ENV before the hook into this temp file
 		tempEnvBeforeFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-env-before")
-		defer tempEnvBeforeFile.Close()
+		tempEnvBeforeFile.Close()
 
 		// We'll then pump the ENV _after_ the hook into this temp file
 		tempEnvAfterFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-env-after")
-		defer tempEnvAfterFile.Close()
+		tempEnvAfterFile.Close()
 
 		// Create the hook runner code
 		var hookScript string
@@ -251,6 +263,7 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 		// Write the hook script to the runner
 		tempHookRunnerFile.WriteString(hookScript)
 		tempHookRunnerFile.Sync()
+		tempHookRunnerFile.Close()
 
 		if b.Debug {
 			headerf("Preparing %s hook", name)
@@ -262,7 +275,7 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 		headerf("Running %s hook", name)
 
 		// Run the hook
-		hookExitStatus, _ := b.shell(tempHookRunnerFile.Name())
+		hookExitStatus := b.shell(os.Stdout, b.RunInPty, tempHookRunnerFile.Name())
 
 		// Exit from the bootstrapper if the hook exited
 		if exitOnError && hookExitStatus != 0 {
@@ -284,7 +297,7 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 			for envDiffKey, envDiffValue := range envDiff {
 				b.env[envDiffKey] = envDiffValue
 				if b.Debug {
-					printf("%s=%s was added/changed to the environment", envDiffKey, envDiffValue)
+					printf("%s=%s", envDiffKey, envDiffValue)
 				}
 			}
 		}
@@ -323,11 +336,37 @@ func (b Bootstrap) executeLocalHook(name string) int {
 // Checkouts source code a paticular revision on the file system. It will do a
 // fresh clone if it doesn't exist, or update an existing repository if it
 // does.
-func (b Bootstrap) checkoutRepository(repository string, revision string) {
-	// TODO
+func (b Bootstrap) cloneRepository(repository string, dir string, branch string) {
+	var exitStatus int
+	existingGitDir := path.Join(dir, ".git")
+
+	if b.Debug {
+		printf("Checking if \"%s\" exists before cloning", existingGitDir)
+	}
+
+	// Do we need to do a git checkout?
+	if fileExists(existingGitDir) {
+		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "remote", "set-url", "origin", repository)
+		exitOnExitStatusError(exitStatus)
+	} else {
+		// Does `git clone` support the --single-branch method? If it
+		// does, we can use that to make first time clones faster.
+		var gitCloneHelpOutput bytes.Buffer
+		b.shell(&gitCloneHelpOutput, false, "git", "clone", "--help")
+
+		// Clone the repository to the path
+		if strings.Contains(gitCloneHelpOutput.String(), "--single-branch") {
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--single-branch", "-b", branch, "--", repository, dir)
+		} else {
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--", repository, dir)
+		}
+		exitOnExitStatusError(exitStatus)
+	}
 }
 
 func (b Bootstrap) Start() error {
+	var exitStatus int
+
 	// Set the working directroy
 	b.wd, _ = os.Getwd()
 
@@ -394,18 +433,36 @@ func (b Bootstrap) Start() error {
 	headerf("Preparing build folder")
 
 	// Create the build directory
-	printf("Creating %s", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
+	printf("Creating \"%s\"", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
 	os.MkdirAll(b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], 0777)
 
 	// Switch the internal wd to it
 	printf("Switching working directroy to build directroy")
 	b.wd = b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
 
+	// Disable any interactive Git/SSH prompting
+	b.env["GIT_TERMINAL_PROMPT"] = "0"
+
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else {
-		b.checkoutRepository("", "")
+		b.cloneRepository(b.Repository, b.wd, b.Branch)
+
+		// Clean up the repository
+		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clean", "-fdq")
+		exitOnExitStatusError(exitStatus)
+
+		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "--version")
+		exitOnExitStatusError(exitStatus)
+
+		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "status")
+		exitOnExitStatusError(exitStatus)
+
+		// if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
+		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
+		exitOnExitStatusError(exitStatus)
+		// fi
 	}
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
@@ -486,7 +543,7 @@ func (b Bootstrap) Start() error {
 
 		// Run the artifact upload command
 		headerf("Uploading artifacts")
-		artifactUploadExitStatus, _ := b.shellAndPrompt("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination)
+		artifactUploadExitStatus := b.shellAndPrompt(os.Stdout, b.RunInPty, "buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination)
 
 		// If the artifact upload fails, open the current group and
 		// exit with an error

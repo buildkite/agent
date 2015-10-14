@@ -25,6 +25,9 @@ Example:
    $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
+	Repository                   string `cli:"repository"`
+	Commit                       string `cli:"commit"`
+	Branch                       string `cli:"branch"`
 	AgentName                    string `cli:"agent"`
 	PipelineSlug                 string `cli:"pipeline"`
 	ProjectSlug                  string `cli:"project"`
@@ -43,6 +46,24 @@ var BootstrapCommand = cli.Command{
 	Usage:       "Run a Buildkite job locally",
 	Description: BootstrapHelpDescription,
 	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:   "repository",
+			Value:  "",
+			Usage:  "The repository to clone and run the job from",
+			EnvVar: "BUILDKITE_REPO",
+		},
+		cli.StringFlag{
+			Name:   "commit",
+			Value:  "",
+			Usage:  "The commit to checkout in the repository",
+			EnvVar: "BUILDKITE_COMMIT",
+		},
+		cli.StringFlag{
+			Name:   "branch",
+			Value:  "",
+			Usage:  "The branch the commit is in",
+			EnvVar: "BUILDKITE_BRANCH",
+		},
 		cli.StringFlag{
 			Name:   "agent",
 			Value:  "",
@@ -122,6 +143,9 @@ var BootstrapCommand = cli.Command{
 
 		// Start the bootstraper
 		agent.Bootstrap{
+			Repository:                   cfg.Repository,
+			Commit:                       cfg.Commit,
+			Branch:                       cfg.Branch,
 			AgentName:                    cfg.AgentName,
 			PipelineSlug:                 pipelineSlug,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
