@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
 )
 
@@ -57,7 +58,7 @@ type Bootstrap struct {
 	ArtifactUploadDestination string
 
 	// The running environment for the bootstrap file as each task runs
-	env map[string]string
+	env *env.Environment
 
 	// Current working directory that shell commands get executed in
 	wd string
@@ -110,48 +111,6 @@ func fileExists(filename string) bool {
 	return !os.IsNotExist(err)
 }
 
-// Reads a file into an ENV map
-func readEnvFileIntoMap(filename string) map[string]string {
-	env := make(map[string]string)
-
-	contents, err := ioutil.ReadFile(filename)
-	if err != nil {
-		fatalf("Error reading file: %s", err)
-	}
-
-	lines := strings.Split(string(contents), "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			env[parts[0]] = parts[1]
-		}
-	}
-
-	return env
-}
-
-// Turns a ENV map into a K=V slice
-func convertEnvMapIntoSlice(env map[string]string) []string {
-	slice := []string{}
-	for k, v := range env {
-		slice = append(slice, fmt.Sprintf("%s=%s", k, v))
-	}
-	return slice
-}
-
-// Comapres 2 env maps and returns the diff
-func diffEnvMaps(beforeEnv map[string]string, afterEnv map[string]string) map[string]string {
-	diff := make(map[string]string)
-
-	for afterEnvKey, afterEnvValue := range afterEnv {
-		if beforeEnv[afterEnvKey] != afterEnvValue {
-			diff[afterEnvKey] = afterEnvValue
-		}
-	}
-
-	return diff
-}
-
 // Come up with a nice way of showing the command if we need to
 func formatCommandAndArgs(command string, args ...string) string {
 	return strings.Join(append([]string{command}, args...), " ")
@@ -161,7 +120,7 @@ func formatCommandAndArgs(command string, args ...string) string {
 func (b Bootstrap) shell(writer io.Writer, pty bool, command string, args ...string) int {
 	// Execute the command
 	c := exec.Command(command, args...)
-	c.Env = append(os.Environ(), convertEnvMapIntoSlice(b.env)...)
+	c.Env = b.env.ToSlice()
 	c.Dir = b.wd
 
 	formattedCommand := formatCommandAndArgs(command, args...)
@@ -285,17 +244,27 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 
 		// Save the hook exit status so other hooks can get access to
 		// it
-		b.env["BUILDKITE_LAST_HOOK_EXIT_STATUS"] = fmt.Sprintf("%s", hookExitStatus)
+		b.env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%s", hookExitStatus))
 
 		// Compare the ENV current env with the after shots, then
 		// modify the running env map with the changes.
-		envDiff := diffEnvMaps(readEnvFileIntoMap(tempEnvBeforeFile.Name()), readEnvFileIntoMap(tempEnvAfterFile.Name()))
-		if len(envDiff) > 0 {
+		beforeEnv, err := env.NewFromFile(tempEnvBeforeFile.Name())
+		if err != nil {
+			fatalf("Failed to parse \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
+		}
+
+		afterEnv, err := env.NewFromFile(tempEnvAfterFile.Name())
+		if err != nil {
+			fatalf("Failed to parse \"%s\" (%s)", tempEnvAfterFile.Name(), err)
+		}
+
+		diff := afterEnv.Diff(beforeEnv)
+		if diff.Length() > 0 {
 			if b.Debug {
 				headerf("Applying environment changes")
 			}
-			for envDiffKey, envDiffValue := range envDiff {
-				b.env[envDiffKey] = envDiffValue
+			for envDiffKey, envDiffValue := range diff.ToMap() {
+				b.env.Set(envDiffKey, envDiffValue)
 				if b.Debug {
 					printf("%s=%s", envDiffKey, envDiffValue)
 				}
@@ -333,37 +302,6 @@ func (b Bootstrap) executeLocalHook(name string) int {
 	return b.executeHook("local "+name, b.localHookPath(name), true)
 }
 
-// Checkouts source code a paticular revision on the file system. It will do a
-// fresh clone if it doesn't exist, or update an existing repository if it
-// does.
-func (b Bootstrap) cloneRepository(repository string, dir string, branch string) {
-	var exitStatus int
-	existingGitDir := path.Join(dir, ".git")
-
-	if b.Debug {
-		printf("Checking if \"%s\" exists before cloning", existingGitDir)
-	}
-
-	// Do we need to do a git checkout?
-	if fileExists(existingGitDir) {
-		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "remote", "set-url", "origin", repository)
-		exitOnExitStatusError(exitStatus)
-	} else {
-		// Does `git clone` support the --single-branch method? If it
-		// does, we can use that to make first time clones faster.
-		var gitCloneHelpOutput bytes.Buffer
-		b.shell(&gitCloneHelpOutput, false, "git", "clone", "--help")
-
-		// Clone the repository to the path
-		if strings.Contains(gitCloneHelpOutput.String(), "--single-branch") {
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--single-branch", "-b", branch, "--", repository, dir)
-		} else {
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--", repository, dir)
-		}
-		exitOnExitStatusError(exitStatus)
-	}
-}
-
 func (b Bootstrap) Start() error {
 	var exitStatus int
 
@@ -371,14 +309,14 @@ func (b Bootstrap) Start() error {
 	b.wd, _ = os.Getwd()
 
 	// Create an empty env for us to keep track of our env changes in
-	b.env = make(map[string]string)
+	b.env, _ = env.New(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH
-	b.env["PATH"] = fmt.Sprintf("%s:%s", b.BinPath, os.Getenv("PATH"))
+	b.env.Set("PATH", fmt.Sprintf("%s:%s", b.BinPath, b.env.Get("PATH")))
 
 	// Come up with the place that the repository will be checked out to
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
-	b.env["BUILDKITE_BUILD_CHECKOUT_PATH"] = path.Join(b.BuildPath, cleanedUpAgentName, b.PipelineSlug)
+	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.PipelineSlug))
 
 	// $ SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
 	// $ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
@@ -389,7 +327,7 @@ func (b Bootstrap) Start() error {
 	// running env map.
 	if b.Debug {
 		headerf("Build environment variables")
-		for _, e := range append(convertEnvMapIntoSlice(b.env), os.Environ()...) {
+		for _, e := range b.env.ToSlice() {
 			if strings.HasPrefix(e, "BUILDKITE") {
 				printf(e)
 			}
@@ -422,66 +360,58 @@ func (b Bootstrap) Start() error {
 	// Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		headerf("Cleaning project checkout")
-		printf("Removing %s", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
+		printf("Removing %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 
-		err := os.RemoveAll(b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
+		err := os.RemoveAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		if err != nil {
-			fatalf("Failed to remove `%s` (%s)", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], err)
+			fatalf("Failed to remove `%s` (%s)", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
 		}
 	}
 
 	headerf("Preparing build folder")
 
 	// Create the build directory
-	printf("Creating \"%s\"", b.env["BUILDKITE_BUILD_CHECKOUT_PATH"])
-	os.MkdirAll(b.env["BUILDKITE_BUILD_CHECKOUT_PATH"], 0777)
+	printf("Creating \"%s\"", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+	os.MkdirAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
 
 	// Switch the internal wd to it
 	printf("Switching working directroy to build directroy")
-	b.wd = b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
+	b.wd = b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Disable any interactive Git/SSH prompting
-	b.env["GIT_TERMINAL_PROMPT"] = "0"
-
-	// So here's a fun problem with git. OS X 10.10 seems to have a hard
-	// time with PATH handling in some cases, and it has quite a hard time
-	// with git aparently. Also git has bug in it:
-	// https://github.com/git/git/blob/590f6e4235a7d44ad39511186ca8bbac02ae8c2e/git-submodule.sh#L18
-	//
-	// You see that line there? It should really be:
-	//
-	// . $(git --exec-path)/git-sh-setup
-	//
-	// More info about the bug here:
-	// https://github.com/SublimeGit/SublimeGit/issues/150#issuecomment-60532654
-	//
-	// Since for some reason, when we run git commands via Go with a
-	// modified path, it can't find Git correctly in the subshell commands,
-	// and causes everything to fail. So this an epic hack where we just
-	// forcefully add the git exec path to $PATH.
-	if runtime.GOOS == "darwin" {
-		var gitExecPathOutput bytes.Buffer
-		exitStatus = b.shell(&gitExecPathOutput, false, "git", "--exec-path")
-
-		b.env["PATH"] = fmt.Sprintf("%s:%s", strings.TrimSpace(gitExecPathOutput.String()), b.env["PATH"])
-	}
+	b.env.Set("GIT_TERMINAL_PROMPT", "0")
 
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else {
-		b.cloneRepository(b.Repository, b.wd, b.Branch)
+		// Do we need to do a git checkout?
+		existingGitDir := path.Join(b.wd, ".git")
+		if fileExists(existingGitDir) {
+			// Update the the origin of the repository so we can
+			// gracefully handle repository renames
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "remote", "set-url", "origin", b.Repository)
+			exitOnExitStatusError(exitStatus)
+		} else {
+			// Does `git clone` support the --single-branch method? If it
+			// does, we can use that to make first time clones faster.
+			var gitCloneHelpOutput bytes.Buffer
+			b.shell(&gitCloneHelpOutput, false, "git", "clone", "--help")
+
+			// Clone the repository to the path
+			if strings.Contains(gitCloneHelpOutput.String(), "--single-branch") {
+				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--single-branch", "-b", b.Branch, "--", b.Repository, b.wd)
+			} else {
+				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--", b.Repository, b.wd)
+			}
+			exitOnExitStatusError(exitStatus)
+		}
 
 		// Clean up the repository
 		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clean", "-fdq")
 		exitOnExitStatusError(exitStatus)
 
-		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "--version")
-		exitOnExitStatusError(exitStatus)
-
-		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "status")
-		exitOnExitStatusError(exitStatus)
-
+		// Clean up any submodules
 		// if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
 		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
 		exitOnExitStatusError(exitStatus)
@@ -490,7 +420,7 @@ func (b Bootstrap) Start() error {
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
-	previousCheckoutPath := b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
+	previousCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run the `post-checkout` global hook
 	b.executeGlobalHook("post-checkout")
@@ -499,7 +429,7 @@ func (b Bootstrap) Start() error {
 	b.executeLocalHook("post-checkout")
 
 	// Capture the new checkout path so we can see if it's changed
-	newCheckoutPath := b.env["BUILDKITE_BUILD_CHECKOUT_PATH"]
+	newCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// If the working directory has been changed by a hook, log and switch to it
 	if b.wd != "" && previousCheckoutPath != newCheckoutPath {
@@ -542,7 +472,7 @@ func (b Bootstrap) Start() error {
 	}
 
 	// Save the command exit status to the env so hooks + plugins can access it
-	b.env["BUILDKITE_COMMAND_EXIT_STATUS"] = fmt.Sprintf("%d", commandExitStatus)
+	b.env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", commandExitStatus))
 
 	// Run the `post-command` global hook
 	b.executeGlobalHook("post-command")
