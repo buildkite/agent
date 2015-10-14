@@ -318,9 +318,6 @@ func (b Bootstrap) executeLocalHook(name string) int {
 func (b Bootstrap) Start() error {
 	var exitStatus int
 
-	// Set the working directroy
-	b.wd, _ = os.Getwd()
-
 	// Create an empty env for us to keep track of our env changes in
 	b.env, _ = env.New(os.Environ())
 
@@ -329,7 +326,7 @@ func (b Bootstrap) Start() error {
 
 	// Come up with the place that the repository will be checked out to
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
-	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
+	b.wd = b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
 
 	// $ SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
 	// $ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
@@ -480,7 +477,7 @@ func (b Bootstrap) Start() error {
 				exitOnExitStatusError(exitStatus)
 			}
 
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "checkout", "-qf", b.Commit)
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "checkout", "-f", b.Commit)
 			exitOnExitStatusError(exitStatus)
 
 			if b.GitSubmodules {

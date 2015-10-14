@@ -40,8 +40,10 @@ func (e *Environment) Get(key string) string {
 }
 
 // Sets a key in the environment
-func (e *Environment) Set(key string, value string) {
+func (e *Environment) Set(key string, value string) string {
 	e.env[key] = value
+
+	return value
 }
 
 // Returns the length of the environment
