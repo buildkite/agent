@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -30,8 +31,20 @@ type Bootstrap struct {
 	// The branch of the commit
 	Branch string
 
-	// Slug of the current pipeline
-	PipelineSlug string
+	// The tag of the job commit
+	Tag string
+
+	// Should git submodules be checked out
+	GitSubmodules bool
+
+	// If the commit was part of a pull request, this will container the PR number
+	PullRequest string
+
+	// The provider of the the project
+	ProjectProvider string
+
+	// Slug of the current project
+	ProjectSlug string
 
 	// Name of the agent running the bootstrap
 	AgentName string
@@ -316,7 +329,7 @@ func (b Bootstrap) Start() error {
 
 	// Come up with the place that the repository will be checked out to
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
-	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.PipelineSlug))
+	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
 
 	// $ SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
 	// $ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
@@ -378,13 +391,34 @@ func (b Bootstrap) Start() error {
 	printf("Switching working directroy to build directroy")
 	b.wd = b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	// Disable any interactive Git/SSH prompting
-	b.env.Set("GIT_TERMINAL_PROMPT", "0")
-
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else {
+		// If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
+		// a yes/no promp from appearing when cloning/fetching
+		// if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION" == "true" ]]; then
+		//   # Only bother running the keyscan if the SSH host has been provided by
+		//   # Buildkite. It won't be present if the host isn't using the SSH protocol
+		//   if [[ ! -z "${BUILDKITE_REPO_SSH_HOST:-}" ]]; then
+		//     : "${BUILDKITE_SSH_DIRECTORY:="$HOME/.ssh"}"
+		//     : "${BUILDKITE_SSH_KNOWN_HOST_PATH:="$BUILDKITE_SSH_DIRECTORY/known_hosts"}"
+
+		//     # Ensure the known_hosts file exists
+		//     mkdir -p "$BUILDKITE_SSH_DIRECTORY"
+		//     touch "$BUILDKITE_SSH_KNOWN_HOST_PATH"
+
+		//     # Only add the output from ssh-keyscan if it doesn't already exist in the
+		//     # known_hosts file
+		//     if ! ssh-keygen -H -F "$BUILDKITE_REPO_SSH_HOST" | grep -q "$BUILDKITE_REPO_SSH_HOST"; then
+		//       buildkite-run "ssh-keyscan \"$BUILDKITE_REPO_SSH_HOST\" >> \"$BUILDKITE_SSH_KNOWN_HOST_PATH\""
+		//     fi
+		//   fi
+		// fi
+
+		// Disable any interactive Git/SSH prompting
+		b.env.Set("GIT_TERMINAL_PROMPT", "0")
+
 		// Do we need to do a git checkout?
 		existingGitDir := path.Join(b.wd, ".git")
 		if fileExists(existingGitDir) {
@@ -411,11 +445,70 @@ func (b Bootstrap) Start() error {
 		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clean", "-fdq")
 		exitOnExitStatusError(exitStatus)
 
-		// Clean up any submodules
-		// if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
-		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
-		exitOnExitStatusError(exitStatus)
-		// fi
+		if b.GitSubmodules {
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
+			exitOnExitStatusError(exitStatus)
+		}
+
+		// Allow checkouts of forked pull requests on GitHub only. See:
+		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+		if b.PullRequest != "false" && strings.Contains(b.ProjectProvider, "github") {
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "fetch", "origin", "+refs/pull/"+b.PullRequest+"/head:")
+			exitOnExitStatusError(exitStatus)
+		} else {
+			// If the commit is HEAD, we can't do a commit-only
+			// fetch, we'll need to use the branch instead.  During
+			// the fetch, we do first try and grab the commit only
+			// (because it's usually much faster).  If that doesn't
+			// work, just resort back to a regular fetch.
+			var commitToFetch string
+			if b.Commit == "HEAD" {
+				commitToFetch = b.Branch
+			} else {
+				commitToFetch = b.Commit
+			}
+
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "fetch", "origin", commitToFetch)
+			if exitStatus != 0 {
+				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "fetch")
+				exitOnExitStatusError(exitStatus)
+			}
+
+			// Handle checking out of tags
+			if b.Tag != "" {
+				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "reset", "--hard", "origin/"+b.Branch)
+				exitOnExitStatusError(exitStatus)
+			}
+
+			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "checkout", "-qf", b.Commit)
+			exitOnExitStatusError(exitStatus)
+
+			if b.GitSubmodules {
+				//   # `submodule sync` will ensure the .git/config matches the .gitmodules file.
+				//   # The command is only available in git version 1.8.1, so if the call fails,
+				//   # continue the bootstrap script, and show an informative error.
+				//   buildkite-prompt-and-run "git submodule sync --recursive"
+				//   if [[ $? -ne 0 ]]; then
+				//     buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can."
+				//   fi
+
+				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "update", "--init", "--recursive")
+				exitOnExitStatusError(exitStatus)
+
+				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
+				exitOnExitStatusError(exitStatus)
+			}
+
+			// # Grab author and commit information and send it back to Buildkite
+			// buildkite-debug "~~~ Saving Git information"
+
+			// # Check to see if the meta data exists before setting it
+			// buildkite-run-debug "buildkite-agent meta-data exists \"buildkite:git:commit\""
+			// if [[ $? -ne 0 ]]; then
+			//   buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
+			//   buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
+			// fi
+		}
 	}
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
@@ -428,17 +521,24 @@ func (b Bootstrap) Start() error {
 	// Run the `post-checkout` local hook
 	b.executeLocalHook("post-checkout")
 
-	// Capture the new checkout path so we can see if it's changed
+	// Capture the new checkout path so we can see if it's changed. We need
+	// to also handle the case where they just switch it to "foo/bar",
+	// because that directroy is relative to the current working directroy.
 	newCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	newCheckoutPathAbs := newCheckoutPath
+	if !filepath.IsAbs(newCheckoutPathAbs) {
+		newCheckoutPathAbs = path.Join(b.wd, newCheckoutPath)
+	}
 
 	// If the working directory has been changed by a hook, log and switch to it
-	if b.wd != "" && previousCheckoutPath != newCheckoutPath {
-		headerf("A post-checkout hook has changed the working directory to %s", newCheckoutPath)
+	if b.wd != "" && previousCheckoutPath != newCheckoutPathAbs {
+		headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
-		if fileExists(newCheckoutPath) {
-			b.wd = newCheckoutPath
+		if fileExists(newCheckoutPathAbs) {
+			printf("Switching working directroy to \"%s\"", newCheckoutPathAbs)
+			b.wd = newCheckoutPathAbs
 		} else {
-			fatalf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPath)
+			fatalf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPathAbs)
 		}
 	}
 

@@ -28,9 +28,12 @@ type BootstrapConfig struct {
 	Repository                   string `cli:"repository"`
 	Commit                       string `cli:"commit"`
 	Branch                       string `cli:"branch"`
+	Tag                          string `cli:"tag"`
+	PullRequest                  string `cli:"pullrequest"`
+	NoGitSubmodules              bool   `cli:"no-git-submodules"`
 	AgentName                    string `cli:"agent"`
-	PipelineSlug                 string `cli:"pipeline"`
 	ProjectSlug                  string `cli:"project"`
+	ProjectProvider              string `cli:"project-provider"`
 	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
 	CleanCheckout                bool   `cli:"clean-checkout"`
@@ -65,22 +68,34 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_BRANCH",
 		},
 		cli.StringFlag{
+			Name:   "tag",
+			Value:  "",
+			Usage:  "The tag the commit",
+			EnvVar: "BUILDKITE_TAG",
+		},
+		cli.StringFlag{
+			Name:   "pullrequest",
+			Value:  "",
+			Usage:  "The number/id of the pull request this commit belonged to",
+			EnvVar: "BUILDKITE_PULL_REQUEST",
+		},
+		cli.StringFlag{
 			Name:   "agent",
 			Value:  "",
 			Usage:  "The name of the agent running the job",
 			EnvVar: "BUILDKITE_AGENT_NAME",
 		},
 		cli.StringFlag{
-			Name:   "pipeline",
-			Value:  "",
-			Usage:  "The ID of the pipeline that the job is a part of",
-			EnvVar: "BUILDKITE_PIPELINE",
-		},
-		cli.StringFlag{
 			Name:   "project",
 			Value:  "",
-			Usage:  "The slug of the project that the job is a part of [DEPRECATED]",
+			Usage:  "The slug of the project that the job is a part of",
 			EnvVar: "BUILDKITE_PROJECT_SLUG",
+		},
+		cli.StringFlag{
+			Name:   "project-provoder",
+			Value:  "",
+			Usage:  "The id of the SCM provider that the repository is hosted on",
+			EnvVar: "BUILDKITE_PROJECT_PROVIDER",
 		},
 		cli.StringFlag{
 			Name:   "artifact-upload-paths",
@@ -118,6 +133,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
 		cli.BoolFlag{
+			Name:   "no-git-submodules",
+			Usage:  "Disable git submodules",
+			EnvVar: "BUILDKITE_DISABLE_GIT_SUBMODULES",
+		},
+		cli.BoolFlag{
 			Name:   "no-pty",
 			Usage:  "Do not run jobs within a pseudo terminal",
 			EnvVar: "BUILDKITE_NO_PTY",
@@ -133,21 +153,17 @@ var BootstrapCommand = cli.Command{
 			logger.Fatal("%s", err)
 		}
 
-		// Support the deprecated --project-slug option
-		var pipelineSlug string
-		if cfg.PipelineSlug != "" {
-			pipelineSlug = cfg.PipelineSlug
-		} else {
-			pipelineSlug = cfg.ProjectSlug
-		}
-
 		// Start the bootstraper
 		agent.Bootstrap{
 			Repository:                   cfg.Repository,
 			Commit:                       cfg.Commit,
 			Branch:                       cfg.Branch,
+			Tag:                          cfg.Tag,
+			GitSubmodules:                !cfg.NoGitSubmodules,
+			PullRequest:                  cfg.PullRequest,
 			AgentName:                    cfg.AgentName,
-			PipelineSlug:                 pipelineSlug,
+			ProjectProvider:              cfg.ProjectProvider,
+			ProjectSlug:                  cfg.ProjectSlug,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			CleanCheckout:                cfg.CleanCheckout,
