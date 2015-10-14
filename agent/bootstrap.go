@@ -260,9 +260,9 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
 		}
 
-		// Write the hook script to the runner
+		// Write the hook script to the runner then close the file so
+		// we can run it
 		tempHookRunnerFile.WriteString(hookScript)
-		tempHookRunnerFile.Sync()
 		tempHookRunnerFile.Close()
 
 		if b.Debug {
@@ -442,6 +442,29 @@ func (b Bootstrap) Start() error {
 
 	// Disable any interactive Git/SSH prompting
 	b.env["GIT_TERMINAL_PROMPT"] = "0"
+
+	// So here's a fun problem with git. OS X 10.10 seems to have a hard
+	// time with PATH handling in some cases, and it has quite a hard time
+	// with git aparently. Also git has bug in it:
+	// https://github.com/git/git/blob/590f6e4235a7d44ad39511186ca8bbac02ae8c2e/git-submodule.sh#L18
+	//
+	// You see that line there? It should really be:
+	//
+	// . $(git --exec-path)/git-sh-setup
+	//
+	// More info about the bug here:
+	// https://github.com/SublimeGit/SublimeGit/issues/150#issuecomment-60532654
+	//
+	// Since for some reason, when we run git commands via Go with a
+	// modified path, it can't find Git correctly in the subshell commands,
+	// and causes everything to fail. So this an epic hack where we just
+	// forcefully add the git exec path to $PATH.
+	if runtime.GOOS == "darwin" {
+		var gitExecPathOutput bytes.Buffer
+		exitStatus = b.shell(&gitExecPathOutput, false, "git", "--exec-path")
+
+		b.env["PATH"] = fmt.Sprintf("%s:%s", strings.TrimSpace(gitExecPathOutput.String()), b.env["PATH"])
+	}
 
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
