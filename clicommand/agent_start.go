@@ -33,7 +33,7 @@ type AgentStartConfig struct {
 	Token                            string   `cli:"token" validate:"required"`
 	Name                             string   `cli:"name"`
 	Priority                         string   `cli:"priority"`
-	BootstrapScript                  string   `cli:"bootstrap-script" normalize:"filepath" validate:"required,file-exists"`
+	BootstrapScript                  string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
 	BuildPath                        string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                        string   `cli:"hooks-path" normalize:"filepath"`
 	MetaData                         []string `cli:"meta-data"`
