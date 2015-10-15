@@ -52,9 +52,6 @@ func (p Process) Create() *Process {
 	p.command = exec.Command(absolutePath)
 	p.command.Dir = scriptDirectory
 
-	// Do cross-platform things to prepare this process to run
-	PrepareCommandProcess(&p)
-
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
 	// the top of the current one so the ENV from Buildkite and the agent
