@@ -100,6 +100,12 @@ func errorf(format string, v ...interface{}) {
 	printf(format, v...)
 }
 
+// Shows a buildkite boostrap warning
+func warningf(format string, v ...interface{}) {
+	printf("\033[33m⚠️ Buildkite Warning: %s\033[0m", fmt.Sprintf(format, v...))
+	printf("^^^ +++")
+}
+
 // Shows the error text and exits the bootstrap
 func fatalf(format string, v ...interface{}) {
 	errorf(format, v...)
@@ -153,7 +159,7 @@ func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...s
 	var buffer bytes.Buffer
 	shell.Run(cmd, &shell.Config{Writer: &buffer})
 
-	return buffer.String()
+	return strings.TrimSpace(buffer.String())
 }
 
 // Run a command and return it's exit status
@@ -429,6 +435,7 @@ func (b *Bootstrap) Start() error {
 		// Clean up the repository
 		b.runCommand("git", "clean", "-fdq")
 
+		// Also clean up submodules if we can
 		if b.GitSubmodules {
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
 		}
@@ -463,27 +470,33 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
 			if b.GitSubmodules {
-				//   # `submodule sync` will ensure the .git/config matches the .gitmodules file.
-				//   # The command is only available in git version 1.8.1, so if the call fails,
-				//   # continue the bootstrap script, and show an informative error.
-				//   buildkite-prompt-and-run "git submodule sync --recursive"
-				//   if [[ $? -ne 0 ]]; then
-				//     buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can."
-				//   fi
+				// `submodule sync` will ensure the .git/config
+				// matches the .gitmodules file.  The command
+				// is only available in git version 1.8.1, so
+				// if the call fails, continue the bootstrap
+				// script, and show an informative error.
+				gitSubmoduleSyncExitStatus := b.runCommandGracefully("git", "submodule", "sync", "--recursive")
+				if gitSubmoduleSyncExitStatus != 0 {
+					gitVersionOutput := b.runCommandSilentlyAndCaptureOutput("git", "--version")
+					warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
+				}
 
 				b.runCommand("git", "submodule", "update", "--init", "--recursive")
 				b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
 			}
 
-			// # Grab author and commit information and send it back to Buildkite
-			// buildkite-debug "~~~ Saving Git information"
+			// Grab author and commit information and send it back to Buildkite. But before we do, we'll
+			// check to see if someone else has done it first.
+			metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
+			if metaDataExistsExitStatus == 0 {
+				headerf("Sending commit information back to Buildkite")
 
-			// # Check to see if the meta data exists before setting it
-			// buildkite-run-debug "buildkite-agent meta-data exists \"buildkite:git:commit\""
-			// if [[ $? -ne 0 ]]; then
-			//   buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
-			//   buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
-			// fi
+				gitCommitOutput := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
+				gitBranchOutput := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+
+				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
+				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
+			}
 		}
 	}
 
