@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/shell"
+	"github.com/buildkite/agent/vendor/src/github.com/mitchellh/go-homedir"
+	"github.com/buildkite/agent/vendor/src/github.com/nightlyone/lockfile"
 )
 
 type Bootstrap struct {
@@ -75,14 +79,15 @@ type Bootstrap struct {
 	// A custom destination to upload artifacts to (i.e. s3://...)
 	ArtifactUploadDestination string
 
+	// Whether or not to automatically authorize SSH key hosts
+	AutoSSHFingerprintVerification bool
+
 	// The running environment for the bootstrap file as each task runs
 	env *shell.Environment
 
 	// Current working directory that shell commands get executed in
 	wd string
 }
-
-var agentNameCleanupRegex = regexp.MustCompile("\"")
 
 // Prints a line of output
 func printf(format string, v ...interface{}) {
@@ -141,6 +146,23 @@ func addExecutePermissiontoFile(filename string) {
 	}
 }
 
+var hasSchemePattern = regexp.MustCompile("^[^:]+://")
+var scpLikeUrlPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
+
+func newGittableURL(ref string) (*url.URL, error) {
+	if !hasSchemePattern.MatchString(ref) && scpLikeUrlPattern.MatchString(ref) {
+		matched := scpLikeUrlPattern.FindStringSubmatch(ref)
+		user := matched[1]
+		host := matched[2]
+		path := matched[3]
+
+		ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+	}
+
+	return url.Parse(ref)
+}
+
+// If a error exists, it will exit the bootstrap with an error
 func checkShellError(err error, cmd *shell.Command) {
 	if err != nil {
 		fatalf("There was error running `%s`: %s", cmd, err)
@@ -190,6 +212,94 @@ func (b *Bootstrap) runCommand(command string, args ...string) {
 
 	if exitStatus != 0 {
 		os.Exit(exitStatus)
+	}
+}
+
+// Given a repostory, it will add the host to the set of SSH known_hosts on the
+// machine
+func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
+	// Try and parse the repository URL
+	url, err := newGittableURL(repository)
+	if err != nil {
+		warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
+		return
+	}
+
+	userHomePath, err := homedir.Dir()
+	if err != nil {
+		warningf("Could not find the current users home directory: %s", err)
+		return
+	}
+
+	// Construct paths to the known_hosts file
+	sshDirectory := path.Join(userHomePath, ".ssh")
+	knownHostPath := path.Join(sshDirectory, "known_hosts")
+
+	// Ensure a directory exists and known_host file exist
+	if !fileExists(knownHostPath) {
+		os.MkdirAll(sshDirectory, 0755)
+		ioutil.WriteFile(knownHostPath, []byte(""), 0644)
+	}
+
+	// Create a lock on the known_host file so other agents don't try and
+	// change it at the same time
+	knownHostLockPath := path.Join(sshDirectory, "known_hosts.lock")
+	knownHostLock, _ := lockfile.New(path.Join(sshDirectory, "known_hosts.lock"))
+
+	// Aquire the known host lock. Keep trying the lock until we get it
+	attempts := 0
+	for true {
+		err = knownHostLock.TryLock()
+		if err != nil {
+			// Keey track of how many times we tried to get the
+			// lock
+			attempts += 1
+			if attempts > 10 {
+				warningf("Gave up trying to aquire a lock on \"%s\"", knownHostLockPath)
+				return
+			}
+
+			// Try again in 100 ms
+			time.Sleep(1 * time.Second)
+		} else {
+			break
+		}
+	}
+
+	// Unlock the known_host lock when we're done
+	defer knownHostLock.Unlock()
+
+	// Clean up the SSH host and remove any key identifiers. See:
+	// git@github.com-custom-identifier:foo/bar.git
+	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
+	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
+	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
+
+	// Try and open the existing hostfile in (append_only) mode
+	f, err := os.OpenFile(knownHostPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		warningf("Could not open \"%s\" for reading: %s", knownHostPath, err)
+		return
+	}
+	defer f.Close()
+
+	// Figure out where the ssh tools exist
+	sshToolBinaryPath := ""
+
+	// Grab the generated keys for the repo host
+	keygenOutput := b.runCommandSilentlyAndCaptureOutput(path.Join(sshToolBinaryPath, "ssh-keygen"), "-f", knownHostPath, "-F", host)
+
+	// If the keygen output doesn't contain the host, we can skip!
+	if !strings.Contains(keygenOutput, host) {
+		// Scan the key and then write it to the known_host file
+		keyscanOutput := b.runCommandSilentlyAndCaptureOutput(path.Join(sshToolBinaryPath, "ssh-keyscan"), host)
+
+		if _, err = f.WriteString(keyscanOutput + "\n"); err != nil {
+			warningf("Could not write to \"%s\": %s", knownHostPath, err)
+			return
+		}
+
+		printf("Added \"%s\" to the list of known hosts at \"%s\"", host, knownHostPath)
 	}
 }
 
@@ -325,7 +435,9 @@ func (b *Bootstrap) Start() error {
 	b.env.Set("PATH", fmt.Sprintf("%s:%s", b.BinPath, b.env.Get("PATH")))
 
 	// Come up with the place that the repository will be checked out to
+	var agentNameCleanupRegex = regexp.MustCompile("\"")
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
+
 	b.wd = b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
 
 	// Show BUILDKITE_* environment variables if in debug mode. Also
@@ -388,6 +500,10 @@ func (b *Bootstrap) Start() error {
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else {
+		if b.AutoSSHFingerprintVerification {
+			b.addRepositoryHostToSSHKnownHosts(b.Repository)
+		}
+
 		// If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
 		// a yes/no promp from appearing when cloning/fetching
 		// if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION" == "true" ]]; then

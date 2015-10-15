@@ -25,26 +25,27 @@ Example:
    $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
-	Command                      string `cli:"command"`
-	JobID                        string `cli:"job"`
-	Repository                   string `cli:"repository"`
-	Commit                       string `cli:"commit"`
-	Branch                       string `cli:"branch"`
-	Tag                          string `cli:"tag"`
-	PullRequest                  string `cli:"pullrequest"`
-	NoGitSubmodules              bool   `cli:"no-git-submodules"`
-	AgentName                    string `cli:"agent"`
-	ProjectSlug                  string `cli:"project"`
-	ProjectProvider              string `cli:"project-provider"`
-	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
-	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
-	CleanCheckout                bool   `cli:"clean-checkout"`
-	BinPath                      string `cli:"bin-path" normalize:"filepath"`
-	BuildPath                    string `cli:"build-path" normalize:"filepath"`
-	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
-	NoCommandEval                bool   `cli:"no-command-eval"`
-	NoPTY                        bool   `cli:"no-pty"`
-	Debug                        bool   `cli:"debug"`
+	Command                          string `cli:"command"`
+	JobID                            string `cli:"job"`
+	Repository                       string `cli:"repository"`
+	Commit                           string `cli:"commit"`
+	Branch                           string `cli:"branch"`
+	Tag                              string `cli:"tag"`
+	PullRequest                      string `cli:"pullrequest"`
+	NoGitSubmodules                  bool   `cli:"no-git-submodules"`
+	NoAutoSSHFingerprintVerification bool   `cli:"no-automatic-ssh-fingerprint-verification"`
+	AgentName                        string `cli:"agent"`
+	ProjectSlug                      string `cli:"project"`
+	ProjectProvider                  string `cli:"project-provider"`
+	AutomaticArtifactUploadPaths     string `cli:"artifact-upload-paths"`
+	ArtifactUploadDestination        string `cli:"artifact-upload-destination"`
+	CleanCheckout                    bool   `cli:"clean-checkout"`
+	BinPath                          string `cli:"bin-path" normalize:"filepath"`
+	BuildPath                        string `cli:"build-path" normalize:"filepath"`
+	HooksPath                        string `cli:"hooks-path" normalize:"filepath"`
+	NoCommandEval                    bool   `cli:"no-command-eval"`
+	NoPTY                            bool   `cli:"no-pty"`
+	Debug                            bool   `cli:"debug"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -148,6 +149,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
 		cli.BoolFlag{
+			Name:   "no-automatic-ssh-fingerprint-verification",
+			Usage:  "Don't automatically verify SSH fingerprints",
+			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
+		},
+		cli.BoolFlag{
 			Name:   "no-command-eval",
 			Usage:  "Disable running commands",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
@@ -175,26 +181,27 @@ var BootstrapCommand = cli.Command{
 
 		// Start the bootstraper
 		bootstrap := &agent.Bootstrap{
-			Command:                      cfg.Command,
-			JobID:                        cfg.JobID,
-			Repository:                   cfg.Repository,
-			Commit:                       cfg.Commit,
-			Branch:                       cfg.Branch,
-			Tag:                          cfg.Tag,
-			GitSubmodules:                !cfg.NoGitSubmodules,
-			PullRequest:                  cfg.PullRequest,
-			AgentName:                    cfg.AgentName,
-			ProjectProvider:              cfg.ProjectProvider,
-			ProjectSlug:                  cfg.ProjectSlug,
-			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
-			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
-			CleanCheckout:                cfg.CleanCheckout,
-			BuildPath:                    cfg.BuildPath,
-			BinPath:                      cfg.BinPath,
-			HooksPath:                    cfg.HooksPath,
-			Debug:                        cfg.Debug,
-			RunInPty:                     !cfg.NoPTY,
-			CommandEval:                  !cfg.NoCommandEval,
+			Command:                        cfg.Command,
+			JobID:                          cfg.JobID,
+			Repository:                     cfg.Repository,
+			Commit:                         cfg.Commit,
+			Branch:                         cfg.Branch,
+			Tag:                            cfg.Tag,
+			GitSubmodules:                  !cfg.NoGitSubmodules,
+			PullRequest:                    cfg.PullRequest,
+			AgentName:                      cfg.AgentName,
+			ProjectProvider:                cfg.ProjectProvider,
+			ProjectSlug:                    cfg.ProjectSlug,
+			AutomaticArtifactUploadPaths:   cfg.AutomaticArtifactUploadPaths,
+			ArtifactUploadDestination:      cfg.ArtifactUploadDestination,
+			CleanCheckout:                  cfg.CleanCheckout,
+			BuildPath:                      cfg.BuildPath,
+			BinPath:                        cfg.BinPath,
+			HooksPath:                      cfg.HooksPath,
+			Debug:                          cfg.Debug,
+			RunInPty:                       !cfg.NoPTY,
+			CommandEval:                    !cfg.NoCommandEval,
+			AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
 		}
 
 		bootstrap.Start()
