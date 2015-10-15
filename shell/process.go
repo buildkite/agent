@@ -51,6 +51,7 @@ func (p *Process) Run() error {
 	} else {
 		cmd.Stdout = p.Config.Writer
 		cmd.Stderr = p.Config.Writer
+		cmd.Stdin = nil
 
 		err := cmd.Start()
 		if err != nil {

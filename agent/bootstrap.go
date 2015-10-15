@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -97,6 +98,11 @@ func printf(format string, v ...interface{}) {
 // Prints a bootstrap formatted header
 func headerf(format string, v ...interface{}) {
 	fmt.Printf("~~~ %s\n", fmt.Sprintf(format, v...))
+}
+
+// Prints an info statement
+func commentf(format string, v ...interface{}) {
+	fmt.Printf("\033[90m# %s\033[0m\n", fmt.Sprintf(format, v...))
 }
 
 // Shows a buildkite boostrap error
@@ -299,7 +305,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 			return
 		}
 
-		printf("Added \"%s\" to the list of known hosts at \"%s\"", host, knownHostPath)
+		commentf("Added \"%s\" to the list of known hosts at \"%s\"", host, knownHostPath)
 	}
 }
 
@@ -351,12 +357,14 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 
 		if b.Debug {
 			headerf("Preparing %s hook", name)
-			printf("A hook runner was written to \"%s\" with the following:", tempHookRunnerFile.Name())
+			commentf("A hook runner was written to \"%s\" with the following:", tempHookRunnerFile.Name())
 			printf(hookScript)
 		}
 
 		// Print to the screen we're going to run the hook
 		headerf("Running %s hook", name)
+
+		commentf("Executing \"%s\"", path)
 
 		// Run the hook
 		hookExitStatus := b.runScript(tempHookRunnerFile.Name())
@@ -391,7 +399,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 			for envDiffKey, envDiffValue := range diff.ToMap() {
 				b.env.Set(envDiffKey, envDiffValue)
 				if b.Debug {
-					printf("%s=%s", envDiffKey, envDiffValue)
+					commentf("%s=%s", envDiffKey, envDiffValue)
 				}
 			}
 		}
@@ -400,7 +408,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 	} else {
 		if b.Debug {
 			headerf("Running %s hook", name)
-			printf("Skipping, no hook script found at: %s", path)
+			commentf("Skipping, no hook script found at \"%s\"", path)
 		}
 
 		return 0
@@ -444,8 +452,13 @@ func (b *Bootstrap) Start() error {
 	// include any custom BUILDKITE_ variables that have been added to our
 	// running env map.
 	if b.Debug {
-		headerf("Build environment variables")
-		for _, e := range b.env.ToSlice() {
+		headerf("Buildkite environment variables")
+
+		// Convert the env to a sorted slice
+		envSlice := b.env.ToSlice()
+		sort.Strings(envSlice)
+
+		for _, e := range envSlice {
 			if strings.HasPrefix(e, "BUILDKITE") {
 				printf(e)
 			}
@@ -478,7 +491,7 @@ func (b *Bootstrap) Start() error {
 	// Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		headerf("Cleaning project checkout")
-		printf("Removing %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		commentf("Removing %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 
 		err := os.RemoveAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		if err != nil {
@@ -489,11 +502,11 @@ func (b *Bootstrap) Start() error {
 	headerf("Preparing build folder")
 
 	// Create the build directory
-	printf("Creating \"%s\"", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+	commentf("Creating \"%s\"", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 	os.MkdirAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
 
 	// Switch the internal wd to it
-	printf("Switching working directroy to build directroy")
+	commentf("Switching working directroy to build folder")
 	b.wd = b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run a custom `checkout` hook if it's present
@@ -559,7 +572,7 @@ func (b *Bootstrap) Start() error {
 		// Allow checkouts of forked pull requests on GitHub only. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		if b.PullRequest != "false" && strings.Contains(b.ProjectProvider, "github") {
-			b.runCommand("git", "fetch", "origin", "+refs/pull/"+b.PullRequest+"/head:")
+			b.runCommand("git", "fetch", "-q", "origin", "+refs/pull/"+b.PullRequest+"/head:")
 		} else {
 			// If the commit is HEAD, we can't do a commit-only
 			// fetch, we'll need to use the branch instead.  During
@@ -573,9 +586,9 @@ func (b *Bootstrap) Start() error {
 				commitToFetch = b.Commit
 			}
 
-			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", commitToFetch)
+			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "-q", "origin", commitToFetch)
 			if gitFetchExitStatus != 0 {
-				b.runCommand("git", "fetch")
+				b.runCommand("git", "fetch", "-q")
 			}
 
 			// Handle checking out of tags
@@ -583,7 +596,7 @@ func (b *Bootstrap) Start() error {
 				b.runCommand("git", "reset", "--hard", "origin/"+b.Branch)
 			}
 
-			b.runCommand("git", "checkout", "-f", b.Commit)
+			b.runCommand("git", "checkout", "-qf", b.Commit)
 
 			if b.GitSubmodules {
 				// `submodule sync` will ensure the .git/config
@@ -603,9 +616,10 @@ func (b *Bootstrap) Start() error {
 
 			// Grab author and commit information and send it back to Buildkite. But before we do, we'll
 			// check to see if someone else has done it first.
+			commentf("Checking to see if Git data needs to be sent to Buildkite")
 			metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
 			if metaDataExistsExitStatus != 0 {
-				headerf("Sending commit information back to Buildkite")
+				headerf("Sending Git commit information back to Buildkite")
 
 				gitCommitOutput := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
 				gitBranchOutput := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
@@ -640,7 +654,7 @@ func (b *Bootstrap) Start() error {
 		headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
 		if fileExists(newCheckoutPathAbs) {
-			printf("Switching working directroy to \"%s\"", newCheckoutPathAbs)
+			commentf("Switching working directroy to \"%s\"", newCheckoutPathAbs)
 			b.wd = newCheckoutPathAbs
 		} else {
 			fatalf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPathAbs)
@@ -678,11 +692,13 @@ func (b *Bootstrap) Start() error {
 			fatalf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
 		}
 
+		pathToCommand := path.Join(b.wd, b.Command)
+
 		// If the command isn't a file on the filesystem, then it's
 		// something we need to eval. But before we even try running
 		// it, we should double check that the agent is allowed to eval
 		// commands.
-		if !fileExists(b.Command) && !b.CommandEval {
+		if !fileExists(pathToCommand) && !b.CommandEval {
 			fatalf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
@@ -697,7 +713,7 @@ func (b *Bootstrap) Start() error {
 		var promptDisplay string
 		var headerLabel string
 		if runtime.GOOS == "windows" {
-			if fileExists(b.Command) {
+			if fileExists(pathToCommand) {
 				promptDisplay = "CALL " + b.Command
 				headerLabel = "Running build script"
 				buildScript = "ECHO hello"
@@ -707,7 +723,7 @@ func (b *Bootstrap) Start() error {
 				buildScript = "#!/bin/bash\n" + b.Command
 			}
 		} else {
-			if fileExists(b.Command) {
+			if fileExists(pathToCommand) {
 				promptDisplay = "./\"" + b.Command + "\""
 				headerLabel = "Running build script"
 				buildScript = "#!/bin/bash\nchmod +x \"" + b.Command + "\"\n./\"" + b.Command + "\""
@@ -730,7 +746,7 @@ func (b *Bootstrap) Start() error {
 		addExecutePermissiontoFile(buildScriptPath)
 
 		if b.Debug {
-			printf("A build script written to \"%s\" with the following:", buildScriptPath)
+			commentf("A build script written to \"%s\" with the following:", buildScriptPath)
 			printf(buildScript)
 		}
 
