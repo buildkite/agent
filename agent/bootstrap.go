@@ -129,8 +129,7 @@ func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...s
 	cmd := b.newCommand(command, args...)
 
 	var buffer bytes.Buffer
-	_, err := shell.Run(cmd, &shell.Config{Writer: &buffer})
-	checkShellError(err, cmd)
+	shell.Run(cmd, &shell.Config{Writer: &buffer})
 
 	return buffer.String()
 }
@@ -308,10 +307,6 @@ func (b *Bootstrap) Start() error {
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
 	b.wd = b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
 
-	// $ SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
-	// $ PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
-	// $ export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
-
 	// Show BUILDKITE_* environment variables if in debug mode. Also
 	// include any custom BUILDKITE_ variables that have been added to our
 	// running env map.
@@ -354,7 +349,7 @@ func (b *Bootstrap) Start() error {
 
 		err := os.RemoveAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		if err != nil {
-			fatalf("Failed to remove `%s` (%s)", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+			fatalf("Failed to remove \"%s\": %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
 		}
 	}
 
