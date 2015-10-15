@@ -42,20 +42,34 @@ ECHO ^> git clean -fdq
 CALL git clean -fdq
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-REM Fetch the latest code
+REM Determine if a GitHub pull request fetch is possible
 
-ECHO ^> git fetch -q
-CALL git fetch -q
-IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
-
-REM Only reset to the branch if we're not on a tag
-
-IF "%BUILDKITE_TAG%" == "" (
-  ECHO ^> git reset --hard origin/%BUILDKITE_BRANCH%
-  CALL git reset --hard origin/%BUILDKITE_BRANCH%
-  IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
+SET PULL_REQUEST_FETCH=false
+IF NOT "%BUILDKITE_PULL_REQUEST%" == "false" (
+  IF "%BUILDKITE_PROJECT_PROVIDER%" == "github" SET PULL_REQUEST_FETCH=true
+  IF "%BUILDKITE_PROJECT_PROVIDER%" == "github_enterprise" SET PULL_REQUEST_FETCH=true
 )
 
+if "%PULL_REQUEST_FETCH%" == "true" (
+  REM Fetch the code using the special GitHub PR syntax
+
+  ECHO ^> git fetch origin "+refs/pull/%BUILDKITE_PULL_REQUEST%/head:"
+  CALL git fetch origin "+refs/pull/%BUILDKITE_PULL_REQUEST%/head:"
+) ELSE (
+  REM Fetch the latest code
+
+  ECHO ^> git fetch -q
+  CALL git fetch -q
+  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+
+  REM Only reset to the branch if we're not on a tag
+
+  IF "%BUILDKITE_TAG%" == "" (
+    ECHO ^> git reset --hard origin/%BUILDKITE_BRANCH%
+    CALL git reset --hard origin/%BUILDKITE_BRANCH%
+    IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
+  )
+)
 
 ECHO ^> git checkout -qf "%BUILDKITE_COMMIT%"
 CALL git checkout -qf "%BUILDKITE_COMMIT%"
