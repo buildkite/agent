@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -55,7 +56,11 @@ func (p Process) Create() *Process {
 		p.command = exec.Command(absolutePath)
 		p.command.Dir = scriptDirectory
 	} else {
-		p.command = exec.Command("/bin/bash", "-c", p.Script)
+		if runtime.GOOS == "windows" {
+			p.command = exec.Command("cmd", "/c", p.Script)
+		} else {
+			p.command = exec.Command("/bin/bash", "-c", p.Script)
+		}
 	}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
