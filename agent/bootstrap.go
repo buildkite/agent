@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -140,17 +139,61 @@ func fileExists(filename string) bool {
 	return !os.IsNotExist(err)
 }
 
+// Returns a platform specific filename for scripts
+func normalizeScriptFileName(filename string) string {
+	if runtime.GOOS == "windows" {
+		return filename + ".bat"
+	} else {
+		return filename
+	}
+}
+
 // Changes the permission of a file so it can be executed
 func addExecutePermissiontoFile(filename string) {
 	s, err := os.Stat(filename)
 	if err != nil {
-		fatalf("Failed to retrieve file information of \"%s\": %s", filename, err)
+		fatalf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
 	}
 
 	err = os.Chmod(filename, s.Mode()|0100)
 	if err != nil {
-		fatalf("Failed to mark \"%s\" as executable: %s", filename, err)
+		fatalf("Failed to mark \"%s\" as executable (%s)", filename, err)
 	}
+}
+
+var tempFileNumber int
+
+// Creates a temporary file. Implementation has been copied from
+func createTempFile(filename string) *os.File {
+	extension := filepath.Ext(filename)
+	basename := strings.TrimSuffix(filename, extension)
+
+	// Create the file
+	tempFile, err := ioutil.TempFile("", basename+"-")
+	if err != nil {
+		fatalf("Failed to create temporary file \"%s\" (%s)", filename, err)
+	}
+
+	// Do we need to rename the file?
+	if extension != "" {
+		// Close the currently open tempfile
+		tempFile.Close()
+
+		// Rename it
+		newTempFileName := tempFile.Name() + extension
+		err = os.Rename(tempFile.Name(), newTempFileName)
+		if err != nil {
+			fatalf("Failed to rename \"%s\" to \"%s\" (%s)", tempFile.Name(), newTempFileName, err)
+		}
+
+		// Open it again
+		tempFile, err = os.OpenFile(newTempFileName, os.O_RDWR|os.O_EXCL, 0600)
+		if err != nil {
+			fatalf("Failed to open temporary file \"%s\" (%s)", newTempFileName, err)
+		}
+	}
+
+	return tempFile
 }
 
 var hasSchemePattern = regexp.MustCompile("^[^:]+://")
@@ -172,7 +215,7 @@ func newGittableURL(ref string) (*url.URL, error) {
 // If a error exists, it will exit the bootstrap with an error
 func checkShellError(err error, cmd *shell.Command) {
 	if err != nil {
-		fatalf("There was error running `%s`: %s", cmd, err)
+		fatalf("There was an error running `%s` (%s)", cmd, err)
 	}
 }
 
@@ -182,13 +225,13 @@ func (b *Bootstrap) newCommand(command string, args ...string) *shell.Command {
 }
 
 // Run a command without showing a prompt or the output to the user
-func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...string) string {
+func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
 	cmd := b.newCommand(command, args...)
 
 	var buffer bytes.Buffer
-	shell.Run(cmd, &shell.Config{Writer: &buffer})
+	_, err := shell.Run(cmd, &shell.Config{Writer: &buffer})
 
-	return strings.TrimSpace(buffer.String())
+	return strings.TrimSpace(buffer.String()), err
 }
 
 // Run a command and return it's exit status
@@ -234,13 +277,13 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 
 	userHomePath, err := homedir.Dir()
 	if err != nil {
-		warningf("Could not find the current users home directory: %s", err)
+		warningf("Could not find the current users home directory (%s)", err)
 		return
 	}
 
 	// Construct paths to the known_hosts file
-	sshDirectory := path.Join(userHomePath, ".ssh")
-	knownHostPath := path.Join(sshDirectory, "known_hosts")
+	sshDirectory := filepath.Join(userHomePath, ".ssh")
+	knownHostPath := filepath.Join(sshDirectory, "known_hosts")
 
 	// Ensure a directory exists and known_host file exist
 	if !fileExists(knownHostPath) {
@@ -250,8 +293,8 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 
 	// Create a lock on the known_host file so other agents don't try and
 	// change it at the same time
-	knownHostLockPath := path.Join(sshDirectory, "known_hosts.lock")
-	knownHostLock, _ := lockfile.New(path.Join(sshDirectory, "known_hosts.lock"))
+	knownHostLockPath := filepath.Join(sshDirectory, "known_hosts.lock")
+	knownHostLock, _ := lockfile.New(filepath.Join(sshDirectory, "known_hosts.lock"))
 
 	// Aquire the known host lock. Keep trying the lock until we get it
 	attempts := 0
@@ -285,7 +328,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	// Try and open the existing hostfile in (append_only) mode
 	f, err := os.OpenFile(knownHostPath, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		warningf("Could not open \"%s\" for reading: %s", knownHostPath, err)
+		warningf("Could not open \"%s\" for reading (%s)", knownHostPath, err)
 		return
 	}
 	defer f.Close()
@@ -294,15 +337,23 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	sshToolBinaryPath := ""
 
 	// Grab the generated keys for the repo host
-	keygenOutput := b.runCommandSilentlyAndCaptureOutput(path.Join(sshToolBinaryPath, "ssh-keygen"), "-f", knownHostPath, "-F", host)
+	keygenOutput, err := b.runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolBinaryPath, "ssh-keygen"), "-f", knownHostPath, "-F", host)
+	if err != nil {
+		warningf("Could not performn `ssh-keygen` (%s)", err)
+		return
+	}
 
 	// If the keygen output doesn't contain the host, we can skip!
 	if !strings.Contains(keygenOutput, host) {
 		// Scan the key and then write it to the known_host file
-		keyscanOutput := b.runCommandSilentlyAndCaptureOutput(path.Join(sshToolBinaryPath, "ssh-keyscan"), host)
+		keyscanOutput, err := b.runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolBinaryPath, "ssh-keyscan"), host)
+		if err != nil {
+			warningf("Could not perform `ssh-keyscan` (%s)", err)
+			return
+		}
 
 		if _, err = f.WriteString(keyscanOutput + "\n"); err != nil {
-			warningf("Could not write to \"%s\": %s", knownHostPath, err)
+			warningf("Could not write to \"%s\" (%s)", knownHostPath, err)
 			return
 		}
 
@@ -318,34 +369,43 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 // Once all that has finished, we compare the files, and apply what ever
 // changes to our running env. Cool huh?
 func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int {
+	hookPath := normalizeScriptFileName(path)
+
 	// Check if the hook exists
-	if fileExists(path) {
+	if fileExists(hookPath) {
 		// Create a temporary file that we'll put the hook runner code in
-		tempHookRunnerFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-runner")
+		tempHookRunnerFile := createTempFile(normalizeScriptFileName("buildkite-agent-bootstrap-hook-runner"))
 
 		// Ensure the hook script is executable
 		addExecutePermissiontoFile(tempHookRunnerFile.Name())
 
 		// We'll pump the ENV before the hook into this temp file
-		tempEnvBeforeFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-env-before")
+		tempEnvBeforeFile := createTempFile("buildkite-agent-bootstrap-hook-env-before")
 		tempEnvBeforeFile.Close()
 
 		// We'll then pump the ENV _after_ the hook into this temp file
-		tempEnvAfterFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-env-after")
+		tempEnvAfterFile := createTempFile("buildkite-agent-bootstrap-hook-env-after")
 		tempEnvAfterFile.Close()
+
+		absolutePathToHook, err := filepath.Abs(hookPath)
+		if err != nil {
+			fatalf("Failed to find absolute path to \"%s\" (%s)", hookPath, err)
+		}
 
 		// Create the hook runner code
 		var hookScript string
 		if runtime.GOOS == "windows" {
-			hookScript = "SET > \"" + tempEnvBeforeFile.Name() + "\"\n" +
-				"call \"" + path + "\"\n" +
-				"BUILDKITE_LAST_HOOK_EXIT_STATUS=!ERRORLEVEL!\n" +
+			hookScript = "@echo off\n" +
+				"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
+				"SET > \"" + tempEnvBeforeFile.Name() + "\"\n" +
+				"CALL \"" + absolutePathToHook + "\"\n" +
+				"SET BUILDKITE_LAST_HOOK_EXIT_STATUS=!ERRORLEVEL!\n" +
 				"SET > \"" + tempEnvAfterFile.Name() + "\"\n" +
 				"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
 		} else {
 			hookScript = "#!/bin/bash\n" +
 				"env > \"" + tempEnvBeforeFile.Name() + "\"\n" +
-				". \"" + path + "\"\n" +
+				". \"" + absolutePathToHook + "\"\n" +
 				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
 				"env > \"" + tempEnvAfterFile.Name() + "\"\n" +
 				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
@@ -359,13 +419,13 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 		if b.Debug {
 			headerf("Preparing %s hook", name)
 			commentf("A hook runner was written to \"%s\" with the following:", tempHookRunnerFile.Name())
-			printf(hookScript)
+			printf("%s", hookScript)
 		}
 
 		// Print to the screen we're going to run the hook
 		headerf("Running %s hook", name)
 
-		commentf("Executing \"%s\"", path)
+		commentf("Executing \"%s\"", hookPath)
 
 		// Run the hook
 		hookExitStatus := b.runScript(tempHookRunnerFile.Name())
@@ -409,7 +469,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 	} else {
 		if b.Debug {
 			headerf("Running %s hook", name)
-			commentf("Skipping, no hook script found at \"%s\"", path)
+			commentf("Skipping, no hook script found at \"%s\"", hookPath)
 		}
 
 		return 0
@@ -418,7 +478,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 
 // Returns the absolute path to a global hook
 func (b *Bootstrap) globalHookPath(name string) string {
-	return path.Join(b.HooksPath, name)
+	return filepath.Join(b.HooksPath, name)
 }
 
 // Executes a global hook
@@ -428,7 +488,7 @@ func (b *Bootstrap) executeGlobalHook(name string) int {
 
 // Returns the absolute path to a local hook
 func (b *Bootstrap) localHookPath(name string) string {
-	return path.Join(b.wd, ".buildkite", "hooks", name)
+	return filepath.Join(b.wd, ".buildkite", "hooks", name)
 }
 
 // Executes a local hook
@@ -441,13 +501,13 @@ func (b *Bootstrap) Start() error {
 	b.env, _ = shell.EnvironmentFromSlice(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH
-	b.env.Set(shell.ENVIRONMENT_KEY_PATH, fmt.Sprintf("%s:%s", b.BinPath, b.env.Get(shell.ENVIRONMENT_KEY_PATH)))
+	b.env.Set(shell.ENVIRONMENT_KEY_PATH, fmt.Sprintf("%s%s%s", b.BinPath, shell.ENVIRONMENT_KEY_SEPERATOR, b.env.Get(shell.ENVIRONMENT_KEY_PATH)))
 
 	// Come up with the place that the repository will be checked out to
 	var agentNameCleanupRegex = regexp.MustCompile("\"")
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
 
-	b.wd = b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
+	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
 
 	if b.Debug {
 		// Convert the env to a sorted slice
@@ -495,15 +555,17 @@ func (b *Bootstrap) Start() error {
 
 		err := os.RemoveAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		if err != nil {
-			fatalf("Failed to remove \"%s\": %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+			fatalf("Failed to remove \"%s\" (%s)", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
 		}
 	}
 
 	headerf("Preparing build folder")
 
 	// Create the build directory
-	commentf("Creating \"%s\"", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-	os.MkdirAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+	if !fileExists(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
+		commentf("Creating \"%s\"", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		os.MkdirAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+	}
 
 	// Switch the internal wd to it
 	commentf("Switching working directroy to build folder")
@@ -517,29 +579,8 @@ func (b *Bootstrap) Start() error {
 			b.addRepositoryHostToSSHKnownHosts(b.Repository)
 		}
 
-		// If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
-		// a yes/no promp from appearing when cloning/fetching
-		// if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION" == "true" ]]; then
-		//   # Only bother running the keyscan if the SSH host has been provided by
-		//   # Buildkite. It won't be present if the host isn't using the SSH protocol
-		//   if [[ ! -z "${BUILDKITE_REPO_SSH_HOST:-}" ]]; then
-		//     : "${BUILDKITE_SSH_DIRECTORY:="$HOME/.ssh"}"
-		//     : "${BUILDKITE_SSH_KNOWN_HOST_PATH:="$BUILDKITE_SSH_DIRECTORY/known_hosts"}"
-
-		//     # Ensure the known_hosts file exists
-		//     mkdir -p "$BUILDKITE_SSH_DIRECTORY"
-		//     touch "$BUILDKITE_SSH_KNOWN_HOST_PATH"
-
-		//     # Only add the output from ssh-keyscan if it doesn't already exist in the
-		//     # known_hosts file
-		//     if ! ssh-keygen -H -F "$BUILDKITE_REPO_SSH_HOST" | grep -q "$BUILDKITE_REPO_SSH_HOST"; then
-		//       buildkite-run "ssh-keyscan \"$BUILDKITE_REPO_SSH_HOST\" >> \"$BUILDKITE_SSH_KNOWN_HOST_PATH\""
-		//     fi
-		//   fi
-		// fi
-
 		// Do we need to do a git checkout?
-		existingGitDir := path.Join(b.wd, ".git")
+		existingGitDir := filepath.Join(b.wd, ".git")
 		if fileExists(existingGitDir) {
 			// Update the the origin of the repository so we can
 			// gracefully handle repository renames
@@ -550,12 +591,12 @@ func (b *Bootstrap) Start() error {
 			// clones faster. The option was introducted in 1.7.10,
 			// so we need to double check we have the right
 			// version.
-			gitVersion := strings.Replace(b.runCommandSilentlyAndCaptureOutput("git", "version"), "git version ", "", 1)
+			gitVersionOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "version")
 
-			if version.Compare(gitVersion, "1.7.10", ">=") {
-				b.runCommand("git", "clone", "-qv", "--single-branch", "-b", b.Branch, "--", b.Repository, b.wd)
+			if version.Compare(strings.Replace(gitVersionOutput, "git version ", "", 1), "1.7.10", ">=") {
+				b.runCommand("git", "clone", "-qv", "--single-branch", "-b", b.Branch, "--", b.Repository, ".")
 			} else {
-				b.runCommand("git", "clone", "-qv", "--", b.Repository, b.wd)
+				b.runCommand("git", "clone", "-qv", "--", b.Repository, ".")
 			}
 		}
 
@@ -604,7 +645,7 @@ func (b *Bootstrap) Start() error {
 				// script, and show an informative error.
 				gitSubmoduleSyncExitStatus := b.runCommandGracefully("git", "submodule", "sync", "--recursive")
 				if gitSubmoduleSyncExitStatus != 0 {
-					gitVersionOutput := b.runCommandSilentlyAndCaptureOutput("git", "--version")
+					gitVersionOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--version")
 					warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 				}
 
@@ -619,8 +660,8 @@ func (b *Bootstrap) Start() error {
 			if metaDataExistsExitStatus != 0 {
 				commentf("Sending Git commit information back to Buildkite")
 
-				gitCommitOutput := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
-				gitBranchOutput := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
+				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
 
 				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
 				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
@@ -644,7 +685,7 @@ func (b *Bootstrap) Start() error {
 	newCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 	newCheckoutPathAbs := newCheckoutPath
 	if !filepath.IsAbs(newCheckoutPathAbs) {
-		newCheckoutPathAbs = path.Join(b.wd, newCheckoutPath)
+		newCheckoutPathAbs = filepath.Join(b.wd, newCheckoutPath)
 	}
 
 	// If the working directory has been changed by a hook, log and switch to it
@@ -690,7 +731,7 @@ func (b *Bootstrap) Start() error {
 			fatalf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
 		}
 
-		pathToCommand := path.Join(b.wd, b.Command)
+		pathToCommand := filepath.Join(b.wd, b.Command)
 
 		// If the command isn't a file on the filesystem, then it's
 		// something we need to eval. But before we even try running
@@ -732,12 +773,12 @@ func (b *Bootstrap) Start() error {
 			}
 		}
 
-		buildScriptPath := path.Join(b.wd, "buildkite-script-"+b.JobID)
+		buildScriptPath := filepath.Join(b.wd, normalizeScriptFileName("buildkite-script-"+b.JobID))
 
 		// Write the build script to disk
 		err := ioutil.WriteFile(buildScriptPath, []byte(buildScript), 0644)
 		if err != nil {
-			fatalf("Failed to write to \"%s\": %s", buildScriptPath, err)
+			fatalf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
 		}
 
 		// Ensure it can be executed

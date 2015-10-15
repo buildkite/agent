@@ -55,7 +55,7 @@ func (p *Process) Run() error {
 
 		err := cmd.Start()
 		if err != nil {
-			return fmt.Errorf("Failed to start command: ", err)
+			return err
 		}
 	}
 

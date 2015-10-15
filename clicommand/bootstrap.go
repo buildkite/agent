@@ -1,6 +1,8 @@
 package clicommand
 
 import (
+	"runtime"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
@@ -179,7 +181,13 @@ var BootstrapCommand = cli.Command{
 			logger.Fatal("%s", err)
 		}
 
-		// Start the bootstraper
+		// Turn of PTY support if we're on Windows
+		runInPty := !cfg.NoPTY
+		if runtime.GOOS == "windows" {
+			runInPty = false
+		}
+
+		// Configure the bootstraper
 		bootstrap := &agent.Bootstrap{
 			Command:                        cfg.Command,
 			JobID:                          cfg.JobID,
@@ -199,11 +207,12 @@ var BootstrapCommand = cli.Command{
 			BinPath:                        cfg.BinPath,
 			HooksPath:                      cfg.HooksPath,
 			Debug:                          cfg.Debug,
-			RunInPty:                       !cfg.NoPTY,
+			RunInPty:                       runInPty,
 			CommandEval:                    !cfg.NoCommandEval,
 			AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
 		}
 
+		// Start the bootstraper
 		bootstrap.Start()
 	},
 }
