@@ -488,7 +488,7 @@ func (b *Bootstrap) Start() error {
 			// Grab author and commit information and send it back to Buildkite. But before we do, we'll
 			// check to see if someone else has done it first.
 			metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
-			if metaDataExistsExitStatus == 0 {
+			if metaDataExistsExitStatus != 0 {
 				headerf("Sending commit information back to Buildkite")
 
 				gitCommitOutput := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
