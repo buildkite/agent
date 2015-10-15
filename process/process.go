@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -48,12 +49,14 @@ func (p Process) Create() *Process {
 	absolutePath, _ := filepath.Abs(p.Script)
 	scriptDirectory := filepath.Dir(absolutePath)
 
-	// Create the command that will be run
-	p.command = exec.Command(absolutePath)
-	p.command.Dir = scriptDirectory
-
-	// Do cross-platform things to prepare this process to run
-	PrepareCommandProcess(&p)
+	// If the command is a file on the file system, just run it normally,
+	// otherwise, execute it via a shell.
+	if _, err := os.Stat(absolutePath); !os.IsNotExist(err) {
+		p.command = exec.Command(absolutePath)
+		p.command.Dir = scriptDirectory
+	} else {
+		p.command = exec.Command("/bin/bash", "-c", p.Script)
+	}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -72,7 +75,7 @@ func (p *Process) Start() error {
 
 	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
 
-	logger.Info("Starting to run script: %s", strings.Join(p.command.Args, " "))
+	logger.Info("Starting to run: %s", strings.Join(p.command.Args, " "))
 
 	// Toggle between running in a pty
 	if p.PTY {
