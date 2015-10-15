@@ -25,6 +25,8 @@ Example:
    $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
+	Command                      string `cli:"command"`
+	JobID                        string `cli:"job"`
 	Repository                   string `cli:"repository"`
 	Commit                       string `cli:"commit"`
 	Branch                       string `cli:"branch"`
@@ -40,6 +42,7 @@ type BootstrapConfig struct {
 	BinPath                      string `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
+	NoCommandEval                bool   `cli:"no-command-eval"`
 	NoPTY                        bool   `cli:"no-pty"`
 	Debug                        bool   `cli:"debug"`
 }
@@ -49,6 +52,18 @@ var BootstrapCommand = cli.Command{
 	Usage:       "Run a Buildkite job locally",
 	Description: BootstrapHelpDescription,
 	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:   "command",
+			Value:  "",
+			Usage:  "The command to run",
+			EnvVar: "BUILDKITE_COMMAND",
+		},
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "The ID of the job being run",
+			EnvVar: "BUILDKITE_JOB_ID",
+		},
 		cli.StringFlag{
 			Name:   "repository",
 			Value:  "",
@@ -133,6 +148,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
 		cli.BoolFlag{
+			Name:   "no-command-eval",
+			Usage:  "Disable running commands",
+			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+		},
+		cli.BoolFlag{
 			Name:   "no-git-submodules",
 			Usage:  "Disable git submodules",
 			EnvVar: "BUILDKITE_DISABLE_GIT_SUBMODULES",
@@ -155,6 +175,8 @@ var BootstrapCommand = cli.Command{
 
 		// Start the bootstraper
 		bootstrap := &agent.Bootstrap{
+			Command:                      cfg.Command,
+			JobID:                        cfg.JobID,
 			Repository:                   cfg.Repository,
 			Commit:                       cfg.Commit,
 			Branch:                       cfg.Branch,
@@ -172,6 +194,7 @@ var BootstrapCommand = cli.Command{
 			HooksPath:                    cfg.HooksPath,
 			Debug:                        cfg.Debug,
 			RunInPty:                     !cfg.NoPTY,
+			CommandEval:                  !cfg.NoCommandEval,
 		}
 
 		bootstrap.Start()

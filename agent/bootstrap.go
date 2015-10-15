@@ -15,6 +15,12 @@ import (
 )
 
 type Bootstrap struct {
+	// The command to run
+	Command string
+
+	// The ID of the job being run
+	JobID string
+
 	// If the bootstrap is in debug mode
 	Debug bool
 
@@ -50,6 +56,9 @@ type Bootstrap struct {
 
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
+
+	// Are aribtary commands allowed to be executed
+	CommandEval bool
 
 	// Path where the builds will be run
 	BuildPath string
@@ -113,9 +122,22 @@ func fileExists(filename string) bool {
 	return !os.IsNotExist(err)
 }
 
+// Changes the permission of a file so it can be executed
+func addExecutePermissiontoFile(filename string) {
+	s, err := os.Stat(filename)
+	if err != nil {
+		fatalf("Failed to retrieve file information of \"%s\": %s", filename, err)
+	}
+
+	err = os.Chmod(filename, s.Mode()|0100)
+	if err != nil {
+		fatalf("Failed to mark \"%s\" as executable: %s", filename, err)
+	}
+}
+
 func checkShellError(err error, cmd *shell.Command) {
 	if err != nil {
-		errorf("There was error running `%s` (%s)", cmd, err)
+		fatalf("There was error running `%s`: %s", cmd, err)
 	}
 }
 
@@ -178,15 +200,8 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 		// Create a temporary file that we'll put the hook runner code in
 		tempHookRunnerFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-runner")
 
-		// Mark the temporary hook runner file as writable
-		s, err := os.Stat(tempHookRunnerFile.Name())
-		if err != nil {
-			fatalf("Failed to retrieve file information of `%s` as executable (%s)", tempHookRunnerFile.Name(), err)
-		}
-		err = os.Chmod(tempHookRunnerFile.Name(), s.Mode()|0100)
-		if err != nil {
-			fatalf("Failed to mark `%s` as executable (%s)", tempHookRunnerFile.Name(), err)
-		}
+		// Ensure the hook script is executable
+		addExecutePermissiontoFile(tempHookRunnerFile.Name())
 
 		// We'll pump the ENV before the hook into this temp file
 		tempEnvBeforeFile, err := ioutil.TempFile("", "buildkite-agent-bootstrap-hook-env-before")
@@ -529,8 +544,71 @@ func (b *Bootstrap) Start() error {
 	} else if fileExists(globalCommandHookPath) {
 		commandExitStatus = b.executeHook("global command", globalCommandHookPath, false)
 	} else {
-		// TODO: run command
-		commandExitStatus = 0
+		// Make sure we actually have a command to run
+		if b.Command == "" {
+			fatalf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
+		}
+
+		// If the command isn't a file on the filesystem, then it's
+		// something we need to eval. But before we even try running
+		// it, we should double check that the agent is allowed to eval
+		// commands.
+		if !fileExists(b.Command) && !b.CommandEval {
+			fatalf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+		}
+
+		if b.Debug {
+			headerf("Preparing build script")
+		}
+
+		// Come up with the contents of the build script. While we
+		// generate the script, we need to handle the case of running a
+		// script vs. a command differently
+		var buildScript string
+		var promptDisplay string
+		var headerLabel string
+		if runtime.GOOS == "windows" {
+			if fileExists(b.Command) {
+				promptDisplay = "CALL " + b.Command
+				headerLabel = "Running build script"
+				buildScript = "ECHO hello"
+			} else {
+				promptDisplay = b.Command
+				headerLabel = "Running command"
+				buildScript = "#!/bin/bash\n" + b.Command
+			}
+		} else {
+			if fileExists(b.Command) {
+				promptDisplay = "./\"" + b.Command + "\""
+				headerLabel = "Running build script"
+				buildScript = "#!/bin/bash\nchmod +x \"" + b.Command + "\"\n./\"" + b.Command + "\""
+			} else {
+				promptDisplay = b.Command
+				headerLabel = "Running command"
+				buildScript = "#!/bin/bash\n" + b.Command
+			}
+		}
+
+		buildScriptPath := path.Join(b.wd, "buildkite-script-"+b.JobID)
+
+		// Write the build script to disk
+		err := ioutil.WriteFile(buildScriptPath, []byte(buildScript), 0644)
+		if err != nil {
+			fatalf("Failed to write to \"%s\": %s", buildScriptPath, err)
+		}
+
+		// Ensure it can be executed
+		addExecutePermissiontoFile(buildScriptPath)
+
+		if b.Debug {
+			printf("A build script written to \"%s\" with the following:", buildScriptPath)
+			printf(buildScript)
+		}
+
+		headerf(headerLabel)
+		promptf(promptDisplay)
+
+		commandExitStatus = b.runScript(buildScriptPath)
 	}
 
 	// Save the command exit status to the env so hooks + plugins can access it
