@@ -473,6 +473,9 @@ func (b *Bootstrap) Start() error {
 	// The global environment hook
 	b.executeGlobalHook("environment")
 
+	// Disable any interactive Git/SSH prompting
+	b.env.Set("GIT_TERMINAL_PROMPT", "0")
+
 	//////////////////////////////////////////////////////////////
 	//
 	// REPOSITORY HANDLING
@@ -533,9 +536,6 @@ func (b *Bootstrap) Start() error {
 		//     fi
 		//   fi
 		// fi
-
-		// Disable any interactive Git/SSH prompting
-		b.env.Set("GIT_TERMINAL_PROMPT", "0")
 
 		// Do we need to do a git checkout?
 		existingGitDir := path.Join(b.wd, ".git")
