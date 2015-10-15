@@ -440,7 +440,7 @@ func (b *Bootstrap) Start() error {
 	b.env, _ = shell.EnvironmentFromSlice(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH
-	b.env.Set("PATH", fmt.Sprintf("%s:%s", b.BinPath, b.env.Get("PATH")))
+	b.env.Set(shell.ENVIRONMENT_KEY_PATH, fmt.Sprintf("%s:%s", b.BinPath, b.env.Get(shell.ENVIRONMENT_KEY_PATH)))
 
 	// Come up with the place that the repository will be checked out to
 	var agentNameCleanupRegex = regexp.MustCompile("\"")
@@ -448,18 +448,14 @@ func (b *Bootstrap) Start() error {
 
 	b.wd = b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", path.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
 
-	// Show BUILDKITE_* environment variables if in debug mode. Also
-	// include any custom BUILDKITE_ variables that have been added to our
-	// running env map.
 	if b.Debug {
-		headerf("Buildkite environment variables")
-
 		// Convert the env to a sorted slice
 		envSlice := b.env.ToSlice()
 		sort.Strings(envSlice)
 
+		headerf("Build environment variables")
 		for _, e := range envSlice {
-			if strings.HasPrefix(e, "BUILDKITE") {
+			if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, shell.ENVIRONMENT_KEY_PATH) {
 				printf(e)
 			}
 		}
