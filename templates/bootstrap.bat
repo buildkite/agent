@@ -42,18 +42,26 @@ ECHO ^> git clean -fdq
 CALL git clean -fdq
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
-REM Fetch the latest code
+REM Determine if a GitHub pull request fetch is possible
 
-ECHO ^> git fetch -q
-CALL git fetch -q
-IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+SET PULL_REQUEST_FETCH=false
+IF NOT "%BUILDKITE_PULL_REQUEST%" == "false" (
+  IF "%BUILDKITE_PROJECT_PROVIDER%" == "github" SET PULL_REQUEST_FETCH=true
+  IF "%BUILDKITE_PROJECT_PROVIDER%" == "github_enterprise" SET PULL_REQUEST_FETCH=true
+)
 
-REM Build open-source Github pull requests
+if "%PULL_REQUEST_FETCH%" == "true" (
+  REM Fetch the code using the special GitHub PR syntax
 
-REM Allow checkouts of forked pull requests on GitHub only
-IF NOT "%BUILDKITE_PULL_REQUEST%" == "false" AND ECHO.%BUILDKITE_PROJECT_PROVIDER% | FIND /I "github">Nul (
+  ECHO ^> git fetch origin "+refs/pull/%BUILDKITE_PULL_REQUEST%/head:"
   CALL git fetch origin "+refs/pull/%BUILDKITE_PULL_REQUEST%/head:"
 ) ELSE (
+  REM Fetch the latest code
+
+  ECHO ^> git fetch -q
+  CALL git fetch -q
+  IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
+
   REM Only reset to the branch if we're not on a tag
 
   IF "%BUILDKITE_TAG%" == "" (
