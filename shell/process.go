@@ -21,8 +21,6 @@ type Process struct {
 }
 
 func (p *Process) Run() error {
-	var err error
-
 	cmd := exec.Command(p.Command.Command, p.Command.Args...)
 
 	if p.Command.Env != nil {
@@ -64,9 +62,17 @@ func (p *Process) Run() error {
 	waitResult := cmd.Wait()
 
 	// Get the exit status
-	p.exitStatus, err = getExitStatusFromWaitResult(waitResult)
-	if err != nil {
-		return fmt.Errorf("Failed to get exit status: %s", err)
+	// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
+	if waitResult != nil {
+		if err, ok := waitResult.(*exec.ExitError); ok {
+			if s, ok := err.Sys().(syscall.WaitStatus); ok {
+				p.exitStatus = s.ExitStatus()
+			} else {
+				return errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+			}
+		}
+	} else {
+		p.exitStatus = 0
 	}
 
 	return nil
@@ -74,24 +80,4 @@ func (p *Process) Run() error {
 
 func (p *Process) ExitStatus() int {
 	return p.exitStatus
-}
-
-// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
-// TODO: Can this be better?
-func getExitStatusFromWaitResult(waitResult error) (int, error) {
-	exitStatus := -1
-
-	if waitResult != nil {
-		if err, ok := waitResult.(*exec.ExitError); ok {
-			if s, ok := err.Sys().(syscall.WaitStatus); ok {
-				exitStatus = s.ExitStatus()
-			} else {
-				return -1, errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
-			}
-		}
-	} else {
-		exitStatus = 0
-	}
-
-	return exitStatus, nil
 }
