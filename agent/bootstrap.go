@@ -126,7 +126,7 @@ func fatalf(format string, v ...interface{}) {
 // Prints a shell prompt
 func promptf(format string, v ...interface{}) {
 	if runtime.GOOS == "windows" {
-		fmt.Printf("^> %s\n", fmt.Sprintf(format, v...))
+		fmt.Printf("\033[90m>\033[0m %s\n", fmt.Sprintf(format, v...))
 	} else {
 		fmt.Printf("\033[90m$\033[0m %s\n", fmt.Sprintf(format, v...))
 	}
