@@ -25,6 +25,9 @@ type ArtifactDownloader struct {
 
 	// Where we'll be downloading artifacts to
 	Destination string
+
+	// Whether to use the unix like sytanx
+	UnixSyntax bool
 }
 
 func (a *ArtifactDownloader) Download() error {

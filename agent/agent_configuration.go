@@ -7,4 +7,5 @@ type AgentConfiguration struct {
 	AutoSSHFingerprintVerification bool
 	CommandEval                    bool
 	RunInPty                       bool
+	ArtifactUnixSyntax             bool
 }

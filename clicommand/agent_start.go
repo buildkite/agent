@@ -42,6 +42,7 @@ type AgentStartConfig struct {
 	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                    bool     `cli:"no-command-eval"`
 	NoPTY                            bool     `cli:"no-pty"`
+	ArtifactUnixSyntax               bool     `cli:"artifact-unix-syntax"`
 	Endpoint                         string   `cli:"endpoint" validate:"required"`
 	Debug                            bool     `cli:"debug"`
 	DebugHTTP                        bool     `cli:"debug-http"`
@@ -144,6 +145,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to run arbitrary console commands",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
+		cli.BoolFlag{
+			Name:   "artifact-unix-syntax",
+			EnvVar: "BUILDKITE_ARTIFACT_UNIX_SYNTAX",
+			Usage:  "The artifact upload/download syntax matches that of regular unix tools like cp and mv. This will be the default in 3.0",
+		},
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
@@ -191,6 +197,7 @@ var AgentStartCommand = cli.Command{
 				AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
 				CommandEval:                    !cfg.NoCommandEval,
 				RunInPty:                       !cfg.NoPTY,
+				ArtifactUnixSyntax:             cfg.ArtifactUnixSyntax,
 			},
 		}
 

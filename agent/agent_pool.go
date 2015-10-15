@@ -202,4 +202,10 @@ func (r *AgentPool) ShowBanner() {
 	if !r.AgentConfiguration.RunInPty {
 		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
+
+	if r.AgentConfiguration.ArtifactUnixSyntax {
+		logger.Debug("Using the new unix sytnax for artifact uploads and downloads")
+	} else {
+		logger.Warn("The `buildkite-agent artifact` command is set to use the deprecated upload/download syntax. This syntax will be deprecated in 3.0. See http://buildkite.dev/docs/agent/build-artifacts#unix-upload-download-syntax on how upgrade, then restart the agent with --artifact-unix-syntax")
+	}
 }

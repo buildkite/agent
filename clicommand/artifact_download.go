@@ -38,6 +38,7 @@ type ArtifactDownloadConfig struct {
 	Destination      string `cli:"arg:1" label:"artifact download path" validate:"required"`
 	Step             string `cli:"step"`
 	Build            string `cli:"build" validate:"required"`
+	UnixSyntax       bool   `cli:"unix-syntax"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
@@ -60,6 +61,11 @@ var ArtifactDownloadCommand = cli.Command{
 			Value:  "",
 			EnvVar: "BUILDKITE_BUILD_ID",
 			Usage:  "The build that the artifacts were uploaded to",
+		},
+		cli.BoolFlag{
+			Name:   "unix-syntax",
+			EnvVar: "BUILDKITE_ARTIFACT_UNIX_SYNTAX",
+			Usage:  "The upload syntax matches that of regular unix tools like cp and mv. This will be the default in 3.0",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -89,6 +95,7 @@ var ArtifactDownloadCommand = cli.Command{
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,
 			Step:        cfg.Step,
+			UnixSyntax:  cfg.UnixSyntax,
 		}
 
 		// Download the artifacts

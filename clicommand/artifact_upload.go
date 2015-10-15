@@ -35,6 +35,7 @@ type ArtifactUploadConfig struct {
 	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`
 	Destination      string `cli:"arg:1" label:"destination"`
 	Job              string `cli:"job" validate:"required"`
+	UnixSyntax       bool   `cli:"unix-syntax"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
@@ -52,6 +53,11 @@ var ArtifactUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the artifacts be uploaded to",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "unix-syntax",
+			EnvVar: "BUILDKITE_ARTIFACT_UNIX_SYNTAX",
+			Usage:  "The download syntax matches that of regular unix tools like cp and mv. This will be the default in 3.0",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -80,6 +86,7 @@ var ArtifactUploadCommand = cli.Command{
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
+			UnixSyntax:  cfg.UnixSyntax,
 		}
 
 		// Upload the artifacts
