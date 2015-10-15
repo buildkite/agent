@@ -321,7 +321,7 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				return -1, errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		}
 	} else {
