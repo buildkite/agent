@@ -1,4 +1,4 @@
-package env
+package shell
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ type Environment struct {
 }
 
 // Creates a new environment from a string slice of KEY=VALUE
-func New(s []string) (*Environment, error) {
+func EnvironmentFromSlice(s []string) (*Environment, error) {
 	env := make(map[string]string)
 
 	for _, l := range s {
@@ -25,13 +25,13 @@ func New(s []string) (*Environment, error) {
 }
 
 // Creates a new environment from a file with format KEY=VALUE\n
-func NewFromFile(path string) (*Environment, error) {
+func EnvironmentFromFile(path string) (*Environment, error) {
 	body, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	return New(strings.Split(string(body), "\n"))
+	return EnvironmentFromSlice(strings.Split(string(body), "\n"))
 }
 
 // Returns a key from the environment
@@ -53,7 +53,7 @@ func (e *Environment) Length() int {
 
 // Returns a new environment with all the variables that have changed
 func (e *Environment) Diff(other *Environment) *Environment {
-	diff, _ := New([]string{})
+	diff := &Environment{env: make(map[string]string)}
 
 	for k, v := range e.env {
 		if other.Get(k) != v {

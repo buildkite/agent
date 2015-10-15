@@ -3,19 +3,15 @@ package agent
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
-	"syscall"
 
-	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/process"
+	"github.com/buildkite/agent/shell"
 )
 
 type Bootstrap struct {
@@ -71,7 +67,7 @@ type Bootstrap struct {
 	ArtifactUploadDestination string
 
 	// The running environment for the bootstrap file as each task runs
-	env *env.Environment
+	env *shell.Environment
 
 	// Current working directory that shell commands get executed in
 	wd string
@@ -110,13 +106,6 @@ func promptf(format string, v ...interface{}) {
 	}
 }
 
-// Will exit the bootstrap if the exit status is non successfull
-func exitOnExitStatusError(exitStatus int) {
-	if exitStatus != 0 {
-		os.Exit(exitStatus)
-	}
-}
-
 // Returns whether or not a file exists on the filesystem
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
@@ -124,64 +113,57 @@ func fileExists(filename string) bool {
 	return !os.IsNotExist(err)
 }
 
-// Come up with a nice way of showing the command if we need to
-func formatCommandAndArgs(command string, args ...string) string {
-	return strings.Join(append([]string{command}, args...), " ")
-}
-
-// Executes a shell function
-func (b Bootstrap) shell(writer io.Writer, pty bool, command string, args ...string) int {
-	// Execute the command
-	c := exec.Command(command, args...)
-	c.Env = b.env.ToSlice()
-	c.Dir = b.wd
-
-	formattedCommand := formatCommandAndArgs(command, args...)
-
-	if pty {
-		// Start our process in a PTY
-		f, err := b.shellPTYStart(c)
-		if err != nil {
-			fatalf("There was an error running `%s` on a PTY (%s)", formattedCommand, err)
-		}
-
-		// Copy the pty to our buffer. This will block until it
-		// EOF's or something breaks.
-		_, err = io.Copy(writer, f)
-		if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
-			// We can safely ignore this error, because
-			// it's just the PTY telling us that it closed
-			// successfully.  See:
-			// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
-			err = nil
-		}
-	} else {
-		c.Stdout = writer
-		c.Stderr = writer
-
-		err := c.Start()
-		if err != nil {
-			fatalf("There was an error running `%s` (%s)", formattedCommand, err)
-		}
-	}
-
-	// Wait for the command to finish
-	waitResult := c.Wait()
-
-	// Get the exit status
-	exitStatus, err := process.GetExitStatusFromWaitResult(waitResult)
+func checkShellError(err error, cmd *shell.Command) {
 	if err != nil {
-		fatalf("There was an error getting the exit status for `%s` (%s)", formattedCommand, err)
+		errorf("There was error running `%s` (%s)", cmd, err)
 	}
-
-	return exitStatus
 }
 
-// Runs a shell command, but prints the command to STDOUT before doing so
-func (b Bootstrap) shellAndPrompt(writer io.Writer, pty bool, command string, args ...string) int {
-	promptf(formatCommandAndArgs(command, args...))
+// Creates a shell command ready for running
+func (b *Bootstrap) newCommand(command string, args ...string) *shell.Command {
+	return &shell.Command{Command: command, Args: args, Env: b.env, Dir: b.wd}
+}
 
-	return b.shell(writer, pty, command, args...)
+// Run a command without showing a prompt or the output to the user
+func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...string) string {
+	cmd := b.newCommand(command, args...)
+
+	var buffer bytes.Buffer
+	_, err := shell.Run(cmd, &shell.Config{Writer: &buffer})
+	checkShellError(err, cmd)
+
+	return buffer.String()
+}
+
+// Run a command and return it's exit status
+func (b *Bootstrap) runCommandGracefully(command string, args ...string) int {
+	cmd := b.newCommand(command, args...)
+
+	promptf("%s", cmd)
+
+	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout})
+	checkShellError(err, cmd)
+
+	return process.ExitStatus()
+}
+
+// Runs a script on the file system
+func (b *Bootstrap) runScript(command string) int {
+	cmd := b.newCommand(command)
+
+	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout, PTY: b.RunInPty})
+	checkShellError(err, cmd)
+
+	return process.ExitStatus()
+}
+
+// Run a command, and if it fails, exit the bootstrap
+func (b *Bootstrap) runCommand(command string, args ...string) {
+	exitStatus := b.runCommandGracefully(command, args...)
+
+	if exitStatus != 0 {
+		os.Exit(exitStatus)
+	}
 }
 
 // Executes a hook and applyes any environment changes. The tricky thing with
@@ -191,7 +173,7 @@ func (b Bootstrap) shellAndPrompt(writer io.Writer, pty bool, command string, ar
 // the ENV to a file, runs the hook, then writes the ENV back to another file.
 // Once all that has finished, we compare the files, and apply what ever
 // changes to our running env. Cool huh?
-func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
+func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 	// Check if the hook exists
 	if fileExists(path) {
 		// Create a temporary file that we'll put the hook runner code in
@@ -247,7 +229,7 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 		headerf("Running %s hook", name)
 
 		// Run the hook
-		hookExitStatus := b.shell(os.Stdout, b.RunInPty, tempHookRunnerFile.Name())
+		hookExitStatus := b.runScript(tempHookRunnerFile.Name())
 
 		// Exit from the bootstrapper if the hook exited
 		if exitOnError && hookExitStatus != 0 {
@@ -261,12 +243,12 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 
 		// Compare the ENV current env with the after shots, then
 		// modify the running env map with the changes.
-		beforeEnv, err := env.NewFromFile(tempEnvBeforeFile.Name())
+		beforeEnv, err := shell.EnvironmentFromFile(tempEnvBeforeFile.Name())
 		if err != nil {
 			fatalf("Failed to parse \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
 		}
 
-		afterEnv, err := env.NewFromFile(tempEnvAfterFile.Name())
+		afterEnv, err := shell.EnvironmentFromFile(tempEnvAfterFile.Name())
 		if err != nil {
 			fatalf("Failed to parse \"%s\" (%s)", tempEnvAfterFile.Name(), err)
 		}
@@ -296,30 +278,28 @@ func (b Bootstrap) executeHook(name string, path string, exitOnError bool) int {
 }
 
 // Returns the absolute path to a global hook
-func (b Bootstrap) globalHookPath(name string) string {
+func (b *Bootstrap) globalHookPath(name string) string {
 	return path.Join(b.HooksPath, name)
 }
 
 // Executes a global hook
-func (b Bootstrap) executeGlobalHook(name string) int {
+func (b *Bootstrap) executeGlobalHook(name string) int {
 	return b.executeHook("global "+name, b.globalHookPath(name), true)
 }
 
 // Returns the absolute path to a local hook
-func (b Bootstrap) localHookPath(name string) string {
+func (b *Bootstrap) localHookPath(name string) string {
 	return path.Join(b.wd, ".buildkite", "hooks", name)
 }
 
 // Executes a local hook
-func (b Bootstrap) executeLocalHook(name string) int {
+func (b *Bootstrap) executeLocalHook(name string) int {
 	return b.executeHook("local "+name, b.localHookPath(name), true)
 }
 
-func (b Bootstrap) Start() error {
-	var exitStatus int
-
+func (b *Bootstrap) Start() error {
 	// Create an empty env for us to keep track of our env changes in
-	b.env, _ = env.New(os.Environ())
+	b.env, _ = shell.EnvironmentFromSlice(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH
 	b.env.Set("PATH", fmt.Sprintf("%s:%s", b.BinPath, b.env.Get("PATH")))
@@ -421,37 +401,32 @@ func (b Bootstrap) Start() error {
 		if fileExists(existingGitDir) {
 			// Update the the origin of the repository so we can
 			// gracefully handle repository renames
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "remote", "set-url", "origin", b.Repository)
-			exitOnExitStatusError(exitStatus)
+			b.runCommand("git", "remote", "set-url", "origin", b.Repository)
 		} else {
-			// Does `git clone` support the --single-branch method? If it
-			// does, we can use that to make first time clones faster.
-			var gitCloneHelpOutput bytes.Buffer
-			b.shell(&gitCloneHelpOutput, false, "git", "clone", "--help")
+			// Does `git clone` support the --single-branch method?
+			// If it does, we can use that to make first time
+			// clones faster.
+			gitCloneHelpOutput := b.runCommandSilentlyAndCaptureOutput("git", "clone", "--help")
 
 			// Clone the repository to the path
-			if strings.Contains(gitCloneHelpOutput.String(), "--single-branch") {
-				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--single-branch", "-b", b.Branch, "--", b.Repository, b.wd)
+			if strings.Contains(gitCloneHelpOutput, "--single-branch") {
+				b.runCommand("git", "clone", "-qv", "--single-branch", "-b", b.Branch, "--", b.Repository, b.wd)
 			} else {
-				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clone", "-qv", "--", b.Repository, b.wd)
+				b.runCommand("git", "clone", "-qv", "--", b.Repository, b.wd)
 			}
-			exitOnExitStatusError(exitStatus)
 		}
 
 		// Clean up the repository
-		exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "clean", "-fdq")
-		exitOnExitStatusError(exitStatus)
+		b.runCommand("git", "clean", "-fdq")
 
 		if b.GitSubmodules {
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
-			exitOnExitStatusError(exitStatus)
+			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
 		}
 
 		// Allow checkouts of forked pull requests on GitHub only. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		if b.PullRequest != "false" && strings.Contains(b.ProjectProvider, "github") {
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "fetch", "origin", "+refs/pull/"+b.PullRequest+"/head:")
-			exitOnExitStatusError(exitStatus)
+			b.runCommand("git", "fetch", "origin", "+refs/pull/"+b.PullRequest+"/head:")
 		} else {
 			// If the commit is HEAD, we can't do a commit-only
 			// fetch, we'll need to use the branch instead.  During
@@ -465,20 +440,17 @@ func (b Bootstrap) Start() error {
 				commitToFetch = b.Commit
 			}
 
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "fetch", "origin", commitToFetch)
-			if exitStatus != 0 {
-				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "fetch")
-				exitOnExitStatusError(exitStatus)
+			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", commitToFetch)
+			if gitFetchExitStatus != 0 {
+				b.runCommand("git", "fetch")
 			}
 
 			// Handle checking out of tags
 			if b.Tag != "" {
-				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "reset", "--hard", "origin/"+b.Branch)
-				exitOnExitStatusError(exitStatus)
+				b.runCommand("git", "reset", "--hard", "origin/"+b.Branch)
 			}
 
-			exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "checkout", "-f", b.Commit)
-			exitOnExitStatusError(exitStatus)
+			b.runCommand("git", "checkout", "-f", b.Commit)
 
 			if b.GitSubmodules {
 				//   # `submodule sync` will ensure the .git/config matches the .gitmodules file.
@@ -489,11 +461,8 @@ func (b Bootstrap) Start() error {
 				//     buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can."
 				//   fi
 
-				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "update", "--init", "--recursive")
-				exitOnExitStatusError(exitStatus)
-
-				exitStatus = b.shellAndPrompt(os.Stdout, false, "git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
-				exitOnExitStatusError(exitStatus)
+				b.runCommand("git", "submodule", "update", "--init", "--recursive")
+				b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
 			}
 
 			// # Grab author and commit information and send it back to Buildkite
@@ -565,6 +534,7 @@ func (b Bootstrap) Start() error {
 	} else if fileExists(globalCommandHookPath) {
 		commandExitStatus = b.executeHook("global command", globalCommandHookPath, false)
 	} else {
+		// TODO: run command
 		commandExitStatus = 0
 	}
 
@@ -593,7 +563,7 @@ func (b Bootstrap) Start() error {
 
 		// Run the artifact upload command
 		headerf("Uploading artifacts")
-		artifactUploadExitStatus := b.shellAndPrompt(os.Stdout, b.RunInPty, "buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination)
+		artifactUploadExitStatus := b.runCommandGracefully("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination)
 
 		// If the artifact upload fails, open the current group and
 		// exit with an error

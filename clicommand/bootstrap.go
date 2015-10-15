@@ -154,7 +154,7 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Start the bootstraper
-		agent.Bootstrap{
+		bootstrap := &agent.Bootstrap{
 			Repository:                   cfg.Repository,
 			Commit:                       cfg.Commit,
 			Branch:                       cfg.Branch,
@@ -172,6 +172,8 @@ var BootstrapCommand = cli.Command{
 			HooksPath:                    cfg.HooksPath,
 			Debug:                        cfg.Debug,
 			RunInPty:                     !cfg.NoPTY,
-		}.Start()
+		}
+
+		bootstrap.Start()
 	},
 }
