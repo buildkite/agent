@@ -316,9 +316,8 @@ buildkite-global-hook "post-checkout"
 buildkite-local-hook "post-checkout"
 
 # If the working directory has been changed by a hook, log and switch to it
-if [[ "$BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY" != "" ]] && [[ "$BUILDKITE_BUILD_CHECKOUT_PATH" != "$BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY" ]]; then
-  echo "~~~ A post-checkout hook has changed the working directory to $BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY"
-  BUILDKITE_BUILD_CHECKOUT_PATH=$BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY
+if [[ "$BUILDKITE_BUILD_CHECKOUT_PATH" != "$PREVIOUS_BUILDKITE_BUILD_CHECKOUT_PATH" ]]; then
+  echo "~~~ A post-checkout hook has changed the working directory to $PREVIOUS_BUILDKITE_BUILD_CHECKOUT_PATH"
 
   if [ -d "$BUILDKITE_BUILD_CHECKOUT_PATH" ]; then
     buildkite-run "cd $BUILDKITE_BUILD_CHECKOUT_PATH"
