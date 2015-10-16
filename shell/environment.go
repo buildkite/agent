@@ -12,16 +12,16 @@ type Environment struct {
 
 // Creates a new environment from a string slice of KEY=VALUE
 func EnvironmentFromSlice(s []string) (*Environment, error) {
-	env := make(map[string]string)
+	env := &Environment{env: make(map[string]string)}
 
 	for _, l := range s {
 		parts := strings.SplitN(l, "=", 2)
 		if len(parts) == 2 {
-			env[parts[0]] = parts[1]
+			env.Set(parts[0], parts[1])
 		}
 	}
 
-	return &Environment{env: env}, nil
+	return env, nil
 }
 
 // Creates a new environment from a file with format KEY=VALUE\n
@@ -41,6 +41,22 @@ func (e *Environment) Get(key string) string {
 
 // Sets a key in the environment
 func (e *Environment) Set(key string, value string) string {
+	// Trim the values
+	key = strings.TrimSpace(key)
+	value = strings.TrimSpace(value)
+
+	// Check if we've got quoted values
+	if strings.Count(value, "\"") == 2 || strings.Count(value, "'") == 2 {
+		// Pull the quotes off the edges
+		value = strings.Trim(value, "\"'")
+
+		// Expand quotes
+		value = strings.Replace(value, "\\\"", "\"", -1)
+
+		// Expand newlines
+		value = strings.Replace(value, "\\n", "\n", -1)
+	}
+
 	e.env[key] = value
 
 	return value
@@ -68,7 +84,7 @@ func (e *Environment) Diff(other *Environment) *Environment {
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		s = append(s, fmt.Sprintf("%s=%s", k, v))
+		s = append(s, fmt.Sprintf("%v=%v", k, v))
 	}
 
 	return s
