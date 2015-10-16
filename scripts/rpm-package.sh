@@ -16,7 +16,7 @@ echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
 echo "Build version: $BUILD_VERSION"
 
-YUM_TMP_PATH=/var/tmp/buildkite-agent-yum-repo
+YUM_TMP_PATH=~/buildkite-agent-yum-repo
 
 function build() {
   echo "--- Building rpm package $1/$2"
