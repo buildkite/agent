@@ -7,12 +7,12 @@ if [[ "$BUILDKITE_BUILD_NUMBER" == "" ]]; then
 fi
 
 function build-binary {
-  echo "--- Building binary for $1/$2"
+  echo "--- :$1: Building binary for $1/$2"
 
   ./scripts/utils/build-binary.sh $1 $2 $BUILDKITE_BUILD_NUMBER
 }
 
-echo '--- Setting up GOPATH'
+echo '--- :golang: Setting up $GOPATH'
 export GOPATH="$GOPATH:$(pwd)/vendor"
 echo $GOPATH
 
