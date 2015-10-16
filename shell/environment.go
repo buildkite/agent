@@ -84,7 +84,11 @@ func (e *Environment) Diff(other *Environment) *Environment {
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		s = append(s, fmt.Sprintf("%v=%v", k, v))
+		if strings.Contains(v, "\n") {
+			s = append(s, fmt.Sprintf("%v=\"%v\"", k, strings.Replace(v, "\n", "\\n", -1)))
+		} else {
+			s = append(s, fmt.Sprintf("%v=%v", k, v))
+		}
 	}
 
 	return s
