@@ -81,7 +81,7 @@ type Bootstrap struct {
 	ArtifactUploadDestination string
 
 	// Whether or not to automatically authorize SSH key hosts
-	AutoSSHFingerprintVerification bool
+	SSHFingerprintVerification bool
 
 	// The running environment for the bootstrap file as each task runs
 	env *shell.Environment
@@ -575,7 +575,7 @@ func (b *Bootstrap) Start() error {
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else {
-		if b.AutoSSHFingerprintVerification {
+		if b.SSHFingerprintVerification {
 			b.addRepositoryHostToSSHKnownHosts(b.Repository)
 		}
 

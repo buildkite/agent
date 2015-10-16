@@ -120,6 +120,7 @@ func (p *Process) Start() error {
 	} else {
 		p.command.Stdout = multiWriter
 		p.command.Stderr = multiWriter
+		p.command.Stdin = nil
 
 		err := p.command.Start()
 		if err != nil {

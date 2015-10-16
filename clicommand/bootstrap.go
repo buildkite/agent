@@ -18,8 +18,6 @@ Description:
    The bootstrap command checks out the jobs repository source code and
    executes the commands defined in the job.
 
-   It handles hooks, plugins artifacts for the job.
-
 Example:
 
    $ export $(curl -s -H "Authorization: Bearer xxx" \
@@ -27,27 +25,27 @@ Example:
    $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
-	Command                          string `cli:"command"`
-	JobID                            string `cli:"job"`
-	Repository                       string `cli:"repository"`
-	Commit                           string `cli:"commit"`
-	Branch                           string `cli:"branch"`
-	Tag                              string `cli:"tag"`
-	PullRequest                      string `cli:"pullrequest"`
-	NoGitSubmodules                  bool   `cli:"no-git-submodules"`
-	NoAutoSSHFingerprintVerification bool   `cli:"no-automatic-ssh-fingerprint-verification"`
-	AgentName                        string `cli:"agent"`
-	ProjectSlug                      string `cli:"project"`
-	ProjectProvider                  string `cli:"project-provider"`
-	AutomaticArtifactUploadPaths     string `cli:"artifact-upload-paths"`
-	ArtifactUploadDestination        string `cli:"artifact-upload-destination"`
-	CleanCheckout                    bool   `cli:"clean-checkout"`
-	BinPath                          string `cli:"bin-path" normalize:"filepath"`
-	BuildPath                        string `cli:"build-path" normalize:"filepath"`
-	HooksPath                        string `cli:"hooks-path" normalize:"filepath"`
-	NoCommandEval                    bool   `cli:"no-command-eval"`
-	NoPTY                            bool   `cli:"no-pty"`
-	Debug                            bool   `cli:"debug"`
+	Command                      string `cli:"command"`
+	JobID                        string `cli:"job"`
+	Repository                   string `cli:"repository"`
+	Commit                       string `cli:"commit"`
+	Branch                       string `cli:"branch"`
+	Tag                          string `cli:"tag"`
+	PullRequest                  string `cli:"pullrequest"`
+	GitSubmodules                bool   `cli:"git-submodules"`
+	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
+	AgentName                    string `cli:"agent"`
+	ProjectSlug                  string `cli:"project"`
+	ProjectProvider              string `cli:"project-provider"`
+	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
+	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
+	CleanCheckout                bool   `cli:"clean-checkout"`
+	BinPath                      string `cli:"bin-path" normalize:"filepath"`
+	BuildPath                    string `cli:"build-path" normalize:"filepath"`
+	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
+	CommandEval                  bool   `cli:"command-eval"`
+	PTY                          bool   `cli:"pty"`
+	Debug                        bool   `cli:"debug"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -110,7 +108,7 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PROJECT_SLUG",
 		},
 		cli.StringFlag{
-			Name:   "project-provoder",
+			Name:   "project-provider",
 			Value:  "",
 			Usage:  "The id of the SCM provider that the repository is hosted on",
 			EnvVar: "BUILDKITE_PROJECT_PROVIDER",
@@ -150,24 +148,24 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
-		cli.BoolFlag{
-			Name:   "no-automatic-ssh-fingerprint-verification",
-			Usage:  "Don't automatically verify SSH fingerprints",
-			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
+		cli.BoolTFlag{
+			Name:   "command-eval",
+			Usage:  "Allow running of arbitary commands",
+			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
-		cli.BoolFlag{
-			Name:   "no-command-eval",
-			Usage:  "Disable running commands",
-			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+		cli.BoolTFlag{
+			Name:   "ssh-fingerprint-verification",
+			Usage:  "Automatically verify SSH fingerprints",
+			EnvVar: "BUILDKITE_SSH_FINGERPRINT_VERIFICATION",
 		},
-		cli.BoolFlag{
-			Name:   "no-git-submodules",
-			Usage:  "Disable git submodules",
-			EnvVar: "BUILDKITE_DISABLE_GIT_SUBMODULES",
+		cli.BoolTFlag{
+			Name:   "git-submodules",
+			Usage:  "Enable git submodules",
+			EnvVar: "BUILDKITE_GIT_SUBMODULES",
 		},
-		cli.BoolFlag{
-			Name:   "no-pty",
-			Usage:  "Do not run jobs within a pseudo terminal",
+		cli.BoolTFlag{
+			Name:   "pty",
+			Usage:  "Run jobs within a pseudo terminal",
 			EnvVar: "BUILDKITE_NO_PTY",
 		},
 		DebugFlag,
@@ -182,34 +180,34 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Turn of PTY support if we're on Windows
-		runInPty := !cfg.NoPTY
+		runInPty := cfg.PTY
 		if runtime.GOOS == "windows" {
 			runInPty = false
 		}
 
 		// Configure the bootstraper
 		bootstrap := &agent.Bootstrap{
-			Command:                        cfg.Command,
-			JobID:                          cfg.JobID,
-			Repository:                     cfg.Repository,
-			Commit:                         cfg.Commit,
-			Branch:                         cfg.Branch,
-			Tag:                            cfg.Tag,
-			GitSubmodules:                  !cfg.NoGitSubmodules,
-			PullRequest:                    cfg.PullRequest,
-			AgentName:                      cfg.AgentName,
-			ProjectProvider:                cfg.ProjectProvider,
-			ProjectSlug:                    cfg.ProjectSlug,
-			AutomaticArtifactUploadPaths:   cfg.AutomaticArtifactUploadPaths,
-			ArtifactUploadDestination:      cfg.ArtifactUploadDestination,
-			CleanCheckout:                  cfg.CleanCheckout,
-			BuildPath:                      cfg.BuildPath,
-			BinPath:                        cfg.BinPath,
-			HooksPath:                      cfg.HooksPath,
-			Debug:                          cfg.Debug,
-			RunInPty:                       runInPty,
-			CommandEval:                    !cfg.NoCommandEval,
-			AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
+			Command:                      cfg.Command,
+			JobID:                        cfg.JobID,
+			Repository:                   cfg.Repository,
+			Commit:                       cfg.Commit,
+			Branch:                       cfg.Branch,
+			Tag:                          cfg.Tag,
+			GitSubmodules:                cfg.GitSubmodules,
+			PullRequest:                  cfg.PullRequest,
+			AgentName:                    cfg.AgentName,
+			ProjectProvider:              cfg.ProjectProvider,
+			ProjectSlug:                  cfg.ProjectSlug,
+			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
+			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
+			CleanCheckout:                cfg.CleanCheckout,
+			BuildPath:                    cfg.BuildPath,
+			BinPath:                      cfg.BinPath,
+			HooksPath:                    cfg.HooksPath,
+			Debug:                        cfg.Debug,
+			RunInPty:                     runInPty,
+			CommandEval:                  cfg.CommandEval,
+			SSHFingerprintVerification:   cfg.SSHFingerprintVerification,
 		}
 
 		// Start the bootstraper
