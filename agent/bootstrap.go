@@ -631,7 +631,7 @@ func (b *Bootstrap) Start() error {
 			}
 
 			// Handle checking out of tags
-			if b.Tag != "" {
+			if b.Tag == "" {
 				b.runCommand("git", "reset", "--hard", "origin/"+b.Branch)
 			}
 
