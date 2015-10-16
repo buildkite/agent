@@ -755,11 +755,11 @@ func (b *Bootstrap) Start() error {
 			if fileExists(pathToCommand) {
 				promptDisplay = "CALL " + b.Command
 				headerLabel = "Running build script"
-				buildScript = "ECHO hello"
+				buildScript = "@echo off\nCALL \"" + b.Command + "\""
 			} else {
 				promptDisplay = b.Command
 				headerLabel = "Running command"
-				buildScript = "#!/bin/bash\n" + b.Command
+				buildScript = "@echo off\n" + b.Command
 			}
 		} else {
 			if fileExists(pathToCommand) {
