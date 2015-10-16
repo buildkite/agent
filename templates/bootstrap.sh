@@ -81,14 +81,6 @@ function buildkite-warning {
   echo "^^^ +++"
 }
 
-# A function that a hook script can call to change the checkout path at runtime
-# of a build.
-BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY=""
-BUILDKITE_BOOTSTRAP_WD_TMP_FILE=""
-function buildkite-working-directory {
-  echo "$1" > "$BUILDKITE_BOOTSTRAP_WD_TMP_FILE"
-}
-
 # Run a hook script. It won't exit on failure. It will store the hooks exit
 # status in BUILDKITE_LAST_HOOK_EXIT_STATUS
 export BUILDKITE_LAST_HOOK_EXIT_STATUS=""
@@ -104,16 +96,6 @@ function buildkite-hook {
     echo "~~~ Running $HOOK_LABEL hook"
     echo -e "$BUILDKITE_PROMPT .\"$HOOK_SCRIPT_PATH\""
 
-    # Create a temporary file that the buildkite-working-directory function
-    # will call from a hook.
-    BUILDKITE_BOOTSTRAP_WD_TMP_FILE=$(mktemp "/tmp/buildkite-agent-bootstrap.XXXXXX")
-
-    # Export the function so it's available to the hook
-    function buildkite-agent-bootstrap-working-directory {
-      buildkite-working-directory $1
-    }
-    export -f buildkite-agent-bootstrap-working-directory
-
     # Run the script and store it's exit status. We don't run the hook in a
     # subshell because we want the hook scripts to be able to modify the
     # bootstrap's ENV variables. The only downside with this approach, is if
@@ -124,13 +106,6 @@ function buildkite-hook {
 
     # Reset the bootstrap.sh flags
     buildkite-flags-reset
-
-    # Remove the exported function
-    unset -f buildkite-agent-bootstrap-working-directory
-
-    # Read from the checkout path file, and cleanup.
-    BUILDKITE_BOOTSTRAP_WORKING_DIRECTORY=$(cat "$BUILDKITE_BOOTSTRAP_WD_TMP_FILE")
-    rm $BUILDKITE_BOOTSTRAP_WD_TMP_FILE
   elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     # When in debug mode, show that we've skipped a hook
     echo "~~~ Running $HOOK_LABEL hook"
