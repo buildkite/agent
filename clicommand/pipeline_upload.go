@@ -95,7 +95,7 @@ var PipelineUploadCommand = cli.Command{
 		var filename string
 
 		if cfg.FilePath != "" {
-			logger.Debug("Reading pipeine config from \"%s\"", cfg.FilePath)
+			logger.Info("Reading pipeine config from \"%s\"", cfg.FilePath)
 
 			filename = filepath.Base(cfg.FilePath)
 			input, err = ioutil.ReadFile(cfg.FilePath)
@@ -103,14 +103,14 @@ var PipelineUploadCommand = cli.Command{
 				logger.Fatal("Failed to read file: %s", err)
 			}
 		} else if !termutil.Isatty(os.Stdin.Fd()) {
-			logger.Debug("Reading pipeine config from STDIN")
+			logger.Info("Reading pipeine config from STDIN")
 
 			input, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
 		} else {
-			logger.Debug("Searching for pipeline config...")
+			logger.Info("Searching for pipeline config...")
 
 			paths := []string{
 				"buildkite.yml",
@@ -138,7 +138,7 @@ var PipelineUploadCommand = cli.Command{
 
 			found := exists[0]
 
-			logger.Debug("Found config file \"%s\"", found)
+			logger.Info("Found config file \"%s\"", found)
 
 			// Warn about the deprecated steps.json
 			if found == ".buildkite/steps.json" {
