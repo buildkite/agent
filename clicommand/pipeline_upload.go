@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andrew-d/go-termutil"
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/stdin"
 	"github.com/codegangsta/cli"
 )
 
@@ -102,7 +102,7 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
 			}
-		} else if !termutil.Isatty(os.Stdin.Fd()) {
+		} else if stdin.IsPipe() {
 			logger.Info("Reading pipeine config from STDIN")
 
 			input, err = ioutil.ReadAll(os.Stdin)
