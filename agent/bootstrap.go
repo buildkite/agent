@@ -15,7 +15,7 @@ import (
 
 	"github.com/buildkite/agent/shell"
 	"github.com/buildkite/agent/vendor/src/github.com/mitchellh/go-homedir"
-	"github.com/buildkite/agent/vendor/src/github.com/nightlyone/lockfile"
+	"github.com/nightlyone/lockfile"
 )
 
 type Bootstrap struct {
