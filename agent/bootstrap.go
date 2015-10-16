@@ -117,7 +117,7 @@ func warningf(format string, v ...interface{}) {
 }
 
 // Shows the error text and exits the bootstrap
-func fatalf(format string, v ...interface{}) {
+func exitf(format string, v ...interface{}) {
 	errorf(format, v...)
 	os.Exit(1)
 }
@@ -151,12 +151,12 @@ func normalizeScriptFileName(filename string) string {
 func addExecutePermissiontoFile(filename string) {
 	s, err := os.Stat(filename)
 	if err != nil {
-		fatalf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
+		exitf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
 	}
 
 	err = os.Chmod(filename, s.Mode()|0100)
 	if err != nil {
-		fatalf("Failed to mark \"%s\" as executable (%s)", filename, err)
+		exitf("Failed to mark \"%s\" as executable (%s)", filename, err)
 	}
 }
 
@@ -170,7 +170,7 @@ func createTempFile(filename string) *os.File {
 	// Create the file
 	tempFile, err := ioutil.TempFile("", basename+"-")
 	if err != nil {
-		fatalf("Failed to create temporary file \"%s\" (%s)", filename, err)
+		exitf("Failed to create temporary file \"%s\" (%s)", filename, err)
 	}
 
 	// Do we need to rename the file?
@@ -182,13 +182,13 @@ func createTempFile(filename string) *os.File {
 		newTempFileName := tempFile.Name() + extension
 		err = os.Rename(tempFile.Name(), newTempFileName)
 		if err != nil {
-			fatalf("Failed to rename \"%s\" to \"%s\" (%s)", tempFile.Name(), newTempFileName, err)
+			exitf("Failed to rename \"%s\" to \"%s\" (%s)", tempFile.Name(), newTempFileName, err)
 		}
 
 		// Open it again
 		tempFile, err = os.OpenFile(newTempFileName, os.O_RDWR|os.O_EXCL, 0600)
 		if err != nil {
-			fatalf("Failed to open temporary file \"%s\" (%s)", newTempFileName, err)
+			exitf("Failed to open temporary file \"%s\" (%s)", newTempFileName, err)
 		}
 	}
 
@@ -214,7 +214,7 @@ func newGittableURL(ref string) (*url.URL, error) {
 // If a error exists, it will exit the bootstrap with an error
 func checkShellError(err error, cmd *shell.Command) {
 	if err != nil {
-		fatalf("There was an error running `%s` (%s)", cmd, err)
+		exitf("There was an error running `%s` (%s)", cmd, err)
 	}
 }
 
@@ -388,7 +388,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 
 		absolutePathToHook, err := filepath.Abs(hookPath)
 		if err != nil {
-			fatalf("Failed to find absolute path to \"%s\" (%s)", hookPath, err)
+			exitf("Failed to find absolute path to \"%s\" (%s)", hookPath, err)
 		}
 
 		// Create the hook runner code
@@ -443,12 +443,12 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 		// modify the running env map with the changes.
 		beforeEnv, err := shell.EnvironmentFromFile(tempEnvBeforeFile.Name())
 		if err != nil {
-			fatalf("Failed to parse \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
+			exitf("Failed to parse \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
 		}
 
 		afterEnv, err := shell.EnvironmentFromFile(tempEnvAfterFile.Name())
 		if err != nil {
-			fatalf("Failed to parse \"%s\" (%s)", tempEnvAfterFile.Name(), err)
+			exitf("Failed to parse \"%s\" (%s)", tempEnvAfterFile.Name(), err)
 		}
 
 		diff := afterEnv.Diff(beforeEnv)
@@ -554,7 +554,7 @@ func (b *Bootstrap) Start() error {
 
 		err := os.RemoveAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		if err != nil {
-			fatalf("Failed to remove \"%s\" (%s)", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+			exitf("Failed to remove \"%s\" (%s)", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
 		}
 	}
 
@@ -684,7 +684,7 @@ func (b *Bootstrap) Start() error {
 			commentf("Switching working directroy to \"%s\"", newCheckoutPathAbs)
 			b.wd = newCheckoutPathAbs
 		} else {
-			fatalf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPathAbs)
+			exitf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPathAbs)
 		}
 	}
 
@@ -716,7 +716,7 @@ func (b *Bootstrap) Start() error {
 	} else {
 		// Make sure we actually have a command to run
 		if b.Command == "" {
-			fatalf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
+			exitf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
 		}
 
 		pathToCommand := filepath.Join(b.wd, b.Command)
@@ -726,7 +726,7 @@ func (b *Bootstrap) Start() error {
 		// it, we should double check that the agent is allowed to eval
 		// commands.
 		if !fileExists(pathToCommand) && !b.CommandEval {
-			fatalf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+			exitf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
 		if b.Debug {
@@ -766,7 +766,7 @@ func (b *Bootstrap) Start() error {
 		// Write the build script to disk
 		err := ioutil.WriteFile(buildScriptPath, []byte(buildScript), 0644)
 		if err != nil {
-			fatalf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
+			exitf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
 		}
 
 		// Ensure it can be executed
