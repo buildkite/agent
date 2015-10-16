@@ -786,11 +786,11 @@ func (b *Bootstrap) Start() error {
 
 		if b.Debug {
 			commentf("A build script written to \"%s\" with the following:", buildScriptPath)
-			printf(buildScript)
+			printf("%s", buildScript)
 		}
 
-		headerf(headerLabel)
-		promptf(promptDisplay)
+		headerf("%s", headerLabel)
+		promptf("%s", promptDisplay)
 
 		commandExitStatus = b.runScript(buildScriptPath)
 	}
