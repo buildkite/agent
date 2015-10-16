@@ -48,7 +48,7 @@ bundle
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
 mkdir -p $YUM_PATH
-s3cmd sync --dry-run "s3://$RPM_S3_BUCKET" "$YUM_PATH"
+s3cmd sync --dry-run "s3://$RPM_S3_BUCKET" "$YUM_PATH" --verbose
 
 # Make sure we have a clean rpm folder
 rm -rf rpm
