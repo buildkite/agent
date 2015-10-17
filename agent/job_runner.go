@@ -60,13 +60,13 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
 	// The process that will run the bootstrap script
-	runner.process = process.Process{
+	runner.process = &process.Process{
 		Script:        r.AgentConfiguration.BootstrapScript,
 		Env:           r.createEnvironment(),
 		PTY:           r.AgentConfiguration.RunInPty,
 		StartCallback: r.onProcessStartCallback,
 		LineCallback:  runner.headerTimesStreamer.Scan,
-	}.Create()
+	}
 
 	return
 }
@@ -169,7 +169,7 @@ func (r *JobRunner) createEnvironment() []string {
 	// Add misc options
 	env["BUILDKITE_BUILD_PATH"] = r.AgentConfiguration.BuildPath
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
-	env["BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.AutoSSHFingerprintVerification)
+	env["BUILDKITE_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHFingerprintVerification)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
 
 	// Convert the env map into a slice (which is what the script gear

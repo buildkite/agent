@@ -11,13 +11,14 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/shell"
 )
 
 type Process struct {
@@ -43,14 +44,14 @@ type Process struct {
 	running int32
 }
 
-func (p Process) Create() *Process {
-	// Find the script to run
-	absolutePath, _ := filepath.Abs(p.Script)
-	scriptDirectory := filepath.Dir(absolutePath)
+func (p *Process) Start() error {
+	c, err := shell.CommandFromString(p.Script)
+	if err != nil {
+		return err
+	}
 
-	// Create the command that will be run
-	p.command = exec.Command(absolutePath)
-	p.command.Dir = scriptDirectory
+	p.command = exec.Command(c.Command, c.Args...)
+	p.command.Dir = c.Dir
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -59,17 +60,13 @@ func (p Process) Create() *Process {
 	currentEnv := os.Environ()
 	p.command.Env = append(currentEnv, p.Env...)
 
-	return &p
-}
-
-func (p *Process) Start() error {
 	var waitGroup sync.WaitGroup
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
 	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
 
-	logger.Info("Starting to run script: %s", p.command.Path)
+	logger.Info("Starting to run: %s", strings.Join(p.command.Args, " "))
 
 	// Toggle between running in a pty
 	if p.PTY {
@@ -109,6 +106,7 @@ func (p *Process) Start() error {
 	} else {
 		p.command.Stdout = multiWriter
 		p.command.Stderr = multiWriter
+		p.command.Stdin = nil
 
 		err := p.command.Start()
 		if err != nil {
@@ -199,7 +197,7 @@ func (p *Process) Start() error {
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
 	logger.Debug("[Process] Waiting for routines to finish")
-	err := timeoutWait(&waitGroup)
+	err = timeoutWait(&waitGroup)
 	if err != nil {
 		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}

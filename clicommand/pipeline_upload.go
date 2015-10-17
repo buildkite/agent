@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/andrew-d/go-termutil"
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/stdin"
 	"github.com/codegangsta/cli"
 )
 
@@ -95,17 +95,23 @@ var PipelineUploadCommand = cli.Command{
 		var filename string
 
 		if cfg.FilePath != "" {
+			logger.Info("Reading pipeine config from \"%s\"", cfg.FilePath)
+
 			filename = filepath.Base(cfg.FilePath)
 			input, err = ioutil.ReadFile(cfg.FilePath)
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
 			}
-		} else if !termutil.Isatty(os.Stdin.Fd()) {
+		} else if stdin.IsPipe() {
+			logger.Info("Reading pipeine config from STDIN")
+
 			input, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
 		} else {
+			logger.Info("Searching for pipeline config...")
+
 			paths := []string{
 				"buildkite.yml",
 				"buildkite.json",
@@ -132,6 +138,8 @@ var PipelineUploadCommand = cli.Command{
 
 			found := exists[0]
 
+			logger.Info("Found config file \"%s\"", found)
+
 			// Warn about the deprecated steps.json
 			if found == ".buildkite/steps.json" {
 				logger.Warn("The default steps.json file has been deprecated and will be removed in v2.2. Please rename to .buildkite/pipeline.json and wrap the steps array in a `steps` property: { \"steps\": [ ... ] } }")
@@ -141,8 +149,12 @@ var PipelineUploadCommand = cli.Command{
 			filename = path.Base(found)
 			input, err = ioutil.ReadFile(found)
 			if err != nil {
-				logger.Fatal("Failed to read file %s: %s", found, err)
+				logger.Fatal("Failed to read file \"%s\" (%s)", found, err)
 			}
+		}
+
+		if len(input) == 0 {
+			logger.Fatal("Config file is empty")
 		}
 
 		// Create the API client

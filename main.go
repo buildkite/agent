@@ -83,6 +83,7 @@ func main() {
 				clicommand.PipelineUploadCommand,
 			},
 		},
+		clicommand.BootstrapCommand,
 	}
 
 	// When no sub command is used

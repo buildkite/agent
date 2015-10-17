@@ -29,22 +29,22 @@ Example:
    $ buildkite-agent start --token xxx`
 
 type AgentStartConfig struct {
-	Config                           string   `cli:"config"`
-	Token                            string   `cli:"token" validate:"required"`
-	Name                             string   `cli:"name"`
-	Priority                         string   `cli:"priority"`
-	BootstrapScript                  string   `cli:"bootstrap-script" normalize:"filepath" validate:"required,file-exists"`
-	BuildPath                        string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                        string   `cli:"hooks-path" normalize:"filepath"`
-	MetaData                         []string `cli:"meta-data"`
-	MetaDataEC2Tags                  bool     `cli:"meta-data-ec2-tags"`
-	NoColor                          bool     `cli:"no-color"`
-	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
-	NoCommandEval                    bool     `cli:"no-command-eval"`
-	NoPTY                            bool     `cli:"no-pty"`
-	Endpoint                         string   `cli:"endpoint" validate:"required"`
-	Debug                            bool     `cli:"debug"`
-	DebugHTTP                        bool     `cli:"debug-http"`
+	Config                       string   `cli:"config"`
+	Token                        string   `cli:"token" validate:"required"`
+	Name                         string   `cli:"name"`
+	Priority                     string   `cli:"priority"`
+	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
+	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
+	MetaData                     []string `cli:"meta-data"`
+	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
+	NoColor                      bool     `cli:"no-color"`
+	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
+	NoCommandEval                bool     `cli:"no-command-eval"`
+	NoPTY                        bool     `cli:"no-pty"`
+	Endpoint                     string   `cli:"endpoint" validate:"required"`
+	Debug                        bool     `cli:"debug"`
+	DebugHTTP                    bool     `cli:"debug-http"`
 }
 
 func DefaultConfigFilePaths() (paths []string) {
@@ -169,11 +169,10 @@ var AgentStartCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		// Force some settings if on Windows (these aren't supported yet)
+		// Force some settings if on Windows (these aren't supported
+		// yet)
 		if runtime.GOOS == "windows" {
-			cfg.NoAutoSSHFingerprintVerification = true
 			cfg.NoPTY = true
-			cfg.NoCommandEval = true
 		}
 
 		// Setup the agent
@@ -185,12 +184,12 @@ var AgentStartCommand = cli.Command{
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
 			Endpoint:        cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
-				BootstrapScript:                cfg.BootstrapScript,
-				BuildPath:                      cfg.BuildPath,
-				HooksPath:                      cfg.HooksPath,
-				AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
-				CommandEval:                    !cfg.NoCommandEval,
-				RunInPty:                       !cfg.NoPTY,
+				BootstrapScript:            cfg.BootstrapScript,
+				BuildPath:                  cfg.BuildPath,
+				HooksPath:                  cfg.HooksPath,
+				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
+				CommandEval:                !cfg.NoCommandEval,
+				RunInPty:                   !cfg.NoPTY,
 			},
 		}
 
