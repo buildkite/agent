@@ -3,6 +3,7 @@ package shell
 import (
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -27,6 +28,11 @@ var envPathLock sync.Mutex
 
 // The absolute path to this commands executable
 func (c *Command) AbsolutePath() (string, error) {
+	// Is the path already absolute?
+	if path.IsAbs(c.Command) {
+		return c.Command, nil
+	}
+
 	var absolutePath string
 	var err error
 

@@ -334,8 +334,15 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	}
 	defer f.Close()
 
-	// Figure out where the ssh tools exist
+	// Figure out where the ssh tools exist. On Windows, it isn't on the
+	// $PATH by default, but we know where to find it.
 	sshToolBinaryPath := ""
+	if runtime.GOOS == "windows" {
+		gitExecPathOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--exec-path")
+		if gitExecPathOutput != "" {
+			sshToolBinaryPath = filepath.Join(gitExecPathOutput, "..", "..", "bin")
+		}
+	}
 
 	// Grab the generated keys for the repo host
 	keygenOutput, err := b.runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolBinaryPath, "ssh-keygen"), "-f", knownHostPath, "-F", host)
