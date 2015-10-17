@@ -3,6 +3,7 @@ package shell
 import (
 	"fmt"
 	"io/ioutil"
+	"runtime"
 	"strings"
 )
 
@@ -55,6 +56,12 @@ func (e *Environment) Set(key string, value string) string {
 
 		// Expand newlines
 		value = strings.Replace(value, "\\n", "\n", -1)
+	}
+
+	// Environment variable keys are case-insensitive on Windows, so we'll
+	// just convert them all to uppercase.
+	if runtime.GOOS == "windows" {
+		key = strings.ToUpper(key)
 	}
 
 	e.env[key] = value

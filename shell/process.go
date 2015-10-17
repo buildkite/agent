@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"runtime"
 	"syscall"
 )
 
@@ -22,16 +21,16 @@ type Process struct {
 }
 
 func (p *Process) Run() error {
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		// Commands don't seem to run properly (especially commands
-		// that have been added to $Path) if you don't run them through
-		// `cmd /c`
-		args := []string{"/c", p.Command.Command}
-		cmd = exec.Command("cmd", append(args, p.Command.Args...)...)
-	} else {
-		cmd = exec.Command(p.Command.Command, p.Command.Args...)
+	// Windows has a hard time finding files that are located in folders
+	// that you've added dynmically to PATH, so we'll use `AbsolutePath`
+	// method (that looks for files in PATH) and use the path from that
+	// instead.
+	absolutePathToCommand, err := p.Command.AbsolutePath()
+	if err != nil {
+		return err
 	}
+
+	cmd := exec.Command(absolutePathToCommand, p.Command.Args...)
 
 	if p.Command.Env != nil {
 		cmd.Env = p.Command.Env.ToSlice()
