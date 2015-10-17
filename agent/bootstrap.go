@@ -522,8 +522,10 @@ func (b *Bootstrap) Start() error {
 	// Create an empty env for us to keep track of our env changes in
 	b.env, _ = shell.EnvironmentFromSlice(os.Environ())
 
-	// Add the $BUILDKITE_BIN_PATH to the $PATH
-	b.env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), b.env.Get("PATH")))
+	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
+	if b.BinPath != "" {
+		b.env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), b.env.Get("PATH")))
+	}
 
 	// Come up with the place that the repository will be checked out to
 	var agentNameCleanupRegex = regexp.MustCompile("\"")
@@ -664,18 +666,24 @@ func (b *Bootstrap) Start() error {
 				b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
 			}
 
-			// Grab author and commit information and send it back to Buildkite. But before we do, we'll
-			// check to see if someone else has done it first.
-			commentf("Checking to see if Git data needs to be sent to Buildkite")
-			metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
-			if metaDataExistsExitStatus != 0 {
-				commentf("Sending Git commit information back to Buildkite")
+			if b.env.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
+				warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
+			} else {
+				// Grab author and commit information and send
+				// it back to Buildkite. But before we do,
+				// we'll check to see if someone else has done
+				// it first.
+				commentf("Checking to see if Git data needs to be sent to Buildkite")
+				metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
+				if metaDataExistsExitStatus != 0 {
+					commentf("Sending Git commit information back to Buildkite")
 
-				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
-				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+					gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
+					gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
 
-				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
-				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
+					b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
+					b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
+				}
 			}
 		}
 	}

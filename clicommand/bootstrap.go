@@ -20,9 +20,9 @@ Description:
 
 Example:
 
-   $ export $(curl -s -H "Authorization: Bearer xxx" \
-     "https://api.buildkite.com/v1/organizations/[org]/projects/[proj]/builds/[build]/jobs/[job]/env.txt" | xargs)
-   $ buildkite-agent bootstrap`
+   $ eval $(curl -s -H "Authorization: Bearer xxx" \
+     "https://api.buildkite.com/v1/organizations/[org]/projects/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
+   $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
 	Command                      string `cli:"command" validate:"required"`
@@ -40,9 +40,9 @@ type BootstrapConfig struct {
 	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
 	CleanCheckout                bool   `cli:"clean-checkout"`
-	BinPath                      string `cli:"bin-path" normalize:"filepath" validate:"required"`
+	BinPath                      string `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                    string `cli:"hooks-path" normalize:"filepath" validate:"required"`
+	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
 	CommandEval                  bool   `cli:"command-eval"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
