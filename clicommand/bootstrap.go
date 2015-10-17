@@ -25,24 +25,24 @@ Example:
    $ buildkite-agent bootstrap`
 
 type BootstrapConfig struct {
-	Command                      string `cli:"command"`
-	JobID                        string `cli:"job"`
-	Repository                   string `cli:"repository"`
-	Commit                       string `cli:"commit"`
-	Branch                       string `cli:"branch"`
+	Command                      string `cli:"command" validate:"required"`
+	JobID                        string `cli:"job" validate:"required"`
+	Repository                   string `cli:"repository" validate:"required"`
+	Commit                       string `cli:"commit" validate:"required"`
+	Branch                       string `cli:"branch" validate:"required"`
 	Tag                          string `cli:"tag"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
 	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
-	AgentName                    string `cli:"agent"`
-	ProjectSlug                  string `cli:"project"`
-	ProjectProvider              string `cli:"project-provider"`
+	AgentName                    string `cli:"agent" validate:"required"`
+	ProjectSlug                  string `cli:"project" validate:"required"`
+	ProjectProvider              string `cli:"project-provider" validate:"required"`
 	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
 	CleanCheckout                bool   `cli:"clean-checkout"`
-	BinPath                      string `cli:"bin-path" normalize:"filepath"`
-	BuildPath                    string `cli:"build-path" normalize:"filepath"`
-	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
+	BinPath                      string `cli:"bin-path" normalize:"filepath" validate:"required"`
+	BuildPath                    string `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                    string `cli:"hooks-path" normalize:"filepath" validate:"required"`
 	CommandEval                  bool   `cli:"command-eval"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
