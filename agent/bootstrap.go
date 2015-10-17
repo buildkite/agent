@@ -15,7 +15,6 @@ import (
 
 	"github.com/buildkite/agent/shell"
 	"github.com/buildkite/agent/shell/windows"
-	"github.com/buildkite/agent/vendor/src/github.com/go-version"
 	"github.com/buildkite/agent/vendor/src/github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
 )
@@ -594,18 +593,7 @@ func (b *Bootstrap) Start() error {
 			// gracefully handle repository renames
 			b.runCommand("git", "remote", "set-url", "origin", b.Repository)
 		} else {
-			// Does `git clone` support the --single-branch method?
-			// If it does, we can use that to make first time
-			// clones faster. The option was introducted in 1.7.10,
-			// so we need to double check we have the right
-			// version.
-			gitVersionOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "version")
-
-			if version.Compare(strings.Replace(gitVersionOutput, "git version ", "", 1), "1.7.10", ">=") {
-				b.runCommand("git", "clone", "-qv", "--single-branch", "-b", b.Branch, "--", b.Repository, ".")
-			} else {
-				b.runCommand("git", "clone", "-qv", "--", b.Repository, ".")
-			}
+			b.runCommand("git", "clone", "-qv", "--", b.Repository, ".")
 		}
 
 		// Clean up the repository
