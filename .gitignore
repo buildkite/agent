@@ -4,6 +4,7 @@ releases
 deb
 rpm
 vendor/bundle
+vendor/pkg
 .vagrant
 .bundle
 .envrc
