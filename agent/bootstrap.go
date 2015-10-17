@@ -258,7 +258,11 @@ func (b *Bootstrap) runScript(command string) int {
 		// #!/bin/bash line to the top of the file, but that's
 		// annoying, and people generally forget it, so we'll make it
 		// easy on them and add it for them here.
-		cmd = b.newCommand("/bin/bash", "-c", command)
+		//
+		// We also need to make sure the script we pass has quotes
+		// around it, otherwise `/bin/bash -c run script with space.sh`
+		// fails.
+		cmd = b.newCommand("/bin/bash", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
 	}
 
 	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout, PTY: b.RunInPty})
