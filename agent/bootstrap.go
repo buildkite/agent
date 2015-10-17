@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/shell"
+	"github.com/buildkite/agent/shell/windows"
 	"github.com/buildkite/agent/vendor/src/github.com/go-version"
 	"github.com/buildkite/agent/vendor/src/github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
@@ -107,8 +108,8 @@ func commentf(format string, v ...interface{}) {
 
 // Shows a buildkite boostrap error
 func errorf(format string, v ...interface{}) {
-	headerf(":rotating_light: \033[31mBuildkite Error\033[0m")
-	printf(format, v...)
+	printf("\033[31m🚨 Buildkite Error: %s\033[0m", fmt.Sprintf(format, v...))
+	printf("^^^ +++")
 }
 
 // Shows a buildkite boostrap warning
@@ -731,66 +732,84 @@ func (b *Bootstrap) Start() error {
 			exitf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
 		}
 
-		pathToCommand := filepath.Join(b.wd, b.Command)
+		pathToCommand := filepath.Join(b.wd, strings.Replace(b.Command, "\n", "", -1))
+		commandIsScript := fileExists(pathToCommand)
 
-		// If the command isn't a file on the filesystem, then it's
-		// something we need to eval. But before we even try running
-		// it, we should double check that the agent is allowed to eval
-		// commands.
-		if !fileExists(pathToCommand) && !b.CommandEval {
+		// If the command isn't a script, then it's something we need
+		// to eval. But before we even try running it, we should double
+		// check that the agent is allowed to eval commands.
+		if !commandIsScript && !b.CommandEval {
 			exitf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
-		if b.Debug {
-			headerf("Preparing build script")
-		}
+		var headerLabel string
+		var buildScriptPath string
+		var promptDisplay string
 
 		// Come up with the contents of the build script. While we
 		// generate the script, we need to handle the case of running a
 		// script vs. a command differently
-		var buildScript string
-		var promptDisplay string
-		var headerLabel string
-		if runtime.GOOS == "windows" {
-			if fileExists(pathToCommand) {
-				promptDisplay = "CALL " + b.Command
-				headerLabel = "Running build script"
-				buildScript = "@echo off\nCALL \"" + b.Command + "\""
-			} else {
+		if commandIsScript {
+			headerLabel = "Running build script"
+
+			if runtime.GOOS == "windows" {
 				promptDisplay = b.Command
-				headerLabel = "Running command"
-				buildScript = "@echo off\n" + b.Command
-			}
-		} else {
-			if fileExists(pathToCommand) {
+			} else {
+				// Show a prettier (more accurate version) of
+				// what we're doing on Linux
 				promptDisplay = "./\"" + b.Command + "\""
-				headerLabel = "Running build script"
-				buildScript = "#!/bin/bash\nchmod +x \"" + b.Command + "\"\n./\"" + b.Command + "\""
-			} else {
-				promptDisplay = b.Command
-				headerLabel = "Running command"
-				buildScript = "#!/bin/bash\n" + b.Command
 			}
-		}
 
-		buildScriptPath := filepath.Join(b.wd, normalizeScriptFileName("buildkite-script-"+b.JobID))
+			buildScriptPath = pathToCommand
+		} else {
+			headerLabel = "Running command"
 
-		// Write the build script to disk
-		err := ioutil.WriteFile(buildScriptPath, []byte(buildScript), 0644)
-		if err != nil {
-			exitf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
+			// Create a build script that will output each line of the command, and run it.
+			var buildScriptContents string
+			if runtime.GOOS == "windows" {
+				buildScriptContents = "@echo off\n"
+				for _, k := range strings.Split(b.Command, "\n") {
+					if k != "" {
+						buildScriptContents = buildScriptContents +
+							fmt.Sprintf("ECHO %s\n", windows.BatchEscape("\033[90m>\033[0m "+k)) +
+							k + "\n"
+					}
+				}
+			} else {
+				buildScriptContents = "#!/bin/bash\n"
+				for _, k := range strings.Split(b.Command, "\n") {
+					if k != "" {
+						buildScriptContents = buildScriptContents +
+							fmt.Sprintf("echo '\033[90m$\033[0m %s'\n", strings.Replace(k, "'", "'\\''", -1)) +
+							k + "\n"
+					}
+				}
+			}
+
+			// Create a temporary file where we'll run a program from
+			buildScriptPath = filepath.Join(b.wd, normalizeScriptFileName("buildkite-script-"+b.JobID))
+
+			if b.Debug {
+				headerf("Preparing build script")
+				commentf("A build script is being written to \"%s\" with the following:", buildScriptPath)
+				printf("%s", buildScriptContents)
+			}
+
+			// Write the build script to disk
+			err := ioutil.WriteFile(buildScriptPath, []byte(buildScriptContents), 0644)
+			if err != nil {
+				exitf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
+			}
 		}
 
 		// Ensure it can be executed
 		addExecutePermissiontoFile(buildScriptPath)
 
-		if b.Debug {
-			commentf("A build script written to \"%s\" with the following:", buildScriptPath)
-			printf("%s", buildScript)
-		}
-
+		// Show we're running the script
 		headerf("%s", headerLabel)
-		promptf("%s", promptDisplay)
+		if promptDisplay != "" {
+			promptf("%s", promptDisplay)
+		}
 
 		commandExitStatus = b.runScript(buildScriptPath)
 	}

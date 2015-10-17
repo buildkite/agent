@@ -44,7 +44,7 @@ func (p *Process) Run() error {
 		// Start our process in a PTY
 		pty, err := ptyStart(cmd)
 		if err != nil {
-			return fmt.Errorf("Failed to start PTY: ", err)
+			return fmt.Errorf("Failed to start PTY (%s)", err)
 		}
 
 		// Copy the pty to our buffer. This will block until it EOF's
