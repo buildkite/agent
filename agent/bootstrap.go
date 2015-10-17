@@ -248,7 +248,18 @@ func (b *Bootstrap) runCommandGracefully(command string, args ...string) int {
 
 // Runs a script on the file system
 func (b *Bootstrap) runScript(command string) int {
-	cmd := b.newCommand(command)
+	var cmd *shell.Command
+	if runtime.GOOS == "windows" {
+		cmd = b.newCommand(command)
+	} else {
+		// If you run a script on Linux that doesn't have the
+		// #!/bin/bash thingy at the top, it will fail to run with a
+		// "exec format error" error. You can solve it by adding the
+		// #!/bin/bash line to the top of the file, but that's
+		// annoying, and people generally forget it, so we'll make it
+		// easy on them and add it for them here.
+		cmd = b.newCommand("/bin/bash", "-c", command)
+	}
 
 	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout, PTY: b.RunInPty})
 	checkShellError(err, cmd)
