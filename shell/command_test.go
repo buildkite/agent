@@ -15,9 +15,9 @@ func TestCommandFromString(t *testing.T) {
 	assert.Equal(t, cmd.Dir, "")
 
 	cmd, _ = CommandFromString("/this/script/here.sh")
-	assert.Equal(t, cmd.Command, "here.sh")
+	assert.Equal(t, cmd.Command, "/this/script/here.sh")
 	assert.Equal(t, cmd.Args, []string{})
-	assert.Equal(t, cmd.Dir, "/this/script")
+	assert.Equal(t, cmd.Dir, "")
 
 	cmd, _ = CommandFromString("test.sh")
 	assert.Equal(t, cmd.Command, "test.sh")
@@ -25,7 +25,7 @@ func TestCommandFromString(t *testing.T) {
 	assert.Equal(t, cmd.Dir, "")
 
 	cmd, _ = CommandFromString("./foo $FOO")
-	assert.Equal(t, cmd.Command, "foo")
+	assert.Equal(t, cmd.Command, "./foo")
 	assert.Equal(t, cmd.Args, []string{"$FOO"})
 	assert.Equal(t, cmd.Dir, "")
 
@@ -35,8 +35,8 @@ func TestCommandFromString(t *testing.T) {
 	assert.Equal(t, cmd.Dir, "")
 
 	cmd, _ = CommandFromString(`/bin/bash -c "execute this \"script\""`)
-	assert.Equal(t, cmd.Command, "bash")
-	assert.Equal(t, cmd.Dir, "/bin")
+	assert.Equal(t, cmd.Command, "/bin/bash")
+	assert.Equal(t, cmd.Dir, "")
 	assert.Equal(t, cmd.Args, []string{"-c", `execute this "script"`})
 
 	cmd, _ = CommandFromString(`git clone -qb -b "branch-name" --single-branch -- 'git@github.com/foo.git' .`)

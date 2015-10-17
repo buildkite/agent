@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -51,7 +50,6 @@ func (p *Process) Start() error {
 	}
 
 	p.command = exec.Command(c.Command, c.Args...)
-	p.command.Dir = c.Dir
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -66,7 +64,7 @@ func (p *Process) Start() error {
 
 	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
 
-	logger.Info("Starting to run: %s", strings.Join(p.command.Args, " "))
+	logger.Info("Starting to run: %s", c.String())
 
 	// Toggle between running in a pty
 	if p.PTY {
