@@ -51,5 +51,5 @@ func (a APIClient) Create() *api.Client {
 }
 
 func (a APIClient) UserAgent() string {
-	return "buildkite-agent/" + Version() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
+	return "buildkite-agent/" + Version() + "." + BuildVersion() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 }
