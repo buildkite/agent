@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"unicode/utf8"
+
+	"github.com/buildkite/agent/vendor/src/github.com/mattn/go-shellwords"
 )
 
 type Command struct {
@@ -22,6 +24,28 @@ type Command struct {
 
 	// The directory to run the command from
 	Dir string
+}
+
+// Creates a command by parsing a string like `ls -lsa`
+func CommandFromString(str string) (*Command, error) {
+	args, err := shellwords.Parse(str)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the base command from the args
+	cmd := filepath.Base(args[0])
+
+	// Get the directory from the command. If dir is `.`, it means the
+	// current working directory. Returning `.` doesn't make much sense
+	// because most tools consider a blank string to be the current working
+	// directory anyway, so we'll just mark it as empty in that case.
+	dir := filepath.Dir(args[0])
+	if dir == "." {
+		dir = ""
+	}
+
+	return &Command{Command: cmd, Args: args[1:], Dir: dir}, nil
 }
 
 var envPathLock sync.Mutex
