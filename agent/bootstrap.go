@@ -624,7 +624,7 @@ func (b *Bootstrap) Start() error {
 		headerf("Build environment variables")
 		for _, e := range envSlice {
 			if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
-				printf(e)
+				printf("%s", strings.Replace(e, "\n", "\\n", -1))
 			}
 		}
 	}

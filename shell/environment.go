@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -121,12 +122,11 @@ func (e *Environment) Copy() *Environment {
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		if strings.Contains(v, "\n") {
-			s = append(s, fmt.Sprintf("%v=\"%v\"", k, strings.Replace(v, "\n", "\\n", -1)))
-		} else {
-			s = append(s, fmt.Sprintf("%v=%v", k, v))
-		}
+		s = append(s, fmt.Sprintf("%v=%v", k, v))
 	}
+
+	// Ensure they are in a consistent order (helpful for tests)
+	sort.Strings(s)
 
 	return s
 }
