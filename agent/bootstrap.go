@@ -226,29 +226,37 @@ func checkShellError(err error, cmd *shell.Command) {
 }
 
 // Aquires a lock on the folder
-func aquireLock(path string, seconds int) (lockfile.Lockfile, error) {
-	lock, _ := lockfile.New(path)
+func aquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
+	lock, err := lockfile.New(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", path, err)
+	}
 
 	// Aquire the lock. Keep trying the lock until we get it
 	attempts := 0
 	for true {
 		err := lock.TryLock()
 		if err != nil {
-			// Keey track of how many times we tried to get the
-			// lock
-			attempts += 1
-			if attempts > seconds {
-				return lock, fmt.Errorf("Gave up trying to aquire a lock on \"%s\"", path)
-			}
+			switch err {
+			case lockfile.ErrBusy:
+				// Keey track of how many times we tried to get the
+				// lock
+				attempts += 1
+				if attempts > seconds {
+					return nil, fmt.Errorf("Gave up trying to aquire a lock on \"%s\" (%s)", path, err)
+				}
 
-			// Try again in a second
-			time.Sleep(1 * time.Second)
-		} else {
-			break
+				// Try again in a second
+				commentf("Could not aquire lock on \"%s\" (%s)", path, err)
+				commentf("Trying again in 1 second...")
+				time.Sleep(1 * time.Second)
+			default:
+				return nil, err
+			}
 		}
 	}
 
-	return lock, nil
+	return &lock, nil
 }
 
 // Creates a shell command ready for running
@@ -395,49 +403,6 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	}
 }
 
-// Returns the absolute path to a plugin hook
-func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
-	id, err := plugin.Identifier()
-	if err != nil {
-		exitf("%s", err)
-	}
-
-	dir, err := plugin.RepositorySubdirectory()
-	if err != nil {
-		exitf("%s", err)
-	}
-
-	return filepath.Join(b.PluginPath, id, dir, name)
-}
-
-// Executes a plugin hook gracefully
-func (b *Bootstrap) executePluginHookGracefully(plugins []*Plugin, name string) int {
-	for _, p := range plugins {
-		exitStatus := b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), false)
-		if exitStatus != 0 {
-			return exitStatus
-		}
-	}
-
-	return 0
-}
-
-// Executes a plugin hook
-func (b *Bootstrap) executePluginHook(plugins []*Plugin, name string) {
-	for _, p := range plugins {
-		b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), true)
-	}
-}
-
-// If a plugin hook exists with this name
-func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
-	for _, p := range plugins {
-		fileExists(b.pluginHookPath(p, name))
-	}
-
-	return false
-}
-
 // Executes a hook and applyes any environment changes. The tricky thing with
 // hooks is that they can modify the ENV of a bootstrap. And it's impossible to
 // grab the ENV of a child process before it finishes, so we've got an awesome
@@ -445,7 +410,7 @@ func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 // the ENV to a file, runs the hook, then writes the ENV back to another file.
 // Once all that has finished, we compare the files, and apply what ever
 // changes to our running env. Cool huh?
-func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int {
+func (b *Bootstrap) executeHook(name string, path string, exitOnError bool, env *shell.Environment) int {
 	hookPath := normalizeScriptFileName(path)
 
 	// Check if the hook exists
@@ -504,8 +469,19 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 
 		commentf("Executing \"%s\"", hookPath)
 
+		// Create a copy of the current env
+		previousEnv := b.env.Copy()
+
+		// If we have a custom ENV we want to apply
+		if env != nil {
+			b.env = b.env.Merge(env)
+		}
+
 		// Run the hook
 		hookExitStatus := b.runScript(tempHookRunnerFile.Name())
+
+		// Restore the previous env
+		b.env = previousEnv
 
 		// Exit from the bootstrapper if the hook exited
 		if exitOnError && hookExitStatus != 0 {
@@ -529,17 +505,19 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool) int 
 			exitf("Failed to parse \"%s\" (%s)", tempEnvAfterFile.Name(), err)
 		}
 
+		// Remove the BUILDKITE_LAST_HOOK_EXIT_STATUS from the after
+		// env (since we don't care about it)
+		afterEnv.Remove("BUILDKITE_LAST_HOOK_EXIT_STATUS")
+
 		diff := afterEnv.Diff(beforeEnv)
 		if diff.Length() > 0 {
 			if b.Debug {
 				headerf("Applying environment changes")
-			}
-			for envDiffKey, envDiffValue := range diff.ToMap() {
-				b.env.Set(envDiffKey, envDiffValue)
-				if b.Debug {
+				for envDiffKey, envDiffValue := range diff.ToMap() {
 					commentf("%s=%s", envDiffKey, envDiffValue)
 				}
 			}
+			b.env = b.env.Merge(diff)
 		}
 
 		return hookExitStatus
@@ -560,7 +538,7 @@ func (b *Bootstrap) globalHookPath(name string) string {
 
 // Executes a global hook
 func (b *Bootstrap) executeGlobalHook(name string) int {
-	return b.executeHook("global "+name, b.globalHookPath(name), true)
+	return b.executeHook("global "+name, b.globalHookPath(name), true, nil)
 }
 
 // Returns the absolute path to a local hook
@@ -570,10 +548,57 @@ func (b *Bootstrap) localHookPath(name string) string {
 
 // Executes a local hook
 func (b *Bootstrap) executeLocalHook(name string) int {
-	return b.executeHook("local "+name, b.localHookPath(name), true)
+	return b.executeHook("local "+name, b.localHookPath(name), true, nil)
+}
+
+// Returns the absolute path to a plugin hook
+func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
+	id, err := plugin.Identifier()
+	if err != nil {
+		exitf("%s", err)
+	}
+
+	dir, err := plugin.RepositorySubdirectory()
+	if err != nil {
+		exitf("%s", err)
+	}
+
+	return filepath.Join(b.PluginsPath, id, dir, name)
+}
+
+// Executes a plugin hook gracefully
+func (b *Bootstrap) executePluginHookGracefully(plugins []*Plugin, name string) int {
+	for _, p := range plugins {
+		env, _ := p.ConfigurationToEnvironment()
+		exitStatus := b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), false, env)
+		if exitStatus != 0 {
+			return exitStatus
+		}
+	}
+
+	return 0
+}
+
+// Executes a plugin hook
+func (b *Bootstrap) executePluginHook(plugins []*Plugin, name string) {
+	for _, p := range plugins {
+		env, _ := p.ConfigurationToEnvironment()
+		b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), true, env)
+	}
+}
+
+// If a plugin hook exists with this name
+func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
+	for _, p := range plugins {
+		fileExists(b.pluginHookPath(p, name))
+	}
+
+	return false
 }
 
 func (b *Bootstrap) Start() error {
+	var err error
+
 	// Create an empty env for us to keep track of our env changes in
 	b.env, _ = shell.EnvironmentFromSlice(os.Environ())
 
@@ -628,13 +653,18 @@ func (b *Bootstrap) Start() error {
 			}
 
 			// Create a path to the plugin
-			directory := filepath.Join(b.PluginPath, id)
+			directory := filepath.Join(b.PluginsPath, id)
 
 			// Has it already been checked out?
 			if !fileExists(directory) {
+				// Make the directory
+				err = os.MkdirAll(directory, 0777)
+				if err != nil {
+					exitf("%s", err)
+				}
 
 				// Try and lock this paticular plugin while we check it out
-				pluginCheckoutHook, err := aquireLock(filepath.Join(sshDirectory, "checkout.lock"), 300) // Wait 5 minutes
+				pluginCheckoutHook, err := aquireLock(filepath.Join(directory, "checkout.lock"), 300) // Wait 5 minutes
 				if err != nil {
 					exitf("%s", err)
 				}
@@ -657,16 +687,26 @@ func (b *Bootstrap) Start() error {
 					commentf("Checking if \"%s\" is a local repository", repo)
 				}
 
+				// Switch to the plugin directory
+				previousWd := b.wd
+				b.wd = directory
+
+				// Do SSH fingerprint verification on the repo
+				// if we can
+				if b.SSHFingerprintVerification {
+					b.addRepositoryHostToSSHKnownHosts(repo)
+				}
+
 				// If it's a local repo, we don't need to do a http clone
 				if fileExists(repo) {
-					b.runCommand("git", "clone", "-qv", "--", repo, directory)
+					b.runCommand("git", "clone", "-qv", "--", repo, ".")
 				} else {
 					// First try a remote clone using http
-					pluginCloneExitStatus := b.runCommandGracefully("git", "clone", "-qv", "--", "https://"+repo, directory)
+					pluginCloneExitStatus := b.runCommandGracefully("git", "clone", "-qv", "--", "https://"+repo, ".")
 
 					if pluginCloneExitStatus != 0 {
 						commentf("Failed to clone using https, trying git+ssh...")
-						pluginCloneExitStatus = b.runCommandGracefully("git", "clone", "-qv", "--", "ssh://"+repo, directory)
+						pluginCloneExitStatus = b.runCommandGracefully("git", "clone", "-qv", "--", "ssh://"+repo, ".")
 						if pluginCloneExitStatus != 0 {
 							exitf("Failed to get plugin \"%s\"", p.Label())
 						}
@@ -675,12 +715,16 @@ func (b *Bootstrap) Start() error {
 
 				// Switch to the version if we need to
 				if p.Version != "" {
-					previousWd := b.wd
 					commentf("Checking out \"%s\"", p.Version)
 					b.runCommand("git", "checkout", "-qf", p.Version)
-					b.wd = previousWd
 				}
 
+				// Switch back to the previous working directory
+				b.wd = previousWd
+
+				// Now that we've succefully checked out the
+				// plugin, we can remove the lock we have on
+				// it.
 				pluginCheckoutHook.Unlock()
 			} else {
 				commentf("Plugin \"%s\" found", p.Label())
@@ -744,7 +788,7 @@ func (b *Bootstrap) Start() error {
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
 	} else if b.pluginHookExists(plugins, "checkout") {
-		+b.executePluginHook(plugins, "checkout")
+		b.executePluginHook(plugins, "checkout")
 	} else {
 		if b.SSHFingerprintVerification {
 			b.addRepositoryHostToSSHKnownHosts(b.Repository)
@@ -894,9 +938,9 @@ func (b *Bootstrap) Start() error {
 	globalCommandHookPath := b.localHookPath("command")
 
 	if fileExists(localCommandHookPath) {
-		commandExitStatus = b.executeHook("local command", localCommandHookPath, false)
+		commandExitStatus = b.executeHook("local command", localCommandHookPath, false, nil)
 	} else if fileExists(globalCommandHookPath) {
-		commandExitStatus = b.executeHook("global command", globalCommandHookPath, false)
+		commandExitStatus = b.executeHook("global command", globalCommandHookPath, false, nil)
 	} else if b.pluginHookExists(plugins, "command") {
 		commandExitStatus = b.executePluginHookGracefully(plugins, "command")
 	} else {

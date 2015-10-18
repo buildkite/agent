@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/buildkite/agent/shell"
 )
 
 type Plugin struct {
@@ -109,10 +111,10 @@ func (p *Plugin) Identifier() (string, error) {
 	nonIdCharacterRegex := regexp.MustCompile(`[^a-zA-Z0-9]`)
 	removeDoubleUnderscore := regexp.MustCompile(`-+`)
 
-	id := p.Location + "#" + p.Version
+	id := p.Label()
 	id = nonIdCharacterRegex.ReplaceAllString(id, "-")
 	id = removeDoubleUnderscore.ReplaceAllString(id, "-")
-	id = strings.TrimSuffix(id, "-")
+	id = strings.Trim(id, "-")
 
 	return id, nil
 }
@@ -164,7 +166,7 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 }
 
 // Converts the plugin configuration values to environment variables
-func (p *Plugin) ConfigurationToEnv() []string {
+func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 	env := []string{}
 
 	toDashRegex := regexp.MustCompile(`-|\s+`)
@@ -189,5 +191,14 @@ func (p *Plugin) ConfigurationToEnv() []string {
 	// Sort them into a consistent order
 	sort.Strings(env)
 
-	return env
+	return shell.EnvironmentFromSlice(env)
+}
+
+// Pretty name for the plugin
+func (p *Plugin) Label() string {
+	if p.Version != "" {
+		return p.Location + "#" + p.Version
+	} else {
+		return p.Location
+	}
 }

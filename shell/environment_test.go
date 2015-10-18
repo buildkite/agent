@@ -22,6 +22,34 @@ func TestEnvironmentSet(t *testing.T) {
 	assert.Equal(t, env.Get("REMOVES_WHITESPACE_FROM_NO_QUOTES"), "new line party")
 }
 
+func TestEnvironmentRemove(t *testing.T) {
+	env, _ := EnvironmentFromSlice([]string{"FOO=bar"})
+
+	assert.Equal(t, env.Get("FOO"), "bar")
+	assert.Equal(t, env.Remove("FOO"), "bar")
+	assert.Equal(t, env.Get(""), "")
+}
+
+func TestEnvironmentMerge(t *testing.T) {
+	env1, _ := EnvironmentFromSlice([]string{"FOO=bar"})
+	env2, _ := EnvironmentFromSlice([]string{"BAR=foo"})
+
+	env3 := env1.Merge(env2)
+
+	assert.Equal(t, env3.ToSlice(), []string{"FOO=bar", "BAR=foo"})
+}
+
+func TestEnvironmentCopy(t *testing.T) {
+	env1, _ := EnvironmentFromSlice([]string{"FOO=bar"})
+	env2 := env1.Copy()
+
+	assert.Equal(t, env2.ToSlice(), []string{"FOO=bar"})
+
+	env1.Set("FOO", "not-bar-anymore")
+
+	assert.Equal(t, env2.ToSlice(), []string{"FOO=bar"})
+}
+
 func TestEnvironmentToSlice(t *testing.T) {
 	env, _ := EnvironmentFromSlice([]string{"\n\nTHIS_IS_GREAT=\"this is the \n best thing\"      "})
 

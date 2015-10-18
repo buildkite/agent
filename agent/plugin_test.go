@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/buildkite/agent/shell"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -78,6 +79,11 @@ func TestIdentifier(t *testing.T) {
 	plugin = &Plugin{Location: "192.168.0.1/foo.git#12341234"}
 	id, err = plugin.Identifier()
 	assert.Equal(t, id, "192-168-0-1-foo-git-12341234")
+	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "/foo/bar/"}
+	id, err = plugin.Identifier()
+	assert.Equal(t, id, "foo-bar")
 	assert.Nil(t, err)
 }
 
@@ -162,12 +168,18 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	assert.Equal(t, err.Error(), "Missing plugin location")
 }
 
-func TestPluginConfigurationToEnv(t *testing.T) {
+func TestPluginConfigurationToEnvironment(t *testing.T) {
+	var env *shell.Environment
+	var err error
 	plugin := &Plugin{Location: "github.com/buildkite/plugins/docker-compose"}
 
 	plugin.Configuration = map[string]interface{}{"container": "app", "some-other-setting": "else right here"}
-	assert.Equal(t, plugin.ConfigurationToEnv(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app", "BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here"})
+	env, err = plugin.ConfigurationToEnvironment()
+	assert.Nil(t, err)
+	assert.Equal(t, env.ToSlice(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app", "BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here"})
 
 	plugin.Configuration = map[string]interface{}{"and _ with a    - number": 12}
-	assert.Equal(t, plugin.ConfigurationToEnv(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"})
+	env, err = plugin.ConfigurationToEnvironment()
+	assert.Nil(t, err)
+	assert.Equal(t, env.ToSlice(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"})
 }

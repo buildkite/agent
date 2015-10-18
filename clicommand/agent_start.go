@@ -35,8 +35,8 @@ type AgentStartConfig struct {
 	Priority                     string   `cli:"priority"`
 	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                    string   `cli:"plugins-path" normalize:"filepath"`
-	PluginsPath                  string   `cli:"hooks-path" normalize:"filepath"`
+	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	MetaData                     []string `cli:"meta-data"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
 	NoColor                      bool     `cli:"no-color"`
