@@ -641,6 +641,11 @@ func (b *Bootstrap) Start() error {
 	if b.Plugins != "" {
 		headerf("Setting up plugins")
 
+		// Make sure we have a plugin path before trying to do anything
+		if b.PluginsPath == "" {
+			exitf("Can't checkout plugins with a `plugins-path`")
+		}
+
 		plugins, err = CreatePluginsFromJSON(b.Plugins)
 		if err != nil {
 			exitf("Failed to parse plugin definition (%s)", err)
@@ -655,25 +660,30 @@ func (b *Bootstrap) Start() error {
 
 			// Create a path to the plugin
 			directory := filepath.Join(b.PluginsPath, id)
+			pluginGitDirectory := filepath.Join(directory, ".git")
 
 			// Has it already been checked out?
-			if !fileExists(directory) {
+			if !fileExists(pluginGitDirectory) {
 				// Make the directory
 				err = os.MkdirAll(directory, 0777)
 				if err != nil {
 					exitf("%s", err)
 				}
 
-				// Try and lock this paticular plugin while we check it out
-				pluginCheckoutHook, err := aquireLock(filepath.Join(directory, "checkout.lock"), 300) // Wait 5 minutes
+				// Try and lock this paticular plugin while we
+				// check it out (we create the file outside of
+				// the plugin directory so git clone doesn't
+				// have a cry about the folder not being empty)
+				pluginCheckoutHook, err := aquireLock(filepath.Join(b.PluginsPath, id+".lock"), 300) // Wait 5 minutes
 				if err != nil {
 					exitf("%s", err)
 				}
 
 				// Once we've got the lock, we need to make sure another process didn't already
 				// checkout the plugin
-				if fileExists(directory) {
+				if fileExists(pluginGitDirectory) {
 					pluginCheckoutHook.Unlock()
+					commentf("Plugin \"%s\" found", p.Label())
 					continue
 				}
 
@@ -691,6 +701,8 @@ func (b *Bootstrap) Start() error {
 				// Switch to the plugin directory
 				previousWd := b.wd
 				b.wd = directory
+
+				commentf("Switching to the plugin directory")
 
 				// Do SSH fingerprint verification on the repo
 				// if we can
