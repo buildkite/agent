@@ -219,6 +219,32 @@ func checkShellError(err error, cmd *shell.Command) {
 	}
 }
 
+// Aquires a lock on the folder
+func aquireLock(path string, seconds int) (lockfile.Lockfile, error) {
+	lock, _ := lockfile.New(path)
+
+	// Aquire the lock. Keep trying the lock until we get it
+	attempts := 0
+	for true {
+		err := lock.TryLock()
+		if err != nil {
+			// Keey track of how many times we tried to get the
+			// lock
+			attempts += 1
+			if attempts > seconds {
+				return lock, fmt.Errorf("Gave up trying to aquire a lock on \"%s\"", path)
+			}
+
+			// Try again in a second
+			time.Sleep(1 * time.Second)
+		} else {
+			break
+		}
+	}
+
+	return lock, nil
+}
+
 // Creates a shell command ready for running
 func (b *Bootstrap) newCommand(command string, args ...string) *shell.Command {
 	return &shell.Command{Command: command, Args: args, Env: b.env, Dir: b.wd}
@@ -308,30 +334,10 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 
 	// Create a lock on the known_host file so other agents don't try and
 	// change it at the same time
-	knownHostLockPath := filepath.Join(sshDirectory, "known_hosts.lock")
-	knownHostLock, _ := lockfile.New(filepath.Join(sshDirectory, "known_hosts.lock"))
-
-	// Aquire the known host lock. Keep trying the lock until we get it
-	attempts := 0
-	for true {
-		err = knownHostLock.TryLock()
-		if err != nil {
-			// Keey track of how many times we tried to get the
-			// lock
-			attempts += 1
-			if attempts > 10 {
-				warningf("Gave up trying to aquire a lock on \"%s\"", knownHostLockPath)
-				return
-			}
-
-			// Try again in 100 ms
-			time.Sleep(1 * time.Second)
-		} else {
-			break
-		}
+	knownHostLock, err := aquireLock(filepath.Join(sshDirectory, "known_hosts.lock"), 30)
+	if err != nil {
+		exitf("%s", err)
 	}
-
-	// Unlock the known_host lock when we're done
 	defer knownHostLock.Unlock()
 
 	// Clean up the SSH host and remove any key identifiers. See:
