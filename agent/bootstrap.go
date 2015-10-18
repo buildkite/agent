@@ -591,7 +591,9 @@ func (b *Bootstrap) executePluginHook(plugins []*Plugin, name string) {
 // If a plugin hook exists with this name
 func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 	for _, p := range plugins {
-		fileExists(b.pluginHookPath(p, name))
+		if fileExists(b.pluginHookPath(p, name)) {
+			return true
+		}
 	}
 
 	return false
