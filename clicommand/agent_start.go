@@ -35,7 +35,8 @@ type AgentStartConfig struct {
 	Priority                     string   `cli:"priority"`
 	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
+	HooksPath                    string   `cli:"plugins-path" normalize:"filepath"`
+	PluginsPath                  string   `cli:"hooks-path" normalize:"filepath"`
 	MetaData                     []string `cli:"meta-data"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
 	NoColor                      bool     `cli:"no-color"`
@@ -129,6 +130,12 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
+		cli.StringFlag{
+			Name:   "plugins-path",
+			Value:  "",
+			Usage:  "Directory where the plugins are saved to",
+			EnvVar: "BUILDKITE_PLUGINS_PATH",
+		},
 		cli.BoolFlag{
 			Name:   "no-pty",
 			Usage:  "Do not run jobs within a pseudo terminal",
@@ -187,6 +194,7 @@ var AgentStartCommand = cli.Command{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,
 				HooksPath:                  cfg.HooksPath,
+				PluginsPath:                cfg.PluginsPath,
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
 				CommandEval:                !cfg.NoCommandEval,
 				RunInPty:                   !cfg.NoPTY,

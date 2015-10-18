@@ -74,6 +74,9 @@ type Bootstrap struct {
 	// Path to the global hooks
 	HooksPath string
 
+	// Path to the plugins folder
+	PluginsPath string
+
 	// Paths to automatically upload as artifacts when the build finishes
 	AutomaticArtifactUploadPaths string
 

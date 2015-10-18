@@ -43,6 +43,7 @@ type BootstrapConfig struct {
 	BinPath                      string `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                  string `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool   `cli:"command-eval"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
@@ -148,6 +149,12 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
+		cli.StringFlag{
+			Name:   "plugins-path",
+			Value:  "",
+			Usage:  "Directory where the plugins are saved to",
+			EnvVar: "BUILDKITE_PLUGINS_PATH",
+		},
 		cli.BoolTFlag{
 			Name:   "command-eval",
 			Usage:  "Allow running of arbitary commands",
@@ -204,6 +211,7 @@ var BootstrapCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
+			PluginsPath:                  cfg.PluginsPath,
 			Debug:                        cfg.Debug,
 			RunInPty:                     runInPty,
 			CommandEval:                  cfg.CommandEval,
