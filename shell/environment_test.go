@@ -20,6 +20,9 @@ func TestEnvironmentSet(t *testing.T) {
 
 	env.Set("REMOVES_WHITESPACE_FROM_NO_QUOTES", "\n       \n  new line party\n  \n  ")
 	assert.Equal(t, env.Get("REMOVES_WHITESPACE_FROM_NO_QUOTES"), "new line party")
+
+	env.Set("DOESNT_AFFECT_QUOTES_INSIDE", `oh "hello" there`)
+	assert.Equal(t, env.Get("DOESNT_AFFECT_QUOTES_INSIDE"), `oh "hello" there`)
 }
 
 func TestEnvironmentRemove(t *testing.T) {

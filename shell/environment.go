@@ -47,7 +47,8 @@ func (e *Environment) Set(key string, value string) string {
 	value = strings.TrimSpace(value)
 
 	// Check if we've got quoted values
-	if strings.Count(value, "\"") == 2 || strings.Count(value, "'") == 2 {
+	if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
+		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
 		// Pull the quotes off the edges
 		value = strings.Trim(value, "\"'")
 
