@@ -237,8 +237,7 @@ func aquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	for true {
 		err := lock.TryLock()
 		if err != nil {
-			switch err {
-			case lockfile.ErrBusy:
+			if err == lockfile.ErrBusy {
 				// Keey track of how many times we tried to get the
 				// lock
 				attempts += 1
@@ -250,9 +249,11 @@ func aquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 				commentf("Could not aquire lock on \"%s\" (%s)", path, err)
 				commentf("Trying again in 1 second...")
 				time.Sleep(1 * time.Second)
-			default:
+			} else {
 				return nil, err
 			}
+		} else {
+			break
 		}
 	}
 
