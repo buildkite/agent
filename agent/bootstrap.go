@@ -704,27 +704,13 @@ func (b *Bootstrap) Start() error {
 
 				commentf("Switching to the plugin directory")
 
-				// Do SSH fingerprint verification on the repo
-				// if we can
-				if b.SSHFingerprintVerification {
+				// If it's not a local repo, and we can perform
+				// SSH fingerprint verification, do so.
+				if !fileExists(repo) && b.SSHFingerprintVerification {
 					b.addRepositoryHostToSSHKnownHosts(repo)
 				}
 
-				// If it's a local repo, we don't need to do a http clone
-				if fileExists(repo) {
-					b.runCommand("git", "clone", "-qv", "--", repo, ".")
-				} else {
-					// First try a remote clone using http
-					pluginCloneExitStatus := b.runCommandGracefully("git", "clone", "-qv", "--", "https://"+repo, ".")
-
-					if pluginCloneExitStatus != 0 {
-						commentf("Failed to clone using https, trying git+ssh...")
-						pluginCloneExitStatus = b.runCommandGracefully("git", "clone", "-qv", "--", "ssh://"+repo, ".")
-						if pluginCloneExitStatus != 0 {
-							exitf("Failed to get plugin \"%s\"", p.Label())
-						}
-					}
-				}
+				b.runCommand("git", "clone", "-qv", "--", repo, ".")
 
 				// Switch to the version if we need to
 				if p.Version != "" {
