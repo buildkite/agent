@@ -1030,6 +1030,11 @@ func (b *Bootstrap) Start() error {
 		commandExitStatus = b.runScript(buildScriptPath)
 	}
 
+	// Expand the command header if it fails
+	if commandExitStatus != 0 {
+		printf("^^^ +++")
+	}
+
 	// Save the command exit status to the env so hooks + plugins can access it
 	b.env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", commandExitStatus))
 
