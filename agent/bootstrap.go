@@ -41,6 +41,9 @@ type Bootstrap struct {
 	// The tag of the job commit
 	Tag string
 
+	// Plugin definition for the job
+	Plugins string
+
 	// Should git submodules be checked out
 	GitSubmodules bool
 
@@ -392,6 +395,49 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	}
 }
 
+// Returns the absolute path to a plugin hook
+func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
+	id, err := plugin.Identifier()
+	if err != nil {
+		exitf("%s", err)
+	}
+
+	dir, err := plugin.RepositorySubdirectory()
+	if err != nil {
+		exitf("%s", err)
+	}
+
+	return filepath.Join(b.PluginPath, id, dir, name)
+}
+
+// Executes a plugin hook gracefully
+func (b *Bootstrap) executePluginHookGracefully(plugins []*Plugin, name string) int {
+	for _, p := range plugins {
+		exitStatus := b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), false)
+		if exitStatus != 0 {
+			return exitStatus
+		}
+	}
+
+	return 0
+}
+
+// Executes a plugin hook
+func (b *Bootstrap) executePluginHook(plugins []*Plugin, name string) {
+	for _, p := range plugins {
+		b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), true)
+	}
+}
+
+// If a plugin hook exists with this name
+func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
+	for _, p := range plugins {
+		fileExists(b.pluginHookPath(p, name))
+	}
+
+	return false
+}
+
 // Executes a hook and applyes any environment changes. The tricky thing with
 // hooks is that they can modify the ENV of a bootstrap. And it's impossible to
 // grab the ENV of a child process before it finishes, so we've got an awesome
@@ -555,6 +601,93 @@ func (b *Bootstrap) Start() error {
 		}
 	}
 
+	// Disable any interactive Git/SSH prompting
+	b.env.Set("GIT_TERMINAL_PROMPT", "0")
+
+	//////////////////////////////////////////////////////////////
+	//
+	// PLUGIN SETUP
+	//
+	//////////////////////////////////////////////////////////////
+
+	var plugins []*Plugin
+
+	if b.Plugins != "" {
+		headerf("Setting up plugins")
+
+		plugins, err = CreatePluginsFromJSON(b.Plugins)
+		if err != nil {
+			exitf("Failed to parse plugin definition (%s)", err)
+		}
+
+		for _, p := range plugins {
+			// Get the identifer for the plugin
+			id, err := p.Identifier()
+			if err != nil {
+				exitf("%s", err)
+			}
+
+			// Create a path to the plugin
+			directory := filepath.Join(b.PluginPath, id)
+
+			// Has it already been checked out?
+			if !fileExists(directory) {
+
+				// Try and lock this paticular plugin while we check it out
+				pluginCheckoutHook, err := aquireLock(filepath.Join(sshDirectory, "checkout.lock"), 300) // Wait 5 minutes
+				if err != nil {
+					exitf("%s", err)
+				}
+
+				// Once we've got the lock, we need to make sure another process didn't already
+				// checkout the plugin
+				if fileExists(directory) {
+					pluginCheckoutHook.Unlock()
+					continue
+				}
+
+				repo, err := p.Repository()
+				if err != nil {
+					exitf("%s", err)
+				}
+
+				commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
+
+				if b.Debug {
+					commentf("Checking if \"%s\" is a local repository", repo)
+				}
+
+				// If it's a local repo, we don't need to do a http clone
+				if fileExists(repo) {
+					b.runCommand("git", "clone", "-qv", "--", repo, directory)
+				} else {
+					// First try a remote clone using http
+					pluginCloneExitStatus := b.runCommandGracefully("git", "clone", "-qv", "--", "https://"+repo, directory)
+
+					if pluginCloneExitStatus != 0 {
+						commentf("Failed to clone using https, trying git+ssh...")
+						pluginCloneExitStatus = b.runCommandGracefully("git", "clone", "-qv", "--", "ssh://"+repo, directory)
+						if pluginCloneExitStatus != 0 {
+							exitf("Failed to get plugin \"%s\"", p.Label())
+						}
+					}
+				}
+
+				// Switch to the version if we need to
+				if p.Version != "" {
+					previousWd := b.wd
+					commentf("Checking out \"%s\"", p.Version)
+					b.runCommand("git", "checkout", "-qf", p.Version)
+					b.wd = previousWd
+				}
+
+				pluginCheckoutHook.Unlock()
+			} else {
+				commentf("Plugin \"%s\" found", p.Label())
+			}
+		}
+	}
+
 	//////////////////////////////////////////////////////////////
 	//
 	// ENVIRONMENT SETUP
@@ -567,8 +700,8 @@ func (b *Bootstrap) Start() error {
 	// The global environment hook
 	b.executeGlobalHook("environment")
 
-	// Disable any interactive Git/SSH prompting
-	b.env.Set("GIT_TERMINAL_PROMPT", "0")
+	// The plugin environment hook
+	b.executePluginHook(plugins, "environment")
 
 	//////////////////////////////////////////////////////////////
 	//
@@ -580,6 +713,9 @@ func (b *Bootstrap) Start() error {
 
 	// Run the `pre-checkout` global hook
 	b.executeGlobalHook("pre-checkout")
+
+	// Run the `pre-checkout` plugin hook
+	b.executePluginHook(plugins, "pre-checkout")
 
 	// Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
@@ -607,6 +743,8 @@ func (b *Bootstrap) Start() error {
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
 		b.executeGlobalHook("checkout")
+	} else if b.pluginHookExists(plugins, "checkout") {
+		+b.executePluginHook(plugins, "checkout")
 	} else {
 		if b.SSHFingerprintVerification {
 			b.addRepositoryHostToSSHKnownHosts(b.Repository)
@@ -707,6 +845,9 @@ func (b *Bootstrap) Start() error {
 	// Run the `post-checkout` local hook
 	b.executeLocalHook("post-checkout")
 
+	// Run the `post-checkout` plugin hook
+	b.executePluginHook(plugins, "post-checkout")
+
 	// Capture the new checkout path so we can see if it's changed. We need
 	// to also handle the case where they just switch it to "foo/bar",
 	// because that directroy is relative to the current working directroy.
@@ -741,6 +882,9 @@ func (b *Bootstrap) Start() error {
 	// Run the `pre-command` local hook
 	b.executeLocalHook("pre-command")
 
+	// Run the `pre-command` plugin hook
+	b.executePluginHook(plugins, "pre-command")
+
 	var commandExitStatus int
 
 	// Run either a custom `command` hook, or the default command runner.
@@ -753,6 +897,8 @@ func (b *Bootstrap) Start() error {
 		commandExitStatus = b.executeHook("local command", localCommandHookPath, false)
 	} else if fileExists(globalCommandHookPath) {
 		commandExitStatus = b.executeHook("global command", globalCommandHookPath, false)
+	} else if b.pluginHookExists(plugins, "command") {
+		commandExitStatus = b.executePluginHookGracefully(plugins, "command")
 	} else {
 		// Make sure we actually have a command to run
 		if b.Command == "" {
@@ -850,6 +996,9 @@ func (b *Bootstrap) Start() error {
 	// Run the `post-command` local hook
 	b.executeLocalHook("post-command")
 
+	// Run the `post-command` plugin hook
+	b.executePluginHook(plugins, "post-command")
+
 	//////////////////////////////////////////////////////////////
 	//
 	// ARTIFACTS
@@ -863,6 +1012,9 @@ func (b *Bootstrap) Start() error {
 
 		// Run the `pre-artifact` local hook
 		b.executeLocalHook("pre-artifact")
+
+		// Run the `pre-artifact` plugin hook
+		b.executePluginHook(plugins, "pre-artifact")
 
 		// Run the artifact upload command
 		headerf("Uploading artifacts")
@@ -881,6 +1033,8 @@ func (b *Bootstrap) Start() error {
 		// Run the `post-artifact` local hook
 		b.executeLocalHook("post-artifact")
 
+		// Run the `post-artifact` plugin hook
+		b.executePluginHook(plugins, "post-artifact")
 	}
 
 	// Be sure to exit this script with the same exit status that the users

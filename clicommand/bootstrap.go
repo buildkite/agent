@@ -31,6 +31,7 @@ type BootstrapConfig struct {
 	Commit                       string `cli:"commit" validate:"required"`
 	Branch                       string `cli:"branch" validate:"required"`
 	Tag                          string `cli:"tag"`
+	Plugins                      string `cli:"plugins"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
 	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
@@ -89,6 +90,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "The tag the commit",
 			EnvVar: "BUILDKITE_TAG",
+		},
+		cli.StringFlag{
+			Name:   "plugins",
+			Value:  "",
+			Usage:  "The plugins for th job",
+			EnvVar: "BUILDKITE_PLUGINS",
 		},
 		cli.StringFlag{
 			Name:   "pullrequest",
@@ -200,6 +207,7 @@ var BootstrapCommand = cli.Command{
 			Commit:                       cfg.Commit,
 			Branch:                       cfg.Branch,
 			Tag:                          cfg.Tag,
+			Plugins:                      cfg.Plugins,
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
 			AgentName:                    cfg.AgentName,
