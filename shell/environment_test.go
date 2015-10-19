@@ -39,7 +39,7 @@ func TestEnvironmentMerge(t *testing.T) {
 
 	env3 := env1.Merge(env2)
 
-	assert.Equal(t, env3.ToSlice(), []string{"FOO=bar", "BAR=foo"})
+	assert.Equal(t, env3.ToSlice(), []string{"BAR=foo", "FOO=bar"})
 }
 
 func TestEnvironmentCopy(t *testing.T) {
@@ -56,5 +56,5 @@ func TestEnvironmentCopy(t *testing.T) {
 func TestEnvironmentToSlice(t *testing.T) {
 	env, _ := EnvironmentFromSlice([]string{"\n\nTHIS_IS_GREAT=\"this is the \n best thing\"      "})
 
-	assert.Equal(t, env.ToSlice(), []string{"THIS_IS_GREAT=\"this is the \\n best thing\""})
+	assert.Equal(t, env.ToSlice(), []string{"THIS_IS_GREAT=this is the \n best thing"})
 }
