@@ -226,7 +226,7 @@ func checkShellError(err error, cmd *shell.Command) {
 }
 
 // Aquires a lock on the folder
-func aquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
+func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	lock, err := lockfile.New(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", path, err)
@@ -349,7 +349,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 
 	// Create a lock on the known_host file so other agents don't try and
 	// change it at the same time
-	knownHostLock, err := aquireLock(filepath.Join(sshDirectory, "known_hosts.lock"), 30)
+	knownHostLock, err := acquireLock(filepath.Join(sshDirectory, "known_hosts.lock"), 30)
 	if err != nil {
 		exitf("%s", err)
 	}
@@ -676,7 +676,7 @@ func (b *Bootstrap) Start() error {
 				// check it out (we create the file outside of
 				// the plugin directory so git clone doesn't
 				// have a cry about the folder not being empty)
-				pluginCheckoutHook, err := aquireLock(filepath.Join(b.PluginsPath, id+".lock"), 300) // Wait 5 minutes
+				pluginCheckoutHook, err := acquireLock(filepath.Join(b.PluginsPath, id+".lock"), 300) // Wait 5 minutes
 				if err != nil {
 					exitf("%s", err)
 				}
