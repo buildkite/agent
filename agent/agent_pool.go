@@ -190,6 +190,7 @@ func (r *AgentPool) ShowBanner() {
 	logger.Debug("Bootstrap script: %s", r.AgentConfiguration.BootstrapScript)
 	logger.Debug("Build path: %s", r.AgentConfiguration.BuildPath)
 	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
+	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
 
 	if !r.AgentConfiguration.SSHFingerprintVerification {
 		logger.Debug("Automatic SSH fingerprint verification has been disabled")

@@ -3,9 +3,12 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/buildkite/agent/shell"
 )
 
 type Plugin struct {
@@ -16,22 +19,36 @@ type Plugin struct {
 	// The version of the plugin that should be running
 	Version string
 
+	// The clone method
+	Scheme string
+
+	// Any authentication attached to the repostiory
+	Authentication string
+
 	// Configuration for the plugin
 	Configuration map[string]interface{}
 }
 
+var locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
+
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
 	plugin := &Plugin{Configuration: config}
 
-	// Extract the version from the location
-	parts := strings.Split(location, "#")
-	if len(parts) > 2 {
+	u, err := url.Parse(location)
+	if err != nil {
+		return nil, err
+	}
+
+	plugin.Scheme = u.Scheme
+	plugin.Location = u.Host + u.Path
+	plugin.Version = u.Fragment
+
+	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
 		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
-	} else if len(parts) == 2 {
-		plugin.Location = parts[0]
-		plugin.Version = parts[1]
-	} else {
-		plugin.Location = location
+	}
+
+	if u.User != nil {
+		plugin.Authentication = u.User.String()
 	}
 
 	return plugin, nil
@@ -109,51 +126,41 @@ func (p *Plugin) Identifier() (string, error) {
 	nonIdCharacterRegex := regexp.MustCompile(`[^a-zA-Z0-9]`)
 	removeDoubleUnderscore := regexp.MustCompile(`-+`)
 
-	id := p.Location + "#" + p.Version
+	id := p.Label()
 	id = nonIdCharacterRegex.ReplaceAllString(id, "-")
 	id = removeDoubleUnderscore.ReplaceAllString(id, "-")
-	id = strings.TrimSuffix(id, "-")
+	id = strings.Trim(id, "-")
 
 	return id, nil
 }
 
 // Returns the repository host where the code is stored
 func (p *Plugin) Repository() (string, error) {
-	if p.Location == "" {
-		return "", fmt.Errorf("Missing plugin location")
+	s, err := p.constructRepositoryHost()
+	if err != nil {
+		return "", err
 	}
 
-	parts := strings.Split(p.Location, "/")
-	if len(parts) < 2 {
-		return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
+	// Add the authentication if there is one
+	if p.Authentication != "" {
+		s = p.Authentication + "@" + s
 	}
 
-	if parts[0] == "github.com" || parts[0] == "bitbucket.org" || parts[0] == "gitlab.com" {
-		if len(parts) < 3 {
-			return "", fmt.Errorf("Incomplete %s path \"%s\"", parts[0], p.Location)
+	// If it's not a file system plugin, add the scheme
+	if !strings.HasPrefix(s, "/") {
+		if p.Scheme != "" {
+			s = p.Scheme + "://" + s
+		} else {
+			s = "https://" + s
 		}
-
-		return strings.Join(parts[:3], "/"), nil
-	} else {
-		repo := []string{}
-
-		for _, p := range parts {
-			repo = append(repo, p)
-
-			if strings.HasSuffix(p, ".git") {
-				break
-			}
-		}
-
-		return strings.Join(repo, "/"), nil
 	}
 
-	return "", nil
+	return s, nil
 }
 
 // Returns the subdirectory path that the plugin is in
 func (p *Plugin) RepositorySubdirectory() (string, error) {
-	repository, err := p.Repository()
+	repository, err := p.constructRepositoryHost()
 	if err != nil {
 		return "", err
 	}
@@ -164,7 +171,7 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 }
 
 // Converts the plugin configuration values to environment variables
-func (p *Plugin) ConfigurationToEnv() []string {
+func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 	env := []string{}
 
 	toDashRegex := regexp.MustCompile(`-|\s+`)
@@ -189,5 +196,49 @@ func (p *Plugin) ConfigurationToEnv() []string {
 	// Sort them into a consistent order
 	sort.Strings(env)
 
-	return env
+	return shell.EnvironmentFromSlice(env)
+}
+
+// Pretty name for the plugin
+func (p *Plugin) Label() string {
+	if p.Version != "" {
+		return p.Location + "#" + p.Version
+	} else {
+		return p.Location
+	}
+}
+
+func (p *Plugin) constructRepositoryHost() (string, error) {
+	if p.Location == "" {
+		return "", fmt.Errorf("Missing plugin location")
+	}
+
+	parts := strings.Split(p.Location, "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
+	}
+
+	var s string
+
+	if parts[0] == "github.com" || parts[0] == "bitbucket.org" || parts[0] == "gitlab.com" {
+		if len(parts) < 3 {
+			return "", fmt.Errorf("Incomplete %s path \"%s\"", parts[0], p.Location)
+		}
+
+		s = strings.Join(parts[:3], "/")
+	} else {
+		repo := []string{}
+
+		for _, p := range parts {
+			repo = append(repo, p)
+
+			if strings.HasSuffix(p, ".git") {
+				break
+			}
+		}
+
+		s = strings.Join(repo, "/")
+	}
+
+	return s, nil
 }

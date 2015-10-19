@@ -169,6 +169,7 @@ func (r *JobRunner) createEnvironment() []string {
 	// Add misc options
 	env["BUILDKITE_BUILD_PATH"] = r.AgentConfiguration.BuildPath
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
+	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHFingerprintVerification)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
 

@@ -31,6 +31,7 @@ type BootstrapConfig struct {
 	Commit                       string `cli:"commit" validate:"required"`
 	Branch                       string `cli:"branch" validate:"required"`
 	Tag                          string `cli:"tag"`
+	Plugins                      string `cli:"plugins"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
 	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
@@ -43,6 +44,7 @@ type BootstrapConfig struct {
 	BinPath                      string `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                  string `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool   `cli:"command-eval"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
@@ -88,6 +90,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "The tag the commit",
 			EnvVar: "BUILDKITE_TAG",
+		},
+		cli.StringFlag{
+			Name:   "plugins",
+			Value:  "",
+			Usage:  "The plugins for the job",
+			EnvVar: "BUILDKITE_PLUGINS",
 		},
 		cli.StringFlag{
 			Name:   "pullrequest",
@@ -148,6 +156,12 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
 		},
+		cli.StringFlag{
+			Name:   "plugins-path",
+			Value:  "",
+			Usage:  "Directory where the plugins are saved to",
+			EnvVar: "BUILDKITE_PLUGINS_PATH",
+		},
 		cli.BoolTFlag{
 			Name:   "command-eval",
 			Usage:  "Allow running of arbitary commands",
@@ -193,6 +207,7 @@ var BootstrapCommand = cli.Command{
 			Commit:                       cfg.Commit,
 			Branch:                       cfg.Branch,
 			Tag:                          cfg.Tag,
+			Plugins:                      cfg.Plugins,
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
 			AgentName:                    cfg.AgentName,
@@ -204,6 +219,7 @@ var BootstrapCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
+			PluginsPath:                  cfg.PluginsPath,
 			Debug:                        cfg.Debug,
 			RunInPty:                     runInPty,
 			CommandEval:                  cfg.CommandEval,

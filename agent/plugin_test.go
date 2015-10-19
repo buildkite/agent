@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/buildkite/agent/shell"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -10,17 +11,28 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 	var plugins []*Plugin
 	var err error
 
-	plugins, err = CreatePluginsFromJSON(`[{"github.com/buildkite/plugins/docker-compose#a34fa34":{"container":"app"}}, "github.com/buildkite/plugins/ping#master"]`)
+	plugins, err = CreatePluginsFromJSON(`[{"http://github.com/buildkite/plugins/docker-compose#a34fa34":{"container":"app"}}, "github.com/buildkite/plugins/ping#master"]`)
 	assert.Equal(t, len(plugins), 2)
 	assert.Nil(t, err)
 
 	assert.Equal(t, plugins[0].Location, "github.com/buildkite/plugins/docker-compose")
 	assert.Equal(t, plugins[0].Version, "a34fa34")
+	assert.Equal(t, plugins[0].Scheme, "http")
 	assert.Equal(t, plugins[0].Configuration, map[string]interface{}{"container": "app"})
 
 	assert.Equal(t, plugins[1].Location, "github.com/buildkite/plugins/ping")
 	assert.Equal(t, plugins[1].Version, "master")
+	assert.Equal(t, plugins[1].Scheme, "")
 	assert.Equal(t, plugins[1].Configuration, map[string]interface{}{})
+
+	plugins, err = CreatePluginsFromJSON(`["ssh://git:foo@github.com/buildkite/plugins/docker-compose#a34fa34"]`)
+	assert.Equal(t, len(plugins), 1)
+	assert.Nil(t, err)
+
+	assert.Equal(t, plugins[0].Location, "github.com/buildkite/plugins/docker-compose")
+	assert.Equal(t, plugins[0].Version, "a34fa34")
+	assert.Equal(t, plugins[0].Scheme, "ssh")
+	assert.Equal(t, plugins[0].Authentication, "git:foo")
 
 	plugins, err = CreatePluginsFromJSON(`blah`)
 	assert.Equal(t, len(plugins), 0)
@@ -79,6 +91,11 @@ func TestIdentifier(t *testing.T) {
 	id, err = plugin.Identifier()
 	assert.Equal(t, id, "192-168-0-1-foo-git-12341234")
 	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "/foo/bar/"}
+	id, err = plugin.Identifier()
+	assert.Equal(t, id, "foo-bar")
+	assert.Nil(t, err)
 }
 
 func TestRepositoryAndSubdirectory(t *testing.T) {
@@ -89,7 +106,7 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 
 	plugin = &Plugin{Location: "github.com/buildkite/plugins/docker-compose/beta"}
 	repo, err = plugin.Repository()
-	assert.Equal(t, repo, "github.com/buildkite/plugins")
+	assert.Equal(t, repo, "https://github.com/buildkite/plugins")
 	assert.Nil(t, err)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "docker-compose/beta")
@@ -97,7 +114,7 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 
 	plugin = &Plugin{Location: "github.com/buildkite/test-plugin"}
 	repo, err = plugin.Repository()
-	assert.Equal(t, repo, "github.com/buildkite/test-plugin")
+	assert.Equal(t, repo, "https://github.com/buildkite/test-plugin")
 	assert.Nil(t, err)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "")
@@ -125,7 +142,15 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 
 	plugin = &Plugin{Location: "bitbucket.org/user/project/sub/directory"}
 	repo, err = plugin.Repository()
-	assert.Equal(t, repo, "bitbucket.org/user/project")
+	assert.Equal(t, repo, "https://bitbucket.org/user/project")
+	assert.Nil(t, err)
+	sub, err = plugin.RepositorySubdirectory()
+	assert.Equal(t, sub, "sub/directory")
+	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "bitbucket.org/user/project/sub/directory", Scheme: "http", Authentication: "foo:bar"}
+	repo, err = plugin.Repository()
+	assert.Equal(t, repo, "http://foo:bar@bitbucket.org/user/project")
 	assert.Nil(t, err)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "sub/directory")
@@ -133,7 +158,7 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 
 	plugin = &Plugin{Location: "114.135.234.212/foo.git"}
 	repo, err = plugin.Repository()
-	assert.Equal(t, repo, "114.135.234.212/foo.git")
+	assert.Equal(t, repo, "https://114.135.234.212/foo.git")
 	assert.Nil(t, err)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "")
@@ -141,7 +166,7 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 
 	plugin = &Plugin{Location: "github.com/buildkite/plugins/docker-compose/beta"}
 	repo, err = plugin.Repository()
-	assert.Equal(t, repo, "github.com/buildkite/plugins")
+	assert.Equal(t, repo, "https://github.com/buildkite/plugins")
 	assert.Nil(t, err)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "docker-compose/beta")
@@ -162,12 +187,18 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	assert.Equal(t, err.Error(), "Missing plugin location")
 }
 
-func TestPluginConfigurationToEnv(t *testing.T) {
+func TestPluginConfigurationToEnvironment(t *testing.T) {
+	var env *shell.Environment
+	var err error
 	plugin := &Plugin{Location: "github.com/buildkite/plugins/docker-compose"}
 
 	plugin.Configuration = map[string]interface{}{"container": "app", "some-other-setting": "else right here"}
-	assert.Equal(t, plugin.ConfigurationToEnv(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app", "BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here"})
+	env, err = plugin.ConfigurationToEnvironment()
+	assert.Nil(t, err)
+	assert.Equal(t, env.ToSlice(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app", "BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here"})
 
 	plugin.Configuration = map[string]interface{}{"and _ with a    - number": 12}
-	assert.Equal(t, plugin.ConfigurationToEnv(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"})
+	env, err = plugin.ConfigurationToEnvironment()
+	assert.Nil(t, err)
+	assert.Equal(t, env.ToSlice(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"})
 }

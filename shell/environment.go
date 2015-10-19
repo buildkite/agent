@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -47,7 +48,8 @@ func (e *Environment) Set(key string, value string) string {
 	value = strings.TrimSpace(value)
 
 	// Check if we've got quoted values
-	if strings.Count(value, "\"") == 2 || strings.Count(value, "'") == 2 {
+	if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
+		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
 		// Pull the quotes off the edges
 		value = strings.Trim(value, "\"'")
 
@@ -69,6 +71,13 @@ func (e *Environment) Set(key string, value string) string {
 	return value
 }
 
+// Remove a key from the Environment and return it's value
+func (e *Environment) Remove(key string) string {
+	value := e.Get(key)
+	delete(e.env, key)
+	return value
+}
+
 // Returns the length of the environment
 func (e *Environment) Length() int {
 	return len(e.env)
@@ -87,16 +96,37 @@ func (e *Environment) Diff(other *Environment) *Environment {
 	return diff
 }
 
+// Merges another env into this one and returns the result
+func (e *Environment) Merge(other *Environment) *Environment {
+	c := e.Copy()
+
+	for k, v := range other.ToMap() {
+		c.Set(k, v)
+	}
+
+	return c
+}
+
+// Returns a copy of the env
+func (e *Environment) Copy() *Environment {
+	c := make(map[string]string)
+
+	for k, v := range e.env {
+		c[k] = v
+	}
+
+	return &Environment{env: c}
+}
+
 // Returns a slice representation of the environment
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		if strings.Contains(v, "\n") {
-			s = append(s, fmt.Sprintf("%v=\"%v\"", k, strings.Replace(v, "\n", "\\n", -1)))
-		} else {
-			s = append(s, fmt.Sprintf("%v=%v", k, v))
-		}
+		s = append(s, fmt.Sprintf("%v=%v", k, v))
 	}
+
+	// Ensure they are in a consistent order (helpful for tests)
+	sort.Strings(s)
 
 	return s
 }
