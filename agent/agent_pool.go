@@ -187,7 +187,7 @@ func (r *AgentPool) ShowBanner() {
 		logger.Info("Configuration loaded from: %s", r.ConfigFilePath)
 	}
 
-	logger.Debug("Bootstrap script: %s", r.AgentConfiguration.BootstrapScript)
+	logger.Debug("Bootstrap command: %s", r.AgentConfiguration.BootstrapScript)
 	logger.Debug("Build path: %s", r.AgentConfiguration.BuildPath)
 	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
 	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)

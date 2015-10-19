@@ -114,7 +114,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
-			Value:  "",
+			Value:  "buildkite-agent bootstrap",
 			Usage:  "Path to the bootstrap script",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
