@@ -94,7 +94,7 @@ var BootstrapCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "plugins",
 			Value:  "",
-			Usage:  "The plugins for th job",
+			Usage:  "The plugins for the job",
 			EnvVar: "BUILDKITE_PLUGINS",
 		},
 		cli.StringFlag{
