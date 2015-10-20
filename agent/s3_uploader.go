@@ -44,16 +44,16 @@ func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 		return err
 	}
 
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.bucketName(), region.Name)
+	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", u.BucketName(), region.Name)
 
 	// Find the bucket
 	s3 := s3.New(auth, region)
-	bucket := s3.Bucket(u.bucketName())
+	bucket := s3.Bucket(u.BucketName())
 
 	// If the list doesn't return an error, then we've got our bucket
 	_, err = bucket.List("", "", "", 0)
 	if err != nil {
-		return errors.New("Could not find bucket `" + u.bucketName() + "` in region `" + region.Name + "` (" + err.Error() + ")")
+		return errors.New("Could not find bucket `" + u.BucketName() + "` in region `" + region.Name + "` (" + err.Error() + ")")
 	}
 
 	u.Bucket = bucket
@@ -62,7 +62,7 @@ func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 }
 
 func (u *S3Uploader) URL(artifact *api.Artifact) string {
-	url, _ := url.Parse("http://" + u.bucketName() + ".s3.amazonaws.com")
+	url, _ := url.Parse("http://" + u.BucketName() + ".s3.amazonaws.com")
 
 	url.Path += u.artifactPath(artifact)
 
@@ -105,16 +105,16 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.bucketPath(), artifact.Path}
+	parts := []string{u.BucketPath(), artifact.Path}
 
 	return strings.Join(parts, "/")
 }
 
-func (u *S3Uploader) bucketPath() string {
+func (u *S3Uploader) BucketPath() string {
 	return strings.Join(u.destinationParts()[1:len(u.destinationParts())], "/")
 }
 
-func (u *S3Uploader) bucketName() string {
+func (u *S3Uploader) BucketName() string {
 	return u.destinationParts()[0]
 }
 
