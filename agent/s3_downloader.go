@@ -42,7 +42,7 @@ func (d S3Downloader) Start() error {
 	}
 
 	// Split apart the bucket
-	bucketParts := strings.Split(strings.TrimLeft(d.Bucket, "s3://"), "/")
+	bucketParts := strings.Split(strings.TrimPrefix(d.Bucket, "s3://"), "/")
 	bucketName := bucketParts[0]
 	bucketPath := strings.Join(bucketParts[1:len(bucketParts)], "/")
 

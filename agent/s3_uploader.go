@@ -119,7 +119,7 @@ func (u *S3Uploader) bucketName() string {
 }
 
 func (u *S3Uploader) destinationParts() []string {
-	trimmed := strings.TrimLeft(u.Destination, "s3://")
+	trimmed := strings.TrimPrefix(u.Destination, "s3://")
 
 	return strings.Split(trimmed, "/")
 }
