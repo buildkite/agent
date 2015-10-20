@@ -41,33 +41,20 @@ func (d S3Downloader) Start() error {
 		return err
 	}
 
-	// Split apart the bucket
-	bucketParts := strings.Split(strings.TrimPrefix(d.Bucket, "s3://"), "/")
-	bucketName := bucketParts[0]
-	bucketPath := strings.Join(bucketParts[1:len(bucketParts)], "/")
-
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucketName, region.Name)
+	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", d.BucketName(), region.Name)
 
 	// Find the bucket
 	s3 := s3.New(auth, region)
-	bucket := s3.Bucket(bucketName)
+	bucket := s3.Bucket(d.BucketName())
 
 	// If the list doesn't return an error, then we've got our bucket
 	_, err = bucket.List("", "", "", 0)
 	if err != nil {
-		return errors.New("Could not find bucket `" + bucketName + "` in region `" + region.Name + "` (" + err.Error() + ")")
-	}
-
-	// Create the location of the file
-	var s3Location string
-	if bucketPath != "" {
-		s3Location = strings.TrimRight(bucketPath, "/") + "/" + strings.TrimLeft(d.Path, "/")
-	} else {
-		s3Location = d.Path
+		return errors.New("Could not find bucket `" + d.BucketName() + "` in region `" + region.Name + "` (" + err.Error() + ")")
 	}
 
 	// Generate a Signed URL
-	signedURL := bucket.SignedURL(s3Location, time.Now().Add(time.Hour))
+	signedURL := bucket.SignedURL(d.BucketFileLocation(), time.Now().Add(time.Hour))
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{
@@ -77,4 +64,26 @@ func (d S3Downloader) Start() error {
 		Retries:     d.Retries,
 		DebugHTTP:   d.DebugHTTP,
 	}.Start()
+}
+
+func (d S3Downloader) BucketFileLocation() string {
+	if d.BucketPath() != "" {
+		return strings.TrimSuffix(d.BucketPath(), "/") + "/" + strings.TrimPrefix(d.Path, "/")
+	} else {
+		return d.Path
+	}
+}
+
+func (d S3Downloader) BucketPath() string {
+	return strings.Join(d.destinationParts()[1:len(d.destinationParts())], "/")
+}
+
+func (d S3Downloader) BucketName() string {
+	return d.destinationParts()[0]
+}
+
+func (d S3Downloader) destinationParts() []string {
+	trimmed := strings.TrimPrefix(d.Bucket, "s3://")
+
+	return strings.Split(trimmed, "/")
 }
