@@ -837,43 +837,43 @@ func (b *Bootstrap) Start() error {
 			if b.Tag == "" {
 				b.runCommand("git", "reset", "--hard", "origin/"+b.Branch)
 			}
+		}
 
-			b.runCommand("git", "checkout", "-qf", b.Commit)
+		b.runCommand("git", "checkout", "-qf", b.Commit)
 
-			if b.GitSubmodules {
-				// `submodule sync` will ensure the .git/config
-				// matches the .gitmodules file.  The command
-				// is only available in git version 1.8.1, so
-				// if the call fails, continue the bootstrap
-				// script, and show an informative error.
-				gitSubmoduleSyncExitStatus := b.runCommandGracefully("git", "submodule", "sync", "--recursive")
-				if gitSubmoduleSyncExitStatus != 0 {
-					gitVersionOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--version")
-					warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
-				}
-
-				b.runCommand("git", "submodule", "update", "--init", "--recursive")
-				b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
+		if b.GitSubmodules {
+			// `submodule sync` will ensure the .git/config
+			// matches the .gitmodules file.  The command
+			// is only available in git version 1.8.1, so
+			// if the call fails, continue the bootstrap
+			// script, and show an informative error.
+			gitSubmoduleSyncExitStatus := b.runCommandGracefully("git", "submodule", "sync", "--recursive")
+			if gitSubmoduleSyncExitStatus != 0 {
+				gitVersionOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--version")
+				warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 			}
 
-			if b.env.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
-				warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
-			} else {
-				// Grab author and commit information and send
-				// it back to Buildkite. But before we do,
-				// we'll check to see if someone else has done
-				// it first.
-				commentf("Checking to see if Git data needs to be sent to Buildkite")
-				metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
-				if metaDataExistsExitStatus != 0 {
-					commentf("Sending Git commit information back to Buildkite")
+			b.runCommand("git", "submodule", "update", "--init", "--recursive")
+			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
+		}
 
-					gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
-					gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+		if b.env.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
+			warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
+		} else {
+			// Grab author and commit information and send
+			// it back to Buildkite. But before we do,
+			// we'll check to see if someone else has done
+			// it first.
+			commentf("Checking to see if Git data needs to be sent to Buildkite")
+			metaDataExistsExitStatus := b.runCommandGracefully("buildkite-agent", "meta-data", "exists", "buildkite:git:commit")
+			if metaDataExistsExitStatus != 0 {
+				commentf("Sending Git commit information back to Buildkite")
 
-					b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
-					b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
-				}
+				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
+				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+
+				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
+				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
 			}
 		}
 	}
