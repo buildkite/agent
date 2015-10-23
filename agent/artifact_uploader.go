@@ -139,6 +139,8 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	if a.Destination != "" {
 		if strings.HasPrefix(a.Destination, "s3://") {
 			uploader = new(S3Uploader)
+		} else if strings.HasPrefix(a.Destination, "gs://") {
+			uploader = new(GSUploader)
 		} else {
 			return errors.New("Unknown upload destination: " + a.Destination)
 		}

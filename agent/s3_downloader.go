@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -58,6 +59,7 @@ func (d S3Downloader) Start() error {
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{
+		Client:      *http.DefaultClient,
 		URL:         signedURL,
 		Path:        d.Path,
 		Destination: d.Destination,
