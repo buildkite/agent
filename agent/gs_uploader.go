@@ -3,6 +3,8 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/mime"
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	storage "google.golang.org/api/storage/v1"
 )
@@ -31,7 +34,7 @@ func (u *GSUploader) Setup(destination string, debugHTTP bool) error {
 	u.Destination = destination
 	u.DebugHTTP = debugHTTP
 
-	client, err := google.DefaultClient(context.Background(), storage.DevstorageFullControlScope)
+	client, err := u.getClient(storage.DevstorageFullControlScope)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
 	}
@@ -47,17 +50,15 @@ func (u *GSUploader) Setup(destination string, debugHTTP bool) error {
 func (u *GSUploader) URL(artifact *api.Artifact) string {
 	// We could use url.QueryEscape() instead of escape(), but the
 	// former escapes a few more characters than necessary.
-	return "https://www.googleapis.com/storage/v1/b/" + u.BucketName() + "/o/" + escape(u.artifactPath(artifact))
+	return "https://www.googleapis.com/storage/v1/b/" + u.BucketName() + "/o/" + escape(u.artifactPath(artifact)) + "?alt=media"
 }
 
 func (u *GSUploader) Upload(artifact *api.Artifact) error {
-	permission := "publicRead"
-	if os.Getenv("BUILDKITE_GS_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_GS_ACL")
-	}
+	permission := os.Getenv("BUILDKITE_GS_ACL")
 
 	// The dirtiest validation method ever...
-	if permission != "authenticatedRead" &&
+	if permission != "" &&
+		permission != "authenticatedRead" &&
 		permission != "private" &&
 		permission != "projectPrivate" &&
 		permission != "publicRead" &&
@@ -65,8 +66,13 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 		logger.Fatal("Invalid GS ACL `%s`", permission)
 	}
 
-	logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
-		u.artifactPath(artifact), u.BucketName(), permission)
+	if permission == "" {
+		logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
+			u.artifactPath(artifact), u.BucketName())
+	} else {
+		logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
+			u.artifactPath(artifact), u.BucketName(), permission)
+	}
 	object := &storage.Object{
 		Name:        u.artifactPath(artifact),
 		ContentType: u.mimeType(artifact),
@@ -75,7 +81,11 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to open file \"%q\" (%v)", artifact.AbsolutePath, err))
 	}
-	if res, err := u.Service.Objects.Insert(u.BucketName(), object).PredefinedAcl(permission).Media(file).Do(); err == nil {
+	call := u.Service.Objects.Insert(u.BucketName(), object)
+	if permission != "" {
+		call = call.PredefinedAcl(permission)
+	}
+	if res, err := call.Media(file).Do(); err == nil {
 		logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%v)", u.artifactPath(artifact), err))
@@ -102,6 +112,21 @@ func (u *GSUploader) destinationParts() []string {
 	trimmed := strings.TrimPrefix(u.Destination, "gs://")
 
 	return strings.Split(trimmed, "/")
+}
+
+func (u *GSUploader) getClient(scope string) (*http.Client, error) {
+	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
+		data, err := ioutil.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
+		if err != nil {
+			return nil, err
+		}
+		conf, err := google.JWTConfigFromJSON(data, scope)
+		if err != nil {
+			return nil, err
+		}
+		return conf.Client(oauth2.NoContext), nil
+	}
+	return google.DefaultClient(context.Background(), scope)
 }
 
 func (u *GSUploader) mimeType(a *api.Artifact) string {

@@ -33,7 +33,7 @@ Example:
 
    Or upload directly to Google Cloud Storage:
 
-   $ export BUILDKITE_GS_ACL=private # default is publicRead
+   $ export BUILDKITE_GS_ACL=private
    $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID`
 
 type ArtifactUploadConfig struct {

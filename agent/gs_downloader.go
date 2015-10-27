@@ -36,7 +36,7 @@ func (d GSDownloader) Start() error {
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{
 		Client:      *client,
-		URL:         d.URL + "?alt=media",
+		URL:         d.URL,
 		Path:        d.Path,
 		Destination: d.Destination,
 		Retries:     d.Retries,
