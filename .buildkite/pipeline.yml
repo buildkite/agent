@@ -14,7 +14,7 @@ steps:
       - ssh://git@github.com/buildkite/plugins/docker-compose:
           container: "agent"
 
-  - waiter
+  - wait
 
   -
     name: ":redhat: experimental"
@@ -45,7 +45,7 @@ steps:
       - ssh://git@github.com/buildkite/plugins/docker-compose:
           container: "agent"
 
-  - manual
+  - block: ":shipit: Unstable"
 
   -
     name: ":octocat: :rocket:"
@@ -55,7 +55,7 @@ steps:
       queue: "deploy"
 
   -
-    name: ":redhat: unstable"
+    name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master"
@@ -65,7 +65,7 @@ steps:
       queue: "deploy"
 
   -
-    name: ":debian: unstable"
+    name: ":debian:"
     command: "scripts/debian-package.sh"
     branches: "master"
     env:
@@ -73,7 +73,7 @@ steps:
     agents:
       queue: "deploy"
 
-  - waiter
+  - wait
 
   -
     name: ":whale:"
@@ -90,10 +90,10 @@ steps:
     agents:
       queue: "deploy"
 
-  - manual
+  - block: ":shipit: Stable"
 
   -
-    name: ":redhat: stable"
+    name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master"
@@ -103,7 +103,7 @@ steps:
       queue: "deploy"
 
   -
-    name: ":debian: stable"
+    name: ":debian:"
     command: "scripts/debian-package.sh"
     branches: "master"
     env:
