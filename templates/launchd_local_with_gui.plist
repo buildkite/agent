@@ -12,7 +12,7 @@
 
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/your-build-user/.buildkite/bin/buildkite-agent</string>
+      <string>/Users/your-build-user/.buildkite-agent/bin/buildkite-agent</string>
       <string>start</string>
       <!-- <string>--debug</string> -->
     </array>
@@ -30,10 +30,10 @@
     <integer>30</integer>
 
     <key>StandardOutPath</key>
-    <string>/Users/your-build-user/.buildkite/log/buildkite-agent.log</string>
+    <string>/Users/your-build-user/.buildkite-agent/log/buildkite-agent.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/your-build-user/.buildkite/log/buildkite-agent.log</string>
+    <string>/Users/your-build-user/.buildkite-agent/log/buildkite-agent.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -41,7 +41,7 @@
       <string>/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin</string>
 
       <key>BUILDKITE_AGENT_CONFIG</key>
-      <string>/Users/your-build-user/.buildkite/buildkite-agent.cfg</string>
+      <string>/Users/your-build-user/.buildkite-agent/buildkite-agent.cfg</string>
     </dict>
   </dict>
 </plist>
