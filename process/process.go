@@ -276,7 +276,7 @@ func (p *Process) signal(sig os.Signal) error {
 	if p.command != nil && p.command.Process != nil {
 		logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
-		err := p.command.Process.Signal(syscall.SIGTERM)
+		err := p.command.Process.Signal(sig)
 		if err != nil {
 			logger.Error("[Process] Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
 			return err
