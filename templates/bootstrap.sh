@@ -218,7 +218,12 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
   else
-    buildkite-run "git clone -qv -- \"$BUILDKITE_REPO\" ."
+    # Attempt to clone just a single branch so first time clones are fast
+    if git clone --help | grep -- --single-branch &> /dev/null; then
+      buildkite-run "git clone -qv --single-branch -b \"$BUILDKITE_BRANCH\" -- \"$BUILDKITE_REPO\" ."
+    else
+      buildkite-run "git clone -qv -- \"$BUILDKITE_REPO\" ."
+    fi
   fi
 
   buildkite-run "git clean -fdq"
@@ -235,7 +240,7 @@ else
     # If the commit is HEAD, we can't do a commit-only fetch, we'll need to use
     # the branch instead.
     if [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
-      buildkite-run "git fetch -q origin $BUILDKITE_BRANCH 2> /dev/null || git fetch -q"
+      buildkite-run "git fetch -q origin refs/heads/$BUILDKITE_BRANCH 2> /dev/null || git fetch -q"
     else
       # First try to fetch the commit only (because it's usually much faster).
       # If that doesn't work, just resort back to a regular fetch.
@@ -245,7 +250,7 @@ else
     if [[ "$BUILDKITE_TAG" == "" ]]; then
       # Default empty branch names
       : "${BUILDKITE_BRANCH:=master}"
-      buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
+      buildkite-run "git reset --hard refs/heads/$BUILDKITE_BRANCH"
     fi
   fi
 
