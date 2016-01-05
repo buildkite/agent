@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,9 +49,13 @@ func (u *GSUploader) Setup(destination string, debugHTTP bool) error {
 }
 
 func (u *GSUploader) URL(artifact *api.Artifact) string {
-	// We could use url.QueryEscape() instead of escape(), but the
-	// former escapes a few more characters than necessary.
-	return "https://www.googleapis.com/storage/v1/b/" + u.BucketName() + "/o/" + escape(u.artifactPath(artifact)) + "?alt=media"
+	// If not publicly accessible, GET on this URL results in 403.
+	var artifactURL = &url.URL{
+		Scheme: "https",
+		Host:   "storage.googleapis.com",
+		Path:   u.BucketName() + "/" + u.artifactPath(artifact),
+	}
+	return artifactURL.String()
 }
 
 func (u *GSUploader) Upload(artifact *api.Artifact) error {
@@ -138,47 +143,4 @@ func (u *GSUploader) mimeType(a *api.Artifact) string {
 	} else {
 		return "binary/octet-stream"
 	}
-}
-
-func shouldEscape(c byte) bool {
-	// See https://cloud.google.com/storage/docs/json_api/#encoding
-	if 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' || '0' <= c && c <= '9' {
-		return false
-	}
-	switch c {
-	case '-', '.', '_', '~', '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=', ':', '@':
-		return false
-	}
-	return true
-}
-
-func escape(s string) string {
-	// See https://golang.org/src/net/url/url.go
-	hexCount := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if shouldEscape(c) {
-			hexCount++
-		}
-	}
-
-	if hexCount == 0 {
-		return s
-	}
-
-	t := make([]byte, len(s)+2*hexCount)
-	j := 0
-	for i := 0; i < len(s); i++ {
-		switch c := s[i]; {
-		case shouldEscape(c):
-			t[j] = '%'
-			t[j+1] = "0123456789ABCDEF"[c>>4]
-			t[j+2] = "0123456789ABCDEF"[c&15]
-			j += 3
-		default:
-			t[j] = s[i]
-			j++
-		}
-	}
-	return string(t)
 }
