@@ -75,7 +75,7 @@ func (a *ArtifactDownloader) Download() error {
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
 					err = GSDownloader{
 						Path:        artifact.Path,
-						URL:         artifact.URL,
+						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.APIClient.DebugHTTP,
