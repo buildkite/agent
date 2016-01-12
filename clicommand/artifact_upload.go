@@ -29,7 +29,12 @@ Example:
    $ export BUILDKITE_S3_SECRET_ACCESS_KEY=yyy
    $ export BUILDKITE_S3_DEFAULT_REGION=eu-central-1 # default is us-east-1
    $ export BUILDKITE_S3_ACL=private # default is public-read
-   $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID`
+   $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID
+
+   Or upload directly to Google Cloud Storage:
+
+   $ export BUILDKITE_GS_ACL=private
+   $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID`
 
 type ArtifactUploadConfig struct {
 	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`

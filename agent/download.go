@@ -15,6 +15,9 @@ import (
 )
 
 type Download struct {
+	// The HTTP client to use for downloading
+	Client http.Client
+
 	// The actual URL to get the file from
 	URL string
 
@@ -74,7 +77,7 @@ func (d Download) try() error {
 	logger.Debug("Downloading %s to %s", d.URL, targetFile)
 
 	// Start by downloading the file
-	response, err := http.Get(d.URL)
+	response, err := d.Client.Get(d.URL)
 	if err != nil {
 		return fmt.Errorf("Error while downloading %s (%T: %v)", d.URL, err, err)
 	}
