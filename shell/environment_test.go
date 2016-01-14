@@ -6,6 +6,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestEnvironmentExists(t *testing.T) {
+	env, _ := EnvironmentFromSlice([]string{})
+
+	env.Set("FOO", "bar")
+	env.Set("EMPTY", "")
+
+	assert.Equal(t, env.Exists("FOO"), true)
+	assert.Equal(t, env.Exists("EMPTY"), true)
+	assert.Equal(t, env.Exists("does not exist"), false)
+}
+
 func TestEnvironmentSet(t *testing.T) {
 	env, _ := EnvironmentFromSlice([]string{})
 
