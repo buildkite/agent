@@ -41,6 +41,13 @@ func (e *Environment) Get(key string) string {
 	return e.env[key]
 }
 
+// Returns true/false depending on whether or not the key exists in the env
+func (e *Environment) Exists(key string) bool {
+	_, ok := e.env[key]
+
+	return ok
+}
+
 // Sets a key in the environment
 func (e *Environment) Set(key string, value string) string {
 	// Trim the values

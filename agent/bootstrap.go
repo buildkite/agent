@@ -519,6 +519,9 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool, env 
 			b.env = b.env.Merge(diff)
 		}
 
+		// Apply any config changes that may have occured
+		b.applyEnvironmentConfigChanges()
+
 		return hookExitStatus
 	} else {
 		if b.Debug {
@@ -595,6 +598,26 @@ func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 	}
 
 	return false
+}
+
+// Checks to see if the bootstrap configuration has changed at runtime, and
+// applies them if they've changed
+func (b *Bootstrap) applyEnvironmentConfigChanges() {
+	if b.env.Exists("BUILDKITE_ARTIFACT_PATHS") {
+		envArifactPaths := b.env.Get("BUILDKITE_ARTIFACT_PATHS")
+
+		if envArifactPaths != b.AutomaticArtifactUploadPaths {
+			b.AutomaticArtifactUploadPaths = envArifactPaths
+		}
+	}
+
+	if b.env.Exists("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION") {
+		envUploadDestination := b.env.Get("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION")
+
+		if envUploadDestination != b.ArtifactUploadDestination {
+			b.ArtifactUploadDestination = envUploadDestination
+		}
+	}
 }
 
 func (b *Bootstrap) Start() error {
