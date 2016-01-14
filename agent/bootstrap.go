@@ -603,11 +603,15 @@ func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 // Checks to see if the bootstrap configuration has changed at runtime, and
 // applies them if they've changed
 func (b *Bootstrap) applyEnvironmentConfigChanges() {
+	artifactPathsChanged := false
+	artifactUploadDestinationChanged := false
+
 	if b.env.Exists("BUILDKITE_ARTIFACT_PATHS") {
 		envArifactPaths := b.env.Get("BUILDKITE_ARTIFACT_PATHS")
 
 		if envArifactPaths != b.AutomaticArtifactUploadPaths {
 			b.AutomaticArtifactUploadPaths = envArifactPaths
+			artifactPathsChanged = true
 		}
 	}
 
@@ -616,6 +620,19 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 
 		if envUploadDestination != b.ArtifactUploadDestination {
 			b.ArtifactUploadDestination = envUploadDestination
+			artifactUploadDestinationChanged = true
+		}
+	}
+
+	if artifactPathsChanged || artifactUploadDestinationChanged {
+		headerf("Bootstrap configuration has changed")
+
+		if artifactPathsChanged {
+			commentf("BUILDKITE_ARTIFACT_PATHS has been changed to \"%s\"", b.AutomaticArtifactUploadPaths)
+		}
+
+		if artifactUploadDestinationChanged {
+			commentf("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION has been changed to \"%s\"", b.ArtifactUploadDestination)
 		}
 	}
 }
