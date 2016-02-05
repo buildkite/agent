@@ -21,7 +21,7 @@ Description:
 Example:
 
    $ eval $(curl -s -H "Authorization: Bearer xxx" \
-     "https://api.buildkite.com/v1/organizations/[org]/projects/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
+     "https://api.buildkite.com/v2/organizations/[org]/pipelines/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
    $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
@@ -36,8 +36,9 @@ type BootstrapConfig struct {
 	GitSubmodules                bool   `cli:"git-submodules"`
 	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
 	AgentName                    string `cli:"agent" validate:"required"`
-	ProjectSlug                  string `cli:"project" validate:"required"`
-	ProjectProvider              string `cli:"project-provider" validate:"required"`
+	OrganizationSlug             string `cli:"organization" validate:"required"`
+	PipelineSlug                 string `cli:"pipeline" validate:"required"`
+	PipelineProvider             string `cli:"pipeline-provider" validate:"required"`
 	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
 	CleanCheckout                bool   `cli:"clean-checkout"`
@@ -110,16 +111,22 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_NAME",
 		},
 		cli.StringFlag{
-			Name:   "project",
+			Name:   "organization",
 			Value:  "",
-			Usage:  "The slug of the project that the job is a part of",
-			EnvVar: "BUILDKITE_PROJECT_SLUG",
+			Usage:  "The slug of the organization that the job is a part of",
+			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
 		},
 		cli.StringFlag{
-			Name:   "project-provider",
+			Name:   "pipeline",
+			Value:  "",
+			Usage:  "The slug of the pipeline that the job is a part of",
+			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		},
+		cli.StringFlag{
+			Name:   "pipeline-provider",
 			Value:  "",
 			Usage:  "The id of the SCM provider that the repository is hosted on",
-			EnvVar: "BUILDKITE_PROJECT_PROVIDER",
+			EnvVar: "BUILDKITE_PIPELINE_PROVIDER",
 		},
 		cli.StringFlag{
 			Name:   "artifact-upload-paths",
@@ -211,8 +218,9 @@ var BootstrapCommand = cli.Command{
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
 			AgentName:                    cfg.AgentName,
-			ProjectProvider:              cfg.ProjectProvider,
-			ProjectSlug:                  cfg.ProjectSlug,
+			PipelineProvider:             cfg.PipelineProvider,
+			PipelineSlug:                 cfg.PipelineSlug,
+			OrganizationSlug:             cfg.OrganizationSlug,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			CleanCheckout:                cfg.CleanCheckout,

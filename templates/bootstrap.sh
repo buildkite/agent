@@ -143,8 +143,8 @@ export PATH="$BUILDKITE_BIN_PATH:$PATH"
 
 # Come up with the place that the repository will be checked out to
 SANITIZED_AGENT_NAME=$(echo "$BUILDKITE_AGENT_NAME" | tr -d '"')
-PROJECT_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_PROJECT_SLUG"
-export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME"
+PIPELINE_FOLDER_NAME="$SANITIZED_AGENT_NAME/$BUILDKITE_ORGANIZATION_SLUG/$BUILDKITE_PIPELINE_SLUG"
+export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PIPELINE_FOLDER_NAME"
 
 if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
   echo "~~~ Build environment variables"
@@ -176,7 +176,7 @@ buildkite-global-hook "pre-checkout"
 
 # Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 if [[ ! -z "${BUILDKITE_CLEAN_CHECKOUT:-}" ]] && [[ "$BUILDKITE_CLEAN_CHECKOUT" == "true" ]]; then
-  echo "~~~ Cleaning project checkout"
+  echo "~~~ Cleaning checkout"
 
   buildkite-run "rm -rf \"$BUILDKITE_BUILD_CHECKOUT_PATH\""
 fi
@@ -229,7 +229,7 @@ else
 
   # Allow checkouts of forked pull requests on GitHub only. See:
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-  if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
+  if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PIPELINE_PROVIDER" == *"github"* ]]; then
     buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
   else
     # If the commit is HEAD, we can't do a commit-only fetch, we'll need to use
@@ -326,7 +326,7 @@ elif [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
 else
   # Make sure we actually have a command to run
   if [[ "$BUILDKITE_COMMAND" == "" ]]; then
-    buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
+    buildkite-error "No command has been defined. Please go to pipeline's \"Settings\" and configure your build step's \"Command\""
   fi
 
   # Generate a temporary build script containing what to actually run.

@@ -50,11 +50,14 @@ type Bootstrap struct {
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
-	// The provider of the the project
-	ProjectProvider string
+	// The provider of the the pipeline
+	PipelineProvider string
 
-	// Slug of the current project
-	ProjectSlug string
+	// Slug of the current organization
+	OrganizationSlug string
+
+	// Slug of the current pipeline
+	PipelineSlug string
 
 	// Name of the agent running the bootstrap
 	AgentName string
@@ -652,7 +655,7 @@ func (b *Bootstrap) Start() error {
 	var agentNameCleanupRegex = regexp.MustCompile("\"")
 	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
 
-	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, cleanedUpAgentName, b.ProjectSlug))
+	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, cleanedUpAgentName, b.OrganizationSlug, b.PipelineSlug))
 
 	if b.Debug {
 		// Convert the env to a sorted slice
@@ -802,7 +805,7 @@ func (b *Bootstrap) Start() error {
 
 	// Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
-		headerf("Cleaning project checkout")
+		headerf("Cleaning pipeline checkout")
 		commentf("Removing %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 
 		err := os.RemoveAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
@@ -853,7 +856,7 @@ func (b *Bootstrap) Start() error {
 
 		// Allow checkouts of forked pull requests on GitHub only. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		if b.PullRequest != "false" && strings.Contains(b.ProjectProvider, "github") {
+		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 			b.runCommand("git", "fetch", "-q", "origin", "+refs/pull/"+b.PullRequest+"/head:")
 		} else {
 			// If the commit is HEAD, we can't do a commit-only
@@ -985,7 +988,7 @@ func (b *Bootstrap) Start() error {
 	} else {
 		// Make sure we actually have a command to run
 		if b.Command == "" {
-			exitf("No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\"")
+			exitf("No command has been defined. Please go to \"Pipeline Settings\" and configure your build step's \"Command\"")
 		}
 
 		pathToCommand := filepath.Join(b.wd, strings.Replace(b.Command, "\n", "", -1))
