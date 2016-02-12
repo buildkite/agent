@@ -53,6 +53,9 @@ brew install mercurial
 export GOPATH="$HOME/Code/go"
 export PATH="$HOME/Code/go/bin:$PATH"
 
+# Use dependencies from the vendor/ subdirectory
+export GO15VENDOREXPERIMENT=1
+
 # Checkout the code
 mkdir -p $GOPATH/src/github.com/buildkite/agent
 git clone git@github.com:buildkite/agent.git $GOPATH/src/github.com/buildkite/agent
