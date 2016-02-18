@@ -65,6 +65,9 @@ type Bootstrap struct {
 	// Should the bootstrap remove an existing checkout before running the job
 	CleanCheckout bool
 
+	// Flags to pass to "git clean" command
+	GitCleanFlags string
+
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
 
@@ -608,6 +611,7 @@ func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 func (b *Bootstrap) applyEnvironmentConfigChanges() {
 	artifactPathsChanged := false
 	artifactUploadDestinationChanged := false
+	gitCleanFlagsChanged := false
 
 	if b.env.Exists("BUILDKITE_ARTIFACT_PATHS") {
 		envArifactPaths := b.env.Get("BUILDKITE_ARTIFACT_PATHS")
@@ -627,7 +631,16 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if artifactPathsChanged || artifactUploadDestinationChanged {
+	if b.env.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
+		envGitCleanFlags := b.env.Get("BUILDKITE_GIT_CLEAN_FLAGS")
+
+		if envGitCleanFlags != b.GitCleanFlags {
+			b.GitCleanFlags = envGitCleanFlags
+			gitCleanFlagsChanged = true
+		}
+	}
+
+	if artifactPathsChanged || artifactUploadDestinationChanged || gitCleanFlagsChanged {
 		headerf("Bootstrap configuration has changed")
 
 		if artifactPathsChanged {
@@ -636,6 +649,10 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 
 		if artifactUploadDestinationChanged {
 			commentf("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION has been changed to \"%s\"", b.ArtifactUploadDestination)
+		}
+
+		if gitCleanFlagsChanged {
+			commentf("BUILDKITE_GIT_CLEAN_FLAGS has been changed to \"%s\"", b.GitCleanFlags)
 		}
 	}
 }
@@ -847,11 +864,11 @@ func (b *Bootstrap) Start() error {
 		}
 
 		// Clean up the repository
-		b.runCommand("git", "clean", "-fdq")
+		b.runCommand("git", "clean", b.env.Get("BUILDKITE_GIT_CLEAN_FLAGS"))
 
 		// Also clean up submodules if we can
 		if b.GitSubmodules {
-			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
+			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", b.env.Get("BUILDKITE_GIT_CLEAN_FLAGS"))
 		}
 
 		// Allow checkouts of forked pull requests on GitHub only. See:
