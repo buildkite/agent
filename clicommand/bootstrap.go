@@ -43,6 +43,7 @@ type BootstrapConfig struct {
 	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
 	CleanCheckout                bool   `cli:"clean-checkout"`
+	GitCleanFlags                string `cli:"git-clean-flags"`
 	BinPath                      string `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
@@ -151,6 +152,12 @@ var BootstrapCommand = cli.Command{
 			Name:   "clean-checkout",
 			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
+		},
+		cli.StringFlag{
+			Name:   "git-clean-flags",
+			Value:  "-fdq",
+			Usage:  "Flags to pass to \"git clean\" command",
+			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "bin-path",
