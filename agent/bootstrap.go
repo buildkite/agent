@@ -41,6 +41,9 @@ type Bootstrap struct {
 	// The tag of the job commit
 	Tag string
 
+	// A refspec to fetch
+	RefSpec string
+
 	// Plugin definition for the job
 	Plugins string
 
@@ -858,6 +861,8 @@ func (b *Bootstrap) Start() error {
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 			b.runCommand("git", "fetch", "-q", "origin", "+refs/pull/"+b.PullRequest+"/head:")
+		} else if b.RefSpec != "" {
+			b.runCommand("git", "fetch", "-q", "origin", b.RefSpec)
 		} else {
 			// If the commit is HEAD, we can't do a commit-only
 			// fetch, we'll need to use the branch instead.  During

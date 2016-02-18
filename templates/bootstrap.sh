@@ -231,6 +231,8 @@ else
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
   if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PIPELINE_PROVIDER" == *"github"* ]]; then
     buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
+  elif [[ "${BUILDKITE_REFSPEC:-}" != "" ]]; then
+    buildkite-run "git fetch origin \"$BUILDKITE_REFSPEC\""
   else
     # If the commit is HEAD, we can't do a commit-only fetch, we'll need to use
     # the branch instead.
