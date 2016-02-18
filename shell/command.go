@@ -9,7 +9,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/buildkite/agent/vendor/src/github.com/mattn/go-shellwords"
+	"github.com/mattn/go-shellwords"
 )
 
 type Command struct {
