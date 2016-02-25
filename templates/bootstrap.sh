@@ -227,11 +227,17 @@ else
     buildkite-run "git submodule foreach --recursive git clean -fdq"
   fi
 
+  # If a refspec is provided then use it instead.
+  # i.e. `refs/not/a/head`
+  if [[ -n "${BUILDKITE_REFSPEC:-}" ]]; then
+    buildkite-run "git fetch origin \"$BUILDKITE_REFSPEC\""
+    buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
+
   # GitHub has a special ref which lets us fetch a pull request head, whether
   # or not there is a current head in this repository or another which
   # references the commit. We presume a commit sha is provided. See:
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-  if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
+  elif [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
     buildkite-run "git fetch origin \"refs/pull/$BUILDKITE_PULL_REQUEST/head\""
     buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
 
