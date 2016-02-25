@@ -268,8 +268,8 @@ else
   # Check to see if the meta data exists before setting it
   buildkite-run-debug "buildkite-agent meta-data exists \"buildkite:git:commit\""
   if [[ $? -ne 0 ]]; then
-    buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:commit\" \"\`git show \"$BUILDKITE_COMMIT\" -s --format=fuller --no-color\`\""
-    buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains \"$BUILDKITE_COMMIT\" --no-color\`\""
+    buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:commit\" \"\`git show HEAD -s --format=fuller --no-color\`\""
+    buildkite-run-debug "buildkite-agent meta-data set \"buildkite:git:branch\" \"\`git branch --contains HEAD --no-color\`\""
   fi
 fi
 
