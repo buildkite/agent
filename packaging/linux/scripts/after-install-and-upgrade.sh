@@ -45,23 +45,31 @@ if [ ! -d /etc/buildkite-agent/hooks ]; then
   cp -r /usr/share/buildkite-agent/hooks /etc/buildkite-agent
 fi
 
+# Check if systemd exists
+command -v systemctl > /dev/null
+BK_SYSTEMD_EXISTS=$?
+
 # Check if the system is Ubuntu 14.10. Systemd is broken on this release, so if
 # even if systemd exists on that system, skip using it.
 command -v lsb_release > /dev/null && lsb_release -d | grep -q "Ubuntu 14.10"
 BK_IS_UBUNTU_14_10=$?
 
-# Check if systemd exists
-command -v systemctl > /dev/null
-BK_SYSTEMD_EXITS=$?
+# Check if upstart exists
+command -v initctl > /dev/null
+BK_UPSTART_EXISTS=$?
+
+# Check if the system is Amazon linux which has an old and broken upstart.
+[ -f /etc/system-release ] && grep -qi "Amazon Linux" /etc/system-release
+BK_IS_AMAZON_LINUX=$?
 
 # Install the relevant system process
-if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
+if [ $BK_SYSTEMD_EXISTS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
   if [ ! -f /lib/systemd/system/buildkite-agent.service ]; then
     cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
   fi
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
-elif command -v initctl > /dev/null; then
+elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_IS_AMAZON_LINUX -eq 1 ]; then
   if [ ! -f /etc/init/buildkite-agent.conf ]; then
     # If the system has the old .env file, install the old upstart script, and
     # let them know they should upgrade. Because the upstart script is no
