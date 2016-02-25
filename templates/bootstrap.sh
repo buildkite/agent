@@ -235,11 +235,11 @@ else
     # If the commit is HEAD, we can't do a commit-only fetch, we'll need to use
     # the branch instead.
     if [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
-      buildkite-run "git fetch origin $BUILDKITE_BRANCH 2> /dev/null || git fetch"
+      buildkite-run "git fetch origin $BUILDKITE_BRANCH 2> /dev/null || git fetch origin --tags"
     else
       # First try to fetch the commit only (because it's usually much faster).
       # If that doesn't work, just resort back to a regular fetch.
-      buildkite-run "git fetch origin $BUILDKITE_COMMIT 2> /dev/null || git fetch"
+      buildkite-run "git fetch origin $BUILDKITE_COMMIT 2> /dev/null || git fetch origin --tags"
     fi
 
     if [[ "$BUILDKITE_TAG" == "" ]]; then
