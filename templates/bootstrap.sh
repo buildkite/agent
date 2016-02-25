@@ -218,7 +218,7 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
   else
-    buildkite-run "git clone -qv -- \"$BUILDKITE_REPO\" ."
+    buildkite-run "git clone -v -- \"$BUILDKITE_REPO\" ."
   fi
 
   buildkite-run "git clean -fdq"
@@ -235,11 +235,11 @@ else
     # If the commit is HEAD, we can't do a commit-only fetch, we'll need to use
     # the branch instead.
     if [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
-      buildkite-run "git fetch -q origin $BUILDKITE_BRANCH 2> /dev/null || git fetch -q"
+      buildkite-run "git fetch origin $BUILDKITE_BRANCH 2> /dev/null || git fetch"
     else
       # First try to fetch the commit only (because it's usually much faster).
       # If that doesn't work, just resort back to a regular fetch.
-      buildkite-run "git fetch -q origin $BUILDKITE_COMMIT 2> /dev/null || git fetch -q"
+      buildkite-run "git fetch origin $BUILDKITE_COMMIT 2> /dev/null || git fetch"
     fi
 
     if [[ "$BUILDKITE_TAG" == "" ]]; then
@@ -249,7 +249,7 @@ else
     fi
   fi
 
-  buildkite-run "git checkout -qf \"$BUILDKITE_COMMIT\""
+  buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
 
   if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
     # `submodule sync` will ensure the .git/config matches the .gitmodules file.
