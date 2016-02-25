@@ -227,29 +227,27 @@ else
     buildkite-run "git submodule foreach --recursive git clean -fdq"
   fi
 
-  # Allow checkouts of forked pull requests on GitHub only. See:
+  # GitHub has a special ref which lets us fetch a pull request head, whether
+  # or not there is a current head in this repository or another which
+  # references the commit. We presume a commit sha is provided. See:
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
   if [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
-    buildkite-run "git fetch origin \"+refs/pull/$BUILDKITE_PULL_REQUEST/head:\""
+    buildkite-run "git fetch origin \"refs/pull/$BUILDKITE_PULL_REQUEST/head\""
+    buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
+
+  # If the commit is "HEAD" then we can't do a commit-specific fetch and will
+  # need to fetch the remote head and checkout the fetched head explicitly.
+  elif [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
+    buildkite-run "git fetch origin \"$BUILDKITE_BRANCH\""
+    buildkite-run "git checkout -f FETCH_HEAD"
+
+  # Otherwise fetch and checkout the commit directly. Some repositories don't
+  # support fetching a specific commit so we fall back to fetching all heads
+  # and tags, hoping that the commit is included.
   else
-    # If the commit is HEAD, we can't do a commit-only fetch, we'll need to use
-    # the branch instead.
-    if [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
-      buildkite-run "git fetch origin $BUILDKITE_BRANCH 2> /dev/null || git fetch origin --tags"
-    else
-      # First try to fetch the commit only (because it's usually much faster).
-      # If that doesn't work, just resort back to a regular fetch.
-      buildkite-run "git fetch origin $BUILDKITE_COMMIT 2> /dev/null || git fetch origin --tags"
-    fi
-
-    if [[ "$BUILDKITE_TAG" == "" ]]; then
-      # Default empty branch names
-      : "${BUILDKITE_BRANCH:=master}"
-      buildkite-run "git reset --hard origin/$BUILDKITE_BRANCH"
-    fi
+    buildkite-run "git fetch origin \"$BUILDKITE_COMMIT\" || git fetch origin --tags"
+    buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
   fi
-
-  buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
 
   if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
     # `submodule sync` will ensure the .git/config matches the .gitmodules file.
