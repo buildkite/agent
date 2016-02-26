@@ -20,7 +20,7 @@ steps:
     name: ":redhat: experimental"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
-    branches: "master"
+    branches: "master *-stable"
     env:
       CODENAME: "experimental"
     agents:
@@ -30,7 +30,7 @@ steps:
     name: ":debian: experimental"
     command: "scripts/debian-package.sh"
     artifact_paths: "deb/**/*"
-    branches: "master"
+    branches: "master *-stable"
     env:
       CODENAME: "experimental"
     agents:
@@ -40,7 +40,7 @@ steps:
     name: ":github: :hammer:"
     command: "scripts/build-github-release.sh"
     artifact_paths: "releases/**/*"
-    branches: "master"
+    branches: "master *-stable"
     plugins:
       - ssh://git@github.com/buildkite/plugins/docker-compose:
           container: "agent"
@@ -50,7 +50,7 @@ steps:
   -
     name: ":octocat: :rocket:"
     command: "scripts/github-release.sh"
-    branches: "master"
+    branches: "master *-stable"
     agents:
       queue: "deploy"
 
@@ -58,7 +58,7 @@ steps:
     name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
-    branches: "master"
+    branches: "master *-stable"
     env:
       CODENAME: "unstable"
     agents:
@@ -67,7 +67,7 @@ steps:
   -
     name: ":debian:"
     command: "scripts/debian-package.sh"
-    branches: "master"
+    branches: "master *-stable"
     env:
       CODENAME: "unstable"
     agents:
@@ -78,7 +78,7 @@ steps:
   -
     name: ":whale:"
     command: "scripts/release-docker.sh"
-    branches: "master"
+    branches: "master *-stable"
     agents:
       queue: "deploy"
 
@@ -86,7 +86,7 @@ steps:
     name: ":beer:"
     command: "scripts/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
-    branches: "master"
+    branches: "master *-stable"
     agents:
       queue: "deploy"
 
@@ -96,7 +96,7 @@ steps:
     name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
-    branches: "master"
+    branches: "master *-stable"
     env:
       CODENAME: "stable"
     agents:
@@ -105,7 +105,7 @@ steps:
   -
     name: ":debian:"
     command: "scripts/debian-package.sh"
-    branches: "master"
+    branches: "master *-stable"
     env:
       CODENAME: "stable"
     agents:
