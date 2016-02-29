@@ -854,35 +854,31 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
 		}
 
-		// Allow checkouts of forked pull requests on GitHub only. See:
+		// GitHub has a special ref which lets us fetch a pull request head, whether
+		// or not there is a current head in this repository or another which
+		// references the commit. We presume a commit sha is provided. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-			b.runCommand("git", "fetch", "origin", "+refs/pull/"+b.PullRequest+"/head:")
+			b.runCommand("git", "fetch", "origin", "refs/pull/" + b.PullRequest + "/head")
+			b.runCommand("git", "checkout", "-f", b.Commit)
+
+		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
+		// need to fetch the remote head and checkout the fetched head explicitly.
+		} else if b.Commit == "HEAD" {
+			b.runCommand("git", "fetch", "origin", b.Branch)
+			b.runCommand("git", "checkout", "-f", "FETCH_HEAD")
+
+		// Otherwise fetch and checkout the commit directly. Some repositories don't
+		// support fetching a specific commit so we fall back to fetching all heads
+		// and tags, hoping that the commit is included.
 		} else {
-			// If the commit is HEAD, we can't do a commit-only
-			// fetch, we'll need to use the branch instead.  During
-			// the fetch, we do first try and grab the commit only
-			// (because it's usually much faster).  If that doesn't
-			// work, just resort back to a regular fetch.
-			var commitToFetch string
-			if b.Commit == "HEAD" {
-				commitToFetch = b.Branch
-			} else {
-				commitToFetch = b.Commit
-			}
-
-			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", commitToFetch)
+			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", b.Commit)
 			if gitFetchExitStatus != 0 {
-				b.runCommand("git", "fetch")
+				b.runCommand("git", "fetch", "origin", "--tags")
 			}
-
-			// Handle checking out of tags
-			if b.Tag == "" {
-				b.runCommand("git", "reset", "--hard", "origin/"+b.Branch)
-			}
+			b.runCommand("git", "checkout", "-f", b.Commit)
 		}
 
-		b.runCommand("git", "checkout", "-f", b.Commit)
 
 		if b.GitSubmodules {
 			// `submodule sync` will ensure the .git/config
