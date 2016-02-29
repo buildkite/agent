@@ -908,8 +908,8 @@ func (b *Bootstrap) Start() error {
 			if metaDataExistsExitStatus != 0 {
 				commentf("Sending Git commit information back to Buildkite")
 
-				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
-				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", "HEAD", "-s", "--format=fuller", "--no-color")
+				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", "HEAD", "--no-color")
 
 				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
 				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
