@@ -41,6 +41,9 @@ type Bootstrap struct {
 	// The tag of the job commit
 	Tag string
 
+	// Optional refspec to override git fetch
+	RefSpec string
+
 	// Plugin definition for the job
 	Plugins string
 
@@ -854,17 +857,26 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
 		}
 
+		// If a refspec is provided then use it instead.
+		// i.e. `refs/not/a/head`
+		if b.RefSpec != "" {
+			commentf("Fetch and checkout custom refspec")
+			b.runCommand("git", "fetch", "origin", b.RefSpec)
+			b.runCommand("git", "checkout", "-f", b.Commit)
+
 		// GitHub has a special ref which lets us fetch a pull request head, whether
 		// or not there is a current head in this repository or another which
 		// references the commit. We presume a commit sha is provided. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+		} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+			commentf("Fetch and checkout pull request head")
 			b.runCommand("git", "fetch", "origin", "refs/pull/" + b.PullRequest + "/head")
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		} else if b.Commit == "HEAD" {
+			commentf("Fetch and checkout remote branch HEAD commit")
 			b.runCommand("git", "fetch", "origin", b.Branch)
 			b.runCommand("git", "checkout", "-f", "FETCH_HEAD")
 
@@ -872,6 +884,7 @@ func (b *Bootstrap) Start() error {
 		// support fetching a specific commit so we fall back to fetching all heads
 		// and tags, hoping that the commit is included.
 		} else {
+			commentf("Fetch and checkout commit")
 			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", b.Commit)
 			if gitFetchExitStatus != 0 {
 				b.runCommand("git", "fetch", "origin", "--tags")
