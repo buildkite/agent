@@ -31,6 +31,7 @@ type BootstrapConfig struct {
 	Commit                       string `cli:"commit" validate:"required"`
 	Branch                       string `cli:"branch" validate:"required"`
 	Tag                          string `cli:"tag"`
+	RefSpec                      string `cli:"refspec"`
 	Plugins                      string `cli:"plugins"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
@@ -91,6 +92,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "The tag the commit",
 			EnvVar: "BUILDKITE_TAG",
+		},
+		cli.StringFlag{
+			Name:   "refspec",
+			Value:  "",
+			Usage:  "The refspec this commit belonged to",
+			EnvVar: "BUILDKITE_REFSPEC",
 		},
 		cli.StringFlag{
 			Name:   "plugins",
