@@ -753,12 +753,12 @@ func (b *Bootstrap) Start() error {
 					b.addRepositoryHostToSSHKnownHosts(repo)
 				}
 
-				b.runCommand("git", "clone", "-qv", "--", repo, ".")
+				b.runCommand("git", "clone", "-v", "--", repo, ".")
 
 				// Switch to the version if we need to
 				if p.Version != "" {
 					commentf("Checking out \"%s\"", p.Version)
-					b.runCommand("git", "checkout", "-qf", p.Version)
+					b.runCommand("git", "checkout", "-f", p.Version)
 				}
 
 				// Switch back to the previous working directory
@@ -843,7 +843,7 @@ func (b *Bootstrap) Start() error {
 			// gracefully handle repository renames
 			b.runCommand("git", "remote", "set-url", "origin", b.Repository)
 		} else {
-			b.runCommand("git", "clone", "-qv", "--", b.Repository, ".")
+			b.runCommand("git", "clone", "-v", "--", b.Repository, ".")
 		}
 
 		// Clean up the repository
@@ -857,7 +857,7 @@ func (b *Bootstrap) Start() error {
 		// Allow checkouts of forked pull requests on GitHub only. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-			b.runCommand("git", "fetch", "-q", "origin", "+refs/pull/"+b.PullRequest+"/head:")
+			b.runCommand("git", "fetch", "origin", "+refs/pull/"+b.PullRequest+"/head:")
 		} else {
 			// If the commit is HEAD, we can't do a commit-only
 			// fetch, we'll need to use the branch instead.  During
@@ -871,9 +871,9 @@ func (b *Bootstrap) Start() error {
 				commitToFetch = b.Commit
 			}
 
-			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "-q", "origin", commitToFetch)
+			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", commitToFetch)
 			if gitFetchExitStatus != 0 {
-				b.runCommand("git", "fetch", "-q")
+				b.runCommand("git", "fetch")
 			}
 
 			// Handle checking out of tags
@@ -882,7 +882,7 @@ func (b *Bootstrap) Start() error {
 			}
 		}
 
-		b.runCommand("git", "checkout", "-qf", b.Commit)
+		b.runCommand("git", "checkout", "-f", b.Commit)
 
 		if b.GitSubmodules {
 			// `submodule sync` will ensure the .git/config
