@@ -124,14 +124,14 @@ func (a *AgentWorker) Stop(graceful bool) {
 	} else {
 		// If there's a job running, kill it, then disconnect
 		if a.jobRunner != nil {
-			logger.Info("Forefully stopping agent. The current job will be canceled before disconnecting...")
+			logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
 
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
 			a.jobRunner.Kill()
 		} else {
-			logger.Info("Forefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+			logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 		}
 	}
 
