@@ -41,6 +41,9 @@ type Bootstrap struct {
 	// The tag of the job commit
 	Tag string
 
+	// Optional refspec to override git fetch
+	RefSpec string
+
 	// Plugin definition for the job
 	Plugins string
 
@@ -753,12 +756,12 @@ func (b *Bootstrap) Start() error {
 					b.addRepositoryHostToSSHKnownHosts(repo)
 				}
 
-				b.runCommand("git", "clone", "-qv", "--", repo, ".")
+				b.runCommand("git", "clone", "-v", "--", repo, ".")
 
 				// Switch to the version if we need to
 				if p.Version != "" {
 					commentf("Checking out \"%s\"", p.Version)
-					b.runCommand("git", "checkout", "-qf", p.Version)
+					b.runCommand("git", "checkout", "-f", p.Version)
 				}
 
 				// Switch back to the previous working directory
@@ -843,7 +846,7 @@ func (b *Bootstrap) Start() error {
 			// gracefully handle repository renames
 			b.runCommand("git", "remote", "set-url", "origin", b.Repository)
 		} else {
-			b.runCommand("git", "clone", "-qv", "--", b.Repository, ".")
+			b.runCommand("git", "clone", "-v", "--", b.Repository, ".")
 		}
 
 		// Clean up the repository
@@ -854,35 +857,41 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
 		}
 
-		// Allow checkouts of forked pull requests on GitHub only. See:
+		// If a refspec is provided then use it instead.
+		// i.e. `refs/not/a/head`
+		if b.RefSpec != "" {
+			commentf("Fetch and checkout custom refspec")
+			b.runCommand("git", "fetch", "origin", b.RefSpec)
+			b.runCommand("git", "checkout", "-f", b.Commit)
+
+		// GitHub has a special ref which lets us fetch a pull request head, whether
+		// or not there is a current head in this repository or another which
+		// references the commit. We presume a commit sha is provided. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-		if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-			b.runCommand("git", "fetch", "-q", "origin", "+refs/pull/"+b.PullRequest+"/head:")
+		} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+			commentf("Fetch and checkout pull request head")
+			b.runCommand("git", "fetch", "origin", "refs/pull/" + b.PullRequest + "/head")
+			b.runCommand("git", "checkout", "-f", b.Commit)
+
+		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
+		// need to fetch the remote head and checkout the fetched head explicitly.
+		} else if b.Commit == "HEAD" {
+			commentf("Fetch and checkout remote branch HEAD commit")
+			b.runCommand("git", "fetch", "origin", b.Branch)
+			b.runCommand("git", "checkout", "-f", "FETCH_HEAD")
+
+		// Otherwise fetch and checkout the commit directly. Some repositories don't
+		// support fetching a specific commit so we fall back to fetching all heads
+		// and tags, hoping that the commit is included.
 		} else {
-			// If the commit is HEAD, we can't do a commit-only
-			// fetch, we'll need to use the branch instead.  During
-			// the fetch, we do first try and grab the commit only
-			// (because it's usually much faster).  If that doesn't
-			// work, just resort back to a regular fetch.
-			var commitToFetch string
-			if b.Commit == "HEAD" {
-				commitToFetch = b.Branch
-			} else {
-				commitToFetch = b.Commit
-			}
-
-			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "-q", "origin", commitToFetch)
+			commentf("Fetch and checkout commit")
+			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", b.Commit)
 			if gitFetchExitStatus != 0 {
-				b.runCommand("git", "fetch", "-q")
+				b.runCommand("git", "fetch", "origin", "--tags")
 			}
-
-			// Handle checking out of tags
-			if b.Tag == "" {
-				b.runCommand("git", "reset", "--hard", "origin/"+b.Branch)
-			}
+			b.runCommand("git", "checkout", "-f", b.Commit)
 		}
 
-		b.runCommand("git", "checkout", "-qf", b.Commit)
 
 		if b.GitSubmodules {
 			// `submodule sync` will ensure the .git/config
@@ -912,8 +921,8 @@ func (b *Bootstrap) Start() error {
 			if metaDataExistsExitStatus != 0 {
 				commentf("Sending Git commit information back to Buildkite")
 
-				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", b.Commit, "-s", "--format=fuller", "--no-color")
-				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", b.Commit, "--no-color")
+				gitCommitOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "show", "HEAD", "-s", "--format=fuller", "--no-color")
+				gitBranchOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "branch", "--contains", "HEAD", "--no-color")
 
 				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput)
 				b.runCommand("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput)
