@@ -861,7 +861,7 @@ func (b *Bootstrap) Start() error {
 		// i.e. `refs/not/a/head`
 		if b.RefSpec != "" {
 			commentf("Fetch and checkout custom refspec")
-			b.runCommand("git", "fetch", "origin", b.RefSpec)
+			b.runCommand("git", "fetch", "-v", "origin", b.RefSpec)
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
 		// GitHub has a special ref which lets us fetch a pull request head, whether
@@ -870,14 +870,14 @@ func (b *Bootstrap) Start() error {
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 			commentf("Fetch and checkout pull request head")
-			b.runCommand("git", "fetch", "origin", "refs/pull/" + b.PullRequest + "/head")
+			b.runCommand("git", "fetch", "-v", "origin", "refs/pull/" + b.PullRequest + "/head")
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		} else if b.Commit == "HEAD" {
 			commentf("Fetch and checkout remote branch HEAD commit")
-			b.runCommand("git", "fetch", "origin", b.Branch)
+			b.runCommand("git", "fetch", "-v", "origin", b.Branch)
 			b.runCommand("git", "checkout", "-f", "FETCH_HEAD")
 
 		// Otherwise fetch and checkout the commit directly. Some repositories don't
@@ -885,9 +885,14 @@ func (b *Bootstrap) Start() error {
 		// and tags, hoping that the commit is included.
 		} else {
 			commentf("Fetch and checkout commit")
-			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", b.Commit)
+			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "-v", "origin", b.Commit)
 			if gitFetchExitStatus != 0 {
-				b.runCommand("git", "fetch", "origin", "--tags")
+				// By default `git fetch origin` will only fetch tags which are
+				// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
+				// fetch all tags in addition to the default refspec, but pre 1.9.0 it
+				// excludes the default refspec.
+				gitFetchRefspec, _ := b.runCommandSilentlyAndCaptureOutput("git", "config", "remote.origin.fetch")
+				b.runCommand("git", "fetch", "-v", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*")
 			}
 			b.runCommand("git", "checkout", "-f", b.Commit)
 		}
