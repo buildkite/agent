@@ -230,7 +230,7 @@ else
   # If a refspec is provided then use it instead.
   # i.e. `refs/not/a/head`
   if [[ -n "${BUILDKITE_REFSPEC:-}" ]]; then
-    buildkite-run "git fetch origin \"$BUILDKITE_REFSPEC\""
+    buildkite-run "git fetch -v origin \"$BUILDKITE_REFSPEC\""
     buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
 
   # GitHub has a special ref which lets us fetch a pull request head, whether
@@ -238,13 +238,13 @@ else
   # references the commit. We presume a commit sha is provided. See:
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
   elif [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
-    buildkite-run "git fetch origin \"refs/pull/$BUILDKITE_PULL_REQUEST/head\""
+    buildkite-run "git fetch -v origin \"refs/pull/$BUILDKITE_PULL_REQUEST/head\""
     buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
 
   # If the commit is "HEAD" then we can't do a commit-specific fetch and will
   # need to fetch the remote head and checkout the fetched head explicitly.
   elif [[ "$BUILDKITE_COMMIT" == "HEAD" ]]; then
-    buildkite-run "git fetch origin \"$BUILDKITE_BRANCH\""
+    buildkite-run "git fetch -v origin \"$BUILDKITE_BRANCH\""
     buildkite-run "git checkout -f FETCH_HEAD"
 
   # Otherwise fetch and checkout the commit directly. Some repositories don't
@@ -255,7 +255,7 @@ else
     # from a fetches branch. git 1.9.0+ changed `--tags` to fetch all tags in
     # addition to the default refspec, but pre 1.9.0 it excludes the default
     # refspec.
-    buildkite-run "git fetch origin \"$BUILDKITE_COMMIT\" || git fetch origin \"$(git config remote.origin.fetch)\" \"+refs/tags/*:refs/tags/*\""
+    buildkite-run "git fetch -v origin \"$BUILDKITE_COMMIT\" || git fetch -v origin \"$(git config remote.origin.fetch)\" \"+refs/tags/*:refs/tags/*\""
     buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
   fi
 
