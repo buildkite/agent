@@ -251,7 +251,11 @@ else
   # support fetching a specific commit so we fall back to fetching all heads
   # and tags, hoping that the commit is included.
   else
-    buildkite-run "git fetch origin \"$BUILDKITE_COMMIT\" || git fetch origin --tags"
+    # By default `git fetch origin` will only fetch tags which are reachable
+    # from a fetches branch. git 1.9.0+ changed `--tags` to fetch all tags in
+    # addition to the default refspec, but pre 1.9.0 it excludes the default
+    # refspec.
+    buildkite-run "git fetch origin \"$BUILDKITE_COMMIT\" || git fetch origin \"$(git config remote.origin.fetch)\" \"+refs/tags/*:refs/tags/*\""
     buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
   fi
 

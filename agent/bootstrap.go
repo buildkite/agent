@@ -887,7 +887,12 @@ func (b *Bootstrap) Start() error {
 			commentf("Fetch and checkout commit")
 			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "origin", b.Commit)
 			if gitFetchExitStatus != 0 {
-				b.runCommand("git", "fetch", "origin", "--tags")
+				// By default `git fetch origin` will only fetch tags which are
+				// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
+				// fetch all tags in addition to the default refspec, but pre 1.9.0 it
+				// excludes the default refspec.
+				gitFetchRefspec, _ := b.runCommandSilentlyAndCaptureOutput("git", "config", "remote.origin.fetch")
+				b.runCommand("git", "fetch", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*")
 			}
 			b.runCommand("git", "checkout", "-f", b.Commit)
 		}
