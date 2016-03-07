@@ -418,12 +418,17 @@ else
     COMPOSE_COMMAND="docker-compose -f ${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml} -p $COMPOSE_PROJ_NAME"
 
     function compose-cleanup {
+      REMOVE_VOLUME_FLAG="-v"
+      if [[ "$BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES" != "true" ]]; then
+        REMOVE_VOLUME_FLAG=""
+      fi
+
       echo "~~~ Cleaning up Docker containers"
       buildkite-run "$COMPOSE_COMMAND kill || true"
-      buildkite-run "$COMPOSE_COMMAND rm --force -v || true"
-
+      buildkite-run "$COMPOSE_COMMAND rm --force $REMOVE_VOLUME_FLAG || true"
+  
       # The adhoc run container isn't cleaned up by compose, so we have to do it ourselves
-      buildkite-run "docker rm -f -v ${COMPOSE_CONTAINER_NAME}_run_1 || true"
+      buildkite-run "docker rm -f $REMOVE_VOLUME_FLAG ${COMPOSE_CONTAINER_NAME}_run_1 || true"
     }
 
     trap compose-cleanup EXIT
