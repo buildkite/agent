@@ -303,6 +303,8 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 		_, err := r.APIClient.Chunks.Upload(r.Job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
+			Offset:   chunk.Offset,
+			Size:     chunk.Size,
 		})
 		if err != nil {
 			logger.Warn("%s (%s)", err, s)
