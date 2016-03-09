@@ -49,7 +49,7 @@ func (r *AgentPool) Start() error {
 	logger.Debug("Ping interval: %ds", registered.PingInterval)
 	logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
 
-	// Now that we have a registereted agent, we can connect it to the API,
+	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
 	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint}.Create()
 

@@ -17,6 +17,8 @@ type ChunksService struct {
 type Chunk struct {
 	Data     string
 	Sequence int
+	Offset   int
+	Size     int
 }
 
 // Uploads the chunk to the Buildkite Agent API. This request doesn't use JSON,
@@ -24,6 +26,11 @@ type Chunk struct {
 func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
+
+	// Write the sequence, offset and size values to the form
+	writer.WriteField("sequence", fmt.Sprintf("%d", chunk.Sequence))
+	writer.WriteField("offset", fmt.Sprintf("%d", chunk.Offset))
+	writer.WriteField("size", fmt.Sprintf("%d", chunk.Size))
 
 	// Gzip the chunk data
 	var b bytes.Buffer
@@ -41,9 +48,6 @@ func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 	// Write the chunk to the form
 	part, _ := writer.CreateFormFile("chunk", "chunk.gz")
 	part.Write(b.Bytes())
-
-	// Write the sequence value to the form
-	writer.WriteField("sequence", fmt.Sprintf("%d", chunk.Sequence))
 
 	// Close the writer because we don't need to add any more values to it
 	err := writer.Close()
