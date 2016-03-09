@@ -16,10 +16,18 @@ NAME="buildkite-agent"
 BUILD_PATH="pkg"
 BINARY_FILENAME="$NAME-$GOOS-$GOARCH"
 
+if [[ "$GOARCH" = "armhf" ]]; then
+  export GOARCH="arm"
+  export GOARM="7"
+fi
+
 echo -e "Building $NAME with:\n"
 
 echo "GOOS=$GOOS"
 echo "GOARCH=$GOARCH"
+if [[ -n "$GOARM" ]]; then
+  echo "GOARM=$GOARM"
+fi
 echo "BUILD_VERSION=$BUILD_VERSION"
 echo ""
 
