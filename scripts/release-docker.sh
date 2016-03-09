@@ -2,4 +2,14 @@
 
 set -eu
 
-curl --fail --data "build=true" -X POST "https://registry.hub.docker.com/u/buildkite/agent/trigger/$DOCKER_HUB_TRIGGER_TOKEN/"
+curl \
+  "https://api.buildkite.com/v2/organizations/buildkite/pipelines/docker-buildkite-agent/builds" \
+  -X POST \
+  --fail \
+  -H "Authorization: Bearer ${DOCKER_RELEASE_BUILDKITE_API_TOKEN}" \
+  -d "{
+    \"commit\": \"HEAD\",
+    \"branch\": \"master\",
+    \"message\": \":rocket:\"
+  }"
+
