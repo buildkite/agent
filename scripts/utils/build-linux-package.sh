@@ -32,6 +32,8 @@ elif [ "$BUILD_ARCH" == "arm" ]; then
   ARCH="arm"
 elif [ "$BUILD_ARCH" == "armhf" ]; then
   ARCH="armhf"
+elif [ "$BUILD_ARCH" == "arm64" ]; then
+  ARCH="arm64"
 else
   echo "Unknown architecture: $BUILD_ARCH"
   exit 1
