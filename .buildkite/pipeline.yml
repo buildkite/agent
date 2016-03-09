@@ -45,6 +45,15 @@ steps:
       - ssh://git@github.com/buildkite/plugins/docker-compose:
           container: "agent"
 
+  - wait
+  
+  -
+    name: ":whale:"
+    command: "scripts/release-docker.sh"
+    branches: "master"
+    agents:
+      queue: "deploy"
+
   - block: ":shipit: Unstable"
 
   -
@@ -101,5 +110,14 @@ steps:
     branches: "master *-stable"
     env:
       CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - wait
+  
+  -
+    name: ":whale:"
+    command: "scripts/release-docker.sh"
+    branches: "master"
     agents:
       queue: "deploy"
