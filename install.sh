@@ -32,6 +32,9 @@ fi
 
 case $UNAME in
   *x86_64*) ARCH="amd64" ;;
+  *armv8*)  ARCH="arm64" ;;
+  *armv7*)  ARCH="armhf" ;;
+  *armv6*)  ARCH="armhf" ;;
   *arm*)    ARCH="arm"   ;;
   *)        ARCH="386"   ;;
 esac
