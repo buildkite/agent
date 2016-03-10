@@ -167,7 +167,7 @@ func (a *AgentWorker) Connect() error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
 // Performs a heatbeat
