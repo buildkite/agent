@@ -167,7 +167,7 @@ func (a *AgentWorker) Connect() error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
 // Performs a heatbeat
@@ -182,7 +182,7 @@ func (a *AgentWorker) Heartbeat() error {
 			logger.Warn("%s (%s)", err, s)
 		}
 		return err
-	}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 5, Interval: 5 * time.Second})
 
 	if err != nil {
 		return err
@@ -263,7 +263,7 @@ func (a *AgentWorker) Ping() {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
