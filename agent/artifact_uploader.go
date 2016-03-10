@@ -217,7 +217,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 					}
 
 					return err
-				}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+				}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 
 				if err != nil {
 					logger.Error("Error uploading artifact states: %s", err)
@@ -259,7 +259,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				}
 
 				return err
-			}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+			}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 
 			var state string
 
