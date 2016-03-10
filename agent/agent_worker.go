@@ -182,7 +182,7 @@ func (a *AgentWorker) Heartbeat() error {
 			logger.Warn("%s (%s)", err, s)
 		}
 		return err
-	}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 5, Interval: 5 * time.Second})
 
 	if err != nil {
 		return err
