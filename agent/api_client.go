@@ -39,7 +39,7 @@ func (a APIClient) Create() *api.Client {
 
 	// From the transport, create the a http client
 	httpClient := transport.Client()
-	httpClient.Timeout = 10 * time.Second
+	httpClient.Timeout = 60 * time.Second
 
 	// Create the Buildkite Agent API Client
 	client := api.NewClient(httpClient)
