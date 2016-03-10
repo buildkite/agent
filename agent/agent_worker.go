@@ -263,7 +263,7 @@ func (a *AgentWorker) Ping() {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
