@@ -38,7 +38,7 @@ func (d Download) Start() error {
 			logger.Warn("Error trying to download %s (%s) %s", d.URL, err, s)
 		}
 		return err
-	}, &retry.Config{Maximum: d.Retries, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: d.Retries, Interval: 5 * time.Second})
 }
 
 func (d Download) try() error {
