@@ -221,10 +221,11 @@ else
     buildkite-run "git clone -v -- \"$BUILDKITE_REPO\" ."
   fi
 
-  buildkite-run "git clean -fdq"
+  BUILDKITE_GIT_CLEAN_FLAGS=${BUILDKITE_GIT_CLEAN_FLAGS:--fdq}
+  buildkite-run "git clean \"$BUILDKITE_GIT_CLEAN_FLAGS\""
 
   if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
-    buildkite-run "git submodule foreach --recursive git clean -fdq"
+    buildkite-run "git submodule foreach --recursive git clean \"$BUILDKITE_GIT_CLEAN_FLAGS\""
   fi
 
   # If a refspec is provided then use it instead.
