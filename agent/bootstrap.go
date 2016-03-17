@@ -850,11 +850,11 @@ func (b *Bootstrap) Start() error {
 		}
 
 		// Clean up the repository
-		b.runCommand("git", "clean", "-fdq")
+		b.runCommand("git", "clean", "-fdqx")
 
 		// Also clean up submodules if we can
 		if b.GitSubmodules {
-			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdq")
+			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", "-fdqx")
 		}
 
 		// If a refspec is provided then use it instead.
