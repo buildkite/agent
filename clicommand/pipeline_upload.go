@@ -157,6 +157,16 @@ var PipelineUploadCommand = cli.Command{
 			logger.Fatal("Config file is empty")
 		}
 
+		var parsed []byte
+
+		logger.Debug("Parsing pipeline...")
+
+		// Parse the pipeline and prepare it for upload
+		parsed, err = agent.PipelineParser{Data: input}.Parse()
+		if err != nil {
+			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
+		}
+
 		// Create the API client
 		client := agent.APIClient{
 			Endpoint: cfg.Endpoint,
@@ -170,7 +180,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: input, FileName: filename, Replace: cfg.Replace})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: parsed, FileName: filename, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
