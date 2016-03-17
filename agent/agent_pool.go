@@ -154,7 +154,8 @@ func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 		return err
 	}
 
-	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
+	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 10 * time.Second})
 
 	return registered, err
 }

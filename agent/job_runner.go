@@ -202,7 +202,7 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
 }
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
@@ -293,7 +293,7 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
 // Call when a chunk is ready for upload. It retry the chunk upload with an
@@ -311,5 +311,5 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }

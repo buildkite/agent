@@ -60,7 +60,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 
 		// Did the batch creation eventually fail?
 		if err != nil {
