@@ -84,7 +84,7 @@ var MetaDataExistsCommand = cli.Command{
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 		if err != nil {
 			logger.Fatal("Failed to see if meta-data exists: %s", err)
 		}

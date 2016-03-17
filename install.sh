@@ -20,7 +20,8 @@ echo -e "\033[33m
 
 echo -e "Finding latest release..."
 
-UNAME=`uname -sp | awk '{print tolower($0)}'`
+ARCH="386"
+UNAME=`uname -sm | awk '{print tolower($0)}'`
 
 if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
   PLATFORM="darwin"
@@ -30,14 +31,23 @@ else
   PLATFORM="linux"
 fi
 
-case $UNAME in
-  *x86_64*) ARCH="amd64" ;;
-  *armv8*)  ARCH="arm64" ;;
-  *armv7*)  ARCH="armhf" ;;
-  *armv6*)  ARCH="armhf" ;;
-  *arm*)    ARCH="arm"   ;;
-  *)        ARCH="386"   ;;
-esac
+if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
+
+  ARCH=$(echo "$BUILDKITE_INSTALL_ARCH")
+  echo "Using explicit arch '$ARCH'"
+
+else
+
+  case $UNAME in
+    *x86_64*) ARCH="amd64" ;;
+    *armv8*)  ARCH="arm64" ;;
+    *armv7*)  ARCH="armhf" ;;
+    *armv6*)  ARCH="armhf" ;;
+    *arm*)    ARCH="arm"   ;;
+    *)        ARCH="386"   ;;
+  esac
+
+fi
 
 if [[ "$BETA" == "true" ]]; then
   RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true"
