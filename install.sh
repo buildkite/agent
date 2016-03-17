@@ -20,7 +20,7 @@ echo -e "\033[33m
 
 echo -e "Finding latest release..."
 
-UNAME=`uname -sp | awk '{print tolower($0)}'`
+UNAME=$(uname -sm | awk '{print tolower($0)}')
 
 if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
   PLATFORM="darwin"
@@ -30,14 +30,23 @@ else
   PLATFORM="linux"
 fi
 
-case $UNAME in
-  *x86_64*) ARCH="amd64" ;;
-  *armv8*)  ARCH="arm64" ;;
-  *armv7*)  ARCH="armhf" ;;
-  *armv6*)  ARCH="armhf" ;;
-  *arm*)    ARCH="arm"   ;;
-  *)        ARCH="386"   ;;
-esac
+if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
+
+  ARCH="$BUILDKITE_INSTALL_ARCH"
+  echo "Using explicit arch '$ARCH'"
+
+else
+
+  case $UNAME in
+    *x86_64*) ARCH="amd64" ;;
+    *armv8*)  ARCH="arm64" ;;
+    *armv7*)  ARCH="armhf" ;;
+    *armv6*)  ARCH="armhf" ;;
+    *arm*)    ARCH="arm"   ;;
+    *)        ARCH="386"   ;;
+  esac
+
+fi
 
 if [[ "$BETA" == "true" ]]; then
   RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true"
@@ -46,9 +55,9 @@ else
 fi
 
 if command -v wget >/dev/null; then
-  LATEST_RELEASE=$(wget -qO- $RELEASE_INFO_URL)
+  LATEST_RELEASE=$(wget -qO- "$RELEASE_INFO_URL")
 else
-  LATEST_RELEASE=$(curl -s $RELEASE_INFO_URL)
+  LATEST_RELEASE=$(curl -s "$RELEASE_INFO_URL")
 fi
 
 VERSION=$(echo "$LATEST_RELEASE"      | awk -F= '/version=/  { print $2 }')
@@ -60,9 +69,9 @@ function buildkite-download {
 
   if command -v wget >/dev/null
   then
-    wget $1 -O $2 2> $BUILDKITE_DOWNLOAD_TMP_FILE || BUILDKITE_DOWNLOAD_EXIT_STATUS=$?
+    wget "$1" -O "$2" 2> $BUILDKITE_DOWNLOAD_TMP_FILE || BUILDKITE_DOWNLOAD_EXIT_STATUS=$?
   else
-    curl -L -o $2 $1 2> $BUILDKITE_DOWNLOAD_TMP_FILE || BUILDKITE_DOWNLOAD_EXIT_STATUS=$?
+    curl -L -o "$2" "$1" 2> $BUILDKITE_DOWNLOAD_TMP_FILE || BUILDKITE_DOWNLOAD_EXIT_STATUS=$?
   fi
 
   if [[ $BUILDKITE_DOWNLOAD_EXIT_STATUS -ne 0 ]]; then
@@ -105,7 +114,7 @@ if [[ -d "$HOME/.buildkite" && ! -d "$HOME/.buildkite-agent" ]]; then
   echo ""
 fi
 
-mkdir -p $DESTINATION
+mkdir -p "$DESTINATION"
 
 if [[ ! -w "$DESTINATION" ]]; then
   echo -e "\n\033[31mUnable to write to destination \`$DESTINATION\`\n\nYou can change the destination by running:\n\nDESTINATION=/my/path $COMMAND\033[0m\n"
@@ -124,22 +133,22 @@ mkdir -p $INSTALL_TMP
 # local testing of this file.
 if [[ -e releases/$DOWNLOAD ]]; then
   echo "Using existing release: releases/$DOWNLOAD_FILENAME"
-  cp releases/$DOWNLOAD_FILENAME $INSTALL_TMP
+  cp releases/"$DOWNLOAD_FILENAME" $INSTALL_TMP
 else
   buildkite-download "$DOWNLOAD_URL" "$INSTALL_TMP/$DOWNLOAD_FILENAME"
 fi
 
 # Extract the download to a tmp folder inside the $DESTINATION
 # folder
-tar -C $INSTALL_TMP -zxf $INSTALL_TMP/$DOWNLOAD_FILENAME
+tar -C "$INSTALL_TMP" -zxf "$INSTALL_TMP"/"$DOWNLOAD_FILENAME"
 
 # Move the buildkite binary into a bin folder
-mkdir -p $DESTINATION/bin
-mv $INSTALL_TMP/buildkite-agent $DESTINATION/bin
-chmod +x $DESTINATION/bin/buildkite-agent
+mkdir -p "$DESTINATION"/bin
+mv $INSTALL_TMP/buildkite-agent "$DESTINATION"/bin
+chmod +x "$DESTINATION"/bin/buildkite-agent
 
 # Copy the latest config file as dist
-mv $INSTALL_TMP/buildkite-agent.cfg $DESTINATION/buildkite-agent.dist.cfg
+mv "$INSTALL_TMP"/buildkite-agent.cfg "$DESTINATION"/buildkite-agent.dist.cfg
 
 # Copy the config file if it doesn't exist
 if [[ -f $DESTINATION/buildkite-agent.cfg ]]; then
@@ -147,15 +156,15 @@ if [[ -f $DESTINATION/buildkite-agent.cfg ]]; then
 else
   echo -e "\n\033[36mA default buildkite-agent.cfg has been created for you in $DESTINATION\033[0m"
 
-  cp $DESTINATION/buildkite-agent.dist.cfg $DESTINATION/buildkite-agent.cfg
+  cp "$DESTINATION"/buildkite-agent.dist.cfg "$DESTINATION"/buildkite-agent.cfg
 
   # Set their token for them
   if [[ -n $TOKEN ]]; then
     # Need "-i ''" for Mac OS X and FreeBSD
-    if [[ "`uname`" == 'Darwin' ]] || [[ "`uname`" == 'FreeBSD' ]]; then
-      sed -i '' "s/token=\"xxx\"/token=\"$TOKEN\"/g" $DESTINATION/buildkite-agent.cfg
+    if [[ $(uname) == 'Darwin' ]] || [[ $(uname) == 'FreeBSD' ]]; then
+      sed -i '' "s/token=\"xxx\"/token=\"$TOKEN\"/g" "$DESTINATION"/buildkite-agent.cfg
     else
-      sed -i "s/token=\"xxx\"/token=\"$TOKEN\"/g" $DESTINATION/buildkite-agent.cfg
+      sed -i "s/token=\"xxx\"/token=\"$TOKEN\"/g" "$DESTINATION"/buildkite-agent.cfg
     fi
   else
     echo -e "\n\033[36mDon't forget to update the config with your agent token! You can find it token on your \"Agents\" page in Buildkite\033[0m"
@@ -163,12 +172,12 @@ else
 fi
 
 # Copy the hook samples
-mkdir -p $DESTINATION/hooks
-mv $INSTALL_TMP/hooks/*.sample $DESTINATION/hooks
+mkdir -p "$DESTINATION"/hooks
+mv $INSTALL_TMP/hooks/*.sample "$DESTINATION"/hooks
 
 function buildkite-copy-bootstrap {
-  mv $INSTALL_TMP/bootstrap.sh $DESTINATION
-  chmod +x $DESTINATION/bootstrap.sh
+  mv $INSTALL_TMP/bootstrap.sh "$DESTINATION"
+  chmod +x "$DESTINATION"/bootstrap.sh
 }
 
 buildkite-copy-bootstrap
