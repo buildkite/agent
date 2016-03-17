@@ -20,7 +20,6 @@ echo -e "\033[33m
 
 echo -e "Finding latest release..."
 
-ARCH="386"
 UNAME=$(uname -sm | awk '{print tolower($0)}')
 
 if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
@@ -32,12 +31,9 @@ else
 fi
 
 if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
-
   ARCH="$BUILDKITE_INSTALL_ARCH"
   echo "Using explicit arch '$ARCH'"
-
 else
-
   case $UNAME in
     *x86_64*) ARCH="amd64" ;;
     *armv8*)  ARCH="arm64" ;;
@@ -46,7 +42,6 @@ else
     *arm*)    ARCH="arm"   ;;
     *)        ARCH="386"   ;;
   esac
-
 fi
 
 if [[ "$BETA" == "true" ]]; then
