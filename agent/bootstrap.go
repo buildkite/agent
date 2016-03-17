@@ -1066,7 +1066,7 @@ func (b *Bootstrap) Start() error {
 					}
 				}
 			} else {
-				buildScriptContents = "#!/bin/bash\n"
+				buildScriptContents = "#!/bin/bash\nset -e\n"
 				for _, k := range strings.Split(b.Command, "\n") {
 					if k != "" {
 						buildScriptContents = buildScriptContents +
