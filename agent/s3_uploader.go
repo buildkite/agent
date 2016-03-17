@@ -62,7 +62,7 @@ func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 }
 
 func (u *S3Uploader) URL(artifact *api.Artifact) string {
-	baseUrl := "http://" + u.bucketName() + ".s3.amazonaws.com"
+	baseUrl := "https://" + u.bucketName() + ".s3.amazonaws.com"
 	if os.Getenv("BUILDKITE_S3_ACCESS_URL") != "" {
 		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
 	}
