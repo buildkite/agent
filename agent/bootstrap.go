@@ -849,6 +849,15 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "clone", "-v", "--", b.Repository, ".")
 		}
 
+	    // Clean up the repository
+	    if fileExists(b.globalHookPath("git-clean")) {
+			b.executeGlobalHook("git-clean")
+	    } else if b.pluginHookExists(plugins, "git-clean") {
+			b.executePluginHook(plugins, "git-clean")
+	    } else {
+			b.runCommand("git", "clean", "-fdq")
+	    }
+
 		// Clean up the repository
 		b.runCommand("git", "clean", "-fdq")
 

@@ -221,7 +221,12 @@ else
     buildkite-run "git clone -v -- \"$BUILDKITE_REPO\" ."
   fi
 
-  buildkite-run "git clean -fdq"
+  # If the user has specificed their own git-clean hook
+  if [[ -e "$BUILDKITE_HOOKS_PATH/git-clean" ]]; then
+    buildkite-global-hook "git-clean"
+  else
+    buildkite-run "git clean -fdq"
+  fi
 
   if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
     buildkite-run "git submodule foreach --recursive git clean -fdq"
