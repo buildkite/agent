@@ -50,6 +50,8 @@ rm -rf deb
 build "linux" "amd64"
 build "linux" "386"
 build "linux" "arm"
+build "linux" "armhf"
+build "linux" "arm64"
 
 # Loop over all the .deb files and publish them
 ls deb/*.deb | xargs -I {} bash -c "publish {}"
