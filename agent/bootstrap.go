@@ -867,11 +867,11 @@ func (b *Bootstrap) Start() error {
 		}
 
 		// Clean up the repository
-		b.runCommand("git", "clean", b.env.Get("BUILDKITE_GIT_CLEAN_FLAGS"))
+		b.runCommand("git", "clean", b.GitCleanFlags)
 
 		// Also clean up submodules if we can
 		if b.GitSubmodules {
-			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", b.env.Get("BUILDKITE_GIT_CLEAN_FLAGS"))
+			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", b.GitCleanFlags)
 		}
 
 		// If a refspec is provided then use it instead.
