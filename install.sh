@@ -20,7 +20,6 @@ echo -e "\033[33m
 
 echo -e "Finding latest release..."
 
-ARCH="386"
 UNAME=$(uname -sm | awk '{print tolower($0)}')
 
 if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
