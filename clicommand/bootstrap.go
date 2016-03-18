@@ -232,6 +232,7 @@ var BootstrapCommand = cli.Command{
 			Plugins:                      cfg.Plugins,
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
+			GitCleanFlags:								cfg.GitCleanFlags,
 			AgentName:                    cfg.AgentName,
 			PipelineProvider:             cfg.PipelineProvider,
 			PipelineSlug:                 cfg.PipelineSlug,
