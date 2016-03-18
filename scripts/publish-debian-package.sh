@@ -7,7 +7,9 @@ if [[ "$CODENAME" == "" ]]; then
 fi
 
 echo '--- Downloading built debian packages'
-buildkite-agent artifact download "deb/*.deb" "."
+rm -rf deb
+mkdir -p deb
+buildkite-agent artifact download "deb/*.deb" deb/
 
 echo '--- Installing dependencies'
 bundle
