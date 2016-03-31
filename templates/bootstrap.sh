@@ -419,7 +419,7 @@ else
 
     function compose-cleanup {
       REMOVE_VOLUME_FLAG="-v"
-      if [[ "$BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES" != "true" ]]; then
+      if [[ "${BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES:-false}" == "true" ]]; then
         REMOVE_VOLUME_FLAG=""
       fi
 
