@@ -436,7 +436,7 @@ else
     # Build the Docker images using Compose, namespaced to the job
     echo "~~~ Building Docker images"
 
-    buildkite-run "$COMPOSE_COMMAND build"
+    buildkite-run "$COMPOSE_COMMAND build $BUILDKITE_DOCKER_COMPOSE_CONTAINER"
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
     echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
