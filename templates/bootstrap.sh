@@ -436,7 +436,7 @@ else
     # Build the Docker images using Compose, namespaced to the job
     echo "~~~ Building Docker images"
 
-    if [[ ! -z "${BUILDKITE_DOCKER_COMPOSE_BUILD_ALL:-}" ]] && [[ "$BUILDKITE_DOCKER_COMPOSE_BUILD_ALL" != "" ]]; then
+    if [[ "${BUILDKITE_DOCKER_COMPOSE_BUILD_ALL:-false}" == "true" ]]; then
       buildkite-run "$COMPOSE_COMMAND build"
     else
       buildkite-run "$COMPOSE_COMMAND build $BUILDKITE_DOCKER_COMPOSE_CONTAINER"
