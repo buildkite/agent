@@ -121,6 +121,7 @@ elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
 elif [ -d /etc/init.d ]; then
   if [ ! -f /etc/init.d/buildkite-agent ]; then
     cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
+    command -v chkconfig > /dev/null && chkconfig --add buildkite-agent
   fi
 
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"
