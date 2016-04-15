@@ -54,6 +54,19 @@ BK_IS_UBUNTU_14_10=$?
 command -v systemctl > /dev/null
 BK_SYSTEMD_EXITS=$?
 
+# Check if upstart exists
+command -v initctl > /dev/null
+BK_UPSTART_EXISTS=$?
+
+# Check if upstart is version 0.6.5 as seen on Amazon linux, RHEL6 & CentOS-6
+BK_UPSTART_TOO_OLD=0
+if [ $BK_UPSTART_EXISTS -eq 0 ]; then
+  BK_UPSTART_VERSION="$(initctl --version | awk 'BEGIN{FS="[ ()]"} NR==1{print $4}')"
+  if [ "$BK_UPSTART_VERSION" = "0.6.5" ]; then
+    BK_UPSTART_TOO_OLD=1
+  fi
+fi
+
 # Install the relevant system process
 if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
   if [ ! -f /lib/systemd/system/buildkite-agent.service ]; then
@@ -61,7 +74,7 @@ if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
   fi
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
-elif command -v initctl > /dev/null; then
+elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
   if [ ! -f /etc/init/buildkite-agent.conf ]; then
     # If the system has the old .env file, install the old upstart script, and
     # let them know they should upgrade. Because the upstart script is no
