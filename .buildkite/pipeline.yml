@@ -46,11 +46,11 @@ steps:
           container: "agent"
 
   - wait
-
+  
   -
     name: ":whale:"
     command: "scripts/release-docker.sh"
-    branches: "master *-stable"
+    branches: "master"
     agents:
       queue: "deploy"
 
@@ -114,10 +114,10 @@ steps:
       queue: "deploy"
 
   - wait
-
+  
   -
     name: ":whale:"
     command: "scripts/release-docker.sh"
-    branches: "master *-stable"
+    branches: "master"
     agents:
       queue: "deploy"
