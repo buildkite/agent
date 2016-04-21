@@ -17,6 +17,16 @@ steps:
   - wait
 
   -
+    name: ":debian: build"
+    command: "scripts/build-debian-packages.sh"
+    artifact_paths: "deb/**/*"
+    branches: "master *-stable"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  -
     name: ":redhat: experimental"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
@@ -27,9 +37,8 @@ steps:
       queue: "deploy"
 
   -
-    name: ":debian: experimental"
-    command: "scripts/debian-package.sh"
-    artifact_paths: "deb/**/*"
+    name: ":debian: publish experimental"
+    command: "scripts/publish-debian-package.sh"
     branches: "master *-stable"
     env:
       CODENAME: "experimental"
@@ -74,8 +83,8 @@ steps:
       queue: "deploy"
 
   -
-    name: ":debian:"
-    command: "scripts/debian-package.sh"
+    name: ":debian: publish unstable"
+    command: "scripts/publish-debian-package.sh"
     branches: "master *-stable"
     env:
       CODENAME: "unstable"
@@ -112,8 +121,8 @@ steps:
       queue: "deploy"
 
   -
-    name: ":debian:"
-    command: "scripts/debian-package.sh"
+    name: ":debian: publish stable"
+    command: "scripts/publish-debian-package.sh"
     branches: "master *-stable"
     env:
       CODENAME: "stable"
