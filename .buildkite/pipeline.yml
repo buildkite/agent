@@ -46,11 +46,11 @@ steps:
           container: "agent"
 
   - wait
-  
+
   -
     name: ":whale:"
     command: "scripts/release-docker.sh"
-    branches: "master"
+    branches: "master *-stable"
     agents:
       queue: "deploy"
 
@@ -85,6 +85,13 @@ steps:
   - wait
 
   -
+    name: ":whale:"
+    command: "scripts/release-docker.sh"
+    branches: "master *-stable"
+    agents:
+      queue: "deploy"
+
+  -
     name: ":beer:"
     command: "scripts/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
@@ -114,10 +121,10 @@ steps:
       queue: "deploy"
 
   - wait
-  
+
   -
     name: ":whale:"
     command: "scripts/release-docker.sh"
-    branches: "master"
+    branches: "master *-stable"
     agents:
       queue: "deploy"
