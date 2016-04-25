@@ -49,6 +49,7 @@ type Client struct {
 	Artifacts   *ArtifactsService
 	Pipelines   *PipelinesService
 	Heartbeats  *HeartbeatsService
+	Queries     *QueriesService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -70,6 +71,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Artifacts = &ArtifactsService{c}
 	c.Pipelines = &PipelinesService{c}
 	c.Heartbeats = &HeartbeatsService{c}
+	c.Queries = &QueriesService{c}
 
 	return c
 }
