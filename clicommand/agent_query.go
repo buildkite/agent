@@ -149,7 +149,10 @@ var AgentQueryCommand = cli.Command{
 				logger.Fatal("Error serializing result to JSON: %s", err)
 			}
 
-			fmt.Println(string(toJSON))
+			jsonAsString := string(toJSON)
+			if jsonAsString != "null" {
+				fmt.Println(jsonAsString)
+			}
 		}
 	},
 }
