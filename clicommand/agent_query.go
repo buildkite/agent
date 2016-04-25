@@ -1,11 +1,9 @@
 package clicommand
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"time"
 
@@ -15,7 +13,8 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
-	"github.com/buildkite/agent/vendor/github.com/codegangsta/cli"
+	"github.com/codegangsta/cli"
+	"github.com/jmespath/go-jmespath"
 )
 
 var QueryDescription = `Usage:
@@ -34,6 +33,7 @@ Example:
 
 type AgentQueryConfig struct {
 	Query            string `cli:"arg:0" label:"query"`
+	Expression       string `cli:"arg:1" label:"expression"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -83,6 +83,9 @@ var AgentQueryCommand = cli.Command{
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
+			// Convert STDIN to a string, and also assume that what
+			// was in the query field was the expression
+			cfg.Expression = cfg.Query
 			cfg.Query = string(bytes)
 		}
 
@@ -123,15 +126,30 @@ var AgentQueryCommand = cli.Command{
 			}
 			os.Exit(1)
 		} else {
-			b, err := json.Marshal(query.Data)
-			if err != nil {
-				log.Fatal(err)
+			data := query.Data
+
+			if cfg.Expression != "" {
+				parser := jmespath.NewParser()
+				_, err := parser.Parse(cfg.Expression)
+				if err != nil {
+					if syntaxError, ok := err.(jmespath.SyntaxError); ok {
+						logger.Fatal("%s\n%s\n", syntaxError, syntaxError.HighlightLocation())
+					}
+					logger.Fatal("%s", err)
+				}
+
+				data, err = jmespath.Search(cfg.Expression, data)
+				if err != nil {
+					logger.Fatal("Error executing expression: %s", err)
+				}
 			}
 
-			var out bytes.Buffer
-			json.Indent(&out, b, "", "  ")
-			out.WriteTo(os.Stdout)
-			fmt.Print("\n")
+			toJSON, err := json.MarshalIndent(data, "", "  ")
+			if err != nil {
+				logger.Fatal("Error serializing result to JSON: %s", err)
+			}
+
+			fmt.Println(string(toJSON))
 		}
 	},
 }
