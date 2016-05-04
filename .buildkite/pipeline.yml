@@ -64,6 +64,7 @@ steps:
       queue: "deploy"
 
   - block: ":shipit: Unstable"
+    branches: "master *-stable"
 
   -
     name: ":octocat: :rocket:"
@@ -109,6 +110,7 @@ steps:
       queue: "deploy"
 
   - block: ":shipit: Stable"
+    branches: "master *-stable"
 
   -
     name: ":redhat:"
