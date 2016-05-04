@@ -413,8 +413,6 @@ else
   elif [[ ! -z "${BUILDKITE_DOCKER_COMPOSE_CONTAINER:-}" ]] && [[ "$BUILDKITE_DOCKER_COMPOSE_CONTAINER" != "" ]]; then
     # Compose strips dashes and underscores, so we'll remove them to match the docker container names
     COMPOSE_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
-    # The name of the docker container compose creates when it creates the adhoc run
-    COMPOSE_CONTAINER_NAME=$COMPOSE_PROJ_NAME"_"$BUILDKITE_DOCKER_COMPOSE_CONTAINER
     COMPOSE_COMMAND="docker-compose -f ${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml} -p $COMPOSE_PROJ_NAME"
 
     function compose-cleanup {
@@ -424,11 +422,28 @@ else
       fi
 
       echo "~~~ Cleaning up Docker containers"
+
+      # Send them a friendly kill
       buildkite-run "$COMPOSE_COMMAND kill || true"
-      buildkite-run "$COMPOSE_COMMAND rm --force $REMOVE_VOLUME_FLAG || true"
-  
-      # The adhoc run container isn't cleaned up by compose, so we have to do it ourselves
-      buildkite-run "docker rm -f $REMOVE_VOLUME_FLAG ${COMPOSE_CONTAINER_NAME}_run_1 || true"
+
+      if [[ $(docker-compose --version) == *1.6* ]]; then
+        # 1.6
+        
+        # There's no --all flag to remove adhoc containers
+        buildkite-run "$COMPOSE_COMMAND rm --force $REMOVE_VOLUME_FLAG || true"
+
+        # So now we remove the adhoc container
+        COMPOSE_CONTAINER_NAME=$COMPOSE_PROJ_NAME"_"$BUILDKITE_DOCKER_COMPOSE_CONTAINER
+        buildkite-run "docker rm -f $REMOVE_VOLUME_FLAG ${COMPOSE_CONTAINER_NAME}_run_1 || true"
+      else
+        # 1.7+
+
+        # `compose down` doesn't support force removing images, so we use `rm --force`
+        buildkite-run "$COMPOSE_COMMAND rm --force --all $REMOVE_VOLUME_FLAG || true"
+
+        # Stop and remove all the linked services and network
+        buildkite-run "$COMPOSE_COMMAND down || true"
+      fi
     }
 
     trap compose-cleanup EXIT
@@ -437,13 +452,13 @@ else
     echo "~~~ Building Docker images"
 
     if [[ "${BUILDKITE_DOCKER_COMPOSE_BUILD_ALL:-false}" == "true" ]]; then
-      buildkite-run "$COMPOSE_COMMAND build"
+      buildkite-run "$COMPOSE_COMMAND build --pull"
     else
-      buildkite-run "$COMPOSE_COMMAND build $BUILDKITE_DOCKER_COMPOSE_CONTAINER"
+      buildkite-run "$COMPOSE_COMMAND build --pull $BUILDKITE_DOCKER_COMPOSE_CONTAINER"
     fi
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
-    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
+    echo "+++ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
     buildkite-prompt-and-run "$COMPOSE_COMMAND run $BUILDKITE_DOCKER_COMPOSE_CONTAINER \"./$BUILDKITE_SCRIPT_PATH\""
 
     # Capture the exit status from the build script
