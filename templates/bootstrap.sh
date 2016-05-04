@@ -416,9 +416,10 @@ else
     COMPOSE_COMMAND="docker-compose -f ${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml} -p $COMPOSE_PROJ_NAME"
 
     function compose-cleanup {
-      REMOVE_VOLUME_FLAG="-v"
       if [[ "${BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES:-false}" == "true" ]]; then
         REMOVE_VOLUME_FLAG=""
+      else
+        REMOVE_VOLUME_FLAG="-v"
       fi
 
       echo "~~~ Cleaning up Docker containers"
