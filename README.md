@@ -78,4 +78,4 @@ go run *.go start --debug --token "abc123"
 
 ## Copyright
 
-Copyright (c) 2014-2015 Keith Pitt, Buildkite Pty Ltd. See LICENSE for details.
+Copyright (c) 2014-2016 Keith Pitt, Buildkite Pty Ltd. See LICENSE for details.
