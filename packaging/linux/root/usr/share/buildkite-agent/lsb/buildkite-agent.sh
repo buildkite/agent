@@ -41,7 +41,7 @@ case "$1" in
             echo "Unable to start, see $log"
             exit 1
         fi
-	touch "$lock_file"
+        touch "$lock_file"
     fi
     ;;
     stop)
@@ -67,7 +67,7 @@ case "$1" in
             if [ -f "$pid_file" ]; then
                 rm "$pid_file"
             fi
-	    rm -f "$lock_file"
+        rm -f "$lock_file"
         fi
     else
         echo "Not running"
