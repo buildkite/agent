@@ -155,7 +155,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-clean-flags",
-			Value:  "-fdq",
+			Value:  "-fxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
