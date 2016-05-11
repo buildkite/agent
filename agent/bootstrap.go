@@ -528,7 +528,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool, env 
 		if diff.Length() > 0 {
 			headerf("Applying environment changes")
 			for envDiffKey, envDiffValue := range diff.ToMap() {
-				commentf("%s=%s", envDiffKey, envDiffValue)
+				commentf("%s changed", envDiffKey)
 			}
 			b.env = b.env.Merge(diff)
 		}
