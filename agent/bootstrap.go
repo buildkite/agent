@@ -176,6 +176,11 @@ func addExecutePermissiontoFile(filename string) {
 	}
 }
 
+func dirForAgentName(agentName string) string {
+	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
+	return badCharsPattern.ReplaceAllString(agentName, "-")
+}
+
 var tempFileNumber int
 
 // Creates a temporary file. Implementation has been copied from
@@ -671,11 +676,7 @@ func (b *Bootstrap) Start() error {
 		b.env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), b.env.Get("PATH")))
 	}
 
-	// Come up with the place that the repository will be checked out to
-	var agentNameCleanupRegex = regexp.MustCompile("\"")
-	cleanedUpAgentName := agentNameCleanupRegex.ReplaceAllString(b.AgentName, "-")
-
-	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, cleanedUpAgentName, b.OrganizationSlug, b.PipelineSlug))
+	b.env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
 	if b.Debug {
 		// Convert the env to a sorted slice
