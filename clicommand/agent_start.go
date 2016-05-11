@@ -38,6 +38,7 @@ type AgentStartConfig struct {
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	MetaData                     []string `cli:"meta-data"`
+	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
 	NoColor                      bool     `cli:"no-color"`
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
@@ -105,12 +106,16 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "meta-data",
 			Value:  &cli.StringSlice{},
-			Usage:  "Meta data for the agent (default is \"queue=default\")",
+			Usage:  "Meta-data for the agent (default is \"queue=default\")",
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
 		},
 		cli.BoolFlag{
+			Name:  "meta-data-ec2",
+			Usage: "Include the host's EC2 meta-data (such instance-id, instance-type, and ami-id) as meta-data",
+		},
+		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
-			Usage: "Populate the meta data from the current instances EC2 Tags",
+			Usage: "Include the host's EC2 tags as meta-data",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -188,6 +193,7 @@ var AgentStartCommand = cli.Command{
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
 			MetaData:        cfg.MetaData,
+			MetaDataEC2:     cfg.MetaDataEC2,
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
 			Endpoint:        cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{

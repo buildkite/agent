@@ -20,6 +20,7 @@ type AgentPool struct {
 	Name               string
 	Priority           string
 	MetaData           []string
+	MetaDataEC2        bool
 	MetaDataEC2Tags    bool
 	Endpoint           string
 	AgentConfiguration *AgentConfiguration
@@ -100,6 +101,19 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Build:             BuildVersion(),
 		PID:               os.Getpid(),
 		Arch:              runtime.GOARCH,
+	}
+
+	// Attempt to add the EC2 meta-data
+	if r.MetaDataEC2 {
+		tags, err := EC2MetaData{}.Get()
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			logger.Error(fmt.Sprintf("Failed to find EC2 meta-data: %s", err.Error()))
+		} else {
+			for tag, value := range tags {
+				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+			}
+		}
 	}
 
 	// Attempt to add the EC2 tags
