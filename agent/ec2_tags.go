@@ -41,8 +41,5 @@ func (e EC2Tags) Get() (map[string]string, error) {
 		tags[tag.Key] = tag.Value
 	}
 
-	// We set this manually, it's not a standard tag
-	tags["aws:instance-id"] = aws.InstanceId()
-
 	return tags, nil
 }
