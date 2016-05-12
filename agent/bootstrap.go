@@ -86,7 +86,7 @@ type Bootstrap struct {
 	// Path to the global hooks
 	HooksPath string
 
-	// Path to the plugins folder
+	// Path to the plugins directory
 	PluginsPath string
 
 	// Paths to automatically upload as artifacts when the build finishes
@@ -239,7 +239,7 @@ func checkShellError(err error, cmd *shell.Command) {
 	}
 }
 
-// Aquires a lock on the folder
+// Aquires a lock on the directory
 func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	lock, err := lockfile.New(path)
 	if err != nil {
@@ -737,7 +737,7 @@ func (b *Bootstrap) Start() error {
 				// Try and lock this paticular plugin while we
 				// check it out (we create the file outside of
 				// the plugin directory so git clone doesn't
-				// have a cry about the folder not being empty)
+				// have a cry about the directory not being empty)
 				pluginCheckoutHook, err := acquireLock(filepath.Join(b.PluginsPath, id+".lock"), 300) // Wait 5 minutes
 				if err != nil {
 					exitf("%s", err)
@@ -813,7 +813,7 @@ func (b *Bootstrap) Start() error {
 	//////////////////////////////////////////////////////////////
 	//
 	// REPOSITORY HANDLING
-	// Creates the build folder and makes sure we're running the
+	// Creates the build directory and makes sure we're running the
 	// build at the right commit.
 	//
 	//////////////////////////////////////////////////////////////
@@ -824,7 +824,7 @@ func (b *Bootstrap) Start() error {
 	// Run the `pre-checkout` plugin hook
 	b.executePluginHook(plugins, "pre-checkout")
 
-	// Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
+	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		headerf("Cleaning pipeline checkout")
 		commentf("Removing %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
@@ -835,7 +835,7 @@ func (b *Bootstrap) Start() error {
 		}
 	}
 
-	headerf("Preparing build folder")
+	headerf("Preparing build directory")
 
 	// Create the build directory
 	if !fileExists(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
@@ -844,7 +844,7 @@ func (b *Bootstrap) Start() error {
 	}
 
 	// Switch the internal wd to it
-	commentf("Switching working directroy to build folder")
+	commentf("Switching working directory to: %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 	b.wd = b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run a custom `checkout` hook if it's present
@@ -968,7 +968,7 @@ func (b *Bootstrap) Start() error {
 
 	// Capture the new checkout path so we can see if it's changed. We need
 	// to also handle the case where they just switch it to "foo/bar",
-	// because that directroy is relative to the current working directroy.
+	// because that directory is relative to the current working directory.
 	newCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 	newCheckoutPathAbs := newCheckoutPath
 	if !filepath.IsAbs(newCheckoutPathAbs) {
@@ -980,7 +980,7 @@ func (b *Bootstrap) Start() error {
 		headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
 		if fileExists(newCheckoutPathAbs) {
-			commentf("Switching working directroy to \"%s\"", newCheckoutPathAbs)
+			commentf("Switching working directory to \"%s\"", newCheckoutPathAbs)
 			b.wd = newCheckoutPathAbs
 		} else {
 			exitf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPathAbs)
