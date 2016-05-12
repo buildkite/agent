@@ -20,7 +20,6 @@ steps:
     name: ":debian: build"
     command: "scripts/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
-    branches: "master *-stable"
     agents:
       queue: "deploy"
 
