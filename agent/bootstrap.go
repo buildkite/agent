@@ -707,7 +707,7 @@ func (b *Bootstrap) Start() error {
 
 		// Make sure we have a plugin path before trying to do anything
 		if b.PluginsPath == "" {
-			exitf("Can't checkout plugins with a `plugins-path`")
+			exitf("Can't checkout plugins without a `plugins-path`")
 		}
 
 		plugins, err = CreatePluginsFromJSON(b.Plugins)
