@@ -3,7 +3,7 @@ steps:
     name: "🔨"
     command: "scripts/tests.sh"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#aec9131:
+      - https://github.com/buildkite/docker-compose-buildkite-plugin#28d5749:
           run: agent
 
   -
@@ -11,7 +11,7 @@ steps:
     command: "scripts/build-binaries.sh"
     artifact_paths: "pkg/*"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#aec9131:
+      - https://github.com/buildkite/docker-compose-buildkite-plugin#28d5749:
           run: agent
 
   - wait
@@ -50,7 +50,7 @@ steps:
     artifact_paths: "releases/**/*"
     branches: "master *-stable"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#aec9131:
+      - https://github.com/buildkite/docker-compose-buildkite-plugin#28d5749:
           run: agent
 
   - wait
