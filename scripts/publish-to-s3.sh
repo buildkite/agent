@@ -3,6 +3,11 @@
 set -eo pipefail
 
 version=$(buildkite-agent meta-data get "agent-version")
+build=$(buildkite-agent meta-data get "agent-version-build")
+
+if [[ "$CODENAME" == "experimental" ]]; then
+  version="$version.$build"
+fi
 
 echo "--- :package: Downloading built binaries"
 
