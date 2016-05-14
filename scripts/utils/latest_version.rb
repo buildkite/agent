@@ -1,17 +1,9 @@
-# Takes a list of versions like so, and returns the latest (and greatest) one:
+#!/usr/bin/env ruby
+
+# Reads a list of versions from STDIN and prints the highest one:
 #
-# 1
-# 1.0
-# 1.0.0
-# 1.0.0.1
-# 3.0.0-beta.1-810
-# 3.0.0-beta.1-811
-# 3.0.0-beta.1-812
-# 3.0.0-beta.2-813
-# 3.0.0
-# 3.1.0.2-alpha.1-814
-# 3.1.0.2-beta.1-814
-# 3.1.0.2
+# echo -e "1.0.1\n1.2.1\n2.3.2-beta.2\n2.3.2-alpha.2\n3.1\n3.1-beta.1\n3.0" | ruby latest_version.rb
+# => 3.1
 
 def parse(version_string)
   pattern = %r{
@@ -33,7 +25,7 @@ def parse(version_string)
   if m = pattern.match(version_string)
     {
       # Parse all the integer strings. If it's nil, make it 0
-      # (i.e. "2" becomes "2.0.0")
+      # (i.e. "2" becomes "2,0,0,0,nil,0,0,0,0")
       major:            m[:major].to_i,
       minor:            m[:minor].to_i,
       patch:            m[:patch].to_i,
@@ -48,12 +40,37 @@ def parse(version_string)
 end
 
 def sort(v1, v2)
-  # We need to special case the major/minor/patch/tiny being the same, but one
-  # being a prerelease. i.e. 2.3.2 > 2.3.2-beta.2 and 2.3.2-beta.2 < 2.3.2
-  if v1.values.first(4) == v2.values.first(4) && (!v1[:prerelease] || !v2[:prerelease])
-    v1[:prerelease] ? -1 : 1
-  # Otherwise we can just let Ruby sort all the parts against both (including
-  # prerelease strings as alphabetical)
+  # Stable release get preferred over pre-releases, but if we just let Ruby
+  # sort v1.values <=> v2.values:
+  #
+  # [2, 3, 2, 1, nil,     0, 0, 0, 0]
+  # [2, 3, 2, 1, 'beta',  1, 1, 0, 0]
+  #
+  # then 2.3.2.1-beta.1 would be greater than 2.3.2.1
+  #
+  # So we special case 2.3.2.1 <=> 2.3.2.1-beta.1 (or vice versa) and preference the
+  # version that isn't the prerelease
+  if v1.values.first(4) == v2.values.first(4) && (v1[:prerelease].nil? || v2[:prerelease].nil?)
+    # 2.3.2.1 <=> 2.3.2.1
+    if v1[:prerelease].nil? && v2[:prerelease].nil?
+      0
+    # 2.3.2.1 <=> 2.3.2.1-beta.1
+    elsif v1[:prerelease].nil? && v2[:prerelease]
+      1
+    # 2.3.2.1-beta.1 <=> 2.3.2.1
+    elsif v1[:prerelease] && v2[:prerelease].nil?
+      -1
+    end
+  # For all other cases we can just let Ruby sort all the things
+  #
+  # [2, 0, 0, 0, nil,     0, 0, 0, 0]
+  # [2, 3, 0, 0, nil,     0, 0, 0, 0]
+  # [2, 3, 0, 0, nil,     0, 0, 0, 0]
+  # [2, 3, 2, 1, 'alpha', 0, 0, 0, 0]
+  # [2, 3, 2, 1, 'beta',  0, 0, 0, 0]
+  # [2, 3, 2, 1, 'beta',  1, 0, 0, 0]
+  # [2, 3, 2, 1, 'beta',  1, 1, 0, 0]
+  # [2, 3, 2, 2, nil,     0, 0, 0, 0]
   else
     v1.values <=> v2.values
   end
