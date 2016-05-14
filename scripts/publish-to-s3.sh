@@ -34,7 +34,7 @@ done
 
 echo "--- :s3: Copying /$version to /latest"
 
-latest_version=$(aws s3 ls --page-size 1000 "$s3_base_url/" | grep PRE | awk '{print $2}' | awk -F '/' '{print $1}' | ruby -pe 'readlines.map {|s| Gem::Version.new(s)}.max')
+latest_version=$(aws s3 ls --page-size 1000 "$s3_base_url/" | grep PRE | awk '{print $2}' | awk -F '/' '{print $1}' | ruby ../scripts/utils/latest_version.rb)
 latest_version_s3_url="$s3_base_url/$latest_version/"
 latest_s3_url="$s3_base_url/latest/"
 
