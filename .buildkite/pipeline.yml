@@ -33,7 +33,7 @@ steps:
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy" 
+      queue: "deploy"
 
   -
     name: ":redhat: experimental"
@@ -72,7 +72,7 @@ steps:
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy" 
+      queue: "deploy"
 
   -
     name: ":whale:"
@@ -119,7 +119,7 @@ steps:
     env:
       CODENAME: "stable"
     agents:
-      queue: "deploy" 
+      queue: "deploy"
 
   -
     name: ":whale:"
