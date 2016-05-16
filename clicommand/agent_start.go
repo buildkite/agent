@@ -111,7 +111,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2",
-			Usage: "Include the host's EC2 meta-data (such instance-id, instance-type, and ami-id) as meta-data",
+			Usage: "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
