@@ -2,7 +2,7 @@
 
 # Reads a list of versions from STDIN and prints the highest one:
 #
-# echo -e "1.0.1\n1.2.1\n2.3.2-beta.2\n2.3.2-alpha.2\n3.1\n3.1-beta.1\n3.0" | ruby latest_version.rb
+# echo -e "latest\n1.0.1\n1.2.1\n2.3.2-beta.2\n2.3.2-alpha.2\n3.1\n3.1-beta.1\n3.0" | ruby latest_version.rb
 # => 3.1
 
 def parse(version_string)
@@ -76,8 +76,12 @@ def sort(v1, v2)
   end
 end
 
-lines = STDIN.readlines.map(&:strip).compact.sort {|line_1, line_2|
-  sort(parse(line_1), parse(line_2))
-}
+parsed_version_lines = STDIN.readlines.map(&:strip).map {|line|
+  if version = parse(line)
+    [line, version]
+  end
+}.compact
 
-puts lines.last
+puts parsed_version_lines.sort {|(l1, v1), (l2, v2)|
+  sort(v1, v2)
+}.last[0]
