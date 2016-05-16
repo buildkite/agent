@@ -105,9 +105,14 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
-		tags := EC2MetaData{}.Get()
-		for tag, value := range tags {
-			agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		tags, err := EC2MetaData{}.Get()
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+		} else {
+			for tag, value := range tags {
+				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+			}
 		}
 	}
 
