@@ -12,14 +12,14 @@ fi
 echo "--- :package: Downloading built binaries"
 
 rm -rf pkg/*
-buildkite-agent artifact download "pkg/*" .
+buildkite-agent artifact download --step '📦' "pkg/buildkite-agent-*" .
 cd pkg
 
 echo "--- :s3: Publishing $version to download.buildkite.com"
 
 s3_base_url="s3://download.buildkite.com/agent/$CODENAME"
 
-for binary in buildkite-agent-*; do
+for binary in *; do
   binary_s3_url="$s3_base_url/$version/$binary"
 
   echo "Publishing $binary to $binary_s3_url"
