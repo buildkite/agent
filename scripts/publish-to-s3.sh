@@ -25,11 +25,11 @@ for binary in buildkite-agent-*; do
   echo "Publishing $binary to $binary_s3_url"
   aws s3 --region "us-east-1" cp --acl "public-read" "$binary" "$binary_s3_url"
 
-  echo "Fetching SHA1"
-  buildkite-agent artifact shasum "pkg/$binary" > "$binary.sha1"
+  echo "Calculating SHA256"
+  sha256sum "$binary" | awk '{print $1}' > "$binary.sha256"
 
-  echo "Publishing $binary.sha1 to $binary_s3_url.sha1"
-  aws s3 cp --region "us-east-1" --acl "public-read" --content-type "text/plain" "$binary.sha1" "$binary_s3_url.sha1"
+  echo "Publishing $binary.sha256 to $binary_s3_url.sha256"
+  aws s3 cp --region "us-east-1" --acl "public-read" --content-type "text/plain" "$binary.sha256" "$binary_s3_url.sha256"
 done
 
 echo "--- :s3: Copying /$version to /latest"
