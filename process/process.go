@@ -320,6 +320,8 @@ func getExitStatus(waitResult error) string {
 			} else {
 				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
+		} else {
+			logger.Errorf("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
 		}
 	} else {
 		exitStatus = 0
