@@ -171,12 +171,10 @@ fi
 mkdir -p "$DESTINATION"/hooks
 mv $INSTALL_TMP/hooks/*.sample "$DESTINATION"/hooks
 
-function buildkite-copy-bootstrap {
-  mv $INSTALL_TMP/bootstrap.sh "$DESTINATION"
-  chmod +x "$DESTINATION"/bootstrap.sh
-}
-
-buildkite-copy-bootstrap
+if [[ -f "$INSTALL_TMP/bootstrap.sh" ]]; then
+  mv "$INSTALL_TMP/bootstrap.sh" "$DESTINATION"
+  chmod +x "$DESTINATION/bootstrap.sh"
+fi
 
 echo -e "\n\033[32mSuccessfully installed to $DESTINATION\033[0m
 
