@@ -218,7 +218,8 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
   else
-    buildkite-run "git clone -v -- \"$BUILDKITE_REPO\" ."
+    BUILDKITE_GIT_CLONE_FLAGS=${BUILDKITE_GIT_CLONE_FLAGS:-v}
+    buildkite-run "git clone \"$BUILDKITE_GIT_CLONE_FLAGS\" -- \"$BUILDKITE_REPO\" ."
   fi
 
   BUILDKITE_GIT_CLEAN_FLAGS=${BUILDKITE_GIT_CLEAN_FLAGS:--fdq}
@@ -429,7 +430,7 @@ else
 
       if [[ $(docker-compose --version) == *1.6* ]]; then
         # 1.6
-        
+
         # There's no --all flag to remove adhoc containers
         buildkite-run "$COMPOSE_COMMAND rm --force $REMOVE_VOLUME_FLAG || true"
 
