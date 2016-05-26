@@ -66,12 +66,6 @@ var MetaDataSetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		// Create the API client
-		client := agent.APIClient{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		}.Create()
-
 		var metadataValue string
 		if cfg.Value != "" {
 			metadataValue = cfg.Value
@@ -85,6 +79,12 @@ var MetaDataSetCommand = cli.Command{
 			}
 			metadataValue = string(input)
 		}
+
+		// Create the API client
+		client := agent.APIClient{
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
+		}.Create()
 
 		// Create the meta data to set
 		metaData := &api.MetaData{
