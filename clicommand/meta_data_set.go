@@ -15,15 +15,20 @@ import (
 
 var MetaDataSetHelpDescription = `Usage:
 
-   buildkite-agent meta-data set <key> <value> [arguments...]
+   buildkite-agent meta-data set <key> [<value>] [arguments...]
 
 Description:
 
    Set arbitrary data on a build using a basic key/value store.
 
+   You can supply the value as an argument to the command, or pipe in a file or
+   script output.
+
 Example:
 
-   $ buildkite-agent meta-data set "foo" "bar"`
+   $ buildkite-agent meta-data set "foo" "bar"
+   $ buildkite-agent meta-data set "foo" < ./tmp/meta-data-value
+   $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
 
 type MetaDataSetConfig struct {
 	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
