@@ -48,10 +48,6 @@ var MetaDataSetCommand = cli.Command{
 			Usage:  "Which job should the meta-data be set on",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
-		cli.BoolFlag{
-			Name:   "value-from-file",
-			Usage:  "Value is a file that contains the metadata value to set.",
-		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
 		NoColorFlag,
