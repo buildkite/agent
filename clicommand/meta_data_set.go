@@ -3,6 +3,7 @@ package clicommand
 import (
 	"time"
 
+	"github.com/andrew-d/go-termutil"
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
@@ -11,7 +12,6 @@ import (
 	"github.com/codegangsta/cli"
 	"io/ioutil"
 	"os"
-	"github.com/andrew-d/go-termutil"
 )
 
 var MetaDataSetHelpDescription = `Usage:
