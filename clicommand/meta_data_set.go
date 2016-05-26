@@ -3,7 +3,6 @@ package clicommand
 import (
 	"time"
 
-	"github.com/andrew-d/go-termutil"
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
@@ -66,8 +65,8 @@ var MetaDataSetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		// Read the meta-data from stdin if none supplied
-		if cfg.Value == "" && !termutil.Isatty(os.Stdin.Fd()) {
+		// Read the value from STDIN if argument omitted entirely
+		if len(c.Args()) < 2 {
 			logger.Info("Reading meta-data value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
