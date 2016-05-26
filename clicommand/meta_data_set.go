@@ -10,6 +10,8 @@ import (
 	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
 	"io/ioutil"
+	"os"
+	"github.com/andrew-d/go-termutil"
 )
 
 var MetaDataSetHelpDescription = `Usage:
@@ -26,7 +28,7 @@ Example:
 
 type MetaDataSetConfig struct {
 	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Value            string `cli:"arg:1" label:"meta-data value validate:"required"`
+	Value            string `cli:"arg:1" label:"meta-data value"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -77,14 +79,24 @@ var MetaDataSetCommand = cli.Command{
 
 		// Read the metadata from a file
 		var metadataValue string
-		if cfg.ValueFromFile {
-			input, err := ioutil.ReadFile(cfg.Value)
+		if cfg.Value != "" {
+			if cfg.ValueFromFile {
+				input, err := ioutil.ReadFile(cfg.Value)
+				if err != nil {
+					logger.Fatal("Failed to read file: %s", err)
+				}
+				metadataValue = string(input)
+			} else {
+				metadataValue = cfg.Value
+			}
+		} else if !termutil.Isatty(os.Stdin.Fd()) {
+			logger.Info("Reading metadata value from STDIN")
+
+			input, err := ioutil.ReadAll(os.Stdin)
 			if err != nil {
-				logger.Fatal("Failed to read file: %s", err)
+				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
 			metadataValue = string(input)
-		} else {
-			metadataValue = cfg.Value
 		}
 
 		// Create the meta data to set
