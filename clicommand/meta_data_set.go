@@ -71,7 +71,7 @@ var MetaDataSetCommand = cli.Command{
 			metadataValue = cfg.Value
 		} else if !termutil.Isatty(os.Stdin.Fd()) {
 			// Read the metadata from stdin
-			logger.Info("Reading metadata value from STDIN")
+			logger.Info("Reading meta-data value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
 			if err != nil {
