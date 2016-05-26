@@ -9,6 +9,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
+	"io/ioutil"
 )
 
 var MetaDataSetHelpDescription = `Usage:
@@ -29,6 +30,7 @@ type MetaDataSetConfig struct {
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
+	ValueFromFile    bool   `cli:"value-from-file"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -44,6 +46,10 @@ var MetaDataSetCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the meta-data be set on",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "value-from-file",
+			Usage:  "Value is a file that contains the metadata value to set.",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -69,10 +75,22 @@ var MetaDataSetCommand = cli.Command{
 			Token:    cfg.AgentAccessToken,
 		}.Create()
 
+		// Read the metadata from a file
+		var metadataValue string
+		if cfg.ValueFromFile {
+			input, err := ioutil.ReadFile(cfg.Value)
+			if err != nil {
+				logger.Fatal("Failed to read file: %s", err)
+			}
+			metadataValue = string(input)
+		} else {
+			metadataValue = cfg.Value
+		}
+
 		// Create the meta data to set
 		metaData := &api.MetaData{
 			Key:   cfg.Key,
-			Value: cfg.Value,
+			Value: metadataValue,
 		}
 
 		// Set the meta data
