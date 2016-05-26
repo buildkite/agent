@@ -66,18 +66,15 @@ var MetaDataSetCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		var metadataValue string
-		if cfg.Value != "" {
-			metadataValue = cfg.Value
-		} else if !termutil.Isatty(os.Stdin.Fd()) {
-			// Read the metadata from stdin
+		// Read the meta-data from stdin if none supplied
+		if cfg.Value == "" && !termutil.Isatty(os.Stdin.Fd()) {
 			logger.Info("Reading meta-data value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
-			metadataValue = string(input)
+			cfg.Value = string(input)
 		}
 
 		// Create the API client
@@ -89,7 +86,7 @@ var MetaDataSetCommand = cli.Command{
 		// Create the meta data to set
 		metaData := &api.MetaData{
 			Key:   cfg.Key,
-			Value: metadataValue,
+			Value: cfg.Value,
 		}
 
 		// Set the meta data
