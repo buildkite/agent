@@ -32,7 +32,6 @@ type MetaDataSetConfig struct {
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
-	ValueFromFile    bool   `cli:"value-from-file"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -77,19 +76,11 @@ var MetaDataSetCommand = cli.Command{
 			Token:    cfg.AgentAccessToken,
 		}.Create()
 
-		// Read the metadata from a file
 		var metadataValue string
 		if cfg.Value != "" {
-			if cfg.ValueFromFile {
-				input, err := ioutil.ReadFile(cfg.Value)
-				if err != nil {
-					logger.Fatal("Failed to read file: %s", err)
-				}
-				metadataValue = string(input)
-			} else {
-				metadataValue = cfg.Value
-			}
+			metadataValue = cfg.Value
 		} else if !termutil.Isatty(os.Stdin.Fd()) {
+			// Read the metadata from stdin
 			logger.Info("Reading metadata value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
