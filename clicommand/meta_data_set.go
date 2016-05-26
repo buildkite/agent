@@ -1,6 +1,8 @@
 package clicommand
 
 import (
+	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/buildkite/agent/agent"
@@ -9,8 +11,6 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/codegangsta/cli"
-	"io/ioutil"
-	"os"
 )
 
 var MetaDataSetHelpDescription = `Usage:
