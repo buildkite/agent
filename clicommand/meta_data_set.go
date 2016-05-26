@@ -1,6 +1,8 @@
 package clicommand
 
 import (
+	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/buildkite/agent/agent"
@@ -13,19 +15,24 @@ import (
 
 var MetaDataSetHelpDescription = `Usage:
 
-   buildkite-agent meta-data set <key> <value> [arguments...]
+   buildkite-agent meta-data set <key> [<value>] [arguments...]
 
 Description:
 
    Set arbitrary data on a build using a basic key/value store.
 
+   You can supply the value as an argument to the command, or pipe in a file or
+   script output.
+
 Example:
 
-   $ buildkite-agent meta-data set "foo" "bar"`
+   $ buildkite-agent meta-data set "foo" "bar"
+   $ buildkite-agent meta-data set "foo" < ./tmp/meta-data-value
+   $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
 
 type MetaDataSetConfig struct {
 	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Value            string `cli:"arg:1" label:"meta-data value validate:"required"`
+	Value            string `cli:"arg:1" label:"meta-data value"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -62,6 +69,17 @@ var MetaDataSetCommand = cli.Command{
 
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
+
+		// Read the value from STDIN if argument omitted entirely
+		if len(c.Args()) < 2 {
+			logger.Info("Reading meta-data value from STDIN")
+
+			input, err := ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				logger.Fatal("Failed to read from STDIN: %s", err)
+			}
+			cfg.Value = string(input)
+		}
 
 		// Create the API client
 		client := agent.APIClient{
