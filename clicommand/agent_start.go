@@ -181,7 +181,9 @@ var AgentStartCommand = cli.Command{
 			cfg.NoCommandEval = true
 		}
 
-		// Setup the agent
+		// Setup the agent. The Git flags currently can't be set in the
+		// configuration file, but only via ENV vars on the agent. This
+		// could change in the future.
 		pool := agent.AgentPool{
 			Token:           cfg.Token,
 			Name:            cfg.Name,
@@ -197,6 +199,8 @@ var AgentStartCommand = cli.Command{
 				AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
 				CommandEval:                    !cfg.NoCommandEval,
 				RunInPty:                       !cfg.NoPTY,
+				GitCleanFlags:                  os.Getenv("BUILDKITE_GIT_CLEAN_FLAGS"),
+				GitCloneFlags:                  os.Getenv("BUILDKITE_GIT_CLONE_FLAGS"),
 			},
 		}
 
