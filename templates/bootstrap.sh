@@ -218,8 +218,8 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run "git remote set-url origin \"$BUILDKITE_REPO\""
   else
-    BUILDKITE_GIT_CLONE_FLAGS=${BUILDKITE_GIT_CLONE_FLAGS:-v}
-    buildkite-run "git clone \"$BUILDKITE_GIT_CLONE_FLAGS\" -- \"$BUILDKITE_REPO\" ."
+    BUILDKITE_GIT_CLONE_FLAGS=${BUILDKITE_GIT_CLONE_FLAGS:--v}
+    buildkite-run "git clone $BUILDKITE_GIT_CLONE_FLAGS -- \"$BUILDKITE_REPO\" ."
   fi
 
   BUILDKITE_GIT_CLEAN_FLAGS=${BUILDKITE_GIT_CLEAN_FLAGS:--fdq}
