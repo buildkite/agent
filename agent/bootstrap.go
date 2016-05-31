@@ -885,7 +885,7 @@ func (b *Bootstrap) Start() error {
 		} else {
 			// `git clone` can't accept options within quote like
 			// `git clone "-v --depth 1", so we need to split them
-			// by spaces and pass them individually.
+			// and pass them individually.
 			gitCloneFlags, err := shlex.Split(b.GitCloneFlags)
 			if err != nil {
 				exitf("There was an error trying to split `%s` into arguments (%s)", b.GitCloneFlags, err)
