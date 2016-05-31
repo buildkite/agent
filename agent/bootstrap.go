@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/shell/windows"
 	"github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
+	"github.com/flynn-archive/go-shlex"
 )
 
 type Bootstrap struct {
@@ -885,7 +886,11 @@ func (b *Bootstrap) Start() error {
 			// `git clone` can't accept options within quote like
 			// `git clone "-v --depth 1", so we need to split them
 			// by spaces and pass them individually.
-			gitCloneFlags := strings.Split(b.GitCloneFlags, " ")
+			gitCloneFlags, err := shlex.Split(b.GitCloneFlags)
+			if err != nil {
+				exitf("There was an error trying to split `%s` into arguments (%s)", b.GitCloneFlags, err)
+			}
+
 			gitCloneArguments := []string{"clone"}
 			gitCloneArguments = append(gitCloneArguments, gitCloneFlags...)
 			gitCloneArguments = append(gitCloneArguments, "--", b.Repository, ".")
