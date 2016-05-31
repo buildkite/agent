@@ -883,9 +883,6 @@ func (b *Bootstrap) Start() error {
 			// gracefully handle repository renames
 			b.runCommand("git", "remote", "set-url", "origin", b.Repository)
 		} else {
-			// `git clone` can't accept options within quote like
-			// `git clone "-v --depth 1", so we need to split them
-			// and pass them individually.
 			gitCloneFlags, err := shlex.Split(b.GitCloneFlags)
 			if err != nil {
 				exitf("There was an error trying to split `%s` into arguments (%s)", b.GitCloneFlags, err)
@@ -898,12 +895,22 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", gitCloneArguments...)
 		}
 
+		gitCleanFlags, err := shlex.Split(b.GitCleanFlags)
+		if err != nil {
+			exitf("There was an error trying to split `%s` into arguments (%s)", b.GitCleanFlags, err)
+		}
+
 		// Clean up the repository
-		b.runCommand("git", "clean", b.GitCleanFlags)
+		gitCleanRepoArguments := []string{"clean"}
+		gitCleanRepoArguments = append(gitCleanRepoArguments, gitCleanFlags...)
+		b.runCommand("git", gitCleanRepoArguments...)
 
 		// Also clean up submodules if we can
 		if b.GitSubmodules {
-			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "clean", b.GitCleanFlags)
+			gitCleanSubmoduleArguments := []string{"submodule", "foreach", "--recursive", "git", "clean"}
+			gitCleanSubmoduleArguments = append(gitCleanSubmoduleArguments, gitCleanFlags...)
+
+			b.runCommand("git", gitCleanSubmoduleArguments...)
 		}
 
 		// If a refspec is provided then use it instead.
