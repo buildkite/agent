@@ -172,6 +172,8 @@ func (r *JobRunner) createEnvironment() []string {
 	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHFingerprintVerification)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
+	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.AgentConfiguration.GitCleanFlags
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)

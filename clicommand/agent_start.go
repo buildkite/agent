@@ -40,6 +40,8 @@ type AgentStartConfig struct {
 	MetaData                     []string `cli:"meta-data"`
 	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
+	GitCloneFlags                string   `cli:"git-clone-flags"`
+	GitCleanFlags                string   `cli:"git-clean-flags"`
 	NoColor                      bool     `cli:"no-color"`
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                bool     `cli:"no-command-eval"`
@@ -116,6 +118,18 @@ var AgentStartCommand = cli.Command{
 		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
 			Usage: "Include the host's EC2 tags as meta-data",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-flags",
+			Value:  "-v",
+			Usage:  "Flags to pass to the `git clone` command",
+			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-clean-flags",
+			Value:  "-fxdq",
+			Usage:  "Flags to pass to \"git clean\" command",
+			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -201,6 +215,8 @@ var AgentStartCommand = cli.Command{
 				BuildPath:                  cfg.BuildPath,
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
+				GitCloneFlags:              cfg.GitCloneFlags,
+				GitCleanFlags:              cfg.GitCleanFlags,
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
 				CommandEval:                !cfg.NoCommandEval,
 				RunInPty:                   !cfg.NoPTY,

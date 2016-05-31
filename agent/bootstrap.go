@@ -68,6 +68,9 @@ type Bootstrap struct {
 	// Should the bootstrap remove an existing checkout before running the job
 	CleanCheckout bool
 
+	// Flags to pass to "git clone" command
+	GitCloneFlags string
+
 	// Flags to pass to "git clean" command
 	GitCleanFlags string
 
@@ -619,6 +622,7 @@ func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 func (b *Bootstrap) applyEnvironmentConfigChanges() {
 	artifactPathsChanged := false
 	artifactUploadDestinationChanged := false
+	gitCloneFlagsChanged := false
 	gitCleanFlagsChanged := false
 
 	if b.env.Exists("BUILDKITE_ARTIFACT_PATHS") {
@@ -639,6 +643,15 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
+	if b.env.Exists("BUILDKITE_GIT_CLONE_FLAGS") {
+		envGitCloneFlags := b.env.Get("BUILDKITE_GIT_CLONE_FLAGS")
+
+		if envGitCloneFlags != b.GitCloneFlags {
+			b.GitCloneFlags = envGitCloneFlags
+			gitCloneFlagsChanged = true
+		}
+	}
+
 	if b.env.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
 		envGitCleanFlags := b.env.Get("BUILDKITE_GIT_CLEAN_FLAGS")
 
@@ -648,7 +661,7 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if artifactPathsChanged || artifactUploadDestinationChanged || gitCleanFlagsChanged {
+	if artifactPathsChanged || artifactUploadDestinationChanged || gitCleanFlagsChanged || gitCloneFlagsChanged {
 		headerf("Bootstrap configuration has changed")
 
 		if artifactPathsChanged {
@@ -661,6 +674,10 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 
 		if gitCleanFlagsChanged {
 			commentf("BUILDKITE_GIT_CLEAN_FLAGS has been changed to \"%s\"", b.GitCleanFlags)
+		}
+
+		if gitCloneFlagsChanged {
+			commentf("BUILDKITE_GIT_CLONE_FLAGS has been changed to \"%s\"", b.GitCloneFlags)
 		}
 	}
 }
@@ -774,6 +791,7 @@ func (b *Bootstrap) Start() error {
 					b.addRepositoryHostToSSHKnownHosts(repo)
 				}
 
+				// Plugin clones shouldn't use custom GitCloneFlags
 				b.runCommand("git", "clone", "-v", "--", repo, ".")
 
 				// Switch to the version if we need to
@@ -864,7 +882,15 @@ func (b *Bootstrap) Start() error {
 			// gracefully handle repository renames
 			b.runCommand("git", "remote", "set-url", "origin", b.Repository)
 		} else {
-			b.runCommand("git", "clone", "-v", "--", b.Repository, ".")
+			// `git clone` can't accept options within quote like
+			// `git clone "-v --depth 1", so we need to split them
+			// by spaces and pass them individually.
+			gitCloneFlags := strings.Split(b.GitCloneFlags, " ")
+			gitCloneArguments := []string{"clone"}
+			gitCloneArguments = append(gitCloneArguments, gitCloneFlags...)
+			gitCloneArguments = append(gitCloneArguments, "--", b.Repository, ".")
+
+			b.runCommand("git", gitCloneArguments...)
 		}
 
 		// Clean up the repository
