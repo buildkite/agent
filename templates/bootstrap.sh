@@ -276,10 +276,8 @@ else
     # `submodule sync` will ensure the .git/config matches the .gitmodules file.
     # The command is only available in git version 1.8.1, so if the call fails,
     # continue the bootstrap script, and show an informative error.
-    buildkite-prompt-and-run git submodule sync --recursive
-    if [[ $? -ne 0 ]]; then
+    buildkite-prompt-and-run git submodule sync --recursive ||
       buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can."
-    fi
 
     buildkite-run git submodule update --init --recursive
     buildkite-run git submodule foreach --recursive git reset --hard
