@@ -103,8 +103,7 @@ function buildkite-hook {
 
     # Print to the screen we're going to run the hook
     echo "~~~ Running $HOOK_LABEL hook"
-    echo -ne "$BUILDKITE_PROMPT "
-    echo ".\"$HOOK_SCRIPT_PATH\""
+    buildkite-prompt "$HOOK_SCRIPT_PATH"
 
     # Run the script and store it's exit status. We don't run the hook in a
     # subshell because we want the hook scripts to be able to modify the
