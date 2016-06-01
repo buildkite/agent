@@ -47,7 +47,7 @@ function buildkite-prompt {
 # Shows the command being run, and runs it
 function buildkite-prompt-and-run {
   buildkite-prompt "$@"
-  eval "$@"
+  "$@"
 }
 
 # Shows the command about to be run, and exits if it fails
@@ -67,7 +67,7 @@ function buildkite-run-debug {
     buildkite-prompt "$@"
   fi
 
-  eval "$@"
+  "$@"
 }
 
 # Show an error and exit
