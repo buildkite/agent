@@ -208,9 +208,11 @@ else
 
       # Only add the output from ssh-keyscan if it doesn't already exist in the
       # known_hosts file (unhashed or hashed).
-      ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST" > /dev/null ||
-        ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST" -H > /dev/null ||
-        buildkite-run ssh-keyscan "$BUILDKITE_REPO_SSH_HOST" >> "$BUILDKITE_SSH_KNOWN_HOST_PATH"
+      if ! ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST" > /dev/null &&
+         ! ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST" -H > /dev/null; then
+        buildkite-prompt ssh-keyscan "$BUILDKITE_REPO_SSH_HOST"
+        ssh-keyscan "$BUILDKITE_REPO_SSH_HOST" >> "$BUILDKITE_SSH_KNOWN_HOST_PATH"
+      fi
     fi
   fi
 
