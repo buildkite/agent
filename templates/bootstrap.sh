@@ -260,7 +260,8 @@ else
     # from a fetches branch. git 1.9.0+ changed `--tags` to fetch all tags in
     # addition to the default refspec, but pre 1.9.0 it excludes the default
     # refspec.
-    buildkite-run "git fetch -v origin \"$BUILDKITE_COMMIT\" || git fetch -v origin \"$(git config remote.origin.fetch)\" \"+refs/tags/*:refs/tags/*\""
+    buildkite-prompt-and-run "git fetch -v origin \"$BUILDKITE_COMMIT\"" ||
+      buildkite-run "git fetch -v origin \"$(git config remote.origin.fetch)\" \"+refs/tags/*:refs/tags/*\""
     buildkite-run "git checkout -f \"$BUILDKITE_COMMIT\""
   fi
 
@@ -396,7 +397,7 @@ else
 
     function docker-cleanup {
       echo "~~~ Cleaning up Docker containers"
-      buildkite-run "docker rm -f -v $DOCKER_CONTAINER || true"
+      buildkite-prompt-and-run "docker rm -f -v $DOCKER_CONTAINER"
     }
 
     trap docker-cleanup EXIT
@@ -429,25 +430,25 @@ else
       echo "~~~ Cleaning up Docker containers"
 
       # Send them a friendly kill
-      buildkite-run "$COMPOSE_COMMAND kill || true"
+      buildkite-prompt-and-run "$COMPOSE_COMMAND kill"
 
       if [[ $(docker-compose --version) == *1.6* ]]; then
         # 1.6
 
         # There's no --all flag to remove adhoc containers
-        buildkite-run "$COMPOSE_COMMAND rm --force $REMOVE_VOLUME_FLAG || true"
+        buildkite-prompt-and-run "$COMPOSE_COMMAND rm --force $REMOVE_VOLUME_FLAG"
 
         # So now we remove the adhoc container
         COMPOSE_CONTAINER_NAME=$COMPOSE_PROJ_NAME"_"$BUILDKITE_DOCKER_COMPOSE_CONTAINER
-        buildkite-run "docker rm -f $REMOVE_VOLUME_FLAG ${COMPOSE_CONTAINER_NAME}_run_1 || true"
+        buildkite-prompot-and-run "docker rm -f $REMOVE_VOLUME_FLAG ${COMPOSE_CONTAINER_NAME}_run_1"
       else
         # 1.7+
 
         # `compose down` doesn't support force removing images, so we use `rm --force`
-        buildkite-run "$COMPOSE_COMMAND rm --force --all $REMOVE_VOLUME_FLAG || true"
+        buildkite-prompt-and-run "$COMPOSE_COMMAND rm --force --all $REMOVE_VOLUME_FLAG"
 
         # Stop and remove all the linked services and network
-        buildkite-run "$COMPOSE_COMMAND down || true"
+        buildkite-prompt-and-run "$COMPOSE_COMMAND down"
       fi
     }
 
