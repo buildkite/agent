@@ -39,21 +39,20 @@ buildkite-flags-reset
 
 BUILDKITE_PROMPT="\033[90m$\033[0m"
 
+function buildkite-prompt {
+  echo -ne "$BUILDKITE_PROMPT "
+  echo "$@"
+}
+
 # Shows the command being run, and runs it
 function buildkite-prompt-and-run {
-  echo -e "$BUILDKITE_PROMPT $1"
-  eval "$1"
+  buildkite-prompt "$@"
+  eval "$@"
 }
 
 # Shows the command about to be run, and exits if it fails
 function buildkite-run {
-  echo -e "$BUILDKITE_PROMPT $1"
-  eval "$1"
-  EVAL_EXIT_STATUS=$?
-
-  if [[ $EVAL_EXIT_STATUS -ne 0 ]]; then
-    exit $EVAL_EXIT_STATUS
-  fi
+  buildkite-prompt-and-run "$@" || exit $?
 }
 
 function buildkite-debug {
@@ -64,8 +63,11 @@ function buildkite-debug {
 
 # Runs the command, but only output what it's doing if we're in DEBUG mode
 function buildkite-run-debug {
-  buildkite-debug "$BUILDKITE_PROMPT $1"
-  eval "$1"
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    buildkite-prompt "$@"
+  fi
+
+  eval "$@"
 }
 
 # Show an error and exit
