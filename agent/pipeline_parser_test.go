@@ -147,10 +147,10 @@ func TestPipelineParser(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, result, `
 	  steps:
-            - command: "Do this $$ESCAPE_PARTY"
-            - command: "Do this \$ESCAPE_PARTY"
-            - command: "Do this $${SUCH_ESCAPE}"
-            - command: "Do this \${SUCH_ESCAPE}"
+            - command: "Do this $ESCAPE_PARTY"
+            - command: "Do this $ESCAPE_PARTY"
+            - command: "Do this ${SUCH_ESCAPE}"
+            - command: "Do this ${SUCH_ESCAPE}"
 	`)
 
 	// Lets you use special characters in the default env var option

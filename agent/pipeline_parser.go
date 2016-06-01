@@ -19,61 +19,70 @@ func (p PipelineParser) Parse() (parsed []byte, err error) {
 	parsed = variablesWithBracketsRegex.ReplaceAllFunc(p.Data, func(part []byte) []byte {
 		v := string(part[:])
 
-		if !p.isPrefixedWithEscapeSequence(v) && err == nil {
-			err = p.isValidPosixEnvironmentVariable(v)
-			if err != nil {
-				return []byte(v)
-			}
-
+		if err == nil {
 			key, option := p.extractKeyAndOptionFromVariable(v)
-			vv, isEnvironmentVariableSet := os.LookupEnv(key)
 
-			switch {
-			case strings.HasPrefix(option, "?"):
-				if vv == "" {
-					errorMessage := option[1:]
-					if errorMessage == "" {
-						errorMessage = "not set"
+			// Just return the key by itself if it was escaped
+			if p.isPrefixedWithEscapeSequence(v) {
+				v = key
+			} else {
+				err = p.isValidPosixEnvironmentVariable(v)
+				if err != nil {
+					return []byte(v)
+				}
+
+				vv, isEnvironmentVariableSet := os.LookupEnv(key)
+
+				switch {
+				case strings.HasPrefix(option, "?"):
+					if vv == "" {
+						errorMessage := option[1:]
+						if errorMessage == "" {
+							errorMessage = "not set"
+						}
+						err = fmt.Errorf("$%s: %s", key, errorMessage)
 					}
-					err = fmt.Errorf("$%s: %s", key, errorMessage)
+
+				case strings.HasPrefix(option, ":-"):
+					if vv == "" {
+						vv = option[2:]
+					}
+
+				case strings.HasPrefix(option, "-"):
+					if !isEnvironmentVariableSet {
+						vv = option[1:]
+					}
+
+				case option != "":
+					err = fmt.Errorf("Invalid option `%s` for environment variable `%s`", option, key)
 				}
 
-			case strings.HasPrefix(option, ":-"):
-				if vv == "" {
-					vv = option[2:]
-				}
-
-			case strings.HasPrefix(option, "-"):
-				if !isEnvironmentVariableSet {
-					vv = option[1:]
-				}
-
-			case option != "":
-				err = fmt.Errorf("Invalid option `%s` for environment variable `%s`", option, key)
+				v = vv
 			}
-
-			v = vv
 		}
 
 		return []byte(v)
 	})
-
-	// If there was an error while parsing the more complicated environment
-	// variables, bail out now with the error.
 
 	// Another parse but this time target ENV variables without the {}
 	// surrounding it, i.e. $FOO. These ones are super simple to replace.
 	parsed = variablesWithNoBracketsRegex.ReplaceAllFunc(parsed, func(part []byte) []byte {
 		v := string(part[:])
 
-		if !p.isPrefixedWithEscapeSequence(v) && err == nil {
-			err = p.isValidPosixEnvironmentVariable(v)
-			if err != nil {
-				return []byte(v)
-			}
-
+		if err == nil {
 			key, _ := p.extractKeyAndOptionFromVariable(v)
-			v = os.Getenv(key)
+
+			// Just return the key by itself if it was escaped
+			if p.isPrefixedWithEscapeSequence(v) {
+				v = key
+			} else {
+				err = p.isValidPosixEnvironmentVariable(v)
+				if err != nil {
+					return []byte(v)
+				}
+
+				v = os.Getenv(key)
+			}
 		}
 
 		return []byte(v)
