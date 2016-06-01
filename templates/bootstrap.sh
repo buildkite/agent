@@ -57,7 +57,7 @@ function buildkite-run {
 
 function buildkite-debug {
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-    echo -e "$1"
+    echo "$@"
   fi
 }
 
@@ -73,13 +73,14 @@ function buildkite-run-debug {
 # Show an error and exit
 function buildkite-error {
   echo -e "~~~ :rotating_light: \033[31mBuildkite Error\033[0m"
-  echo "$1"
+  echo "$@"
   exit 1
 }
 
 # Show a warning
 function buildkite-warning {
-  echo -e "\033[33m⚠️ Buildkite Warning: $1\033[0m"
+  echo -ne "\033[33m⚠️ Buildkite Warning:\033[0m "
+  echo "$@"
   echo "^^^ +++"
 }
 
@@ -96,7 +97,8 @@ function buildkite-hook {
 
     # Print to the screen we're going to run the hook
     echo "~~~ Running $HOOK_LABEL hook"
-    echo -e "$BUILDKITE_PROMPT .\"$HOOK_SCRIPT_PATH\""
+    echo -ne "$BUILDKITE_PROMPT "
+    echo ".\"$HOOK_SCRIPT_PATH\""
 
     # Run the script and store it's exit status. We don't run the hook in a
     # subshell because we want the hook scripts to be able to modify the
@@ -470,7 +472,8 @@ else
   ## Standard
   else
     echo "~~~ $BUILDKITE_COMMAND_ACTION"
-    echo -e "$BUILDKITE_PROMPT $BUILDKITE_COMMAND_DISPLAY"
+    echo -ne "$BUILDKITE_PROMPT "
+    echo "$BUILDKITE_COMMAND_DISPLAY"
     ."/$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
