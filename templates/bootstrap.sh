@@ -40,8 +40,14 @@ buildkite-flags-reset
 BUILDKITE_PROMPT="\033[90m$\033[0m"
 
 function buildkite-prompt {
-  echo -ne "$BUILDKITE_PROMPT "
-  echo "$@"
+  # Output "$" prefix in a pleasant grey...
+  echo -ne "$BUILDKITE_PROMPT"
+
+  # ...each positional parameter with spaces and correct escaping for copy/pasting...
+  printf " %q" "$@"
+
+  # ...and a trailing newline.
+  echo
 }
 
 # Shows the command being run, and runs it
