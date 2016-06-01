@@ -158,7 +158,7 @@ export BUILDKITE_BUILD_CHECKOUT_PATH="$BUILDKITE_BUILD_PATH/$PROJECT_FOLDER_NAME
 
 if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
   echo "~~~ Build environment variables"
-  env | grep BUILDKITE | sort
+  env | grep -e "^BUILDKITE" | sort
 fi
 
 ##############################################################
