@@ -164,11 +164,52 @@ func TestPipelineParser(t *testing.T) {
 	    - command: "-:{}"
 	`)
 
-	// Lets you use special characters in the required var option
+	// Lets you use special characters in the required var option. In this
+	// example, the first `}` character is what is used to complete the ${}
+	// var, and the last one is just ignored.
 	result, err = parse(`
 	  steps:
 	    - command: "Hello ${REQUIRED_VAR?{}}"
 	`)
 	assert.NotNil(t, err)
-	assert.Equal(t, string(err.Error()), "$REQUIRED_VAR: {}")
+	assert.Equal(t, string(err.Error()), "$REQUIRED_VAR: {")
+
+	// Lets you parse a full looking pipeline
+	os.Setenv("BUILDKITE_COMMIT", "1adf998e39f647b4b25842f107c6ed9d30a3a7c7")
+	result, err = parse(`
+          env:
+            IMAGE: registry.dev.example.com/app:${BUILDKITE_COMMIT}
+            REVISION: ${BUILDKITE_COMMIT}
+          steps:
+            - name: ":docker:"
+              command: docker build -t $$IMAGE --build-arg REVISION=$$BUILDKITE_COMMIT .
+	`)
+	assert.Nil(t, err)
+	assert.Equal(t, result, `
+          env:
+            IMAGE: registry.dev.example.com/app:1adf998e39f647b4b25842f107c6ed9d30a3a7c7
+            REVISION: 1adf998e39f647b4b25842f107c6ed9d30a3a7c7
+          steps:
+            - name: ":docker:"
+              command: docker build -t $IMAGE --build-arg REVISION=$BUILDKITE_COMMIT .
+	`)
+
+
+	// The regex isn't greedy. The result of ENV_1 doesn't contain the
+	// `BUILDKITE_COMMIT` value, because the interpolator sees the actual
+	// variable key as being `BUILDKITE_COMMIT_`. To get this working, the
+	// user has to use the ${} syntax.
+	os.Setenv("BUILDKITE_COMMIT", "cfeeee3fa7fa1a6311723f5cbff95b738ec6e683")
+	os.Setenv("BUILDKITE_PARALLEL_JOB", "456")
+	result, err = parse(`
+	  steps:
+            - command: echo "ENV_1=test_$BUILDKITE_COMMIT_$BUILDKITE_PARALLEL_JOB"
+            - command: echo "ENV_2=test_${BUILDKITE_COMMIT}_${BUILDKITE_PARALLEL_JOB}"
+	`)
+	assert.Nil(t, err)
+	assert.Equal(t, result, `
+	  steps:
+            - command: echo "ENV_1=test_456"
+            - command: echo "ENV_2=test_cfeeee3fa7fa1a6311723f5cbff95b738ec6e683_456"
+	`)
 }

@@ -11,7 +11,7 @@ type PipelineParser struct {
 	Data []byte
 }
 
-var variablesWithBracketsRegex = regexp.MustCompile(`([\\\$]?\$\{(.+[^\\])})`)
+var variablesWithBracketsRegex = regexp.MustCompile(`([\\\$]?\$\{([^}]+?)})`)
 var variablesWithNoBracketsRegex = regexp.MustCompile(`([\\\$]?\$[a-zA-Z0-9_]+)`)
 
 func (p PipelineParser) Parse() (parsed []byte, err error) {
