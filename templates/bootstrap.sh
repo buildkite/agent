@@ -110,7 +110,7 @@ function buildkite-hook {
     # bootstrap's ENV variables. The only downside with this approach, is if
     # they call `exit`, the bootstrap script will exit as well. We this is an
     # acceptable tradeoff.
-    . "$HOOK_SCRIPT_PATH"
+    source "$HOOK_SCRIPT_PATH"
     BUILDKITE_LAST_HOOK_EXIT_STATUS=$?
 
     # Reset the bootstrap.sh flags
