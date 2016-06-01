@@ -287,8 +287,7 @@ else
   buildkite-debug "~~~ Saving Git information"
 
   # Check to see if the meta data exists before setting it
-  buildkite-run-debug buildkite-agent meta-data exists "buildkite:git:commit"
-  if [[ $? -ne 0 ]]; then
+  if ! buildkite-run-debug buildkite-agent meta-data exists "buildkite:git:commit"; then
     buildkite-run-debug buildkite-agent meta-data set "buildkite:git:commit" "$(git show HEAD -s --format=fuller --no-color)"
     buildkite-run-debug buildkite-agent meta-data set "buildkite:git:branch" "$(git branch --contains HEAD --no-color)"
   fi
