@@ -124,7 +124,7 @@ function buildkite-hook {
 
 # Exit from the bootstrap.sh script if the hook exits with a non-0 exit status
 function buildkite-hook-exit-on-error {
-  if [[ $BUILDKITE_LAST_HOOK_EXIT_STATUS != "" ]] && [[ $BUILDKITE_LAST_HOOK_EXIT_STATUS -ne 0 ]]; then
+  if [[ -n "$BUILDKITE_LAST_HOOK_EXIT_STATUS" ]] && [[ $BUILDKITE_LAST_HOOK_EXIT_STATUS -ne 0 ]]; then
     echo "Hook returned an exit status of $BUILDKITE_LAST_HOOK_EXIT_STATUS, exiting..."
     exit $BUILDKITE_LAST_HOOK_EXIT_STATUS
   fi
@@ -344,7 +344,7 @@ elif [[ -e "$BUILDKITE_HOOKS_PATH/command" ]]; then
   export BUILDKITE_COMMAND_EXIT_STATUS=$BUILDKITE_LAST_HOOK_EXIT_STATUS
 else
   # Make sure we actually have a command to run
-  if [[ "$BUILDKITE_COMMAND" == "" ]]; then
+  if [[ -z "$BUILDKITE_COMMAND" ]]; then
     buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
   fi
 
@@ -396,7 +396,7 @@ else
   fi
 
   ## Docker
-  if [[ ! -z "${BUILDKITE_DOCKER:-}" ]] && [[ "$BUILDKITE_DOCKER" != "" ]]; then
+  if [[ -n "${BUILDKITE_DOCKER:-}" ]]; then
     DOCKER_CONTAINER="buildkite_${BUILDKITE_JOB_ID}_container"
     DOCKER_IMAGE="buildkite_${BUILDKITE_JOB_ID}_image"
 
@@ -419,7 +419,7 @@ else
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
   ## Docker Compose
-  elif [[ ! -z "${BUILDKITE_DOCKER_COMPOSE_CONTAINER:-}" ]] && [[ "$BUILDKITE_DOCKER_COMPOSE_CONTAINER" != "" ]]; then
+  elif [[ -n "${BUILDKITE_DOCKER_COMPOSE_CONTAINER:-}" ]]; then
     # Compose strips dashes and underscores, so we'll remove them to match the docker container names
     COMPOSE_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
     COMPOSE_COMMAND=(docker-compose -f "${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml}" -p "$COMPOSE_PROJ_NAME")
@@ -436,7 +436,7 @@ else
       # Send them a friendly kill
       buildkite-prompt-and-run "${COMPOSE_COMMAND[@]}" kill
 
-      if [[ $(docker-compose --version) == *1.6* ]]; then
+      if [[ "$(docker-compose --version)" == *version\ 1.6.* ]]; then
         # 1.6
 
         # There's no --all flag to remove adhoc containers
@@ -502,7 +502,7 @@ buildkite-global-hook "post-command"
 #
 ##############################################################
 
-if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
+if [[ -n "$BUILDKITE_ARTIFACT_PATHS" ]]; then
   # Run the per-checkout `pre-artifact` hook
   buildkite-local-hook "pre-artifact"
 
@@ -510,7 +510,7 @@ if [[ "$BUILDKITE_ARTIFACT_PATHS" != "" ]]; then
   buildkite-global-hook "pre-artifact"
 
   echo "~~~ Uploading artifacts"
-  if [[ ! -z "${BUILDKITE_ARTIFACT_UPLOAD_DESTINATION:-}" ]] && [[ "$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION" != "" ]]; then
+  if [[ -n "${BUILDKITE_ARTIFACT_UPLOAD_DESTINATION:-}" ]]; then
     buildkite-prompt-and-run buildkite-agent artifact upload "$BUILDKITE_ARTIFACT_PATHS" "$BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"
   else
     buildkite-prompt-and-run buildkite-agent artifact upload "$BUILDKITE_ARTIFACT_PATHS"
