@@ -80,6 +80,7 @@ function buildkite-run-debug {
 function buildkite-error {
   echo -e "~~~ :rotating_light: \033[31mBuildkite Error\033[0m"
   echo "$@"
+  echo "^^^ +++"
   exit 1
 }
 
