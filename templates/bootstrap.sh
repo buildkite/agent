@@ -422,7 +422,7 @@ else
   ## Docker Compose
   elif [[ -n "${BUILDKITE_DOCKER_COMPOSE_CONTAINER:-}" ]]; then
     # Compose strips dashes and underscores, so we'll remove them to match the docker container names
-    COMPOSE_PROJ_NAME="buildkite"${BUILDKITE_JOB_ID//-}
+    COMPOSE_PROJ_NAME="buildkite${BUILDKITE_JOB_ID//-}"
     COMPOSE_COMMAND=(docker-compose -f "${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml}" -p "$COMPOSE_PROJ_NAME")
 
     function compose-cleanup {
