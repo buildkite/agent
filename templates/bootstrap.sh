@@ -349,11 +349,7 @@ else
     buildkite-error "No command has been defined. Please go to \"Project Settings\" and configure your build step's \"Command\""
   fi
 
-  # Generate a temporary build script containing what to actually run.
-  buildkite-debug "~~~ Preparing build script"
-  BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
-
-  # Generate a different script for running straight commands or script snippets.
+  # Literal file paths are just executed as the command
   #
   # NOTE: There is a slight problem with this check - and it's with usage with
   # Docker. If you specify a script to run inside the docker container, and that
@@ -362,33 +358,37 @@ else
   # the agent run `app/ci.sh`, ci.sh won't exist on the filesytem at this point
   # at app/ci.sh. The solution is to make sure the `WORKDIR` directroy of the
   # docker container is at /app in that case.
-  if [[ -f "$BUILDKITE_COMMAND" ]]; then
-    BUILDKITE_COMMAND_ACTION="Running build script"
-    printf -v BUILDKITE_COMMAND_DISPLAY "./%q" "$BUILDKITE_COMMAND"
+  if [[ -f "./$BUILDKITE_COMMAND" ]]; then
+    BUILDKITE_COMMAND_DESCRIPTION="Running command"
+    printf -v BUILDKITE_COMMAND_PROMPT "./%q" "$BUILDKITE_COMMAND"
+    BUILDKITE_COMMAND_PATH="$BUILDKITE_COMMAND"
 
-    # Make sure the script they're trying to execute has chmod +x. We can't do
-    # this inside the script we generate because it fails within Docker:
-    # https://github.com/docker/docker/issues/9547
-    buildkite-run-debug chmod +x "$BUILDKITE_COMMAND"
-    printf "#!/bin/bash\nset -eo pipefail\n./%q\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
+  # Otherwise we presume it is a shell script snippet
   else
     # Make sure the agent is even allowed to eval commands
     if [[ "$BUILDKITE_COMMAND_EVAL" != "true" ]]; then
       buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
     fi
 
-    BUILDKITE_COMMAND_ACTION="Running command"
-    BUILDKITE_COMMAND_DISPLAY="$BUILDKITE_COMMAND"
+    buildkite-debug "~~~ Preparing build script"
 
-    printf "#!/bin/bash\nset -eo pipefail\n%s\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
+    BUILDKITE_COMMAND_DESCRIPTION="Running build script"
+    BUILDKITE_COMMAND_PROMPT="$BUILDKITE_COMMAND"
+    BUILDKITE_COMMAND_PATH="buildkite-script-$BUILDKITE_JOB_ID"
+
+    # We'll actually run a temporary file with pipefail and exit-on-fail
+    # containing the full script body, printed literally through printf
+    printf "#!/bin/bash\nset -eo pipefail\n%s\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_COMMAND_PATH"
+
+    if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+      buildkite-run cat "./$BUILDKITE_COMMAND_PATH"
+    fi
   fi
 
-  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
-    buildkite-run cat "$BUILDKITE_SCRIPT_PATH"
+  # Make sure the command is executable
+  if [[ ! -x "./$BUILDKITE_COMMAND_PATH" ]]; then
+    buildkite-run-debug chmod +x "./$BUILDKITE_COMMAND_PATH"
   fi
-
-  # Ensure the temporary build script can be executed
-  chmod +x "$BUILDKITE_SCRIPT_PATH"
 
   ## Docker
   if [[ -n "${BUILDKITE_DOCKER:-}" ]]; then
@@ -407,8 +407,8 @@ else
     buildkite-run docker build -f "${BUILDKITE_DOCKER_FILE:-Dockerfile}" -t "$DOCKER_IMAGE" .
 
     # Run the build script command in a one-off container
-    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker container)"
-    buildkite-prompt-and-run docker run --name "$DOCKER_CONTAINER" "$DOCKER_IMAGE" "./$BUILDKITE_SCRIPT_PATH"
+    echo "~~~ $BUILDKITE_COMMAND_DESCRIPTION (in Docker container)"
+    buildkite-prompt-and-run docker run --name "$DOCKER_CONTAINER" "$DOCKER_IMAGE" "./$BUILDKITE_COMMAND_PATH"
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
@@ -463,18 +463,18 @@ else
     fi
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
-    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
-    buildkite-prompt-and-run "${COMPOSE_COMMAND[@]}" run "$BUILDKITE_DOCKER_COMPOSE_CONTAINER" "./$BUILDKITE_SCRIPT_PATH"
+    echo "~~~ $BUILDKITE_COMMAND_DESCRIPTION (in Docker Compose container)"
+    buildkite-prompt-and-run "${COMPOSE_COMMAND[@]}" run "$BUILDKITE_DOCKER_COMPOSE_CONTAINER" "./$BUILDKITE_COMMAND_PATH"
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
 
   ## Standard
   else
-    echo "~~~ $BUILDKITE_COMMAND_ACTION"
+    echo "~~~ $BUILDKITE_COMMAND_DESCRIPTION"
     echo -ne "$BUILDKITE_PROMPT "
-    echo "$BUILDKITE_COMMAND_DISPLAY"
-    ."/$BUILDKITE_SCRIPT_PATH"
+    echo "$BUILDKITE_COMMAND_PROMPT"
+    "./$BUILDKITE_COMMAND_PATH"
 
     # Capture the exit status from the build script
     export BUILDKITE_COMMAND_EXIT_STATUS=$?
