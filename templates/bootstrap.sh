@@ -463,7 +463,7 @@ else
     fi
 
     # Run the build script command in the service specified in BUILDKITE_DOCKER_COMPOSE_CONTAINER
-    echo "+++ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
+    echo "~~~ $BUILDKITE_COMMAND_ACTION (in Docker Compose container)"
     buildkite-prompt-and-run "${COMPOSE_COMMAND[@]}" run "$BUILDKITE_DOCKER_COMPOSE_CONTAINER" "./$BUILDKITE_SCRIPT_PATH"
 
     # Capture the exit status from the build script
