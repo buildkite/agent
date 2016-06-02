@@ -519,8 +519,7 @@ if [[ -n "$BUILDKITE_ARTIFACT_PATHS" ]]; then
 
   # If the artifact upload fails, open the current group and exit with an error
   if [[ $? -ne 0 ]]; then
-    echo "^^^ +++"
-    exit 1
+    buildkite-error "Unable to upload artifacts"
   fi
 
   # Run the per-checkout `post-artifact` hook
