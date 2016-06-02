@@ -359,9 +359,9 @@ else
     # this inside the script we generate because it fails within Docker:
     # https://github.com/docker/docker/issues/9547
     buildkite-run-debug chmod +x "$BUILDKITE_COMMAND"
-    echo -e '#!/bin/bash'"\nset -eo pipefail\n./\"$BUILDKITE_COMMAND\"" > "$BUILDKITE_SCRIPT_PATH"
+    printf "#!/bin/bash\nset -eo pipefail\n./%q\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
   else
-    echo -e '#!/bin/bash'"\nset -eo pipefail\n$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
+    printf "#!/bin/bash\nset -eo pipefail\n%s\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
   fi
 
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
