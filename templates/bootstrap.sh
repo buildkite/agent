@@ -353,15 +353,33 @@ else
   buildkite-debug "~~~ Preparing build script"
   BUILDKITE_SCRIPT_PATH="buildkite-script-$BUILDKITE_JOB_ID"
 
-  # Generate a different script depending on whether or not it's a script to
-  # execute
+  # Generate a different script for running straight commands or script snippets.
+  #
+  # NOTE: There is a slight problem with this check - and it's with usage with
+  # Docker. If you specify a script to run inside the docker container, and that
+  # isn't on the file system at the same path, then it won't match, and it'll be
+  # treated as an eval. For example, you mount your repository at /app, and tell
+  # the agent run `app/ci.sh`, ci.sh won't exist on the filesytem at this point
+  # at app/ci.sh. The solution is to make sure the `WORKDIR` directroy of the
+  # docker container is at /app in that case.
   if [[ -f "$BUILDKITE_COMMAND" ]]; then
+    BUILDKITE_COMMAND_ACTION="Running build script"
+    printf -v BUILDKITE_COMMAND_DISPLAY "./%q" "$BUILDKITE_COMMAND"
+
     # Make sure the script they're trying to execute has chmod +x. We can't do
     # this inside the script we generate because it fails within Docker:
     # https://github.com/docker/docker/issues/9547
     buildkite-run-debug chmod +x "$BUILDKITE_COMMAND"
     printf "#!/bin/bash\nset -eo pipefail\n./%q\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
   else
+    # Make sure the agent is even allowed to eval commands
+    if [[ "$BUILDKITE_COMMAND_EVAL" != "true" ]]; then
+      buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
+    fi
+
+    BUILDKITE_COMMAND_ACTION="Running command"
+    BUILDKITE_COMMAND_DISPLAY="$BUILDKITE_COMMAND"
+
     printf "#!/bin/bash\nset -eo pipefail\n%s\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_SCRIPT_PATH"
   fi
 
@@ -371,30 +389,6 @@ else
 
   # Ensure the temporary build script can be executed
   chmod +x "$BUILDKITE_SCRIPT_PATH"
-
-  # If the command isn't a file on the filesystem, then it's something we need to
-  # eval. But before we even try running it, we should double check that the
-  # agent is allowed to eval commands.
-  #
-  # NOTE: There is a slight problem with this check - and it's with usage with
-  # Docker. If you specify a script to run inside the docker container, and that
-  # isn't on the file system at the same path, then it won't match, and it'll be
-  # treated as an eval. For example, you mount your repository at /app, and tell
-  # the agent run `app/ci.sh`, ci.sh won't exist on the filesytem at this point
-  # at app/ci.sh. The soltion is to make sure the `workdir` directroy of the
-  # docker container is at /app in that case.
-  if [[ ! -f "$BUILDKITE_COMMAND" ]]; then
-    # Make sure the agent is even allowed to eval commands
-    if [[ "$BUILDKITE_COMMAND_EVAL" != "true" ]]; then
-      buildkite-error "This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the \`--no-command-eval\` option, or specify a script within your repository to run instead (such as scripts/test.sh)."
-    fi
-
-    BUILDKITE_COMMAND_ACTION="Running command"
-    BUILDKITE_COMMAND_DISPLAY="$BUILDKITE_COMMAND"
-  else
-    BUILDKITE_COMMAND_ACTION="Running build script"
-    printf -v BUILDKITE_COMMAND_DISPLAY "./%q" "$BUILDKITE_COMMAND"
-  fi
 
   ## Docker
   if [[ -n "${BUILDKITE_DOCKER:-}" ]]; then
