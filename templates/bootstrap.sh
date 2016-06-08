@@ -419,6 +419,11 @@ else
     COMPOSE_PROJ_NAME="buildkite${BUILDKITE_JOB_ID//-}"
     COMPOSE_COMMAND=(docker-compose -f "${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml}" -p "$COMPOSE_PROJ_NAME")
 
+    # Switch on verbose in debug mode
+    if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+      COMPOSE_COMMAND+=(--verbose)
+    fi
+
     function compose-cleanup {
       if [[ "${BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES:-false}" == "true" ]]; then
         REMOVE_VOLUME_FLAG=""
