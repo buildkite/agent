@@ -967,7 +967,7 @@ func (b *Bootstrap) Start() error {
 				warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 			}
 
-			b.runCommand("git", "submodule", "update", "--init", "--recursive")
+			b.runCommand("git", "submodule", "update", "--init", "--recursive", "--force")
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
 		}
 
