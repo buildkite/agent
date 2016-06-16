@@ -942,10 +942,7 @@ func (b *Bootstrap) Start() error {
 		} else {
 			commentf("Fetch and checkout commit")
 			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "-v", "origin", b.Commit)
-			if gitFetchExitStatus == 0 {
-				// If it suceeds then this should be the exact commit we want
-				b.runCommand("git", "checkout", "-f", "FETCH_HEAD")
-			} else {
+			if gitFetchExitStatus != 0 {
 				// By default `git fetch origin` will only fetch tags which are
 				// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 				// fetch all tags in addition to the default refspec, but pre 1.9.0 it
@@ -953,7 +950,9 @@ func (b *Bootstrap) Start() error {
 				gitFetchRefspec, _ := b.runCommandSilentlyAndCaptureOutput("git", "config", "remote.origin.fetch")
 				b.runCommand("git", "fetch", "-v", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*")
 			}
+			b.runCommand("git", "checkout", "-f", b.Commit)
 		}
+
 
 		if b.GitSubmodules {
 			// `submodule sync` will ensure the .git/config
@@ -967,7 +966,7 @@ func (b *Bootstrap) Start() error {
 				warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 			}
 
-			b.runCommand("git", "submodule", "update", "--init", "--recursive", "--force")
+			b.runCommand("git", "submodule", "update", "--init", "--recursive")
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
 		}
 
