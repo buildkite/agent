@@ -25,7 +25,7 @@ Example:
    $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
-	Command                      string `cli:"command" validate:"required"`
+	Command                      string `cli:"command"`
 	JobID                        string `cli:"job" validate:"required"`
 	Repository                   string `cli:"repository" validate:"required"`
 	Commit                       string `cli:"commit" validate:"required"`
