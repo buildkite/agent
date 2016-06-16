@@ -583,7 +583,7 @@ func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
 		exitf("%s", err)
 	}
 
-	return filepath.Join(b.PluginsPath, id, dir, name)
+	return filepath.Join(b.PluginsPath, id, dir, "hooks", name)
 }
 
 // Executes a plugin hook gracefully
