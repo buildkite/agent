@@ -115,9 +115,9 @@ var PipelineUploadCommand = cli.Command{
 			paths := []string{
 				"buildkite.yml",
 				"buildkite.json",
-				".buildkite/pipeline.yml",
-				".buildkite/pipeline.json",
-				".buildkite/steps.json",
+				filepath.FromSlash(".buildkite/pipeline.yml"),
+				filepath.FromSlash(".buildkite/pipeline.json"),
+				filepath.FromSlash(".buildkite/steps.json"),
 			}
 
 			// Collect all the files that exist
@@ -141,7 +141,7 @@ var PipelineUploadCommand = cli.Command{
 			logger.Info("Found config file \"%s\"", found)
 
 			// Warn about the deprecated steps.json
-			if found == ".buildkite/steps.json" {
+			if found == filepath.FromSlash(".buildkite/steps.json") {
 				logger.Warn("The default steps.json file has been deprecated and will be removed in v2.2. Please rename to .buildkite/pipeline.json and wrap the steps array in a `steps` property: { \"steps\": [ ... ] } }")
 			}
 
