@@ -30,6 +30,10 @@ func (p *Process) Run() error {
 		return err
 	}
 
+	// fmt.Printf("The command dir is: %s\n", p.Command.Dir)
+	// fmt.Printf("The absolute path to the command is: %s\n", absolutePathToCommand)
+	// fmt.Printf("The arguments are: %s\n", p.Command.Args)
+
 	cmd := exec.Command(absolutePathToCommand, p.Command.Args...)
 
 	if p.Command.Env != nil {
