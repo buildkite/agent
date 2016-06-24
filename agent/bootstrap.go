@@ -151,11 +151,14 @@ func promptf(format string, v ...interface{}) {
 	}
 }
 
-// Returns whether or not a file exists on the filesystem
+// Returns whether or not a file exists on the filesystem. We consider any
+// error returned by os.Stat to indicate that the file doesn't exist. We could
+// be speciifc and use os.IsNotExist(err), but most other errors also indicate
+// that the file isn't there (or isn't available) so we'll just catch them all.
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 
-	return !os.IsNotExist(err)
+	return err == nil
 }
 
 // Returns a platform specific filename for scripts
