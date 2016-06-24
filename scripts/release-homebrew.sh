@@ -55,6 +55,7 @@ CONTENTS_API_RESPONSE=$(curl "https://api.github.com/repos/buildkite/homebrew-bu
 
 echo "Base64 decoding Github response into $FORMULA_FILE"
 
+mkdir -p pkg
 echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FILE
 
 echo "--- :ruby: Updating formula file"
