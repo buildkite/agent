@@ -15,9 +15,9 @@ import (
 
 	"github.com/buildkite/agent/shell"
 	"github.com/buildkite/agent/shell/windows"
+	"github.com/flynn-archive/go-shlex"
 	"github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
-	"github.com/flynn-archive/go-shlex"
 )
 
 type Bootstrap struct {
@@ -276,6 +276,34 @@ func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	}
 
 	return &lock, nil
+}
+
+// Changes the working directory of the bootstrap file
+func (b *Bootstrap) changeWorkingDirectory(path string) {
+	commentf("Changing working directory to \"%s\"", path)
+
+	// If the path isn't absolute, prefix it with the current working
+	// directory. If no working directory has been set, use the current
+	// processes working directory.
+	if !filepath.IsAbs(path) {
+		var err error
+		wd := b.wd
+
+		if wd == "" {
+			wd, err = os.Getwd()
+			if err != nil {
+				exitf("Failed to change working: could not calculate current working directory (%s)", err)
+			}
+		}
+
+		path = filepath.Join(wd, path)
+	}
+
+	if fileExists(path) {
+		b.wd = path
+	} else {
+		exitf("Failed to change working: directory does not exist")
+	}
 }
 
 // Creates a shell command ready for running
@@ -782,7 +810,7 @@ func (b *Bootstrap) Start() error {
 
 				// Switch to the plugin directory
 				previousWd := b.wd
-				b.wd = directory
+				b.changeWorkingDirectory(directory)
 
 				commentf("Switching to the plugin directory")
 
@@ -802,7 +830,7 @@ func (b *Bootstrap) Start() error {
 				}
 
 				// Switch back to the previous working directory
-				b.wd = previousWd
+				b.changeWorkingDirectory(previousWd)
 
 				// Now that we've succefully checked out the
 				// plugin, we can remove the lock we have on
@@ -862,9 +890,8 @@ func (b *Bootstrap) Start() error {
 		os.MkdirAll(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
 	}
 
-	// Switch the internal wd to it
-	commentf("Switching working directory to: %s", b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-	b.wd = b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	// Change to the new build checkout path
+	b.changeWorkingDirectory(b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
@@ -920,25 +947,25 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "fetch", "-v", "origin", b.RefSpec)
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
-		// GitHub has a special ref which lets us fetch a pull request head, whether
-		// or not there is a current head in this repository or another which
-		// references the commit. We presume a commit sha is provided. See:
-		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+			// GitHub has a special ref which lets us fetch a pull request head, whether
+			// or not there is a current head in this repository or another which
+			// references the commit. We presume a commit sha is provided. See:
+			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 			commentf("Fetch and checkout pull request head")
-			b.runCommand("git", "fetch", "-v", "origin", "refs/pull/" + b.PullRequest + "/head")
+			b.runCommand("git", "fetch", "-v", "origin", "refs/pull/"+b.PullRequest+"/head")
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
-		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
-		// need to fetch the remote head and checkout the fetched head explicitly.
+			// If the commit is "HEAD" then we can't do a commit-specific fetch and will
+			// need to fetch the remote head and checkout the fetched head explicitly.
 		} else if b.Commit == "HEAD" {
 			commentf("Fetch and checkout remote branch HEAD commit")
 			b.runCommand("git", "fetch", "-v", "origin", b.Branch)
 			b.runCommand("git", "checkout", "-f", "FETCH_HEAD")
 
-		// Otherwise fetch and checkout the commit directly. Some repositories don't
-		// support fetching a specific commit so we fall back to fetching all heads
-		// and tags, hoping that the commit is included.
+			// Otherwise fetch and checkout the commit directly. Some repositories don't
+			// support fetching a specific commit so we fall back to fetching all heads
+			// and tags, hoping that the commit is included.
 		} else {
 			commentf("Fetch and checkout commit")
 			gitFetchExitStatus := b.runCommandGracefully("git", "fetch", "-v", "origin", b.Commit)
@@ -952,7 +979,6 @@ func (b *Bootstrap) Start() error {
 			}
 			b.runCommand("git", "checkout", "-f", b.Commit)
 		}
-
 
 		if b.GitSubmodules {
 			// `submodule sync` will ensure the .git/config
@@ -1004,25 +1030,14 @@ func (b *Bootstrap) Start() error {
 	// Run the `post-checkout` plugin hook
 	b.executePluginHook(plugins, "post-checkout")
 
-	// Capture the new checkout path so we can see if it's changed. We need
-	// to also handle the case where they just switch it to "foo/bar",
-	// because that directory is relative to the current working directory.
+	// Capture the new checkout path so we can see if it's changed.
 	newCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-	newCheckoutPathAbs := newCheckoutPath
-	if !filepath.IsAbs(newCheckoutPathAbs) {
-		newCheckoutPathAbs = filepath.Join(b.wd, newCheckoutPath)
-	}
 
 	// If the working directory has been changed by a hook, log and switch to it
-	if b.wd != "" && previousCheckoutPath != newCheckoutPathAbs {
+	if b.wd != "" && previousCheckoutPath != newCheckoutPath {
 		headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
-		if fileExists(newCheckoutPathAbs) {
-			commentf("Switching working directory to \"%s\"", newCheckoutPathAbs)
-			b.wd = newCheckoutPathAbs
-		} else {
-			exitf("Failed to switch to \"%s\" as it doesn't exist", newCheckoutPathAbs)
-		}
+		b.changeWorkingDirectory(newCheckoutPath)
 	}
 
 	//////////////////////////////////////////////////////////////
