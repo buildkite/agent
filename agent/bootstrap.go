@@ -286,25 +286,29 @@ func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	return &lock, nil
 }
 
+// Returns the current working directory. Returns the current processes working
+// directory if one has not been set directly.
+func (b *Bootstrap) currentWorkingDirectory() string {
+	if b.wd == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			exitf("Failed to find current working directory (%s)", err)
+		}
+
+		return wd
+	}
+
+	return b.wd
+}
+
 // Changes the working directory of the bootstrap file
 func (b *Bootstrap) changeWorkingDirectory(path string) {
 	commentf("Changing working directory to \"%s\"", path)
 
 	// If the path isn't absolute, prefix it with the current working
-	// directory. If no working directory has been set, use the current
-	// processes working directory.
+	// directory.
 	if !filepath.IsAbs(path) {
-		var err error
-		wd := b.wd
-
-		if wd == "" {
-			wd, err = os.Getwd()
-			if err != nil {
-				exitf("Failed to change working: could not calculate current working directory (%s)", err)
-			}
-		}
-
-		path = filepath.Join(wd, path)
+		path = filepath.Join(b.currentWorkingDirectory(), path)
 	}
 
 	if fileExists(path) {
@@ -316,7 +320,7 @@ func (b *Bootstrap) changeWorkingDirectory(path string) {
 
 // Creates a shell command ready for running
 func (b *Bootstrap) newCommand(command string, args ...string) *shell.Command {
-	return &shell.Command{Command: command, Args: args, Env: b.env, Dir: b.wd}
+	return &shell.Command{Command: command, Args: args, Env: b.env, Dir: b.currentWorkingDirectory()}
 }
 
 // Run a command without showing a prompt or the output to the user
@@ -465,9 +469,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 // the ENV to a file, runs the hook, then writes the ENV back to another file.
 // Once all that has finished, we compare the files, and apply what ever
 // changes to our running env. Cool huh?
-func (b *Bootstrap) executeHook(name string, path string, exitOnError bool, env *shell.Environment) int {
-	hookPath := normalizeScriptFileName(path)
-
+func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, env *shell.Environment) int {
 	// Check if the hook exists
 	if fileExists(hookPath) {
 		// Create a temporary file that we'll put the hook runner code in
@@ -589,7 +591,7 @@ func (b *Bootstrap) executeHook(name string, path string, exitOnError bool, env 
 
 // Returns the absolute path to a global hook
 func (b *Bootstrap) globalHookPath(name string) string {
-	return filepath.Join(b.HooksPath, name)
+	return filepath.Join(b.HooksPath, normalizeScriptFileName(name))
 }
 
 // Executes a global hook
@@ -599,7 +601,7 @@ func (b *Bootstrap) executeGlobalHook(name string) int {
 
 // Returns the absolute path to a local hook
 func (b *Bootstrap) localHookPath(name string) string {
-	return filepath.Join(b.wd, ".buildkite", "hooks", name)
+	return filepath.Join(b.currentWorkingDirectory(), ".buildkite", "hooks", normalizeScriptFileName(name))
 }
 
 // Executes a local hook
@@ -619,7 +621,7 @@ func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
 		exitf("%s", err)
 	}
 
-	return filepath.Join(b.PluginsPath, id, dir, "hooks", name)
+	return filepath.Join(b.PluginsPath, id, dir, "hooks", normalizeScriptFileName(name))
 }
 
 // Executes a plugin hook gracefully
@@ -817,7 +819,7 @@ func (b *Bootstrap) Start() error {
 				}
 
 				// Switch to the plugin directory
-				previousWd := b.wd
+				previousWd := b.currentWorkingDirectory()
 				b.changeWorkingDirectory(directory)
 
 				commentf("Switching to the plugin directory")
@@ -912,7 +914,7 @@ func (b *Bootstrap) Start() error {
 		}
 
 		// Do we need to do a git checkout?
-		existingGitDir := filepath.Join(b.wd, ".git")
+		existingGitDir := filepath.Join(b.currentWorkingDirectory(), ".git")
 		if fileExists(existingGitDir) {
 			// Update the the origin of the repository so we can
 			// gracefully handle repository renames
@@ -1042,7 +1044,7 @@ func (b *Bootstrap) Start() error {
 	newCheckoutPath := b.env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// If the working directory has been changed by a hook, log and switch to it
-	if b.wd != "" && previousCheckoutPath != newCheckoutPath {
+	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
 		headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
 		b.changeWorkingDirectory(newCheckoutPath)
@@ -1084,7 +1086,7 @@ func (b *Bootstrap) Start() error {
 			exitf("No command has been defined. Please go to \"Pipeline Settings\" and configure your build step's \"Command\"")
 		}
 
-		pathToCommand := filepath.Join(b.wd, strings.Replace(b.Command, "\n", "", -1))
+		pathToCommand := filepath.Join(b.currentWorkingDirectory(), strings.Replace(b.Command, "\n", "", -1))
 		commandIsScript := fileExists(pathToCommand)
 
 		// If the command isn't a script, then it's something we need
@@ -1139,7 +1141,7 @@ func (b *Bootstrap) Start() error {
 			}
 
 			// Create a temporary file where we'll run a program from
-			buildScriptPath = filepath.Join(b.wd, normalizeScriptFileName("buildkite-script-"+b.JobID))
+			buildScriptPath = filepath.Join(b.currentWorkingDirectory(), normalizeScriptFileName("buildkite-script-"+b.JobID))
 
 			if b.Debug {
 				headerf("Preparing build script")
