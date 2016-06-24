@@ -248,9 +248,14 @@ func checkShellError(err error, cmd *shell.Command) {
 
 // Aquires a lock on the directory
 func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
-	lock, err := lockfile.New(path)
+	absolutePathToLock, err := filepath.Abs(path)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", path, err)
+		exitf("Failed to find absolute path to lock \"%s\" (%s)", path, err)
+	}
+
+	lock, err := lockfile.New(absolutePathToLock)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
 	}
 
 	// Aquire the lock. Keep trying the lock until we get it
@@ -263,11 +268,11 @@ func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 				// lock
 				attempts += 1
 				if attempts > seconds {
-					return nil, fmt.Errorf("Gave up trying to aquire a lock on \"%s\" (%s)", path, err)
+					return nil, fmt.Errorf("Gave up trying to aquire a lock on \"%s\" (%s)", absolutePathToLock, err)
 				}
 
 				// Try again in a second
-				commentf("Could not aquire lock on \"%s\" (%s)", path, err)
+				commentf("Could not aquire lock on \"%s\" (%s)", absolutePathToLock, err)
 				commentf("Trying again in 1 second...")
 				time.Sleep(1 * time.Second)
 			} else {
