@@ -105,6 +105,9 @@ type Bootstrap struct {
 	// The running environment for the bootstrap file as each task runs
 	env *shell.Environment
 
+  // The secret environment variables exposed by the secrets hook
+  secrets *shell.Environment
+
 	// Current working directory that shell commands get executed in
 	wd string
 }
@@ -339,7 +342,7 @@ func (b *Bootstrap) runCommandGracefully(command string, args ...string) int {
 
 	promptf("%s", cmd)
 
-	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout})
+	process, err := shell.Run(cmd, &shell.Config{Writer: shell.FilteredOutput{os.Stdout, b.secrets}})
 	checkShellError(err, cmd)
 
 	return process.ExitStatus()
@@ -364,7 +367,7 @@ func (b *Bootstrap) runScript(command string) int {
 		cmd = b.newCommand("/bin/bash", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
 	}
 
-	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout, PTY: b.RunInPty})
+	process, err := shell.Run(cmd, &shell.Config{Writer: shell.FilteredOutput{os.Stdout, b.secrets}, PTY: b.RunInPty})
 	checkShellError(err, cmd)
 
 	return process.ExitStatus()
@@ -656,6 +659,18 @@ func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
 	return false
 }
 
+func (b *Bootstrap) executeSecretsHooks(plugins []*Plugin) *shell.Environment {
+  envBeforeSecretsHook := b.env.Copy()
+
+  // The global secrets hook
+  b.executeGlobalHook("secrets")  
+
+  // The plugin secrets hook
+  b.executePluginHook(plugins, "secrets")
+
+  return b.env.Diff(envBeforeSecretsHook)
+}
+
 // Checks to see if the bootstrap configuration has changed at runtime, and
 // applies them if they've changed
 func (b *Bootstrap) applyEnvironmentConfigChanges() {
@@ -866,6 +881,9 @@ func (b *Bootstrap) Start() error {
 
 	// The plugin environment hook
 	b.executePluginHook(plugins, "environment")
+
+  // The global and plugin secrets hooks
+  b.secrets = b.executeSecretsHooks(plugins)
 
 	//////////////////////////////////////////////////////////////
 	//
