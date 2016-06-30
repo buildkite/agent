@@ -462,7 +462,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	}
 }
 
-// Executes a hook and applyes any environment changes. The tricky thing with
+// Executes a hook and applies any environment changes. The tricky thing with
 // hooks is that they can modify the ENV of a bootstrap. And it's impossible to
 // grab the ENV of a child process before it finishes, so we've got an awesome
 // ugly hack to get around this.  We essentially have a bash script that writes
