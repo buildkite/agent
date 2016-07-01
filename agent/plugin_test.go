@@ -196,15 +196,35 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 func TestPluginConfigurationToEnvironment(t *testing.T) {
 	var env *shell.Environment
 	var err error
-	plugin := &Plugin{Location: "github.com/buildkite/plugins/docker-compose"}
+	plugin := &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin"}
 
-	plugin.Configuration = map[string]interface{}{"container": "app", "some-other-setting": "else right here"}
+	plugin.Configuration = map[string]interface{}{
+		"container": "app",
+		"some-other-setting": "else right here",
+	}
 	env, err = plugin.ConfigurationToEnvironment()
 	assert.Nil(t, err)
-	assert.Equal(t, env.ToSlice(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app", "BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here"})
+	assert.Equal(t, env.ToSlice(), []string{
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here",
+	})
 
-	plugin.Configuration = map[string]interface{}{"and _ with a    - number": 12}
+	plugin.Configuration = map[string]interface{}{
+		"and _ with a    - number": 12,
+	}
 	env, err = plugin.ConfigurationToEnvironment()
 	assert.Nil(t, err)
-	assert.Equal(t, env.ToSlice(), []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"})
+	assert.Equal(t, env.ToSlice(), []string{
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12",
+	})
+
+	plugin.Configuration = map[string]interface{}{
+		"array-key": []string{ "array-val-1", "array-val-2" },
+	}
+	env, err = plugin.ConfigurationToEnvironment()
+	assert.Nil(t, err)
+	assert.Equal(t, env.ToSlice(), []string{
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0=array-val-1",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1=array-val-2",
+	})
 }

@@ -189,6 +189,10 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 			env = append(env, fmt.Sprintf("%s=%s", name, vv))
 		case int:
 			env = append(env, fmt.Sprintf("%s=%d", name, vv))
+		case []string:
+			for i := range vv {
+				env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
+			}
 		default:
 			// unknown type
 		}
