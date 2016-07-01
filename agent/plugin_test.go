@@ -53,6 +53,12 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 func TestPluginName(t *testing.T) {
 	var plugin *Plugin
 
+	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin"}
+	assert.Equal(t, plugin.Name(), "docker-compose")
+
+	plugin = &Plugin{Location: "github.com/my-org/docker-compose-buildkite-plugin"}
+	assert.Equal(t, plugin.Name(), "docker-compose")
+
 	plugin = &Plugin{Location: "github.com/buildkite/plugins/docker-compose"}
 	assert.Equal(t, plugin.Name(), "docker-compose")
 
