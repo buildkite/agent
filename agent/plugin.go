@@ -114,6 +114,7 @@ func (p *Plugin) Name() string {
 		name = strings.ToLower(name)
 		name = regexp.MustCompile(`\s+`).ReplaceAllString(name, " ")
 		name = regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(name, "-")
+		name = strings.Replace(name, "-buildkite-plugin", "", -1)
 
 		return name
 	} else {
