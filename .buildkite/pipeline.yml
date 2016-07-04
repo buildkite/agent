@@ -66,11 +66,14 @@ steps:
   - wait
 
   -
-    name: ":whale:"
-    command: "scripts/release-docker.sh"
+    name: ":whale: :rocket:"
+    trigger: docker-buildkite-agent
     branches: "master 2-1-stable"
-    agents:
-      queue: "deploy"
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
 
   - block: ":shipit: Unstable"
     branches: "master 2-1-stable"
@@ -113,11 +116,14 @@ steps:
   - wait
 
   -
-    name: ":whale:"
-    command: "scripts/release-docker.sh"
+    name: ":whale: :rocket:"
+    trigger: docker-buildkite-agent
     branches: "master 2-1-stable"
-    agents:
-      queue: "deploy"
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
 
   -
     name: ":beer:"
@@ -161,8 +167,11 @@ steps:
   - wait
 
   -
-    name: ":whale:"
-    command: "scripts/release-docker.sh"
+    name: ":whale: :rocket:"
+    trigger: docker-buildkite-agent
     branches: "master 2-1-stable"
-    agents:
-      queue: "deploy"
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
