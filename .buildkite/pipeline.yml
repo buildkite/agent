@@ -74,6 +74,8 @@ steps:
       message: "Update Docker images"
       commit: "HEAD"
       branch: "master"
+      env:
+        CODENAME: "experimental"
 
   - block: ":shipit: Unstable"
     branches: "master 2-1-stable"
@@ -124,6 +126,8 @@ steps:
       message: "Update Docker images"
       commit: "HEAD"
       branch: "master"
+      env:
+        CODENAME: "unstable"
 
   -
     name: ":beer:"
@@ -175,3 +179,5 @@ steps:
       message: "Update Docker images"
       commit: "HEAD"
       branch: "master"
+      env:
+        CODENAME: "stable"
