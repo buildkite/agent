@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/buildkite/agent/shell"
@@ -193,38 +195,60 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	assert.Equal(t, err.Error(), "Missing plugin location")
 }
 
-func TestPluginConfigurationToEnvironment(t *testing.T) {
+func TestConfigurationToEnvironment(t *testing.T) {
 	var env *shell.Environment
 	var err error
-	plugin := &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin"}
 
-	plugin.Configuration = map[string]interface{}{
-		"container": "app",
-		"some-other-setting": "else right here",
-	}
-	env, err = plugin.ConfigurationToEnvironment()
+	env, err = pluginEnvFromConfig(t, `{ "config-key": 42 }`)
 	assert.Nil(t, err)
-	assert.Equal(t, env.ToSlice(), []string{
+	assert.Equal(t, []string{ "BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONFIG_KEY=42" }, env.ToSlice())
+
+	env, err = pluginEnvFromConfig(t, `{ "container": "app", "some-other-setting": "else right here" }`)
+	assert.Nil(t, err)
+	assert.Equal(t, []string{
 		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONTAINER=app",
-		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here",
-	})
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_SOME_OTHER_SETTING=else right here"},
+		env.ToSlice())
 
-	plugin.Configuration = map[string]interface{}{
-		"and _ with a    - number": 12,
-	}
-	env, err = plugin.ConfigurationToEnvironment()
+	env, err = pluginEnvFromConfig(t, `{ "and _ with a    - number": 12 }`)
 	assert.Nil(t, err)
-	assert.Equal(t, env.ToSlice(), []string{
-		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12",
-	})
+	assert.Equal(t, []string{ "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"}, env.ToSlice())
 
-	plugin.Configuration = map[string]interface{}{
-		"array-key": []string{ "array-val-1", "array-val-2" },
-	}
-	env, err = plugin.ConfigurationToEnvironment()
+	env, err = pluginEnvFromConfig(t, `{ "array-key": [ "array-val-1", "array-val-2" ] }`)
 	assert.Nil(t, err)
-	assert.Equal(t, env.ToSlice(), []string{
+	assert.Equal(t, []string{
 		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0=array-val-1",
-		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1=array-val-2",
-	})
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1=array-val-2"},
+		env.ToSlice())
+
+	env, err = pluginEnvFromConfig(t, `{ "array-key": [ 42, 43, 44 ] }`)
+	assert.Nil(t, err)
+	assert.Equal(t, []string{
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0=42",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1=43",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_2=44"},
+		env.ToSlice())
+
+	env, err = pluginEnvFromConfig(t, `{ "array-key": [ 42, 43, "foo" ] }`)
+	assert.Nil(t, err)
+	assert.Equal(t, []string{
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0=42",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_1=43",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_2=foo"},
+		env.ToSlice())
+}
+
+func pluginEnvFromConfig(t *testing.T, configJson string) (*shell.Environment, error) {
+	var config map[string]interface{}
+
+	json.Unmarshal([]byte(configJson), &config)
+
+	jsonString := fmt.Sprintf(`[ { "%s": %s } ]`, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", configJson)
+
+	plugins, err := CreatePluginsFromJSON(jsonString)
+	
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(plugins))
+	
+	return plugins[0].ConfigurationToEnvironment()
 }

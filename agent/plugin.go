@@ -187,13 +187,26 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 		switch vv := v.(type) {
 		case string:
 			env = append(env, fmt.Sprintf("%s=%s", name, vv))
-		case int:
-			env = append(env, fmt.Sprintf("%s=%d", name, vv))
+		case float64:
+			env = append(env, fmt.Sprintf("%s=%f", name, vv))
 		case []string:
 			for i := range vv {
 				env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
 			}
+		case []interface {}:
+			for i := range vv {
+				switch vvv := vv[i].(type) {
+				case float64:
+					env = append(env, fmt.Sprintf("%s_%d=%f", name, i, vvv))
+				case string:
+					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv))
+				default:
+					fmt.Printf("Unknown type %T %v", vvv, vvv)
+					// unknown type
+				}
+			}
 		default:
+			fmt.Printf("Unknown type %T %v", vv, vv)
 			// unknown type
 		}
 	}
