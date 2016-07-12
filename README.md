@@ -48,26 +48,21 @@ root@d854f845511a:/go/src/github.com/buildkite/agent# go run *.go start --token 
 
 ```bash
 # Make sure you have go installed.
-brew install go --cross-compile-common
-brew install mercurial
+brew install go
 
 # Setup your GOPATH
 export GOPATH="$HOME/Code/go"
 export PATH="$HOME/Code/go/bin:$PATH"
 
-# Use dependencies from the vendor/ subdirectory
-export GO15VENDOREXPERIMENT=1
-
 # Checkout the code
-mkdir -p $GOPATH/src/github.com/buildkite/agent
-git clone git@github.com:buildkite/agent.git $GOPATH/src/github.com/buildkite/agent
-cd $GOPATH/src/github.com/buildkite/agent
+go get github.com/buildkite/agent
+cd "$GOPATH/src/github.com/buildkite/agent"
 ```
 
 To test the commands locally:
 
 ```bash
-go run *.go start --debug --token "abc123"
+go run main.go start --debug --token "abc123"
 ```
 
 ## Contributing
