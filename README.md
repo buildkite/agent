@@ -18,6 +18,7 @@ Available commands are:
   artifact	Upload/download artifacts from Buildkite jobs
   meta-data	Get/set data from Buildkite jobs
   pipeline	Make changes to the pipeline of the currently running build
+  bootstrap	Run a Buildkite job locally
   help, h	Shows a list of commands or help for one command
 
 Use "buildkite-agent <command> --help" for more information about a command.
