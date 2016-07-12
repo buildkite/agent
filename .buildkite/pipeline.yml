@@ -5,8 +5,6 @@ steps:
     plugins:
       - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
           run: agent
-    agents:
-      queue: "elastic"
 
   -
     name: "📦"
@@ -15,8 +13,6 @@ steps:
     plugins:
       - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
           run: agent
-    agents:
-      queue: "elastic"
 
   - wait
 
