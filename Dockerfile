@@ -38,10 +38,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 		zip \
 	&& rm -rf /var/lib/apt/lists/*
 
-ENV RUBY_MAJOR 2.2
-ENV RUBY_VERSION 2.2.3
-ENV RUBY_DOWNLOAD_SHA256 df795f2f99860745a416092a4004b016ccf77e8b82dec956b120f18bdc71edce
-ENV RUBYGEMS_VERSION 2.4.8
+ENV RUBY_MAJOR 2.3
+ENV RUBY_VERSION 2.3.1
+ENV RUBY_DOWNLOAD_SHA256 b87c738cb2032bf4920fef8e3864dc5cf8eae9d89d8d523ce0236945c5797dcd
+ENV RUBYGEMS_VERSION 2.6.6
 
 # Skip installing gem documentation
 RUN echo 'install: --no-document\nupdate: --no-document' >> "$HOME/.gemrc"
@@ -69,7 +69,7 @@ RUN apt-get update \
 ENV GEM_HOME /usr/local/bundle
 ENV PATH $GEM_HOME/bin:$PATH
 
-ENV BUNDLER_VERSION 1.10.6
+ENV BUNDLER_VERSION 1.12.5
 
 RUN gem install bundler --version "$BUNDLER_VERSION" \
 	&& bundle config --global path "$GEM_HOME" \
