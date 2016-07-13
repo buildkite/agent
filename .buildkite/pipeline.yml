@@ -1,18 +1,31 @@
 steps:
+
+  - wait
+
+  - name: ":docker: :package:"
+    plugins:
+      docker-compose#e8ce6c1:
+        build: agent
+        image-repository: index.docker.io/buildkiteci/agent
+    agents:
+      queue: elastic-builders
+
+  - wait
+
   -
     name: "🔨"
     command: "scripts/tests.sh"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
-          run: agent
+      docker-compose#e8ce6c1:
+        run: agent
 
   -
     name: "📦"
     command: "scripts/build-binaries.sh"
     artifact_paths: "pkg/*"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
-          run: agent
+      docker-compose#e8ce6c1:
+        run: agent
 
   - wait
 
@@ -60,8 +73,8 @@ steps:
     artifact_paths: "releases/**/*"
     branches: "master 2-1-stable"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
-          run: agent
+      docker-compose#e8ce6c1:
+        run: agent
 
   - wait
 
