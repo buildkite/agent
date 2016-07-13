@@ -10,7 +10,7 @@ import (
 )
 
 var HeaderRegex = regexp.MustCompile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
-var ANSIColorRegex = regexp.MustCompile(`\x1b\[([;\d]+)?m`)
+var ANSIColorRegex = regexp.MustCompile(`\x1b\[([;\d]+)?[mK]`)
 
 type HeaderTimesStreamer struct {
 	// The callback that will be called when a header time is ready for
