@@ -35,7 +35,7 @@ build-binary "freebsd" "386"
 # commit to GitHub)
 echo '--- Saving agent version to build meta data'
 
-FULL_AGENT_VERSION=`pkg/buildkite-agent-linux-386 --version`
+FULL_AGENT_VERSION=$(pkg/buildkite-agent-linux-amd64 --version)
 AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //' | sed -E 's/\, build .+//')
 BUILD_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version .*, build //')
 
