@@ -1,14 +1,87 @@
 steps:
-  -
-    name: "🔨"
+
+  - wait
+
+  - name: ":hammer:"
     command: "scripts/tests.sh"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - wait
+
+  - name: ":windows: 386"
+    command: "scripts/build-binary.sh windows 386"
+    artifact_paths: "pkg/*"
     plugins:
       - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
           run: agent
 
-  -
-    name: "📦"
-    command: "scripts/build-binaries.sh"
+  - name: ":windows: amd64"
+    command: "scripts/build-binary.sh windows amd64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":linux: amd64"
+    command: "scripts/build-binary.sh linux amd64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":linux: 386"
+    command: "scripts/build-binary.sh linux 386"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":linux: arm"
+    command: "scripts/build-binary.sh linux arm"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":linux: armhf"
+    command: "scripts/build-binary.sh linux armhf"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":linux: arm64"
+    command: "scripts/build-binary.sh linux arm64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":mac: 386"
+    command: "scripts/build-binary.sh darwin 386"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":mac: amd64"
+    command: "scripts/build-binary.sh darwin amd64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":freebsd: amd64"
+    command: "scripts/build-binary.sh freebsd amd64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":freebsd: 386"
+    command: "scripts/build-binary.sh freebsd 386"
     artifact_paths: "pkg/*"
     plugins:
       - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
@@ -16,8 +89,12 @@ steps:
 
   - wait
 
-  -
-    name: ":debian: build"
+  - name: "Extract version metadata"
+    command: "scripts/extract-agent-version-metadata.sh"
+
+  - wait
+
+  - name: ":debian: build"
     command: "scripts/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
     branches: "master 2-1-stable"
@@ -26,8 +103,7 @@ steps:
 
   - wait
 
-  -
-    name: ":s3: publish binaries"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     branches: "master 2-1-stable"
     env:
@@ -35,8 +111,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":redhat: experimental"
+  - name: ":redhat: experimental"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master 2-1-stable"
@@ -45,8 +120,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":debian: publish experimental"
+  - name: ":debian: publish experimental"
     command: "scripts/publish-debian-package.sh"
     branches: "master 2-1-stable"
     env:
@@ -54,19 +128,17 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":github: :hammer:"
+  - name: ":github: :hammer:"
     command: "scripts/build-github-release.sh"
     artifact_paths: "releases/**/*"
     branches: "master 2-1-stable"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
-          run: agent
+      docker-compose#e8ce6c1:
+        run: github-release
 
   - wait
 
-  -
-    name: ":whale:"
+  - name: ":whale:"
     command: "scripts/release-docker.sh"
     branches: "master 2-1-stable"
     agents:
@@ -75,8 +147,7 @@ steps:
   - block: ":shipit: Unstable"
     branches: "master 2-1-stable"
 
-  -
-    name: ":s3: publish binaries"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     branches: "master 2-1-stable"
     env:
@@ -84,15 +155,13 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":octocat: :rocket:"
+  - name: ":octocat: :rocket:"
     command: "scripts/github-release.sh"
     branches: "master 2-1-stable"
     agents:
       queue: "deploy"
 
-  -
-    name: ":redhat:"
+  - name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master 2-1-stable"
@@ -101,8 +170,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":debian: publish unstable"
+  - name: ":debian: publish unstable"
     command: "scripts/publish-debian-package.sh"
     branches: "master 2-1-stable"
     env:
@@ -112,15 +180,13 @@ steps:
 
   - wait
 
-  -
-    name: ":whale:"
+  - name: ":whale:"
     command: "scripts/release-docker.sh"
     branches: "master 2-1-stable"
     agents:
       queue: "deploy"
 
-  -
-    name: ":beer:"
+  - name: ":beer:"
     command: "scripts/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     branches: "master 2-1-stable"
@@ -130,8 +196,7 @@ steps:
   - block: ":shipit: Stable"
     branches: "master 2-1-stable"
 
-  -
-    name: ":s3: publish binaries"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     branches: "master 2-1-stable"
     env:
@@ -139,8 +204,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":redhat:"
+  - name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master 2-1-stable"
@@ -149,8 +213,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":debian: publish stable"
+  - name: ":debian: publish stable"
     command: "scripts/publish-debian-package.sh"
     branches: "master 2-1-stable"
     env:
@@ -160,8 +223,7 @@ steps:
 
   - wait
 
-  -
-    name: ":whale:"
+  - name: ":whale:"
     command: "scripts/release-docker.sh"
     branches: "master 2-1-stable"
     agents:
