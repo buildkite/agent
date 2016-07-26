@@ -12,7 +12,7 @@ fi
 echo "--- :package: Downloading built binaries"
 
 rm -rf pkg/*
-buildkite-agent artifact download --step '📦' "pkg/buildkite-agent-*" .
+buildkite-agent artifact download "pkg/buildkite-agent-*" .
 cd pkg
 
 echo "--- :s3: Publishing $version to download.buildkite.com"
