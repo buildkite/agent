@@ -94,8 +94,7 @@ steps:
 
   - wait
 
-  -
-    name: ":debian: build"
+  - name: ":debian: build"
     command: "scripts/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
     branches: "master 2-1-stable"
@@ -104,8 +103,7 @@ steps:
 
   - wait
 
-  -
-    name: ":s3: publish binaries"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     branches: "master 2-1-stable"
     env:
@@ -113,8 +111,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":redhat: experimental"
+  - name: ":redhat: experimental"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master 2-1-stable"
@@ -123,8 +120,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":debian: publish experimental"
+  - name: ":debian: publish experimental"
     command: "scripts/publish-debian-package.sh"
     branches: "master 2-1-stable"
     env:
@@ -132,8 +128,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":github: :hammer:"
+  - name: ":github: :hammer:"
     command: "scripts/build-github-release.sh"
     artifact_paths: "releases/**/*"
     branches: "master 2-1-stable"
@@ -143,8 +138,7 @@ steps:
 
   - wait
 
-  -
-    name: ":whale: :rocket:"
+  - name: ":whale: :rocket:"
     trigger: docker-buildkite-agent
     branches: "master 2-1-stable"
     async: true
@@ -158,8 +152,7 @@ steps:
   - block: ":shipit: Unstable"
     branches: "master 2-1-stable"
 
-  -
-    name: ":s3: publish binaries"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     branches: "master 2-1-stable"
     env:
@@ -167,15 +160,13 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":octocat: :rocket:"
+  - name: ":octocat: :rocket:"
     command: "scripts/github-release.sh"
     branches: "master 2-1-stable"
     agents:
       queue: "deploy"
 
-  -
-    name: ":redhat:"
+  - name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master 2-1-stable"
@@ -184,8 +175,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":debian: publish unstable"
+  - name: ":debian: publish unstable"
     command: "scripts/publish-debian-package.sh"
     branches: "master 2-1-stable"
     env:
@@ -195,8 +185,7 @@ steps:
 
   - wait
 
-  -
-    name: ":whale: :rocket:"
+  - name: ":whale: :rocket:"
     trigger: docker-buildkite-agent
     branches: "master 2-1-stable"
     async: true
@@ -207,8 +196,7 @@ steps:
       env:
         CODENAME: "unstable"
 
-  -
-    name: ":beer:"
+  - name: ":beer:"
     command: "scripts/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     branches: "master 2-1-stable"
@@ -218,8 +206,7 @@ steps:
   - block: ":shipit: Stable"
     branches: "master 2-1-stable"
 
-  -
-    name: ":s3: publish binaries"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     branches: "master 2-1-stable"
     env:
@@ -227,8 +214,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":redhat:"
+  - name: ":redhat:"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     branches: "master 2-1-stable"
@@ -237,8 +223,7 @@ steps:
     agents:
       queue: "deploy"
 
-  -
-    name: ":debian: publish stable"
+  - name: ":debian: publish stable"
     command: "scripts/publish-debian-package.sh"
     branches: "master 2-1-stable"
     env:
@@ -248,8 +233,7 @@ steps:
 
   - wait
 
-  -
-    name: ":whale: :rocket:"
+  - name: ":whale: :rocket:"
     trigger: docker-buildkite-agent
     branches: "master 2-1-stable"
     async: true
