@@ -14,8 +14,8 @@ steps:
     command: "scripts/build-binary.sh windows 386"
     artifact_paths: "pkg/*"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
-          run: agent
+      docker-compose#e8ce6c1:
+        run: agent
 
   - name: ":windows: amd64"
     command: "scripts/build-binary.sh windows amd64"
@@ -84,8 +84,8 @@ steps:
     command: "scripts/build-binary.sh freebsd 386"
     artifact_paths: "pkg/*"
     plugins:
-      - https://github.com/buildkite/docker-compose-buildkite-plugin#b47622c:
-          run: agent
+      docker-compose#e8ce6c1:
+        run: agent
 
   - wait
 
