@@ -56,9 +56,13 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 
 // Given a JSON structure, convert it to an array of plugins
 func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
+	// Use more versatile number decoding
+	decoder := json.NewDecoder(strings.NewReader(j))
+	decoder.UseNumber()
+
 	// Parse the JSON
 	var f interface{}
-	err := json.Unmarshal([]byte(j), &f)
+	err := decoder.Decode(&f)
 	if err != nil {
 		return nil, err
 	}
@@ -187,8 +191,8 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 		switch vv := v.(type) {
 		case string:
 			env = append(env, fmt.Sprintf("%s=%s", name, vv))
-		case float64:
-			env = append(env, fmt.Sprintf("%s=%f", name, vv))
+		case json.Number:
+			env = append(env, fmt.Sprintf("%s=%s", name, vv.String()))
 		case []string:
 			for i := range vv {
 				env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
@@ -196,8 +200,8 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 		case []interface {}:
 			for i := range vv {
 				switch vvv := vv[i].(type) {
-				case float64:
-					env = append(env, fmt.Sprintf("%s_%d=%f", name, i, vvv))
+				case json.Number:
+					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv.String()))
 				case string:
 					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv))
 				default:
