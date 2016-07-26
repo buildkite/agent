@@ -89,7 +89,7 @@ steps:
 
   - wait
 
-  - name: "Extract version metadata"
+  - name: ":mag:"
     command: "scripts/extract-agent-version-metadata.sh"
 
   - wait
