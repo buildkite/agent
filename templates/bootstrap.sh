@@ -417,7 +417,12 @@ else
   elif [[ -n "${BUILDKITE_DOCKER_COMPOSE_CONTAINER:-}" ]]; then
     # Compose strips dashes and underscores, so we'll remove them to match the docker container names
     COMPOSE_PROJ_NAME="buildkite${BUILDKITE_JOB_ID//-}"
-    COMPOSE_COMMAND=(docker-compose -f "${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml}" -p "$COMPOSE_PROJ_NAME")
+    COMPOSE_COMMAND=(docker-compose)
+    IFS=":" read -ra COMPOSE_FILES <<< "${BUILDKITE_DOCKER_COMPOSE_FILE:-docker-compose.yml}"
+    for FILE in "${COMPOSE_FILES[@]}"; do
+      COMPOSE_COMMAND+=(-f "$FILE")
+    done
+    COMPOSE_COMMAND+=(-p "$COMPOSE_PROJ_NAME")
 
     # Switch on verbose in debug mode
     if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
