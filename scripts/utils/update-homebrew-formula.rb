@@ -18,7 +18,7 @@
 #     sha256  "..."
 #   end
 
-release, version, url, sha1 = ARGV
+release, version, url, sha1, sha256 = ARGV
 
 print $stdin.read.sub(%r{
   (
