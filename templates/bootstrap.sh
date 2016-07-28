@@ -280,7 +280,7 @@ else
     buildkite-prompt-and-run git submodule sync --recursive ||
       buildkite-warning "Failed to recursively sync git submodules. This is most likely because you have an older version of git installed ($(git --version)) and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can."
 
-    buildkite-run git submodule update --init --recursive
+    buildkite-run git submodule update --init --recursive --force
     buildkite-run git submodule foreach --recursive git reset --hard
   fi
 
