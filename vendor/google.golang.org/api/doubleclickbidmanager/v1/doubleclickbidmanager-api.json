@@ -1,12 +1,12 @@
 {
  "kind": "discovery#restDescription",
- "etag": "\"ye6orv2F-1npMW3u9suM3a7C5Bo/mAPHdimW0pvTGXzTTcUsJfk40xQ\"",
+ "etag": "\"C5oy1hgQsABtYOYIOXWcR3BgYqU/APNHThgbF23N6qKTgbCZClI5UfQ\"",
  "discoveryVersion": "v1",
  "id": "doubleclickbidmanager:v1",
  "name": "doubleclickbidmanager",
  "canonicalName": "DoubleClick Bid Manager",
  "version": "v1",
- "revision": "20150925",
+ "revision": "20160608",
  "title": "DoubleClick Bid Manager API",
  "description": "API for viewing and managing your reports in DoubleClick Bid Manager.",
  "ownerDomain": "google.com",
@@ -165,6 +165,7 @@
       "FILTER_DATA_PROVIDER",
       "FILTER_DATE",
       "FILTER_DAY_OF_WEEK",
+      "FILTER_DFP_ORDER_ID",
       "FILTER_DMA",
       "FILTER_EXCHANGE_ID",
       "FILTER_FLOODLIGHT_PIXEL_ID",
@@ -202,7 +203,36 @@
       "FILTER_SITE_LANGUAGE",
       "FILTER_TARGETED_USER_LIST",
       "FILTER_TIME_OF_DAY",
+      "FILTER_TRUEVIEW_AD_GROUP_AD_ID",
+      "FILTER_TRUEVIEW_AD_GROUP_ID",
+      "FILTER_TRUEVIEW_AGE",
+      "FILTER_TRUEVIEW_CATEGORY",
+      "FILTER_TRUEVIEW_CITY",
       "FILTER_TRUEVIEW_CONVERSION_TYPE",
+      "FILTER_TRUEVIEW_COUNTRY",
+      "FILTER_TRUEVIEW_CUSTOM_AFFINITY",
+      "FILTER_TRUEVIEW_DMA",
+      "FILTER_TRUEVIEW_GENDER",
+      "FILTER_TRUEVIEW_IAR_AGE",
+      "FILTER_TRUEVIEW_IAR_CATEGORY",
+      "FILTER_TRUEVIEW_IAR_CITY",
+      "FILTER_TRUEVIEW_IAR_COUNTRY",
+      "FILTER_TRUEVIEW_IAR_GENDER",
+      "FILTER_TRUEVIEW_IAR_INTEREST",
+      "FILTER_TRUEVIEW_IAR_LANGUAGE",
+      "FILTER_TRUEVIEW_IAR_PARENTAL_STATUS",
+      "FILTER_TRUEVIEW_IAR_REGION",
+      "FILTER_TRUEVIEW_IAR_REMARKETING_LIST",
+      "FILTER_TRUEVIEW_IAR_TIME_OF_DAY",
+      "FILTER_TRUEVIEW_IAR_ZIPCODE",
+      "FILTER_TRUEVIEW_INTEREST",
+      "FILTER_TRUEVIEW_KEYWORD",
+      "FILTER_TRUEVIEW_PARENTAL_STATUS",
+      "FILTER_TRUEVIEW_PLACEMENT",
+      "FILTER_TRUEVIEW_REGION",
+      "FILTER_TRUEVIEW_REMARKETING_LIST",
+      "FILTER_TRUEVIEW_URL",
+      "FILTER_TRUEVIEW_ZIPCODE",
       "FILTER_UNKNOWN",
       "FILTER_USER_LIST",
       "FILTER_USER_LIST_FIRST_PARTY",
@@ -225,6 +255,36 @@
       "FILTER_ZIP_CODE"
      ],
      "enumDescriptions": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
       "",
       "",
       "",
@@ -352,6 +412,65 @@
     }
    }
   },
+  "Note": {
+   "id": "Note",
+   "type": "object",
+   "description": "Publisher comment from Rubicon.",
+   "properties": {
+    "id": {
+     "type": "string",
+     "description": "Note id.",
+     "format": "int64"
+    },
+    "message": {
+     "type": "string",
+     "description": "Message from publisher."
+    },
+    "source": {
+     "type": "string",
+     "description": "Equals \"publisher\" for notification from Rubicon."
+    },
+    "timestamp": {
+     "type": "string",
+     "description": "Time when the note was added, e.g. \"2015-12-16T17:25:35.000-08:00\"."
+    },
+    "username": {
+     "type": "string",
+     "description": "Publisher user name."
+    }
+   }
+  },
+  "NotifyProposalChangeRequest": {
+   "id": "NotifyProposalChangeRequest",
+   "type": "object",
+   "description": "NotifyProposalChange request.",
+   "properties": {
+    "action": {
+     "type": "string",
+     "description": "Action taken by publisher. One of: Accept, Decline, Append"
+    },
+    "href": {
+     "type": "string",
+     "description": "URL to access proposal detail."
+    },
+    "id": {
+     "type": "string",
+     "description": "Below are contents of notification from Rubicon. Proposal id.",
+     "format": "int64"
+    },
+    "notes": {
+     "type": "array",
+     "description": "Notes from publisher",
+     "items": {
+      "$ref": "Note"
+     }
+    },
+    "token": {
+     "type": "string",
+     "description": "Deal token, available when proposal is accepted by publisher."
+    }
+   }
+  },
   "Parameters": {
    "id": "Parameters",
    "type": "object",
@@ -393,6 +512,7 @@
        "FILTER_DATA_PROVIDER",
        "FILTER_DATE",
        "FILTER_DAY_OF_WEEK",
+       "FILTER_DFP_ORDER_ID",
        "FILTER_DMA",
        "FILTER_EXCHANGE_ID",
        "FILTER_FLOODLIGHT_PIXEL_ID",
@@ -430,7 +550,36 @@
        "FILTER_SITE_LANGUAGE",
        "FILTER_TARGETED_USER_LIST",
        "FILTER_TIME_OF_DAY",
+       "FILTER_TRUEVIEW_AD_GROUP_AD_ID",
+       "FILTER_TRUEVIEW_AD_GROUP_ID",
+       "FILTER_TRUEVIEW_AGE",
+       "FILTER_TRUEVIEW_CATEGORY",
+       "FILTER_TRUEVIEW_CITY",
        "FILTER_TRUEVIEW_CONVERSION_TYPE",
+       "FILTER_TRUEVIEW_COUNTRY",
+       "FILTER_TRUEVIEW_CUSTOM_AFFINITY",
+       "FILTER_TRUEVIEW_DMA",
+       "FILTER_TRUEVIEW_GENDER",
+       "FILTER_TRUEVIEW_IAR_AGE",
+       "FILTER_TRUEVIEW_IAR_CATEGORY",
+       "FILTER_TRUEVIEW_IAR_CITY",
+       "FILTER_TRUEVIEW_IAR_COUNTRY",
+       "FILTER_TRUEVIEW_IAR_GENDER",
+       "FILTER_TRUEVIEW_IAR_INTEREST",
+       "FILTER_TRUEVIEW_IAR_LANGUAGE",
+       "FILTER_TRUEVIEW_IAR_PARENTAL_STATUS",
+       "FILTER_TRUEVIEW_IAR_REGION",
+       "FILTER_TRUEVIEW_IAR_REMARKETING_LIST",
+       "FILTER_TRUEVIEW_IAR_TIME_OF_DAY",
+       "FILTER_TRUEVIEW_IAR_ZIPCODE",
+       "FILTER_TRUEVIEW_INTEREST",
+       "FILTER_TRUEVIEW_KEYWORD",
+       "FILTER_TRUEVIEW_PARENTAL_STATUS",
+       "FILTER_TRUEVIEW_PLACEMENT",
+       "FILTER_TRUEVIEW_REGION",
+       "FILTER_TRUEVIEW_REMARKETING_LIST",
+       "FILTER_TRUEVIEW_URL",
+       "FILTER_TRUEVIEW_ZIPCODE",
        "FILTER_UNKNOWN",
        "FILTER_USER_LIST",
        "FILTER_USER_LIST_FIRST_PARTY",
@@ -453,6 +602,36 @@
        "FILTER_ZIP_CODE"
       ],
       "enumDescriptions": [
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
        "",
        "",
        "",
@@ -715,6 +894,7 @@
        "METRIC_PROFIT_VIEWABLE_ECPM_ADVERTISER",
        "METRIC_PROFIT_VIEWABLE_ECPM_PARTNER",
        "METRIC_PROFIT_VIEWABLE_ECPM_USD",
+       "METRIC_REACH_COOKIE_REACH",
        "METRIC_REVENUE_ADVERTISER",
        "METRIC_REVENUE_ECPAPC_ADVERTISER",
        "METRIC_REVENUE_ECPAPC_PARTNER",
@@ -776,6 +956,9 @@
        "METRIC_TOTAL_MEDIA_COST_VIEWABLE_ECPM_ADVERTISER",
        "METRIC_TOTAL_MEDIA_COST_VIEWABLE_ECPM_PARTNER",
        "METRIC_TOTAL_MEDIA_COST_VIEWABLE_ECPM_USD",
+       "METRIC_TRUEVIEW_AVERAGE_CPE_ADVERTISER",
+       "METRIC_TRUEVIEW_AVERAGE_CPE_PARTNER",
+       "METRIC_TRUEVIEW_AVERAGE_CPE_USD",
        "METRIC_TRUEVIEW_CONVERSION_COST_MANY_PER_VIEW_ADVERTISER",
        "METRIC_TRUEVIEW_CONVERSION_COST_MANY_PER_VIEW_PARTNER",
        "METRIC_TRUEVIEW_CONVERSION_COST_MANY_PER_VIEW_USD",
@@ -801,6 +984,8 @@
        "METRIC_TRUEVIEW_EARNED_SHARES",
        "METRIC_TRUEVIEW_EARNED_SUBSCRIBERS",
        "METRIC_TRUEVIEW_EARNED_VIEWS",
+       "METRIC_TRUEVIEW_ENGAGEMENTS",
+       "METRIC_TRUEVIEW_ENGAGEMENT_RATE",
        "METRIC_TRUEVIEW_IMPRESSION_SHARE",
        "METRIC_TRUEVIEW_LOST_IS_BUDGET",
        "METRIC_TRUEVIEW_LOST_IS_RANK",
@@ -821,6 +1006,12 @@
        "METRIC_VIDEO_COMPLETION_RATE"
       ],
       "enumDescriptions": [
+       "",
+       "",
+       "",
+       "",
+       "",
+       "",
        "",
        "",
        "",
@@ -1117,8 +1308,12 @@
       "TYPE_NIELSEN_DAILY_REACH_BUILD",
       "TYPE_NIELSEN_ONLINE_GLOBAL_MARKET",
       "TYPE_NIELSEN_SITE",
+      "TYPE_NOT_SUPPORTED",
       "TYPE_ORDER_ID",
       "TYPE_PAGE_CATEGORY",
+      "TYPE_PETRA_NIELSEN_AUDIENCE_PROFILE",
+      "TYPE_PETRA_NIELSEN_DAILY_REACH_BUILD",
+      "TYPE_PETRA_NIELSEN_ONLINE_GLOBAL_MARKET",
       "TYPE_PIXEL_LOAD",
       "TYPE_REACH_AND_FREQUENCY",
       "TYPE_THIRD_PARTY_DATA_PROVIDER",
@@ -1128,6 +1323,10 @@
       "TYPE_YOUTUBE_VERTICAL"
      ],
      "enumDescriptions": [
+      "",
+      "",
+      "",
+      "",
       "",
       "",
       "",
@@ -1226,10 +1425,12 @@
       "PREVIOUS_WEEK",
       "PREVIOUS_YEAR",
       "QUARTER_TO_DATE",
+      "TYPE_NOT_SUPPORTED",
       "WEEK_TO_DATE",
       "YEAR_TO_DATE"
      ],
      "enumDescriptions": [
+      "",
       "",
       "",
       "",
@@ -1565,10 +1766,12 @@
       "PREVIOUS_WEEK",
       "PREVIOUS_YEAR",
       "QUARTER_TO_DATE",
+      "TYPE_NOT_SUPPORTED",
       "WEEK_TO_DATE",
       "YEAR_TO_DATE"
      ],
      "enumDescriptions": [
+      "",
       "",
       "",
       "",
@@ -1798,6 +2001,19 @@
      ],
      "response": {
       "$ref": "ListReportsResponse"
+     }
+    }
+   }
+  },
+  "rubicon": {
+   "methods": {
+    "notifyproposalchange": {
+     "id": "doubleclickbidmanager.rubicon.notifyproposalchange",
+     "path": "rubicon/notifyproposalchange",
+     "httpMethod": "POST",
+     "description": "Update proposal upon actions of Rubicon publisher.",
+     "request": {
+      "$ref": "NotifyProposalChangeRequest"
      }
     }
    }

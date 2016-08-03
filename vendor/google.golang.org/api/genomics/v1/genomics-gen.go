@@ -1,5 +1,7 @@
 // Package genomics provides access to the Genomics API.
 //
+// See https://cloud.google.com/genomics/
+//
 // Usage example:
 //
 //   import "google.golang.org/api/genomics/v1"
@@ -66,6 +68,8 @@ func New(client *http.Client) (*Service, error) {
 		return nil, errors.New("client is nil")
 	}
 	s := &Service{client: client, BasePath: basePath}
+	s.Annotations = NewAnnotationsService(s)
+	s.Annotationsets = NewAnnotationsetsService(s)
 	s.Callsets = NewCallsetsService(s)
 	s.Datasets = NewDatasetsService(s)
 	s.Operations = NewOperationsService(s)
@@ -82,6 +86,10 @@ type Service struct {
 	client    *http.Client
 	BasePath  string // API endpoint base URL
 	UserAgent string // optional additional User-Agent fragment
+
+	Annotations *AnnotationsService
+
+	Annotationsets *AnnotationsetsService
 
 	Callsets *CallsetsService
 
@@ -107,6 +115,24 @@ func (s *Service) userAgent() string {
 		return googleapi.UserAgent
 	}
 	return googleapi.UserAgent + " " + s.UserAgent
+}
+
+func NewAnnotationsService(s *Service) *AnnotationsService {
+	rs := &AnnotationsService{s: s}
+	return rs
+}
+
+type AnnotationsService struct {
+	s *Service
+}
+
+func NewAnnotationsetsService(s *Service) *AnnotationsetsService {
+	rs := &AnnotationsetsService{s: s}
+	return rs
+}
+
+type AnnotationsetsService struct {
+	s *Service
 }
 
 func NewCallsetsService(s *Service) *CallsetsService {
@@ -214,6 +240,192 @@ type VariantsetsService struct {
 	s *Service
 }
 
+// Annotation: An annotation describes a region of reference genome. The
+// value of an annotation may be one of several canonical types,
+// supplemented by arbitrary info tags. An annotation is not inherently
+// associated with a specific sample or individual (though a client
+// could choose to use annotations in this way). Example canonical
+// annotation types are `GENE` and `VARIANT`.
+type Annotation struct {
+	// AnnotationSetId: The annotation set to which this annotation belongs.
+	AnnotationSetId string `json:"annotationSetId,omitempty"`
+
+	// End: The end position of the range on the reference, 0-based
+	// exclusive.
+	End int64 `json:"end,omitempty,string"`
+
+	// Id: The server-generated annotation ID, unique across all
+	// annotations.
+	Id string `json:"id,omitempty"`
+
+	// Info: A map of additional read alignment information. This must be of
+	// the form map (string key mapping to a list of string values).
+	Info map[string][]interface{} `json:"info,omitempty"`
+
+	// Name: The display name of this annotation.
+	Name string `json:"name,omitempty"`
+
+	// ReferenceId: The ID of the Google Genomics reference associated with
+	// this range.
+	ReferenceId string `json:"referenceId,omitempty"`
+
+	// ReferenceName: The display name corresponding to the reference
+	// specified by `referenceId`, for example `chr1`, `1`, or `chrX`.
+	ReferenceName string `json:"referenceName,omitempty"`
+
+	// ReverseStrand: Whether this range refers to the reverse strand, as
+	// opposed to the forward strand. Note that regardless of this field,
+	// the start/end position of the range always refer to the forward
+	// strand.
+	ReverseStrand bool `json:"reverseStrand,omitempty"`
+
+	// Start: The start position of the range on the reference, 0-based
+	// inclusive.
+	Start int64 `json:"start,omitempty,string"`
+
+	// Transcript: A transcript value represents the assertion that a
+	// particular region of the reference genome may be transcribed as RNA.
+	// An alternative splicing pattern would be represented as a separate
+	// transcript object. This field is only set for annotations of type
+	// `TRANSCRIPT`.
+	Transcript *Transcript `json:"transcript,omitempty"`
+
+	// Type: The data type for this annotation. Must match the containing
+	// annotation set's type.
+	//
+	// Possible values:
+	//   "ANNOTATION_TYPE_UNSPECIFIED"
+	//   "GENERIC"
+	//   "VARIANT"
+	//   "GENE"
+	//   "TRANSCRIPT"
+	Type string `json:"type,omitempty"`
+
+	// Variant: A variant annotation, which describes the effect of a
+	// variant on the genome, the coding sequence, and/or higher level
+	// consequences at the organism level e.g. pathogenicity. This field is
+	// only set for annotations of type `VARIANT`.
+	Variant *VariantAnnotation `json:"variant,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "AnnotationSetId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Annotation) MarshalJSON() ([]byte, error) {
+	type noMethod Annotation
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// AnnotationSet: An annotation set is a logical grouping of annotations
+// that share consistent type information and provenance. Examples of
+// annotation sets include 'all genes from refseq', and 'all variant
+// annotations from ClinVar'.
+type AnnotationSet struct {
+	// DatasetId: The dataset to which this annotation set belongs.
+	DatasetId string `json:"datasetId,omitempty"`
+
+	// Id: The server-generated annotation set ID, unique across all
+	// annotation sets.
+	Id string `json:"id,omitempty"`
+
+	// Info: A map of additional read alignment information. This must be of
+	// the form map (string key mapping to a list of string values).
+	Info map[string][]interface{} `json:"info,omitempty"`
+
+	// Name: The display name for this annotation set.
+	Name string `json:"name,omitempty"`
+
+	// ReferenceSetId: The ID of the reference set that defines the
+	// coordinate space for this set's annotations.
+	ReferenceSetId string `json:"referenceSetId,omitempty"`
+
+	// SourceUri: The source URI describing the file from which this
+	// annotation set was generated, if any.
+	SourceUri string `json:"sourceUri,omitempty"`
+
+	// Type: The type of annotations contained within this set.
+	//
+	// Possible values:
+	//   "ANNOTATION_TYPE_UNSPECIFIED"
+	//   "GENERIC"
+	//   "VARIANT"
+	//   "GENE"
+	//   "TRANSCRIPT"
+	Type string `json:"type,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "DatasetId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *AnnotationSet) MarshalJSON() ([]byte, error) {
+	type noMethod AnnotationSet
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type BatchCreateAnnotationsRequest struct {
+	// Annotations: The annotations to be created. At most 4096 can be
+	// specified in a single request.
+	Annotations []*Annotation `json:"annotations,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Annotations") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *BatchCreateAnnotationsRequest) MarshalJSON() ([]byte, error) {
+	type noMethod BatchCreateAnnotationsRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type BatchCreateAnnotationsResponse struct {
+	// Entries: The resulting per-annotation entries, ordered consistently
+	// with the original request.
+	Entries []*Entry `json:"entries,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "Entries") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *BatchCreateAnnotationsResponse) MarshalJSON() ([]byte, error) {
+	type noMethod BatchCreateAnnotationsResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // Binding: Associates `members` with a `role`.
 type Binding struct {
 	// Members: Specifies the identities requesting access for a Cloud
@@ -267,7 +479,7 @@ type CallSet struct {
 
 	// Info: A map of additional call set information. This must be of the
 	// form map (string key mapping to a list of string values).
-	Info *CallSetInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// Name: The call set name.
 	Name string `json:"name,omitempty"`
@@ -300,11 +512,6 @@ func (s *CallSet) MarshalJSON() ([]byte, error) {
 	type noMethod CallSet
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-// CallSetInfo: A map of additional call set information. This must be
-// of the form map (string key mapping to a list of string values).
-type CallSetInfo struct {
 }
 
 // CancelOperationRequest: The request message for
@@ -348,6 +555,94 @@ type CigarUnit struct {
 
 func (s *CigarUnit) MarshalJSON() ([]byte, error) {
 	type noMethod CigarUnit
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type ClinicalCondition struct {
+	// ConceptId: The MedGen concept id associated with this gene. Search
+	// for these IDs at http://www.ncbi.nlm.nih.gov/medgen/
+	ConceptId string `json:"conceptId,omitempty"`
+
+	// ExternalIds: The set of external IDs for this condition.
+	ExternalIds []*ExternalId `json:"externalIds,omitempty"`
+
+	// Names: A set of names for the condition.
+	Names []string `json:"names,omitempty"`
+
+	// OmimId: The OMIM id for this condition. Search for these IDs at
+	// http://omim.org/
+	OmimId string `json:"omimId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ConceptId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ClinicalCondition) MarshalJSON() ([]byte, error) {
+	type noMethod ClinicalCondition
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type CodingSequence struct {
+	// End: The end of the coding sequence on this annotation's reference
+	// sequence, 0-based exclusive. Note that this position is relative to
+	// the reference start, and *not* the containing annotation start.
+	End int64 `json:"end,omitempty,string"`
+
+	// Start: The start of the coding sequence on this annotation's
+	// reference sequence, 0-based inclusive. Note that this position is
+	// relative to the reference start, and *not* the containing annotation
+	// start.
+	Start int64 `json:"start,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "End") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *CodingSequence) MarshalJSON() ([]byte, error) {
+	type noMethod CodingSequence
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// ComputeEngine: Describes a Compute Engine resource that is being
+// managed by a running pipeline.
+type ComputeEngine struct {
+	// DiskNames: The names of the disks that were created for this
+	// pipeline.
+	DiskNames []string `json:"diskNames,omitempty"`
+
+	// InstanceName: The instance on which the operation is running.
+	InstanceName string `json:"instanceName,omitempty"`
+
+	// MachineType: The machine type of the instance.
+	MachineType string `json:"machineType,omitempty"`
+
+	// Zone: The availability zone in which the instance resides.
+	Zone string `json:"zone,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DiskNames") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ComputeEngine) MarshalJSON() ([]byte, error) {
+	type noMethod ComputeEngine
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -426,6 +721,66 @@ type Empty struct {
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
+}
+
+type Entry struct {
+	// Annotation: The created annotation, if creation was successful.
+	Annotation *Annotation `json:"annotation,omitempty"`
+
+	// Status: The creation status.
+	Status *Status `json:"status,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Annotation") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Entry) MarshalJSON() ([]byte, error) {
+	type noMethod Entry
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type Exon struct {
+	// End: The end position of the exon on this annotation's reference
+	// sequence, 0-based exclusive. Note that this is relative to the
+	// reference start, and *not* the containing annotation start.
+	End int64 `json:"end,omitempty,string"`
+
+	// Frame: The frame of this exon. Contains a value of 0, 1, or 2, which
+	// indicates the offset of the first coding base of the exon within the
+	// reading frame of the coding DNA sequence, if any. This field is
+	// dependent on the strandedness of this annotation (see
+	// Annotation.reverse_strand). For forward stranded annotations, this
+	// offset is relative to the exon.start. For reverse strand annotations,
+	// this offset is relative to the exon.end `- 1`. Unset if this exon
+	// does not intersect the coding sequence. Upon creation of a
+	// transcript, the frame must be populated for all or none of the coding
+	// exons.
+	Frame int64 `json:"frame,omitempty"`
+
+	// Start: The start position of the exon on this annotation's reference
+	// sequence, 0-based inclusive. Note that this is relative to the
+	// reference start, and **not** the containing annotation start.
+	Start int64 `json:"start,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "End") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Exon) MarshalJSON() ([]byte, error) {
+	type noMethod Exon
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
 type Experiment struct {
@@ -538,6 +893,28 @@ func (s *ExportVariantSetRequest) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type ExternalId struct {
+	// Id: The id used by the source of this data.
+	Id string `json:"id,omitempty"`
+
+	// SourceName: The name of the source of this data.
+	SourceName string `json:"sourceName,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Id") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ExternalId) MarshalJSON() ([]byte, error) {
+	type noMethod ExternalId
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // GetIamPolicyRequest: Request message for `GetIamPolicy` method.
 type GetIamPolicyRequest struct {
 }
@@ -614,6 +991,11 @@ type ImportVariantsRequest struct {
 	//   "FORMAT_VCF"
 	//   "FORMAT_COMPLETE_GENOMICS"
 	Format string `json:"format,omitempty"`
+
+	// InfoMergeConfig: A mapping between info field keys and the
+	// InfoMergeOperations to be performed on them. This is plumbed down to
+	// the MergeVariantRequests generated by the resulting import job.
+	InfoMergeConfig map[string]string `json:"infoMergeConfig,omitempty"`
 
 	// NormalizeReferenceNames: Convert reference names to the canonical
 	// representation. hg19 haploytypes (those reference names containing
@@ -832,6 +1214,32 @@ func (s *ListOperationsResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type MergeVariantsRequest struct {
+	// InfoMergeConfig: A mapping between info field keys and the
+	// InfoMergeOperations to be performed on them.
+	InfoMergeConfig map[string]string `json:"infoMergeConfig,omitempty"`
+
+	// VariantSetId: The destination variant set.
+	VariantSetId string `json:"variantSetId,omitempty"`
+
+	// Variants: The variants to be merged with existing variants.
+	Variants []*Variant `json:"variants,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "InfoMergeConfig") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *MergeVariantsRequest) MarshalJSON() ([]byte, error) {
+	type noMethod MergeVariantsRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // Operation: This resource represents a long-running operation that is
 // the result of a network API call.
 type Operation struct {
@@ -885,6 +1293,14 @@ type OperationEvent struct {
 	// Description: Required description of event.
 	Description string `json:"description,omitempty"`
 
+	// EndTime: Optional time of when event finished. An event can have a
+	// start time and no finish time. If an event has a finish time, there
+	// must be a start time.
+	EndTime string `json:"endTime,omitempty"`
+
+	// StartTime: Optional time of when event started.
+	StartTime string `json:"startTime,omitempty"`
+
 	// ForceSendFields is a list of field names (e.g. "Description") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
@@ -902,9 +1318,16 @@ func (s *OperationEvent) MarshalJSON() ([]byte, error) {
 
 // OperationMetadata1: Metadata describing an Operation.
 type OperationMetadata1 struct {
+	// ClientId: Optionally provided by the caller when submitting the
+	// request that creates the operation.
+	ClientId string `json:"clientId,omitempty"`
+
 	// CreateTime: The time at which the job was submitted to the Genomics
 	// service.
 	CreateTime string `json:"createTime,omitempty"`
+
+	// EndTime: The time at which the job stopped running.
+	EndTime string `json:"endTime,omitempty"`
 
 	// Events: Optional event messages that were generated during the job's
 	// execution. This also contains any warnings that were generated during
@@ -920,7 +1343,13 @@ type OperationMetadata1 struct {
 	// v1 request will be returned.
 	Request OperationMetadataRequest `json:"request,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "CreateTime") to
+	// RuntimeMetadata: Runtime metadata on this Operation.
+	RuntimeMetadata OperationMetadataRuntimeMetadata `json:"runtimeMetadata,omitempty"`
+
+	// StartTime: The time at which the job began to run.
+	StartTime string `json:"startTime,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ClientId") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -937,6 +1366,8 @@ func (s *OperationMetadata1) MarshalJSON() ([]byte, error) {
 
 type OperationMetadataRequest interface{}
 
+type OperationMetadataRuntimeMetadata interface{}
+
 // Policy: Defines an Identity and Access Management (IAM) policy. It is
 // used to specify access control policies for Cloud Platform resources.
 // A `Policy` consists of a list of `bindings`. A `Binding` binds a list
@@ -945,7 +1376,7 @@ type OperationMetadataRequest interface{}
 // named list of permissions defined by IAM. **Example** { "bindings": [
 // { "role": "roles/owner", "members": [ "user:mike@example.com",
 // "group:admins@example.com", "domain:google.com",
-// "serviceAccount:my-other-app@appspot.gserviceaccount.com"] }, {
+// "serviceAccount:my-other-app@appspot.gserviceaccount.com", ] }, {
 // "role": "roles/viewer", "members": ["user:sean@example.com"] } ] }
 // For a description of IAM and its features, see the [IAM developer's
 // guide](https://cloud.google.com/iam).
@@ -1174,7 +1605,7 @@ type Read struct {
 
 	// Info: A map of additional read alignment information. This must be of
 	// the form map (string key mapping to a list of string values).
-	Info *ReadInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// NextMatePosition: The mapping of the primary alignment of the
 	// `(readNumber+1)%numberReads` read in the fragment. It replaces mate
@@ -1241,11 +1672,6 @@ func (s *Read) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// ReadInfo: A map of additional read alignment information. This must
-// be of the form map (string key mapping to a list of string values).
-type ReadInfo struct {
-}
-
 // ReadGroup: A read group is all the data that's processed the same way
 // by the sequencer.
 type ReadGroup struct {
@@ -1265,7 +1691,7 @@ type ReadGroup struct {
 
 	// Info: A map of additional read group information. This must be of the
 	// form map (string key mapping to a list of string values).
-	Info *ReadGroupInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// Name: The read group name. This corresponds to the @RG ID field in
 	// the SAM spec.
@@ -1305,11 +1731,6 @@ func (s *ReadGroup) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// ReadGroupInfo: A map of additional read group information. This must
-// be of the form map (string key mapping to a list of string values).
-type ReadGroupInfo struct {
-}
-
 // ReadGroupSet: A read group set is a logical collection of read
 // groups, which are collections of reads produced by a sequencer. A
 // read group set typically models reads corresponding to one sample,
@@ -1332,7 +1753,7 @@ type ReadGroupSet struct {
 	Id string `json:"id,omitempty"`
 
 	// Info: A map of additional read group set information.
-	Info *ReadGroupSetInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// Name: The read group set name. By default this will be initialized to
 	// the sample name of the sequenced data contained in this set.
@@ -1363,10 +1784,6 @@ func (s *ReadGroupSet) MarshalJSON() ([]byte, error) {
 	type noMethod ReadGroupSet
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-// ReadGroupSetInfo: A map of additional read group set information.
-type ReadGroupSetInfo struct {
 }
 
 // Reference: A reference is a canonical assembled DNA sequence,
@@ -1428,7 +1845,7 @@ func (s *Reference) MarshalJSON() ([]byte, error) {
 // starting coordinate of variants in a particular reference.
 type ReferenceBound struct {
 	// ReferenceName: The name of the reference associated with this
-	// ReferenceBound.
+	// reference bound.
 	ReferenceName string `json:"referenceName,omitempty"`
 
 	// UpperBound: An upper bound (inclusive) on the starting coordinate of
@@ -1512,6 +1929,189 @@ type ReferenceSet struct {
 
 func (s *ReferenceSet) MarshalJSON() ([]byte, error) {
 	type noMethod ReferenceSet
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// RuntimeMetadata: Runtime metadata that will be populated in the
+// runtimeMetadata field of the Operation associated with a RunPipeline
+// execution.
+type RuntimeMetadata struct {
+	// ComputeEngine: Execution information specific to Google Compute
+	// Engine.
+	ComputeEngine *ComputeEngine `json:"computeEngine,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ComputeEngine") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *RuntimeMetadata) MarshalJSON() ([]byte, error) {
+	type noMethod RuntimeMetadata
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type SearchAnnotationSetsRequest struct {
+	// DatasetIds: Required. The dataset IDs to search within. Caller must
+	// have `READ` access to these datasets.
+	DatasetIds []string `json:"datasetIds,omitempty"`
+
+	// Name: Only return annotations sets for which a substring of the name
+	// matches this string (case insensitive).
+	Name string `json:"name,omitempty"`
+
+	// PageSize: The maximum number of results to return in a single page.
+	// If unspecified, defaults to 128. The maximum value is 1024.
+	PageSize int64 `json:"pageSize,omitempty"`
+
+	// PageToken: The continuation token, which is used to page through
+	// large result sets. To get the next page of results, set this
+	// parameter to the value of `nextPageToken` from the previous response.
+	PageToken string `json:"pageToken,omitempty"`
+
+	// ReferenceSetId: If specified, only annotation sets associated with
+	// the given reference set are returned.
+	ReferenceSetId string `json:"referenceSetId,omitempty"`
+
+	// Types: If specified, only annotation sets that have any of these
+	// types are returned.
+	//
+	// Possible values:
+	//   "ANNOTATION_TYPE_UNSPECIFIED"
+	//   "GENERIC" - A `GENERIC` annotation type should be used when no
+	// other annotation type will suffice. This represents an untyped
+	// annotation of the reference genome.
+	//   "VARIANT" - A `VARIANT` annotation type.
+	//   "GENE" - A `GENE` annotation type represents the existence of a
+	// gene at the associated reference coordinates. The start coordinate is
+	// typically the gene's transcription start site and the end is
+	// typically the end of the gene's last exon.
+	//   "TRANSCRIPT" - A `TRANSCRIPT` annotation type represents the
+	// assertion that a particular region of the reference genome may be
+	// transcribed as RNA.
+	Types []string `json:"types,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DatasetIds") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *SearchAnnotationSetsRequest) MarshalJSON() ([]byte, error) {
+	type noMethod SearchAnnotationSetsRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type SearchAnnotationSetsResponse struct {
+	// AnnotationSets: The matching annotation sets.
+	AnnotationSets []*AnnotationSet `json:"annotationSets,omitempty"`
+
+	// NextPageToken: The continuation token, which is used to page through
+	// large result sets. Provide this value in a subsequent request to
+	// return the next page of results. This field will be empty if there
+	// aren't any additional results.
+	NextPageToken string `json:"nextPageToken,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "AnnotationSets") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *SearchAnnotationSetsResponse) MarshalJSON() ([]byte, error) {
+	type noMethod SearchAnnotationSetsResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type SearchAnnotationsRequest struct {
+	// AnnotationSetIds: Required. The annotation sets to search within. The
+	// caller must have `READ` access to these annotation sets. All queried
+	// annotation sets must have the same type.
+	AnnotationSetIds []string `json:"annotationSetIds,omitempty"`
+
+	// End: The end position of the range on the reference, 0-based
+	// exclusive. If referenceId or referenceName must be specified,
+	// Defaults to the length of the reference.
+	End int64 `json:"end,omitempty,string"`
+
+	// PageSize: The maximum number of results to return in a single page.
+	// If unspecified, defaults to 256. The maximum value is 2048.
+	PageSize int64 `json:"pageSize,omitempty"`
+
+	// PageToken: The continuation token, which is used to page through
+	// large result sets. To get the next page of results, set this
+	// parameter to the value of `nextPageToken` from the previous response.
+	PageToken string `json:"pageToken,omitempty"`
+
+	// ReferenceId: The ID of the reference to query.
+	ReferenceId string `json:"referenceId,omitempty"`
+
+	// ReferenceName: The name of the reference to query, within the
+	// reference set associated with this query.
+	ReferenceName string `json:"referenceName,omitempty"`
+
+	// Start: The start position of the range on the reference, 0-based
+	// inclusive. If specified, referenceId or referenceName must be
+	// specified. Defaults to 0.
+	Start int64 `json:"start,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "AnnotationSetIds") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *SearchAnnotationsRequest) MarshalJSON() ([]byte, error) {
+	type noMethod SearchAnnotationsRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type SearchAnnotationsResponse struct {
+	// Annotations: The matching annotations.
+	Annotations []*Annotation `json:"annotations,omitempty"`
+
+	// NextPageToken: The continuation token, which is used to page through
+	// large result sets. Provide this value in a subsequent request to
+	// return the next page of results. This field will be empty if there
+	// aren't any additional results.
+	NextPageToken string `json:"nextPageToken,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "Annotations") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *SearchAnnotationsResponse) MarshalJSON() ([]byte, error) {
+	type noMethod SearchAnnotationsResponse
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -1938,8 +2538,8 @@ type SearchVariantsRequest struct {
 	End int64 `json:"end,omitempty,string"`
 
 	// MaxCalls: The maximum number of calls to return in a single page.
-	// Note that this limit may be exceeded; at least one variant is always
-	// returned per page, even if it has more calls than this limit. If
+	// Note that this limit may be exceeded in the event that a matching
+	// variant contains more calls than the requested maximum. If
 	// unspecified, defaults to 5000. The maximum value is 10000.
 	MaxCalls int64 `json:"maxCalls,omitempty"`
 
@@ -2123,9 +2723,31 @@ type StreamReadsRequest struct {
 	// or `chrX`. If set to *, only unmapped reads are returned.
 	ReferenceName string `json:"referenceName,omitempty"`
 
+	// Shard: Restricts results to a shard containing approximately
+	// `1/totalShards` of the normal response payload for this query.
+	// Results from a sharded request are disjoint from those returned by
+	// all queries which differ only in their shard parameter. A shard may
+	// yield 0 results; this is especially likely for large values of
+	// `totalShards`. Valid values are `[0, totalShards)`.
+	Shard int64 `json:"shard,omitempty"`
+
 	// Start: The start position of the range on the reference, 0-based
 	// inclusive. If specified, `referenceName` must also be specified.
 	Start int64 `json:"start,omitempty,string"`
+
+	// TotalShards: Specifying `totalShards` causes a disjoint subset of the
+	// normal response payload to be returned for each query with a unique
+	// `shard` parameter specified. A best effort is made to yield equally
+	// sized shards. Sharding can be used to distribute processing amongst
+	// workers, where each worker is assigned a unique `shard` number and
+	// all workers specify the same `totalShards` number. The union of reads
+	// returned for all sharded queries `[0, totalShards)` is equal to those
+	// returned by a single unsharded query. Queries for different values of
+	// `totalShards` with common divisors will share shard boundaries. For
+	// example, streaming `shard` 2 of 5 `totalShards` yields the same
+	// results as streaming `shard`s 4 and 5 of 10 `totalShards`. This
+	// property can be leveraged for adaptive retries.
+	TotalShards int64 `json:"totalShards,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "End") to
 	// unconditionally include in API requests. By default, fields with
@@ -2280,6 +2902,51 @@ func (s *TestIamPermissionsResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+// Transcript: A transcript represents the assertion that a particular
+// region of the reference genome may be transcribed as RNA.
+type Transcript struct {
+	// CodingSequence: The range of the coding sequence for this transcript,
+	// if any. To determine the exact ranges of coding sequence, intersect
+	// this range with those of the exons, if any. If there are any exons,
+	// the codingSequence must start and end within them. Note that in some
+	// cases, the reference genome will not exactly match the observed mRNA
+	// transcript e.g. due to variance in the source genome from reference.
+	// In these cases, exon.frame will not necessarily match the expected
+	// reference reading frame and coding exon reference bases cannot
+	// necessarily be concatenated to produce the original transcript mRNA.
+	CodingSequence *CodingSequence `json:"codingSequence,omitempty"`
+
+	// Exons: The exons that compose this transcript. This field should be
+	// unset for genomes where transcript splicing does not occur, for
+	// example prokaryotes. Introns are regions of the transcript that are
+	// not included in the spliced RNA product. Though not explicitly
+	// modeled here, intron ranges can be deduced; all regions of this
+	// transcript that are not exons are introns. Exonic sequences do not
+	// necessarily code for a translational product (amino acids). Only the
+	// regions of exons bounded by the codingSequence correspond to coding
+	// DNA sequence. Exons are ordered by start position and may not
+	// overlap.
+	Exons []*Exon `json:"exons,omitempty"`
+
+	// GeneId: The annotation ID of the gene from which this transcript is
+	// transcribed.
+	GeneId string `json:"geneId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CodingSequence") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Transcript) MarshalJSON() ([]byte, error) {
+	type noMethod Transcript
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type UndeleteDatasetRequest struct {
 }
 
@@ -2322,7 +2989,7 @@ type Variant struct {
 
 	// Info: A map of additional variant information. This must be of the
 	// form map (string key mapping to a list of string values).
-	Info *VariantInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// Names: Names for the variant, for example a RefSNP ID.
 	Names []string `json:"names,omitempty"`
@@ -2365,9 +3032,86 @@ func (s *Variant) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// VariantInfo: A map of additional variant information. This must be of
-// the form map (string key mapping to a list of string values).
-type VariantInfo struct {
+type VariantAnnotation struct {
+	// AlternateBases: The alternate allele for this variant. If multiple
+	// alternate alleles exist at this location, create a separate variant
+	// for each one, as they may represent distinct conditions.
+	AlternateBases string `json:"alternateBases,omitempty"`
+
+	// ClinicalSignificance: Describes the clinical significance of a
+	// variant. It is adapted from the ClinVar controlled vocabulary for
+	// clinical significance described at:
+	// http://www.ncbi.nlm.nih.gov/clinvar/docs/clinsig/
+	//
+	// Possible values:
+	//   "CLINICAL_SIGNIFICANCE_UNSPECIFIED"
+	//   "CLINICAL_SIGNIFICANCE_OTHER"
+	//   "UNCERTAIN"
+	//   "BENIGN"
+	//   "LIKELY_BENIGN"
+	//   "LIKELY_PATHOGENIC"
+	//   "PATHOGENIC"
+	//   "DRUG_RESPONSE"
+	//   "HISTOCOMPATIBILITY"
+	//   "CONFERS_SENSITIVITY"
+	//   "RISK_FACTOR"
+	//   "ASSOCIATION"
+	//   "PROTECTIVE"
+	//   "MULTIPLE_REPORTED"
+	ClinicalSignificance string `json:"clinicalSignificance,omitempty"`
+
+	// Conditions: The set of conditions associated with this variant. A
+	// condition describes the way a variant influences human health.
+	Conditions []*ClinicalCondition `json:"conditions,omitempty"`
+
+	// Effect: Effect of the variant on the coding sequence.
+	//
+	// Possible values:
+	//   "EFFECT_UNSPECIFIED"
+	//   "EFFECT_OTHER"
+	//   "FRAMESHIFT"
+	//   "FRAME_PRESERVING_INDEL"
+	//   "SYNONYMOUS_SNP"
+	//   "NONSYNONYMOUS_SNP"
+	//   "STOP_GAIN"
+	//   "STOP_LOSS"
+	//   "SPLICE_SITE_DISRUPTION"
+	Effect string `json:"effect,omitempty"`
+
+	// GeneId: Google annotation ID of the gene affected by this variant.
+	// This should be provided when the variant is created.
+	GeneId string `json:"geneId,omitempty"`
+
+	// TranscriptIds: Google annotation IDs of the transcripts affected by
+	// this variant. These should be provided when the variant is created.
+	TranscriptIds []string `json:"transcriptIds,omitempty"`
+
+	// Type: Type has been adapted from ClinVar's list of variant types.
+	//
+	// Possible values:
+	//   "TYPE_UNSPECIFIED"
+	//   "TYPE_OTHER"
+	//   "INSERTION"
+	//   "DELETION"
+	//   "SUBSTITUTION"
+	//   "SNP"
+	//   "STRUCTURAL"
+	//   "CNV"
+	Type string `json:"type,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AlternateBases") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *VariantAnnotation) MarshalJSON() ([]byte, error) {
+	type noMethod VariantAnnotation
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
 // VariantCall: A call represents the determination of genotype with
@@ -2404,7 +3148,7 @@ type VariantCall struct {
 
 	// Info: A map of additional variant call information. This must be of
 	// the form map (string key mapping to a list of string values).
-	Info *VariantCallInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// Phaseset: If this field is present, this variant call's genotype
 	// ordering implies the phase of the bases and is consistent with any
@@ -2429,12 +3173,6 @@ func (s *VariantCall) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// VariantCallInfo: A map of additional variant call information. This
-// must be of the form map (string key mapping to a list of string
-// values).
-type VariantCallInfo struct {
-}
-
 // VariantSet: A variant set is a collection of call sets and variants.
 // It contains summary statistics of those contents. A variant set
 // belongs to a dataset. For more genomics resource definitions, see
@@ -2445,12 +3183,18 @@ type VariantSet struct {
 	// DatasetId: The dataset to which this variant set belongs.
 	DatasetId string `json:"datasetId,omitempty"`
 
+	// Description: A textual description of this variant set.
+	Description string `json:"description,omitempty"`
+
 	// Id: The server-generated variant set ID, unique across all variant
 	// sets.
 	Id string `json:"id,omitempty"`
 
 	// Metadata: The metadata associated with this variant set.
 	Metadata []*VariantSetMetadata `json:"metadata,omitempty"`
+
+	// Name: User-specified, mutable name.
+	Name string `json:"name,omitempty"`
 
 	// ReferenceBounds: A list of all references used by the variants in a
 	// variant set with associated coordinate upper bounds for each one.
@@ -2501,7 +3245,7 @@ type VariantSetMetadata struct {
 
 	// Info: Remaining structured metadata key-value pairs. This must be of
 	// the form map (string key mapping to a list of string values).
-	Info *VariantSetMetadataInfo `json:"info,omitempty"`
+	Info map[string][]interface{} `json:"info,omitempty"`
 
 	// Key: The top-level key.
 	Key string `json:"key,omitempty"`
@@ -2540,10 +3284,1321 @@ func (s *VariantSetMetadata) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// VariantSetMetadataInfo: Remaining structured metadata key-value
-// pairs. This must be of the form map (string key mapping to a list of
-// string values).
-type VariantSetMetadataInfo struct {
+// method id "genomics.annotations.batchCreate":
+
+type AnnotationsBatchCreateCall struct {
+	s                             *Service
+	batchcreateannotationsrequest *BatchCreateAnnotationsRequest
+	urlParams_                    gensupport.URLParams
+	ctx_                          context.Context
+}
+
+// BatchCreate: Creates one or more new annotations atomically. All
+// annotations must belong to the same annotation set. Caller must have
+// WRITE permission for this annotation set. For optimal performance,
+// batch positionally adjacent annotations together. If the request has
+// a systemic issue, such as an attempt to write to an inaccessible
+// annotation set, the entire RPC will fail accordingly. For lesser data
+// issues, when possible an error will be isolated to the corresponding
+// batch entry in the response; the remaining well formed annotations
+// will be created normally. For details on the requirements for each
+// individual annotation resource, see CreateAnnotation.
+func (r *AnnotationsService) BatchCreate(batchcreateannotationsrequest *BatchCreateAnnotationsRequest) *AnnotationsBatchCreateCall {
+	c := &AnnotationsBatchCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.batchcreateannotationsrequest = batchcreateannotationsrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsBatchCreateCall) Fields(s ...googleapi.Field) *AnnotationsBatchCreateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsBatchCreateCall) Context(ctx context.Context) *AnnotationsBatchCreateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsBatchCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.batchcreateannotationsrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotations:batchCreate")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotations.batchCreate" call.
+// Exactly one of *BatchCreateAnnotationsResponse or error will be
+// non-nil. Any non-2xx status code is an error. Response headers are in
+// either *BatchCreateAnnotationsResponse.ServerResponse.Header or (if a
+// response was returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *AnnotationsBatchCreateCall) Do(opts ...googleapi.CallOption) (*BatchCreateAnnotationsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &BatchCreateAnnotationsResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Creates one or more new annotations atomically. All annotations must belong to the same annotation set. Caller must have WRITE permission for this annotation set. For optimal performance, batch positionally adjacent annotations together. If the request has a systemic issue, such as an attempt to write to an inaccessible annotation set, the entire RPC will fail accordingly. For lesser data issues, when possible an error will be isolated to the corresponding batch entry in the response; the remaining well formed annotations will be created normally. For details on the requirements for each individual annotation resource, see CreateAnnotation.",
+	//   "httpMethod": "POST",
+	//   "id": "genomics.annotations.batchCreate",
+	//   "path": "v1/annotations:batchCreate",
+	//   "request": {
+	//     "$ref": "BatchCreateAnnotationsRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "BatchCreateAnnotationsResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotations.create":
+
+type AnnotationsCreateCall struct {
+	s          *Service
+	annotation *Annotation
+	urlParams_ gensupport.URLParams
+	ctx_       context.Context
+}
+
+// Create: Creates a new annotation. Caller must have WRITE permission
+// for the associated annotation set. The following fields are required:
+// * annotationSetId * referenceName or referenceId ### Transcripts For
+// annotations of type TRANSCRIPT, the following fields of transcript
+// must be provided: * exons.start * exons.end All other fields may be
+// optionally specified, unless documented as being server-generated
+// (for example, the `id` field). The annotated range must be no longer
+// than 100Mbp (mega base pairs). See the Annotation resource for
+// additional restrictions on each field.
+func (r *AnnotationsService) Create(annotation *Annotation) *AnnotationsCreateCall {
+	c := &AnnotationsCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotation = annotation
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsCreateCall) Fields(s ...googleapi.Field) *AnnotationsCreateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsCreateCall) Context(ctx context.Context) *AnnotationsCreateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.annotation)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotations")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotations.create" call.
+// Exactly one of *Annotation or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Annotation.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *AnnotationsCreateCall) Do(opts ...googleapi.CallOption) (*Annotation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Annotation{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Creates a new annotation. Caller must have WRITE permission for the associated annotation set. The following fields are required: * annotationSetId * referenceName or referenceId ### Transcripts For annotations of type TRANSCRIPT, the following fields of transcript must be provided: * exons.start * exons.end All other fields may be optionally specified, unless documented as being server-generated (for example, the `id` field). The annotated range must be no longer than 100Mbp (mega base pairs). See the Annotation resource for additional restrictions on each field.",
+	//   "httpMethod": "POST",
+	//   "id": "genomics.annotations.create",
+	//   "path": "v1/annotations",
+	//   "request": {
+	//     "$ref": "Annotation"
+	//   },
+	//   "response": {
+	//     "$ref": "Annotation"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotations.delete":
+
+type AnnotationsDeleteCall struct {
+	s            *Service
+	annotationId string
+	urlParams_   gensupport.URLParams
+	ctx_         context.Context
+}
+
+// Delete: Deletes an annotation. Caller must have WRITE permission for
+// the associated annotation set.
+func (r *AnnotationsService) Delete(annotationId string) *AnnotationsDeleteCall {
+	c := &AnnotationsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationId = annotationId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsDeleteCall) Fields(s ...googleapi.Field) *AnnotationsDeleteCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsDeleteCall) Context(ctx context.Context) *AnnotationsDeleteCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotations/{annotationId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"annotationId": c.annotationId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotations.delete" call.
+// Exactly one of *Empty or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Empty.ServerResponse.Header or (if a response was returned at all)
+// in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified
+// was returned.
+func (c *AnnotationsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Empty{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Deletes an annotation. Caller must have WRITE permission for the associated annotation set.",
+	//   "httpMethod": "DELETE",
+	//   "id": "genomics.annotations.delete",
+	//   "parameterOrder": [
+	//     "annotationId"
+	//   ],
+	//   "parameters": {
+	//     "annotationId": {
+	//       "description": "The ID of the annotation to be deleted.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/annotations/{annotationId}",
+	//   "response": {
+	//     "$ref": "Empty"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotations.get":
+
+type AnnotationsGetCall struct {
+	s            *Service
+	annotationId string
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+}
+
+// Get: Gets an annotation. Caller must have READ permission for the
+// associated annotation set.
+func (r *AnnotationsService) Get(annotationId string) *AnnotationsGetCall {
+	c := &AnnotationsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationId = annotationId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsGetCall) Fields(s ...googleapi.Field) *AnnotationsGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *AnnotationsGetCall) IfNoneMatch(entityTag string) *AnnotationsGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsGetCall) Context(ctx context.Context) *AnnotationsGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotations/{annotationId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"annotationId": c.annotationId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotations.get" call.
+// Exactly one of *Annotation or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Annotation.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *AnnotationsGetCall) Do(opts ...googleapi.CallOption) (*Annotation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Annotation{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets an annotation. Caller must have READ permission for the associated annotation set.",
+	//   "httpMethod": "GET",
+	//   "id": "genomics.annotations.get",
+	//   "parameterOrder": [
+	//     "annotationId"
+	//   ],
+	//   "parameters": {
+	//     "annotationId": {
+	//       "description": "The ID of the annotation to be retrieved.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/annotations/{annotationId}",
+	//   "response": {
+	//     "$ref": "Annotation"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics",
+	//     "https://www.googleapis.com/auth/genomics.readonly"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotations.search":
+
+type AnnotationsSearchCall struct {
+	s                        *Service
+	searchannotationsrequest *SearchAnnotationsRequest
+	urlParams_               gensupport.URLParams
+	ctx_                     context.Context
+}
+
+// Search: Searches for annotations that match the given criteria.
+// Results are ordered by genomic coordinate (by reference sequence,
+// then position). Annotations with equivalent genomic coordinates are
+// returned in an unspecified order. This order is consistent, such that
+// two queries for the same content (regardless of page size) yield
+// annotations in the same order across their respective streams of
+// paginated responses. Caller must have READ permission for the queried
+// annotation sets.
+func (r *AnnotationsService) Search(searchannotationsrequest *SearchAnnotationsRequest) *AnnotationsSearchCall {
+	c := &AnnotationsSearchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.searchannotationsrequest = searchannotationsrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsSearchCall) Fields(s ...googleapi.Field) *AnnotationsSearchCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsSearchCall) Context(ctx context.Context) *AnnotationsSearchCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchannotationsrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotations/search")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotations.search" call.
+// Exactly one of *SearchAnnotationsResponse or error will be non-nil.
+// Any non-2xx status code is an error. Response headers are in either
+// *SearchAnnotationsResponse.ServerResponse.Header or (if a response
+// was returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *AnnotationsSearchCall) Do(opts ...googleapi.CallOption) (*SearchAnnotationsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &SearchAnnotationsResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Searches for annotations that match the given criteria. Results are ordered by genomic coordinate (by reference sequence, then position). Annotations with equivalent genomic coordinates are returned in an unspecified order. This order is consistent, such that two queries for the same content (regardless of page size) yield annotations in the same order across their respective streams of paginated responses. Caller must have READ permission for the queried annotation sets.",
+	//   "httpMethod": "POST",
+	//   "id": "genomics.annotations.search",
+	//   "path": "v1/annotations/search",
+	//   "request": {
+	//     "$ref": "SearchAnnotationsRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "SearchAnnotationsResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics",
+	//     "https://www.googleapis.com/auth/genomics.readonly"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotations.update":
+
+type AnnotationsUpdateCall struct {
+	s            *Service
+	annotationId string
+	annotation   *Annotation
+	urlParams_   gensupport.URLParams
+	ctx_         context.Context
+}
+
+// Update: Updates an annotation. Caller must have WRITE permission for
+// the associated dataset.
+func (r *AnnotationsService) Update(annotationId string, annotation *Annotation) *AnnotationsUpdateCall {
+	c := &AnnotationsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationId = annotationId
+	c.annotation = annotation
+	return c
+}
+
+// UpdateMask sets the optional parameter "updateMask": An optional mask
+// specifying which fields to update. Mutable fields are name, variant,
+// transcript, and info. If unspecified, all mutable fields will be
+// updated.
+func (c *AnnotationsUpdateCall) UpdateMask(updateMask string) *AnnotationsUpdateCall {
+	c.urlParams_.Set("updateMask", updateMask)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsUpdateCall) Fields(s ...googleapi.Field) *AnnotationsUpdateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsUpdateCall) Context(ctx context.Context) *AnnotationsUpdateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.annotation)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotations/{annotationId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"annotationId": c.annotationId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotations.update" call.
+// Exactly one of *Annotation or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *Annotation.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *AnnotationsUpdateCall) Do(opts ...googleapi.CallOption) (*Annotation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Annotation{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Updates an annotation. Caller must have WRITE permission for the associated dataset.",
+	//   "httpMethod": "PUT",
+	//   "id": "genomics.annotations.update",
+	//   "parameterOrder": [
+	//     "annotationId"
+	//   ],
+	//   "parameters": {
+	//     "annotationId": {
+	//       "description": "The ID of the annotation to be updated.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "updateMask": {
+	//       "description": "An optional mask specifying which fields to update. Mutable fields are name, variant, transcript, and info. If unspecified, all mutable fields will be updated.",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/annotations/{annotationId}",
+	//   "request": {
+	//     "$ref": "Annotation"
+	//   },
+	//   "response": {
+	//     "$ref": "Annotation"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotationsets.create":
+
+type AnnotationsetsCreateCall struct {
+	s             *Service
+	annotationset *AnnotationSet
+	urlParams_    gensupport.URLParams
+	ctx_          context.Context
+}
+
+// Create: Creates a new annotation set. Caller must have WRITE
+// permission for the associated dataset. The following fields are
+// required: * datasetId * referenceSetId All other fields may be
+// optionally specified, unless documented as being server-generated
+// (for example, the `id` field).
+func (r *AnnotationsetsService) Create(annotationset *AnnotationSet) *AnnotationsetsCreateCall {
+	c := &AnnotationsetsCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationset = annotationset
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsetsCreateCall) Fields(s ...googleapi.Field) *AnnotationsetsCreateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsetsCreateCall) Context(ctx context.Context) *AnnotationsetsCreateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsetsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.annotationset)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotationsets")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotationsets.create" call.
+// Exactly one of *AnnotationSet or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *AnnotationSet.ServerResponse.Header or (if a response was returned
+// at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *AnnotationsetsCreateCall) Do(opts ...googleapi.CallOption) (*AnnotationSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &AnnotationSet{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Creates a new annotation set. Caller must have WRITE permission for the associated dataset. The following fields are required: * datasetId * referenceSetId All other fields may be optionally specified, unless documented as being server-generated (for example, the `id` field).",
+	//   "httpMethod": "POST",
+	//   "id": "genomics.annotationsets.create",
+	//   "path": "v1/annotationsets",
+	//   "request": {
+	//     "$ref": "AnnotationSet"
+	//   },
+	//   "response": {
+	//     "$ref": "AnnotationSet"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotationsets.delete":
+
+type AnnotationsetsDeleteCall struct {
+	s               *Service
+	annotationSetId string
+	urlParams_      gensupport.URLParams
+	ctx_            context.Context
+}
+
+// Delete: Deletes an annotation set. Caller must have WRITE permission
+// for the associated annotation set.
+func (r *AnnotationsetsService) Delete(annotationSetId string) *AnnotationsetsDeleteCall {
+	c := &AnnotationsetsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationSetId = annotationSetId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsetsDeleteCall) Fields(s ...googleapi.Field) *AnnotationsetsDeleteCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsetsDeleteCall) Context(ctx context.Context) *AnnotationsetsDeleteCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotationsets/{annotationSetId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"annotationSetId": c.annotationSetId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotationsets.delete" call.
+// Exactly one of *Empty or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Empty.ServerResponse.Header or (if a response was returned at all)
+// in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified
+// was returned.
+func (c *AnnotationsetsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Empty{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Deletes an annotation set. Caller must have WRITE permission for the associated annotation set.",
+	//   "httpMethod": "DELETE",
+	//   "id": "genomics.annotationsets.delete",
+	//   "parameterOrder": [
+	//     "annotationSetId"
+	//   ],
+	//   "parameters": {
+	//     "annotationSetId": {
+	//       "description": "The ID of the annotation set to be deleted.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/annotationsets/{annotationSetId}",
+	//   "response": {
+	//     "$ref": "Empty"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotationsets.get":
+
+type AnnotationsetsGetCall struct {
+	s               *Service
+	annotationSetId string
+	urlParams_      gensupport.URLParams
+	ifNoneMatch_    string
+	ctx_            context.Context
+}
+
+// Get: Gets an annotation set. Caller must have READ permission for the
+// associated dataset.
+func (r *AnnotationsetsService) Get(annotationSetId string) *AnnotationsetsGetCall {
+	c := &AnnotationsetsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationSetId = annotationSetId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsetsGetCall) Fields(s ...googleapi.Field) *AnnotationsetsGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *AnnotationsetsGetCall) IfNoneMatch(entityTag string) *AnnotationsetsGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsetsGetCall) Context(ctx context.Context) *AnnotationsetsGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotationsets/{annotationSetId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"annotationSetId": c.annotationSetId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotationsets.get" call.
+// Exactly one of *AnnotationSet or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *AnnotationSet.ServerResponse.Header or (if a response was returned
+// at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *AnnotationsetsGetCall) Do(opts ...googleapi.CallOption) (*AnnotationSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &AnnotationSet{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets an annotation set. Caller must have READ permission for the associated dataset.",
+	//   "httpMethod": "GET",
+	//   "id": "genomics.annotationsets.get",
+	//   "parameterOrder": [
+	//     "annotationSetId"
+	//   ],
+	//   "parameters": {
+	//     "annotationSetId": {
+	//       "description": "The ID of the annotation set to be retrieved.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/annotationsets/{annotationSetId}",
+	//   "response": {
+	//     "$ref": "AnnotationSet"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics",
+	//     "https://www.googleapis.com/auth/genomics.readonly"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotationsets.search":
+
+type AnnotationsetsSearchCall struct {
+	s                           *Service
+	searchannotationsetsrequest *SearchAnnotationSetsRequest
+	urlParams_                  gensupport.URLParams
+	ctx_                        context.Context
+}
+
+// Search: Searches for annotation sets that match the given criteria.
+// Annotation sets are returned in an unspecified order. This order is
+// consistent, such that two queries for the same content (regardless of
+// page size) yield annotation sets in the same order across their
+// respective streams of paginated responses. Caller must have READ
+// permission for the queried datasets.
+func (r *AnnotationsetsService) Search(searchannotationsetsrequest *SearchAnnotationSetsRequest) *AnnotationsetsSearchCall {
+	c := &AnnotationsetsSearchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.searchannotationsetsrequest = searchannotationsetsrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsetsSearchCall) Fields(s ...googleapi.Field) *AnnotationsetsSearchCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsetsSearchCall) Context(ctx context.Context) *AnnotationsetsSearchCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsetsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchannotationsetsrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotationsets/search")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotationsets.search" call.
+// Exactly one of *SearchAnnotationSetsResponse or error will be
+// non-nil. Any non-2xx status code is an error. Response headers are in
+// either *SearchAnnotationSetsResponse.ServerResponse.Header or (if a
+// response was returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *AnnotationsetsSearchCall) Do(opts ...googleapi.CallOption) (*SearchAnnotationSetsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &SearchAnnotationSetsResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Searches for annotation sets that match the given criteria. Annotation sets are returned in an unspecified order. This order is consistent, such that two queries for the same content (regardless of page size) yield annotation sets in the same order across their respective streams of paginated responses. Caller must have READ permission for the queried datasets.",
+	//   "httpMethod": "POST",
+	//   "id": "genomics.annotationsets.search",
+	//   "path": "v1/annotationsets/search",
+	//   "request": {
+	//     "$ref": "SearchAnnotationSetsRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "SearchAnnotationSetsResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics",
+	//     "https://www.googleapis.com/auth/genomics.readonly"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.annotationsets.update":
+
+type AnnotationsetsUpdateCall struct {
+	s               *Service
+	annotationSetId string
+	annotationset   *AnnotationSet
+	urlParams_      gensupport.URLParams
+	ctx_            context.Context
+}
+
+// Update: Updates an annotation set. The update must respect all
+// mutability restrictions and other invariants described on the
+// annotation set resource. Caller must have WRITE permission for the
+// associated dataset.
+func (r *AnnotationsetsService) Update(annotationSetId string, annotationset *AnnotationSet) *AnnotationsetsUpdateCall {
+	c := &AnnotationsetsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.annotationSetId = annotationSetId
+	c.annotationset = annotationset
+	return c
+}
+
+// UpdateMask sets the optional parameter "updateMask": An optional mask
+// specifying which fields to update. Mutable fields are name,
+// source_uri, and info. If unspecified, all mutable fields will be
+// updated.
+func (c *AnnotationsetsUpdateCall) UpdateMask(updateMask string) *AnnotationsetsUpdateCall {
+	c.urlParams_.Set("updateMask", updateMask)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *AnnotationsetsUpdateCall) Fields(s ...googleapi.Field) *AnnotationsetsUpdateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *AnnotationsetsUpdateCall) Context(ctx context.Context) *AnnotationsetsUpdateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *AnnotationsetsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.annotationset)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/annotationsets/{annotationSetId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"annotationSetId": c.annotationSetId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.annotationsets.update" call.
+// Exactly one of *AnnotationSet or error will be non-nil. Any non-2xx
+// status code is an error. Response headers are in either
+// *AnnotationSet.ServerResponse.Header or (if a response was returned
+// at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *AnnotationsetsUpdateCall) Do(opts ...googleapi.CallOption) (*AnnotationSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &AnnotationSet{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Updates an annotation set. The update must respect all mutability restrictions and other invariants described on the annotation set resource. Caller must have WRITE permission for the associated dataset.",
+	//   "httpMethod": "PUT",
+	//   "id": "genomics.annotationsets.update",
+	//   "parameterOrder": [
+	//     "annotationSetId"
+	//   ],
+	//   "parameters": {
+	//     "annotationSetId": {
+	//       "description": "The ID of the annotation set to be updated.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "updateMask": {
+	//       "description": "An optional mask specifying which fields to update. Mutable fields are name, source_uri, and info. If unspecified, all mutable fields will be updated.",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1/annotationsets/{annotationSetId}",
+	//   "request": {
+	//     "$ref": "AnnotationSet"
+	//   },
+	//   "response": {
+	//     "$ref": "AnnotationSet"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
 }
 
 // method id "genomics.callsets.create":
@@ -2565,14 +4620,6 @@ func (r *CallsetsService) Create(callset *CallSet) *CallsetsCreateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *CallsetsCreateCall) QuotaUser(quotaUser string) *CallsetsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2590,23 +4637,21 @@ func (c *CallsetsCreateCall) Context(ctx context.Context) *CallsetsCreateCall {
 }
 
 func (c *CallsetsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.callset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/callsets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.callsets.create" call.
@@ -2616,7 +4661,8 @@ func (c *CallsetsCreateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CallsetsCreateCall) Do() (*CallSet, error) {
+func (c *CallsetsCreateCall) Do(opts ...googleapi.CallOption) (*CallSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2640,7 +4686,8 @@ func (c *CallsetsCreateCall) Do() (*CallSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2682,14 +4729,6 @@ func (r *CallsetsService) Delete(callSetId string) *CallsetsDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *CallsetsDeleteCall) QuotaUser(quotaUser string) *CallsetsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2707,19 +4746,18 @@ func (c *CallsetsDeleteCall) Context(ctx context.Context) *CallsetsDeleteCall {
 }
 
 func (c *CallsetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/callsets/{callSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"callSetId": c.callSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.callsets.delete" call.
@@ -2729,7 +4767,8 @@ func (c *CallsetsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CallsetsDeleteCall) Do() (*Empty, error) {
+func (c *CallsetsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2753,7 +4792,8 @@ func (c *CallsetsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2804,14 +4844,6 @@ func (r *CallsetsService) Get(callSetId string) *CallsetsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *CallsetsGetCall) QuotaUser(quotaUser string) *CallsetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2839,22 +4871,21 @@ func (c *CallsetsGetCall) Context(ctx context.Context) *CallsetsGetCall {
 }
 
 func (c *CallsetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/callsets/{callSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"callSetId": c.callSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.callsets.get" call.
@@ -2864,7 +4895,8 @@ func (c *CallsetsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CallsetsGetCall) Do() (*CallSet, error) {
+func (c *CallsetsGetCall) Do(opts ...googleapi.CallOption) (*CallSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2888,7 +4920,8 @@ func (c *CallsetsGetCall) Do() (*CallSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2941,14 +4974,6 @@ func (r *CallsetsService) Patch(callSetId string, callset *CallSet) *CallsetsPat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *CallsetsPatchCall) QuotaUser(quotaUser string) *CallsetsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // UpdateMask sets the optional parameter "updateMask": An optional mask
 // specifying which fields to update. At this time, the only mutable
 // field is name. The only acceptable value is "name". If unspecified,
@@ -2975,25 +5000,23 @@ func (c *CallsetsPatchCall) Context(ctx context.Context) *CallsetsPatchCall {
 }
 
 func (c *CallsetsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.callset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/callsets/{callSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"callSetId": c.callSetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.callsets.patch" call.
@@ -3003,7 +5026,8 @@ func (c *CallsetsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CallsetsPatchCall) Do() (*CallSet, error) {
+func (c *CallsetsPatchCall) Do(opts ...googleapi.CallOption) (*CallSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3027,7 +5051,8 @@ func (c *CallsetsPatchCall) Do() (*CallSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3088,14 +5113,6 @@ func (r *CallsetsService) Search(searchcallsetsrequest *SearchCallSetsRequest) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *CallsetsSearchCall) QuotaUser(quotaUser string) *CallsetsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3113,23 +5130,21 @@ func (c *CallsetsSearchCall) Context(ctx context.Context) *CallsetsSearchCall {
 }
 
 func (c *CallsetsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchcallsetsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/callsets/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.callsets.search" call.
@@ -3139,7 +5154,8 @@ func (c *CallsetsSearchCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CallsetsSearchCall) Do() (*SearchCallSetsResponse, error) {
+func (c *CallsetsSearchCall) Do(opts ...googleapi.CallOption) (*SearchCallSetsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3163,7 +5179,8 @@ func (c *CallsetsSearchCall) Do() (*SearchCallSetsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3206,14 +5223,6 @@ func (r *DatasetsService) Create(dataset *Dataset) *DatasetsCreateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsCreateCall) QuotaUser(quotaUser string) *DatasetsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3231,23 +5240,21 @@ func (c *DatasetsCreateCall) Context(ctx context.Context) *DatasetsCreateCall {
 }
 
 func (c *DatasetsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/datasets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.create" call.
@@ -3257,7 +5264,8 @@ func (c *DatasetsCreateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsCreateCall) Do() (*Dataset, error) {
+func (c *DatasetsCreateCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3281,7 +5289,8 @@ func (c *DatasetsCreateCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3313,21 +5322,16 @@ type DatasetsDeleteCall struct {
 	ctx_       context.Context
 }
 
-// Delete: Deletes a dataset. For the definitions of datasets and other
-// genomics resources, see [Fundamentals of Google
+// Delete: Deletes a dataset and all of its contents (all read group
+// sets, reference sets, variant sets, call sets, annotation sets, etc.)
+// This is reversible (up to one week after the deletion) via the
+// datasets.undelete operation. For the definitions of datasets and
+// other genomics resources, see [Fundamentals of Google
 // Genomics](https://cloud.google.com/genomics/fundamentals-of-google-gen
 // omics)
 func (r *DatasetsService) Delete(datasetId string) *DatasetsDeleteCall {
 	c := &DatasetsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.datasetId = datasetId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsDeleteCall) QuotaUser(quotaUser string) *DatasetsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -3348,19 +5352,18 @@ func (c *DatasetsDeleteCall) Context(ctx context.Context) *DatasetsDeleteCall {
 }
 
 func (c *DatasetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.delete" call.
@@ -3370,7 +5373,8 @@ func (c *DatasetsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsDeleteCall) Do() (*Empty, error) {
+func (c *DatasetsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3394,12 +5398,13 @@ func (c *DatasetsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Deletes a dataset. For the definitions of datasets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics)",
+	//   "description": "Deletes a dataset and all of its contents (all read group sets, reference sets, variant sets, call sets, annotation sets, etc.) This is reversible (up to one week after the deletion) via the datasets.undelete operation. For the definitions of datasets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics)",
 	//   "httpMethod": "DELETE",
 	//   "id": "genomics.datasets.delete",
 	//   "parameterOrder": [
@@ -3445,14 +5450,6 @@ func (r *DatasetsService) Get(datasetId string) *DatasetsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsGetCall) QuotaUser(quotaUser string) *DatasetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3480,22 +5477,21 @@ func (c *DatasetsGetCall) Context(ctx context.Context) *DatasetsGetCall {
 }
 
 func (c *DatasetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.get" call.
@@ -3505,7 +5501,8 @@ func (c *DatasetsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsGetCall) Do() (*Dataset, error) {
+func (c *DatasetsGetCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3529,7 +5526,8 @@ func (c *DatasetsGetCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3584,14 +5582,6 @@ func (r *DatasetsService) GetIamPolicy(resource string, getiampolicyrequest *Get
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsGetIamPolicyCall) QuotaUser(quotaUser string) *DatasetsGetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3609,25 +5599,23 @@ func (c *DatasetsGetIamPolicyCall) Context(ctx context.Context) *DatasetsGetIamP
 }
 
 func (c *DatasetsGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/{+resource}:getIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.getIamPolicy" call.
@@ -3637,7 +5625,8 @@ func (c *DatasetsGetIamPolicyCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsGetIamPolicyCall) Do() (*Policy, error) {
+func (c *DatasetsGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3661,7 +5650,8 @@ func (c *DatasetsGetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3738,14 +5728,6 @@ func (c *DatasetsListCall) ProjectId(projectId string) *DatasetsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsListCall) QuotaUser(quotaUser string) *DatasetsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3773,20 +5755,19 @@ func (c *DatasetsListCall) Context(ctx context.Context) *DatasetsListCall {
 }
 
 func (c *DatasetsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/datasets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.list" call.
@@ -3796,7 +5777,8 @@ func (c *DatasetsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DatasetsListCall) Do() (*ListDatasetsResponse, error) {
+func (c *DatasetsListCall) Do(opts ...googleapi.CallOption) (*ListDatasetsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3820,7 +5802,8 @@ func (c *DatasetsListCall) Do() (*ListDatasetsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3859,6 +5842,27 @@ func (c *DatasetsListCall) Do() (*ListDatasetsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *DatasetsListCall) Pages(ctx context.Context, f func(*ListDatasetsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "genomics.datasets.patch":
 
 type DatasetsPatchCall struct {
@@ -3877,14 +5881,6 @@ func (r *DatasetsService) Patch(datasetId string, dataset *Dataset) *DatasetsPat
 	c := &DatasetsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.datasetId = datasetId
 	c.dataset = dataset
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsPatchCall) QuotaUser(quotaUser string) *DatasetsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -3914,25 +5910,23 @@ func (c *DatasetsPatchCall) Context(ctx context.Context) *DatasetsPatchCall {
 }
 
 func (c *DatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.patch" call.
@@ -3942,7 +5936,8 @@ func (c *DatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsPatchCall) Do() (*Dataset, error) {
+func (c *DatasetsPatchCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3966,7 +5961,8 @@ func (c *DatasetsPatchCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4027,14 +6023,6 @@ func (r *DatasetsService) SetIamPolicy(resource string, setiampolicyrequest *Set
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsSetIamPolicyCall) QuotaUser(quotaUser string) *DatasetsSetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4052,25 +6040,23 @@ func (c *DatasetsSetIamPolicyCall) Context(ctx context.Context) *DatasetsSetIamP
 }
 
 func (c *DatasetsSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/{+resource}:setIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.setIamPolicy" call.
@@ -4080,7 +6066,8 @@ func (c *DatasetsSetIamPolicyCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsSetIamPolicyCall) Do() (*Policy, error) {
+func (c *DatasetsSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4104,7 +6091,8 @@ func (c *DatasetsSetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4162,14 +6150,6 @@ func (r *DatasetsService) TestIamPermissions(resource string, testiampermissions
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsTestIamPermissionsCall) QuotaUser(quotaUser string) *DatasetsTestIamPermissionsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4187,25 +6167,23 @@ func (c *DatasetsTestIamPermissionsCall) Context(ctx context.Context) *DatasetsT
 }
 
 func (c *DatasetsTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/{+resource}:testIamPermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.testIamPermissions" call.
@@ -4215,7 +6193,8 @@ func (c *DatasetsTestIamPermissionsCall) doRequest(alt string) (*http.Response, 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DatasetsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, error) {
+func (c *DatasetsTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*TestIamPermissionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4239,7 +6218,8 @@ func (c *DatasetsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4297,14 +6277,6 @@ func (r *DatasetsService) Undelete(datasetId string, undeletedatasetrequest *Und
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DatasetsUndeleteCall) QuotaUser(quotaUser string) *DatasetsUndeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4322,25 +6294,23 @@ func (c *DatasetsUndeleteCall) Context(ctx context.Context) *DatasetsUndeleteCal
 }
 
 func (c *DatasetsUndeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.undeletedatasetrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/datasets/{datasetId}:undelete")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.datasets.undelete" call.
@@ -4350,7 +6320,8 @@ func (c *DatasetsUndeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsUndeleteCall) Do() (*Dataset, error) {
+func (c *DatasetsUndeleteCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4374,7 +6345,8 @@ func (c *DatasetsUndeleteCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4430,14 +6402,6 @@ func (r *OperationsService) Cancel(name string, canceloperationrequest *CancelOp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsCancelCall) QuotaUser(quotaUser string) *OperationsCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4455,25 +6419,23 @@ func (c *OperationsCancelCall) Context(ctx context.Context) *OperationsCancelCal
 }
 
 func (c *OperationsCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.canceloperationrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/{+name}:cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.operations.cancel" call.
@@ -4483,7 +6445,8 @@ func (c *OperationsCancelCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OperationsCancelCall) Do() (*Empty, error) {
+func (c *OperationsCancelCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4507,7 +6470,8 @@ func (c *OperationsCancelCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4561,14 +6525,6 @@ func (r *OperationsService) Get(name string) *OperationsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsGetCall) QuotaUser(quotaUser string) *OperationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4596,22 +6552,21 @@ func (c *OperationsGetCall) Context(ctx context.Context) *OperationsGetCall {
 }
 
 func (c *OperationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.operations.get" call.
@@ -4621,7 +6576,8 @@ func (c *OperationsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *OperationsGetCall) Do() (*Operation, error) {
+func (c *OperationsGetCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4645,7 +6601,8 @@ func (c *OperationsGetCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4722,14 +6679,6 @@ func (c *OperationsListCall) PageToken(pageToken string) *OperationsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsListCall) QuotaUser(quotaUser string) *OperationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4757,22 +6706,21 @@ func (c *OperationsListCall) Context(ctx context.Context) *OperationsListCall {
 }
 
 func (c *OperationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.operations.list" call.
@@ -4782,7 +6730,8 @@ func (c *OperationsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OperationsListCall) Do() (*ListOperationsResponse, error) {
+func (c *OperationsListCall) Do(opts ...googleapi.CallOption) (*ListOperationsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4806,7 +6755,8 @@ func (c *OperationsListCall) Do() (*ListOperationsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4854,6 +6804,27 @@ func (c *OperationsListCall) Do() (*ListOperationsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *OperationsListCall) Pages(ctx context.Context, f func(*ListOperationsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "genomics.readgroupsets.delete":
 
 type ReadgroupsetsDeleteCall struct {
@@ -4870,14 +6841,6 @@ type ReadgroupsetsDeleteCall struct {
 func (r *ReadgroupsetsService) Delete(readGroupSetId string) *ReadgroupsetsDeleteCall {
 	c := &ReadgroupsetsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.readGroupSetId = readGroupSetId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsDeleteCall) QuotaUser(quotaUser string) *ReadgroupsetsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -4898,19 +6861,18 @@ func (c *ReadgroupsetsDeleteCall) Context(ctx context.Context) *ReadgroupsetsDel
 }
 
 func (c *ReadgroupsetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets/{readGroupSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"readGroupSetId": c.readGroupSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.delete" call.
@@ -4920,7 +6882,8 @@ func (c *ReadgroupsetsDeleteCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ReadgroupsetsDeleteCall) Do() (*Empty, error) {
+func (c *ReadgroupsetsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4944,7 +6907,8 @@ func (c *ReadgroupsetsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4991,21 +6955,11 @@ type ReadgroupsetsExportCall struct {
 // Genomics](https://cloud.google.com/genomics/fundamentals-of-google-gen
 // omics) Note that currently there may be some differences between
 // exported BAM files and the original BAM file at the time of import.
-// See
-// [ImportReadGroupSets](google.genomics.v1.ReadServiceV1.ImportReadGroup
-// Sets) for caveats.
+// See ImportReadGroupSets for caveats.
 func (r *ReadgroupsetsService) Export(readGroupSetId string, exportreadgroupsetrequest *ExportReadGroupSetRequest) *ReadgroupsetsExportCall {
 	c := &ReadgroupsetsExportCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.readGroupSetId = readGroupSetId
 	c.exportreadgroupsetrequest = exportreadgroupsetrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsExportCall) QuotaUser(quotaUser string) *ReadgroupsetsExportCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -5026,25 +6980,23 @@ func (c *ReadgroupsetsExportCall) Context(ctx context.Context) *ReadgroupsetsExp
 }
 
 func (c *ReadgroupsetsExportCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.exportreadgroupsetrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets/{readGroupSetId}:export")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"readGroupSetId": c.readGroupSetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.export" call.
@@ -5054,7 +7006,8 @@ func (c *ReadgroupsetsExportCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReadgroupsetsExportCall) Do() (*Operation, error) {
+func (c *ReadgroupsetsExportCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5078,12 +7031,13 @@ func (c *ReadgroupsetsExportCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Exports a read group set to a BAM file in Google Cloud Storage. For the definitions of read group sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) Note that currently there may be some differences between exported BAM files and the original BAM file at the time of import. See [ImportReadGroupSets](google.genomics.v1.ReadServiceV1.ImportReadGroupSets) for caveats.",
+	//   "description": "Exports a read group set to a BAM file in Google Cloud Storage. For the definitions of read group sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) Note that currently there may be some differences between exported BAM files and the original BAM file at the time of import. See ImportReadGroupSets for caveats.",
 	//   "httpMethod": "POST",
 	//   "id": "genomics.readgroupsets.export",
 	//   "parameterOrder": [
@@ -5133,14 +7087,6 @@ func (r *ReadgroupsetsService) Get(readGroupSetId string) *ReadgroupsetsGetCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsGetCall) QuotaUser(quotaUser string) *ReadgroupsetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5168,22 +7114,21 @@ func (c *ReadgroupsetsGetCall) Context(ctx context.Context) *ReadgroupsetsGetCal
 }
 
 func (c *ReadgroupsetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets/{readGroupSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"readGroupSetId": c.readGroupSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.get" call.
@@ -5193,7 +7138,8 @@ func (c *ReadgroupsetsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReadgroupsetsGetCall) Do() (*ReadGroupSet, error) {
+func (c *ReadgroupsetsGetCall) Do(opts ...googleapi.CallOption) (*ReadGroupSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5217,7 +7163,8 @@ func (c *ReadgroupsetsGetCall) Do() (*ReadGroupSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5268,20 +7215,12 @@ type ReadgroupsetsImportCall struct {
 // Comments (`@CO`) in the input file header will not be preserved -
 // Original header order of references (`@SQ`) will not be preserved -
 // Any reverse stranded unmapped reads will be reverse complemented, and
-// their qualities (and "BQ" tag, if any) will be reversed - Unmapped
-// reads will be stripped of positional information (reference name and
-// position)
+// their qualities (also the "BQ" and "OQ" tags, if any) will be
+// reversed - Unmapped reads will be stripped of positional information
+// (reference name and position)
 func (r *ReadgroupsetsService) Import(importreadgroupsetsrequest *ImportReadGroupSetsRequest) *ReadgroupsetsImportCall {
 	c := &ReadgroupsetsImportCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.importreadgroupsetsrequest = importreadgroupsetsrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsImportCall) QuotaUser(quotaUser string) *ReadgroupsetsImportCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -5302,23 +7241,21 @@ func (c *ReadgroupsetsImportCall) Context(ctx context.Context) *ReadgroupsetsImp
 }
 
 func (c *ReadgroupsetsImportCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.importreadgroupsetsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets:import")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.import" call.
@@ -5328,7 +7265,8 @@ func (c *ReadgroupsetsImportCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReadgroupsetsImportCall) Do() (*Operation, error) {
+func (c *ReadgroupsetsImportCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5352,12 +7290,13 @@ func (c *ReadgroupsetsImportCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Creates read group sets by asynchronously importing the provided information. For the definitions of read group sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) The caller must have WRITE permissions to the dataset. ## Notes on [BAM](https://samtools.github.io/hts-specs/SAMv1.pdf) import - Tags will be converted to strings - tag types are not preserved - Comments (`@CO`) in the input file header will not be preserved - Original header order of references (`@SQ`) will not be preserved - Any reverse stranded unmapped reads will be reverse complemented, and their qualities (and \"BQ\" tag, if any) will be reversed - Unmapped reads will be stripped of positional information (reference name and position)",
+	//   "description": "Creates read group sets by asynchronously importing the provided information. For the definitions of read group sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) The caller must have WRITE permissions to the dataset. ## Notes on [BAM](https://samtools.github.io/hts-specs/SAMv1.pdf) import - Tags will be converted to strings - tag types are not preserved - Comments (`@CO`) in the input file header will not be preserved - Original header order of references (`@SQ`) will not be preserved - Any reverse stranded unmapped reads will be reverse complemented, and their qualities (also the \"BQ\" and \"OQ\" tags, if any) will be reversed - Unmapped reads will be stripped of positional information (reference name and position)",
 	//   "httpMethod": "POST",
 	//   "id": "genomics.readgroupsets.import",
 	//   "path": "v1/readgroupsets:import",
@@ -5397,14 +7336,6 @@ func (r *ReadgroupsetsService) Patch(readGroupSetId string, readgroupset *ReadGr
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsPatchCall) QuotaUser(quotaUser string) *ReadgroupsetsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // UpdateMask sets the optional parameter "updateMask": An optional mask
 // specifying which fields to update. Supported fields: * name. *
 // referenceSetId. Leaving `updateMask` unset is equivalent to
@@ -5431,25 +7362,23 @@ func (c *ReadgroupsetsPatchCall) Context(ctx context.Context) *ReadgroupsetsPatc
 }
 
 func (c *ReadgroupsetsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.readgroupset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets/{readGroupSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"readGroupSetId": c.readGroupSetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.patch" call.
@@ -5459,7 +7388,8 @@ func (c *ReadgroupsetsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReadgroupsetsPatchCall) Do() (*ReadGroupSet, error) {
+func (c *ReadgroupsetsPatchCall) Do(opts ...googleapi.CallOption) (*ReadGroupSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5483,7 +7413,8 @@ func (c *ReadgroupsetsPatchCall) Do() (*ReadGroupSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5544,14 +7475,6 @@ func (r *ReadgroupsetsService) Search(searchreadgroupsetsrequest *SearchReadGrou
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsSearchCall) QuotaUser(quotaUser string) *ReadgroupsetsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5569,23 +7492,21 @@ func (c *ReadgroupsetsSearchCall) Context(ctx context.Context) *ReadgroupsetsSea
 }
 
 func (c *ReadgroupsetsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchreadgroupsetsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.search" call.
@@ -5595,7 +7516,8 @@ func (c *ReadgroupsetsSearchCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReadgroupsetsSearchCall) Do() (*SearchReadGroupSetsResponse, error) {
+func (c *ReadgroupsetsSearchCall) Do(opts ...googleapi.CallOption) (*SearchReadGroupSetsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5619,7 +7541,8 @@ func (c *ReadgroupsetsSearchCall) Do() (*SearchReadGroupSetsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5696,14 +7619,6 @@ func (c *ReadgroupsetsCoveragebucketsListCall) PageToken(pageToken string) *Read
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadgroupsetsCoveragebucketsListCall) QuotaUser(quotaUser string) *ReadgroupsetsCoveragebucketsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ReferenceName sets the optional parameter "referenceName": The name
 // of the reference to query, within the reference set associated with
 // this query.
@@ -5760,22 +7675,21 @@ func (c *ReadgroupsetsCoveragebucketsListCall) Context(ctx context.Context) *Rea
 }
 
 func (c *ReadgroupsetsCoveragebucketsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/readgroupsets/{readGroupSetId}/coveragebuckets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"readGroupSetId": c.readGroupSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.readgroupsets.coveragebuckets.list" call.
@@ -5785,7 +7699,8 @@ func (c *ReadgroupsetsCoveragebucketsListCall) doRequest(alt string) (*http.Resp
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReadgroupsetsCoveragebucketsListCall) Do() (*ListCoverageBucketsResponse, error) {
+func (c *ReadgroupsetsCoveragebucketsListCall) Do(opts ...googleapi.CallOption) (*ListCoverageBucketsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5809,7 +7724,8 @@ func (c *ReadgroupsetsCoveragebucketsListCall) Do() (*ListCoverageBucketsRespons
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5875,6 +7791,27 @@ func (c *ReadgroupsetsCoveragebucketsListCall) Do() (*ListCoverageBucketsRespons
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ReadgroupsetsCoveragebucketsListCall) Pages(ctx context.Context, f func(*ListCoverageBucketsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "genomics.reads.search":
 
 type ReadsSearchCall struct {
@@ -5909,14 +7846,6 @@ func (r *ReadsService) Search(searchreadsrequest *SearchReadsRequest) *ReadsSear
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadsSearchCall) QuotaUser(quotaUser string) *ReadsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5934,23 +7863,21 @@ func (c *ReadsSearchCall) Context(ctx context.Context) *ReadsSearchCall {
 }
 
 func (c *ReadsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchreadsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/reads/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.reads.search" call.
@@ -5960,7 +7887,8 @@ func (c *ReadsSearchCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReadsSearchCall) Do() (*SearchReadsResponse, error) {
+func (c *ReadsSearchCall) Do(opts ...googleapi.CallOption) (*SearchReadsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5984,7 +7912,8 @@ func (c *ReadsSearchCall) Do() (*SearchReadsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6025,14 +7954,6 @@ func (r *ReadsService) Stream(streamreadsrequest *StreamReadsRequest) *ReadsStre
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReadsStreamCall) QuotaUser(quotaUser string) *ReadsStreamCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6050,23 +7971,21 @@ func (c *ReadsStreamCall) Context(ctx context.Context) *ReadsStreamCall {
 }
 
 func (c *ReadsStreamCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.streamreadsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/reads:stream")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.reads.stream" call.
@@ -6076,7 +7995,8 @@ func (c *ReadsStreamCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReadsStreamCall) Do() (*StreamReadsResponse, error) {
+func (c *ReadsStreamCall) Do(opts ...googleapi.CallOption) (*StreamReadsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6100,7 +8020,8 @@ func (c *ReadsStreamCall) Do() (*StreamReadsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6145,14 +8066,6 @@ func (r *ReferencesService) Get(referenceId string) *ReferencesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReferencesGetCall) QuotaUser(quotaUser string) *ReferencesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6180,22 +8093,21 @@ func (c *ReferencesGetCall) Context(ctx context.Context) *ReferencesGetCall {
 }
 
 func (c *ReferencesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/references/{referenceId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"referenceId": c.referenceId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.references.get" call.
@@ -6205,7 +8117,8 @@ func (c *ReferencesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReferencesGetCall) Do() (*Reference, error) {
+func (c *ReferencesGetCall) Do(opts ...googleapi.CallOption) (*Reference, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6229,7 +8142,8 @@ func (c *ReferencesGetCall) Do() (*Reference, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6283,14 +8197,6 @@ func (r *ReferencesService) Search(searchreferencesrequest *SearchReferencesRequ
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReferencesSearchCall) QuotaUser(quotaUser string) *ReferencesSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6308,23 +8214,21 @@ func (c *ReferencesSearchCall) Context(ctx context.Context) *ReferencesSearchCal
 }
 
 func (c *ReferencesSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchreferencesrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/references/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.references.search" call.
@@ -6334,7 +8238,8 @@ func (c *ReferencesSearchCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReferencesSearchCall) Do() (*SearchReferencesResponse, error) {
+func (c *ReferencesSearchCall) Do(opts ...googleapi.CallOption) (*SearchReferencesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6358,7 +8263,8 @@ func (c *ReferencesSearchCall) Do() (*SearchReferencesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6430,14 +8336,6 @@ func (c *ReferencesBasesListCall) PageToken(pageToken string) *ReferencesBasesLi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReferencesBasesListCall) QuotaUser(quotaUser string) *ReferencesBasesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Start sets the optional parameter "start": The start position
 // (0-based) of this query. Defaults to 0.
 func (c *ReferencesBasesListCall) Start(start int64) *ReferencesBasesListCall {
@@ -6472,22 +8370,21 @@ func (c *ReferencesBasesListCall) Context(ctx context.Context) *ReferencesBasesL
 }
 
 func (c *ReferencesBasesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/references/{referenceId}/bases")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"referenceId": c.referenceId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.references.bases.list" call.
@@ -6497,7 +8394,8 @@ func (c *ReferencesBasesListCall) doRequest(alt string) (*http.Response, error) 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReferencesBasesListCall) Do() (*ListBasesResponse, error) {
+func (c *ReferencesBasesListCall) Do(opts ...googleapi.CallOption) (*ListBasesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6521,7 +8419,8 @@ func (c *ReferencesBasesListCall) Do() (*ListBasesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6576,6 +8475,27 @@ func (c *ReferencesBasesListCall) Do() (*ListBasesResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ReferencesBasesListCall) Pages(ctx context.Context, f func(*ListBasesResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "genomics.referencesets.get":
 
 type ReferencesetsGetCall struct {
@@ -6595,14 +8515,6 @@ type ReferencesetsGetCall struct {
 func (r *ReferencesetsService) Get(referenceSetId string) *ReferencesetsGetCall {
 	c := &ReferencesetsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.referenceSetId = referenceSetId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReferencesetsGetCall) QuotaUser(quotaUser string) *ReferencesetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -6633,22 +8545,21 @@ func (c *ReferencesetsGetCall) Context(ctx context.Context) *ReferencesetsGetCal
 }
 
 func (c *ReferencesetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/referencesets/{referenceSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"referenceSetId": c.referenceSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.referencesets.get" call.
@@ -6658,7 +8569,8 @@ func (c *ReferencesetsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReferencesetsGetCall) Do() (*ReferenceSet, error) {
+func (c *ReferencesetsGetCall) Do(opts ...googleapi.CallOption) (*ReferenceSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6682,7 +8594,8 @@ func (c *ReferencesetsGetCall) Do() (*ReferenceSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6736,14 +8649,6 @@ func (r *ReferencesetsService) Search(searchreferencesetsrequest *SearchReferenc
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReferencesetsSearchCall) QuotaUser(quotaUser string) *ReferencesetsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6761,23 +8666,21 @@ func (c *ReferencesetsSearchCall) Context(ctx context.Context) *ReferencesetsSea
 }
 
 func (c *ReferencesetsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchreferencesetsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/referencesets/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.referencesets.search" call.
@@ -6787,7 +8690,8 @@ func (c *ReferencesetsSearchCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReferencesetsSearchCall) Do() (*SearchReferenceSetsResponse, error) {
+func (c *ReferencesetsSearchCall) Do(opts ...googleapi.CallOption) (*SearchReferenceSetsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6811,7 +8715,8 @@ func (c *ReferencesetsSearchCall) Do() (*SearchReferenceSetsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6854,14 +8759,6 @@ func (r *VariantsService) Create(variant *Variant) *VariantsCreateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsCreateCall) QuotaUser(quotaUser string) *VariantsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6879,23 +8776,21 @@ func (c *VariantsCreateCall) Context(ctx context.Context) *VariantsCreateCall {
 }
 
 func (c *VariantsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.variant)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.create" call.
@@ -6905,7 +8800,8 @@ func (c *VariantsCreateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VariantsCreateCall) Do() (*Variant, error) {
+func (c *VariantsCreateCall) Do(opts ...googleapi.CallOption) (*Variant, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6929,7 +8825,8 @@ func (c *VariantsCreateCall) Do() (*Variant, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6971,14 +8868,6 @@ func (r *VariantsService) Delete(variantId string) *VariantsDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsDeleteCall) QuotaUser(quotaUser string) *VariantsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6996,19 +8885,18 @@ func (c *VariantsDeleteCall) Context(ctx context.Context) *VariantsDeleteCall {
 }
 
 func (c *VariantsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants/{variantId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantId": c.variantId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.delete" call.
@@ -7018,7 +8906,8 @@ func (c *VariantsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VariantsDeleteCall) Do() (*Empty, error) {
+func (c *VariantsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7042,7 +8931,8 @@ func (c *VariantsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7093,14 +8983,6 @@ func (r *VariantsService) Get(variantId string) *VariantsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsGetCall) QuotaUser(quotaUser string) *VariantsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7128,22 +9010,21 @@ func (c *VariantsGetCall) Context(ctx context.Context) *VariantsGetCall {
 }
 
 func (c *VariantsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants/{variantId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantId": c.variantId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.get" call.
@@ -7153,7 +9034,8 @@ func (c *VariantsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VariantsGetCall) Do() (*Variant, error) {
+func (c *VariantsGetCall) Do(opts ...googleapi.CallOption) (*Variant, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7177,7 +9059,8 @@ func (c *VariantsGetCall) Do() (*Variant, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7226,24 +9109,15 @@ type VariantsImportCall struct {
 // variant that matches its reference sequence, start, end, reference
 // bases, and alternative bases. If no such variant exists, a new one
 // will be created. When variants are merged, the call information from
-// the new variant is added to the existing variant, and other fields
-// (such as key/value pairs) are discarded. In particular, this means
-// for merged VCF variants that have conflicting INFO fields, some data
-// will be arbitrarily discarded. As a special case, for single-sample
-// VCF files, QUAL and FILTER fields will be moved to the call level;
-// these are sometimes interpreted in a call-specific context. Imported
-// VCF headers are appended to the metadata already in a variant set.
+// the new variant is added to the existing variant, and Variant info
+// fields are merged as specified in infoMergeConfig. As a special case,
+// for single-sample VCF files, QUAL and FILTER fields will be moved to
+// the call level; these are sometimes interpreted in a call-specific
+// context. Imported VCF headers are appended to the metadata already in
+// a variant set.
 func (r *VariantsService) Import(importvariantsrequest *ImportVariantsRequest) *VariantsImportCall {
 	c := &VariantsImportCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.importvariantsrequest = importvariantsrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsImportCall) QuotaUser(quotaUser string) *VariantsImportCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -7264,23 +9138,21 @@ func (c *VariantsImportCall) Context(ctx context.Context) *VariantsImportCall {
 }
 
 func (c *VariantsImportCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.importvariantsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants:import")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.import" call.
@@ -7290,7 +9162,8 @@ func (c *VariantsImportCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *VariantsImportCall) Do() (*Operation, error) {
+func (c *VariantsImportCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7314,12 +9187,13 @@ func (c *VariantsImportCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Creates variant data by asynchronously importing the provided information. For the definitions of variant sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) The variants for import will be merged with any existing variant that matches its reference sequence, start, end, reference bases, and alternative bases. If no such variant exists, a new one will be created. When variants are merged, the call information from the new variant is added to the existing variant, and other fields (such as key/value pairs) are discarded. In particular, this means for merged VCF variants that have conflicting INFO fields, some data will be arbitrarily discarded. As a special case, for single-sample VCF files, QUAL and FILTER fields will be moved to the call level; these are sometimes interpreted in a call-specific context. Imported VCF headers are appended to the metadata already in a variant set.",
+	//   "description": "Creates variant data by asynchronously importing the provided information. For the definitions of variant sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) The variants for import will be merged with any existing variant that matches its reference sequence, start, end, reference bases, and alternative bases. If no such variant exists, a new one will be created. When variants are merged, the call information from the new variant is added to the existing variant, and Variant info fields are merged as specified in infoMergeConfig. As a special case, for single-sample VCF files, QUAL and FILTER fields will be moved to the call level; these are sometimes interpreted in a call-specific context. Imported VCF headers are appended to the metadata already in a variant set.",
 	//   "httpMethod": "POST",
 	//   "id": "genomics.variants.import",
 	//   "path": "v1/variants:import",
@@ -7332,6 +9206,142 @@ func (c *VariantsImportCall) Do() (*Operation, error) {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/devstorage.read_write",
+	//     "https://www.googleapis.com/auth/genomics"
+	//   ]
+	// }
+
+}
+
+// method id "genomics.variants.merge":
+
+type VariantsMergeCall struct {
+	s                    *Service
+	mergevariantsrequest *MergeVariantsRequest
+	urlParams_           gensupport.URLParams
+	ctx_                 context.Context
+}
+
+// Merge: Merges the given variants with existing variants. For the
+// definitions of variants and other genomics resources, see
+// [Fundamentals of Google
+// Genomics](https://cloud.google.com/genomics/fundamentals-of-google-gen
+// omics) Each variant will be merged with an existing variant that
+// matches its reference sequence, start, end, reference bases, and
+// alternative bases. If no such variant exists, a new one will be
+// created. When variants are merged, the call information from the new
+// variant is added to the existing variant. Variant info fields are
+// merged as specified in the infoMergeConfig field of the
+// MergeVariantsRequest. Please exercise caution when using this method!
+// It is easy to introduce mistakes in existing variants and difficult
+// to back out of them. For example, suppose you were trying to merge a
+// new variant with an existing one and both variants contain calls that
+// belong to callsets with the same callset ID. // Existing variant -
+// irrelevant fields trimmed for clarity { "variantSetId":
+// "10473108253681171589", "referenceName": "1", "start": "10582",
+// "referenceBases": "G", "alternateBases": [ "A" ], "calls": [ {
+// "callSetId": "10473108253681171589-0", "callSetName": "CALLSET0",
+// "genotype": [ 0, 1 ], } ] } // New variant with conflicting call
+// information { "variantSetId": "10473108253681171589",
+// "referenceName": "1", "start": "10582", "referenceBases": "G",
+// "alternateBases": [ "A" ], "calls": [ { "callSetId":
+// "10473108253681171589-0", "callSetName": "CALLSET0", "genotype": [ 1,
+// 1 ], } ] } The resulting merged variant would overwrite the existing
+// calls with those from the new variant: { "variantSetId":
+// "10473108253681171589", "referenceName": "1", "start": "10582",
+// "referenceBases": "G", "alternateBases": [ "A" ], "calls": [ {
+// "callSetId": "10473108253681171589-0", "callSetName": "CALLSET0",
+// "genotype": [ 1, 1 ], } ] } This may be the desired outcome, but it
+// is up to the user to determine if if that is indeed the case.
+func (r *VariantsService) Merge(mergevariantsrequest *MergeVariantsRequest) *VariantsMergeCall {
+	c := &VariantsMergeCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.mergevariantsrequest = mergevariantsrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *VariantsMergeCall) Fields(s ...googleapi.Field) *VariantsMergeCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *VariantsMergeCall) Context(ctx context.Context) *VariantsMergeCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *VariantsMergeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.mergevariantsrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants:merge")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "genomics.variants.merge" call.
+// Exactly one of *Empty or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Empty.ServerResponse.Header or (if a response was returned at all)
+// in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified
+// was returned.
+func (c *VariantsMergeCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Empty{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Merges the given variants with existing variants. For the definitions of variants and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics) Each variant will be merged with an existing variant that matches its reference sequence, start, end, reference bases, and alternative bases. If no such variant exists, a new one will be created. When variants are merged, the call information from the new variant is added to the existing variant. Variant info fields are merged as specified in the infoMergeConfig field of the MergeVariantsRequest. Please exercise caution when using this method! It is easy to introduce mistakes in existing variants and difficult to back out of them. For example, suppose you were trying to merge a new variant with an existing one and both variants contain calls that belong to callsets with the same callset ID. // Existing variant - irrelevant fields trimmed for clarity { \"variantSetId\": \"10473108253681171589\", \"referenceName\": \"1\", \"start\": \"10582\", \"referenceBases\": \"G\", \"alternateBases\": [ \"A\" ], \"calls\": [ { \"callSetId\": \"10473108253681171589-0\", \"callSetName\": \"CALLSET0\", \"genotype\": [ 0, 1 ], } ] } // New variant with conflicting call information { \"variantSetId\": \"10473108253681171589\", \"referenceName\": \"1\", \"start\": \"10582\", \"referenceBases\": \"G\", \"alternateBases\": [ \"A\" ], \"calls\": [ { \"callSetId\": \"10473108253681171589-0\", \"callSetName\": \"CALLSET0\", \"genotype\": [ 1, 1 ], } ] } The resulting merged variant would overwrite the existing calls with those from the new variant: { \"variantSetId\": \"10473108253681171589\", \"referenceName\": \"1\", \"start\": \"10582\", \"referenceBases\": \"G\", \"alternateBases\": [ \"A\" ], \"calls\": [ { \"callSetId\": \"10473108253681171589-0\", \"callSetName\": \"CALLSET0\", \"genotype\": [ 1, 1 ], } ] } This may be the desired outcome, but it is up to the user to determine if if that is indeed the case.",
+	//   "httpMethod": "POST",
+	//   "id": "genomics.variants.merge",
+	//   "path": "v1/variants:merge",
+	//   "request": {
+	//     "$ref": "MergeVariantsRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "Empty"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/genomics"
 	//   ]
 	// }
@@ -7357,14 +9367,6 @@ func (r *VariantsService) Patch(variantId string, variant *Variant) *VariantsPat
 	c := &VariantsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.variantId = variantId
 	c.variant = variant
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsPatchCall) QuotaUser(quotaUser string) *VariantsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -7394,25 +9396,23 @@ func (c *VariantsPatchCall) Context(ctx context.Context) *VariantsPatchCall {
 }
 
 func (c *VariantsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.variant)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants/{variantId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantId": c.variantId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.patch" call.
@@ -7422,7 +9422,8 @@ func (c *VariantsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VariantsPatchCall) Do() (*Variant, error) {
+func (c *VariantsPatchCall) Do(opts ...googleapi.CallOption) (*Variant, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7446,7 +9447,8 @@ func (c *VariantsPatchCall) Do() (*Variant, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7507,14 +9509,6 @@ func (r *VariantsService) Search(searchvariantsrequest *SearchVariantsRequest) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsSearchCall) QuotaUser(quotaUser string) *VariantsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7532,23 +9526,21 @@ func (c *VariantsSearchCall) Context(ctx context.Context) *VariantsSearchCall {
 }
 
 func (c *VariantsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchvariantsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.search" call.
@@ -7558,7 +9550,8 @@ func (c *VariantsSearchCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *VariantsSearchCall) Do() (*SearchVariantsResponse, error) {
+func (c *VariantsSearchCall) Do(opts ...googleapi.CallOption) (*SearchVariantsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7582,7 +9575,8 @@ func (c *VariantsSearchCall) Do() (*SearchVariantsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7623,14 +9617,6 @@ func (r *VariantsService) Stream(streamvariantsrequest *StreamVariantsRequest) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsStreamCall) QuotaUser(quotaUser string) *VariantsStreamCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7648,23 +9634,21 @@ func (c *VariantsStreamCall) Context(ctx context.Context) *VariantsStreamCall {
 }
 
 func (c *VariantsStreamCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.streamvariantsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variants:stream")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variants.stream" call.
@@ -7674,7 +9658,8 @@ func (c *VariantsStreamCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *VariantsStreamCall) Do() (*StreamVariantsResponse, error) {
+func (c *VariantsStreamCall) Do(opts ...googleapi.CallOption) (*StreamVariantsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7698,7 +9683,8 @@ func (c *VariantsStreamCall) Do() (*StreamVariantsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7742,14 +9728,6 @@ func (r *VariantsetsService) Create(variantset *VariantSet) *VariantsetsCreateCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsetsCreateCall) QuotaUser(quotaUser string) *VariantsetsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7767,23 +9745,21 @@ func (c *VariantsetsCreateCall) Context(ctx context.Context) *VariantsetsCreateC
 }
 
 func (c *VariantsetsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.variantset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variantsets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variantsets.create" call.
@@ -7793,7 +9769,8 @@ func (c *VariantsetsCreateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *VariantsetsCreateCall) Do() (*VariantSet, error) {
+func (c *VariantsetsCreateCall) Do(opts ...googleapi.CallOption) (*VariantSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7817,7 +9794,8 @@ func (c *VariantsetsCreateCall) Do() (*VariantSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7849,22 +9827,14 @@ type VariantsetsDeleteCall struct {
 	ctx_         context.Context
 }
 
-// Delete: Deletes the contents of a variant set. The variant set object
-// is not deleted. For the definitions of variant sets and other
-// genomics resources, see [Fundamentals of Google
+// Delete: Deletes a variant set including all variants, call sets, and
+// calls within. This is not reversible. For the definitions of variant
+// sets and other genomics resources, see [Fundamentals of Google
 // Genomics](https://cloud.google.com/genomics/fundamentals-of-google-gen
 // omics)
 func (r *VariantsetsService) Delete(variantSetId string) *VariantsetsDeleteCall {
 	c := &VariantsetsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.variantSetId = variantSetId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsetsDeleteCall) QuotaUser(quotaUser string) *VariantsetsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -7885,19 +9855,18 @@ func (c *VariantsetsDeleteCall) Context(ctx context.Context) *VariantsetsDeleteC
 }
 
 func (c *VariantsetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variantsets/{variantSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantSetId": c.variantSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variantsets.delete" call.
@@ -7907,7 +9876,8 @@ func (c *VariantsetsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VariantsetsDeleteCall) Do() (*Empty, error) {
+func (c *VariantsetsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7931,12 +9901,13 @@ func (c *VariantsetsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Deletes the contents of a variant set. The variant set object is not deleted. For the definitions of variant sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics)",
+	//   "description": "Deletes a variant set including all variants, call sets, and calls within. This is not reversible. For the definitions of variant sets and other genomics resources, see [Fundamentals of Google Genomics](https://cloud.google.com/genomics/fundamentals-of-google-genomics)",
 	//   "httpMethod": "DELETE",
 	//   "id": "genomics.variantsets.delete",
 	//   "parameterOrder": [
@@ -7984,14 +9955,6 @@ func (r *VariantsetsService) Export(variantSetId string, exportvariantsetrequest
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsetsExportCall) QuotaUser(quotaUser string) *VariantsetsExportCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8009,25 +9972,23 @@ func (c *VariantsetsExportCall) Context(ctx context.Context) *VariantsetsExportC
 }
 
 func (c *VariantsetsExportCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.exportvariantsetrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variantsets/{variantSetId}:export")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantSetId": c.variantSetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variantsets.export" call.
@@ -8037,7 +9998,8 @@ func (c *VariantsetsExportCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *VariantsetsExportCall) Do() (*Operation, error) {
+func (c *VariantsetsExportCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8061,7 +10023,8 @@ func (c *VariantsetsExportCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8116,14 +10079,6 @@ func (r *VariantsetsService) Get(variantSetId string) *VariantsetsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsetsGetCall) QuotaUser(quotaUser string) *VariantsetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8151,22 +10106,21 @@ func (c *VariantsetsGetCall) Context(ctx context.Context) *VariantsetsGetCall {
 }
 
 func (c *VariantsetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variantsets/{variantSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantSetId": c.variantSetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variantsets.get" call.
@@ -8176,7 +10130,8 @@ func (c *VariantsetsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *VariantsetsGetCall) Do() (*VariantSet, error) {
+func (c *VariantsetsGetCall) Do(opts ...googleapi.CallOption) (*VariantSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8200,7 +10155,8 @@ func (c *VariantsetsGetCall) Do() (*VariantSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8254,18 +10210,10 @@ func (r *VariantsetsService) Patch(variantSetId string, variantset *VariantSet) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsetsPatchCall) QuotaUser(quotaUser string) *VariantsetsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // UpdateMask sets the optional parameter "updateMask": An optional mask
-// specifying which fields to update. Supported fields: * metadata.
-// Leaving `updateMask` unset is equivalent to specifying all mutable
-// fields.
+// specifying which fields to update. Supported fields: * metadata. *
+// name. * description. Leaving `updateMask` unset is equivalent to
+// specifying all mutable fields.
 func (c *VariantsetsPatchCall) UpdateMask(updateMask string) *VariantsetsPatchCall {
 	c.urlParams_.Set("updateMask", updateMask)
 	return c
@@ -8288,25 +10236,23 @@ func (c *VariantsetsPatchCall) Context(ctx context.Context) *VariantsetsPatchCal
 }
 
 func (c *VariantsetsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.variantset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variantsets/{variantSetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"variantSetId": c.variantSetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variantsets.patch" call.
@@ -8316,7 +10262,8 @@ func (c *VariantsetsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *VariantsetsPatchCall) Do() (*VariantSet, error) {
+func (c *VariantsetsPatchCall) Do(opts ...googleapi.CallOption) (*VariantSet, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8340,7 +10287,8 @@ func (c *VariantsetsPatchCall) Do() (*VariantSet, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8353,7 +10301,7 @@ func (c *VariantsetsPatchCall) Do() (*VariantSet, error) {
 	//   ],
 	//   "parameters": {
 	//     "updateMask": {
-	//       "description": "An optional mask specifying which fields to update. Supported fields: * metadata. Leaving `updateMask` unset is equivalent to specifying all mutable fields.",
+	//       "description": "An optional mask specifying which fields to update. Supported fields: * metadata. * name. * description. Leaving `updateMask` unset is equivalent to specifying all mutable fields.",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -8401,14 +10349,6 @@ func (r *VariantsetsService) Search(searchvariantsetsrequest *SearchVariantSetsR
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *VariantsetsSearchCall) QuotaUser(quotaUser string) *VariantsetsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8426,23 +10366,21 @@ func (c *VariantsetsSearchCall) Context(ctx context.Context) *VariantsetsSearchC
 }
 
 func (c *VariantsetsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchvariantsetsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/variantsets/search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "genomics.variantsets.search" call.
@@ -8452,7 +10390,8 @@ func (c *VariantsetsSearchCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *VariantsetsSearchCall) Do() (*SearchVariantSetsResponse, error) {
+func (c *VariantsetsSearchCall) Do(opts ...googleapi.CallOption) (*SearchVariantSetsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8476,7 +10415,8 @@ func (c *VariantsetsSearchCall) Do() (*SearchVariantSetsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

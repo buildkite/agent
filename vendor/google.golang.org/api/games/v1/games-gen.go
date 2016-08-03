@@ -54,7 +54,7 @@ const (
 	// activity
 	GamesScope = "https://www.googleapis.com/auth/games"
 
-	// Know your basic profile info and list of people in your circles.
+	// Know the list of people in your circles, your age range, and language
 	PlusLoginScope = "https://www.googleapis.com/auth/plus.login"
 )
 
@@ -371,7 +371,7 @@ type AchievementIncrementResponse struct {
 	// the fixed string games#achievementIncrementResponse.
 	Kind string `json:"kind,omitempty"`
 
-	// NewlyUnlocked: Whether the the current steps for the achievement has
+	// NewlyUnlocked: Whether the current steps for the achievement has
 	// reached the number of steps required to unlock.
 	NewlyUnlocked bool `json:"newlyUnlocked,omitempty"`
 
@@ -795,6 +795,11 @@ func (s *ApplicationCategory) MarshalJSON() ([]byte, error) {
 // ApplicationVerifyResponse: This is a JSON template for a third party
 // application verification response resource.
 type ApplicationVerifyResponse struct {
+	// AlternatePlayerId: An alternate ID that was once used for the player
+	// that was issued the auth token used in this request. (This field is
+	// not normally populated.)
+	AlternatePlayerId string `json:"alternate_player_id,omitempty"`
+
 	// Kind: Uniquely identifies the type of this resource. Value is always
 	// the fixed string games#applicationVerifyResponse.
 	Kind string `json:"kind,omitempty"`
@@ -807,8 +812,8 @@ type ApplicationVerifyResponse struct {
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "Kind") to
-	// unconditionally include in API requests. By default, fields with
+	// ForceSendFields is a list of field names (e.g. "AlternatePlayerId")
+	// to unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
 	// server regardless of whether the field is empty or not. This may be
@@ -1942,8 +1947,19 @@ type Player struct {
 	// player's name. For some players, these fields may not be present.
 	Name *PlayerName `json:"name,omitempty"`
 
+	// OriginalPlayerId: The player ID that was used for this player the
+	// first time they signed into the game in question. This is only
+	// populated for calls to player.get for the requesting player, only if
+	// the player ID has subsequently changed, and only to clients that
+	// support remapping player IDs.
+	OriginalPlayerId string `json:"originalPlayerId,omitempty"`
+
 	// PlayerId: The ID of the player.
 	PlayerId string `json:"playerId,omitempty"`
+
+	// ProfileSettings: The player's profile settings. Controls whether or
+	// not the player's profile is visible to other players.
+	ProfileSettings *ProfileSettings `json:"profileSettings,omitempty"`
 
 	// Title: The player's title rewarded for their game activities.
 	Title string `json:"title,omitempty"`
@@ -2472,6 +2488,31 @@ type PlayerScoreSubmissionList struct {
 
 func (s *PlayerScoreSubmissionList) MarshalJSON() ([]byte, error) {
 	type noMethod PlayerScoreSubmissionList
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// ProfileSettings: This is a JSON template for profile settings
+type ProfileSettings struct {
+	// Kind: Uniquely identifies the type of this resource. Value is always
+	// the fixed string games#profileSettings.
+	Kind string `json:"kind,omitempty"`
+
+	// ProfileVisible: The player's current profile visibility. This field
+	// is visible to both 1P and 3P APIs.
+	ProfileVisible bool `json:"profileVisible,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Kind") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ProfileSettings) MarshalJSON() ([]byte, error) {
+	type noMethod ProfileSettings
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -4173,6 +4214,13 @@ func (r *AchievementDefinitionsService) List() *AchievementDefinitionsListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementDefinitionsListCall) ConsistencyToken(consistencyToken int64) *AchievementDefinitionsListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *AchievementDefinitionsListCall) Language(language string) *AchievementDefinitionsListCall {
@@ -4193,23 +4241,6 @@ func (c *AchievementDefinitionsListCall) MaxResults(maxResults int64) *Achieveme
 // by the previous request.
 func (c *AchievementDefinitionsListCall) PageToken(pageToken string) *AchievementDefinitionsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementDefinitionsListCall) QuotaUser(quotaUser string) *AchievementDefinitionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementDefinitionsListCall) UserIP(userIP string) *AchievementDefinitionsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4240,20 +4271,19 @@ func (c *AchievementDefinitionsListCall) Context(ctx context.Context) *Achieveme
 }
 
 func (c *AchievementDefinitionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "achievements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievementDefinitions.list" call.
@@ -4264,7 +4294,8 @@ func (c *AchievementDefinitionsListCall) doRequest(alt string) (*http.Response, 
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AchievementDefinitionsListCall) Do() (*AchievementDefinitionsListResponse, error) {
+func (c *AchievementDefinitionsListCall) Do(opts ...googleapi.CallOption) (*AchievementDefinitionsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4288,7 +4319,8 @@ func (c *AchievementDefinitionsListCall) Do() (*AchievementDefinitionsListRespon
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4297,6 +4329,12 @@ func (c *AchievementDefinitionsListCall) Do() (*AchievementDefinitionsListRespon
 	//   "httpMethod": "GET",
 	//   "id": "games.achievementDefinitions.list",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -4328,6 +4366,27 @@ func (c *AchievementDefinitionsListCall) Do() (*AchievementDefinitionsListRespon
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AchievementDefinitionsListCall) Pages(ctx context.Context, f func(*AchievementDefinitionsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.achievements.increment":
 
 type AchievementsIncrementCall struct {
@@ -4346,12 +4405,10 @@ func (r *AchievementsService) Increment(achievementId string, stepsToIncrement i
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementsIncrementCall) QuotaUser(quotaUser string) *AchievementsIncrementCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementsIncrementCall) ConsistencyToken(consistencyToken int64) *AchievementsIncrementCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -4361,14 +4418,6 @@ func (c *AchievementsIncrementCall) QuotaUser(quotaUser string) *AchievementsInc
 // correctly across retries.
 func (c *AchievementsIncrementCall) RequestId(requestId int64) *AchievementsIncrementCall {
 	c.urlParams_.Set("requestId", fmt.Sprint(requestId))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementsIncrementCall) UserIP(userIP string) *AchievementsIncrementCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4389,19 +4438,18 @@ func (c *AchievementsIncrementCall) Context(ctx context.Context) *AchievementsIn
 }
 
 func (c *AchievementsIncrementCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "achievements/{achievementId}/increment")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"achievementId": c.achievementId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievements.increment" call.
@@ -4411,7 +4459,8 @@ func (c *AchievementsIncrementCall) doRequest(alt string) (*http.Response, error
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AchievementsIncrementCall) Do() (*AchievementIncrementResponse, error) {
+func (c *AchievementsIncrementCall) Do(opts ...googleapi.CallOption) (*AchievementIncrementResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4435,7 +4484,8 @@ func (c *AchievementsIncrementCall) Do() (*AchievementIncrementResponse, error) 
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4452,6 +4502,12 @@ func (c *AchievementsIncrementCall) Do() (*AchievementIncrementResponse, error) 
 	//       "description": "The ID of the achievement used by this method.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "requestId": {
@@ -4499,6 +4555,13 @@ func (r *AchievementsService) List(playerId string) *AchievementsListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementsListCall) ConsistencyToken(consistencyToken int64) *AchievementsListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *AchievementsListCall) Language(language string) *AchievementsListCall {
@@ -4522,15 +4585,6 @@ func (c *AchievementsListCall) PageToken(pageToken string) *AchievementsListCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementsListCall) QuotaUser(quotaUser string) *AchievementsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // State sets the optional parameter "state": Tells the server to return
 // only achievements with the specified state. If this parameter isn't
 // specified, all achievements are returned.
@@ -4542,14 +4596,6 @@ func (c *AchievementsListCall) QuotaUser(quotaUser string) *AchievementsListCall
 //   "UNLOCKED" - List only unlocked achievements.
 func (c *AchievementsListCall) State(state string) *AchievementsListCall {
 	c.urlParams_.Set("state", state)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementsListCall) UserIP(userIP string) *AchievementsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4580,22 +4626,21 @@ func (c *AchievementsListCall) Context(ctx context.Context) *AchievementsListCal
 }
 
 func (c *AchievementsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/{playerId}/achievements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"playerId": c.playerId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievements.list" call.
@@ -4605,7 +4650,8 @@ func (c *AchievementsListCall) doRequest(alt string) (*http.Response, error) {
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AchievementsListCall) Do() (*PlayerAchievementListResponse, error) {
+func (c *AchievementsListCall) Do(opts ...googleapi.CallOption) (*PlayerAchievementListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4629,7 +4675,8 @@ func (c *AchievementsListCall) Do() (*PlayerAchievementListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4641,6 +4688,12 @@ func (c *AchievementsListCall) Do() (*PlayerAchievementListResponse, error) {
 	//     "playerId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -4695,6 +4748,27 @@ func (c *AchievementsListCall) Do() (*PlayerAchievementListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AchievementsListCall) Pages(ctx context.Context, f func(*PlayerAchievementListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.achievements.reveal":
 
 type AchievementsRevealCall struct {
@@ -4712,20 +4786,10 @@ func (r *AchievementsService) Reveal(achievementId string) *AchievementsRevealCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementsRevealCall) QuotaUser(quotaUser string) *AchievementsRevealCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementsRevealCall) UserIP(userIP string) *AchievementsRevealCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementsRevealCall) ConsistencyToken(consistencyToken int64) *AchievementsRevealCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -4746,19 +4810,18 @@ func (c *AchievementsRevealCall) Context(ctx context.Context) *AchievementsRevea
 }
 
 func (c *AchievementsRevealCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "achievements/{achievementId}/reveal")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"achievementId": c.achievementId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievements.reveal" call.
@@ -4768,7 +4831,8 @@ func (c *AchievementsRevealCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AchievementsRevealCall) Do() (*AchievementRevealResponse, error) {
+func (c *AchievementsRevealCall) Do(opts ...googleapi.CallOption) (*AchievementRevealResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4792,7 +4856,8 @@ func (c *AchievementsRevealCall) Do() (*AchievementRevealResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4808,6 +4873,12 @@ func (c *AchievementsRevealCall) Do() (*AchievementRevealResponse, error) {
 	//       "description": "The ID of the achievement used by this method.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     }
 	//   },
@@ -4843,20 +4914,10 @@ func (r *AchievementsService) SetStepsAtLeast(achievementId string, steps int64)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementsSetStepsAtLeastCall) QuotaUser(quotaUser string) *AchievementsSetStepsAtLeastCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementsSetStepsAtLeastCall) UserIP(userIP string) *AchievementsSetStepsAtLeastCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementsSetStepsAtLeastCall) ConsistencyToken(consistencyToken int64) *AchievementsSetStepsAtLeastCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -4877,19 +4938,18 @@ func (c *AchievementsSetStepsAtLeastCall) Context(ctx context.Context) *Achievem
 }
 
 func (c *AchievementsSetStepsAtLeastCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "achievements/{achievementId}/setStepsAtLeast")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"achievementId": c.achievementId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievements.setStepsAtLeast" call.
@@ -4900,7 +4960,8 @@ func (c *AchievementsSetStepsAtLeastCall) doRequest(alt string) (*http.Response,
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AchievementsSetStepsAtLeastCall) Do() (*AchievementSetStepsAtLeastResponse, error) {
+func (c *AchievementsSetStepsAtLeastCall) Do(opts ...googleapi.CallOption) (*AchievementSetStepsAtLeastResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4924,7 +4985,8 @@ func (c *AchievementsSetStepsAtLeastCall) Do() (*AchievementSetStepsAtLeastRespo
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4941,6 +5003,12 @@ func (c *AchievementsSetStepsAtLeastCall) Do() (*AchievementSetStepsAtLeastRespo
 	//       "description": "The ID of the achievement used by this method.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "steps": {
@@ -4981,20 +5049,10 @@ func (r *AchievementsService) Unlock(achievementId string) *AchievementsUnlockCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementsUnlockCall) QuotaUser(quotaUser string) *AchievementsUnlockCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementsUnlockCall) UserIP(userIP string) *AchievementsUnlockCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementsUnlockCall) ConsistencyToken(consistencyToken int64) *AchievementsUnlockCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -5015,19 +5073,18 @@ func (c *AchievementsUnlockCall) Context(ctx context.Context) *AchievementsUnloc
 }
 
 func (c *AchievementsUnlockCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "achievements/{achievementId}/unlock")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"achievementId": c.achievementId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievements.unlock" call.
@@ -5037,7 +5094,8 @@ func (c *AchievementsUnlockCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AchievementsUnlockCall) Do() (*AchievementUnlockResponse, error) {
+func (c *AchievementsUnlockCall) Do(opts ...googleapi.CallOption) (*AchievementUnlockResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5061,7 +5119,8 @@ func (c *AchievementsUnlockCall) Do() (*AchievementUnlockResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5077,6 +5136,12 @@ func (c *AchievementsUnlockCall) Do() (*AchievementUnlockResponse, error) {
 	//       "description": "The ID of the achievement used by this method.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     }
 	//   },
@@ -5109,20 +5174,10 @@ func (r *AchievementsService) UpdateMultiple(achievementupdatemultiplerequest *A
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AchievementsUpdateMultipleCall) QuotaUser(quotaUser string) *AchievementsUpdateMultipleCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AchievementsUpdateMultipleCall) UserIP(userIP string) *AchievementsUpdateMultipleCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *AchievementsUpdateMultipleCall) ConsistencyToken(consistencyToken int64) *AchievementsUpdateMultipleCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -5143,23 +5198,21 @@ func (c *AchievementsUpdateMultipleCall) Context(ctx context.Context) *Achieveme
 }
 
 func (c *AchievementsUpdateMultipleCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.achievementupdatemultiplerequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "achievements/updateMultiple")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.achievements.updateMultiple" call.
@@ -5170,7 +5223,8 @@ func (c *AchievementsUpdateMultipleCall) doRequest(alt string) (*http.Response, 
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AchievementsUpdateMultipleCall) Do() (*AchievementUpdateMultipleResponse, error) {
+func (c *AchievementsUpdateMultipleCall) Do(opts ...googleapi.CallOption) (*AchievementUpdateMultipleResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5194,7 +5248,8 @@ func (c *AchievementsUpdateMultipleCall) Do() (*AchievementUpdateMultipleRespons
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5202,6 +5257,14 @@ func (c *AchievementsUpdateMultipleCall) Do() (*AchievementUpdateMultipleRespons
 	//   "description": "Updates multiple achievements for the currently authenticated player.",
 	//   "httpMethod": "POST",
 	//   "id": "games.achievements.updateMultiple",
+	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "achievements/updateMultiple",
 	//   "request": {
 	//     "$ref": "AchievementUpdateMultipleRequest"
@@ -5237,6 +5300,13 @@ func (r *ApplicationsService) Get(applicationId string) *ApplicationsGetCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ApplicationsGetCall) ConsistencyToken(consistencyToken int64) *ApplicationsGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *ApplicationsGetCall) Language(language string) *ApplicationsGetCall {
@@ -5254,23 +5324,6 @@ func (c *ApplicationsGetCall) Language(language string) *ApplicationsGetCall {
 // web.
 func (c *ApplicationsGetCall) PlatformType(platformType string) *ApplicationsGetCall {
 	c.urlParams_.Set("platformType", platformType)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ApplicationsGetCall) QuotaUser(quotaUser string) *ApplicationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ApplicationsGetCall) UserIP(userIP string) *ApplicationsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5301,22 +5354,21 @@ func (c *ApplicationsGetCall) Context(ctx context.Context) *ApplicationsGetCall 
 }
 
 func (c *ApplicationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "applications/{applicationId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"applicationId": c.applicationId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.applications.get" call.
@@ -5326,7 +5378,8 @@ func (c *ApplicationsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ApplicationsGetCall) Do() (*Application, error) {
+func (c *ApplicationsGetCall) Do(opts ...googleapi.CallOption) (*Application, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5350,7 +5403,8 @@ func (c *ApplicationsGetCall) Do() (*Application, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5366,6 +5420,12 @@ func (c *ApplicationsGetCall) Do() (*Application, error) {
 	//       "description": "The application ID from the Google Play developer console.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "language": {
@@ -5416,20 +5476,10 @@ func (r *ApplicationsService) Played() *ApplicationsPlayedCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ApplicationsPlayedCall) QuotaUser(quotaUser string) *ApplicationsPlayedCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ApplicationsPlayedCall) UserIP(userIP string) *ApplicationsPlayedCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ApplicationsPlayedCall) ConsistencyToken(consistencyToken int64) *ApplicationsPlayedCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -5450,21 +5500,21 @@ func (c *ApplicationsPlayedCall) Context(ctx context.Context) *ApplicationsPlaye
 }
 
 func (c *ApplicationsPlayedCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "applications/played")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.applications.played" call.
-func (c *ApplicationsPlayedCall) Do() error {
+func (c *ApplicationsPlayedCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -5478,6 +5528,14 @@ func (c *ApplicationsPlayedCall) Do() error {
 	//   "description": "Indicate that the the currently authenticated user is playing your application.",
 	//   "httpMethod": "POST",
 	//   "id": "games.applications.played",
+	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "applications/played",
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/games",
@@ -5506,20 +5564,10 @@ func (r *ApplicationsService) Verify(applicationId string) *ApplicationsVerifyCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ApplicationsVerifyCall) QuotaUser(quotaUser string) *ApplicationsVerifyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ApplicationsVerifyCall) UserIP(userIP string) *ApplicationsVerifyCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ApplicationsVerifyCall) ConsistencyToken(consistencyToken int64) *ApplicationsVerifyCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -5550,22 +5598,21 @@ func (c *ApplicationsVerifyCall) Context(ctx context.Context) *ApplicationsVerif
 }
 
 func (c *ApplicationsVerifyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "applications/{applicationId}/verify")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"applicationId": c.applicationId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.applications.verify" call.
@@ -5575,7 +5622,8 @@ func (c *ApplicationsVerifyCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ApplicationsVerifyCall) Do() (*ApplicationVerifyResponse, error) {
+func (c *ApplicationsVerifyCall) Do(opts ...googleapi.CallOption) (*ApplicationVerifyResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5599,7 +5647,8 @@ func (c *ApplicationsVerifyCall) Do() (*ApplicationVerifyResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5615,6 +5664,12 @@ func (c *ApplicationsVerifyCall) Do() (*ApplicationVerifyResponse, error) {
 	//       "description": "The application ID from the Google Play developer console.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     }
 	//   },
@@ -5646,6 +5701,13 @@ func (r *EventsService) ListByPlayer() *EventsListByPlayerCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *EventsListByPlayerCall) ConsistencyToken(consistencyToken int64) *EventsListByPlayerCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *EventsListByPlayerCall) Language(language string) *EventsListByPlayerCall {
@@ -5666,23 +5728,6 @@ func (c *EventsListByPlayerCall) MaxResults(maxResults int64) *EventsListByPlaye
 // by the previous request.
 func (c *EventsListByPlayerCall) PageToken(pageToken string) *EventsListByPlayerCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventsListByPlayerCall) QuotaUser(quotaUser string) *EventsListByPlayerCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventsListByPlayerCall) UserIP(userIP string) *EventsListByPlayerCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5713,20 +5758,19 @@ func (c *EventsListByPlayerCall) Context(ctx context.Context) *EventsListByPlaye
 }
 
 func (c *EventsListByPlayerCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "events")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.events.listByPlayer" call.
@@ -5736,7 +5780,8 @@ func (c *EventsListByPlayerCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EventsListByPlayerCall) Do() (*PlayerEventListResponse, error) {
+func (c *EventsListByPlayerCall) Do(opts ...googleapi.CallOption) (*PlayerEventListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5760,7 +5805,8 @@ func (c *EventsListByPlayerCall) Do() (*PlayerEventListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5769,6 +5815,12 @@ func (c *EventsListByPlayerCall) Do() (*PlayerEventListResponse, error) {
 	//   "httpMethod": "GET",
 	//   "id": "games.events.listByPlayer",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -5800,6 +5852,27 @@ func (c *EventsListByPlayerCall) Do() (*PlayerEventListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *EventsListByPlayerCall) Pages(ctx context.Context, f func(*PlayerEventListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.events.listDefinitions":
 
 type EventsListDefinitionsCall struct {
@@ -5813,6 +5886,13 @@ type EventsListDefinitionsCall struct {
 // application.
 func (r *EventsService) ListDefinitions() *EventsListDefinitionsCall {
 	c := &EventsListDefinitionsCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	return c
+}
+
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *EventsListDefinitionsCall) ConsistencyToken(consistencyToken int64) *EventsListDefinitionsCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -5836,23 +5916,6 @@ func (c *EventsListDefinitionsCall) MaxResults(maxResults int64) *EventsListDefi
 // by the previous request.
 func (c *EventsListDefinitionsCall) PageToken(pageToken string) *EventsListDefinitionsCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventsListDefinitionsCall) QuotaUser(quotaUser string) *EventsListDefinitionsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventsListDefinitionsCall) UserIP(userIP string) *EventsListDefinitionsCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5883,20 +5946,19 @@ func (c *EventsListDefinitionsCall) Context(ctx context.Context) *EventsListDefi
 }
 
 func (c *EventsListDefinitionsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "eventDefinitions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.events.listDefinitions" call.
@@ -5906,7 +5968,8 @@ func (c *EventsListDefinitionsCall) doRequest(alt string) (*http.Response, error
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EventsListDefinitionsCall) Do() (*EventDefinitionListResponse, error) {
+func (c *EventsListDefinitionsCall) Do(opts ...googleapi.CallOption) (*EventDefinitionListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5930,7 +5993,8 @@ func (c *EventsListDefinitionsCall) Do() (*EventDefinitionListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5939,6 +6003,12 @@ func (c *EventsListDefinitionsCall) Do() (*EventDefinitionListResponse, error) {
 	//   "httpMethod": "GET",
 	//   "id": "games.events.listDefinitions",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -5970,6 +6040,27 @@ func (c *EventsListDefinitionsCall) Do() (*EventDefinitionListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *EventsListDefinitionsCall) Pages(ctx context.Context, f func(*EventDefinitionListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.events.record":
 
 type EventsRecordCall struct {
@@ -5987,27 +6078,17 @@ func (r *EventsService) Record(eventrecordrequest *EventRecordRequest) *EventsRe
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *EventsRecordCall) ConsistencyToken(consistencyToken int64) *EventsRecordCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *EventsRecordCall) Language(language string) *EventsRecordCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventsRecordCall) QuotaUser(quotaUser string) *EventsRecordCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventsRecordCall) UserIP(userIP string) *EventsRecordCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6028,23 +6109,21 @@ func (c *EventsRecordCall) Context(ctx context.Context) *EventsRecordCall {
 }
 
 func (c *EventsRecordCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.eventrecordrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "events")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.events.record" call.
@@ -6054,7 +6133,8 @@ func (c *EventsRecordCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EventsRecordCall) Do() (*EventUpdateResponse, error) {
+func (c *EventsRecordCall) Do(opts ...googleapi.CallOption) (*EventUpdateResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6078,7 +6158,8 @@ func (c *EventsRecordCall) Do() (*EventUpdateResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6087,6 +6168,12 @@ func (c *EventsRecordCall) Do() (*EventUpdateResponse, error) {
 	//   "httpMethod": "POST",
 	//   "id": "games.events.record",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -6125,27 +6212,17 @@ func (r *LeaderboardsService) Get(leaderboardId string) *LeaderboardsGetCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *LeaderboardsGetCall) ConsistencyToken(consistencyToken int64) *LeaderboardsGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *LeaderboardsGetCall) Language(language string) *LeaderboardsGetCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LeaderboardsGetCall) QuotaUser(quotaUser string) *LeaderboardsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LeaderboardsGetCall) UserIP(userIP string) *LeaderboardsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6176,22 +6253,21 @@ func (c *LeaderboardsGetCall) Context(ctx context.Context) *LeaderboardsGetCall 
 }
 
 func (c *LeaderboardsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "leaderboards/{leaderboardId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"leaderboardId": c.leaderboardId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.leaderboards.get" call.
@@ -6201,7 +6277,8 @@ func (c *LeaderboardsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LeaderboardsGetCall) Do() (*Leaderboard, error) {
+func (c *LeaderboardsGetCall) Do(opts ...googleapi.CallOption) (*Leaderboard, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6225,7 +6302,8 @@ func (c *LeaderboardsGetCall) Do() (*Leaderboard, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6237,6 +6315,12 @@ func (c *LeaderboardsGetCall) Do() (*Leaderboard, error) {
 	//     "leaderboardId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -6276,6 +6360,13 @@ func (r *LeaderboardsService) List() *LeaderboardsListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *LeaderboardsListCall) ConsistencyToken(consistencyToken int64) *LeaderboardsListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *LeaderboardsListCall) Language(language string) *LeaderboardsListCall {
@@ -6296,23 +6387,6 @@ func (c *LeaderboardsListCall) MaxResults(maxResults int64) *LeaderboardsListCal
 // by the previous request.
 func (c *LeaderboardsListCall) PageToken(pageToken string) *LeaderboardsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LeaderboardsListCall) QuotaUser(quotaUser string) *LeaderboardsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LeaderboardsListCall) UserIP(userIP string) *LeaderboardsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6343,20 +6417,19 @@ func (c *LeaderboardsListCall) Context(ctx context.Context) *LeaderboardsListCal
 }
 
 func (c *LeaderboardsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "leaderboards")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.leaderboards.list" call.
@@ -6366,7 +6439,8 @@ func (c *LeaderboardsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LeaderboardsListCall) Do() (*LeaderboardListResponse, error) {
+func (c *LeaderboardsListCall) Do(opts ...googleapi.CallOption) (*LeaderboardListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6390,7 +6464,8 @@ func (c *LeaderboardsListCall) Do() (*LeaderboardListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6399,6 +6474,12 @@ func (c *LeaderboardsListCall) Do() (*LeaderboardListResponse, error) {
 	//   "httpMethod": "GET",
 	//   "id": "games.leaderboards.list",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -6430,6 +6511,27 @@ func (c *LeaderboardsListCall) Do() (*LeaderboardListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LeaderboardsListCall) Pages(ctx context.Context, f func(*LeaderboardListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.metagame.getMetagameConfig":
 
 type MetagameGetMetagameConfigCall struct {
@@ -6446,20 +6548,10 @@ func (r *MetagameService) GetMetagameConfig() *MetagameGetMetagameConfigCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MetagameGetMetagameConfigCall) QuotaUser(quotaUser string) *MetagameGetMetagameConfigCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MetagameGetMetagameConfigCall) UserIP(userIP string) *MetagameGetMetagameConfigCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *MetagameGetMetagameConfigCall) ConsistencyToken(consistencyToken int64) *MetagameGetMetagameConfigCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -6490,20 +6582,19 @@ func (c *MetagameGetMetagameConfigCall) Context(ctx context.Context) *MetagameGe
 }
 
 func (c *MetagameGetMetagameConfigCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "metagameConfig")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.metagame.getMetagameConfig" call.
@@ -6513,7 +6604,8 @@ func (c *MetagameGetMetagameConfigCall) doRequest(alt string) (*http.Response, e
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MetagameGetMetagameConfigCall) Do() (*MetagameConfig, error) {
+func (c *MetagameGetMetagameConfigCall) Do(opts ...googleapi.CallOption) (*MetagameConfig, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6537,7 +6629,8 @@ func (c *MetagameGetMetagameConfigCall) Do() (*MetagameConfig, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6545,6 +6638,14 @@ func (c *MetagameGetMetagameConfigCall) Do() (*MetagameConfig, error) {
 	//   "description": "Return the metagame configuration data for the calling application.",
 	//   "httpMethod": "GET",
 	//   "id": "games.metagame.getMetagameConfig",
+	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "metagameConfig",
 	//   "response": {
 	//     "$ref": "MetagameConfig"
@@ -6577,6 +6678,13 @@ func (r *MetagameService) ListCategoriesByPlayer(playerId string, collection str
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *MetagameListCategoriesByPlayerCall) ConsistencyToken(consistencyToken int64) *MetagameListCategoriesByPlayerCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *MetagameListCategoriesByPlayerCall) Language(language string) *MetagameListCategoriesByPlayerCall {
@@ -6597,23 +6705,6 @@ func (c *MetagameListCategoriesByPlayerCall) MaxResults(maxResults int64) *Metag
 // by the previous request.
 func (c *MetagameListCategoriesByPlayerCall) PageToken(pageToken string) *MetagameListCategoriesByPlayerCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MetagameListCategoriesByPlayerCall) QuotaUser(quotaUser string) *MetagameListCategoriesByPlayerCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MetagameListCategoriesByPlayerCall) UserIP(userIP string) *MetagameListCategoriesByPlayerCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6644,23 +6735,22 @@ func (c *MetagameListCategoriesByPlayerCall) Context(ctx context.Context) *Metag
 }
 
 func (c *MetagameListCategoriesByPlayerCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/{playerId}/categories/{collection}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"playerId":   c.playerId,
 		"collection": c.collection,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.metagame.listCategoriesByPlayer" call.
@@ -6670,7 +6760,8 @@ func (c *MetagameListCategoriesByPlayerCall) doRequest(alt string) (*http.Respon
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MetagameListCategoriesByPlayerCall) Do() (*CategoryListResponse, error) {
+func (c *MetagameListCategoriesByPlayerCall) Do(opts ...googleapi.CallOption) (*CategoryListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6694,7 +6785,8 @@ func (c *MetagameListCategoriesByPlayerCall) Do() (*CategoryListResponse, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6717,6 +6809,12 @@ func (c *MetagameListCategoriesByPlayerCall) Do() (*CategoryListResponse, error)
 	//       ],
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "language": {
@@ -6756,6 +6854,27 @@ func (c *MetagameListCategoriesByPlayerCall) Do() (*CategoryListResponse, error)
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *MetagameListCategoriesByPlayerCall) Pages(ctx context.Context, f func(*CategoryListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.players.get":
 
 type PlayersGetCall struct {
@@ -6774,27 +6893,17 @@ func (r *PlayersService) Get(playerId string) *PlayersGetCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *PlayersGetCall) ConsistencyToken(consistencyToken int64) *PlayersGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *PlayersGetCall) Language(language string) *PlayersGetCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlayersGetCall) QuotaUser(quotaUser string) *PlayersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlayersGetCall) UserIP(userIP string) *PlayersGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6825,22 +6934,21 @@ func (c *PlayersGetCall) Context(ctx context.Context) *PlayersGetCall {
 }
 
 func (c *PlayersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/{playerId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"playerId": c.playerId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.players.get" call.
@@ -6850,7 +6958,8 @@ func (c *PlayersGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *PlayersGetCall) Do() (*Player, error) {
+func (c *PlayersGetCall) Do(opts ...googleapi.CallOption) (*Player, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6874,7 +6983,8 @@ func (c *PlayersGetCall) Do() (*Player, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6886,6 +6996,12 @@ func (c *PlayersGetCall) Do() (*Player, error) {
 	//     "playerId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -6928,6 +7044,13 @@ func (r *PlayersService) List(collection string) *PlayersListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *PlayersListCall) ConsistencyToken(consistencyToken int64) *PlayersListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *PlayersListCall) Language(language string) *PlayersListCall {
@@ -6948,23 +7071,6 @@ func (c *PlayersListCall) MaxResults(maxResults int64) *PlayersListCall {
 // by the previous request.
 func (c *PlayersListCall) PageToken(pageToken string) *PlayersListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlayersListCall) QuotaUser(quotaUser string) *PlayersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlayersListCall) UserIP(userIP string) *PlayersListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6995,22 +7101,21 @@ func (c *PlayersListCall) Context(ctx context.Context) *PlayersListCall {
 }
 
 func (c *PlayersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/me/players/{collection}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"collection": c.collection,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.players.list" call.
@@ -7020,7 +7125,8 @@ func (c *PlayersListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlayersListCall) Do() (*PlayerListResponse, error) {
+func (c *PlayersListCall) Do(opts ...googleapi.CallOption) (*PlayerListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7044,7 +7150,8 @@ func (c *PlayersListCall) Do() (*PlayerListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7061,15 +7168,23 @@ func (c *PlayersListCall) Do() (*PlayerListResponse, error) {
 	//       "enum": [
 	//         "connected",
 	//         "playedWith",
-	//         "played_with"
+	//         "played_with",
+	//         "visible"
 	//       ],
 	//       "enumDescriptions": [
 	//         "Retrieve a list of players that are also playing this game in reverse chronological order.",
 	//         "(DEPRECATED: please use played_with!) Retrieve a list of players you have played a multiplayer game (realtime or turn-based) with recently.",
-	//         "Retrieve a list of players you have played a multiplayer game (realtime or turn-based) with recently."
+	//         "Retrieve a list of players you have played a multiplayer game (realtime or turn-based) with recently.",
+	//         "Retrieve a list of players in the user's social graph that are visible to this game."
 	//       ],
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "language": {
@@ -7103,6 +7218,27 @@ func (c *PlayersListCall) Do() (*PlayerListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *PlayersListCall) Pages(ctx context.Context, f func(*PlayerListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.pushtokens.remove":
 
 type PushtokensRemoveCall struct {
@@ -7120,20 +7256,10 @@ func (r *PushtokensService) Remove(pushtokenid *PushTokenId) *PushtokensRemoveCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PushtokensRemoveCall) QuotaUser(quotaUser string) *PushtokensRemoveCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PushtokensRemoveCall) UserIP(userIP string) *PushtokensRemoveCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *PushtokensRemoveCall) ConsistencyToken(consistencyToken int64) *PushtokensRemoveCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -7154,27 +7280,26 @@ func (c *PushtokensRemoveCall) Context(ctx context.Context) *PushtokensRemoveCal
 }
 
 func (c *PushtokensRemoveCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pushtokenid)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pushtokens/remove")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.pushtokens.remove" call.
-func (c *PushtokensRemoveCall) Do() error {
+func (c *PushtokensRemoveCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -7188,6 +7313,14 @@ func (c *PushtokensRemoveCall) Do() error {
 	//   "description": "Removes a push token for the current user and application. Removing a non-existent push token will report success.",
 	//   "httpMethod": "POST",
 	//   "id": "games.pushtokens.remove",
+	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "pushtokens/remove",
 	//   "request": {
 	//     "$ref": "PushTokenId"
@@ -7216,20 +7349,10 @@ func (r *PushtokensService) Update(pushtoken *PushToken) *PushtokensUpdateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PushtokensUpdateCall) QuotaUser(quotaUser string) *PushtokensUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PushtokensUpdateCall) UserIP(userIP string) *PushtokensUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *PushtokensUpdateCall) ConsistencyToken(consistencyToken int64) *PushtokensUpdateCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -7250,27 +7373,26 @@ func (c *PushtokensUpdateCall) Context(ctx context.Context) *PushtokensUpdateCal
 }
 
 func (c *PushtokensUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pushtoken)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pushtokens")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.pushtokens.update" call.
-func (c *PushtokensUpdateCall) Do() error {
+func (c *PushtokensUpdateCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -7284,6 +7406,14 @@ func (c *PushtokensUpdateCall) Do() error {
 	//   "description": "Registers a push token for the current user and application.",
 	//   "httpMethod": "PUT",
 	//   "id": "games.pushtokens.update",
+	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "pushtokens",
 	//   "request": {
 	//     "$ref": "PushToken"
@@ -7317,20 +7447,10 @@ func (r *QuestMilestonesService) Claim(questId string, milestoneId string, reque
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QuestMilestonesClaimCall) QuotaUser(quotaUser string) *QuestMilestonesClaimCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QuestMilestonesClaimCall) UserIP(userIP string) *QuestMilestonesClaimCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *QuestMilestonesClaimCall) ConsistencyToken(consistencyToken int64) *QuestMilestonesClaimCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -7351,24 +7471,24 @@ func (c *QuestMilestonesClaimCall) Context(ctx context.Context) *QuestMilestones
 }
 
 func (c *QuestMilestonesClaimCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "quests/{questId}/milestones/{milestoneId}/claim")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"questId":     c.questId,
 		"milestoneId": c.milestoneId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.questMilestones.claim" call.
-func (c *QuestMilestonesClaimCall) Do() error {
+func (c *QuestMilestonesClaimCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -7388,6 +7508,12 @@ func (c *QuestMilestonesClaimCall) Do() error {
 	//     "requestId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "milestoneId": {
 	//       "description": "The ID of the milestone.",
 	//       "location": "path",
@@ -7434,27 +7560,17 @@ func (r *QuestsService) Accept(questId string) *QuestsAcceptCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *QuestsAcceptCall) ConsistencyToken(consistencyToken int64) *QuestsAcceptCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *QuestsAcceptCall) Language(language string) *QuestsAcceptCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QuestsAcceptCall) QuotaUser(quotaUser string) *QuestsAcceptCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QuestsAcceptCall) UserIP(userIP string) *QuestsAcceptCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7475,19 +7591,18 @@ func (c *QuestsAcceptCall) Context(ctx context.Context) *QuestsAcceptCall {
 }
 
 func (c *QuestsAcceptCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "quests/{questId}/accept")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"questId": c.questId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.quests.accept" call.
@@ -7497,7 +7612,8 @@ func (c *QuestsAcceptCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *QuestsAcceptCall) Do() (*Quest, error) {
+func (c *QuestsAcceptCall) Do(opts ...googleapi.CallOption) (*Quest, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7521,7 +7637,8 @@ func (c *QuestsAcceptCall) Do() (*Quest, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7533,6 +7650,12 @@ func (c *QuestsAcceptCall) Do() (*Quest, error) {
 	//     "questId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -7575,6 +7698,13 @@ func (r *QuestsService) List(playerId string) *QuestsListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *QuestsListCall) ConsistencyToken(consistencyToken int64) *QuestsListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *QuestsListCall) Language(language string) *QuestsListCall {
@@ -7596,23 +7726,6 @@ func (c *QuestsListCall) MaxResults(maxResults int64) *QuestsListCall {
 // by the previous request.
 func (c *QuestsListCall) PageToken(pageToken string) *QuestsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QuestsListCall) QuotaUser(quotaUser string) *QuestsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QuestsListCall) UserIP(userIP string) *QuestsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7643,22 +7756,21 @@ func (c *QuestsListCall) Context(ctx context.Context) *QuestsListCall {
 }
 
 func (c *QuestsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/{playerId}/quests")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"playerId": c.playerId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.quests.list" call.
@@ -7668,7 +7780,8 @@ func (c *QuestsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *QuestsListCall) Do() (*QuestListResponse, error) {
+func (c *QuestsListCall) Do(opts ...googleapi.CallOption) (*QuestListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7692,7 +7805,8 @@ func (c *QuestsListCall) Do() (*QuestListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7704,6 +7818,12 @@ func (c *QuestsListCall) Do() (*QuestListResponse, error) {
 	//     "playerId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -7741,6 +7861,27 @@ func (c *QuestsListCall) Do() (*QuestListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *QuestsListCall) Pages(ctx context.Context, f func(*QuestListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.revisions.check":
 
 type RevisionsCheckCall struct {
@@ -7757,20 +7898,10 @@ func (r *RevisionsService) Check(clientRevision string) *RevisionsCheckCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RevisionsCheckCall) QuotaUser(quotaUser string) *RevisionsCheckCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RevisionsCheckCall) UserIP(userIP string) *RevisionsCheckCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RevisionsCheckCall) ConsistencyToken(consistencyToken int64) *RevisionsCheckCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -7801,20 +7932,19 @@ func (c *RevisionsCheckCall) Context(ctx context.Context) *RevisionsCheckCall {
 }
 
 func (c *RevisionsCheckCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "revisions/check")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.revisions.check" call.
@@ -7824,7 +7954,8 @@ func (c *RevisionsCheckCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RevisionsCheckCall) Do() (*RevisionCheckResponse, error) {
+func (c *RevisionsCheckCall) Do(opts ...googleapi.CallOption) (*RevisionCheckResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7848,7 +7979,8 @@ func (c *RevisionsCheckCall) Do() (*RevisionCheckResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7864,6 +7996,12 @@ func (c *RevisionsCheckCall) Do() (*RevisionCheckResponse, error) {
 	//       "description": "The revision of the client SDK used by your application. Format:\n[PLATFORM_TYPE]:[VERSION_NUMBER]. Possible values of PLATFORM_TYPE are:\n \n- \"ANDROID\" - Client is running the Android SDK. \n- \"IOS\" - Client is running the iOS SDK. \n- \"WEB_APP\" - Client is running as a Web App.",
 	//       "location": "query",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     }
 	//   },
@@ -7896,27 +8034,17 @@ func (r *RoomsService) Create(roomcreaterequest *RoomCreateRequest) *RoomsCreate
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsCreateCall) ConsistencyToken(consistencyToken int64) *RoomsCreateCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsCreateCall) Language(language string) *RoomsCreateCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsCreateCall) QuotaUser(quotaUser string) *RoomsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsCreateCall) UserIP(userIP string) *RoomsCreateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7937,23 +8065,21 @@ func (c *RoomsCreateCall) Context(ctx context.Context) *RoomsCreateCall {
 }
 
 func (c *RoomsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.roomcreaterequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/create")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.create" call.
@@ -7963,7 +8089,8 @@ func (c *RoomsCreateCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RoomsCreateCall) Do() (*Room, error) {
+func (c *RoomsCreateCall) Do(opts ...googleapi.CallOption) (*Room, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7987,7 +8114,8 @@ func (c *RoomsCreateCall) Do() (*Room, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7996,6 +8124,12 @@ func (c *RoomsCreateCall) Do() (*Room, error) {
 	//   "httpMethod": "POST",
 	//   "id": "games.rooms.create",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -8034,27 +8168,17 @@ func (r *RoomsService) Decline(roomId string) *RoomsDeclineCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsDeclineCall) ConsistencyToken(consistencyToken int64) *RoomsDeclineCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsDeclineCall) Language(language string) *RoomsDeclineCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsDeclineCall) QuotaUser(quotaUser string) *RoomsDeclineCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsDeclineCall) UserIP(userIP string) *RoomsDeclineCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8075,19 +8199,18 @@ func (c *RoomsDeclineCall) Context(ctx context.Context) *RoomsDeclineCall {
 }
 
 func (c *RoomsDeclineCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/{roomId}/decline")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"roomId": c.roomId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.decline" call.
@@ -8097,7 +8220,8 @@ func (c *RoomsDeclineCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RoomsDeclineCall) Do() (*Room, error) {
+func (c *RoomsDeclineCall) Do(opts ...googleapi.CallOption) (*Room, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8121,7 +8245,8 @@ func (c *RoomsDeclineCall) Do() (*Room, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8133,6 +8258,12 @@ func (c *RoomsDeclineCall) Do() (*Room, error) {
 	//     "roomId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -8174,20 +8305,10 @@ func (r *RoomsService) Dismiss(roomId string) *RoomsDismissCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsDismissCall) QuotaUser(quotaUser string) *RoomsDismissCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsDismissCall) UserIP(userIP string) *RoomsDismissCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsDismissCall) ConsistencyToken(consistencyToken int64) *RoomsDismissCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -8208,23 +8329,23 @@ func (c *RoomsDismissCall) Context(ctx context.Context) *RoomsDismissCall {
 }
 
 func (c *RoomsDismissCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/{roomId}/dismiss")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"roomId": c.roomId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.dismiss" call.
-func (c *RoomsDismissCall) Do() error {
+func (c *RoomsDismissCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8242,6 +8363,12 @@ func (c *RoomsDismissCall) Do() error {
 	//     "roomId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "roomId": {
 	//       "description": "The ID of the room.",
 	//       "location": "path",
@@ -8275,27 +8402,17 @@ func (r *RoomsService) Get(roomId string) *RoomsGetCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsGetCall) ConsistencyToken(consistencyToken int64) *RoomsGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsGetCall) Language(language string) *RoomsGetCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsGetCall) QuotaUser(quotaUser string) *RoomsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsGetCall) UserIP(userIP string) *RoomsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8326,22 +8443,21 @@ func (c *RoomsGetCall) Context(ctx context.Context) *RoomsGetCall {
 }
 
 func (c *RoomsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/{roomId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"roomId": c.roomId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.get" call.
@@ -8351,7 +8467,8 @@ func (c *RoomsGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RoomsGetCall) Do() (*Room, error) {
+func (c *RoomsGetCall) Do(opts ...googleapi.CallOption) (*Room, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8375,7 +8492,8 @@ func (c *RoomsGetCall) Do() (*Room, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8387,6 +8505,12 @@ func (c *RoomsGetCall) Do() (*Room, error) {
 	//     "roomId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -8430,27 +8554,17 @@ func (r *RoomsService) Join(roomId string, roomjoinrequest *RoomJoinRequest) *Ro
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsJoinCall) ConsistencyToken(consistencyToken int64) *RoomsJoinCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsJoinCall) Language(language string) *RoomsJoinCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsJoinCall) QuotaUser(quotaUser string) *RoomsJoinCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsJoinCall) UserIP(userIP string) *RoomsJoinCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8471,25 +8585,23 @@ func (c *RoomsJoinCall) Context(ctx context.Context) *RoomsJoinCall {
 }
 
 func (c *RoomsJoinCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.roomjoinrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/{roomId}/join")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"roomId": c.roomId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.join" call.
@@ -8499,7 +8611,8 @@ func (c *RoomsJoinCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RoomsJoinCall) Do() (*Room, error) {
+func (c *RoomsJoinCall) Do(opts ...googleapi.CallOption) (*Room, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8523,7 +8636,8 @@ func (c *RoomsJoinCall) Do() (*Room, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8535,6 +8649,12 @@ func (c *RoomsJoinCall) Do() (*Room, error) {
 	//     "roomId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -8581,27 +8701,17 @@ func (r *RoomsService) Leave(roomId string, roomleaverequest *RoomLeaveRequest) 
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsLeaveCall) ConsistencyToken(consistencyToken int64) *RoomsLeaveCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsLeaveCall) Language(language string) *RoomsLeaveCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsLeaveCall) QuotaUser(quotaUser string) *RoomsLeaveCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsLeaveCall) UserIP(userIP string) *RoomsLeaveCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8622,25 +8732,23 @@ func (c *RoomsLeaveCall) Context(ctx context.Context) *RoomsLeaveCall {
 }
 
 func (c *RoomsLeaveCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.roomleaverequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/{roomId}/leave")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"roomId": c.roomId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.leave" call.
@@ -8650,7 +8758,8 @@ func (c *RoomsLeaveCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RoomsLeaveCall) Do() (*Room, error) {
+func (c *RoomsLeaveCall) Do(opts ...googleapi.CallOption) (*Room, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8674,7 +8783,8 @@ func (c *RoomsLeaveCall) Do() (*Room, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8686,6 +8796,12 @@ func (c *RoomsLeaveCall) Do() (*Room, error) {
 	//     "roomId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -8728,6 +8844,13 @@ func (r *RoomsService) List() *RoomsListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsListCall) ConsistencyToken(consistencyToken int64) *RoomsListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsListCall) Language(language string) *RoomsListCall {
@@ -8748,23 +8871,6 @@ func (c *RoomsListCall) MaxResults(maxResults int64) *RoomsListCall {
 // by the previous request.
 func (c *RoomsListCall) PageToken(pageToken string) *RoomsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsListCall) QuotaUser(quotaUser string) *RoomsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsListCall) UserIP(userIP string) *RoomsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8795,20 +8901,19 @@ func (c *RoomsListCall) Context(ctx context.Context) *RoomsListCall {
 }
 
 func (c *RoomsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.list" call.
@@ -8818,7 +8923,8 @@ func (c *RoomsListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RoomsListCall) Do() (*RoomList, error) {
+func (c *RoomsListCall) Do(opts ...googleapi.CallOption) (*RoomList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8842,7 +8948,8 @@ func (c *RoomsListCall) Do() (*RoomList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8851,6 +8958,12 @@ func (c *RoomsListCall) Do() (*RoomList, error) {
 	//   "httpMethod": "GET",
 	//   "id": "games.rooms.list",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -8882,6 +8995,27 @@ func (c *RoomsListCall) Do() (*RoomList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *RoomsListCall) Pages(ctx context.Context, f func(*RoomList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.rooms.reportStatus":
 
 type RoomsReportStatusCall struct {
@@ -8902,27 +9036,17 @@ func (r *RoomsService) ReportStatus(roomId string, roomp2pstatuses *RoomP2PStatu
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *RoomsReportStatusCall) ConsistencyToken(consistencyToken int64) *RoomsReportStatusCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *RoomsReportStatusCall) Language(language string) *RoomsReportStatusCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RoomsReportStatusCall) QuotaUser(quotaUser string) *RoomsReportStatusCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RoomsReportStatusCall) UserIP(userIP string) *RoomsReportStatusCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8943,25 +9067,23 @@ func (c *RoomsReportStatusCall) Context(ctx context.Context) *RoomsReportStatusC
 }
 
 func (c *RoomsReportStatusCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.roomp2pstatuses)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "rooms/{roomId}/reportstatus")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"roomId": c.roomId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.rooms.reportStatus" call.
@@ -8971,7 +9093,8 @@ func (c *RoomsReportStatusCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RoomsReportStatusCall) Do() (*RoomStatus, error) {
+func (c *RoomsReportStatusCall) Do(opts ...googleapi.CallOption) (*RoomStatus, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8995,7 +9118,8 @@ func (c *RoomsReportStatusCall) Do() (*RoomStatus, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9007,6 +9131,12 @@ func (c *RoomsReportStatusCall) Do() (*RoomStatus, error) {
 	//     "roomId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -9060,6 +9190,13 @@ func (r *ScoresService) Get(playerId string, leaderboardId string, timeSpan stri
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ScoresGetCall) ConsistencyToken(consistencyToken int64) *ScoresGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // IncludeRankType sets the optional parameter "includeRankType": The
 // types of ranks to return. If the parameter is omitted, no ranks will
 // be returned.
@@ -9097,23 +9234,6 @@ func (c *ScoresGetCall) PageToken(pageToken string) *ScoresGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ScoresGetCall) QuotaUser(quotaUser string) *ScoresGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ScoresGetCall) UserIP(userIP string) *ScoresGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9141,24 +9261,23 @@ func (c *ScoresGetCall) Context(ctx context.Context) *ScoresGetCall {
 }
 
 func (c *ScoresGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/{playerId}/leaderboards/{leaderboardId}/scores/{timeSpan}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"playerId":      c.playerId,
 		"leaderboardId": c.leaderboardId,
 		"timeSpan":      c.timeSpan,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.scores.get" call.
@@ -9169,7 +9288,8 @@ func (c *ScoresGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *ScoresGetCall) Do() (*PlayerLeaderboardScoreListResponse, error) {
+func (c *ScoresGetCall) Do(opts ...googleapi.CallOption) (*PlayerLeaderboardScoreListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9193,7 +9313,8 @@ func (c *ScoresGetCall) Do() (*PlayerLeaderboardScoreListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9207,6 +9328,12 @@ func (c *ScoresGetCall) Do() (*PlayerLeaderboardScoreListResponse, error) {
 	//     "timeSpan"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "includeRankType": {
 	//       "description": "The types of ranks to return. If the parameter is omitted, no ranks will be returned.",
 	//       "enum": [
@@ -9283,6 +9410,27 @@ func (c *ScoresGetCall) Do() (*PlayerLeaderboardScoreListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ScoresGetCall) Pages(ctx context.Context, f func(*PlayerLeaderboardScoreListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.scores.list":
 
 type ScoresListCall struct {
@@ -9300,6 +9448,13 @@ func (r *ScoresService) List(leaderboardId string, collection string, timeSpan s
 	c.leaderboardId = leaderboardId
 	c.collection = collection
 	c.urlParams_.Set("timeSpan", timeSpan)
+	return c
+}
+
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ScoresListCall) ConsistencyToken(consistencyToken int64) *ScoresListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -9323,23 +9478,6 @@ func (c *ScoresListCall) MaxResults(maxResults int64) *ScoresListCall {
 // by the previous request.
 func (c *ScoresListCall) PageToken(pageToken string) *ScoresListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ScoresListCall) QuotaUser(quotaUser string) *ScoresListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ScoresListCall) UserIP(userIP string) *ScoresListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9370,23 +9508,22 @@ func (c *ScoresListCall) Context(ctx context.Context) *ScoresListCall {
 }
 
 func (c *ScoresListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "leaderboards/{leaderboardId}/scores/{collection}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"leaderboardId": c.leaderboardId,
 		"collection":    c.collection,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.scores.list" call.
@@ -9396,7 +9533,8 @@ func (c *ScoresListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ScoresListCall) Do() (*LeaderboardScores, error) {
+func (c *ScoresListCall) Do(opts ...googleapi.CallOption) (*LeaderboardScores, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9420,7 +9558,8 @@ func (c *ScoresListCall) Do() (*LeaderboardScores, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9438,14 +9577,22 @@ func (c *ScoresListCall) Do() (*LeaderboardScores, error) {
 	//       "description": "The collection of scores you're requesting.",
 	//       "enum": [
 	//         "PUBLIC",
-	//         "SOCIAL"
+	//         "SOCIAL",
+	//         "SOCIAL_1P"
 	//       ],
 	//       "enumDescriptions": [
 	//         "List all scores in the public leaderboard.",
-	//         "List only social scores."
+	//         "List only social scores.",
+	//         "List only social scores, not respecting the fACL."
 	//       ],
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "language": {
@@ -9501,6 +9648,27 @@ func (c *ScoresListCall) Do() (*LeaderboardScores, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ScoresListCall) Pages(ctx context.Context, f func(*LeaderboardScores) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.scores.listWindow":
 
 type ScoresListWindowCall struct {
@@ -9519,6 +9687,13 @@ func (r *ScoresService) ListWindow(leaderboardId string, collection string, time
 	c.leaderboardId = leaderboardId
 	c.collection = collection
 	c.urlParams_.Set("timeSpan", timeSpan)
+	return c
+}
+
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ScoresListWindowCall) ConsistencyToken(consistencyToken int64) *ScoresListWindowCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -9545,15 +9720,6 @@ func (c *ScoresListWindowCall) PageToken(pageToken string) *ScoresListWindowCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ScoresListWindowCall) QuotaUser(quotaUser string) *ScoresListWindowCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ResultsAbove sets the optional parameter "resultsAbove": The
 // preferred number of scores to return above the player's score. More
 // scores may be returned if the player is at the bottom of the
@@ -9569,14 +9735,6 @@ func (c *ScoresListWindowCall) ResultsAbove(resultsAbove int64) *ScoresListWindo
 // the leaderboard. Defaults to true.
 func (c *ScoresListWindowCall) ReturnTopIfAbsent(returnTopIfAbsent bool) *ScoresListWindowCall {
 	c.urlParams_.Set("returnTopIfAbsent", fmt.Sprint(returnTopIfAbsent))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ScoresListWindowCall) UserIP(userIP string) *ScoresListWindowCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9607,23 +9765,22 @@ func (c *ScoresListWindowCall) Context(ctx context.Context) *ScoresListWindowCal
 }
 
 func (c *ScoresListWindowCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "leaderboards/{leaderboardId}/window/{collection}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"leaderboardId": c.leaderboardId,
 		"collection":    c.collection,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.scores.listWindow" call.
@@ -9633,7 +9790,8 @@ func (c *ScoresListWindowCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ScoresListWindowCall) Do() (*LeaderboardScores, error) {
+func (c *ScoresListWindowCall) Do(opts ...googleapi.CallOption) (*LeaderboardScores, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9657,7 +9815,8 @@ func (c *ScoresListWindowCall) Do() (*LeaderboardScores, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9675,14 +9834,22 @@ func (c *ScoresListWindowCall) Do() (*LeaderboardScores, error) {
 	//       "description": "The collection of scores you're requesting.",
 	//       "enum": [
 	//         "PUBLIC",
-	//         "SOCIAL"
+	//         "SOCIAL",
+	//         "SOCIAL_1P"
 	//       ],
 	//       "enumDescriptions": [
 	//         "List all scores in the public leaderboard.",
-	//         "List only social scores."
+	//         "List only social scores.",
+	//         "List only social scores, not respecting the fACL."
 	//       ],
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "language": {
@@ -9749,6 +9916,27 @@ func (c *ScoresListWindowCall) Do() (*LeaderboardScores, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ScoresListWindowCall) Pages(ctx context.Context, f func(*LeaderboardScores) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.scores.submit":
 
 type ScoresSubmitCall struct {
@@ -9766,19 +9954,17 @@ func (r *ScoresService) Submit(leaderboardId string, score int64) *ScoresSubmitC
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ScoresSubmitCall) ConsistencyToken(consistencyToken int64) *ScoresSubmitCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *ScoresSubmitCall) Language(language string) *ScoresSubmitCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ScoresSubmitCall) QuotaUser(quotaUser string) *ScoresSubmitCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -9788,14 +9974,6 @@ func (c *ScoresSubmitCall) QuotaUser(quotaUser string) *ScoresSubmitCall {
 // 3986.
 func (c *ScoresSubmitCall) ScoreTag(scoreTag string) *ScoresSubmitCall {
 	c.urlParams_.Set("scoreTag", scoreTag)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ScoresSubmitCall) UserIP(userIP string) *ScoresSubmitCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9816,19 +9994,18 @@ func (c *ScoresSubmitCall) Context(ctx context.Context) *ScoresSubmitCall {
 }
 
 func (c *ScoresSubmitCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "leaderboards/{leaderboardId}/scores")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"leaderboardId": c.leaderboardId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.scores.submit" call.
@@ -9838,7 +10015,8 @@ func (c *ScoresSubmitCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ScoresSubmitCall) Do() (*PlayerScoreResponse, error) {
+func (c *ScoresSubmitCall) Do(opts ...googleapi.CallOption) (*PlayerScoreResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9862,7 +10040,8 @@ func (c *ScoresSubmitCall) Do() (*PlayerScoreResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9875,6 +10054,12 @@ func (c *ScoresSubmitCall) Do() (*PlayerScoreResponse, error) {
 	//     "score"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -9928,27 +10113,17 @@ func (r *ScoresService) SubmitMultiple(playerscoresubmissionlist *PlayerScoreSub
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *ScoresSubmitMultipleCall) ConsistencyToken(consistencyToken int64) *ScoresSubmitMultipleCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *ScoresSubmitMultipleCall) Language(language string) *ScoresSubmitMultipleCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ScoresSubmitMultipleCall) QuotaUser(quotaUser string) *ScoresSubmitMultipleCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ScoresSubmitMultipleCall) UserIP(userIP string) *ScoresSubmitMultipleCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9969,23 +10144,21 @@ func (c *ScoresSubmitMultipleCall) Context(ctx context.Context) *ScoresSubmitMul
 }
 
 func (c *ScoresSubmitMultipleCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.playerscoresubmissionlist)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "leaderboards/scores")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.scores.submitMultiple" call.
@@ -9995,7 +10168,8 @@ func (c *ScoresSubmitMultipleCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ScoresSubmitMultipleCall) Do() (*PlayerScoreListResponse, error) {
+func (c *ScoresSubmitMultipleCall) Do(opts ...googleapi.CallOption) (*PlayerScoreListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10019,7 +10193,8 @@ func (c *ScoresSubmitMultipleCall) Do() (*PlayerScoreListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10028,6 +10203,12 @@ func (c *ScoresSubmitMultipleCall) Do() (*PlayerScoreListResponse, error) {
 	//   "httpMethod": "POST",
 	//   "id": "games.scores.submitMultiple",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -10066,27 +10247,17 @@ func (r *SnapshotsService) Get(snapshotId string) *SnapshotsGetCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *SnapshotsGetCall) ConsistencyToken(consistencyToken int64) *SnapshotsGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *SnapshotsGetCall) Language(language string) *SnapshotsGetCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SnapshotsGetCall) QuotaUser(quotaUser string) *SnapshotsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SnapshotsGetCall) UserIP(userIP string) *SnapshotsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10117,22 +10288,21 @@ func (c *SnapshotsGetCall) Context(ctx context.Context) *SnapshotsGetCall {
 }
 
 func (c *SnapshotsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "snapshots/{snapshotId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"snapshotId": c.snapshotId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.snapshots.get" call.
@@ -10142,7 +10312,8 @@ func (c *SnapshotsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SnapshotsGetCall) Do() (*Snapshot, error) {
+func (c *SnapshotsGetCall) Do(opts ...googleapi.CallOption) (*Snapshot, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10166,7 +10337,8 @@ func (c *SnapshotsGetCall) Do() (*Snapshot, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10178,6 +10350,12 @@ func (c *SnapshotsGetCall) Do() (*Snapshot, error) {
 	//     "snapshotId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -10221,6 +10399,13 @@ func (r *SnapshotsService) List(playerId string) *SnapshotsListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *SnapshotsListCall) ConsistencyToken(consistencyToken int64) *SnapshotsListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *SnapshotsListCall) Language(language string) *SnapshotsListCall {
@@ -10241,23 +10426,6 @@ func (c *SnapshotsListCall) MaxResults(maxResults int64) *SnapshotsListCall {
 // by the previous request.
 func (c *SnapshotsListCall) PageToken(pageToken string) *SnapshotsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SnapshotsListCall) QuotaUser(quotaUser string) *SnapshotsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SnapshotsListCall) UserIP(userIP string) *SnapshotsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10288,22 +10456,21 @@ func (c *SnapshotsListCall) Context(ctx context.Context) *SnapshotsListCall {
 }
 
 func (c *SnapshotsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "players/{playerId}/snapshots")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"playerId": c.playerId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.snapshots.list" call.
@@ -10313,7 +10480,8 @@ func (c *SnapshotsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SnapshotsListCall) Do() (*SnapshotListResponse, error) {
+func (c *SnapshotsListCall) Do(opts ...googleapi.CallOption) (*SnapshotListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10337,7 +10505,8 @@ func (c *SnapshotsListCall) Do() (*SnapshotListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10349,6 +10518,12 @@ func (c *SnapshotsListCall) Do() (*SnapshotListResponse, error) {
 	//     "playerId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -10387,6 +10562,27 @@ func (c *SnapshotsListCall) Do() (*SnapshotListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *SnapshotsListCall) Pages(ctx context.Context, f func(*SnapshotListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.turnBasedMatches.cancel":
 
 type TurnBasedMatchesCancelCall struct {
@@ -10403,20 +10599,10 @@ func (r *TurnBasedMatchesService) Cancel(matchId string) *TurnBasedMatchesCancel
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesCancelCall) QuotaUser(quotaUser string) *TurnBasedMatchesCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesCancelCall) UserIP(userIP string) *TurnBasedMatchesCancelCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesCancelCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesCancelCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -10437,23 +10623,23 @@ func (c *TurnBasedMatchesCancelCall) Context(ctx context.Context) *TurnBasedMatc
 }
 
 func (c *TurnBasedMatchesCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.cancel" call.
-func (c *TurnBasedMatchesCancelCall) Do() error {
+func (c *TurnBasedMatchesCancelCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -10471,6 +10657,12 @@ func (c *TurnBasedMatchesCancelCall) Do() error {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "matchId": {
 	//       "description": "The ID of the match.",
 	//       "location": "path",
@@ -10503,27 +10695,17 @@ func (r *TurnBasedMatchesService) Create(turnbasedmatchcreaterequest *TurnBasedM
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesCreateCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesCreateCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesCreateCall) Language(language string) *TurnBasedMatchesCreateCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesCreateCall) QuotaUser(quotaUser string) *TurnBasedMatchesCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesCreateCall) UserIP(userIP string) *TurnBasedMatchesCreateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10544,23 +10726,21 @@ func (c *TurnBasedMatchesCreateCall) Context(ctx context.Context) *TurnBasedMatc
 }
 
 func (c *TurnBasedMatchesCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.turnbasedmatchcreaterequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/create")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.create" call.
@@ -10570,7 +10750,8 @@ func (c *TurnBasedMatchesCreateCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesCreateCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesCreateCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10594,7 +10775,8 @@ func (c *TurnBasedMatchesCreateCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10603,6 +10785,12 @@ func (c *TurnBasedMatchesCreateCall) Do() (*TurnBasedMatch, error) {
 	//   "httpMethod": "POST",
 	//   "id": "games.turnBasedMatches.create",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -10640,27 +10828,17 @@ func (r *TurnBasedMatchesService) Decline(matchId string) *TurnBasedMatchesDecli
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesDeclineCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesDeclineCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesDeclineCall) Language(language string) *TurnBasedMatchesDeclineCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesDeclineCall) QuotaUser(quotaUser string) *TurnBasedMatchesDeclineCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesDeclineCall) UserIP(userIP string) *TurnBasedMatchesDeclineCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10681,19 +10859,18 @@ func (c *TurnBasedMatchesDeclineCall) Context(ctx context.Context) *TurnBasedMat
 }
 
 func (c *TurnBasedMatchesDeclineCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/decline")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.decline" call.
@@ -10703,7 +10880,8 @@ func (c *TurnBasedMatchesDeclineCall) doRequest(alt string) (*http.Response, err
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesDeclineCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesDeclineCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10727,7 +10905,8 @@ func (c *TurnBasedMatchesDeclineCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10739,6 +10918,12 @@ func (c *TurnBasedMatchesDeclineCall) Do() (*TurnBasedMatch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -10781,20 +10966,10 @@ func (r *TurnBasedMatchesService) Dismiss(matchId string) *TurnBasedMatchesDismi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesDismissCall) QuotaUser(quotaUser string) *TurnBasedMatchesDismissCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesDismissCall) UserIP(userIP string) *TurnBasedMatchesDismissCall {
-	c.urlParams_.Set("userIp", userIP)
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesDismissCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesDismissCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
 	return c
 }
 
@@ -10815,23 +10990,23 @@ func (c *TurnBasedMatchesDismissCall) Context(ctx context.Context) *TurnBasedMat
 }
 
 func (c *TurnBasedMatchesDismissCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/dismiss")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.dismiss" call.
-func (c *TurnBasedMatchesDismissCall) Do() error {
+func (c *TurnBasedMatchesDismissCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -10849,6 +11024,12 @@ func (c *TurnBasedMatchesDismissCall) Do() error {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "matchId": {
 	//       "description": "The ID of the match.",
 	//       "location": "path",
@@ -10885,27 +11066,17 @@ func (r *TurnBasedMatchesService) Finish(matchId string, turnbasedmatchresults *
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesFinishCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesFinishCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesFinishCall) Language(language string) *TurnBasedMatchesFinishCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesFinishCall) QuotaUser(quotaUser string) *TurnBasedMatchesFinishCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesFinishCall) UserIP(userIP string) *TurnBasedMatchesFinishCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10926,25 +11097,23 @@ func (c *TurnBasedMatchesFinishCall) Context(ctx context.Context) *TurnBasedMatc
 }
 
 func (c *TurnBasedMatchesFinishCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.turnbasedmatchresults)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/finish")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.finish" call.
@@ -10954,7 +11123,8 @@ func (c *TurnBasedMatchesFinishCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesFinishCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesFinishCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10978,7 +11148,8 @@ func (c *TurnBasedMatchesFinishCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10990,6 +11161,12 @@ func (c *TurnBasedMatchesFinishCall) Do() (*TurnBasedMatch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -11034,6 +11211,13 @@ func (r *TurnBasedMatchesService) Get(matchId string) *TurnBasedMatchesGetCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesGetCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesGetCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // IncludeMatchData sets the optional parameter "includeMatchData": Get
 // match data along with metadata.
 func (c *TurnBasedMatchesGetCall) IncludeMatchData(includeMatchData bool) *TurnBasedMatchesGetCall {
@@ -11045,23 +11229,6 @@ func (c *TurnBasedMatchesGetCall) IncludeMatchData(includeMatchData bool) *TurnB
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesGetCall) Language(language string) *TurnBasedMatchesGetCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesGetCall) QuotaUser(quotaUser string) *TurnBasedMatchesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesGetCall) UserIP(userIP string) *TurnBasedMatchesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11092,22 +11259,21 @@ func (c *TurnBasedMatchesGetCall) Context(ctx context.Context) *TurnBasedMatches
 }
 
 func (c *TurnBasedMatchesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.get" call.
@@ -11117,7 +11283,8 @@ func (c *TurnBasedMatchesGetCall) doRequest(alt string) (*http.Response, error) 
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesGetCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesGetCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11141,7 +11308,8 @@ func (c *TurnBasedMatchesGetCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11153,6 +11321,12 @@ func (c *TurnBasedMatchesGetCall) Do() (*TurnBasedMatch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "includeMatchData": {
 	//       "description": "Get match data along with metadata.",
 	//       "location": "query",
@@ -11198,27 +11372,17 @@ func (r *TurnBasedMatchesService) Join(matchId string) *TurnBasedMatchesJoinCall
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesJoinCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesJoinCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesJoinCall) Language(language string) *TurnBasedMatchesJoinCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesJoinCall) QuotaUser(quotaUser string) *TurnBasedMatchesJoinCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesJoinCall) UserIP(userIP string) *TurnBasedMatchesJoinCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11239,19 +11403,18 @@ func (c *TurnBasedMatchesJoinCall) Context(ctx context.Context) *TurnBasedMatche
 }
 
 func (c *TurnBasedMatchesJoinCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/join")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.join" call.
@@ -11261,7 +11424,8 @@ func (c *TurnBasedMatchesJoinCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesJoinCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesJoinCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11285,7 +11449,8 @@ func (c *TurnBasedMatchesJoinCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11297,6 +11462,12 @@ func (c *TurnBasedMatchesJoinCall) Do() (*TurnBasedMatch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -11338,27 +11509,17 @@ func (r *TurnBasedMatchesService) Leave(matchId string) *TurnBasedMatchesLeaveCa
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesLeaveCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesLeaveCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesLeaveCall) Language(language string) *TurnBasedMatchesLeaveCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesLeaveCall) QuotaUser(quotaUser string) *TurnBasedMatchesLeaveCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesLeaveCall) UserIP(userIP string) *TurnBasedMatchesLeaveCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11379,19 +11540,18 @@ func (c *TurnBasedMatchesLeaveCall) Context(ctx context.Context) *TurnBasedMatch
 }
 
 func (c *TurnBasedMatchesLeaveCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/leave")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.leave" call.
@@ -11401,7 +11561,8 @@ func (c *TurnBasedMatchesLeaveCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesLeaveCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesLeaveCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11425,7 +11586,8 @@ func (c *TurnBasedMatchesLeaveCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11437,6 +11599,12 @@ func (c *TurnBasedMatchesLeaveCall) Do() (*TurnBasedMatch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -11479,6 +11647,13 @@ func (r *TurnBasedMatchesService) LeaveTurn(matchId string, matchVersion int64) 
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesLeaveTurnCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesLeaveTurnCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesLeaveTurnCall) Language(language string) *TurnBasedMatchesLeaveTurnCall {
@@ -11493,23 +11668,6 @@ func (c *TurnBasedMatchesLeaveTurnCall) Language(language string) *TurnBasedMatc
 // set on the match with remaining slots for automatched players.
 func (c *TurnBasedMatchesLeaveTurnCall) PendingParticipantId(pendingParticipantId string) *TurnBasedMatchesLeaveTurnCall {
 	c.urlParams_.Set("pendingParticipantId", pendingParticipantId)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesLeaveTurnCall) QuotaUser(quotaUser string) *TurnBasedMatchesLeaveTurnCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesLeaveTurnCall) UserIP(userIP string) *TurnBasedMatchesLeaveTurnCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11530,19 +11688,18 @@ func (c *TurnBasedMatchesLeaveTurnCall) Context(ctx context.Context) *TurnBasedM
 }
 
 func (c *TurnBasedMatchesLeaveTurnCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/leaveTurn")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.leaveTurn" call.
@@ -11552,7 +11709,8 @@ func (c *TurnBasedMatchesLeaveTurnCall) doRequest(alt string) (*http.Response, e
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesLeaveTurnCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesLeaveTurnCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11576,7 +11734,8 @@ func (c *TurnBasedMatchesLeaveTurnCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11589,6 +11748,12 @@ func (c *TurnBasedMatchesLeaveTurnCall) Do() (*TurnBasedMatch, error) {
 	//     "matchVersion"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -11640,6 +11805,13 @@ func (r *TurnBasedMatchesService) List() *TurnBasedMatchesListCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesListCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesListCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // IncludeMatchData sets the optional parameter "includeMatchData": True
 // if match data should be returned in the response. Note that not all
 // data will necessarily be returned if include_match_data is true; the
@@ -11683,23 +11855,6 @@ func (c *TurnBasedMatchesListCall) PageToken(pageToken string) *TurnBasedMatches
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesListCall) QuotaUser(quotaUser string) *TurnBasedMatchesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesListCall) UserIP(userIP string) *TurnBasedMatchesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11727,20 +11882,19 @@ func (c *TurnBasedMatchesListCall) Context(ctx context.Context) *TurnBasedMatche
 }
 
 func (c *TurnBasedMatchesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.list" call.
@@ -11750,7 +11904,8 @@ func (c *TurnBasedMatchesListCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesListCall) Do() (*TurnBasedMatchList, error) {
+func (c *TurnBasedMatchesListCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatchList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11774,7 +11929,8 @@ func (c *TurnBasedMatchesListCall) Do() (*TurnBasedMatchList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11783,6 +11939,12 @@ func (c *TurnBasedMatchesListCall) Do() (*TurnBasedMatchList, error) {
 	//   "httpMethod": "GET",
 	//   "id": "games.turnBasedMatches.list",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "includeMatchData": {
 	//       "description": "True if match data should be returned in the response. Note that not all data will necessarily be returned if include_match_data is true; the server may decide to only return data for some of the matches to limit download size for the client. The remainder of the data for these matches will be retrievable on request.",
 	//       "location": "query",
@@ -11827,6 +11989,27 @@ func (c *TurnBasedMatchesListCall) Do() (*TurnBasedMatchList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *TurnBasedMatchesListCall) Pages(ctx context.Context, f func(*TurnBasedMatchList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.turnBasedMatches.rematch":
 
 type TurnBasedMatchesRematchCall struct {
@@ -11846,19 +12029,17 @@ func (r *TurnBasedMatchesService) Rematch(matchId string) *TurnBasedMatchesRemat
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesRematchCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesRematchCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesRematchCall) Language(language string) *TurnBasedMatchesRematchCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesRematchCall) QuotaUser(quotaUser string) *TurnBasedMatchesRematchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -11868,14 +12049,6 @@ func (c *TurnBasedMatchesRematchCall) QuotaUser(quotaUser string) *TurnBasedMatc
 // correctly across retries.
 func (c *TurnBasedMatchesRematchCall) RequestId(requestId int64) *TurnBasedMatchesRematchCall {
 	c.urlParams_.Set("requestId", fmt.Sprint(requestId))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesRematchCall) UserIP(userIP string) *TurnBasedMatchesRematchCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11896,19 +12069,18 @@ func (c *TurnBasedMatchesRematchCall) Context(ctx context.Context) *TurnBasedMat
 }
 
 func (c *TurnBasedMatchesRematchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/rematch")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.rematch" call.
@@ -11918,7 +12090,8 @@ func (c *TurnBasedMatchesRematchCall) doRequest(alt string) (*http.Response, err
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesRematchCall) Do() (*TurnBasedMatchRematch, error) {
+func (c *TurnBasedMatchesRematchCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatchRematch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11942,7 +12115,8 @@ func (c *TurnBasedMatchesRematchCall) Do() (*TurnBasedMatchRematch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11954,6 +12128,12 @@ func (c *TurnBasedMatchesRematchCall) Do() (*TurnBasedMatchRematch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",
@@ -12002,6 +12182,13 @@ func (r *TurnBasedMatchesService) Sync() *TurnBasedMatchesSyncCall {
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesSyncCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesSyncCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // IncludeMatchData sets the optional parameter "includeMatchData": True
 // if match data should be returned in the response. Note that not all
 // data will necessarily be returned if include_match_data is true; the
@@ -12045,23 +12232,6 @@ func (c *TurnBasedMatchesSyncCall) PageToken(pageToken string) *TurnBasedMatches
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesSyncCall) QuotaUser(quotaUser string) *TurnBasedMatchesSyncCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesSyncCall) UserIP(userIP string) *TurnBasedMatchesSyncCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12089,20 +12259,19 @@ func (c *TurnBasedMatchesSyncCall) Context(ctx context.Context) *TurnBasedMatche
 }
 
 func (c *TurnBasedMatchesSyncCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/sync")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.sync" call.
@@ -12112,7 +12281,8 @@ func (c *TurnBasedMatchesSyncCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesSyncCall) Do() (*TurnBasedMatchSync, error) {
+func (c *TurnBasedMatchesSyncCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatchSync, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12136,7 +12306,8 @@ func (c *TurnBasedMatchesSyncCall) Do() (*TurnBasedMatchSync, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12145,6 +12316,12 @@ func (c *TurnBasedMatchesSyncCall) Do() (*TurnBasedMatchSync, error) {
 	//   "httpMethod": "GET",
 	//   "id": "games.turnBasedMatches.sync",
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "includeMatchData": {
 	//       "description": "True if match data should be returned in the response. Note that not all data will necessarily be returned if include_match_data is true; the server may decide to only return data for some of the matches to limit download size for the client. The remainder of the data for these matches will be retrievable on request.",
 	//       "location": "query",
@@ -12189,6 +12366,27 @@ func (c *TurnBasedMatchesSyncCall) Do() (*TurnBasedMatchSync, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *TurnBasedMatchesSyncCall) Pages(ctx context.Context, f func(*TurnBasedMatchSync) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "games.turnBasedMatches.takeTurn":
 
 type TurnBasedMatchesTakeTurnCall struct {
@@ -12207,27 +12405,17 @@ func (r *TurnBasedMatchesService) TakeTurn(matchId string, turnbasedmatchturn *T
 	return c
 }
 
+// ConsistencyToken sets the optional parameter "consistencyToken": The
+// last-seen mutation timestamp.
+func (c *TurnBasedMatchesTakeTurnCall) ConsistencyToken(consistencyToken int64) *TurnBasedMatchesTakeTurnCall {
+	c.urlParams_.Set("consistencyToken", fmt.Sprint(consistencyToken))
+	return c
+}
+
 // Language sets the optional parameter "language": The preferred
 // language to use for strings returned by this method.
 func (c *TurnBasedMatchesTakeTurnCall) Language(language string) *TurnBasedMatchesTakeTurnCall {
 	c.urlParams_.Set("language", language)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TurnBasedMatchesTakeTurnCall) QuotaUser(quotaUser string) *TurnBasedMatchesTakeTurnCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TurnBasedMatchesTakeTurnCall) UserIP(userIP string) *TurnBasedMatchesTakeTurnCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -12248,25 +12436,23 @@ func (c *TurnBasedMatchesTakeTurnCall) Context(ctx context.Context) *TurnBasedMa
 }
 
 func (c *TurnBasedMatchesTakeTurnCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.turnbasedmatchturn)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "turnbasedmatches/{matchId}/turn")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"matchId": c.matchId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "games.turnBasedMatches.takeTurn" call.
@@ -12276,7 +12462,8 @@ func (c *TurnBasedMatchesTakeTurnCall) doRequest(alt string) (*http.Response, er
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TurnBasedMatchesTakeTurnCall) Do() (*TurnBasedMatch, error) {
+func (c *TurnBasedMatchesTakeTurnCall) Do(opts ...googleapi.CallOption) (*TurnBasedMatch, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12300,7 +12487,8 @@ func (c *TurnBasedMatchesTakeTurnCall) Do() (*TurnBasedMatch, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12312,6 +12500,12 @@ func (c *TurnBasedMatchesTakeTurnCall) Do() (*TurnBasedMatch, error) {
 	//     "matchId"
 	//   ],
 	//   "parameters": {
+	//     "consistencyToken": {
+	//       "description": "The last-seen mutation timestamp.",
+	//       "format": "int64",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "language": {
 	//       "description": "The preferred language to use for strings returned by this method.",
 	//       "location": "query",

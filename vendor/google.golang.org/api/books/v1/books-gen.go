@@ -1848,12 +1848,25 @@ func (s *MetadataItems) MarshalJSON() ([]byte, error) {
 type Notification struct {
 	Body string `json:"body,omitempty"`
 
+	// CrmExperimentIds: The list of crm experiment ids.
+	CrmExperimentIds googleapi.Int64s `json:"crmExperimentIds,omitempty"`
+
+	DocId string `json:"doc_id,omitempty"`
+
+	DocType string `json:"doc_type,omitempty"`
+
+	DontShowNotification bool `json:"dont_show_notification,omitempty"`
+
 	IconUrl string `json:"iconUrl,omitempty"`
 
 	// Kind: Resource type.
 	Kind string `json:"kind,omitempty"`
 
 	NotificationType string `json:"notification_type,omitempty"`
+
+	PcampaignId string `json:"pcampaign_id,omitempty"`
+
+	Reason string `json:"reason,omitempty"`
 
 	ShowNotificationSettingsAction bool `json:"show_notification_settings_action,omitempty"`
 
@@ -2158,6 +2171,8 @@ type SeriesSeries struct {
 
 	SeriesId string `json:"seriesId,omitempty"`
 
+	SeriesType string `json:"seriesType,omitempty"`
+
 	Title string `json:"title,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "BannerImageUrl") to
@@ -2256,6 +2271,8 @@ func (s *UsersettingsNotesExport) MarshalJSON() ([]byte, error) {
 type UsersettingsNotification struct {
 	MoreFromAuthors *UsersettingsNotificationMoreFromAuthors `json:"moreFromAuthors,omitempty"`
 
+	MoreFromSeries *UsersettingsNotificationMoreFromSeries `json:"moreFromSeries,omitempty"`
+
 	// ForceSendFields is a list of field names (e.g. "MoreFromAuthors") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
@@ -2285,6 +2302,24 @@ type UsersettingsNotificationMoreFromAuthors struct {
 
 func (s *UsersettingsNotificationMoreFromAuthors) MarshalJSON() ([]byte, error) {
 	type noMethod UsersettingsNotificationMoreFromAuthors
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type UsersettingsNotificationMoreFromSeries struct {
+	OptedState string `json:"opted_state,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "OptedState") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *UsersettingsNotificationMoreFromSeries) MarshalJSON() ([]byte, error) {
+	type noMethod UsersettingsNotificationMoreFromSeries
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -2640,6 +2675,9 @@ type VolumeSaleInfoOffers struct {
 	// FinskyOfferType: The finsky offer type (e.g., PURCHASE=0 RENTAL=3)
 	FinskyOfferType int64 `json:"finskyOfferType,omitempty"`
 
+	// Giftable: Indicates whether the offer is giftable.
+	Giftable bool `json:"giftable,omitempty"`
+
 	// ListPrice: Offer list (=undiscounted) price in Micros.
 	ListPrice *VolumeSaleInfoOffersListPrice `json:"listPrice,omitempty"`
 
@@ -2779,6 +2817,11 @@ func (s *VolumeSearchInfo) MarshalJSON() ([]byte, error) {
 // VolumeUserInfo: User specific information related to this volume.
 // (e.g. page this user last read or whether they purchased this book)
 type VolumeUserInfo struct {
+	// AcquiredTime: Timestamp when this volume was acquired by the user.
+	// (RFC 3339 UTC date-time format) Acquiring includes purchase, user
+	// upload, receiving family sharing, etc.
+	AcquiredTime string `json:"acquiredTime,omitempty"`
+
 	// AcquisitionType: How this volume was acquired.
 	AcquisitionType int64 `json:"acquisitionType,omitempty"`
 
@@ -2788,6 +2831,23 @@ type VolumeUserInfo struct {
 	// EntitlementType: Whether this volume is purchased, sample, pd
 	// download etc.
 	EntitlementType int64 `json:"entitlementType,omitempty"`
+
+	// FamilySharing: Information on the ability to share with the family.
+	FamilySharing *VolumeUserInfoFamilySharing `json:"familySharing,omitempty"`
+
+	// IsFamilySharedFromUser: Whether or not the user shared this volume
+	// with the family.
+	IsFamilySharedFromUser bool `json:"isFamilySharedFromUser,omitempty"`
+
+	// IsFamilySharedToUser: Whether or not the user received this volume
+	// through family sharing.
+	IsFamilySharedToUser bool `json:"isFamilySharedToUser,omitempty"`
+
+	// IsFamilySharingAllowed: Deprecated: Replaced by familySharing.
+	IsFamilySharingAllowed bool `json:"isFamilySharingAllowed,omitempty"`
+
+	// IsFamilySharingDisabledByFop: Deprecated: Replaced by familySharing.
+	IsFamilySharingDisabledByFop bool `json:"isFamilySharingDisabledByFop,omitempty"`
 
 	// IsInMyBooks: Whether or not this volume is currently in "my books."
 	IsInMyBooks bool `json:"isInMyBooks,omitempty"`
@@ -2823,7 +2883,7 @@ type VolumeUserInfo struct {
 
 	UserUploadedVolumeInfo *VolumeUserInfoUserUploadedVolumeInfo `json:"userUploadedVolumeInfo,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "AcquisitionType") to
+	// ForceSendFields is a list of field names (e.g. "AcquiredTime") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -2860,6 +2920,37 @@ type VolumeUserInfoCopy struct {
 
 func (s *VolumeUserInfoCopy) MarshalJSON() ([]byte, error) {
 	type noMethod VolumeUserInfoCopy
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// VolumeUserInfoFamilySharing: Information on the ability to share with
+// the family.
+type VolumeUserInfoFamilySharing struct {
+	// FamilyRole: The role of the user in the family.
+	FamilyRole string `json:"familyRole,omitempty"`
+
+	// IsSharingAllowed: Whether or not this volume can be shared with the
+	// family by the user. This includes sharing eligibility of both the
+	// volume and the user. If the value is true, the user can initiate a
+	// family sharing action.
+	IsSharingAllowed bool `json:"isSharingAllowed,omitempty"`
+
+	// IsSharingDisabledByFop: Whether or not sharing this volume is
+	// temporarily disabled due to issues with the Family Wallet.
+	IsSharingDisabledByFop bool `json:"isSharingDisabledByFop,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "FamilyRole") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *VolumeUserInfoFamilySharing) MarshalJSON() ([]byte, error) {
+	type noMethod VolumeUserInfoFamilySharing
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -2961,6 +3052,10 @@ type VolumeVolumeInfo struct {
 
 	// PageCount: Total number of pages as per publisher metadata.
 	PageCount int64 `json:"pageCount,omitempty"`
+
+	// PanelizationSummary: A top-level summary of the panelization info in
+	// this volume.
+	PanelizationSummary *VolumeVolumeInfoPanelizationSummary `json:"panelizationSummary,omitempty"`
 
 	// PreviewLink: URL to preview this volume on the Google Books site.
 	PreviewLink string `json:"previewLink,omitempty"`
@@ -3099,6 +3194,32 @@ type VolumeVolumeInfoIndustryIdentifiers struct {
 
 func (s *VolumeVolumeInfoIndustryIdentifiers) MarshalJSON() ([]byte, error) {
 	type noMethod VolumeVolumeInfoIndustryIdentifiers
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// VolumeVolumeInfoPanelizationSummary: A top-level summary of the
+// panelization info in this volume.
+type VolumeVolumeInfoPanelizationSummary struct {
+	ContainsEpubBubbles bool `json:"containsEpubBubbles,omitempty"`
+
+	ContainsImageBubbles bool `json:"containsImageBubbles,omitempty"`
+
+	EpubBubbleVersion string `json:"epubBubbleVersion,omitempty"`
+
+	ImageBubbleVersion string `json:"imageBubbleVersion,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ContainsEpubBubbles")
+	// to unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *VolumeVolumeInfoPanelizationSummary) MarshalJSON() ([]byte, error) {
+	type noMethod VolumeVolumeInfoPanelizationSummary
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -3395,27 +3516,10 @@ func (r *BookshelvesService) Get(userId string, shelf string) *BookshelvesGetCal
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BookshelvesGetCall) QuotaUser(quotaUser string) *BookshelvesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *BookshelvesGetCall) Source(source string) *BookshelvesGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BookshelvesGetCall) UserIP(userIP string) *BookshelvesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -3446,23 +3550,22 @@ func (c *BookshelvesGetCall) Context(ctx context.Context) *BookshelvesGetCall {
 }
 
 func (c *BookshelvesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "users/{userId}/bookshelves/{shelf}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 		"shelf":  c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.bookshelves.get" call.
@@ -3472,7 +3575,8 @@ func (c *BookshelvesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *BookshelvesGetCall) Do() (*Bookshelf, error) {
+func (c *BookshelvesGetCall) Do(opts ...googleapi.CallOption) (*Bookshelf, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3496,7 +3600,8 @@ func (c *BookshelvesGetCall) Do() (*Bookshelf, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3555,27 +3660,10 @@ func (r *BookshelvesService) List(userId string) *BookshelvesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BookshelvesListCall) QuotaUser(quotaUser string) *BookshelvesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *BookshelvesListCall) Source(source string) *BookshelvesListCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BookshelvesListCall) UserIP(userIP string) *BookshelvesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -3606,22 +3694,21 @@ func (c *BookshelvesListCall) Context(ctx context.Context) *BookshelvesListCall 
 }
 
 func (c *BookshelvesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "users/{userId}/bookshelves")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.bookshelves.list" call.
@@ -3631,7 +3718,8 @@ func (c *BookshelvesListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *BookshelvesListCall) Do() (*Bookshelves, error) {
+func (c *BookshelvesListCall) Do(opts ...googleapi.CallOption) (*Bookshelves, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3655,7 +3743,8 @@ func (c *BookshelvesListCall) Do() (*Bookshelves, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3717,15 +3806,6 @@ func (c *BookshelvesVolumesListCall) MaxResults(maxResults int64) *BookshelvesVo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BookshelvesVolumesListCall) QuotaUser(quotaUser string) *BookshelvesVolumesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowPreorders sets the optional parameter "showPreorders": Set to
 // true to show pre-ordered books. Defaults to false.
 func (c *BookshelvesVolumesListCall) ShowPreorders(showPreorders bool) *BookshelvesVolumesListCall {
@@ -3744,14 +3824,6 @@ func (c *BookshelvesVolumesListCall) Source(source string) *BookshelvesVolumesLi
 // first element to return (starts at 0)
 func (c *BookshelvesVolumesListCall) StartIndex(startIndex int64) *BookshelvesVolumesListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BookshelvesVolumesListCall) UserIP(userIP string) *BookshelvesVolumesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -3782,23 +3854,22 @@ func (c *BookshelvesVolumesListCall) Context(ctx context.Context) *BookshelvesVo
 }
 
 func (c *BookshelvesVolumesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "users/{userId}/bookshelves/{shelf}/volumes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 		"shelf":  c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.bookshelves.volumes.list" call.
@@ -3808,7 +3879,8 @@ func (c *BookshelvesVolumesListCall) doRequest(alt string) (*http.Response, erro
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *BookshelvesVolumesListCall) Do() (*Volumes, error) {
+func (c *BookshelvesVolumesListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3832,7 +3904,8 @@ func (c *BookshelvesVolumesListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3928,26 +4001,9 @@ func (c *CloudloadingAddBookCall) Name(name string) *CloudloadingAddBookCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CloudloadingAddBookCall) QuotaUser(quotaUser string) *CloudloadingAddBookCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // UploadClientToken sets the optional parameter "upload_client_token":
 func (c *CloudloadingAddBookCall) UploadClientToken(uploadClientToken string) *CloudloadingAddBookCall {
 	c.urlParams_.Set("upload_client_token", uploadClientToken)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CloudloadingAddBookCall) UserIP(userIP string) *CloudloadingAddBookCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -3968,17 +4024,16 @@ func (c *CloudloadingAddBookCall) Context(ctx context.Context) *CloudloadingAddB
 }
 
 func (c *CloudloadingAddBookCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "cloudloading/addBook")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.cloudloading.addBook" call.
@@ -3988,7 +4043,8 @@ func (c *CloudloadingAddBookCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CloudloadingAddBookCall) Do() (*BooksCloudloadingResource, error) {
+func (c *CloudloadingAddBookCall) Do(opts ...googleapi.CallOption) (*BooksCloudloadingResource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4012,7 +4068,8 @@ func (c *CloudloadingAddBookCall) Do() (*BooksCloudloadingResource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4067,23 +4124,6 @@ func (r *CloudloadingService) DeleteBook(volumeId string) *CloudloadingDeleteBoo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CloudloadingDeleteBookCall) QuotaUser(quotaUser string) *CloudloadingDeleteBookCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CloudloadingDeleteBookCall) UserIP(userIP string) *CloudloadingDeleteBookCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4101,21 +4141,21 @@ func (c *CloudloadingDeleteBookCall) Context(ctx context.Context) *CloudloadingD
 }
 
 func (c *CloudloadingDeleteBookCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "cloudloading/deleteBook")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.cloudloading.deleteBook" call.
-func (c *CloudloadingDeleteBookCall) Do() error {
+func (c *CloudloadingDeleteBookCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -4164,23 +4204,6 @@ func (r *CloudloadingService) UpdateBook(bookscloudloadingresource *BooksCloudlo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CloudloadingUpdateBookCall) QuotaUser(quotaUser string) *CloudloadingUpdateBookCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CloudloadingUpdateBookCall) UserIP(userIP string) *CloudloadingUpdateBookCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4198,23 +4221,21 @@ func (c *CloudloadingUpdateBookCall) Context(ctx context.Context) *CloudloadingU
 }
 
 func (c *CloudloadingUpdateBookCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.bookscloudloadingresource)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "cloudloading/updateBook")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.cloudloading.updateBook" call.
@@ -4224,7 +4245,8 @@ func (c *CloudloadingUpdateBookCall) doRequest(alt string) (*http.Response, erro
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CloudloadingUpdateBookCall) Do() (*BooksCloudloadingResource, error) {
+func (c *CloudloadingUpdateBookCall) Do(opts ...googleapi.CallOption) (*BooksCloudloadingResource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4248,7 +4270,8 @@ func (c *CloudloadingUpdateBookCall) Do() (*BooksCloudloadingResource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4287,23 +4310,6 @@ func (r *DictionaryService) ListOfflineMetadata(cpksver string) *DictionaryListO
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DictionaryListOfflineMetadataCall) QuotaUser(quotaUser string) *DictionaryListOfflineMetadataCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DictionaryListOfflineMetadataCall) UserIP(userIP string) *DictionaryListOfflineMetadataCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4331,20 +4337,19 @@ func (c *DictionaryListOfflineMetadataCall) Context(ctx context.Context) *Dictio
 }
 
 func (c *DictionaryListOfflineMetadataCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "dictionary/listOfflineMetadata")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.dictionary.listOfflineMetadata" call.
@@ -4354,7 +4359,8 @@ func (c *DictionaryListOfflineMetadataCall) doRequest(alt string) (*http.Respons
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *DictionaryListOfflineMetadataCall) Do() (*Metadata, error) {
+func (c *DictionaryListOfflineMetadataCall) Do(opts ...googleapi.CallOption) (*Metadata, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4378,7 +4384,8 @@ func (c *DictionaryListOfflineMetadataCall) Do() (*Metadata, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4434,27 +4441,10 @@ func (c *LayersGetCall) ContentVersion(contentVersion string) *LayersGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LayersGetCall) QuotaUser(quotaUser string) *LayersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *LayersGetCall) Source(source string) *LayersGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LayersGetCall) UserIP(userIP string) *LayersGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4485,23 +4475,22 @@ func (c *LayersGetCall) Context(ctx context.Context) *LayersGetCall {
 }
 
 func (c *LayersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/layersummary/{summaryId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId":  c.volumeId,
 		"summaryId": c.summaryId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.layers.get" call.
@@ -4511,7 +4500,8 @@ func (c *LayersGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LayersGetCall) Do() (*Layersummary, error) {
+func (c *LayersGetCall) Do(opts ...googleapi.CallOption) (*Layersummary, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4535,7 +4525,8 @@ func (c *LayersGetCall) Do() (*Layersummary, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4620,27 +4611,10 @@ func (c *LayersListCall) PageToken(pageToken string) *LayersListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LayersListCall) QuotaUser(quotaUser string) *LayersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *LayersListCall) Source(source string) *LayersListCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LayersListCall) UserIP(userIP string) *LayersListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4671,22 +4645,21 @@ func (c *LayersListCall) Context(ctx context.Context) *LayersListCall {
 }
 
 func (c *LayersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/layersummary")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.layers.list" call.
@@ -4696,7 +4669,8 @@ func (c *LayersListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LayersListCall) Do() (*Layersummaries, error) {
+func (c *LayersListCall) Do(opts ...googleapi.CallOption) (*Layersummaries, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4720,7 +4694,8 @@ func (c *LayersListCall) Do() (*Layersummaries, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4818,15 +4793,6 @@ func (c *LayersAnnotationDataGetCall) Locale(locale string) *LayersAnnotationDat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LayersAnnotationDataGetCall) QuotaUser(quotaUser string) *LayersAnnotationDataGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Scale sets the optional parameter "scale": The requested scale for
 // the image.
 func (c *LayersAnnotationDataGetCall) Scale(scale int64) *LayersAnnotationDataGetCall {
@@ -4838,14 +4804,6 @@ func (c *LayersAnnotationDataGetCall) Scale(scale int64) *LayersAnnotationDataGe
 // originator of this request.
 func (c *LayersAnnotationDataGetCall) Source(source string) *LayersAnnotationDataGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LayersAnnotationDataGetCall) UserIP(userIP string) *LayersAnnotationDataGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4883,24 +4841,23 @@ func (c *LayersAnnotationDataGetCall) Context(ctx context.Context) *LayersAnnota
 }
 
 func (c *LayersAnnotationDataGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/layers/{layerId}/data/{annotationDataId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId":         c.volumeId,
 		"layerId":          c.layerId,
 		"annotationDataId": c.annotationDataId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.layers.annotationData.get" call.
@@ -4910,7 +4867,8 @@ func (c *LayersAnnotationDataGetCall) doRequest(alt string) (*http.Response, err
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LayersAnnotationDataGetCall) Do() (*Annotationdata, error) {
+func (c *LayersAnnotationDataGetCall) Do(opts ...googleapi.CallOption) (*Annotationdata, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4934,7 +4892,8 @@ func (c *LayersAnnotationDataGetCall) Do() (*Annotationdata, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5076,15 +5035,6 @@ func (c *LayersAnnotationDataListCall) PageToken(pageToken string) *LayersAnnota
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LayersAnnotationDataListCall) QuotaUser(quotaUser string) *LayersAnnotationDataListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Scale sets the optional parameter "scale": The requested scale for
 // the image.
 func (c *LayersAnnotationDataListCall) Scale(scale int64) *LayersAnnotationDataListCall {
@@ -5112,14 +5062,6 @@ func (c *LayersAnnotationDataListCall) UpdatedMax(updatedMax string) *LayersAnno
 // (inclusive).
 func (c *LayersAnnotationDataListCall) UpdatedMin(updatedMin string) *LayersAnnotationDataListCall {
 	c.urlParams_.Set("updatedMin", updatedMin)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LayersAnnotationDataListCall) UserIP(userIP string) *LayersAnnotationDataListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5157,23 +5099,22 @@ func (c *LayersAnnotationDataListCall) Context(ctx context.Context) *LayersAnnot
 }
 
 func (c *LayersAnnotationDataListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/layers/{layerId}/data")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 		"layerId":  c.layerId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.layers.annotationData.list" call.
@@ -5183,7 +5124,8 @@ func (c *LayersAnnotationDataListCall) doRequest(alt string) (*http.Response, er
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LayersAnnotationDataListCall) Do() (*Annotationsdata, error) {
+func (c *LayersAnnotationDataListCall) Do(opts ...googleapi.CallOption) (*Annotationsdata, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5207,7 +5149,8 @@ func (c *LayersAnnotationDataListCall) Do() (*Annotationsdata, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5309,6 +5252,27 @@ func (c *LayersAnnotationDataListCall) Do() (*Annotationsdata, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LayersAnnotationDataListCall) Pages(ctx context.Context, f func(*Annotationsdata) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "books.layers.volumeAnnotations.get":
 
 type LayersVolumeAnnotationsGetCall struct {
@@ -5338,27 +5302,10 @@ func (c *LayersVolumeAnnotationsGetCall) Locale(locale string) *LayersVolumeAnno
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LayersVolumeAnnotationsGetCall) QuotaUser(quotaUser string) *LayersVolumeAnnotationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *LayersVolumeAnnotationsGetCall) Source(source string) *LayersVolumeAnnotationsGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LayersVolumeAnnotationsGetCall) UserIP(userIP string) *LayersVolumeAnnotationsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5389,24 +5336,23 @@ func (c *LayersVolumeAnnotationsGetCall) Context(ctx context.Context) *LayersVol
 }
 
 func (c *LayersVolumeAnnotationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/layers/{layerId}/annotations/{annotationId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId":     c.volumeId,
 		"layerId":      c.layerId,
 		"annotationId": c.annotationId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.layers.volumeAnnotations.get" call.
@@ -5416,7 +5362,8 @@ func (c *LayersVolumeAnnotationsGetCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LayersVolumeAnnotationsGetCall) Do() (*Volumeannotation, error) {
+func (c *LayersVolumeAnnotationsGetCall) Do(opts ...googleapi.CallOption) (*Volumeannotation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5440,7 +5387,8 @@ func (c *LayersVolumeAnnotationsGetCall) Do() (*Volumeannotation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5550,15 +5498,6 @@ func (c *LayersVolumeAnnotationsListCall) PageToken(pageToken string) *LayersVol
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LayersVolumeAnnotationsListCall) QuotaUser(quotaUser string) *LayersVolumeAnnotationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowDeleted sets the optional parameter "showDeleted": Set to true to
 // return deleted annotations. updatedMin must be in the request to use
 // this. Defaults to false.
@@ -5604,14 +5543,6 @@ func (c *LayersVolumeAnnotationsListCall) UpdatedMin(updatedMin string) *LayersV
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LayersVolumeAnnotationsListCall) UserIP(userIP string) *LayersVolumeAnnotationsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // VolumeAnnotationsVersion sets the optional parameter
 // "volumeAnnotationsVersion": The version of the volume annotations
 // that you are requesting.
@@ -5647,23 +5578,22 @@ func (c *LayersVolumeAnnotationsListCall) Context(ctx context.Context) *LayersVo
 }
 
 func (c *LayersVolumeAnnotationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/layers/{layerId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 		"layerId":  c.layerId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.layers.volumeAnnotations.list" call.
@@ -5673,7 +5603,8 @@ func (c *LayersVolumeAnnotationsListCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LayersVolumeAnnotationsListCall) Do() (*Volumeannotations, error) {
+func (c *LayersVolumeAnnotationsListCall) Do(opts ...googleapi.CallOption) (*Volumeannotations, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5697,7 +5628,8 @@ func (c *LayersVolumeAnnotationsListCall) Do() (*Volumeannotations, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5804,6 +5736,27 @@ func (c *LayersVolumeAnnotationsListCall) Do() (*Volumeannotations, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LayersVolumeAnnotationsListCall) Pages(ctx context.Context, f func(*Volumeannotations) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "books.myconfig.getUserSettings":
 
 type MyconfigGetUserSettingsCall struct {
@@ -5816,23 +5769,6 @@ type MyconfigGetUserSettingsCall struct {
 // GetUserSettings: Gets the current settings for the user.
 func (r *MyconfigService) GetUserSettings() *MyconfigGetUserSettingsCall {
 	c := &MyconfigGetUserSettingsCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MyconfigGetUserSettingsCall) QuotaUser(quotaUser string) *MyconfigGetUserSettingsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MyconfigGetUserSettingsCall) UserIP(userIP string) *MyconfigGetUserSettingsCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5863,20 +5799,19 @@ func (c *MyconfigGetUserSettingsCall) Context(ctx context.Context) *MyconfigGetU
 }
 
 func (c *MyconfigGetUserSettingsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "myconfig/getUserSettings")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.myconfig.getUserSettings" call.
@@ -5886,7 +5821,8 @@ func (c *MyconfigGetUserSettingsCall) doRequest(alt string) (*http.Response, err
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MyconfigGetUserSettingsCall) Do() (*Usersettings, error) {
+func (c *MyconfigGetUserSettingsCall) Do(opts ...googleapi.CallOption) (*Usersettings, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5910,7 +5846,8 @@ func (c *MyconfigGetUserSettingsCall) Do() (*Usersettings, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5952,27 +5889,10 @@ func (c *MyconfigReleaseDownloadAccessCall) Locale(locale string) *MyconfigRelea
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MyconfigReleaseDownloadAccessCall) QuotaUser(quotaUser string) *MyconfigReleaseDownloadAccessCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MyconfigReleaseDownloadAccessCall) Source(source string) *MyconfigReleaseDownloadAccessCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MyconfigReleaseDownloadAccessCall) UserIP(userIP string) *MyconfigReleaseDownloadAccessCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5993,17 +5913,16 @@ func (c *MyconfigReleaseDownloadAccessCall) Context(ctx context.Context) *Myconf
 }
 
 func (c *MyconfigReleaseDownloadAccessCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "myconfig/releaseDownloadAccess")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.myconfig.releaseDownloadAccess" call.
@@ -6013,7 +5932,8 @@ func (c *MyconfigReleaseDownloadAccessCall) doRequest(alt string) (*http.Respons
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MyconfigReleaseDownloadAccessCall) Do() (*DownloadAccesses, error) {
+func (c *MyconfigReleaseDownloadAccessCall) Do(opts ...googleapi.CallOption) (*DownloadAccesses, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6037,7 +5957,8 @@ func (c *MyconfigReleaseDownloadAccessCall) Do() (*DownloadAccesses, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6122,23 +6043,6 @@ func (c *MyconfigRequestAccessCall) Locale(locale string) *MyconfigRequestAccess
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MyconfigRequestAccessCall) QuotaUser(quotaUser string) *MyconfigRequestAccessCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MyconfigRequestAccessCall) UserIP(userIP string) *MyconfigRequestAccessCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6156,17 +6060,16 @@ func (c *MyconfigRequestAccessCall) Context(ctx context.Context) *MyconfigReques
 }
 
 func (c *MyconfigRequestAccessCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "myconfig/requestAccess")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.myconfig.requestAccess" call.
@@ -6176,7 +6079,8 @@ func (c *MyconfigRequestAccessCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MyconfigRequestAccessCall) Do() (*RequestAccess, error) {
+func (c *MyconfigRequestAccessCall) Do(opts ...googleapi.CallOption) (*RequestAccess, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6200,7 +6104,8 @@ func (c *MyconfigRequestAccessCall) Do() (*RequestAccess, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6299,6 +6204,14 @@ func (c *MyconfigSyncVolumeLicensesCall) Features(features ...string) *MyconfigS
 	return c
 }
 
+// IncludeNonComicsSeries sets the optional parameter
+// "includeNonComicsSeries": Set to true to include non-comics series.
+// Defaults to false.
+func (c *MyconfigSyncVolumeLicensesCall) IncludeNonComicsSeries(includeNonComicsSeries bool) *MyconfigSyncVolumeLicensesCall {
+	c.urlParams_.Set("includeNonComicsSeries", fmt.Sprint(includeNonComicsSeries))
+	return c
+}
+
 // Locale sets the optional parameter "locale": ISO-639-1, ISO-3166-1
 // codes for message localization, i.e. en_US.
 func (c *MyconfigSyncVolumeLicensesCall) Locale(locale string) *MyconfigSyncVolumeLicensesCall {
@@ -6306,27 +6219,10 @@ func (c *MyconfigSyncVolumeLicensesCall) Locale(locale string) *MyconfigSyncVolu
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MyconfigSyncVolumeLicensesCall) QuotaUser(quotaUser string) *MyconfigSyncVolumeLicensesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowPreorders sets the optional parameter "showPreorders": Set to
 // true to show pre-ordered books. Defaults to false.
 func (c *MyconfigSyncVolumeLicensesCall) ShowPreorders(showPreorders bool) *MyconfigSyncVolumeLicensesCall {
 	c.urlParams_.Set("showPreorders", fmt.Sprint(showPreorders))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MyconfigSyncVolumeLicensesCall) UserIP(userIP string) *MyconfigSyncVolumeLicensesCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6354,17 +6250,16 @@ func (c *MyconfigSyncVolumeLicensesCall) Context(ctx context.Context) *MyconfigS
 }
 
 func (c *MyconfigSyncVolumeLicensesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "myconfig/syncVolumeLicenses")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.myconfig.syncVolumeLicenses" call.
@@ -6374,7 +6269,8 @@ func (c *MyconfigSyncVolumeLicensesCall) doRequest(alt string) (*http.Response, 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *MyconfigSyncVolumeLicensesCall) Do() (*Volumes, error) {
+func (c *MyconfigSyncVolumeLicensesCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6398,7 +6294,8 @@ func (c *MyconfigSyncVolumeLicensesCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6429,6 +6326,11 @@ func (c *MyconfigSyncVolumeLicensesCall) Do() (*Volumes, error) {
 	//       "location": "query",
 	//       "repeated": true,
 	//       "type": "string"
+	//     },
+	//     "includeNonComicsSeries": {
+	//       "description": "Set to true to include non-comics series. Defaults to false.",
+	//       "location": "query",
+	//       "type": "boolean"
 	//     },
 	//     "locale": {
 	//       "description": "ISO-639-1, ISO-3166-1 codes for message localization, i.e. en_US.",
@@ -6488,23 +6390,6 @@ func (r *MyconfigService) UpdateUserSettings(usersettings *Usersettings) *Myconf
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MyconfigUpdateUserSettingsCall) QuotaUser(quotaUser string) *MyconfigUpdateUserSettingsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MyconfigUpdateUserSettingsCall) UserIP(userIP string) *MyconfigUpdateUserSettingsCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6522,23 +6407,21 @@ func (c *MyconfigUpdateUserSettingsCall) Context(ctx context.Context) *MyconfigU
 }
 
 func (c *MyconfigUpdateUserSettingsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.usersettings)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "myconfig/updateUserSettings")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.myconfig.updateUserSettings" call.
@@ -6548,7 +6431,8 @@ func (c *MyconfigUpdateUserSettingsCall) doRequest(alt string) (*http.Response, 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MyconfigUpdateUserSettingsCall) Do() (*Usersettings, error) {
+func (c *MyconfigUpdateUserSettingsCall) Do(opts ...googleapi.CallOption) (*Usersettings, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6572,7 +6456,8 @@ func (c *MyconfigUpdateUserSettingsCall) Do() (*Usersettings, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6610,27 +6495,10 @@ func (r *MylibraryAnnotationsService) Delete(annotationId string) *MylibraryAnno
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryAnnotationsDeleteCall) QuotaUser(quotaUser string) *MylibraryAnnotationsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryAnnotationsDeleteCall) Source(source string) *MylibraryAnnotationsDeleteCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryAnnotationsDeleteCall) UserIP(userIP string) *MylibraryAnnotationsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6651,23 +6519,23 @@ func (c *MylibraryAnnotationsDeleteCall) Context(ctx context.Context) *Mylibrary
 }
 
 func (c *MylibraryAnnotationsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/annotations/{annotationId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"annotationId": c.annotationId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.annotations.delete" call.
-func (c *MylibraryAnnotationsDeleteCall) Do() error {
+func (c *MylibraryAnnotationsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -6728,15 +6596,6 @@ func (c *MylibraryAnnotationsInsertCall) Country(country string) *MylibraryAnnot
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryAnnotationsInsertCall) QuotaUser(quotaUser string) *MylibraryAnnotationsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowOnlySummaryInResponse sets the optional parameter
 // "showOnlySummaryInResponse": Requests that only the summary of the
 // specified layer be provided in the response.
@@ -6749,14 +6608,6 @@ func (c *MylibraryAnnotationsInsertCall) ShowOnlySummaryInResponse(showOnlySumma
 // originator of this request.
 func (c *MylibraryAnnotationsInsertCall) Source(source string) *MylibraryAnnotationsInsertCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryAnnotationsInsertCall) UserIP(userIP string) *MylibraryAnnotationsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6777,23 +6628,21 @@ func (c *MylibraryAnnotationsInsertCall) Context(ctx context.Context) *Mylibrary
 }
 
 func (c *MylibraryAnnotationsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.annotation)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/annotations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.annotations.insert" call.
@@ -6803,7 +6652,8 @@ func (c *MylibraryAnnotationsInsertCall) doRequest(alt string) (*http.Response, 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MylibraryAnnotationsInsertCall) Do() (*Annotation, error) {
+func (c *MylibraryAnnotationsInsertCall) Do(opts ...googleapi.CallOption) (*Annotation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6827,7 +6677,8 @@ func (c *MylibraryAnnotationsInsertCall) Do() (*Annotation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6916,15 +6767,6 @@ func (c *MylibraryAnnotationsListCall) PageToken(pageToken string) *MylibraryAnn
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryAnnotationsListCall) QuotaUser(quotaUser string) *MylibraryAnnotationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowDeleted sets the optional parameter "showDeleted": Set to true to
 // return deleted annotations. updatedMin must be in the request to use
 // this. Defaults to false.
@@ -6953,14 +6795,6 @@ func (c *MylibraryAnnotationsListCall) UpdatedMax(updatedMax string) *MylibraryA
 // (inclusive).
 func (c *MylibraryAnnotationsListCall) UpdatedMin(updatedMin string) *MylibraryAnnotationsListCall {
 	c.urlParams_.Set("updatedMin", updatedMin)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryAnnotationsListCall) UserIP(userIP string) *MylibraryAnnotationsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -6998,20 +6832,19 @@ func (c *MylibraryAnnotationsListCall) Context(ctx context.Context) *MylibraryAn
 }
 
 func (c *MylibraryAnnotationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/annotations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.annotations.list" call.
@@ -7021,7 +6854,8 @@ func (c *MylibraryAnnotationsListCall) doRequest(alt string) (*http.Response, er
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MylibraryAnnotationsListCall) Do() (*Annotations, error) {
+func (c *MylibraryAnnotationsListCall) Do(opts ...googleapi.CallOption) (*Annotations, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7045,7 +6879,8 @@ func (c *MylibraryAnnotationsListCall) Do() (*Annotations, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7120,6 +6955,27 @@ func (c *MylibraryAnnotationsListCall) Do() (*Annotations, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *MylibraryAnnotationsListCall) Pages(ctx context.Context, f func(*Annotations) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "books.mylibrary.annotations.summary":
 
 type MylibraryAnnotationsSummaryCall struct {
@@ -7133,23 +6989,6 @@ func (r *MylibraryAnnotationsService) Summary(layerIds []string, volumeId string
 	c := &MylibraryAnnotationsSummaryCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.SetMulti("layerIds", append([]string{}, layerIds...))
 	c.urlParams_.Set("volumeId", volumeId)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryAnnotationsSummaryCall) QuotaUser(quotaUser string) *MylibraryAnnotationsSummaryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryAnnotationsSummaryCall) UserIP(userIP string) *MylibraryAnnotationsSummaryCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7170,17 +7009,16 @@ func (c *MylibraryAnnotationsSummaryCall) Context(ctx context.Context) *Mylibrar
 }
 
 func (c *MylibraryAnnotationsSummaryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/annotations/summary")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.annotations.summary" call.
@@ -7190,7 +7028,8 @@ func (c *MylibraryAnnotationsSummaryCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MylibraryAnnotationsSummaryCall) Do() (*AnnotationsSummary, error) {
+func (c *MylibraryAnnotationsSummaryCall) Do(opts ...googleapi.CallOption) (*AnnotationsSummary, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7214,7 +7053,8 @@ func (c *MylibraryAnnotationsSummaryCall) Do() (*AnnotationsSummary, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7270,27 +7110,10 @@ func (r *MylibraryAnnotationsService) Update(annotationId string, annotation *An
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryAnnotationsUpdateCall) QuotaUser(quotaUser string) *MylibraryAnnotationsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryAnnotationsUpdateCall) Source(source string) *MylibraryAnnotationsUpdateCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryAnnotationsUpdateCall) UserIP(userIP string) *MylibraryAnnotationsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7311,25 +7134,23 @@ func (c *MylibraryAnnotationsUpdateCall) Context(ctx context.Context) *Mylibrary
 }
 
 func (c *MylibraryAnnotationsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.annotation)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/annotations/{annotationId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"annotationId": c.annotationId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.annotations.update" call.
@@ -7339,7 +7160,8 @@ func (c *MylibraryAnnotationsUpdateCall) doRequest(alt string) (*http.Response, 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MylibraryAnnotationsUpdateCall) Do() (*Annotation, error) {
+func (c *MylibraryAnnotationsUpdateCall) Do(opts ...googleapi.CallOption) (*Annotation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7363,7 +7185,8 @@ func (c *MylibraryAnnotationsUpdateCall) Do() (*Annotation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7418,15 +7241,6 @@ func (r *MylibraryBookshelvesService) AddVolume(shelf string, volumeId string) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesAddVolumeCall) QuotaUser(quotaUser string) *MylibraryBookshelvesAddVolumeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Reason sets the optional parameter "reason": The reason for which the
 // book is added to the library.
 //
@@ -7443,14 +7257,6 @@ func (c *MylibraryBookshelvesAddVolumeCall) Reason(reason string) *MylibraryBook
 // originator of this request.
 func (c *MylibraryBookshelvesAddVolumeCall) Source(source string) *MylibraryBookshelvesAddVolumeCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesAddVolumeCall) UserIP(userIP string) *MylibraryBookshelvesAddVolumeCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7471,23 +7277,23 @@ func (c *MylibraryBookshelvesAddVolumeCall) Context(ctx context.Context) *Mylibr
 }
 
 func (c *MylibraryBookshelvesAddVolumeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves/{shelf}/addVolume")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"shelf": c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.addVolume" call.
-func (c *MylibraryBookshelvesAddVolumeCall) Do() error {
+func (c *MylibraryBookshelvesAddVolumeCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -7563,27 +7369,10 @@ func (r *MylibraryBookshelvesService) ClearVolumes(shelf string) *MylibraryBooks
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesClearVolumesCall) QuotaUser(quotaUser string) *MylibraryBookshelvesClearVolumesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryBookshelvesClearVolumesCall) Source(source string) *MylibraryBookshelvesClearVolumesCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesClearVolumesCall) UserIP(userIP string) *MylibraryBookshelvesClearVolumesCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7604,23 +7393,23 @@ func (c *MylibraryBookshelvesClearVolumesCall) Context(ctx context.Context) *Myl
 }
 
 func (c *MylibraryBookshelvesClearVolumesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves/{shelf}/clearVolumes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"shelf": c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.clearVolumes" call.
-func (c *MylibraryBookshelvesClearVolumesCall) Do() error {
+func (c *MylibraryBookshelvesClearVolumesCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -7676,27 +7465,10 @@ func (r *MylibraryBookshelvesService) Get(shelf string) *MylibraryBookshelvesGet
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesGetCall) QuotaUser(quotaUser string) *MylibraryBookshelvesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryBookshelvesGetCall) Source(source string) *MylibraryBookshelvesGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesGetCall) UserIP(userIP string) *MylibraryBookshelvesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7727,22 +7499,21 @@ func (c *MylibraryBookshelvesGetCall) Context(ctx context.Context) *MylibraryBoo
 }
 
 func (c *MylibraryBookshelvesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves/{shelf}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"shelf": c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.get" call.
@@ -7752,7 +7523,8 @@ func (c *MylibraryBookshelvesGetCall) doRequest(alt string) (*http.Response, err
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MylibraryBookshelvesGetCall) Do() (*Bookshelf, error) {
+func (c *MylibraryBookshelvesGetCall) Do(opts ...googleapi.CallOption) (*Bookshelf, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7776,7 +7548,8 @@ func (c *MylibraryBookshelvesGetCall) Do() (*Bookshelf, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7827,27 +7600,10 @@ func (r *MylibraryBookshelvesService) List() *MylibraryBookshelvesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesListCall) QuotaUser(quotaUser string) *MylibraryBookshelvesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryBookshelvesListCall) Source(source string) *MylibraryBookshelvesListCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesListCall) UserIP(userIP string) *MylibraryBookshelvesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7878,20 +7634,19 @@ func (c *MylibraryBookshelvesListCall) Context(ctx context.Context) *MylibraryBo
 }
 
 func (c *MylibraryBookshelvesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.list" call.
@@ -7901,7 +7656,8 @@ func (c *MylibraryBookshelvesListCall) doRequest(alt string) (*http.Response, er
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *MylibraryBookshelvesListCall) Do() (*Bookshelves, error) {
+func (c *MylibraryBookshelvesListCall) Do(opts ...googleapi.CallOption) (*Bookshelves, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7925,7 +7681,8 @@ func (c *MylibraryBookshelvesListCall) Do() (*Bookshelves, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7969,27 +7726,10 @@ func (r *MylibraryBookshelvesService) MoveVolume(shelf string, volumeId string, 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesMoveVolumeCall) QuotaUser(quotaUser string) *MylibraryBookshelvesMoveVolumeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryBookshelvesMoveVolumeCall) Source(source string) *MylibraryBookshelvesMoveVolumeCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesMoveVolumeCall) UserIP(userIP string) *MylibraryBookshelvesMoveVolumeCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8010,23 +7750,23 @@ func (c *MylibraryBookshelvesMoveVolumeCall) Context(ctx context.Context) *Mylib
 }
 
 func (c *MylibraryBookshelvesMoveVolumeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves/{shelf}/moveVolume")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"shelf": c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.moveVolume" call.
-func (c *MylibraryBookshelvesMoveVolumeCall) Do() error {
+func (c *MylibraryBookshelvesMoveVolumeCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8096,15 +7836,6 @@ func (r *MylibraryBookshelvesService) RemoveVolume(shelf string, volumeId string
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesRemoveVolumeCall) QuotaUser(quotaUser string) *MylibraryBookshelvesRemoveVolumeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Reason sets the optional parameter "reason": The reason for which the
 // book is removed from the library.
 //
@@ -8119,14 +7850,6 @@ func (c *MylibraryBookshelvesRemoveVolumeCall) Reason(reason string) *MylibraryB
 // originator of this request.
 func (c *MylibraryBookshelvesRemoveVolumeCall) Source(source string) *MylibraryBookshelvesRemoveVolumeCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesRemoveVolumeCall) UserIP(userIP string) *MylibraryBookshelvesRemoveVolumeCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8147,23 +7870,23 @@ func (c *MylibraryBookshelvesRemoveVolumeCall) Context(ctx context.Context) *Myl
 }
 
 func (c *MylibraryBookshelvesRemoveVolumeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves/{shelf}/removeVolume")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"shelf": c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.removeVolume" call.
-func (c *MylibraryBookshelvesRemoveVolumeCall) Do() error {
+func (c *MylibraryBookshelvesRemoveVolumeCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8268,15 +7991,6 @@ func (c *MylibraryBookshelvesVolumesListCall) Q(q string) *MylibraryBookshelvesV
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryBookshelvesVolumesListCall) QuotaUser(quotaUser string) *MylibraryBookshelvesVolumesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowPreorders sets the optional parameter "showPreorders": Set to
 // true to show pre-ordered books. Defaults to false.
 func (c *MylibraryBookshelvesVolumesListCall) ShowPreorders(showPreorders bool) *MylibraryBookshelvesVolumesListCall {
@@ -8295,14 +8009,6 @@ func (c *MylibraryBookshelvesVolumesListCall) Source(source string) *MylibraryBo
 // first element to return (starts at 0)
 func (c *MylibraryBookshelvesVolumesListCall) StartIndex(startIndex int64) *MylibraryBookshelvesVolumesListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryBookshelvesVolumesListCall) UserIP(userIP string) *MylibraryBookshelvesVolumesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8333,22 +8039,21 @@ func (c *MylibraryBookshelvesVolumesListCall) Context(ctx context.Context) *Myli
 }
 
 func (c *MylibraryBookshelvesVolumesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/bookshelves/{shelf}/volumes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"shelf": c.shelf,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.bookshelves.volumes.list" call.
@@ -8358,7 +8063,8 @@ func (c *MylibraryBookshelvesVolumesListCall) doRequest(alt string) (*http.Respo
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *MylibraryBookshelvesVolumesListCall) Do() (*Volumes, error) {
+func (c *MylibraryBookshelvesVolumesListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8382,7 +8088,8 @@ func (c *MylibraryBookshelvesVolumesListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8483,27 +8190,10 @@ func (c *MylibraryReadingpositionsGetCall) ContentVersion(contentVersion string)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryReadingpositionsGetCall) QuotaUser(quotaUser string) *MylibraryReadingpositionsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryReadingpositionsGetCall) Source(source string) *MylibraryReadingpositionsGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryReadingpositionsGetCall) UserIP(userIP string) *MylibraryReadingpositionsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8534,22 +8224,21 @@ func (c *MylibraryReadingpositionsGetCall) Context(ctx context.Context) *Mylibra
 }
 
 func (c *MylibraryReadingpositionsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/readingpositions/{volumeId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.readingpositions.get" call.
@@ -8559,7 +8248,8 @@ func (c *MylibraryReadingpositionsGetCall) doRequest(alt string) (*http.Response
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MylibraryReadingpositionsGetCall) Do() (*ReadingPosition, error) {
+func (c *MylibraryReadingpositionsGetCall) Do(opts ...googleapi.CallOption) (*ReadingPosition, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8583,7 +8273,8 @@ func (c *MylibraryReadingpositionsGetCall) Do() (*ReadingPosition, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8670,27 +8361,10 @@ func (c *MylibraryReadingpositionsSetPositionCall) DeviceCookie(deviceCookie str
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MylibraryReadingpositionsSetPositionCall) QuotaUser(quotaUser string) *MylibraryReadingpositionsSetPositionCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *MylibraryReadingpositionsSetPositionCall) Source(source string) *MylibraryReadingpositionsSetPositionCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MylibraryReadingpositionsSetPositionCall) UserIP(userIP string) *MylibraryReadingpositionsSetPositionCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8711,23 +8385,23 @@ func (c *MylibraryReadingpositionsSetPositionCall) Context(ctx context.Context) 
 }
 
 func (c *MylibraryReadingpositionsSetPositionCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "mylibrary/readingpositions/{volumeId}/setPosition")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.mylibrary.readingpositions.setPosition" call.
-func (c *MylibraryReadingpositionsSetPositionCall) Do() error {
+func (c *MylibraryReadingpositionsSetPositionCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8834,27 +8508,10 @@ func (c *NotificationGetCall) Locale(locale string) *NotificationGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *NotificationGetCall) QuotaUser(quotaUser string) *NotificationGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *NotificationGetCall) Source(source string) *NotificationGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *NotificationGetCall) UserIP(userIP string) *NotificationGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8885,20 +8542,19 @@ func (c *NotificationGetCall) Context(ctx context.Context) *NotificationGetCall 
 }
 
 func (c *NotificationGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "notification/get")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.notification.get" call.
@@ -8908,7 +8564,8 @@ func (c *NotificationGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *NotificationGetCall) Do() (*Notification, error) {
+func (c *NotificationGetCall) Do(opts ...googleapi.CallOption) (*Notification, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8932,7 +8589,8 @@ func (c *NotificationGetCall) Do() (*Notification, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8994,23 +8652,6 @@ func (c *OnboardingListCategoriesCall) Locale(locale string) *OnboardingListCate
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OnboardingListCategoriesCall) QuotaUser(quotaUser string) *OnboardingListCategoriesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OnboardingListCategoriesCall) UserIP(userIP string) *OnboardingListCategoriesCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9038,20 +8679,19 @@ func (c *OnboardingListCategoriesCall) Context(ctx context.Context) *OnboardingL
 }
 
 func (c *OnboardingListCategoriesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "onboarding/listCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.onboarding.listCategories" call.
@@ -9061,7 +8701,8 @@ func (c *OnboardingListCategoriesCall) doRequest(alt string) (*http.Response, er
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *OnboardingListCategoriesCall) Do() (*Category, error) {
+func (c *OnboardingListCategoriesCall) Do(opts ...googleapi.CallOption) (*Category, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9085,7 +8726,8 @@ func (c *OnboardingListCategoriesCall) Do() (*Category, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9168,23 +8810,6 @@ func (c *OnboardingListCategoryVolumesCall) PageToken(pageToken string) *Onboard
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OnboardingListCategoryVolumesCall) QuotaUser(quotaUser string) *OnboardingListCategoryVolumesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OnboardingListCategoryVolumesCall) UserIP(userIP string) *OnboardingListCategoryVolumesCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9212,20 +8837,19 @@ func (c *OnboardingListCategoryVolumesCall) Context(ctx context.Context) *Onboar
 }
 
 func (c *OnboardingListCategoryVolumesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "onboarding/listCategoryVolumes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.onboarding.listCategoryVolumes" call.
@@ -9235,7 +8859,8 @@ func (c *OnboardingListCategoryVolumesCall) doRequest(alt string) (*http.Respons
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OnboardingListCategoryVolumesCall) Do() (*Volume2, error) {
+func (c *OnboardingListCategoryVolumesCall) Do(opts ...googleapi.CallOption) (*Volume2, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9259,7 +8884,8 @@ func (c *OnboardingListCategoryVolumesCall) Do() (*Volume2, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9315,6 +8941,27 @@ func (c *OnboardingListCategoryVolumesCall) Do() (*Volume2, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *OnboardingListCategoryVolumesCall) Pages(ctx context.Context, f func(*Volume2) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "books.personalizedstream.get":
 
 type PersonalizedstreamGetCall struct {
@@ -9351,27 +8998,10 @@ func (c *PersonalizedstreamGetCall) MaxAllowedMaturityRating(maxAllowedMaturityR
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PersonalizedstreamGetCall) QuotaUser(quotaUser string) *PersonalizedstreamGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *PersonalizedstreamGetCall) Source(source string) *PersonalizedstreamGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PersonalizedstreamGetCall) UserIP(userIP string) *PersonalizedstreamGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9402,20 +9032,19 @@ func (c *PersonalizedstreamGetCall) Context(ctx context.Context) *Personalizedst
 }
 
 func (c *PersonalizedstreamGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "personalizedstream/get")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.personalizedstream.get" call.
@@ -9425,7 +9054,8 @@ func (c *PersonalizedstreamGetCall) doRequest(alt string) (*http.Response, error
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PersonalizedstreamGetCall) Do() (*Discoveryclusters, error) {
+func (c *PersonalizedstreamGetCall) Do(opts ...googleapi.CallOption) (*Discoveryclusters, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9449,7 +9079,8 @@ func (c *PersonalizedstreamGetCall) Do() (*Discoveryclusters, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9544,26 +9175,9 @@ func (c *PromoofferAcceptCall) Product(product string) *PromoofferAcceptCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PromoofferAcceptCall) QuotaUser(quotaUser string) *PromoofferAcceptCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Serial sets the optional parameter "serial": device serial
 func (c *PromoofferAcceptCall) Serial(serial string) *PromoofferAcceptCall {
 	c.urlParams_.Set("serial", serial)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PromoofferAcceptCall) UserIP(userIP string) *PromoofferAcceptCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9591,21 +9205,21 @@ func (c *PromoofferAcceptCall) Context(ctx context.Context) *PromoofferAcceptCal
 }
 
 func (c *PromoofferAcceptCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "promooffer/accept")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.promooffer.accept" call.
-func (c *PromoofferAcceptCall) Do() error {
+func (c *PromoofferAcceptCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -9719,26 +9333,9 @@ func (c *PromoofferDismissCall) Product(product string) *PromoofferDismissCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PromoofferDismissCall) QuotaUser(quotaUser string) *PromoofferDismissCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Serial sets the optional parameter "serial": device serial
 func (c *PromoofferDismissCall) Serial(serial string) *PromoofferDismissCall {
 	c.urlParams_.Set("serial", serial)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PromoofferDismissCall) UserIP(userIP string) *PromoofferDismissCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9759,21 +9356,21 @@ func (c *PromoofferDismissCall) Context(ctx context.Context) *PromoofferDismissC
 }
 
 func (c *PromoofferDismissCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "promooffer/dismiss")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.promooffer.dismiss" call.
-func (c *PromoofferDismissCall) Do() error {
+func (c *PromoofferDismissCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -9878,26 +9475,9 @@ func (c *PromoofferGetCall) Product(product string) *PromoofferGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PromoofferGetCall) QuotaUser(quotaUser string) *PromoofferGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Serial sets the optional parameter "serial": device serial
 func (c *PromoofferGetCall) Serial(serial string) *PromoofferGetCall {
 	c.urlParams_.Set("serial", serial)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PromoofferGetCall) UserIP(userIP string) *PromoofferGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -9928,20 +9508,19 @@ func (c *PromoofferGetCall) Context(ctx context.Context) *PromoofferGetCall {
 }
 
 func (c *PromoofferGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "promooffer/get")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.promooffer.get" call.
@@ -9951,7 +9530,8 @@ func (c *PromoofferGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *PromoofferGetCall) Do() (*Offers, error) {
+func (c *PromoofferGetCall) Do(opts ...googleapi.CallOption) (*Offers, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9975,7 +9555,8 @@ func (c *PromoofferGetCall) Do() (*Offers, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10042,23 +9623,6 @@ func (r *SeriesService) Get(seriesId []string) *SeriesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SeriesGetCall) QuotaUser(quotaUser string) *SeriesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SeriesGetCall) UserIP(userIP string) *SeriesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10086,20 +9650,19 @@ func (c *SeriesGetCall) Context(ctx context.Context) *SeriesGetCall {
 }
 
 func (c *SeriesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "series/get")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.series.get" call.
@@ -10109,7 +9672,8 @@ func (c *SeriesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *SeriesGetCall) Do() (*Series, error) {
+func (c *SeriesGetCall) Do(opts ...googleapi.CallOption) (*Series, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10133,7 +9697,8 @@ func (c *SeriesGetCall) Do() (*Series, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10194,23 +9759,6 @@ func (c *SeriesMembershipGetCall) PageToken(pageToken string) *SeriesMembershipG
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SeriesMembershipGetCall) QuotaUser(quotaUser string) *SeriesMembershipGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SeriesMembershipGetCall) UserIP(userIP string) *SeriesMembershipGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10238,20 +9786,19 @@ func (c *SeriesMembershipGetCall) Context(ctx context.Context) *SeriesMembership
 }
 
 func (c *SeriesMembershipGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "series/membership/get")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.series.membership.get" call.
@@ -10261,7 +9808,8 @@ func (c *SeriesMembershipGetCall) doRequest(alt string) (*http.Response, error) 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SeriesMembershipGetCall) Do() (*Seriesmembership, error) {
+func (c *SeriesMembershipGetCall) Do(opts ...googleapi.CallOption) (*Seriesmembership, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10285,7 +9833,8 @@ func (c *SeriesMembershipGetCall) Do() (*Seriesmembership, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10350,6 +9899,14 @@ func (c *VolumesGetCall) Country(country string) *VolumesGetCall {
 	return c
 }
 
+// IncludeNonComicsSeries sets the optional parameter
+// "includeNonComicsSeries": Set to true to include non-comics series.
+// Defaults to false.
+func (c *VolumesGetCall) IncludeNonComicsSeries(includeNonComicsSeries bool) *VolumesGetCall {
+	c.urlParams_.Set("includeNonComicsSeries", fmt.Sprint(includeNonComicsSeries))
+	return c
+}
+
 // Partner sets the optional parameter "partner": Brand results for
 // partner ID.
 func (c *VolumesGetCall) Partner(partner string) *VolumesGetCall {
@@ -10368,27 +9925,10 @@ func (c *VolumesGetCall) Projection(projection string) *VolumesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesGetCall) QuotaUser(quotaUser string) *VolumesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *VolumesGetCall) Source(source string) *VolumesGetCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesGetCall) UserIP(userIP string) *VolumesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10426,22 +9966,21 @@ func (c *VolumesGetCall) Context(ctx context.Context) *VolumesGetCall {
 }
 
 func (c *VolumesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.get" call.
@@ -10451,7 +9990,8 @@ func (c *VolumesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VolumesGetCall) Do() (*Volume, error) {
+func (c *VolumesGetCall) Do(opts ...googleapi.CallOption) (*Volume, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10475,7 +10015,8 @@ func (c *VolumesGetCall) Do() (*Volume, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10491,6 +10032,11 @@ func (c *VolumesGetCall) Do() (*Volume, error) {
 	//       "description": "ISO-3166-1 code to override the IP-based location.",
 	//       "location": "query",
 	//       "type": "string"
+	//     },
+	//     "includeNonComicsSeries": {
+	//       "description": "Set to true to include non-comics series. Defaults to false.",
+	//       "location": "query",
+	//       "type": "boolean"
 	//     },
 	//     "partner": {
 	//       "description": "Brand results for partner ID.",
@@ -10641,15 +10187,6 @@ func (c *VolumesListCall) Projection(projection string) *VolumesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesListCall) QuotaUser(quotaUser string) *VolumesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // ShowPreorders sets the optional parameter "showPreorders": Set to
 // true to show books available for preorder. Defaults to false.
 func (c *VolumesListCall) ShowPreorders(showPreorders bool) *VolumesListCall {
@@ -10668,14 +10205,6 @@ func (c *VolumesListCall) Source(source string) *VolumesListCall {
 // first result to return (starts at 0)
 func (c *VolumesListCall) StartIndex(startIndex int64) *VolumesListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesListCall) UserIP(userIP string) *VolumesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -10706,20 +10235,19 @@ func (c *VolumesListCall) Context(ctx context.Context) *VolumesListCall {
 }
 
 func (c *VolumesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.list" call.
@@ -10729,7 +10257,8 @@ func (c *VolumesListCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VolumesListCall) Do() (*Volumes, error) {
+func (c *VolumesListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10753,7 +10282,8 @@ func (c *VolumesListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10952,27 +10482,10 @@ func (c *VolumesAssociatedListCall) MaxAllowedMaturityRating(maxAllowedMaturityR
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesAssociatedListCall) QuotaUser(quotaUser string) *VolumesAssociatedListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *VolumesAssociatedListCall) Source(source string) *VolumesAssociatedListCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesAssociatedListCall) UserIP(userIP string) *VolumesAssociatedListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11003,22 +10516,21 @@ func (c *VolumesAssociatedListCall) Context(ctx context.Context) *VolumesAssocia
 }
 
 func (c *VolumesAssociatedListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/{volumeId}/associated")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"volumeId": c.volumeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.associated.list" call.
@@ -11028,7 +10540,8 @@ func (c *VolumesAssociatedListCall) doRequest(alt string) (*http.Response, error
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VolumesAssociatedListCall) Do() (*Volumes, error) {
+func (c *VolumesAssociatedListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11052,7 +10565,8 @@ func (c *VolumesAssociatedListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11136,9 +10650,10 @@ func (r *VolumesMybooksService) List() *VolumesMybooksListCall {
 }
 
 // AcquireMethod sets the optional parameter "acquireMethod": How the
-// book was aquired
+// book was acquired
 //
 // Possible values:
+//   "FAMILY_SHARED" - Books acquired via Family Sharing
 //   "PREORDERED" - Preordered books (not yet available)
 //   "PREVIOUSLY_RENTED" - User-rented books past their expiration time
 //   "PUBLIC_DOMAIN" - Public domain books
@@ -11148,6 +10663,13 @@ func (r *VolumesMybooksService) List() *VolumesMybooksListCall {
 //   "UPLOADED" - User uploaded books
 func (c *VolumesMybooksListCall) AcquireMethod(acquireMethod ...string) *VolumesMybooksListCall {
 	c.urlParams_.SetMulti("acquireMethod", append([]string{}, acquireMethod...))
+	return c
+}
+
+// Country sets the optional parameter "country": ISO-3166-1 code to
+// override the IP-based location.
+func (c *VolumesMybooksListCall) Country(country string) *VolumesMybooksListCall {
+	c.urlParams_.Set("country", country)
 	return c
 }
 
@@ -11179,15 +10701,6 @@ func (c *VolumesMybooksListCall) ProcessingState(processingState ...string) *Vol
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesMybooksListCall) QuotaUser(quotaUser string) *VolumesMybooksListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *VolumesMybooksListCall) Source(source string) *VolumesMybooksListCall {
@@ -11199,14 +10712,6 @@ func (c *VolumesMybooksListCall) Source(source string) *VolumesMybooksListCall {
 // first result to return (starts at 0)
 func (c *VolumesMybooksListCall) StartIndex(startIndex int64) *VolumesMybooksListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesMybooksListCall) UserIP(userIP string) *VolumesMybooksListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11237,20 +10742,19 @@ func (c *VolumesMybooksListCall) Context(ctx context.Context) *VolumesMybooksLis
 }
 
 func (c *VolumesMybooksListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/mybooks")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.mybooks.list" call.
@@ -11260,7 +10764,8 @@ func (c *VolumesMybooksListCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VolumesMybooksListCall) Do() (*Volumes, error) {
+func (c *VolumesMybooksListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11284,7 +10789,8 @@ func (c *VolumesMybooksListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11294,8 +10800,9 @@ func (c *VolumesMybooksListCall) Do() (*Volumes, error) {
 	//   "id": "books.volumes.mybooks.list",
 	//   "parameters": {
 	//     "acquireMethod": {
-	//       "description": "How the book was aquired",
+	//       "description": "How the book was acquired",
 	//       "enum": [
+	//         "FAMILY_SHARED",
 	//         "PREORDERED",
 	//         "PREVIOUSLY_RENTED",
 	//         "PUBLIC_DOMAIN",
@@ -11305,6 +10812,7 @@ func (c *VolumesMybooksListCall) Do() (*Volumes, error) {
 	//         "UPLOADED"
 	//       ],
 	//       "enumDescriptions": [
+	//         "Books acquired via Family Sharing",
 	//         "Preordered books (not yet available)",
 	//         "User-rented books past their expiration time",
 	//         "Public domain books",
@@ -11315,6 +10823,11 @@ func (c *VolumesMybooksListCall) Do() (*Volumes, error) {
 	//       ],
 	//       "location": "query",
 	//       "repeated": true,
+	//       "type": "string"
+	//     },
+	//     "country": {
+	//       "description": "ISO-3166-1 code to override the IP-based location.",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "locale": {
@@ -11406,38 +10919,10 @@ func (c *VolumesRecommendedListCall) MaxAllowedMaturityRating(maxAllowedMaturity
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesRecommendedListCall) QuotaUser(quotaUser string) *VolumesRecommendedListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *VolumesRecommendedListCall) Source(source string) *VolumesRecommendedListCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// TargetIds sets the optional parameter "targetIds": List of target ids
-// used for experiments or user segments
-func (c *VolumesRecommendedListCall) TargetIds(targetIds ...int64) *VolumesRecommendedListCall {
-	var targetIds_ []string
-	for _, v := range targetIds {
-		targetIds_ = append(targetIds_, fmt.Sprint(v))
-	}
-	c.urlParams_.SetMulti("targetIds", targetIds_)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesRecommendedListCall) UserIP(userIP string) *VolumesRecommendedListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11468,20 +10953,19 @@ func (c *VolumesRecommendedListCall) Context(ctx context.Context) *VolumesRecomm
 }
 
 func (c *VolumesRecommendedListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/recommended")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.recommended.list" call.
@@ -11491,7 +10975,8 @@ func (c *VolumesRecommendedListCall) doRequest(alt string) (*http.Response, erro
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VolumesRecommendedListCall) Do() (*Volumes, error) {
+func (c *VolumesRecommendedListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11515,7 +11000,8 @@ func (c *VolumesRecommendedListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11545,13 +11031,6 @@ func (c *VolumesRecommendedListCall) Do() (*Volumes, error) {
 	//     "source": {
 	//       "description": "String to identify the originator of this request.",
 	//       "location": "query",
-	//       "type": "string"
-	//     },
-	//     "targetIds": {
-	//       "description": "List of target ids used for experiments or user segments",
-	//       "format": "int64",
-	//       "location": "query",
-	//       "repeated": true,
 	//       "type": "string"
 	//     }
 	//   },
@@ -11590,27 +11069,10 @@ func (c *VolumesRecommendedRateCall) Locale(locale string) *VolumesRecommendedRa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesRecommendedRateCall) QuotaUser(quotaUser string) *VolumesRecommendedRateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *VolumesRecommendedRateCall) Source(source string) *VolumesRecommendedRateCall {
 	c.urlParams_.Set("source", source)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesRecommendedRateCall) UserIP(userIP string) *VolumesRecommendedRateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11631,17 +11093,16 @@ func (c *VolumesRecommendedRateCall) Context(ctx context.Context) *VolumesRecomm
 }
 
 func (c *VolumesRecommendedRateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/recommended/rate")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.recommended.rate" call.
@@ -11652,7 +11113,8 @@ func (c *VolumesRecommendedRateCall) doRequest(alt string) (*http.Response, erro
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *VolumesRecommendedRateCall) Do() (*BooksVolumesRecommendedRateResponse, error) {
+func (c *VolumesRecommendedRateCall) Do(opts ...googleapi.CallOption) (*BooksVolumesRecommendedRateResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11676,7 +11138,8 @@ func (c *VolumesRecommendedRateCall) Do() (*BooksVolumesRecommendedRateResponse,
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11773,15 +11236,6 @@ func (c *VolumesUseruploadedListCall) ProcessingState(processingState ...string)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VolumesUseruploadedListCall) QuotaUser(quotaUser string) *VolumesUseruploadedListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": String to identify the
 // originator of this request.
 func (c *VolumesUseruploadedListCall) Source(source string) *VolumesUseruploadedListCall {
@@ -11793,14 +11247,6 @@ func (c *VolumesUseruploadedListCall) Source(source string) *VolumesUseruploaded
 // first result to return (starts at 0)
 func (c *VolumesUseruploadedListCall) StartIndex(startIndex int64) *VolumesUseruploadedListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VolumesUseruploadedListCall) UserIP(userIP string) *VolumesUseruploadedListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11839,20 +11285,19 @@ func (c *VolumesUseruploadedListCall) Context(ctx context.Context) *VolumesUseru
 }
 
 func (c *VolumesUseruploadedListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "volumes/useruploaded")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "books.volumes.useruploaded.list" call.
@@ -11862,7 +11307,8 @@ func (c *VolumesUseruploadedListCall) doRequest(alt string) (*http.Response, err
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VolumesUseruploadedListCall) Do() (*Volumes, error) {
+func (c *VolumesUseruploadedListCall) Do(opts ...googleapi.CallOption) (*Volumes, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11886,7 +11332,8 @@ func (c *VolumesUseruploadedListCall) Do() (*Volumes, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

@@ -38,7 +38,6 @@ func Example_auth() *datastore.Client {
 	conf, err := google.JWTConfigFromJSON(
 		jsonKey,
 		datastore.ScopeDatastore,
-		datastore.ScopeUserEmail,
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -194,7 +193,7 @@ func ExampleQuery() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("There are %d posts.", n)
+	log.Printf("There are %d posts.", n)
 
 	// List the posts published since yesterday.
 	yesterday := time.Now().Add(-24 * time.Hour)

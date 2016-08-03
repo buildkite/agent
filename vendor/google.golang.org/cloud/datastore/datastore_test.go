@@ -19,9 +19,15 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
+
+	pb "google.golang.org/genproto/googleapis/datastore/v1beta3"
 )
 
 type (
@@ -64,11 +70,14 @@ func newKey(stringID string, parent *Key) *Key {
 }
 
 var (
-	testKey0  = newKey("name0", nil)
-	testKey1a = newKey("name1", nil)
-	testKey1b = newKey("name1", nil)
-	testKey2a = newKey("name2", testKey0)
-	testKey2b = newKey("name2", testKey0)
+	testKey0     = newKey("name0", nil)
+	testKey1a    = newKey("name1", nil)
+	testKey1b    = newKey("name1", nil)
+	testKey2a    = newKey("name2", testKey0)
+	testKey2b    = newKey("name2", testKey0)
+	testGeoPt0   = GeoPoint{Lat: 1.2, Lng: 3.4}
+	testGeoPt1   = GeoPoint{Lat: 5, Lng: 10}
+	testBadGeoPt = GeoPoint{Lat: 1000, Lng: 34}
 )
 
 type B0 struct {
@@ -111,6 +120,14 @@ type C3 struct {
 }
 
 type E struct{}
+
+type G0 struct {
+	G GeoPoint
+}
+
+type G1 struct {
+	G []GeoPoint
+}
 
 type K0 struct {
 	K *Key
@@ -354,7 +371,7 @@ func (e *BadMultiPropEntity) Load(props []Property) error {
 }
 
 func (e *BadMultiPropEntity) Save() ([]Property, error) {
-	// Write multiple properties with the same name "I", but Multiple is false.
+	// Write multiple properties with the same name "I".
 	var props []Property
 	for i := 0; i < 3; i++ {
 		props = append(props, Property{
@@ -422,6 +439,36 @@ var testCases = []testCase{
 		"empty struct",
 		&E{},
 		&E{},
+		"",
+		"",
+	},
+	{
+		"geopoint",
+		&G0{G: testGeoPt0},
+		&G0{G: testGeoPt0},
+		"",
+		"",
+	},
+	{
+		"geopoint invalid",
+		&G0{G: testBadGeoPt},
+		&G0{},
+		"invalid GeoPoint value",
+		"",
+	},
+	{
+		"geopoint as props",
+		&G0{G: testGeoPt0},
+		&PropertyList{
+			Property{Name: "G", Value: testGeoPt0, NoIndex: false},
+		},
+		"",
+		"",
+	},
+	{
+		"geopoint slice",
+		&G1{G: []GeoPoint{testGeoPt0, testGeoPt1}},
+		&G1{G: []GeoPoint{testGeoPt0, testGeoPt1}},
 		"",
 		"",
 	},
@@ -644,7 +691,40 @@ var testCases = []testCase{
 			Property{Name: "B", Value: makeUint8Slice(1501), NoIndex: false},
 		},
 		nil,
-		"cannot index a Property",
+		"[]byte property too long to index",
+		"",
+	},
+	{
+		"string must be noindex",
+		&PropertyList{
+			Property{Name: "B", Value: strings.Repeat("x", 1501), NoIndex: false},
+		},
+		nil,
+		"string property too long to index",
+		"",
+	},
+	{
+		"slice of []byte must be noindex",
+		&PropertyList{
+			Property{Name: "B", Value: []interface{}{
+				[]byte("short"),
+				makeUint8Slice(1501),
+			}, NoIndex: false},
+		},
+		nil,
+		"[]byte property too long to index",
+		"",
+	},
+	{
+		"slice of string must be noindex",
+		&PropertyList{
+			Property{Name: "B", Value: []interface{}{
+				"short",
+				strings.Repeat("x", 1501),
+			}, NoIndex: false},
+		},
+		nil,
+		"string property too long to index",
 		"",
 	},
 	{
@@ -652,15 +732,13 @@ var testCases = []testCase{
 		&Tagged{A: 1, B: []int{21, 22, 23}, C: 3, D: 4, E: 5, I: 6, J: 7},
 		&PropertyList{
 			// A and B are renamed to a and b; A and C are noindex, I is ignored.
-			// Order is alphabetical
-			Property{Name: "a", Value: int64(1), NoIndex: true},
-			Property{Name: "b", Value: int64(21), NoIndex: false, Multiple: true},
-			Property{Name: "b", Value: int64(22), NoIndex: false, Multiple: true},
-			Property{Name: "b", Value: int64(23), NoIndex: false, Multiple: true},
+			// Order is sorted as per byName.
 			Property{Name: "C", Value: int64(3), NoIndex: true},
 			Property{Name: "D", Value: int64(4), NoIndex: false},
 			Property{Name: "E", Value: int64(5), NoIndex: false},
 			Property{Name: "J", Value: int64(7), NoIndex: true},
+			Property{Name: "a", Value: int64(1), NoIndex: true},
+			Property{Name: "b", Value: []interface{}{int64(21), int64(22), int64(23)}, NoIndex: false},
 		},
 		"",
 		"",
@@ -707,8 +785,8 @@ var testCases = []testCase{
 		"save struct load props",
 		&X0{S: "s", I: 1},
 		&PropertyList{
-			Property{Name: "S", Value: "s", NoIndex: false},
 			Property{Name: "I", Value: int64(1), NoIndex: false},
+			Property{Name: "S", Value: "s", NoIndex: false},
 		},
 		"",
 		"",
@@ -716,8 +794,8 @@ var testCases = []testCase{
 	{
 		"save props load struct",
 		&PropertyList{
-			Property{Name: "S", Value: "s", NoIndex: false},
 			Property{Name: "I", Value: int64(1), NoIndex: false},
+			Property{Name: "S", Value: "s", NoIndex: false},
 		},
 		&X0{S: "s", I: 1},
 		"",
@@ -732,9 +810,7 @@ var testCases = []testCase{
 			Property{Name: "F", Value: nil, NoIndex: false},
 			Property{Name: "K", Value: nil, NoIndex: false},
 			Property{Name: "T", Value: nil, NoIndex: false},
-			Property{Name: "J", Value: nil, NoIndex: false},
-			Property{Name: "J", Value: int64(7), NoIndex: false},
-			Property{Name: "J", Value: nil, NoIndex: false},
+			Property{Name: "J", Value: []interface{}{nil, int64(7), nil}, NoIndex: false},
 		},
 		&struct {
 			I int64
@@ -768,12 +844,8 @@ var testCases = []testCase{
 		},
 		&PropertyList{
 			Property{Name: "A", Value: int64(1), NoIndex: false},
-			Property{Name: "I.W", Value: int64(10), NoIndex: false, Multiple: true},
-			Property{Name: "I.W", Value: int64(20), NoIndex: false, Multiple: true},
-			Property{Name: "I.W", Value: int64(30), NoIndex: false, Multiple: true},
-			Property{Name: "I.X", Value: "ten", NoIndex: false, Multiple: true},
-			Property{Name: "I.X", Value: "twenty", NoIndex: false, Multiple: true},
-			Property{Name: "I.X", Value: "thirty", NoIndex: false, Multiple: true},
+			Property{Name: "I.W", Value: []interface{}{int64(10), int64(20), int64(30)}, NoIndex: false},
+			Property{Name: "I.X", Value: []interface{}{"ten", "twenty", "thirty"}, NoIndex: false},
 			Property{Name: "J.Y", Value: float64(3.14), NoIndex: false},
 			Property{Name: "Z", Value: true, NoIndex: false},
 		},
@@ -784,12 +856,8 @@ var testCases = []testCase{
 		"save props load outer-equivalent",
 		&PropertyList{
 			Property{Name: "A", Value: int64(1), NoIndex: false},
-			Property{Name: "I.W", Value: int64(10), NoIndex: false},
-			Property{Name: "I.X", Value: "ten", NoIndex: false},
-			Property{Name: "I.W", Value: int64(20), NoIndex: false},
-			Property{Name: "I.X", Value: "twenty", NoIndex: false},
-			Property{Name: "I.W", Value: int64(30), NoIndex: false},
-			Property{Name: "I.X", Value: "thirty", NoIndex: false},
+			Property{Name: "I.W", Value: []interface{}{int64(10), int64(20), int64(30)}, NoIndex: false},
+			Property{Name: "I.X", Value: []interface{}{"ten", "twenty", "thirty"}, NoIndex: false},
 			Property{Name: "J.Y", Value: float64(3.14), NoIndex: false},
 			Property{Name: "Z", Value: true, NoIndex: false},
 		},
@@ -1024,33 +1092,21 @@ var testCases = []testCase{
 			},
 		},
 		&PropertyList{
-			Property{Name: "red.S", Value: "rouge", NoIndex: false},
-			Property{Name: "red.I", Value: int64(0), NoIndex: false},
-			Property{Name: "red.Nonymous.S", Value: "rosso0", NoIndex: false, Multiple: true},
-			Property{Name: "red.Nonymous.S", Value: "rosso1", NoIndex: false, Multiple: true},
-			Property{Name: "red.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "red.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "red.Other", Value: "", NoIndex: false},
-			Property{Name: "green.S", Value: "vert", NoIndex: false},
-			Property{Name: "green.I", Value: int64(0), NoIndex: false},
-			Property{Name: "green.Nonymous.S", Value: "verde0", NoIndex: false, Multiple: true},
-			Property{Name: "green.Nonymous.S", Value: "verde1", NoIndex: false, Multiple: true},
-			Property{Name: "green.Nonymous.S", Value: "verde2", NoIndex: false, Multiple: true},
-			Property{Name: "green.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "green.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "green.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "green.Other", Value: "", NoIndex: false},
-			Property{Name: "Blue.S", Value: "bleu", NoIndex: false},
 			Property{Name: "Blue.I", Value: int64(0), NoIndex: false},
-			Property{Name: "Blue.Nonymous.S", Value: "blu0", NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.S", Value: "blu1", NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.S", Value: "blu2", NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.S", Value: "blu3", NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
-			Property{Name: "Blue.Nonymous.I", Value: int64(0), NoIndex: false, Multiple: true},
+			Property{Name: "Blue.Nonymous.I", Value: []interface{}{int64(0), int64(0), int64(0), int64(0)}, NoIndex: false},
+			Property{Name: "Blue.Nonymous.S", Value: []interface{}{"blu0", "blu1", "blu2", "blu3"}, NoIndex: false},
 			Property{Name: "Blue.Other", Value: "", NoIndex: false},
+			Property{Name: "Blue.S", Value: "bleu", NoIndex: false},
+			Property{Name: "green.I", Value: int64(0), NoIndex: false},
+			Property{Name: "green.Nonymous.I", Value: []interface{}{int64(0), int64(0), int64(0)}, NoIndex: false},
+			Property{Name: "green.Nonymous.S", Value: []interface{}{"verde0", "verde1", "verde2"}, NoIndex: false},
+			Property{Name: "green.Other", Value: "", NoIndex: false},
+			Property{Name: "green.S", Value: "vert", NoIndex: false},
+			Property{Name: "red.I", Value: int64(0), NoIndex: false},
+			Property{Name: "red.Nonymous.I", Value: []interface{}{int64(0), int64(0)}, NoIndex: false},
+			Property{Name: "red.Nonymous.S", Value: []interface{}{"rosso0", "rosso1"}, NoIndex: false},
+			Property{Name: "red.Other", Value: "", NoIndex: false},
+			Property{Name: "red.S", Value: "rouge", NoIndex: false},
 		},
 		"",
 		"",
@@ -1059,15 +1115,9 @@ var testCases = []testCase{
 		"save props load structs with ragged fields",
 		&PropertyList{
 			Property{Name: "red.S", Value: "rot", NoIndex: false},
-			Property{Name: "green.Nonymous.I", Value: int64(10), NoIndex: false},
-			Property{Name: "green.Nonymous.I", Value: int64(11), NoIndex: false},
-			Property{Name: "green.Nonymous.I", Value: int64(12), NoIndex: false},
-			Property{Name: "green.Nonymous.I", Value: int64(13), NoIndex: false},
-			Property{Name: "Blue.Nonymous.S", Value: "blau0", NoIndex: false},
-			Property{Name: "Blue.Nonymous.I", Value: int64(20), NoIndex: false},
-			Property{Name: "Blue.Nonymous.S", Value: "blau1", NoIndex: false},
-			Property{Name: "Blue.Nonymous.I", Value: int64(21), NoIndex: false},
-			Property{Name: "Blue.Nonymous.S", Value: "blau2", NoIndex: false},
+			Property{Name: "green.Nonymous.I", Value: []interface{}{int64(10), int64(11), int64(12), int64(13)}, NoIndex: false},
+			Property{Name: "Blue.Nonymous.I", Value: []interface{}{int64(20), int64(21)}, NoIndex: false},
+			Property{Name: "Blue.Nonymous.S", Value: []interface{}{"blau0", "blau1", "blau2"}, NoIndex: false},
 		},
 		&N2{
 			N1: N1{
@@ -1181,6 +1231,16 @@ var testCases = []testCase{
 		"",
 		"",
 	},
+	{
+		"repeated property names",
+		&PropertyList{
+			Property{Name: "A", Value: ""},
+			Property{Name: "A", Value: ""},
+		},
+		nil,
+		"duplicate Property",
+		"",
+	},
 }
 
 // checkErr returns the empty string if either both want and err are zero,
@@ -1218,6 +1278,10 @@ func TestRoundTrip(t *testing.T) {
 			t.Errorf("%s: load: %s", tc.desc, s)
 			continue
 		}
+		if pl, ok := got.(*PropertyList); ok {
+			// Sort by name to make sure we have a deterministic order.
+			sort.Stable(byName(*pl))
+		}
 		equal := false
 		if gotT, ok := got.(*T); ok {
 			// Round tripping a time.Time can result in a different time.Location: Local instead of UTC.
@@ -1227,7 +1291,8 @@ func TestRoundTrip(t *testing.T) {
 			equal = reflect.DeepEqual(got, tc.want)
 		}
 		if !equal {
-			t.Errorf("%s: compare: got %v want %v", tc.desc, got, tc.want)
+			t.Errorf("%s: compare:\ngot:  %#v\nwant: %#v", tc.desc, got, tc.want)
+			t.Logf("intermediate proto (%s):\n%s", tc.desc, proto.MarshalTextString(p))
 			continue
 		}
 	}
@@ -1354,6 +1419,226 @@ func TestQueryConstruction(t *testing.T) {
 		}
 		if !reflect.DeepEqual(test.q, test.exp) {
 			t.Errorf("%d: mismatch: got %v want %v", i, test.q, test.exp)
+		}
+	}
+}
+
+func TestPutMultiTypes(t *testing.T) {
+	ctx := context.Background()
+	type S struct {
+		A int
+		B string
+	}
+
+	testCases := []struct {
+		desc    string
+		src     interface{}
+		wantErr bool
+	}{
+		// Test cases to check each of the valid input types for src.
+		// Each case has the same elements.
+		{
+			desc: "type []struct",
+			src: []S{
+				{1, "one"}, {2, "two"},
+			},
+		},
+		{
+			desc: "type []*struct",
+			src: []*S{
+				{1, "one"}, {2, "two"},
+			},
+		},
+		{
+			desc: "type []interface{} with PLS elems",
+			src: []interface{}{
+				&PropertyList{Property{Name: "A", Value: 1}, Property{Name: "B", Value: "one"}},
+				&PropertyList{Property{Name: "A", Value: 2}, Property{Name: "B", Value: "two"}},
+			},
+		},
+		{
+			desc: "type []interface{} with struct ptr elems",
+			src: []interface{}{
+				&S{1, "one"}, &S{2, "two"},
+			},
+		},
+		{
+			desc: "type []PropertyLoadSaver{}",
+			src: []PropertyLoadSaver{
+				&PropertyList{Property{Name: "A", Value: 1}, Property{Name: "B", Value: "one"}},
+				&PropertyList{Property{Name: "A", Value: 2}, Property{Name: "B", Value: "two"}},
+			},
+		},
+		{
+			desc: "type []P (non-pointer, *P implements PropertyLoadSaver)",
+			src: []PropertyList{
+				PropertyList{Property{Name: "A", Value: 1}, Property{Name: "B", Value: "one"}},
+				PropertyList{Property{Name: "A", Value: 2}, Property{Name: "B", Value: "two"}},
+			},
+		},
+		// Test some invalid cases.
+		{
+			desc: "type []interface{} with struct elems",
+			src: []interface{}{
+				S{1, "one"}, S{2, "two"},
+			},
+			wantErr: true,
+		},
+		{
+			desc: "PropertyList",
+			src: PropertyList{
+				Property{Name: "A", Value: 1},
+				Property{Name: "B", Value: "one"},
+			},
+			wantErr: true,
+		},
+		{
+			desc:    "type []int",
+			src:     []int{1, 2},
+			wantErr: true,
+		},
+		{
+			desc:    "not a slice",
+			src:     S{1, "one"},
+			wantErr: true,
+		},
+	}
+
+	// Use the same keys and expected entities for all tests.
+	keys := []*Key{
+		NewKey(ctx, "testKind", "first", 0, nil),
+		NewKey(ctx, "testKind", "second", 0, nil),
+	}
+	want := []*pb.Mutation{
+		{Operation: &pb.Mutation_Upsert{&pb.Entity{
+			Key: keyToProto(keys[0]),
+			Properties: map[string]*pb.Value{
+				"A": {ValueType: &pb.Value_IntegerValue{1}},
+				"B": {ValueType: &pb.Value_StringValue{"one"}},
+			},
+		}}},
+		{Operation: &pb.Mutation_Upsert{&pb.Entity{
+			Key: keyToProto(keys[1]),
+			Properties: map[string]*pb.Value{
+				"A": {ValueType: &pb.Value_IntegerValue{2}},
+				"B": {ValueType: &pb.Value_StringValue{"two"}},
+			},
+		}}},
+	}
+
+	for _, tt := range testCases {
+		// Set up a fake client which captures upserts.
+		var got []*pb.Mutation
+		client := &Client{
+			client: &fakeClient{
+				commitFn: func(req *pb.CommitRequest) (*pb.CommitResponse, error) {
+					got = req.Mutations
+					return &pb.CommitResponse{}, nil
+				},
+			},
+		}
+
+		_, err := client.PutMulti(ctx, keys, tt.src)
+		if err != nil {
+			if !tt.wantErr {
+				t.Errorf("%s: error %v", tt.desc, err)
+			}
+			continue
+		}
+		if tt.wantErr {
+			t.Errorf("%s: wanted error, but none returned", tt.desc)
+			continue
+		}
+		if len(got) != len(want) {
+			t.Errorf("%s: got %d entities, want %d", tt.desc, len(got), len(want))
+			continue
+		}
+		for i, e := range got {
+			if !proto.Equal(e, want[i]) {
+				t.Logf("%s: entity %d doesn't match\ngot:  %v\nwant: %v", tt.desc, i, e, want[i])
+			}
+		}
+	}
+}
+
+func TestNoIndexOnSliceProperties(t *testing.T) {
+	// Check that ExcludeFromIndexes is set on the inner elements,
+	// rather than the top-level ArrayValue value.
+	ctx := context.Background()
+	pl := PropertyList{
+		Property{
+			Name: "repeated",
+			Value: []interface{}{
+				123,
+				false,
+				"short",
+				strings.Repeat("a", 1503),
+			},
+			NoIndex: true,
+		},
+	}
+	key := NewKey(ctx, "dummy", "dummy", 0, nil)
+
+	entity, err := saveEntity(key, &pl)
+	if err != nil {
+		t.Fatalf("saveEntity: %v", err)
+	}
+
+	want := &pb.Value{
+		ValueType: &pb.Value_ArrayValue{&pb.ArrayValue{[]*pb.Value{
+			{ValueType: &pb.Value_IntegerValue{123}, ExcludeFromIndexes: true},
+			{ValueType: &pb.Value_BooleanValue{false}, ExcludeFromIndexes: true},
+			{ValueType: &pb.Value_StringValue{"short"}, ExcludeFromIndexes: true},
+			{ValueType: &pb.Value_StringValue{strings.Repeat("a", 1503)}, ExcludeFromIndexes: true},
+		}}},
+	}
+	if got := entity.Properties["repeated"]; !proto.Equal(got, want) {
+		t.Errorf("Entity proto differs\ngot:  %v\nwant: %v", got, want)
+	}
+}
+
+type byName PropertyList
+
+func (s byName) Len() int           { return len(s) }
+func (s byName) Less(i, j int) bool { return s[i].Name < s[j].Name }
+func (s byName) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+func TestValidGeoPoint(t *testing.T) {
+	testCases := []struct {
+		desc string
+		pt   GeoPoint
+		want bool
+	}{
+		{
+			"valid",
+			GeoPoint{67.21, 13.37},
+			true,
+		},
+		{
+			"high lat",
+			GeoPoint{-90.01, 13.37},
+			false,
+		},
+		{
+			"low lat",
+			GeoPoint{90.01, 13.37},
+			false,
+		},
+		{
+			"high lng",
+			GeoPoint{67.21, 182},
+			false,
+		},
+		{
+			"low lng",
+			GeoPoint{67.21, -181},
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		if got := tc.pt.Valid(); got != tc.want {
+			t.Errorf("%s: got %v, want %v", tc.desc, got, tc.want)
 		}
 	}
 }

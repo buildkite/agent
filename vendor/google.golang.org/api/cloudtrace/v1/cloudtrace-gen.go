@@ -49,6 +49,12 @@ const basePath = "https://cloudtrace.googleapis.com/"
 const (
 	// View and manage your data across Google Cloud Platform services
 	CloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+
+	// Write Trace data for a project or application
+	TraceAppendScope = "https://www.googleapis.com/auth/trace.append"
+
+	// Read Trace data for a project or application
+	TraceReadonlyScope = "https://www.googleapis.com/auth/trace.readonly"
 )
 
 func New(client *http.Client) (*Service, error) {
@@ -195,11 +201,11 @@ type TraceSpan struct {
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// Name: Name of the trace. The trace name is sanitized and displayed in
-	// the Cloud Trace tool in the Google Developers Console. The name may
-	// be a method name or some other per-call site name. For the same
-	// executable and the same call point, a best practice is to use a
-	// consistent name, which makes it easier to correlate cross-trace
-	// spans.
+	// the Stackdriver Trace tool in the {% dynamic print
+	// site_values.console_name %}. The name may be a method name or some
+	// other per-call site name. For the same executable and the same call
+	// point, a best practice is to use a consistent name, which makes it
+	// easier to correlate cross-trace spans.
 	Name string `json:"name,omitempty"`
 
 	// ParentSpanId: ID of the parent span, if any. Optional.
@@ -257,9 +263,9 @@ type ProjectsPatchTracesCall struct {
 	ctx_       context.Context
 }
 
-// PatchTraces: Sends new traces to Cloud Trace or updates existing
-// traces. If the ID of a trace that you send matches that of an
-// existing trace, any fields in the existing trace and its spans are
+// PatchTraces: Sends new traces to Stackdriver Trace or updates
+// existing traces. If the ID of a trace that you send matches that of
+// an existing trace, any fields in the existing trace and its spans are
 // overwritten by the provided values, and any new fields provided are
 // merged with the existing trace data. If the ID does not match, a new
 // trace is created.
@@ -267,14 +273,6 @@ func (r *ProjectsService) PatchTraces(projectId string, traces *Traces) *Project
 	c := &ProjectsPatchTracesCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
 	c.traces = traces
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsPatchTracesCall) QuotaUser(quotaUser string) *ProjectsPatchTracesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -295,25 +293,23 @@ func (c *ProjectsPatchTracesCall) Context(ctx context.Context) *ProjectsPatchTra
 }
 
 func (c *ProjectsPatchTracesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.traces)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectId}/traces")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudtrace.projects.patchTraces" call.
@@ -323,7 +319,8 @@ func (c *ProjectsPatchTracesCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsPatchTracesCall) Do() (*Empty, error) {
+func (c *ProjectsPatchTracesCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -347,12 +344,13 @@ func (c *ProjectsPatchTracesCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Sends new traces to Cloud Trace or updates existing traces. If the ID of a trace that you send matches that of an existing trace, any fields in the existing trace and its spans are overwritten by the provided values, and any new fields provided are merged with the existing trace data. If the ID does not match, a new trace is created.",
+	//   "description": "Sends new traces to Stackdriver Trace or updates existing traces. If the ID of a trace that you send matches that of an existing trace, any fields in the existing trace and its spans are overwritten by the provided values, and any new fields provided are merged with the existing trace data. If the ID does not match, a new trace is created.",
 	//   "httpMethod": "PATCH",
 	//   "id": "cloudtrace.projects.patchTraces",
 	//   "parameterOrder": [
@@ -374,7 +372,8 @@ func (c *ProjectsPatchTracesCall) Do() (*Empty, error) {
 	//     "$ref": "Empty"
 	//   },
 	//   "scopes": [
-	//     "https://www.googleapis.com/auth/cloud-platform"
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/trace.append"
 	//   ]
 	// }
 
@@ -396,14 +395,6 @@ func (r *ProjectsTracesService) Get(projectId string, traceId string) *ProjectsT
 	c := &ProjectsTracesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
 	c.traceId = traceId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTracesGetCall) QuotaUser(quotaUser string) *ProjectsTracesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -434,23 +425,22 @@ func (c *ProjectsTracesGetCall) Context(ctx context.Context) *ProjectsTracesGetC
 }
 
 func (c *ProjectsTracesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectId}/traces/{traceId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"traceId":   c.traceId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudtrace.projects.traces.get" call.
@@ -460,7 +450,8 @@ func (c *ProjectsTracesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsTracesGetCall) Do() (*Trace, error) {
+func (c *ProjectsTracesGetCall) Do(opts ...googleapi.CallOption) (*Trace, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -484,7 +475,8 @@ func (c *ProjectsTracesGetCall) Do() (*Trace, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -515,7 +507,8 @@ func (c *ProjectsTracesGetCall) Do() (*Trace, error) {
 	//     "$ref": "Trace"
 	//   },
 	//   "scopes": [
-	//     "https://www.googleapis.com/auth/cloud-platform"
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/trace.readonly"
 	//   ]
 	// }
 
@@ -583,14 +576,6 @@ func (c *ProjectsTracesListCall) PageToken(pageToken string) *ProjectsTracesList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTracesListCall) QuotaUser(quotaUser string) *ProjectsTracesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StartTime sets the optional parameter "startTime": End of the time
 // interval (inclusive) during which the trace data was collected from
 // the application.
@@ -639,22 +624,21 @@ func (c *ProjectsTracesListCall) Context(ctx context.Context) *ProjectsTracesLis
 }
 
 func (c *ProjectsTracesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/projects/{projectId}/traces")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudtrace.projects.traces.list" call.
@@ -664,7 +648,8 @@ func (c *ProjectsTracesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsTracesListCall) Do() (*ListTracesResponse, error) {
+func (c *ProjectsTracesListCall) Do(opts ...googleapi.CallOption) (*ListTracesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -688,7 +673,8 @@ func (c *ProjectsTracesListCall) Do() (*ListTracesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -754,8 +740,30 @@ func (c *ProjectsTracesListCall) Do() (*ListTracesResponse, error) {
 	//     "$ref": "ListTracesResponse"
 	//   },
 	//   "scopes": [
-	//     "https://www.googleapis.com/auth/cloud-platform"
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/trace.readonly"
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsTracesListCall) Pages(ctx context.Context, f func(*ListTracesResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }

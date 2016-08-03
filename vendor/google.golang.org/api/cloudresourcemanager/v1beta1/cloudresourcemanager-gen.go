@@ -99,6 +99,26 @@ type ProjectsService struct {
 	s *Service
 }
 
+// Ancestor: Identifying information for a single ancestor of a project.
+type Ancestor struct {
+	// ResourceId: Resource id of the ancestor.
+	ResourceId *ResourceId `json:"resourceId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ResourceId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Ancestor) MarshalJSON() ([]byte, error) {
+	type noMethod Ancestor
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // Binding: Associates `members` with a `role`.
 type Binding struct {
 	// Members: Specifies the identities requesting access for a Cloud
@@ -147,6 +167,36 @@ type Empty struct {
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
+}
+
+// GetAncestryRequest: The request sent to the GetAncestry method.
+type GetAncestryRequest struct {
+}
+
+// GetAncestryResponse: Response from the GetAncestry method.
+type GetAncestryResponse struct {
+	// Ancestor: Ancestors are ordered from bottom to top of the resource
+	// hierarchy. The first ancestor is the project itself, followed by the
+	// project's parent, etc.
+	Ancestor []*Ancestor `json:"ancestor,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "Ancestor") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *GetAncestryResponse) MarshalJSON() ([]byte, error) {
+	type noMethod GetAncestryResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
 // GetIamPolicyRequest: Request message for `GetIamPolicy` method.
@@ -235,9 +285,24 @@ type Organization struct {
 	// Organization in the UI. This field is required.
 	DisplayName string `json:"displayName,omitempty"`
 
+	// LifecycleState: The organization's current lifecycle state. Assigned
+	// by the server. @OutputOnly
+	//
+	// Possible values:
+	//   "LIFECYCLE_STATE_UNSPECIFIED"
+	//   "ACTIVE"
+	//   "DELETE_REQUESTED"
+	LifecycleState string `json:"lifecycleState,omitempty"`
+
+	// Name: Output Only. The resource name of the organization. This is the
+	// organization's relative path in the API. Its format is
+	// "organizations/[organization_id]". For example, "organizations/1234".
+	Name string `json:"name,omitempty"`
+
 	// OrganizationId: An immutable id for the Organization that is assigned
 	// on creation. This should be omitted when creating a new Organization.
-	// This field is read-only.
+	// This field is read-only. This field is deprecated and will be removed
+	// in v1. Use name instead.
 	OrganizationId string `json:"organizationId,omitempty"`
 
 	// Owner: The owner of this Organization. The owner should be specified
@@ -295,7 +360,7 @@ func (s *OrganizationOwner) MarshalJSON() ([]byte, error) {
 // named list of permissions defined by IAM. **Example** { "bindings": [
 // { "role": "roles/owner", "members": [ "user:mike@example.com",
 // "group:admins@example.com", "domain:google.com",
-// "serviceAccount:my-other-app@appspot.gserviceaccount.com"] }, {
+// "serviceAccount:my-other-app@appspot.gserviceaccount.com", ] }, {
 // "role": "roles/viewer", "members": ["user:sean@example.com"] } ] }
 // For a description of IAM and its features, see the [IAM developer's
 // guide](https://cloud.google.com/iam).
@@ -366,10 +431,10 @@ type Project struct {
 	//   "DELETE_IN_PROGRESS"
 	LifecycleState string `json:"lifecycleState,omitempty"`
 
-	// Name: The user-assigned name of the Project. It must be 4 to 30
-	// characters. Allowed characters are: lowercase and uppercase letters,
-	// numbers, hyphen, single-quote, double-quote, space, and exclamation
-	// point. Example: My Project Read-write.
+	// Name: The user-assigned display name of the Project. It must be 4 to
+	// 30 characters. Allowed characters are: lowercase and uppercase
+	// letters, numbers, hyphen, single-quote, double-quote, space, and
+	// exclamation point. Example: My Project Read-write.
 	Name string `json:"name,omitempty"`
 
 	// Parent: An optional reference to a parent Resource. The only
@@ -417,7 +482,7 @@ type ResourceId struct {
 	Id string `json:"id,omitempty"`
 
 	// Type: Required field representing the resource type this id is for.
-	// At present, the only valid type is "organization".
+	// At present, the valid types are "project" and "organization".
 	Type string `json:"type,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Id") to
@@ -463,7 +528,7 @@ func (s *SetIamPolicyRequest) MarshalJSON() ([]byte, error) {
 type TestIamPermissionsRequest struct {
 	// Permissions: The set of permissions to check for the `resource`.
 	// Permissions with wildcards (such as '*' or 'storage.*') are not
-	// allowed.
+	// allowed. For more information see IAM Overview.
 	Permissions []string `json:"permissions,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Permissions") to
@@ -507,29 +572,34 @@ func (s *TestIamPermissionsResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+// UndeleteProjectRequest: The request sent to the UndeleteProject
+// method.
+type UndeleteProjectRequest struct {
+}
+
 // method id "cloudresourcemanager.organizations.get":
 
 type OrganizationsGetCall struct {
-	s              *Service
-	organizationId string
-	urlParams_     gensupport.URLParams
-	ifNoneMatch_   string
-	ctx_           context.Context
+	s            *Service
+	name         string
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
 }
 
 // Get: Fetches an Organization resource identified by the specified
-// `organization_id`.
-func (r *OrganizationsService) Get(organizationId string) *OrganizationsGetCall {
+// resource name.
+func (r *OrganizationsService) Get(name string) *OrganizationsGetCall {
 	c := &OrganizationsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.organizationId = organizationId
+	c.name = name
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OrganizationsGetCall) QuotaUser(quotaUser string) *OrganizationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// OrganizationId sets the optional parameter "organizationId": The id
+// of the Organization resource to fetch. This field is deprecated and
+// will be removed in v1. Use name instead.
+func (c *OrganizationsGetCall) OrganizationId(organizationId string) *OrganizationsGetCall {
+	c.urlParams_.Set("organizationId", organizationId)
 	return c
 }
 
@@ -560,22 +630,21 @@ func (c *OrganizationsGetCall) Context(ctx context.Context) *OrganizationsGetCal
 }
 
 func (c *OrganizationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/organizations/{organizationId}")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"organizationId": c.organizationId,
+		"name": c.name,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.organizations.get" call.
@@ -585,7 +654,8 @@ func (c *OrganizationsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *OrganizationsGetCall) Do() (*Organization, error) {
+func (c *OrganizationsGetCall) Do(opts ...googleapi.CallOption) (*Organization, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -609,26 +679,33 @@ func (c *OrganizationsGetCall) Do() (*Organization, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Fetches an Organization resource identified by the specified `organization_id`.",
+	//   "description": "Fetches an Organization resource identified by the specified resource name.",
 	//   "httpMethod": "GET",
 	//   "id": "cloudresourcemanager.organizations.get",
 	//   "parameterOrder": [
-	//     "organizationId"
+	//     "name"
 	//   ],
 	//   "parameters": {
-	//     "organizationId": {
-	//       "description": "The id of the Organization resource to fetch.",
+	//     "name": {
+	//       "description": "The resource name of the Organization to fetch. Its format is \"organizations/[organization_id]\". For example, \"organizations/1234\".",
 	//       "location": "path",
+	//       "pattern": "^organizations/[^/]*$",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "organizationId": {
+	//       "description": "The id of the Organization resource to fetch. This field is deprecated and will be removed in v1. Use name instead.",
+	//       "location": "query",
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "v1beta1/organizations/{organizationId}",
+	//   "path": "v1beta1/{+name}",
 	//   "response": {
 	//     "$ref": "Organization"
 	//   },
@@ -651,19 +728,15 @@ type OrganizationsGetIamPolicyCall struct {
 }
 
 // GetIamPolicy: Gets the access control policy for an Organization
-// resource. May be empty if no such policy or resource exists.
+// resource. May be empty if no such policy or resource exists. The
+// `resource` field should be the organization's resource name, e.g.
+// "organizations/123". For backward compatibility, the resource
+// provided may also be the organization_id. This will not be supported
+// in v1.
 func (r *OrganizationsService) GetIamPolicy(resource string, getiampolicyrequest *GetIamPolicyRequest) *OrganizationsGetIamPolicyCall {
 	c := &OrganizationsGetIamPolicyCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resource = resource
 	c.getiampolicyrequest = getiampolicyrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OrganizationsGetIamPolicyCall) QuotaUser(quotaUser string) *OrganizationsGetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -684,25 +757,23 @@ func (c *OrganizationsGetIamPolicyCall) Context(ctx context.Context) *Organizati
 }
 
 func (c *OrganizationsGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/organizations/{resource}:getIamPolicy")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+resource}:getIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.organizations.getIamPolicy" call.
@@ -712,7 +783,8 @@ func (c *OrganizationsGetIamPolicyCall) doRequest(alt string) (*http.Response, e
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OrganizationsGetIamPolicyCall) Do() (*Policy, error) {
+func (c *OrganizationsGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -736,12 +808,13 @@ func (c *OrganizationsGetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Gets the access control policy for an Organization resource. May be empty if no such policy or resource exists.",
+	//   "description": "Gets the access control policy for an Organization resource. May be empty if no such policy or resource exists. The `resource` field should be the organization's resource name, e.g. \"organizations/123\". For backward compatibility, the resource provided may also be the organization_id. This will not be supported in v1.",
 	//   "httpMethod": "POST",
 	//   "id": "cloudresourcemanager.organizations.getIamPolicy",
 	//   "parameterOrder": [
@@ -749,13 +822,14 @@ func (c *OrganizationsGetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the `getIamPolicy` documentation.",
+	//       "description": "REQUIRED: The resource for which the policy is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `getIamPolicy` documentation.",
 	//       "location": "path",
+	//       "pattern": "^organizations/[^/]*$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "v1beta1/organizations/{resource}:getIamPolicy",
+	//   "path": "v1beta1/{+resource}:getIamPolicy",
 	//   "request": {
 	//     "$ref": "GetIamPolicyRequest"
 	//   },
@@ -818,14 +892,6 @@ func (c *OrganizationsListCall) PageToken(pageToken string) *OrganizationsListCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OrganizationsListCall) QuotaUser(quotaUser string) *OrganizationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -853,20 +919,19 @@ func (c *OrganizationsListCall) Context(ctx context.Context) *OrganizationsListC
 }
 
 func (c *OrganizationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/organizations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.organizations.list" call.
@@ -876,7 +941,8 @@ func (c *OrganizationsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OrganizationsListCall) Do() (*ListOrganizationsResponse, error) {
+func (c *OrganizationsListCall) Do(opts ...googleapi.CallOption) (*ListOrganizationsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -900,7 +966,8 @@ func (c *OrganizationsListCall) Do() (*ListOrganizationsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -938,6 +1005,27 @@ func (c *OrganizationsListCall) Do() (*ListOrganizationsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *OrganizationsListCall) Pages(ctx context.Context, f func(*ListOrganizationsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "cloudresourcemanager.organizations.setIamPolicy":
 
 type OrganizationsSetIamPolicyCall struct {
@@ -949,19 +1037,14 @@ type OrganizationsSetIamPolicyCall struct {
 }
 
 // SetIamPolicy: Sets the access control policy on an Organization
-// resource. Replaces any existing policy.
+// resource. Replaces any existing policy. The `resource` field should
+// be the organization's resource name, e.g. "organizations/123". For
+// backward compatibility, the resource provided may also be the
+// organization_id. This will not be supported in v1.
 func (r *OrganizationsService) SetIamPolicy(resource string, setiampolicyrequest *SetIamPolicyRequest) *OrganizationsSetIamPolicyCall {
 	c := &OrganizationsSetIamPolicyCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resource = resource
 	c.setiampolicyrequest = setiampolicyrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OrganizationsSetIamPolicyCall) QuotaUser(quotaUser string) *OrganizationsSetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -982,25 +1065,23 @@ func (c *OrganizationsSetIamPolicyCall) Context(ctx context.Context) *Organizati
 }
 
 func (c *OrganizationsSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/organizations/{resource}:setIamPolicy")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+resource}:setIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.organizations.setIamPolicy" call.
@@ -1010,7 +1091,8 @@ func (c *OrganizationsSetIamPolicyCall) doRequest(alt string) (*http.Response, e
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OrganizationsSetIamPolicyCall) Do() (*Policy, error) {
+func (c *OrganizationsSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1034,12 +1116,13 @@ func (c *OrganizationsSetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Sets the access control policy on an Organization resource. Replaces any existing policy.",
+	//   "description": "Sets the access control policy on an Organization resource. Replaces any existing policy. The `resource` field should be the organization's resource name, e.g. \"organizations/123\". For backward compatibility, the resource provided may also be the organization_id. This will not be supported in v1.",
 	//   "httpMethod": "POST",
 	//   "id": "cloudresourcemanager.organizations.setIamPolicy",
 	//   "parameterOrder": [
@@ -1047,13 +1130,14 @@ func (c *OrganizationsSetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being specified. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the `setIamPolicy` documentation.",
+	//       "description": "REQUIRED: The resource for which the policy is being specified. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `setIamPolicy` documentation.",
 	//       "location": "path",
+	//       "pattern": "^organizations/[^/]*$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "v1beta1/organizations/{resource}:setIamPolicy",
+	//   "path": "v1beta1/{+resource}:setIamPolicy",
 	//   "request": {
 	//     "$ref": "SetIamPolicyRequest"
 	//   },
@@ -1078,19 +1162,14 @@ type OrganizationsTestIamPermissionsCall struct {
 }
 
 // TestIamPermissions: Returns permissions that a caller has on the
-// specified Organization.
+// specified Organization. The `resource` field should be the
+// organization's resource name, e.g. "organizations/123". For backward
+// compatibility, the resource provided may also be the organization_id.
+// This will not be supported in v1.
 func (r *OrganizationsService) TestIamPermissions(resource string, testiampermissionsrequest *TestIamPermissionsRequest) *OrganizationsTestIamPermissionsCall {
 	c := &OrganizationsTestIamPermissionsCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resource = resource
 	c.testiampermissionsrequest = testiampermissionsrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OrganizationsTestIamPermissionsCall) QuotaUser(quotaUser string) *OrganizationsTestIamPermissionsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1111,25 +1190,23 @@ func (c *OrganizationsTestIamPermissionsCall) Context(ctx context.Context) *Orga
 }
 
 func (c *OrganizationsTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/organizations/{resource}:testIamPermissions")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+resource}:testIamPermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.organizations.testIamPermissions" call.
@@ -1139,7 +1216,8 @@ func (c *OrganizationsTestIamPermissionsCall) doRequest(alt string) (*http.Respo
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OrganizationsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, error) {
+func (c *OrganizationsTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*TestIamPermissionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1163,12 +1241,13 @@ func (c *OrganizationsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse,
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Returns permissions that a caller has on the specified Organization.",
+	//   "description": "Returns permissions that a caller has on the specified Organization. The `resource` field should be the organization's resource name, e.g. \"organizations/123\". For backward compatibility, the resource provided may also be the organization_id. This will not be supported in v1.",
 	//   "httpMethod": "POST",
 	//   "id": "cloudresourcemanager.organizations.testIamPermissions",
 	//   "parameterOrder": [
@@ -1176,13 +1255,14 @@ func (c *OrganizationsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse,
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy detail is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the `testIamPermissions` documentation. rpc.",
+	//       "description": "REQUIRED: The resource for which the policy detail is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `testIamPermissions` documentation.",
 	//       "location": "path",
+	//       "pattern": "^organizations/[^/]*$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "v1beta1/organizations/{resource}:testIamPermissions",
+	//   "path": "v1beta1/{+resource}:testIamPermissions",
 	//   "request": {
 	//     "$ref": "TestIamPermissionsRequest"
 	//   },
@@ -1200,27 +1280,19 @@ func (c *OrganizationsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse,
 // method id "cloudresourcemanager.organizations.update":
 
 type OrganizationsUpdateCall struct {
-	s              *Service
-	organizationId string
-	organization   *Organization
-	urlParams_     gensupport.URLParams
-	ctx_           context.Context
+	s            *Service
+	name         string
+	organization *Organization
+	urlParams_   gensupport.URLParams
+	ctx_         context.Context
 }
 
 // Update: Updates an Organization resource identified by the specified
-// `organization_id`.
-func (r *OrganizationsService) Update(organizationId string, organization *Organization) *OrganizationsUpdateCall {
+// resource name.
+func (r *OrganizationsService) Update(name string, organization *Organization) *OrganizationsUpdateCall {
 	c := &OrganizationsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.organizationId = organizationId
+	c.name = name
 	c.organization = organization
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OrganizationsUpdateCall) QuotaUser(quotaUser string) *OrganizationsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1241,25 +1313,23 @@ func (c *OrganizationsUpdateCall) Context(ctx context.Context) *OrganizationsUpd
 }
 
 func (c *OrganizationsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.organization)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/organizations/{organizationId}")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"organizationId": c.organizationId,
+		"name": c.name,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.organizations.update" call.
@@ -1269,7 +1339,8 @@ func (c *OrganizationsUpdateCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *OrganizationsUpdateCall) Do() (*Organization, error) {
+func (c *OrganizationsUpdateCall) Do(opts ...googleapi.CallOption) (*Organization, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1293,26 +1364,28 @@ func (c *OrganizationsUpdateCall) Do() (*Organization, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Updates an Organization resource identified by the specified `organization_id`.",
+	//   "description": "Updates an Organization resource identified by the specified resource name.",
 	//   "httpMethod": "PUT",
 	//   "id": "cloudresourcemanager.organizations.update",
 	//   "parameterOrder": [
-	//     "organizationId"
+	//     "name"
 	//   ],
 	//   "parameters": {
-	//     "organizationId": {
-	//       "description": "An immutable id for the Organization that is assigned on creation. This should be omitted when creating a new Organization. This field is read-only.",
+	//     "name": {
+	//       "description": "Output Only. The resource name of the organization. This is the organization's relative path in the API. Its format is \"organizations/[organization_id]\". For example, \"organizations/1234\".",
 	//       "location": "path",
+	//       "pattern": "^organizations/[^/]*$",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "v1beta1/organizations/{organizationId}",
+	//   "path": "v1beta1/{+name}",
 	//   "request": {
 	//     "$ref": "Organization"
 	//   },
@@ -1346,14 +1419,6 @@ func (r *ProjectsService) Create(project *Project) *ProjectsCreateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsCreateCall) QuotaUser(quotaUser string) *ProjectsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1371,23 +1436,21 @@ func (c *ProjectsCreateCall) Context(ctx context.Context) *ProjectsCreateCall {
 }
 
 func (c *ProjectsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.project)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.create" call.
@@ -1397,7 +1460,8 @@ func (c *ProjectsCreateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsCreateCall) Do() (*Project, error) {
+func (c *ProjectsCreateCall) Do(opts ...googleapi.CallOption) (*Project, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1421,7 +1485,8 @@ func (c *ProjectsCreateCall) Do() (*Project, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1458,24 +1523,16 @@ type ProjectsDeleteCall struct {
 // does not have a billing account associated with it. + The Project has
 // a lifecycle state of ACTIVE. This method changes the Project's
 // lifecycle state from ACTIVE to DELETE_REQUESTED. The deletion starts
-// at an unspecified time, at which point the lifecycle state changes to
-// DELETE_IN_PROGRESS. Until the deletion completes, you can check the
-// lifecycle state checked by retrieving the Project with GetProject,
-// and the Project remains visible to ListProjects. However, you cannot
-// update the project. After the deletion completes, the Project is not
+// at an unspecified time, at which point the project is no longer
+// accessible. Until the deletion completes, you can check the lifecycle
+// state checked by retrieving the Project with GetProject, and the
+// Project remains visible to ListProjects. However, you cannot update
+// the project. After the deletion completes, the Project is not
 // retrievable by the GetProject and ListProjects methods. The caller
 // must have modify permissions for this Project.
 func (r *ProjectsService) Delete(projectId string) *ProjectsDeleteCall {
 	c := &ProjectsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsDeleteCall) QuotaUser(quotaUser string) *ProjectsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1496,19 +1553,18 @@ func (c *ProjectsDeleteCall) Context(ctx context.Context) *ProjectsDeleteCall {
 }
 
 func (c *ProjectsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.delete" call.
@@ -1518,7 +1574,8 @@ func (c *ProjectsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsDeleteCall) Do() (*Empty, error) {
+func (c *ProjectsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1542,12 +1599,13 @@ func (c *ProjectsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Marks the Project identified by the specified `project_id` (for example, `my-project-123`) for deletion. This method will only affect the Project if the following criteria are met: + The Project does not have a billing account associated with it. + The Project has a lifecycle state of ACTIVE. This method changes the Project's lifecycle state from ACTIVE to DELETE_REQUESTED. The deletion starts at an unspecified time, at which point the lifecycle state changes to DELETE_IN_PROGRESS. Until the deletion completes, you can check the lifecycle state checked by retrieving the Project with GetProject, and the Project remains visible to ListProjects. However, you cannot update the project. After the deletion completes, the Project is not retrievable by the GetProject and ListProjects methods. The caller must have modify permissions for this Project.",
+	//   "description": "Marks the Project identified by the specified `project_id` (for example, `my-project-123`) for deletion. This method will only affect the Project if the following criteria are met: + The Project does not have a billing account associated with it. + The Project has a lifecycle state of ACTIVE. This method changes the Project's lifecycle state from ACTIVE to DELETE_REQUESTED. The deletion starts at an unspecified time, at which point the project is no longer accessible. Until the deletion completes, you can check the lifecycle state checked by retrieving the Project with GetProject, and the Project remains visible to ListProjects. However, you cannot update the project. After the deletion completes, the Project is not retrievable by the GetProject and ListProjects methods. The caller must have modify permissions for this Project.",
 	//   "httpMethod": "DELETE",
 	//   "id": "cloudresourcemanager.projects.delete",
 	//   "parameterOrder": [
@@ -1591,14 +1649,6 @@ func (r *ProjectsService) Get(projectId string) *ProjectsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsGetCall) QuotaUser(quotaUser string) *ProjectsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1626,22 +1676,21 @@ func (c *ProjectsGetCall) Context(ctx context.Context) *ProjectsGetCall {
 }
 
 func (c *ProjectsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.get" call.
@@ -1651,7 +1700,8 @@ func (c *ProjectsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsGetCall) Do() (*Project, error) {
+func (c *ProjectsGetCall) Do(opts ...googleapi.CallOption) (*Project, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1675,7 +1725,8 @@ func (c *ProjectsGetCall) Do() (*Project, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1706,6 +1757,130 @@ func (c *ProjectsGetCall) Do() (*Project, error) {
 
 }
 
+// method id "cloudresourcemanager.projects.getAncestry":
+
+type ProjectsGetAncestryCall struct {
+	s                  *Service
+	projectId          string
+	getancestryrequest *GetAncestryRequest
+	urlParams_         gensupport.URLParams
+	ctx_               context.Context
+}
+
+// GetAncestry: Gets a list of ancestors in the resource hierarchy for
+// the Project identified by the specified `project_id` (for example,
+// `my-project-123`). The caller must have read permissions for this
+// Project.
+func (r *ProjectsService) GetAncestry(projectId string, getancestryrequest *GetAncestryRequest) *ProjectsGetAncestryCall {
+	c := &ProjectsGetAncestryCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.projectId = projectId
+	c.getancestryrequest = getancestryrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProjectsGetAncestryCall) Fields(s ...googleapi.Field) *ProjectsGetAncestryCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProjectsGetAncestryCall) Context(ctx context.Context) *ProjectsGetAncestryCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProjectsGetAncestryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getancestryrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}:getAncestry")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"projectId": c.projectId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "cloudresourcemanager.projects.getAncestry" call.
+// Exactly one of *GetAncestryResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *GetAncestryResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ProjectsGetAncestryCall) Do(opts ...googleapi.CallOption) (*GetAncestryResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &GetAncestryResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets a list of ancestors in the resource hierarchy for the Project identified by the specified `project_id` (for example, `my-project-123`). The caller must have read permissions for this Project.",
+	//   "httpMethod": "POST",
+	//   "id": "cloudresourcemanager.projects.getAncestry",
+	//   "parameterOrder": [
+	//     "projectId"
+	//   ],
+	//   "parameters": {
+	//     "projectId": {
+	//       "description": "The Project ID (for example, `my-project-123`). Required.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "v1beta1/projects/{projectId}:getAncestry",
+	//   "request": {
+	//     "$ref": "GetAncestryRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "GetAncestryResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
+	//     "https://www.googleapis.com/auth/cloud-platform.read-only"
+	//   ]
+	// }
+
+}
+
 // method id "cloudresourcemanager.projects.getIamPolicy":
 
 type ProjectsGetIamPolicyCall struct {
@@ -1726,14 +1901,6 @@ func (r *ProjectsService) GetIamPolicy(resource string, getiampolicyrequest *Get
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsGetIamPolicyCall) QuotaUser(quotaUser string) *ProjectsGetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1751,25 +1918,23 @@ func (c *ProjectsGetIamPolicyCall) Context(ctx context.Context) *ProjectsGetIamP
 }
 
 func (c *ProjectsGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.getiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{resource}:getIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.getIamPolicy" call.
@@ -1779,7 +1944,8 @@ func (c *ProjectsGetIamPolicyCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsGetIamPolicyCall) Do() (*Policy, error) {
+func (c *ProjectsGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1803,7 +1969,8 @@ func (c *ProjectsGetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1816,7 +1983,7 @@ func (c *ProjectsGetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the `getIamPolicy` documentation.",
+	//       "description": "REQUIRED: The resource for which the policy is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `getIamPolicy` documentation.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
@@ -1887,14 +2054,6 @@ func (c *ProjectsListCall) PageToken(pageToken string) *ProjectsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsListCall) QuotaUser(quotaUser string) *ProjectsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1922,20 +2081,19 @@ func (c *ProjectsListCall) Context(ctx context.Context) *ProjectsListCall {
 }
 
 func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.list" call.
@@ -1945,7 +2103,8 @@ func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsListCall) Do() (*ListProjectsResponse, error) {
+func (c *ProjectsListCall) Do(opts ...googleapi.CallOption) (*ListProjectsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1969,7 +2128,8 @@ func (c *ProjectsListCall) Do() (*ListProjectsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2007,6 +2167,27 @@ func (c *ProjectsListCall) Do() (*ListProjectsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsListCall) Pages(ctx context.Context, f func(*ListProjectsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "cloudresourcemanager.projects.setIamPolicy":
 
 type ProjectsSetIamPolicyCall struct {
@@ -2019,14 +2200,26 @@ type ProjectsSetIamPolicyCall struct {
 
 // SetIamPolicy: Sets the IAM access control policy for the specified
 // Project. Replaces any existing policy. The following constraints
-// apply when using `setIamPolicy()`: + Project currently supports only
-// `user:{emailid}` and `serviceAccount:{emailid}` members in a
-// `Binding` of a `Policy`. + To be added as an `owner`, a user must be
-// invited via Cloud Platform console and must accept the invitation. +
-// Members cannot be added to more than one role in the same policy. +
-// There must be at least one owner who has accepted the Terms of
-// Service (ToS) agreement in the policy. Calling `setIamPolicy()` to to
-// remove the last ToS-accepted owner from the policy will fail. +
+// apply when using `setIamPolicy()`: + Project does not support
+// `allUsers` and `allAuthenticatedUsers` as `members` in a `Binding` of
+// a `Policy`. + The owner role can be granted only to `user` and
+// `serviceAccount`. + Service accounts can be made owners of a project
+// directly without any restrictions. However, to be added as an owner,
+// a user must be invited via Cloud Platform console and must accept the
+// invitation. + A user cannot be granted the owner role using
+// `setIamPolicy()`. The user must be granted the owner role using the
+// Cloud Platform Console and must explicitly accept the invitation. +
+// Invitations to grant the owner role cannot be sent using
+// `setIamPolicy()`; they must be sent only using the Cloud Platform
+// Console. + Membership changes that leave the project without any
+// owners that have accepted the Terms of Service (ToS) will be
+// rejected. + Members cannot be added to more than one role in the same
+// policy. + There must be at least one owner who has accepted the Terms
+// of Service (ToS) agreement in the policy. Calling `setIamPolicy()` to
+// to remove the last ToS-accepted owner from the policy will fail. This
+// restriction also applies to legacy projects that no longer have
+// owners who have accepted the ToS. Edits to IAM policies will be
+// rejected until the lack of a ToS-accepting owner is rectified. +
 // Calling this method requires enabling the App Engine Admin API. Note:
 // Removing service accounts from policies or changing their roles can
 // render services completely inoperable. It is important to understand
@@ -2036,14 +2229,6 @@ func (r *ProjectsService) SetIamPolicy(resource string, setiampolicyrequest *Set
 	c := &ProjectsSetIamPolicyCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resource = resource
 	c.setiampolicyrequest = setiampolicyrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSetIamPolicyCall) QuotaUser(quotaUser string) *ProjectsSetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -2064,25 +2249,23 @@ func (c *ProjectsSetIamPolicyCall) Context(ctx context.Context) *ProjectsSetIamP
 }
 
 func (c *ProjectsSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{resource}:setIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.setIamPolicy" call.
@@ -2092,7 +2275,8 @@ func (c *ProjectsSetIamPolicyCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSetIamPolicyCall) Do() (*Policy, error) {
+func (c *ProjectsSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2116,12 +2300,13 @@ func (c *ProjectsSetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Sets the IAM access control policy for the specified Project. Replaces any existing policy. The following constraints apply when using `setIamPolicy()`: + Project currently supports only `user:{emailid}` and `serviceAccount:{emailid}` members in a `Binding` of a `Policy`. + To be added as an `owner`, a user must be invited via Cloud Platform console and must accept the invitation. + Members cannot be added to more than one role in the same policy. + There must be at least one owner who has accepted the Terms of Service (ToS) agreement in the policy. Calling `setIamPolicy()` to to remove the last ToS-accepted owner from the policy will fail. + Calling this method requires enabling the App Engine Admin API. Note: Removing service accounts from policies or changing their roles can render services completely inoperable. It is important to understand how the service account is being used before removing or updating its roles.",
+	//   "description": "Sets the IAM access control policy for the specified Project. Replaces any existing policy. The following constraints apply when using `setIamPolicy()`: + Project does not support `allUsers` and `allAuthenticatedUsers` as `members` in a `Binding` of a `Policy`. + The owner role can be granted only to `user` and `serviceAccount`. + Service accounts can be made owners of a project directly without any restrictions. However, to be added as an owner, a user must be invited via Cloud Platform console and must accept the invitation. + A user cannot be granted the owner role using `setIamPolicy()`. The user must be granted the owner role using the Cloud Platform Console and must explicitly accept the invitation. + Invitations to grant the owner role cannot be sent using `setIamPolicy()`; they must be sent only using the Cloud Platform Console. + Membership changes that leave the project without any owners that have accepted the Terms of Service (ToS) will be rejected. + Members cannot be added to more than one role in the same policy. + There must be at least one owner who has accepted the Terms of Service (ToS) agreement in the policy. Calling `setIamPolicy()` to to remove the last ToS-accepted owner from the policy will fail. This restriction also applies to legacy projects that no longer have owners who have accepted the ToS. Edits to IAM policies will be rejected until the lack of a ToS-accepting owner is rectified. + Calling this method requires enabling the App Engine Admin API. Note: Removing service accounts from policies or changing their roles can render services completely inoperable. It is important to understand how the service account is being used before removing or updating its roles.",
 	//   "httpMethod": "POST",
 	//   "id": "cloudresourcemanager.projects.setIamPolicy",
 	//   "parameterOrder": [
@@ -2129,7 +2314,7 @@ func (c *ProjectsSetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being specified. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the `setIamPolicy` documentation.",
+	//       "description": "REQUIRED: The resource for which the policy is being specified. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `setIamPolicy` documentation.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
@@ -2168,14 +2353,6 @@ func (r *ProjectsService) TestIamPermissions(resource string, testiampermissions
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTestIamPermissionsCall) QuotaUser(quotaUser string) *ProjectsTestIamPermissionsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2193,25 +2370,23 @@ func (c *ProjectsTestIamPermissionsCall) Context(ctx context.Context) *ProjectsT
 }
 
 func (c *ProjectsTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{resource}:testIamPermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.testIamPermissions" call.
@@ -2221,7 +2396,8 @@ func (c *ProjectsTestIamPermissionsCall) doRequest(alt string) (*http.Response, 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, error) {
+func (c *ProjectsTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*TestIamPermissionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2245,7 +2421,8 @@ func (c *ProjectsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2258,7 +2435,7 @@ func (c *ProjectsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, erro
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy detail is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the `testIamPermissions` documentation. rpc.",
+	//       "description": "REQUIRED: The resource for which the policy detail is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `testIamPermissions` documentation.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
@@ -2282,29 +2459,22 @@ func (c *ProjectsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, erro
 // method id "cloudresourcemanager.projects.undelete":
 
 type ProjectsUndeleteCall struct {
-	s          *Service
-	projectId  string
-	urlParams_ gensupport.URLParams
-	ctx_       context.Context
+	s                      *Service
+	projectId              string
+	undeleteprojectrequest *UndeleteProjectRequest
+	urlParams_             gensupport.URLParams
+	ctx_                   context.Context
 }
 
 // Undelete: Restores the Project identified by the specified
 // `project_id` (for example, `my-project-123`). You can only use this
 // method for a Project that has a lifecycle state of DELETE_REQUESTED.
-// After deletion starts, as indicated by a lifecycle state of
-// DELETE_IN_PROGRESS, the Project cannot be restored. The caller must
-// have modify permissions for this Project.
-func (r *ProjectsService) Undelete(projectId string) *ProjectsUndeleteCall {
+// After deletion starts, the Project cannot be restored. The caller
+// must have modify permissions for this Project.
+func (r *ProjectsService) Undelete(projectId string, undeleteprojectrequest *UndeleteProjectRequest) *ProjectsUndeleteCall {
 	c := &ProjectsUndeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsUndeleteCall) QuotaUser(quotaUser string) *ProjectsUndeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+	c.undeleteprojectrequest = undeleteprojectrequest
 	return c
 }
 
@@ -2325,19 +2495,23 @@ func (c *ProjectsUndeleteCall) Context(ctx context.Context) *ProjectsUndeleteCal
 }
 
 func (c *ProjectsUndeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.undeleteprojectrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}:undelete")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.undelete" call.
@@ -2347,7 +2521,8 @@ func (c *ProjectsUndeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsUndeleteCall) Do() (*Empty, error) {
+func (c *ProjectsUndeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2371,12 +2546,13 @@ func (c *ProjectsUndeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Restores the Project identified by the specified `project_id` (for example, `my-project-123`). You can only use this method for a Project that has a lifecycle state of DELETE_REQUESTED. After deletion starts, as indicated by a lifecycle state of DELETE_IN_PROGRESS, the Project cannot be restored. The caller must have modify permissions for this Project.",
+	//   "description": "Restores the Project identified by the specified `project_id` (for example, `my-project-123`). You can only use this method for a Project that has a lifecycle state of DELETE_REQUESTED. After deletion starts, the Project cannot be restored. The caller must have modify permissions for this Project.",
 	//   "httpMethod": "POST",
 	//   "id": "cloudresourcemanager.projects.undelete",
 	//   "parameterOrder": [
@@ -2391,6 +2567,9 @@ func (c *ProjectsUndeleteCall) Do() (*Empty, error) {
 	//     }
 	//   },
 	//   "path": "v1beta1/projects/{projectId}:undelete",
+	//   "request": {
+	//     "$ref": "UndeleteProjectRequest"
+	//   },
 	//   "response": {
 	//     "$ref": "Empty"
 	//   },
@@ -2421,14 +2600,6 @@ func (r *ProjectsService) Update(projectId string, project *Project) *ProjectsUp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsUpdateCall) QuotaUser(quotaUser string) *ProjectsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2446,25 +2617,23 @@ func (c *ProjectsUpdateCall) Context(ctx context.Context) *ProjectsUpdateCall {
 }
 
 func (c *ProjectsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.project)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "cloudresourcemanager.projects.update" call.
@@ -2474,7 +2643,8 @@ func (c *ProjectsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsUpdateCall) Do() (*Project, error) {
+func (c *ProjectsUpdateCall) Do(opts ...googleapi.CallOption) (*Project, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2498,7 +2668,8 @@ func (c *ProjectsUpdateCall) Do() (*Project, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

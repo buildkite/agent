@@ -62,10 +62,12 @@ func New(client *http.Client) (*Service, error) {
 	s.Creatives = NewCreativesService(s)
 	s.Marketplacedeals = NewMarketplacedealsService(s)
 	s.Marketplacenotes = NewMarketplacenotesService(s)
-	s.Marketplaceoffers = NewMarketplaceoffersService(s)
-	s.Marketplaceorders = NewMarketplaceordersService(s)
+	s.Marketplaceprivateauction = NewMarketplaceprivateauctionService(s)
 	s.PerformanceReport = NewPerformanceReportService(s)
 	s.PretargetingConfig = NewPretargetingConfigService(s)
+	s.Products = NewProductsService(s)
+	s.Proposals = NewProposalsService(s)
+	s.Pubprofiles = NewPubprofilesService(s)
 	return s, nil
 }
 
@@ -86,13 +88,17 @@ type Service struct {
 
 	Marketplacenotes *MarketplacenotesService
 
-	Marketplaceoffers *MarketplaceoffersService
-
-	Marketplaceorders *MarketplaceordersService
+	Marketplaceprivateauction *MarketplaceprivateauctionService
 
 	PerformanceReport *PerformanceReportService
 
 	PretargetingConfig *PretargetingConfigService
+
+	Products *ProductsService
+
+	Proposals *ProposalsService
+
+	Pubprofiles *PubprofilesService
 }
 
 func (s *Service) userAgent() string {
@@ -156,21 +162,12 @@ type MarketplacenotesService struct {
 	s *Service
 }
 
-func NewMarketplaceoffersService(s *Service) *MarketplaceoffersService {
-	rs := &MarketplaceoffersService{s: s}
+func NewMarketplaceprivateauctionService(s *Service) *MarketplaceprivateauctionService {
+	rs := &MarketplaceprivateauctionService{s: s}
 	return rs
 }
 
-type MarketplaceoffersService struct {
-	s *Service
-}
-
-func NewMarketplaceordersService(s *Service) *MarketplaceordersService {
-	rs := &MarketplaceordersService{s: s}
-	return rs
-}
-
-type MarketplaceordersService struct {
+type MarketplaceprivateauctionService struct {
 	s *Service
 }
 
@@ -189,6 +186,33 @@ func NewPretargetingConfigService(s *Service) *PretargetingConfigService {
 }
 
 type PretargetingConfigService struct {
+	s *Service
+}
+
+func NewProductsService(s *Service) *ProductsService {
+	rs := &ProductsService{s: s}
+	return rs
+}
+
+type ProductsService struct {
+	s *Service
+}
+
+func NewProposalsService(s *Service) *ProposalsService {
+	rs := &ProposalsService{s: s}
+	return rs
+}
+
+type ProposalsService struct {
+	s *Service
+}
+
+func NewPubprofilesService(s *Service) *PubprofilesService {
+	rs := &PubprofilesService{s: s}
+	return rs
+}
+
+type PubprofilesService struct {
 	s *Service
 }
 
@@ -246,6 +270,17 @@ func (s *Account) MarshalJSON() ([]byte, error) {
 }
 
 type AccountBidderLocation struct {
+	// BidProtocol: The protocol that the bidder endpoint is using. By
+	// default, OpenRTB protocols use JSON, except
+	// PROTOCOL_OPENRTB_PROTOBUF. PROTOCOL_OPENRTB_PROTOBUF uses protobuf
+	// encoding over the latest OpenRTB protocol version, which is 2.3 right
+	// now. Allowed values:
+	// - PROTOCOL_ADX
+	// - PROTOCOL_OPENRTB_2_2
+	// - PROTOCOL_OPENRTB_2_3
+	// - PROTOCOL_OPENRTB_PROTOBUF
+	BidProtocol string `json:"bidProtocol,omitempty"`
+
 	// MaximumQps: The maximum queries per second the Ad Exchange will send.
 	MaximumQps int64 `json:"maximumQps,omitempty"`
 
@@ -261,7 +296,7 @@ type AccountBidderLocation struct {
 	// Url: The URL to which the Ad Exchange will send bid requests.
 	Url string `json:"url,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "MaximumQps") to
+	// ForceSendFields is a list of field names (e.g. "BidProtocol") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -309,10 +344,10 @@ type AddOrderDealsRequest struct {
 	// Deals: The list of deals to add
 	Deals []*MarketplaceDeal `json:"deals,omitempty"`
 
-	// OrderRevisionNumber: The last known order revision number.
-	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
+	// ProposalRevisionNumber: The last known proposal revision number.
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
 
-	// UpdateAction: Indicates an optional action to take on the order
+	// UpdateAction: Indicates an optional action to take on the proposal
 	UpdateAction string `json:"updateAction,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Deals") to
@@ -331,12 +366,12 @@ func (s *AddOrderDealsRequest) MarshalJSON() ([]byte, error) {
 }
 
 type AddOrderDealsResponse struct {
-	// Deals: List of deals added (in the same order as passed in the
+	// Deals: List of deals added (in the same proposal as passed in the
 	// request)
 	Deals []*MarketplaceDeal `json:"deals,omitempty"`
 
-	// OrderRevisionNumber: The updated revision number for the order.
-	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
+	// ProposalRevisionNumber: The updated revision number for the proposal.
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -548,12 +583,13 @@ func (s *ContactInformation) MarshalJSON() ([]byte, error) {
 }
 
 type CreateOrdersRequest struct {
-	// Orders: The list of orders to create.
-	Orders []*MarketplaceOrder `json:"orders,omitempty"`
+	// Proposals: The list of proposals to create.
+	Proposals []*Proposal `json:"proposals,omitempty"`
 
+	// WebPropertyCode: Web property id of the seller creating these orders
 	WebPropertyCode string `json:"webPropertyCode,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Orders") to
+	// ForceSendFields is a list of field names (e.g. "Proposals") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -569,14 +605,14 @@ func (s *CreateOrdersRequest) MarshalJSON() ([]byte, error) {
 }
 
 type CreateOrdersResponse struct {
-	// Orders: The list of orders successfully created.
-	Orders []*MarketplaceOrder `json:"orders,omitempty"`
+	// Proposals: The list of proposals successfully created.
+	Proposals []*Proposal `json:"proposals,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "Orders") to
+	// ForceSendFields is a list of field names (e.g. "Proposals") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -599,6 +635,10 @@ type Creative struct {
 
 	// AccountId: Account id.
 	AccountId int64 `json:"accountId,omitempty"`
+
+	// AdChoicesDestinationUrl: The link to the Ad Preferences page. This is
+	// only supported for native ads.
+	AdChoicesDestinationUrl string `json:"adChoicesDestinationUrl,omitempty"`
 
 	// AdvertiserId: Detected advertiser id, if any. Read-only. This field
 	// should not be set in requests.
@@ -640,6 +680,10 @@ type Creative struct {
 	// servingRestrictions directly.
 	DealsStatus string `json:"dealsStatus,omitempty"`
 
+	// DetectedDomains: Detected domains for this creative. Read-only. This
+	// field should not be set in requests.
+	DetectedDomains []string `json:"detectedDomains,omitempty"`
+
 	// FilteringReasons: The filtering reasons for the creative. Read-only.
 	// This field should not be set in requests.
 	FilteringReasons *CreativeFilteringReasons `json:"filteringReasons,omitempty"`
@@ -653,6 +697,10 @@ type Creative struct {
 
 	// Kind: Resource type.
 	Kind string `json:"kind,omitempty"`
+
+	// Languages: Detected languages for this creative. Read-only. This
+	// field should not be set in requests.
+	Languages []string `json:"languages,omitempty"`
 
 	// NativeAd: If nativeAd is set, HTMLSnippet and videoURL should not be
 	// set.
@@ -720,13 +768,17 @@ func (s *Creative) MarshalJSON() ([]byte, error) {
 }
 
 type CreativeCorrections struct {
+	// Contexts: All known serving contexts containing serving status
+	// information.
+	Contexts []*CreativeCorrectionsContexts `json:"contexts,omitempty"`
+
 	// Details: Additional details about the correction.
 	Details []string `json:"details,omitempty"`
 
 	// Reason: The type of correction that was applied to the creative.
 	Reason string `json:"reason,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Details") to
+	// ForceSendFields is a list of field names (e.g. "Contexts") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -737,6 +789,38 @@ type CreativeCorrections struct {
 
 func (s *CreativeCorrections) MarshalJSON() ([]byte, error) {
 	type noMethod CreativeCorrections
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type CreativeCorrectionsContexts struct {
+	// AuctionType: Only set when contextType=AUCTION_TYPE. Represents the
+	// auction types this correction applies to.
+	AuctionType []string `json:"auctionType,omitempty"`
+
+	// ContextType: The type of context (e.g., location, platform, auction
+	// type, SSL-ness).
+	ContextType string `json:"contextType,omitempty"`
+
+	// GeoCriteriaId: Only set when contextType=LOCATION. Represents the geo
+	// criterias this correction applies to.
+	GeoCriteriaId []int64 `json:"geoCriteriaId,omitempty"`
+
+	// Platform: Only set when contextType=PLATFORM. Represents the
+	// platforms this correction applies to.
+	Platform []string `json:"platform,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AuctionType") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *CreativeCorrectionsContexts) MarshalJSON() ([]byte, error) {
+	type noMethod CreativeCorrectionsContexts
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -1036,6 +1120,58 @@ func (s *CreativesList) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type DealServingMetadata struct {
+	// DealPauseStatus: Tracks which parties (if any) have paused a deal.
+	// (readonly, except via PauseResumeOrderDeals action)
+	DealPauseStatus *DealServingMetadataDealPauseStatus `json:"dealPauseStatus,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DealPauseStatus") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DealServingMetadata) MarshalJSON() ([]byte, error) {
+	type noMethod DealServingMetadata
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// DealServingMetadataDealPauseStatus: Tracks which parties (if any)
+// have paused a deal. The deal is considered paused if has_buyer_paused
+// || has_seller_paused. Each of the has_buyer_paused or the
+// has_seller_paused bits can be set independently.
+type DealServingMetadataDealPauseStatus struct {
+	BuyerPauseReason string `json:"buyerPauseReason,omitempty"`
+
+	// FirstPausedBy: If the deal is paused, records which party paused the
+	// deal first.
+	FirstPausedBy string `json:"firstPausedBy,omitempty"`
+
+	HasBuyerPaused bool `json:"hasBuyerPaused,omitempty"`
+
+	HasSellerPaused bool `json:"hasSellerPaused,omitempty"`
+
+	SellerPauseReason string `json:"sellerPauseReason,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "BuyerPauseReason") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DealServingMetadataDealPauseStatus) MarshalJSON() ([]byte, error) {
+	type noMethod DealServingMetadataDealPauseStatus
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type DealTerms struct {
 	// BrandingType: Visibilty of the URL in bid requests.
 	BrandingType string `json:"brandingType,omitempty"`
@@ -1063,6 +1199,14 @@ type DealTerms struct {
 	// price deals.
 	NonGuaranteedFixedPriceTerms *DealTermsNonGuaranteedFixedPriceTerms `json:"nonGuaranteedFixedPriceTerms,omitempty"`
 
+	// RubiconNonGuaranteedTerms: The terms for rubicon non-guaranteed
+	// deals.
+	RubiconNonGuaranteedTerms *DealTermsRubiconNonGuaranteedTerms `json:"rubiconNonGuaranteedTerms,omitempty"`
+
+	// SellerTimeZone: For deals with Cost Per Day billing, defines the
+	// timezone used to mark the boundaries of a day (buyer-readonly)
+	SellerTimeZone string `json:"sellerTimeZone,omitempty"`
+
 	// ForceSendFields is a list of field names (e.g. "BrandingType") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
@@ -1079,6 +1223,11 @@ func (s *DealTerms) MarshalJSON() ([]byte, error) {
 }
 
 type DealTermsGuaranteedFixedPriceTerms struct {
+	// BillingInfo: External billing info for this Deal. This field is
+	// relevant when external billing info such as price has a different
+	// currency code than DFP/AdX.
+	BillingInfo *DealTermsGuaranteedFixedPriceTermsBillingInfo `json:"billingInfo,omitempty"`
+
 	// FixedPrices: Fixed price for the specified buyer.
 	FixedPrices []*PricePerBuyer `json:"fixedPrices,omitempty"`
 
@@ -1088,10 +1237,16 @@ type DealTermsGuaranteedFixedPriceTerms struct {
 	GuaranteedImpressions int64 `json:"guaranteedImpressions,omitempty,string"`
 
 	// GuaranteedLooks: Count of guaranteed looks. Required for deal,
-	// optional for offer.
+	// optional for product. For CPD deals, buyer changes to
+	// guaranteed_looks will be ignored.
 	GuaranteedLooks int64 `json:"guaranteedLooks,omitempty,string"`
 
-	// ForceSendFields is a list of field names (e.g. "FixedPrices") to
+	// MinimumDailyLooks: Count of minimum daily looks for a CPD deal. For
+	// CPD deals, buyer should negotiate on this field instead of
+	// guaranteed_looks.
+	MinimumDailyLooks int64 `json:"minimumDailyLooks,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "BillingInfo") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -1106,19 +1261,61 @@ func (s *DealTermsGuaranteedFixedPriceTerms) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type DealTermsGuaranteedFixedPriceTermsBillingInfo struct {
+	// CurrencyConversionTimeMs: The timestamp (in ms since epoch) when the
+	// original reservation price for the deal was first converted to DFP
+	// currency. This is used to convert the contracted price into
+	// advertiser's currency without discrepancy.
+	CurrencyConversionTimeMs int64 `json:"currencyConversionTimeMs,omitempty,string"`
+
+	// DfpLineItemId: The DFP line item id associated with this deal. For
+	// features like CPD, buyers can retrieve the DFP line item for billing
+	// reconciliation.
+	DfpLineItemId int64 `json:"dfpLineItemId,omitempty,string"`
+
+	// OriginalContractedQuantity: The original contracted quantity (#
+	// impressions) for this deal. To ensure delivery, sometimes the
+	// publisher will book the deal with a impression buffer, such that
+	// guaranteed_looks is greater than the contracted quantity. However
+	// clients are billed using the original contracted quantity.
+	OriginalContractedQuantity int64 `json:"originalContractedQuantity,omitempty,string"`
+
+	// Price: The original reservation price for the deal, if the currency
+	// code is different from the one used in negotiation.
+	Price *Price `json:"price,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g.
+	// "CurrencyConversionTimeMs") to unconditionally include in API
+	// requests. By default, fields with empty values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DealTermsGuaranteedFixedPriceTermsBillingInfo) MarshalJSON() ([]byte, error) {
+	type noMethod DealTermsGuaranteedFixedPriceTermsBillingInfo
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type DealTermsNonGuaranteedAuctionTerms struct {
-	// PrivateAuctionId: Id of the corresponding private auction.
-	PrivateAuctionId string `json:"privateAuctionId,omitempty"`
+	// AutoOptimizePrivateAuction: True if open auction buyers are allowed
+	// to compete with invited buyers in this private auction
+	// (buyer-readonly).
+	AutoOptimizePrivateAuction bool `json:"autoOptimizePrivateAuction,omitempty"`
 
 	// ReservePricePerBuyers: Reserve price for the specified buyer.
 	ReservePricePerBuyers []*PricePerBuyer `json:"reservePricePerBuyers,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "PrivateAuctionId") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "AutoOptimizePrivateAuction") to unconditionally include in API
+	// requests. By default, fields with empty values are omitted from API
+	// requests. However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -1147,13 +1344,38 @@ func (s *DealTermsNonGuaranteedFixedPriceTerms) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type DealTermsRubiconNonGuaranteedTerms struct {
+	// PriorityPrice: Optional price for Rubicon priority access in the
+	// auction.
+	PriorityPrice *Price `json:"priorityPrice,omitempty"`
+
+	// StandardPrice: Optional price for Rubicon standard access in the
+	// auction.
+	StandardPrice *Price `json:"standardPrice,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "PriorityPrice") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DealTermsRubiconNonGuaranteedTerms) MarshalJSON() ([]byte, error) {
+	type noMethod DealTermsRubiconNonGuaranteedTerms
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type DeleteOrderDealsRequest struct {
-	// DealIds: List of deals to delete for a given order
+	// DealIds: List of deals to delete for a given proposal
 	DealIds []string `json:"dealIds,omitempty"`
 
-	// OrderRevisionNumber: The last known order revision number.
-	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
+	// ProposalRevisionNumber: The last known proposal revision number.
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
 
+	// UpdateAction: Indicates an optional action to take on the proposal
 	UpdateAction string `json:"updateAction,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "DealIds") to
@@ -1172,12 +1394,12 @@ func (s *DeleteOrderDealsRequest) MarshalJSON() ([]byte, error) {
 }
 
 type DeleteOrderDealsResponse struct {
-	// Deals: List of deals deleted (in the same order as passed in the
+	// Deals: List of deals deleted (in the same proposal as passed in the
 	// request)
 	Deals []*MarketplaceDeal `json:"deals,omitempty"`
 
-	// OrderRevisionNumber: The updated revision number for the order.
-	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
+	// ProposalRevisionNumber: The updated revision number for the proposal.
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -1243,30 +1465,85 @@ func (s *DeliveryControlFrequencyCap) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+// Dimension: This message carries publisher provided breakdown. E.g.
+// {dimension_type: 'COUNTRY', [{dimension_value: {id: 1, name: 'US'}},
+// {dimension_value: {id: 2, name: 'UK'}}]}
+type Dimension struct {
+	DimensionType string `json:"dimensionType,omitempty"`
+
+	DimensionValues []*DimensionDimensionValue `json:"dimensionValues,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DimensionType") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Dimension) MarshalJSON() ([]byte, error) {
+	type noMethod Dimension
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// DimensionDimensionValue: Value of the dimension.
+type DimensionDimensionValue struct {
+	// Id: Id of the dimension.
+	Id int64 `json:"id,omitempty"`
+
+	// Name: Name of the dimension mainly for debugging purposes, except for
+	// the case of CREATIVE_SIZE. For CREATIVE_SIZE, strings are used
+	// instead of ids.
+	Name string `json:"name,omitempty"`
+
+	// Percentage: Percent of total impressions for a dimension type. e.g.
+	// {dimension_type: 'GENDER', [{dimension_value: {id: 1, name: 'MALE',
+	// percentage: 60}}]} Gender MALE is 60% of all impressions which have
+	// gender.
+	Percentage int64 `json:"percentage,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Id") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DimensionDimensionValue) MarshalJSON() ([]byte, error) {
+	type noMethod DimensionDimensionValue
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type EditAllOrderDealsRequest struct {
 	// Deals: List of deals to edit. Service may perform 3 different
 	// operations based on comparison of deals in this list vs deals already
-	// persisted in database: 1. Add new deal to order If a deal in this
-	// list does not exist in the order, the service will create a new deal
-	// and add it to the order. Validation will follow AddOrderDealsRequest.
-	// 2. Update existing deal in the order If a deal in this list already
-	// exist in the order, the service will update that existing deal to
-	// this new deal in the request. Validation will follow
-	// UpdateOrderDealsRequest. 3. Delete deals from the order (just need
-	// the id) If a existing deal in the order is not present in this list,
-	// the service will delete that deal from the order. Validation will
-	// follow DeleteOrderDealsRequest.
+	// persisted in database: 1. Add new deal to proposal If a deal in this
+	// list does not exist in the proposal, the service will create a new
+	// deal and add it to the proposal. Validation will follow
+	// AddOrderDealsRequest. 2. Update existing deal in the proposal If a
+	// deal in this list already exist in the proposal, the service will
+	// update that existing deal to this new deal in the request. Validation
+	// will follow UpdateOrderDealsRequest. 3. Delete deals from the
+	// proposal (just need the id) If a existing deal in the proposal is not
+	// present in this list, the service will delete that deal from the
+	// proposal. Validation will follow DeleteOrderDealsRequest.
 	Deals []*MarketplaceDeal `json:"deals,omitempty"`
 
-	// Order: If specified, also updates the order in the batch transaction.
-	// This is useful when the order and the deals need to be updated in one
-	// transaction.
-	Order *MarketplaceOrder `json:"order,omitempty"`
+	// Proposal: If specified, also updates the proposal in the batch
+	// transaction. This is useful when the proposal and the deals need to
+	// be updated in one transaction.
+	Proposal *Proposal `json:"proposal,omitempty"`
 
-	// OrderRevisionNumber: The last known revision number for the order.
-	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
+	// ProposalRevisionNumber: The last known revision number for the
+	// proposal.
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
 
-	// UpdateAction: Indicates an optional action to take on the order
+	// UpdateAction: Indicates an optional action to take on the proposal
 	UpdateAction string `json:"updateAction,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Deals") to
@@ -1285,8 +1562,12 @@ func (s *EditAllOrderDealsRequest) MarshalJSON() ([]byte, error) {
 }
 
 type EditAllOrderDealsResponse struct {
-	// Deals: List of all deals in the order after edit.
+	// Deals: List of all deals in the proposal after edit.
 	Deals []*MarketplaceDeal `json:"deals,omitempty"`
+
+	// OrderRevisionNumber: The latest revision number after the update has
+	// been applied.
+	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -1308,14 +1589,14 @@ func (s *EditAllOrderDealsResponse) MarshalJSON() ([]byte, error) {
 }
 
 type GetOffersResponse struct {
-	// Offers: The returned list of offers.
-	Offers []*MarketplaceOffer `json:"offers,omitempty"`
+	// Products: The returned list of products.
+	Products []*Product `json:"products,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "Offers") to
+	// ForceSendFields is a list of field names (e.g. "Products") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -1331,7 +1612,7 @@ func (s *GetOffersResponse) MarshalJSON() ([]byte, error) {
 }
 
 type GetOrderDealsResponse struct {
-	// Deals: List of deals for the order
+	// Deals: List of deals for the proposal
 	Deals []*MarketplaceDeal `json:"deals,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1354,7 +1635,10 @@ func (s *GetOrderDealsResponse) MarshalJSON() ([]byte, error) {
 }
 
 type GetOrderNotesResponse struct {
-	// Notes: The list of matching notes.
+	// Notes: The list of matching notes. The notes for a proposal are
+	// ordered from oldest to newest. If the notes span multiple proposals,
+	// they will be grouped by proposal, with the notes for the most
+	// recently modified proposal appearing first.
 	Notes []*MarketplaceNote `json:"notes,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1377,14 +1661,14 @@ func (s *GetOrderNotesResponse) MarshalJSON() ([]byte, error) {
 }
 
 type GetOrdersResponse struct {
-	// Orders: The list of matching orders.
-	Orders []*MarketplaceOrder `json:"orders,omitempty"`
+	// Proposals: The list of matching proposals.
+	Proposals []*Proposal `json:"proposals,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "Orders") to
+	// ForceSendFields is a list of field names (e.g. "Proposals") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -1399,8 +1683,32 @@ func (s *GetOrdersResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// MarketplaceDeal: An order can contain multiple deals. A deal contains
-// the terms and targeting information that is used for serving.
+type GetPublisherProfilesByAccountIdResponse struct {
+	// Profiles: Profiles for the requested publisher
+	Profiles []*PublisherProfileApiProto `json:"profiles,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "Profiles") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *GetPublisherProfilesByAccountIdResponse) MarshalJSON() ([]byte, error) {
+	type noMethod GetPublisherProfilesByAccountIdResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// MarketplaceDeal: A proposal can contain multiple deals. A deal
+// contains the terms and targeting information that is used for
+// serving.
 type MarketplaceDeal struct {
 	// BuyerPrivateData: Buyer private data (hidden from seller).
 	BuyerPrivateData *PrivateData `json:"buyerPrivateData,omitempty"`
@@ -1413,8 +1721,16 @@ type MarketplaceDeal struct {
 	// (buyer-readonly)
 	CreativePreApprovalPolicy string `json:"creativePreApprovalPolicy,omitempty"`
 
-	// DealId: A unique deal=id for the deal (readonly).
+	// CreativeSafeFrameCompatibility: Specifies whether the creative is
+	// safeFrame compatible (buyer-readonly)
+	CreativeSafeFrameCompatibility string `json:"creativeSafeFrameCompatibility,omitempty"`
+
+	// DealId: A unique deal-id for the deal (readonly).
 	DealId string `json:"dealId,omitempty"`
+
+	// DealServingMetadata: Metadata about the serving status of this deal
+	// (readonly, writes via custom actions)
+	DealServingMetadata *DealServingMetadata `json:"dealServingMetadata,omitempty"`
 
 	// DeliveryControl: The set of fields around delivery control that are
 	// interesting for a buyer to see but are non-negotiable. These are set
@@ -1451,22 +1767,27 @@ type MarketplaceDeal struct {
 	// Name: The name of the deal. (updatable)
 	Name string `json:"name,omitempty"`
 
-	// OfferId: The offer-id from which this deal was created. (readonly,
-	// except on create)
-	OfferId string `json:"offerId,omitempty"`
+	// ProductId: The product-id from which this deal was created.
+	// (readonly, except on create)
+	ProductId string `json:"productId,omitempty"`
 
-	// OfferRevisionNumber: The revision number of the offer that the deal
-	// was created from (readonly, except on create)
-	OfferRevisionNumber int64 `json:"offerRevisionNumber,omitempty,string"`
+	// ProductRevisionNumber: The revision number of the product that the
+	// deal was created from (readonly, except on create)
+	ProductRevisionNumber int64 `json:"productRevisionNumber,omitempty,string"`
 
-	OrderId string `json:"orderId,omitempty"`
+	// ProgrammaticCreativeSource: Specifies the creative source for
+	// programmatic deals, PUBLISHER means creative is provided by seller
+	// and ADVERTISR means creative is provided by buyer. (buyer-readonly)
+	ProgrammaticCreativeSource string `json:"programmaticCreativeSource,omitempty"`
+
+	ProposalId string `json:"proposalId,omitempty"`
 
 	// SellerContacts: Optional Seller contact information for the deal
 	// (buyer-readonly)
 	SellerContacts []*ContactInformation `json:"sellerContacts,omitempty"`
 
 	// SharedTargetings: The shared targeting visible to buyers and sellers.
-	// (updatable)
+	// Each shared targeting entity is AND'd together. (updatable)
 	SharedTargetings []*SharedTargeting `json:"sharedTargetings,omitempty"`
 
 	// SyndicationProduct: The syndication product associated with the deal.
@@ -1546,7 +1867,7 @@ func (s *MarketplaceLabel) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// MarketplaceNote: An order is associated with a bunch of notes which
+// MarketplaceNote: A proposal is associated with a bunch of notes which
 // may optionally be associated with a deal and/or revision number.
 type MarketplaceNote struct {
 	// CreatorRole: The role of the person (buyer/seller) creating the note.
@@ -1567,12 +1888,12 @@ type MarketplaceNote struct {
 	// NoteId: The unique id for the note. (readonly)
 	NoteId string `json:"noteId,omitempty"`
 
-	// OrderId: The order_id that a note is attached to. (readonly)
-	OrderId string `json:"orderId,omitempty"`
+	// ProposalId: The proposalId that a note is attached to. (readonly)
+	ProposalId string `json:"proposalId,omitempty"`
 
-	// OrderRevisionNumber: If the note is associated with an order revision
-	// number, then store that here. (readonly, except on create)
-	OrderRevisionNumber int64 `json:"orderRevisionNumber,omitempty,string"`
+	// ProposalRevisionNumber: If the note is associated with a proposal
+	// revision number, then store that here. (readonly, except on create)
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
 
 	// TimestampMs: The timestamp (ms since epoch) that this note was
 	// created. (readonly)
@@ -1589,209 +1910,6 @@ type MarketplaceNote struct {
 
 func (s *MarketplaceNote) MarshalJSON() ([]byte, error) {
 	type noMethod MarketplaceNote
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-// MarketplaceOffer: An offer is segment of inventory that a seller
-// wishes to sell. It is associated with certain terms and targeting
-// information which helps buyer know more about the inventory. Each
-// field in an order can have one of the following setting:
-//
-// (readonly) - It is an error to try and set this field.
-// (buyer-readonly) - Only the seller can set this field.
-// (seller-readonly) - Only the buyer can set this field. (updatable) -
-// The field is updatable at all times by either buyer or the seller.
-type MarketplaceOffer struct {
-	// CreationTimeMs: Creation time in ms. since epoch (readonly)
-	CreationTimeMs int64 `json:"creationTimeMs,omitempty,string"`
-
-	// CreatorContacts: Optional contact information for the creator of this
-	// offer. (buyer-readonly)
-	CreatorContacts []*ContactInformation `json:"creatorContacts,omitempty"`
-
-	// FlightEndTimeMs: The proposed end time for the deal (ms since epoch)
-	// (buyer-readonly)
-	FlightEndTimeMs int64 `json:"flightEndTimeMs,omitempty,string"`
-
-	// FlightStartTimeMs: Inventory availability dates. (times are in ms
-	// since epoch) The granularity is generally in the order of seconds.
-	// (buyer-readonly)
-	FlightStartTimeMs int64 `json:"flightStartTimeMs,omitempty,string"`
-
-	// HasCreatorSignedOff: If the creator has already signed off on the
-	// offer, then the buyer can finalize the deal by accepting the offer as
-	// is. When copying to an order, if any of the terms are changed, then
-	// auto_finalize is automatically set to false.
-	HasCreatorSignedOff bool `json:"hasCreatorSignedOff,omitempty"`
-
-	// InventorySource: What exchange will provide this inventory (readonly,
-	// except on create).
-	InventorySource string `json:"inventorySource,omitempty"`
-
-	// Kind: Identifies what kind of resource this is. Value: the fixed
-	// string "adexchangebuyer#marketplaceOffer".
-	Kind string `json:"kind,omitempty"`
-
-	// Labels: Optional List of labels for the offer (optional,
-	// buyer-readonly).
-	Labels []*MarketplaceLabel `json:"labels,omitempty"`
-
-	// LastUpdateTimeMs: Time of last update in ms. since epoch (readonly)
-	LastUpdateTimeMs int64 `json:"lastUpdateTimeMs,omitempty,string"`
-
-	// Name: The name for this offer as set by the seller. (buyer-readonly)
-	Name string `json:"name,omitempty"`
-
-	// OfferId: The unique id for the offer (readonly)
-	OfferId string `json:"offerId,omitempty"`
-
-	// RevisionNumber: The revision number of the offer. (readonly)
-	RevisionNumber int64 `json:"revisionNumber,omitempty,string"`
-
-	// Seller: Information about the seller that created this offer
-	// (readonly, except on create)
-	Seller *Seller `json:"seller,omitempty"`
-
-	// SharedTargetings: Targeting that is shared between the buyer and the
-	// seller. Each targeting criteria has a specified key and for each key
-	// there is a list of inclusion value or exclusion values.
-	// (buyer-readonly)
-	SharedTargetings []*SharedTargeting `json:"sharedTargetings,omitempty"`
-
-	// State: The state of the offer. (buyer-readonly)
-	State string `json:"state,omitempty"`
-
-	// SyndicationProduct: The syndication product associated with the deal.
-	// (readonly, except on create)
-	SyndicationProduct string `json:"syndicationProduct,omitempty"`
-
-	// Terms: The negotiable terms of the deal (buyer-readonly)
-	Terms *DealTerms `json:"terms,omitempty"`
-
-	WebPropertyCode string `json:"webPropertyCode,omitempty"`
-
-	// ServerResponse contains the HTTP response code and headers from the
-	// server.
-	googleapi.ServerResponse `json:"-"`
-
-	// ForceSendFields is a list of field names (e.g. "CreationTimeMs") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-}
-
-func (s *MarketplaceOffer) MarshalJSON() ([]byte, error) {
-	type noMethod MarketplaceOffer
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-// MarketplaceOrder: Represents an order in the marketplace. An order is
-// the unit of negotiation between a seller and a buyer and contains
-// deals which are served. Each field in an order can have one of the
-// following setting:
-//
-// (readonly) - It is an error to try and set this field.
-// (buyer-readonly) - Only the seller can set this field.
-// (seller-readonly) - Only the buyer can set this field. (updatable) -
-// The field is updatable at all times by either buyer or the seller.
-type MarketplaceOrder struct {
-	// BilledBuyer: Reference to the buyer that will get billed for this
-	// order. (readonly)
-	BilledBuyer *Buyer `json:"billedBuyer,omitempty"`
-
-	// Buyer: Reference to the buyer on the order. (readonly, except on
-	// create)
-	Buyer *Buyer `json:"buyer,omitempty"`
-
-	// BuyerContacts: Optional contact information fort the buyer.
-	// (seller-readonly)
-	BuyerContacts []*ContactInformation `json:"buyerContacts,omitempty"`
-
-	// BuyerPrivateData: Private data for buyer. (hidden from seller).
-	BuyerPrivateData *PrivateData `json:"buyerPrivateData,omitempty"`
-
-	// HasBuyerSignedOff: When an order is in an accepted state, indicates
-	// whether the buyer has signed off Once both sides have signed off on a
-	// deal, the order can be finalized by the seller. (seller-readonly)
-	HasBuyerSignedOff bool `json:"hasBuyerSignedOff,omitempty"`
-
-	// HasSellerSignedOff: When an order is in an accepted state, indicates
-	// whether the buyer has signed off Once both sides have signed off on a
-	// deal, the order can be finalized by the seller. (buyer-readonly)
-	HasSellerSignedOff bool `json:"hasSellerSignedOff,omitempty"`
-
-	// InventorySource: What exchange will provide this inventory (readonly,
-	// except on create).
-	InventorySource string `json:"inventorySource,omitempty"`
-
-	// IsRenegotiating: True if the order is being renegotiated (readonly).
-	IsRenegotiating bool `json:"isRenegotiating,omitempty"`
-
-	// IsSetupComplete: True, if the buyside inventory setup is complete for
-	// this order. (readonly)
-	IsSetupComplete bool `json:"isSetupComplete,omitempty"`
-
-	// Kind: Identifies what kind of resource this is. Value: the fixed
-	// string "adexchangebuyer#marketplaceOrder".
-	Kind string `json:"kind,omitempty"`
-
-	// Labels: List of labels associated with the order. (readonly)
-	Labels []*MarketplaceLabel `json:"labels,omitempty"`
-
-	// LastUpdaterOrCommentorRole: The role of the last user that either
-	// updated the order or left a comment. (readonly)
-	LastUpdaterOrCommentorRole string `json:"lastUpdaterOrCommentorRole,omitempty"`
-
-	LastUpdaterRole string `json:"lastUpdaterRole,omitempty"`
-
-	// Name: The name for the order (updatable)
-	Name string `json:"name,omitempty"`
-
-	// OrderId: The unique id of the order. (readonly).
-	OrderId string `json:"orderId,omitempty"`
-
-	// OrderState: The current state of the order. (readonly)
-	OrderState string `json:"orderState,omitempty"`
-
-	// OriginatorRole: Indicates whether the buyer/seller created the
-	// offer.(readonly)
-	OriginatorRole string `json:"originatorRole,omitempty"`
-
-	// RevisionNumber: The revision number for the order (readonly).
-	RevisionNumber int64 `json:"revisionNumber,omitempty,string"`
-
-	// RevisionTimeMs: The time (ms since epoch) when the order was last
-	// revised (readonly).
-	RevisionTimeMs int64 `json:"revisionTimeMs,omitempty,string"`
-
-	// Seller: Reference to the seller on the order. (readonly, except on
-	// create)
-	Seller *Seller `json:"seller,omitempty"`
-
-	// SellerContacts: Optional contact information for the seller
-	// (buyer-readonly).
-	SellerContacts []*ContactInformation `json:"sellerContacts,omitempty"`
-
-	// ServerResponse contains the HTTP response code and headers from the
-	// server.
-	googleapi.ServerResponse `json:"-"`
-
-	// ForceSendFields is a list of field names (e.g. "BilledBuyer") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-}
-
-func (s *MarketplaceOrder) MarshalJSON() ([]byte, error) {
-	type noMethod MarketplaceOrder
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -1899,8 +2017,6 @@ func (s *PerformanceReport) MarshalJSON() ([]byte, error) {
 
 // PerformanceReportList: The configuration data for an Ad Exchange
 // performance report list.
-// https://sites.google.com/a/google.com/adx-integration/Home/engineering/binary-releases/rtb-api-release
-// https://cs.corp.google.com/#piper///depot/google3/contentads/adx/tools/rtb_api/adxrtb.py
 type PerformanceReportList struct {
 	// Kind: Resource type.
 	Kind string `json:"kind,omitempty"`
@@ -2180,7 +2296,10 @@ type Price struct {
 	// CurrencyCode: The currency code for the price.
 	CurrencyCode string `json:"currencyCode,omitempty"`
 
-	// PricingType: The pricing type for the deal/offer.
+	// ExpectedCpmMicros: In case of CPD deals, the expected CPM in micros.
+	ExpectedCpmMicros float64 `json:"expectedCpmMicros,omitempty"`
+
+	// PricingType: The pricing type for the deal/product.
 	PricingType string `json:"pricingType,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "AmountMicros") to
@@ -2199,13 +2318,16 @@ func (s *Price) MarshalJSON() ([]byte, error) {
 }
 
 // PricePerBuyer: Used to specify pricing rules for buyers/advertisers.
-// Each PricePerBuyer in an offer can become [0,1] deals. To check if
+// Each PricePerBuyer in an product can become [0,1] deals. To check if
 // there is a PricePerBuyer for a particular buyer or buyer/advertiser
 // pair, we look for the most specific matching rule - we first look for
 // a rule matching the buyer and advertiser, next a rule with the buyer
 // but an empty advertiser list, and otherwise look for a matching rule
 // where no buyer is set.
 type PricePerBuyer struct {
+	// AuctionTier: Optional access type for this buyer.
+	AuctionTier string `json:"auctionTier,omitempty"`
+
 	// Buyer: The buyer who will pay this price. If unset, all buyers can
 	// pay this price (if the advertisers match, and there's no more
 	// specific rule matching the buyer).
@@ -2214,7 +2336,7 @@ type PricePerBuyer struct {
 	// Price: The specified price
 	Price *Price `json:"price,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Buyer") to
+	// ForceSendFields is a list of field names (e.g. "AuctionTier") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -2249,9 +2371,367 @@ func (s *PrivateData) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+// Product: A product is segment of inventory that a seller wishes to
+// sell. It is associated with certain terms and targeting information
+// which helps buyer know more about the inventory. Each field in a
+// product can have one of the following setting:
+//
+// (readonly) - It is an error to try and set this field.
+// (buyer-readonly) - Only the seller can set this field.
+// (seller-readonly) - Only the buyer can set this field. (updatable) -
+// The field is updatable at all times by either buyer or the seller.
+type Product struct {
+	// CreationTimeMs: Creation time in ms. since epoch (readonly)
+	CreationTimeMs int64 `json:"creationTimeMs,omitempty,string"`
+
+	// CreatorContacts: Optional contact information for the creator of this
+	// product. (buyer-readonly)
+	CreatorContacts []*ContactInformation `json:"creatorContacts,omitempty"`
+
+	// DeliveryControl: The set of fields around delivery control that are
+	// interesting for a buyer to see but are non-negotiable. These are set
+	// by the publisher. This message is assigned an id of 100 since some
+	// day we would want to model this as a protobuf extension.
+	DeliveryControl *DeliveryControl `json:"deliveryControl,omitempty"`
+
+	// FlightEndTimeMs: The proposed end time for the deal (ms since epoch)
+	// (buyer-readonly)
+	FlightEndTimeMs int64 `json:"flightEndTimeMs,omitempty,string"`
+
+	// FlightStartTimeMs: Inventory availability dates. (times are in ms
+	// since epoch) The granularity is generally in the order of seconds.
+	// (buyer-readonly)
+	FlightStartTimeMs int64 `json:"flightStartTimeMs,omitempty,string"`
+
+	// HasCreatorSignedOff: If the creator has already signed off on the
+	// product, then the buyer can finalize the deal by accepting the
+	// product as is. When copying to a proposal, if any of the terms are
+	// changed, then auto_finalize is automatically set to false.
+	HasCreatorSignedOff bool `json:"hasCreatorSignedOff,omitempty"`
+
+	// InventorySource: What exchange will provide this inventory (readonly,
+	// except on create).
+	InventorySource string `json:"inventorySource,omitempty"`
+
+	// Kind: Identifies what kind of resource this is. Value: the fixed
+	// string "adexchangebuyer#product".
+	Kind string `json:"kind,omitempty"`
+
+	// Labels: Optional List of labels for the product (optional,
+	// buyer-readonly).
+	Labels []*MarketplaceLabel `json:"labels,omitempty"`
+
+	// LastUpdateTimeMs: Time of last update in ms. since epoch (readonly)
+	LastUpdateTimeMs int64 `json:"lastUpdateTimeMs,omitempty,string"`
+
+	// LegacyOfferId: Optional legacy offer id if this offer is a preferred
+	// deal offer.
+	LegacyOfferId string `json:"legacyOfferId,omitempty"`
+
+	// Name: The name for this product as set by the seller.
+	// (buyer-readonly)
+	Name string `json:"name,omitempty"`
+
+	// PrivateAuctionId: Optional private auction id if this offer is a
+	// private auction offer.
+	PrivateAuctionId string `json:"privateAuctionId,omitempty"`
+
+	// ProductId: The unique id for the product (readonly)
+	ProductId string `json:"productId,omitempty"`
+
+	// PublisherProfileId: Id of the publisher profile for a given seller. A
+	// (seller.account_id, publisher_profile_id) pair uniquely identifies a
+	// publisher profile. Buyers can call the PublisherProfiles::List
+	// endpoint to get a list of publisher profiles for a given seller.
+	PublisherProfileId string `json:"publisherProfileId,omitempty"`
+
+	// PublisherProvidedForecast: Publisher self-provided forecast
+	// information.
+	PublisherProvidedForecast *PublisherProvidedForecast `json:"publisherProvidedForecast,omitempty"`
+
+	// RevisionNumber: The revision number of the product. (readonly)
+	RevisionNumber int64 `json:"revisionNumber,omitempty,string"`
+
+	// Seller: Information about the seller that created this product
+	// (readonly, except on create)
+	Seller *Seller `json:"seller,omitempty"`
+
+	// SharedTargetings: Targeting that is shared between the buyer and the
+	// seller. Each targeting criteria has a specified key and for each key
+	// there is a list of inclusion value or exclusion values.
+	// (buyer-readonly)
+	SharedTargetings []*SharedTargeting `json:"sharedTargetings,omitempty"`
+
+	// State: The state of the product. (buyer-readonly)
+	State string `json:"state,omitempty"`
+
+	// SyndicationProduct: The syndication product associated with the deal.
+	// (readonly, except on create)
+	SyndicationProduct string `json:"syndicationProduct,omitempty"`
+
+	// Terms: The negotiable terms of the deal (buyer-readonly)
+	Terms *DealTerms `json:"terms,omitempty"`
+
+	// WebPropertyCode: The web property code for the seller. This field is
+	// meant to be copied over as is when creating deals.
+	WebPropertyCode string `json:"webPropertyCode,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "CreationTimeMs") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Product) MarshalJSON() ([]byte, error) {
+	type noMethod Product
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// Proposal: Represents a proposal in the marketplace. A proposal is the
+// unit of negotiation between a seller and a buyer and contains deals
+// which are served. Each field in a proposal can have one of the
+// following setting:
+//
+// (readonly) - It is an error to try and set this field.
+// (buyer-readonly) - Only the seller can set this field.
+// (seller-readonly) - Only the buyer can set this field. (updatable) -
+// The field is updatable at all times by either buyer or the seller.
+type Proposal struct {
+	// BilledBuyer: Reference to the buyer that will get billed for this
+	// proposal. (readonly)
+	BilledBuyer *Buyer `json:"billedBuyer,omitempty"`
+
+	// Buyer: Reference to the buyer on the proposal. (readonly, except on
+	// create)
+	Buyer *Buyer `json:"buyer,omitempty"`
+
+	// BuyerContacts: Optional contact information of the buyer.
+	// (seller-readonly)
+	BuyerContacts []*ContactInformation `json:"buyerContacts,omitempty"`
+
+	// BuyerPrivateData: Private data for buyer. (hidden from seller).
+	BuyerPrivateData *PrivateData `json:"buyerPrivateData,omitempty"`
+
+	// HasBuyerSignedOff: When an proposal is in an accepted state,
+	// indicates whether the buyer has signed off. Once both sides have
+	// signed off on a deal, the proposal can be finalized by the seller.
+	// (seller-readonly)
+	HasBuyerSignedOff bool `json:"hasBuyerSignedOff,omitempty"`
+
+	// HasSellerSignedOff: When an proposal is in an accepted state,
+	// indicates whether the buyer has signed off Once both sides have
+	// signed off on a deal, the proposal can be finalized by the seller.
+	// (buyer-readonly)
+	HasSellerSignedOff bool `json:"hasSellerSignedOff,omitempty"`
+
+	// InventorySource: What exchange will provide this inventory (readonly,
+	// except on create).
+	InventorySource string `json:"inventorySource,omitempty"`
+
+	// IsRenegotiating: True if the proposal is being renegotiated
+	// (readonly).
+	IsRenegotiating bool `json:"isRenegotiating,omitempty"`
+
+	// IsSetupComplete: True, if the buyside inventory setup is complete for
+	// this proposal. (readonly, except via OrderSetupCompleted action)
+	IsSetupComplete bool `json:"isSetupComplete,omitempty"`
+
+	// Kind: Identifies what kind of resource this is. Value: the fixed
+	// string "adexchangebuyer#proposal".
+	Kind string `json:"kind,omitempty"`
+
+	// Labels: List of labels associated with the proposal. (readonly)
+	Labels []*MarketplaceLabel `json:"labels,omitempty"`
+
+	// LastUpdaterOrCommentorRole: The role of the last user that either
+	// updated the proposal or left a comment. (readonly)
+	LastUpdaterOrCommentorRole string `json:"lastUpdaterOrCommentorRole,omitempty"`
+
+	// Name: The name for the proposal (updatable)
+	Name string `json:"name,omitempty"`
+
+	// NegotiationId: Optional negotiation id if this proposal is a
+	// preferred deal proposal.
+	NegotiationId string `json:"negotiationId,omitempty"`
+
+	// OriginatorRole: Indicates whether the buyer/seller created the
+	// proposal.(readonly)
+	OriginatorRole string `json:"originatorRole,omitempty"`
+
+	// PrivateAuctionId: Optional private auction id if this proposal is a
+	// private auction proposal.
+	PrivateAuctionId string `json:"privateAuctionId,omitempty"`
+
+	// ProposalId: The unique id of the proposal. (readonly).
+	ProposalId string `json:"proposalId,omitempty"`
+
+	// ProposalState: The current state of the proposal. (readonly)
+	ProposalState string `json:"proposalState,omitempty"`
+
+	// RevisionNumber: The revision number for the proposal (readonly).
+	RevisionNumber int64 `json:"revisionNumber,omitempty,string"`
+
+	// RevisionTimeMs: The time (ms since epoch) when the proposal was last
+	// revised (readonly).
+	RevisionTimeMs int64 `json:"revisionTimeMs,omitempty,string"`
+
+	// Seller: Reference to the seller on the proposal. (readonly, except on
+	// create)
+	Seller *Seller `json:"seller,omitempty"`
+
+	// SellerContacts: Optional contact information of the seller
+	// (buyer-readonly).
+	SellerContacts []*ContactInformation `json:"sellerContacts,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "BilledBuyer") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Proposal) MarshalJSON() ([]byte, error) {
+	type noMethod Proposal
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type PublisherProfileApiProto struct {
+	// AccountId: The account id of the seller.
+	AccountId string `json:"accountId,omitempty"`
+
+	// Audience: Publisher provided info on its audience.
+	Audience string `json:"audience,omitempty"`
+
+	// BuyerPitchStatement: A pitch statement for the buyer
+	BuyerPitchStatement string `json:"buyerPitchStatement,omitempty"`
+
+	// DirectContact: Direct contact for the publisher profile.
+	DirectContact string `json:"directContact,omitempty"`
+
+	// Exchange: Exchange where this publisher profile is from. E.g. AdX,
+	// Rubicon etc...
+	Exchange string `json:"exchange,omitempty"`
+
+	// GooglePlusLink: Link to publisher's Google+ page.
+	GooglePlusLink string `json:"googlePlusLink,omitempty"`
+
+	// IsParent: True, if this is the parent profile, which represents all
+	// domains owned by the publisher.
+	IsParent bool `json:"isParent,omitempty"`
+
+	// IsPublished: True, if this profile is published. Deprecated for
+	// state.
+	IsPublished bool `json:"isPublished,omitempty"`
+
+	// Kind: Identifies what kind of resource this is. Value: the fixed
+	// string "adexchangebuyer#publisherProfileApiProto".
+	Kind string `json:"kind,omitempty"`
+
+	// LogoUrl: The url to the logo for the publisher.
+	LogoUrl string `json:"logoUrl,omitempty"`
+
+	// MediaKitLink: The url for additional marketing and sales materials.
+	MediaKitLink string `json:"mediaKitLink,omitempty"`
+
+	Name string `json:"name,omitempty"`
+
+	// Overview: Publisher provided overview.
+	Overview string `json:"overview,omitempty"`
+
+	// ProfileId: The pair of (seller.account_id, profile_id) uniquely
+	// identifies a publisher profile for a given publisher.
+	ProfileId int64 `json:"profileId,omitempty"`
+
+	// ProgrammaticContact: Programmatic contact for the publisher profile.
+	ProgrammaticContact string `json:"programmaticContact,omitempty"`
+
+	// PublisherDomains: The list of domains represented in this publisher
+	// profile. Empty if this is a parent profile.
+	PublisherDomains []string `json:"publisherDomains,omitempty"`
+
+	// PublisherProfileId: Unique Id for publisher profile.
+	PublisherProfileId string `json:"publisherProfileId,omitempty"`
+
+	// PublisherProvidedForecast: Publisher provided forecasting
+	// information.
+	PublisherProvidedForecast *PublisherProvidedForecast `json:"publisherProvidedForecast,omitempty"`
+
+	// RateCardInfoLink: Link to publisher rate card
+	RateCardInfoLink string `json:"rateCardInfoLink,omitempty"`
+
+	// SamplePageLink: Link for a sample content page.
+	SamplePageLink string `json:"samplePageLink,omitempty"`
+
+	// Seller: Seller of the publisher profile.
+	Seller *Seller `json:"seller,omitempty"`
+
+	// State: State of the publisher profile.
+	State string `json:"state,omitempty"`
+
+	// TopHeadlines: Publisher provided key metrics and rankings.
+	TopHeadlines []string `json:"topHeadlines,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AccountId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *PublisherProfileApiProto) MarshalJSON() ([]byte, error) {
+	type noMethod PublisherProfileApiProto
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// PublisherProvidedForecast: This message carries publisher provided
+// forecasting information.
+type PublisherProvidedForecast struct {
+	// Dimensions: Publisher provided dimensions. E.g. geo, sizes etc...
+	Dimensions []*Dimension `json:"dimensions,omitempty"`
+
+	// WeeklyImpressions: Publisher provided weekly impressions.
+	WeeklyImpressions int64 `json:"weeklyImpressions,omitempty,string"`
+
+	// WeeklyUniques: Publisher provided weekly uniques.
+	WeeklyUniques int64 `json:"weeklyUniques,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "Dimensions") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *PublisherProvidedForecast) MarshalJSON() ([]byte, error) {
+	type noMethod PublisherProvidedForecast
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type Seller struct {
 	// AccountId: The unique id for the seller. The seller fills in this
-	// field. The seller account id is then available to buyer in the offer.
+	// field. The seller account id is then available to buyer in the
+	// product.
 	AccountId string `json:"accountId,omitempty"`
 
 	// SubAccountId: Optional sub-account id for the seller.
@@ -2273,10 +2753,12 @@ func (s *Seller) MarshalJSON() ([]byte, error) {
 }
 
 type SharedTargeting struct {
-	// Exclusions: The list of values to exclude from targeting.
+	// Exclusions: The list of values to exclude from targeting. Each value
+	// is AND'd together.
 	Exclusions []*TargetingValue `json:"exclusions,omitempty"`
 
 	// Inclusions: The list of value to include as part of the targeting.
+	// Each value is OR'd together.
 	Inclusions []*TargetingValue `json:"inclusions,omitempty"`
 
 	// Key: The key representing the shared targeting criterion.
@@ -2336,6 +2818,9 @@ type TargetingValueCreativeSize struct {
 	// Size: For regular or video creative size type, specifies the size of
 	// the creative.
 	Size *TargetingValueSize `json:"size,omitempty"`
+
+	// SkippableAdType: The skippable ad type for video size.
+	SkippableAdType string `json:"skippableAdType,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "CompanionSizes") to
 	// unconditionally include in API requests. By default, fields with
@@ -2420,6 +2905,35 @@ func (s *TargetingValueSize) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type UpdatePrivateAuctionProposalRequest struct {
+	// ExternalDealId: The externalDealId of the deal to be updated.
+	ExternalDealId string `json:"externalDealId,omitempty"`
+
+	// Note: Optional note to be added.
+	Note *MarketplaceNote `json:"note,omitempty"`
+
+	// ProposalRevisionNumber: The current revision number of the proposal
+	// to be updated.
+	ProposalRevisionNumber int64 `json:"proposalRevisionNumber,omitempty,string"`
+
+	// UpdateAction: The proposed action on the private auction proposal.
+	UpdateAction string `json:"updateAction,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ExternalDealId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *UpdatePrivateAuctionProposalRequest) MarshalJSON() ([]byte, error) {
+	type noMethod UpdatePrivateAuctionProposalRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // method id "adexchangebuyer.accounts.get":
 
 type AccountsGetCall struct {
@@ -2434,23 +2948,6 @@ type AccountsGetCall struct {
 func (r *AccountsService) Get(id int64) *AccountsGetCall {
 	c := &AccountsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsGetCall) QuotaUser(quotaUser string) *AccountsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsGetCall) UserIP(userIP string) *AccountsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -2481,22 +2978,21 @@ func (c *AccountsGetCall) Context(ctx context.Context) *AccountsGetCall {
 }
 
 func (c *AccountsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "accounts/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"id": strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.accounts.get" call.
@@ -2506,7 +3002,8 @@ func (c *AccountsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *AccountsGetCall) Do() (*Account, error) {
+func (c *AccountsGetCall) Do(opts ...googleapi.CallOption) (*Account, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2530,7 +3027,8 @@ func (c *AccountsGetCall) Do() (*Account, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2576,23 +3074,6 @@ func (r *AccountsService) List() *AccountsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsListCall) QuotaUser(quotaUser string) *AccountsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsListCall) UserIP(userIP string) *AccountsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2620,20 +3101,19 @@ func (c *AccountsListCall) Context(ctx context.Context) *AccountsListCall {
 }
 
 func (c *AccountsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "accounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.accounts.list" call.
@@ -2643,7 +3123,8 @@ func (c *AccountsListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *AccountsListCall) Do() (*AccountsList, error) {
+func (c *AccountsListCall) Do(opts ...googleapi.CallOption) (*AccountsList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2667,7 +3148,8 @@ func (c *AccountsListCall) Do() (*AccountsList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2705,23 +3187,6 @@ func (r *AccountsService) Patch(id int64, account *Account) *AccountsPatchCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsPatchCall) QuotaUser(quotaUser string) *AccountsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsPatchCall) UserIP(userIP string) *AccountsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2739,25 +3204,23 @@ func (c *AccountsPatchCall) Context(ctx context.Context) *AccountsPatchCall {
 }
 
 func (c *AccountsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.account)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "accounts/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"id": strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.accounts.patch" call.
@@ -2767,7 +3230,8 @@ func (c *AccountsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *AccountsPatchCall) Do() (*Account, error) {
+func (c *AccountsPatchCall) Do(opts ...googleapi.CallOption) (*Account, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2791,7 +3255,8 @@ func (c *AccountsPatchCall) Do() (*Account, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2843,23 +3308,6 @@ func (r *AccountsService) Update(id int64, account *Account) *AccountsUpdateCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsUpdateCall) QuotaUser(quotaUser string) *AccountsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsUpdateCall) UserIP(userIP string) *AccountsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2877,25 +3325,23 @@ func (c *AccountsUpdateCall) Context(ctx context.Context) *AccountsUpdateCall {
 }
 
 func (c *AccountsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.account)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "accounts/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"id": strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.accounts.update" call.
@@ -2905,7 +3351,8 @@ func (c *AccountsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *AccountsUpdateCall) Do() (*Account, error) {
+func (c *AccountsUpdateCall) Do(opts ...googleapi.CallOption) (*Account, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2929,7 +3376,8 @@ func (c *AccountsUpdateCall) Do() (*Account, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2981,23 +3429,6 @@ func (r *BillingInfoService) Get(accountId int64) *BillingInfoGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BillingInfoGetCall) QuotaUser(quotaUser string) *BillingInfoGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BillingInfoGetCall) UserIP(userIP string) *BillingInfoGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3025,22 +3456,21 @@ func (c *BillingInfoGetCall) Context(ctx context.Context) *BillingInfoGetCall {
 }
 
 func (c *BillingInfoGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "billinginfo/{accountId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.billingInfo.get" call.
@@ -3050,7 +3480,8 @@ func (c *BillingInfoGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *BillingInfoGetCall) Do() (*BillingInfo, error) {
+func (c *BillingInfoGetCall) Do(opts ...googleapi.CallOption) (*BillingInfo, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3074,7 +3505,8 @@ func (c *BillingInfoGetCall) Do() (*BillingInfo, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3121,23 +3553,6 @@ func (r *BillingInfoService) List() *BillingInfoListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BillingInfoListCall) QuotaUser(quotaUser string) *BillingInfoListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BillingInfoListCall) UserIP(userIP string) *BillingInfoListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3165,20 +3580,19 @@ func (c *BillingInfoListCall) Context(ctx context.Context) *BillingInfoListCall 
 }
 
 func (c *BillingInfoListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "billinginfo")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.billingInfo.list" call.
@@ -3188,7 +3602,8 @@ func (c *BillingInfoListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *BillingInfoListCall) Do() (*BillingInfoList, error) {
+func (c *BillingInfoListCall) Do(opts ...googleapi.CallOption) (*BillingInfoList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3212,7 +3627,8 @@ func (c *BillingInfoListCall) Do() (*BillingInfoList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3251,23 +3667,6 @@ func (r *BudgetService) Get(accountId int64, billingId int64) *BudgetGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BudgetGetCall) QuotaUser(quotaUser string) *BudgetGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BudgetGetCall) UserIP(userIP string) *BudgetGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3295,23 +3694,22 @@ func (c *BudgetGetCall) Context(ctx context.Context) *BudgetGetCall {
 }
 
 func (c *BudgetGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "billinginfo/{accountId}/{billingId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"billingId": strconv.FormatInt(c.billingId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.budget.get" call.
@@ -3321,7 +3719,8 @@ func (c *BudgetGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *BudgetGetCall) Do() (*Budget, error) {
+func (c *BudgetGetCall) Do(opts ...googleapi.CallOption) (*Budget, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3345,7 +3744,8 @@ func (c *BudgetGetCall) Do() (*Budget, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3406,23 +3806,6 @@ func (r *BudgetService) Patch(accountId int64, billingId int64, budget *Budget) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BudgetPatchCall) QuotaUser(quotaUser string) *BudgetPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BudgetPatchCall) UserIP(userIP string) *BudgetPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3440,26 +3823,24 @@ func (c *BudgetPatchCall) Context(ctx context.Context) *BudgetPatchCall {
 }
 
 func (c *BudgetPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.budget)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "billinginfo/{accountId}/{billingId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"billingId": strconv.FormatInt(c.billingId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.budget.patch" call.
@@ -3469,7 +3850,8 @@ func (c *BudgetPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *BudgetPatchCall) Do() (*Budget, error) {
+func (c *BudgetPatchCall) Do(opts ...googleapi.CallOption) (*Budget, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3493,7 +3875,8 @@ func (c *BudgetPatchCall) Do() (*Budget, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3557,23 +3940,6 @@ func (r *BudgetService) Update(accountId int64, billingId int64, budget *Budget)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BudgetUpdateCall) QuotaUser(quotaUser string) *BudgetUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BudgetUpdateCall) UserIP(userIP string) *BudgetUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3591,26 +3957,24 @@ func (c *BudgetUpdateCall) Context(ctx context.Context) *BudgetUpdateCall {
 }
 
 func (c *BudgetUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.budget)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "billinginfo/{accountId}/{billingId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"billingId": strconv.FormatInt(c.billingId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.budget.update" call.
@@ -3620,7 +3984,8 @@ func (c *BudgetUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *BudgetUpdateCall) Do() (*Budget, error) {
+func (c *BudgetUpdateCall) Do(opts ...googleapi.CallOption) (*Budget, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3644,7 +4009,8 @@ func (c *BudgetUpdateCall) Do() (*Budget, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3706,23 +4072,6 @@ func (r *CreativesService) AddDeal(accountId int64, buyerCreativeId string, deal
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesAddDealCall) QuotaUser(quotaUser string) *CreativesAddDealCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesAddDealCall) UserIP(userIP string) *CreativesAddDealCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3740,25 +4089,25 @@ func (c *CreativesAddDealCall) Context(ctx context.Context) *CreativesAddDealCal
 }
 
 func (c *CreativesAddDealCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "creatives/{accountId}/{buyerCreativeId}/addDeal/{dealId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId":       strconv.FormatInt(c.accountId, 10),
 		"buyerCreativeId": c.buyerCreativeId,
 		"dealId":          strconv.FormatInt(c.dealId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.creatives.addDeal" call.
-func (c *CreativesAddDealCall) Do() error {
+func (c *CreativesAddDealCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -3827,23 +4176,6 @@ func (r *CreativesService) Get(accountId int64, buyerCreativeId string) *Creativ
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesGetCall) QuotaUser(quotaUser string) *CreativesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesGetCall) UserIP(userIP string) *CreativesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3871,23 +4203,22 @@ func (c *CreativesGetCall) Context(ctx context.Context) *CreativesGetCall {
 }
 
 func (c *CreativesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "creatives/{accountId}/{buyerCreativeId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId":       strconv.FormatInt(c.accountId, 10),
 		"buyerCreativeId": c.buyerCreativeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.creatives.get" call.
@@ -3897,7 +4228,8 @@ func (c *CreativesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CreativesGetCall) Do() (*Creative, error) {
+func (c *CreativesGetCall) Do(opts ...googleapi.CallOption) (*Creative, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3921,7 +4253,8 @@ func (c *CreativesGetCall) Do() (*Creative, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3975,23 +4308,6 @@ func (r *CreativesService) Insert(creative *Creative) *CreativesInsertCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesInsertCall) QuotaUser(quotaUser string) *CreativesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesInsertCall) UserIP(userIP string) *CreativesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4009,23 +4325,21 @@ func (c *CreativesInsertCall) Context(ctx context.Context) *CreativesInsertCall 
 }
 
 func (c *CreativesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creative)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "creatives")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.creatives.insert" call.
@@ -4035,7 +4349,8 @@ func (c *CreativesInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CreativesInsertCall) Do() (*Creative, error) {
+func (c *CreativesInsertCall) Do(opts ...googleapi.CallOption) (*Creative, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4059,7 +4374,8 @@ func (c *CreativesInsertCall) Do() (*Creative, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4168,23 +4484,6 @@ func (c *CreativesListCall) PageToken(pageToken string) *CreativesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesListCall) QuotaUser(quotaUser string) *CreativesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesListCall) UserIP(userIP string) *CreativesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4212,20 +4511,19 @@ func (c *CreativesListCall) Context(ctx context.Context) *CreativesListCall {
 }
 
 func (c *CreativesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "creatives")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.creatives.list" call.
@@ -4235,7 +4533,8 @@ func (c *CreativesListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativesListCall) Do() (*CreativesList, error) {
+func (c *CreativesListCall) Do(opts ...googleapi.CallOption) (*CreativesList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4259,7 +4558,8 @@ func (c *CreativesListCall) Do() (*CreativesList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4340,6 +4640,27 @@ func (c *CreativesListCall) Do() (*CreativesList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CreativesListCall) Pages(ctx context.Context, f func(*CreativesList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "adexchangebuyer.creatives.removeDeal":
 
 type CreativesRemoveDealCall struct {
@@ -4360,23 +4681,6 @@ func (r *CreativesService) RemoveDeal(accountId int64, buyerCreativeId string, d
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesRemoveDealCall) QuotaUser(quotaUser string) *CreativesRemoveDealCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesRemoveDealCall) UserIP(userIP string) *CreativesRemoveDealCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4394,25 +4698,25 @@ func (c *CreativesRemoveDealCall) Context(ctx context.Context) *CreativesRemoveD
 }
 
 func (c *CreativesRemoveDealCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "creatives/{accountId}/{buyerCreativeId}/removeDeal/{dealId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId":       strconv.FormatInt(c.accountId, 10),
 		"buyerCreativeId": c.buyerCreativeId,
 		"dealId":          strconv.FormatInt(c.dealId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.creatives.removeDeal" call.
-func (c *CreativesRemoveDealCall) Do() error {
+func (c *CreativesRemoveDealCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -4465,34 +4769,17 @@ func (c *CreativesRemoveDealCall) Do() error {
 
 type MarketplacedealsDeleteCall struct {
 	s                       *Service
-	orderId                 string
+	proposalId              string
 	deleteorderdealsrequest *DeleteOrderDealsRequest
 	urlParams_              gensupport.URLParams
 	ctx_                    context.Context
 }
 
-// Delete: Delete the specified deals from the order
-func (r *MarketplacedealsService) Delete(orderId string, deleteorderdealsrequest *DeleteOrderDealsRequest) *MarketplacedealsDeleteCall {
+// Delete: Delete the specified deals from the proposal
+func (r *MarketplacedealsService) Delete(proposalId string, deleteorderdealsrequest *DeleteOrderDealsRequest) *MarketplacedealsDeleteCall {
 	c := &MarketplacedealsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
+	c.proposalId = proposalId
 	c.deleteorderdealsrequest = deleteorderdealsrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplacedealsDeleteCall) QuotaUser(quotaUser string) *MarketplacedealsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplacedealsDeleteCall) UserIP(userIP string) *MarketplacedealsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4513,25 +4800,23 @@ func (c *MarketplacedealsDeleteCall) Context(ctx context.Context) *Marketplacede
 }
 
 func (c *MarketplacedealsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.deleteorderdealsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/deals/delete")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/deals/delete")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
+		"proposalId": c.proposalId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.marketplacedeals.delete" call.
@@ -4541,7 +4826,8 @@ func (c *MarketplacedealsDeleteCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MarketplacedealsDeleteCall) Do() (*DeleteOrderDealsResponse, error) {
+func (c *MarketplacedealsDeleteCall) Do(opts ...googleapi.CallOption) (*DeleteOrderDealsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4565,26 +4851,27 @@ func (c *MarketplacedealsDeleteCall) Do() (*DeleteOrderDealsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Delete the specified deals from the order",
+	//   "description": "Delete the specified deals from the proposal",
 	//   "httpMethod": "POST",
 	//   "id": "adexchangebuyer.marketplacedeals.delete",
 	//   "parameterOrder": [
-	//     "orderId"
+	//     "proposalId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The orderId to delete deals from.",
+	//     "proposalId": {
+	//       "description": "The proposalId to delete deals from.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/deals/delete",
+	//   "path": "proposals/{proposalId}/deals/delete",
 	//   "request": {
 	//     "$ref": "DeleteOrderDealsRequest"
 	//   },
@@ -4602,34 +4889,17 @@ func (c *MarketplacedealsDeleteCall) Do() (*DeleteOrderDealsResponse, error) {
 
 type MarketplacedealsInsertCall struct {
 	s                    *Service
-	orderId              string
+	proposalId           string
 	addorderdealsrequest *AddOrderDealsRequest
 	urlParams_           gensupport.URLParams
 	ctx_                 context.Context
 }
 
-// Insert: Add new deals for the specified order
-func (r *MarketplacedealsService) Insert(orderId string, addorderdealsrequest *AddOrderDealsRequest) *MarketplacedealsInsertCall {
+// Insert: Add new deals for the specified proposal
+func (r *MarketplacedealsService) Insert(proposalId string, addorderdealsrequest *AddOrderDealsRequest) *MarketplacedealsInsertCall {
 	c := &MarketplacedealsInsertCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
+	c.proposalId = proposalId
 	c.addorderdealsrequest = addorderdealsrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplacedealsInsertCall) QuotaUser(quotaUser string) *MarketplacedealsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplacedealsInsertCall) UserIP(userIP string) *MarketplacedealsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4650,25 +4920,23 @@ func (c *MarketplacedealsInsertCall) Context(ctx context.Context) *Marketplacede
 }
 
 func (c *MarketplacedealsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.addorderdealsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/deals/insert")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/deals/insert")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
+		"proposalId": c.proposalId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.marketplacedeals.insert" call.
@@ -4678,7 +4946,8 @@ func (c *MarketplacedealsInsertCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MarketplacedealsInsertCall) Do() (*AddOrderDealsResponse, error) {
+func (c *MarketplacedealsInsertCall) Do(opts ...googleapi.CallOption) (*AddOrderDealsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4702,26 +4971,27 @@ func (c *MarketplacedealsInsertCall) Do() (*AddOrderDealsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Add new deals for the specified order",
+	//   "description": "Add new deals for the specified proposal",
 	//   "httpMethod": "POST",
 	//   "id": "adexchangebuyer.marketplacedeals.insert",
 	//   "parameterOrder": [
-	//     "orderId"
+	//     "proposalId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "OrderId for which deals need to be added.",
+	//     "proposalId": {
+	//       "description": "proposalId for which deals need to be added.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/deals/insert",
+	//   "path": "proposals/{proposalId}/deals/insert",
 	//   "request": {
 	//     "$ref": "AddOrderDealsRequest"
 	//   },
@@ -4739,33 +5009,23 @@ func (c *MarketplacedealsInsertCall) Do() (*AddOrderDealsResponse, error) {
 
 type MarketplacedealsListCall struct {
 	s            *Service
-	orderId      string
+	proposalId   string
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
 }
 
-// List: List all the deals for a given order
-func (r *MarketplacedealsService) List(orderId string) *MarketplacedealsListCall {
+// List: List all the deals for a given proposal
+func (r *MarketplacedealsService) List(proposalId string) *MarketplacedealsListCall {
 	c := &MarketplacedealsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
+	c.proposalId = proposalId
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplacedealsListCall) QuotaUser(quotaUser string) *MarketplacedealsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplacedealsListCall) UserIP(userIP string) *MarketplacedealsListCall {
-	c.urlParams_.Set("userIp", userIP)
+// PqlQuery sets the optional parameter "pqlQuery": Query string to
+// retrieve specific deals.
+func (c *MarketplacedealsListCall) PqlQuery(pqlQuery string) *MarketplacedealsListCall {
+	c.urlParams_.Set("pqlQuery", pqlQuery)
 	return c
 }
 
@@ -4796,22 +5056,21 @@ func (c *MarketplacedealsListCall) Context(ctx context.Context) *Marketplacedeal
 }
 
 func (c *MarketplacedealsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/deals")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/deals")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
+		"proposalId": c.proposalId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.marketplacedeals.list" call.
@@ -4821,7 +5080,8 @@ func (c *MarketplacedealsListCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MarketplacedealsListCall) Do() (*GetOrderDealsResponse, error) {
+func (c *MarketplacedealsListCall) Do(opts ...googleapi.CallOption) (*GetOrderDealsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4845,26 +5105,32 @@ func (c *MarketplacedealsListCall) Do() (*GetOrderDealsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "List all the deals for a given order",
+	//   "description": "List all the deals for a given proposal",
 	//   "httpMethod": "GET",
 	//   "id": "adexchangebuyer.marketplacedeals.list",
 	//   "parameterOrder": [
-	//     "orderId"
+	//     "proposalId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The orderId to get deals for.",
+	//     "pqlQuery": {
+	//       "description": "Query string to retrieve specific deals.",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
+	//     "proposalId": {
+	//       "description": "The proposalId to get deals for. To search across all proposals specify order_id = '-' as part of the URL.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/deals",
+	//   "path": "proposals/{proposalId}/deals",
 	//   "response": {
 	//     "$ref": "GetOrderDealsResponse"
 	//   },
@@ -4879,34 +5145,18 @@ func (c *MarketplacedealsListCall) Do() (*GetOrderDealsResponse, error) {
 
 type MarketplacedealsUpdateCall struct {
 	s                        *Service
-	orderId                  string
+	proposalId               string
 	editallorderdealsrequest *EditAllOrderDealsRequest
 	urlParams_               gensupport.URLParams
 	ctx_                     context.Context
 }
 
-// Update: Replaces all the deals in the order with the passed in deals
-func (r *MarketplacedealsService) Update(orderId string, editallorderdealsrequest *EditAllOrderDealsRequest) *MarketplacedealsUpdateCall {
+// Update: Replaces all the deals in the proposal with the passed in
+// deals
+func (r *MarketplacedealsService) Update(proposalId string, editallorderdealsrequest *EditAllOrderDealsRequest) *MarketplacedealsUpdateCall {
 	c := &MarketplacedealsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
+	c.proposalId = proposalId
 	c.editallorderdealsrequest = editallorderdealsrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplacedealsUpdateCall) QuotaUser(quotaUser string) *MarketplacedealsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplacedealsUpdateCall) UserIP(userIP string) *MarketplacedealsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4927,25 +5177,23 @@ func (c *MarketplacedealsUpdateCall) Context(ctx context.Context) *Marketplacede
 }
 
 func (c *MarketplacedealsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.editallorderdealsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/deals/update")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/deals/update")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
+		"proposalId": c.proposalId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.marketplacedeals.update" call.
@@ -4955,7 +5203,8 @@ func (c *MarketplacedealsUpdateCall) doRequest(alt string) (*http.Response, erro
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MarketplacedealsUpdateCall) Do() (*EditAllOrderDealsResponse, error) {
+func (c *MarketplacedealsUpdateCall) Do(opts ...googleapi.CallOption) (*EditAllOrderDealsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4979,26 +5228,27 @@ func (c *MarketplacedealsUpdateCall) Do() (*EditAllOrderDealsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Replaces all the deals in the order with the passed in deals",
+	//   "description": "Replaces all the deals in the proposal with the passed in deals",
 	//   "httpMethod": "POST",
 	//   "id": "adexchangebuyer.marketplacedeals.update",
 	//   "parameterOrder": [
-	//     "orderId"
+	//     "proposalId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The orderId to edit deals on.",
+	//     "proposalId": {
+	//       "description": "The proposalId to edit deals on.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/deals/update",
+	//   "path": "proposals/{proposalId}/deals/update",
 	//   "request": {
 	//     "$ref": "EditAllOrderDealsRequest"
 	//   },
@@ -5016,34 +5266,17 @@ func (c *MarketplacedealsUpdateCall) Do() (*EditAllOrderDealsResponse, error) {
 
 type MarketplacenotesInsertCall struct {
 	s                    *Service
-	orderId              string
+	proposalId           string
 	addordernotesrequest *AddOrderNotesRequest
 	urlParams_           gensupport.URLParams
 	ctx_                 context.Context
 }
 
-// Insert: Add notes to the order
-func (r *MarketplacenotesService) Insert(orderId string, addordernotesrequest *AddOrderNotesRequest) *MarketplacenotesInsertCall {
+// Insert: Add notes to the proposal
+func (r *MarketplacenotesService) Insert(proposalId string, addordernotesrequest *AddOrderNotesRequest) *MarketplacenotesInsertCall {
 	c := &MarketplacenotesInsertCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
+	c.proposalId = proposalId
 	c.addordernotesrequest = addordernotesrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplacenotesInsertCall) QuotaUser(quotaUser string) *MarketplacenotesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplacenotesInsertCall) UserIP(userIP string) *MarketplacenotesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -5064,25 +5297,23 @@ func (c *MarketplacenotesInsertCall) Context(ctx context.Context) *Marketplaceno
 }
 
 func (c *MarketplacenotesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.addordernotesrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/notes/insert")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/notes/insert")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
+		"proposalId": c.proposalId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.marketplacenotes.insert" call.
@@ -5092,7 +5323,8 @@ func (c *MarketplacenotesInsertCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MarketplacenotesInsertCall) Do() (*AddOrderNotesResponse, error) {
+func (c *MarketplacenotesInsertCall) Do(opts ...googleapi.CallOption) (*AddOrderNotesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5116,26 +5348,27 @@ func (c *MarketplacenotesInsertCall) Do() (*AddOrderNotesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Add notes to the order",
+	//   "description": "Add notes to the proposal",
 	//   "httpMethod": "POST",
 	//   "id": "adexchangebuyer.marketplacenotes.insert",
 	//   "parameterOrder": [
-	//     "orderId"
+	//     "proposalId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The orderId to add notes for.",
+	//     "proposalId": {
+	//       "description": "The proposalId to add notes for.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/notes/insert",
+	//   "path": "proposals/{proposalId}/notes/insert",
 	//   "request": {
 	//     "$ref": "AddOrderNotesRequest"
 	//   },
@@ -5153,33 +5386,25 @@ func (c *MarketplacenotesInsertCall) Do() (*AddOrderNotesResponse, error) {
 
 type MarketplacenotesListCall struct {
 	s            *Service
-	orderId      string
+	proposalId   string
 	urlParams_   gensupport.URLParams
 	ifNoneMatch_ string
 	ctx_         context.Context
 }
 
-// List: Get all the notes associated with an order
-func (r *MarketplacenotesService) List(orderId string) *MarketplacenotesListCall {
+// List: Get all the notes associated with a proposal
+func (r *MarketplacenotesService) List(proposalId string) *MarketplacenotesListCall {
 	c := &MarketplacenotesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
+	c.proposalId = proposalId
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplacenotesListCall) QuotaUser(quotaUser string) *MarketplacenotesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplacenotesListCall) UserIP(userIP string) *MarketplacenotesListCall {
-	c.urlParams_.Set("userIp", userIP)
+// PqlQuery sets the optional parameter "pqlQuery": Query string to
+// retrieve specific notes. To search the text contents of notes, please
+// use syntax like "WHERE note.note = "foo" or "WHERE note.note LIKE
+// "%bar%"
+func (c *MarketplacenotesListCall) PqlQuery(pqlQuery string) *MarketplacenotesListCall {
+	c.urlParams_.Set("pqlQuery", pqlQuery)
 	return c
 }
 
@@ -5210,22 +5435,21 @@ func (c *MarketplacenotesListCall) Context(ctx context.Context) *Marketplacenote
 }
 
 func (c *MarketplacenotesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/notes")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/notes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
+		"proposalId": c.proposalId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.marketplacenotes.list" call.
@@ -5235,7 +5459,8 @@ func (c *MarketplacenotesListCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MarketplacenotesListCall) Do() (*GetOrderNotesResponse, error) {
+func (c *MarketplacenotesListCall) Do(opts ...googleapi.CallOption) (*GetOrderNotesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5259,26 +5484,32 @@ func (c *MarketplacenotesListCall) Do() (*GetOrderNotesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Get all the notes associated with an order",
+	//   "description": "Get all the notes associated with a proposal",
 	//   "httpMethod": "GET",
 	//   "id": "adexchangebuyer.marketplacenotes.list",
 	//   "parameterOrder": [
-	//     "orderId"
+	//     "proposalId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The orderId to get notes for.",
+	//     "pqlQuery": {
+	//       "description": "Query string to retrieve specific notes. To search the text contents of notes, please use syntax like \"WHERE note.note = \"foo\" or \"WHERE note.note LIKE \"%bar%\"",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
+	//     "proposalId": {
+	//       "description": "The proposalId to get notes for. To search across all proposals specify order_id = '-' as part of the URL.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/notes",
+	//   "path": "proposals/{proposalId}/notes",
 	//   "response": {
 	//     "$ref": "GetOrderNotesResponse"
 	//   },
@@ -5289,462 +5520,28 @@ func (c *MarketplacenotesListCall) Do() (*GetOrderNotesResponse, error) {
 
 }
 
-// method id "adexchangebuyer.marketplaceoffers.get":
+// method id "adexchangebuyer.marketplaceprivateauction.updateproposal":
 
-type MarketplaceoffersGetCall struct {
-	s            *Service
-	offerId      string
-	urlParams_   gensupport.URLParams
-	ifNoneMatch_ string
-	ctx_         context.Context
+type MarketplaceprivateauctionUpdateproposalCall struct {
+	s                                   *Service
+	privateAuctionId                    string
+	updateprivateauctionproposalrequest *UpdatePrivateAuctionProposalRequest
+	urlParams_                          gensupport.URLParams
+	ctx_                                context.Context
 }
 
-// Get: Gets the requested negotiation.
-func (r *MarketplaceoffersService) Get(offerId string) *MarketplaceoffersGetCall {
-	c := &MarketplaceoffersGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.offerId = offerId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceoffersGetCall) QuotaUser(quotaUser string) *MarketplaceoffersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceoffersGetCall) UserIP(userIP string) *MarketplaceoffersGetCall {
-	c.urlParams_.Set("userIp", userIP)
+// Updateproposal: Update a given private auction proposal
+func (r *MarketplaceprivateauctionService) Updateproposal(privateAuctionId string, updateprivateauctionproposalrequest *UpdatePrivateAuctionProposalRequest) *MarketplaceprivateauctionUpdateproposalCall {
+	c := &MarketplaceprivateauctionUpdateproposalCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.privateAuctionId = privateAuctionId
+	c.updateprivateauctionproposalrequest = updateprivateauctionproposalrequest
 	return c
 }
 
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
-func (c *MarketplaceoffersGetCall) Fields(s ...googleapi.Field) *MarketplaceoffersGetCall {
-	c.urlParams_.Set("fields", googleapi.CombineFields(s))
-	return c
-}
-
-// IfNoneMatch sets the optional parameter which makes the operation
-// fail if the object's ETag matches the given value. This is useful for
-// getting updates only after the object has changed since the last
-// request. Use googleapi.IsNotModified to check whether the response
-// error from Do is the result of In-None-Match.
-func (c *MarketplaceoffersGetCall) IfNoneMatch(entityTag string) *MarketplaceoffersGetCall {
-	c.ifNoneMatch_ = entityTag
-	return c
-}
-
-// Context sets the context to be used in this call's Do method. Any
-// pending HTTP request will be aborted if the provided context is
-// canceled.
-func (c *MarketplaceoffersGetCall) Context(ctx context.Context) *MarketplaceoffersGetCall {
-	c.ctx_ = ctx
-	return c
-}
-
-func (c *MarketplaceoffersGetCall) doRequest(alt string) (*http.Response, error) {
-	var body io.Reader = nil
-	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOffers/{offerId}")
-	urls += "?" + c.urlParams_.Encode()
-	req, _ := http.NewRequest("GET", urls, body)
-	googleapi.Expand(req.URL, map[string]string{
-		"offerId": c.offerId,
-	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
-}
-
-// Do executes the "adexchangebuyer.marketplaceoffers.get" call.
-// Exactly one of *MarketplaceOffer or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *MarketplaceOffer.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceoffersGetCall) Do() (*MarketplaceOffer, error) {
-	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer googleapi.CloseBody(res)
-	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
-	}
-	ret := &MarketplaceOffer{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
-	// {
-	//   "description": "Gets the requested negotiation.",
-	//   "httpMethod": "GET",
-	//   "id": "adexchangebuyer.marketplaceoffers.get",
-	//   "parameterOrder": [
-	//     "offerId"
-	//   ],
-	//   "parameters": {
-	//     "offerId": {
-	//       "description": "The offerId for the offer to get the head revision for.",
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     }
-	//   },
-	//   "path": "marketplaceOffers/{offerId}",
-	//   "response": {
-	//     "$ref": "MarketplaceOffer"
-	//   },
-	//   "scopes": [
-	//     "https://www.googleapis.com/auth/adexchange.buyer"
-	//   ]
-	// }
-
-}
-
-// method id "adexchangebuyer.marketplaceoffers.search":
-
-type MarketplaceoffersSearchCall struct {
-	s            *Service
-	urlParams_   gensupport.URLParams
-	ifNoneMatch_ string
-	ctx_         context.Context
-}
-
-// Search: Gets the requested negotiation.
-func (r *MarketplaceoffersService) Search() *MarketplaceoffersSearchCall {
-	c := &MarketplaceoffersSearchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	return c
-}
-
-// PqlQuery sets the optional parameter "pqlQuery": The pql query used
-// to query for offers.
-func (c *MarketplaceoffersSearchCall) PqlQuery(pqlQuery string) *MarketplaceoffersSearchCall {
-	c.urlParams_.Set("pqlQuery", pqlQuery)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceoffersSearchCall) QuotaUser(quotaUser string) *MarketplaceoffersSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceoffersSearchCall) UserIP(userIP string) *MarketplaceoffersSearchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Fields allows partial responses to be retrieved. See
-// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
-// for more information.
-func (c *MarketplaceoffersSearchCall) Fields(s ...googleapi.Field) *MarketplaceoffersSearchCall {
-	c.urlParams_.Set("fields", googleapi.CombineFields(s))
-	return c
-}
-
-// IfNoneMatch sets the optional parameter which makes the operation
-// fail if the object's ETag matches the given value. This is useful for
-// getting updates only after the object has changed since the last
-// request. Use googleapi.IsNotModified to check whether the response
-// error from Do is the result of In-None-Match.
-func (c *MarketplaceoffersSearchCall) IfNoneMatch(entityTag string) *MarketplaceoffersSearchCall {
-	c.ifNoneMatch_ = entityTag
-	return c
-}
-
-// Context sets the context to be used in this call's Do method. Any
-// pending HTTP request will be aborted if the provided context is
-// canceled.
-func (c *MarketplaceoffersSearchCall) Context(ctx context.Context) *MarketplaceoffersSearchCall {
-	c.ctx_ = ctx
-	return c
-}
-
-func (c *MarketplaceoffersSearchCall) doRequest(alt string) (*http.Response, error) {
-	var body io.Reader = nil
-	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOffers/search")
-	urls += "?" + c.urlParams_.Encode()
-	req, _ := http.NewRequest("GET", urls, body)
-	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
-}
-
-// Do executes the "adexchangebuyer.marketplaceoffers.search" call.
-// Exactly one of *GetOffersResponse or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *GetOffersResponse.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceoffersSearchCall) Do() (*GetOffersResponse, error) {
-	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer googleapi.CloseBody(res)
-	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
-	}
-	ret := &GetOffersResponse{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
-	// {
-	//   "description": "Gets the requested negotiation.",
-	//   "httpMethod": "GET",
-	//   "id": "adexchangebuyer.marketplaceoffers.search",
-	//   "parameters": {
-	//     "pqlQuery": {
-	//       "description": "The pql query used to query for offers.",
-	//       "location": "query",
-	//       "type": "string"
-	//     }
-	//   },
-	//   "path": "marketplaceOffers/search",
-	//   "response": {
-	//     "$ref": "GetOffersResponse"
-	//   },
-	//   "scopes": [
-	//     "https://www.googleapis.com/auth/adexchange.buyer"
-	//   ]
-	// }
-
-}
-
-// method id "adexchangebuyer.marketplaceorders.get":
-
-type MarketplaceordersGetCall struct {
-	s            *Service
-	orderId      string
-	urlParams_   gensupport.URLParams
-	ifNoneMatch_ string
-	ctx_         context.Context
-}
-
-// Get: Get an order given its id
-func (r *MarketplaceordersService) Get(orderId string) *MarketplaceordersGetCall {
-	c := &MarketplaceordersGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceordersGetCall) QuotaUser(quotaUser string) *MarketplaceordersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceordersGetCall) UserIP(userIP string) *MarketplaceordersGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Fields allows partial responses to be retrieved. See
-// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
-// for more information.
-func (c *MarketplaceordersGetCall) Fields(s ...googleapi.Field) *MarketplaceordersGetCall {
-	c.urlParams_.Set("fields", googleapi.CombineFields(s))
-	return c
-}
-
-// IfNoneMatch sets the optional parameter which makes the operation
-// fail if the object's ETag matches the given value. This is useful for
-// getting updates only after the object has changed since the last
-// request. Use googleapi.IsNotModified to check whether the response
-// error from Do is the result of In-None-Match.
-func (c *MarketplaceordersGetCall) IfNoneMatch(entityTag string) *MarketplaceordersGetCall {
-	c.ifNoneMatch_ = entityTag
-	return c
-}
-
-// Context sets the context to be used in this call's Do method. Any
-// pending HTTP request will be aborted if the provided context is
-// canceled.
-func (c *MarketplaceordersGetCall) Context(ctx context.Context) *MarketplaceordersGetCall {
-	c.ctx_ = ctx
-	return c
-}
-
-func (c *MarketplaceordersGetCall) doRequest(alt string) (*http.Response, error) {
-	var body io.Reader = nil
-	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}")
-	urls += "?" + c.urlParams_.Encode()
-	req, _ := http.NewRequest("GET", urls, body)
-	googleapi.Expand(req.URL, map[string]string{
-		"orderId": c.orderId,
-	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
-}
-
-// Do executes the "adexchangebuyer.marketplaceorders.get" call.
-// Exactly one of *MarketplaceOrder or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *MarketplaceOrder.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceordersGetCall) Do() (*MarketplaceOrder, error) {
-	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer googleapi.CloseBody(res)
-	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
-	}
-	ret := &MarketplaceOrder{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
-	// {
-	//   "description": "Get an order given its id",
-	//   "httpMethod": "GET",
-	//   "id": "adexchangebuyer.marketplaceorders.get",
-	//   "parameterOrder": [
-	//     "orderId"
-	//   ],
-	//   "parameters": {
-	//     "orderId": {
-	//       "description": "Id of the order to retrieve.",
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     }
-	//   },
-	//   "path": "marketplaceOrders/{orderId}",
-	//   "response": {
-	//     "$ref": "MarketplaceOrder"
-	//   },
-	//   "scopes": [
-	//     "https://www.googleapis.com/auth/adexchange.buyer"
-	//   ]
-	// }
-
-}
-
-// method id "adexchangebuyer.marketplaceorders.insert":
-
-type MarketplaceordersInsertCall struct {
-	s                   *Service
-	createordersrequest *CreateOrdersRequest
-	urlParams_          gensupport.URLParams
-	ctx_                context.Context
-}
-
-// Insert: Create the given list of orders
-func (r *MarketplaceordersService) Insert(createordersrequest *CreateOrdersRequest) *MarketplaceordersInsertCall {
-	c := &MarketplaceordersInsertCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.createordersrequest = createordersrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceordersInsertCall) QuotaUser(quotaUser string) *MarketplaceordersInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceordersInsertCall) UserIP(userIP string) *MarketplaceordersInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Fields allows partial responses to be retrieved. See
-// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
-// for more information.
-func (c *MarketplaceordersInsertCall) Fields(s ...googleapi.Field) *MarketplaceordersInsertCall {
+func (c *MarketplaceprivateauctionUpdateproposalCall) Fields(s ...googleapi.Field) *MarketplaceprivateauctionUpdateproposalCall {
 	c.urlParams_.Set("fields", googleapi.CombineFields(s))
 	return c
 }
@@ -5752,559 +5549,61 @@ func (c *MarketplaceordersInsertCall) Fields(s ...googleapi.Field) *Marketplaceo
 // Context sets the context to be used in this call's Do method. Any
 // pending HTTP request will be aborted if the provided context is
 // canceled.
-func (c *MarketplaceordersInsertCall) Context(ctx context.Context) *MarketplaceordersInsertCall {
+func (c *MarketplaceprivateauctionUpdateproposalCall) Context(ctx context.Context) *MarketplaceprivateauctionUpdateproposalCall {
 	c.ctx_ = ctx
 	return c
 }
 
-func (c *MarketplaceordersInsertCall) doRequest(alt string) (*http.Response, error) {
+func (c *MarketplaceprivateauctionUpdateproposalCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.createordersrequest)
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.updateprivateauctionproposalrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/insert")
+	urls := googleapi.ResolveRelative(c.s.BasePath, "privateauction/{privateAuctionId}/updateproposal")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
-	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"privateAuctionId": c.privateAuctionId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
-// Do executes the "adexchangebuyer.marketplaceorders.insert" call.
-// Exactly one of *CreateOrdersResponse or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *CreateOrdersResponse.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceordersInsertCall) Do() (*CreateOrdersResponse, error) {
+// Do executes the "adexchangebuyer.marketplaceprivateauction.updateproposal" call.
+func (c *MarketplaceprivateauctionUpdateproposalCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer googleapi.CloseBody(res)
 	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
+		return err
 	}
-	ret := &CreateOrdersResponse{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
+	return nil
 	// {
-	//   "description": "Create the given list of orders",
+	//   "description": "Update a given private auction proposal",
 	//   "httpMethod": "POST",
-	//   "id": "adexchangebuyer.marketplaceorders.insert",
-	//   "path": "marketplaceOrders/insert",
-	//   "request": {
-	//     "$ref": "CreateOrdersRequest"
-	//   },
-	//   "response": {
-	//     "$ref": "CreateOrdersResponse"
-	//   },
-	//   "scopes": [
-	//     "https://www.googleapis.com/auth/adexchange.buyer"
-	//   ]
-	// }
-
-}
-
-// method id "adexchangebuyer.marketplaceorders.patch":
-
-type MarketplaceordersPatchCall struct {
-	s                *Service
-	orderId          string
-	revisionNumber   int64
-	updateAction     string
-	marketplaceorder *MarketplaceOrder
-	urlParams_       gensupport.URLParams
-	ctx_             context.Context
-}
-
-// Patch: Update the given order. This method supports patch semantics.
-func (r *MarketplaceordersService) Patch(orderId string, revisionNumber int64, updateAction string, marketplaceorder *MarketplaceOrder) *MarketplaceordersPatchCall {
-	c := &MarketplaceordersPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
-	c.revisionNumber = revisionNumber
-	c.updateAction = updateAction
-	c.marketplaceorder = marketplaceorder
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceordersPatchCall) QuotaUser(quotaUser string) *MarketplaceordersPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceordersPatchCall) UserIP(userIP string) *MarketplaceordersPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Fields allows partial responses to be retrieved. See
-// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
-// for more information.
-func (c *MarketplaceordersPatchCall) Fields(s ...googleapi.Field) *MarketplaceordersPatchCall {
-	c.urlParams_.Set("fields", googleapi.CombineFields(s))
-	return c
-}
-
-// Context sets the context to be used in this call's Do method. Any
-// pending HTTP request will be aborted if the provided context is
-// canceled.
-func (c *MarketplaceordersPatchCall) Context(ctx context.Context) *MarketplaceordersPatchCall {
-	c.ctx_ = ctx
-	return c
-}
-
-func (c *MarketplaceordersPatchCall) doRequest(alt string) (*http.Response, error) {
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.marketplaceorder)
-	if err != nil {
-		return nil, err
-	}
-	ctype := "application/json"
-	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/{revisionNumber}/{updateAction}")
-	urls += "?" + c.urlParams_.Encode()
-	req, _ := http.NewRequest("PATCH", urls, body)
-	googleapi.Expand(req.URL, map[string]string{
-		"orderId":        c.orderId,
-		"revisionNumber": strconv.FormatInt(c.revisionNumber, 10),
-		"updateAction":   c.updateAction,
-	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
-}
-
-// Do executes the "adexchangebuyer.marketplaceorders.patch" call.
-// Exactly one of *MarketplaceOrder or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *MarketplaceOrder.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceordersPatchCall) Do() (*MarketplaceOrder, error) {
-	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer googleapi.CloseBody(res)
-	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
-	}
-	ret := &MarketplaceOrder{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
-	// {
-	//   "description": "Update the given order. This method supports patch semantics.",
-	//   "httpMethod": "PATCH",
-	//   "id": "adexchangebuyer.marketplaceorders.patch",
+	//   "id": "adexchangebuyer.marketplaceprivateauction.updateproposal",
 	//   "parameterOrder": [
-	//     "orderId",
-	//     "revisionNumber",
-	//     "updateAction"
+	//     "privateAuctionId"
 	//   ],
 	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The order id to update.",
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     },
-	//     "revisionNumber": {
-	//       "description": "The last known revision number to update. If the head revision in the marketplace database has since changed, an error will be thrown. The caller should then fetch the lastest order at head revision and retry the update at that revision.",
-	//       "format": "int64",
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     },
-	//     "updateAction": {
-	//       "description": "The proposed action to take on the order.",
-	//       "enum": [
-	//         "accept",
-	//         "cancel",
-	//         "propose",
-	//         "unknownAction",
-	//         "updateFinalized"
-	//       ],
-	//       "enumDescriptions": [
-	//         "",
-	//         "",
-	//         "",
-	//         "",
-	//         ""
-	//       ],
+	//     "privateAuctionId": {
+	//       "description": "The private auction id to be updated.",
 	//       "location": "path",
 	//       "required": true,
 	//       "type": "string"
 	//     }
 	//   },
-	//   "path": "marketplaceOrders/{orderId}/{revisionNumber}/{updateAction}",
+	//   "path": "privateauction/{privateAuctionId}/updateproposal",
 	//   "request": {
-	//     "$ref": "MarketplaceOrder"
-	//   },
-	//   "response": {
-	//     "$ref": "MarketplaceOrder"
-	//   },
-	//   "scopes": [
-	//     "https://www.googleapis.com/auth/adexchange.buyer"
-	//   ]
-	// }
-
-}
-
-// method id "adexchangebuyer.marketplaceorders.search":
-
-type MarketplaceordersSearchCall struct {
-	s            *Service
-	urlParams_   gensupport.URLParams
-	ifNoneMatch_ string
-	ctx_         context.Context
-}
-
-// Search: Search for orders using pql query
-func (r *MarketplaceordersService) Search() *MarketplaceordersSearchCall {
-	c := &MarketplaceordersSearchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	return c
-}
-
-// PqlQuery sets the optional parameter "pqlQuery": Query string to
-// retrieve specific orders.
-func (c *MarketplaceordersSearchCall) PqlQuery(pqlQuery string) *MarketplaceordersSearchCall {
-	c.urlParams_.Set("pqlQuery", pqlQuery)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceordersSearchCall) QuotaUser(quotaUser string) *MarketplaceordersSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceordersSearchCall) UserIP(userIP string) *MarketplaceordersSearchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Fields allows partial responses to be retrieved. See
-// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
-// for more information.
-func (c *MarketplaceordersSearchCall) Fields(s ...googleapi.Field) *MarketplaceordersSearchCall {
-	c.urlParams_.Set("fields", googleapi.CombineFields(s))
-	return c
-}
-
-// IfNoneMatch sets the optional parameter which makes the operation
-// fail if the object's ETag matches the given value. This is useful for
-// getting updates only after the object has changed since the last
-// request. Use googleapi.IsNotModified to check whether the response
-// error from Do is the result of In-None-Match.
-func (c *MarketplaceordersSearchCall) IfNoneMatch(entityTag string) *MarketplaceordersSearchCall {
-	c.ifNoneMatch_ = entityTag
-	return c
-}
-
-// Context sets the context to be used in this call's Do method. Any
-// pending HTTP request will be aborted if the provided context is
-// canceled.
-func (c *MarketplaceordersSearchCall) Context(ctx context.Context) *MarketplaceordersSearchCall {
-	c.ctx_ = ctx
-	return c
-}
-
-func (c *MarketplaceordersSearchCall) doRequest(alt string) (*http.Response, error) {
-	var body io.Reader = nil
-	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/search")
-	urls += "?" + c.urlParams_.Encode()
-	req, _ := http.NewRequest("GET", urls, body)
-	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
-}
-
-// Do executes the "adexchangebuyer.marketplaceorders.search" call.
-// Exactly one of *GetOrdersResponse or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *GetOrdersResponse.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceordersSearchCall) Do() (*GetOrdersResponse, error) {
-	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer googleapi.CloseBody(res)
-	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
-	}
-	ret := &GetOrdersResponse{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
-	// {
-	//   "description": "Search for orders using pql query",
-	//   "httpMethod": "GET",
-	//   "id": "adexchangebuyer.marketplaceorders.search",
-	//   "parameters": {
-	//     "pqlQuery": {
-	//       "description": "Query string to retrieve specific orders.",
-	//       "location": "query",
-	//       "type": "string"
-	//     }
-	//   },
-	//   "path": "marketplaceOrders/search",
-	//   "response": {
-	//     "$ref": "GetOrdersResponse"
-	//   },
-	//   "scopes": [
-	//     "https://www.googleapis.com/auth/adexchange.buyer"
-	//   ]
-	// }
-
-}
-
-// method id "adexchangebuyer.marketplaceorders.update":
-
-type MarketplaceordersUpdateCall struct {
-	s                *Service
-	orderId          string
-	revisionNumber   int64
-	updateAction     string
-	marketplaceorder *MarketplaceOrder
-	urlParams_       gensupport.URLParams
-	ctx_             context.Context
-}
-
-// Update: Update the given order
-func (r *MarketplaceordersService) Update(orderId string, revisionNumber int64, updateAction string, marketplaceorder *MarketplaceOrder) *MarketplaceordersUpdateCall {
-	c := &MarketplaceordersUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	c.orderId = orderId
-	c.revisionNumber = revisionNumber
-	c.updateAction = updateAction
-	c.marketplaceorder = marketplaceorder
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MarketplaceordersUpdateCall) QuotaUser(quotaUser string) *MarketplaceordersUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MarketplaceordersUpdateCall) UserIP(userIP string) *MarketplaceordersUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Fields allows partial responses to be retrieved. See
-// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
-// for more information.
-func (c *MarketplaceordersUpdateCall) Fields(s ...googleapi.Field) *MarketplaceordersUpdateCall {
-	c.urlParams_.Set("fields", googleapi.CombineFields(s))
-	return c
-}
-
-// Context sets the context to be used in this call's Do method. Any
-// pending HTTP request will be aborted if the provided context is
-// canceled.
-func (c *MarketplaceordersUpdateCall) Context(ctx context.Context) *MarketplaceordersUpdateCall {
-	c.ctx_ = ctx
-	return c
-}
-
-func (c *MarketplaceordersUpdateCall) doRequest(alt string) (*http.Response, error) {
-	var body io.Reader = nil
-	body, err := googleapi.WithoutDataWrapper.JSONReader(c.marketplaceorder)
-	if err != nil {
-		return nil, err
-	}
-	ctype := "application/json"
-	c.urlParams_.Set("alt", alt)
-	urls := googleapi.ResolveRelative(c.s.BasePath, "marketplaceOrders/{orderId}/{revisionNumber}/{updateAction}")
-	urls += "?" + c.urlParams_.Encode()
-	req, _ := http.NewRequest("PUT", urls, body)
-	googleapi.Expand(req.URL, map[string]string{
-		"orderId":        c.orderId,
-		"revisionNumber": strconv.FormatInt(c.revisionNumber, 10),
-		"updateAction":   c.updateAction,
-	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
-}
-
-// Do executes the "adexchangebuyer.marketplaceorders.update" call.
-// Exactly one of *MarketplaceOrder or error will be non-nil. Any
-// non-2xx status code is an error. Response headers are in either
-// *MarketplaceOrder.ServerResponse.Header or (if a response was
-// returned at all) in error.(*googleapi.Error).Header. Use
-// googleapi.IsNotModified to check whether the returned error was
-// because http.StatusNotModified was returned.
-func (c *MarketplaceordersUpdateCall) Do() (*MarketplaceOrder, error) {
-	res, err := c.doRequest("json")
-	if res != nil && res.StatusCode == http.StatusNotModified {
-		if res.Body != nil {
-			res.Body.Close()
-		}
-		return nil, &googleapi.Error{
-			Code:   res.StatusCode,
-			Header: res.Header,
-		}
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer googleapi.CloseBody(res)
-	if err := googleapi.CheckResponse(res); err != nil {
-		return nil, err
-	}
-	ret := &MarketplaceOrder{
-		ServerResponse: googleapi.ServerResponse{
-			Header:         res.Header,
-			HTTPStatusCode: res.StatusCode,
-		},
-	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
-		return nil, err
-	}
-	return ret, nil
-	// {
-	//   "description": "Update the given order",
-	//   "httpMethod": "PUT",
-	//   "id": "adexchangebuyer.marketplaceorders.update",
-	//   "parameterOrder": [
-	//     "orderId",
-	//     "revisionNumber",
-	//     "updateAction"
-	//   ],
-	//   "parameters": {
-	//     "orderId": {
-	//       "description": "The order id to update.",
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     },
-	//     "revisionNumber": {
-	//       "description": "The last known revision number to update. If the head revision in the marketplace database has since changed, an error will be thrown. The caller should then fetch the lastest order at head revision and retry the update at that revision.",
-	//       "format": "int64",
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     },
-	//     "updateAction": {
-	//       "description": "The proposed action to take on the order.",
-	//       "enum": [
-	//         "accept",
-	//         "cancel",
-	//         "propose",
-	//         "unknownAction",
-	//         "updateFinalized"
-	//       ],
-	//       "enumDescriptions": [
-	//         "",
-	//         "",
-	//         "",
-	//         "",
-	//         ""
-	//       ],
-	//       "location": "path",
-	//       "required": true,
-	//       "type": "string"
-	//     }
-	//   },
-	//   "path": "marketplaceOrders/{orderId}/{revisionNumber}/{updateAction}",
-	//   "request": {
-	//     "$ref": "MarketplaceOrder"
-	//   },
-	//   "response": {
-	//     "$ref": "MarketplaceOrder"
+	//     "$ref": "UpdatePrivateAuctionProposalRequest"
 	//   },
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/adexchange.buyer"
@@ -6348,23 +5647,6 @@ func (c *PerformanceReportListCall) PageToken(pageToken string) *PerformanceRepo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PerformanceReportListCall) QuotaUser(quotaUser string) *PerformanceReportListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PerformanceReportListCall) UserIP(userIP string) *PerformanceReportListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6392,20 +5674,19 @@ func (c *PerformanceReportListCall) Context(ctx context.Context) *PerformanceRep
 }
 
 func (c *PerformanceReportListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "performancereport")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.performanceReport.list" call.
@@ -6415,7 +5696,8 @@ func (c *PerformanceReportListCall) doRequest(alt string) (*http.Response, error
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PerformanceReportListCall) Do() (*PerformanceReportList, error) {
+func (c *PerformanceReportListCall) Do(opts ...googleapi.CallOption) (*PerformanceReportList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6439,7 +5721,8 @@ func (c *PerformanceReportListCall) Do() (*PerformanceReportList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6515,23 +5798,6 @@ func (r *PretargetingConfigService) Delete(accountId int64, configId int64) *Pre
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PretargetingConfigDeleteCall) QuotaUser(quotaUser string) *PretargetingConfigDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PretargetingConfigDeleteCall) UserIP(userIP string) *PretargetingConfigDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6549,24 +5815,24 @@ func (c *PretargetingConfigDeleteCall) Context(ctx context.Context) *Pretargetin
 }
 
 func (c *PretargetingConfigDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pretargetingconfigs/{accountId}/{configId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"configId":  strconv.FormatInt(c.configId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.pretargetingConfig.delete" call.
-func (c *PretargetingConfigDeleteCall) Do() error {
+func (c *PretargetingConfigDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -6627,23 +5893,6 @@ func (r *PretargetingConfigService) Get(accountId int64, configId int64) *Pretar
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PretargetingConfigGetCall) QuotaUser(quotaUser string) *PretargetingConfigGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PretargetingConfigGetCall) UserIP(userIP string) *PretargetingConfigGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6671,23 +5920,22 @@ func (c *PretargetingConfigGetCall) Context(ctx context.Context) *PretargetingCo
 }
 
 func (c *PretargetingConfigGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pretargetingconfigs/{accountId}/{configId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"configId":  strconv.FormatInt(c.configId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.pretargetingConfig.get" call.
@@ -6697,7 +5945,8 @@ func (c *PretargetingConfigGetCall) doRequest(alt string) (*http.Response, error
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PretargetingConfigGetCall) Do() (*PretargetingConfig, error) {
+func (c *PretargetingConfigGetCall) Do(opts ...googleapi.CallOption) (*PretargetingConfig, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6721,7 +5970,8 @@ func (c *PretargetingConfigGetCall) Do() (*PretargetingConfig, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6778,23 +6028,6 @@ func (r *PretargetingConfigService) Insert(accountId int64, pretargetingconfig *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PretargetingConfigInsertCall) QuotaUser(quotaUser string) *PretargetingConfigInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PretargetingConfigInsertCall) UserIP(userIP string) *PretargetingConfigInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6812,25 +6045,23 @@ func (c *PretargetingConfigInsertCall) Context(ctx context.Context) *Pretargetin
 }
 
 func (c *PretargetingConfigInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pretargetingconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pretargetingconfigs/{accountId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.pretargetingConfig.insert" call.
@@ -6840,7 +6071,8 @@ func (c *PretargetingConfigInsertCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PretargetingConfigInsertCall) Do() (*PretargetingConfig, error) {
+func (c *PretargetingConfigInsertCall) Do(opts ...googleapi.CallOption) (*PretargetingConfig, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6864,7 +6096,8 @@ func (c *PretargetingConfigInsertCall) Do() (*PretargetingConfig, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6916,23 +6149,6 @@ func (r *PretargetingConfigService) List(accountId int64) *PretargetingConfigLis
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PretargetingConfigListCall) QuotaUser(quotaUser string) *PretargetingConfigListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PretargetingConfigListCall) UserIP(userIP string) *PretargetingConfigListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6960,22 +6176,21 @@ func (c *PretargetingConfigListCall) Context(ctx context.Context) *PretargetingC
 }
 
 func (c *PretargetingConfigListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pretargetingconfigs/{accountId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.pretargetingConfig.list" call.
@@ -6985,7 +6200,8 @@ func (c *PretargetingConfigListCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PretargetingConfigListCall) Do() (*PretargetingConfigList, error) {
+func (c *PretargetingConfigListCall) Do(opts ...googleapi.CallOption) (*PretargetingConfigList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7009,7 +6225,8 @@ func (c *PretargetingConfigListCall) Do() (*PretargetingConfigList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7061,23 +6278,6 @@ func (r *PretargetingConfigService) Patch(accountId int64, configId int64, preta
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PretargetingConfigPatchCall) QuotaUser(quotaUser string) *PretargetingConfigPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PretargetingConfigPatchCall) UserIP(userIP string) *PretargetingConfigPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7095,26 +6295,24 @@ func (c *PretargetingConfigPatchCall) Context(ctx context.Context) *Pretargeting
 }
 
 func (c *PretargetingConfigPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pretargetingconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pretargetingconfigs/{accountId}/{configId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"configId":  strconv.FormatInt(c.configId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.pretargetingConfig.patch" call.
@@ -7124,7 +6322,8 @@ func (c *PretargetingConfigPatchCall) doRequest(alt string) (*http.Response, err
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PretargetingConfigPatchCall) Do() (*PretargetingConfig, error) {
+func (c *PretargetingConfigPatchCall) Do(opts ...googleapi.CallOption) (*PretargetingConfig, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7148,7 +6347,8 @@ func (c *PretargetingConfigPatchCall) Do() (*PretargetingConfig, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7210,23 +6410,6 @@ func (r *PretargetingConfigService) Update(accountId int64, configId int64, pret
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PretargetingConfigUpdateCall) QuotaUser(quotaUser string) *PretargetingConfigUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PretargetingConfigUpdateCall) UserIP(userIP string) *PretargetingConfigUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7244,26 +6427,24 @@ func (c *PretargetingConfigUpdateCall) Context(ctx context.Context) *Pretargetin
 }
 
 func (c *PretargetingConfigUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pretargetingconfig)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "pretargetingconfigs/{accountId}/{configId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"accountId": strconv.FormatInt(c.accountId, 10),
 		"configId":  strconv.FormatInt(c.configId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "adexchangebuyer.pretargetingConfig.update" call.
@@ -7273,7 +6454,8 @@ func (c *PretargetingConfigUpdateCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PretargetingConfigUpdateCall) Do() (*PretargetingConfig, error) {
+func (c *PretargetingConfigUpdateCall) Do(opts ...googleapi.CallOption) (*PretargetingConfig, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7297,7 +6479,8 @@ func (c *PretargetingConfigUpdateCall) Do() (*PretargetingConfig, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7331,6 +6514,1125 @@ func (c *PretargetingConfigUpdateCall) Do() (*PretargetingConfig, error) {
 	//   },
 	//   "response": {
 	//     "$ref": "PretargetingConfig"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.products.get":
+
+type ProductsGetCall struct {
+	s            *Service
+	productId    string
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+}
+
+// Get: Gets the requested product by id.
+func (r *ProductsService) Get(productId string) *ProductsGetCall {
+	c := &ProductsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.productId = productId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProductsGetCall) Fields(s ...googleapi.Field) *ProductsGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProductsGetCall) IfNoneMatch(entityTag string) *ProductsGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProductsGetCall) Context(ctx context.Context) *ProductsGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProductsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "products/{productId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"productId": c.productId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.products.get" call.
+// Exactly one of *Product or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Product.ServerResponse.Header or (if a response was returned at all)
+// in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified
+// was returned.
+func (c *ProductsGetCall) Do(opts ...googleapi.CallOption) (*Product, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Product{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets the requested product by id.",
+	//   "httpMethod": "GET",
+	//   "id": "adexchangebuyer.products.get",
+	//   "parameterOrder": [
+	//     "productId"
+	//   ],
+	//   "parameters": {
+	//     "productId": {
+	//       "description": "The id for the product to get the head revision for.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "products/{productId}",
+	//   "response": {
+	//     "$ref": "Product"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.products.search":
+
+type ProductsSearchCall struct {
+	s            *Service
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+}
+
+// Search: Gets the requested product.
+func (r *ProductsService) Search() *ProductsSearchCall {
+	c := &ProductsSearchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	return c
+}
+
+// PqlQuery sets the optional parameter "pqlQuery": The pql query used
+// to query for products.
+func (c *ProductsSearchCall) PqlQuery(pqlQuery string) *ProductsSearchCall {
+	c.urlParams_.Set("pqlQuery", pqlQuery)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProductsSearchCall) Fields(s ...googleapi.Field) *ProductsSearchCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProductsSearchCall) IfNoneMatch(entityTag string) *ProductsSearchCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProductsSearchCall) Context(ctx context.Context) *ProductsSearchCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProductsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "products/search")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.products.search" call.
+// Exactly one of *GetOffersResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *GetOffersResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ProductsSearchCall) Do(opts ...googleapi.CallOption) (*GetOffersResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &GetOffersResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets the requested product.",
+	//   "httpMethod": "GET",
+	//   "id": "adexchangebuyer.products.search",
+	//   "parameters": {
+	//     "pqlQuery": {
+	//       "description": "The pql query used to query for products.",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "products/search",
+	//   "response": {
+	//     "$ref": "GetOffersResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.proposals.get":
+
+type ProposalsGetCall struct {
+	s            *Service
+	proposalId   string
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+}
+
+// Get: Get a proposal given its id
+func (r *ProposalsService) Get(proposalId string) *ProposalsGetCall {
+	c := &ProposalsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.proposalId = proposalId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProposalsGetCall) Fields(s ...googleapi.Field) *ProposalsGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProposalsGetCall) IfNoneMatch(entityTag string) *ProposalsGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProposalsGetCall) Context(ctx context.Context) *ProposalsGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProposalsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"proposalId": c.proposalId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.proposals.get" call.
+// Exactly one of *Proposal or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Proposal.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProposalsGetCall) Do(opts ...googleapi.CallOption) (*Proposal, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Proposal{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Get a proposal given its id",
+	//   "httpMethod": "GET",
+	//   "id": "adexchangebuyer.proposals.get",
+	//   "parameterOrder": [
+	//     "proposalId"
+	//   ],
+	//   "parameters": {
+	//     "proposalId": {
+	//       "description": "Id of the proposal to retrieve.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "proposals/{proposalId}",
+	//   "response": {
+	//     "$ref": "Proposal"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.proposals.insert":
+
+type ProposalsInsertCall struct {
+	s                   *Service
+	createordersrequest *CreateOrdersRequest
+	urlParams_          gensupport.URLParams
+	ctx_                context.Context
+}
+
+// Insert: Create the given list of proposals
+func (r *ProposalsService) Insert(createordersrequest *CreateOrdersRequest) *ProposalsInsertCall {
+	c := &ProposalsInsertCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.createordersrequest = createordersrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProposalsInsertCall) Fields(s ...googleapi.Field) *ProposalsInsertCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProposalsInsertCall) Context(ctx context.Context) *ProposalsInsertCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProposalsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.createordersrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/insert")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.proposals.insert" call.
+// Exactly one of *CreateOrdersResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *CreateOrdersResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ProposalsInsertCall) Do(opts ...googleapi.CallOption) (*CreateOrdersResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &CreateOrdersResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Create the given list of proposals",
+	//   "httpMethod": "POST",
+	//   "id": "adexchangebuyer.proposals.insert",
+	//   "path": "proposals/insert",
+	//   "request": {
+	//     "$ref": "CreateOrdersRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "CreateOrdersResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.proposals.patch":
+
+type ProposalsPatchCall struct {
+	s              *Service
+	proposalId     string
+	revisionNumber int64
+	updateAction   string
+	proposal       *Proposal
+	urlParams_     gensupport.URLParams
+	ctx_           context.Context
+}
+
+// Patch: Update the given proposal. This method supports patch
+// semantics.
+func (r *ProposalsService) Patch(proposalId string, revisionNumber int64, updateAction string, proposal *Proposal) *ProposalsPatchCall {
+	c := &ProposalsPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.proposalId = proposalId
+	c.revisionNumber = revisionNumber
+	c.updateAction = updateAction
+	c.proposal = proposal
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProposalsPatchCall) Fields(s ...googleapi.Field) *ProposalsPatchCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProposalsPatchCall) Context(ctx context.Context) *ProposalsPatchCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProposalsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.proposal)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/{revisionNumber}/{updateAction}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"proposalId":     c.proposalId,
+		"revisionNumber": strconv.FormatInt(c.revisionNumber, 10),
+		"updateAction":   c.updateAction,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.proposals.patch" call.
+// Exactly one of *Proposal or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Proposal.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProposalsPatchCall) Do(opts ...googleapi.CallOption) (*Proposal, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Proposal{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Update the given proposal. This method supports patch semantics.",
+	//   "httpMethod": "PATCH",
+	//   "id": "adexchangebuyer.proposals.patch",
+	//   "parameterOrder": [
+	//     "proposalId",
+	//     "revisionNumber",
+	//     "updateAction"
+	//   ],
+	//   "parameters": {
+	//     "proposalId": {
+	//       "description": "The proposal id to update.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "revisionNumber": {
+	//       "description": "The last known revision number to update. If the head revision in the marketplace database has since changed, an error will be thrown. The caller should then fetch the latest proposal at head revision and retry the update at that revision.",
+	//       "format": "int64",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "updateAction": {
+	//       "description": "The proposed action to take on the proposal.",
+	//       "enum": [
+	//         "accept",
+	//         "cancel",
+	//         "propose",
+	//         "unknownAction",
+	//         "updateFinalized"
+	//       ],
+	//       "enumDescriptions": [
+	//         "",
+	//         "",
+	//         "",
+	//         "",
+	//         ""
+	//       ],
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "proposals/{proposalId}/{revisionNumber}/{updateAction}",
+	//   "request": {
+	//     "$ref": "Proposal"
+	//   },
+	//   "response": {
+	//     "$ref": "Proposal"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.proposals.search":
+
+type ProposalsSearchCall struct {
+	s            *Service
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+}
+
+// Search: Search for proposals using pql query
+func (r *ProposalsService) Search() *ProposalsSearchCall {
+	c := &ProposalsSearchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	return c
+}
+
+// PqlQuery sets the optional parameter "pqlQuery": Query string to
+// retrieve specific proposals.
+func (c *ProposalsSearchCall) PqlQuery(pqlQuery string) *ProposalsSearchCall {
+	c.urlParams_.Set("pqlQuery", pqlQuery)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProposalsSearchCall) Fields(s ...googleapi.Field) *ProposalsSearchCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ProposalsSearchCall) IfNoneMatch(entityTag string) *ProposalsSearchCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProposalsSearchCall) Context(ctx context.Context) *ProposalsSearchCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProposalsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/search")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.proposals.search" call.
+// Exactly one of *GetOrdersResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *GetOrdersResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ProposalsSearchCall) Do(opts ...googleapi.CallOption) (*GetOrdersResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &GetOrdersResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Search for proposals using pql query",
+	//   "httpMethod": "GET",
+	//   "id": "adexchangebuyer.proposals.search",
+	//   "parameters": {
+	//     "pqlQuery": {
+	//       "description": "Query string to retrieve specific proposals.",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "proposals/search",
+	//   "response": {
+	//     "$ref": "GetOrdersResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.proposals.setupcomplete":
+
+type ProposalsSetupcompleteCall struct {
+	s          *Service
+	proposalId string
+	urlParams_ gensupport.URLParams
+	ctx_       context.Context
+}
+
+// Setupcomplete: Update the given proposal to indicate that setup has
+// been completed.
+func (r *ProposalsService) Setupcomplete(proposalId string) *ProposalsSetupcompleteCall {
+	c := &ProposalsSetupcompleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.proposalId = proposalId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProposalsSetupcompleteCall) Fields(s ...googleapi.Field) *ProposalsSetupcompleteCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProposalsSetupcompleteCall) Context(ctx context.Context) *ProposalsSetupcompleteCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProposalsSetupcompleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/setupcomplete")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"proposalId": c.proposalId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.proposals.setupcomplete" call.
+func (c *ProposalsSetupcompleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if err != nil {
+		return err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return err
+	}
+	return nil
+	// {
+	//   "description": "Update the given proposal to indicate that setup has been completed.",
+	//   "httpMethod": "POST",
+	//   "id": "adexchangebuyer.proposals.setupcomplete",
+	//   "parameterOrder": [
+	//     "proposalId"
+	//   ],
+	//   "parameters": {
+	//     "proposalId": {
+	//       "description": "The proposal id for which the setup is complete",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "proposals/{proposalId}/setupcomplete",
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.proposals.update":
+
+type ProposalsUpdateCall struct {
+	s              *Service
+	proposalId     string
+	revisionNumber int64
+	updateAction   string
+	proposal       *Proposal
+	urlParams_     gensupport.URLParams
+	ctx_           context.Context
+}
+
+// Update: Update the given proposal
+func (r *ProposalsService) Update(proposalId string, revisionNumber int64, updateAction string, proposal *Proposal) *ProposalsUpdateCall {
+	c := &ProposalsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.proposalId = proposalId
+	c.revisionNumber = revisionNumber
+	c.updateAction = updateAction
+	c.proposal = proposal
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ProposalsUpdateCall) Fields(s ...googleapi.Field) *ProposalsUpdateCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ProposalsUpdateCall) Context(ctx context.Context) *ProposalsUpdateCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ProposalsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.proposal)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "proposals/{proposalId}/{revisionNumber}/{updateAction}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"proposalId":     c.proposalId,
+		"revisionNumber": strconv.FormatInt(c.revisionNumber, 10),
+		"updateAction":   c.updateAction,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.proposals.update" call.
+// Exactly one of *Proposal or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Proposal.ServerResponse.Header or (if a response was returned at
+// all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
+// to check whether the returned error was because
+// http.StatusNotModified was returned.
+func (c *ProposalsUpdateCall) Do(opts ...googleapi.CallOption) (*Proposal, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Proposal{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Update the given proposal",
+	//   "httpMethod": "PUT",
+	//   "id": "adexchangebuyer.proposals.update",
+	//   "parameterOrder": [
+	//     "proposalId",
+	//     "revisionNumber",
+	//     "updateAction"
+	//   ],
+	//   "parameters": {
+	//     "proposalId": {
+	//       "description": "The proposal id to update.",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "revisionNumber": {
+	//       "description": "The last known revision number to update. If the head revision in the marketplace database has since changed, an error will be thrown. The caller should then fetch the latest proposal at head revision and retry the update at that revision.",
+	//       "format": "int64",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "updateAction": {
+	//       "description": "The proposed action to take on the proposal.",
+	//       "enum": [
+	//         "accept",
+	//         "cancel",
+	//         "propose",
+	//         "unknownAction",
+	//         "updateFinalized"
+	//       ],
+	//       "enumDescriptions": [
+	//         "",
+	//         "",
+	//         "",
+	//         "",
+	//         ""
+	//       ],
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "proposals/{proposalId}/{revisionNumber}/{updateAction}",
+	//   "request": {
+	//     "$ref": "Proposal"
+	//   },
+	//   "response": {
+	//     "$ref": "Proposal"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/adexchange.buyer"
+	//   ]
+	// }
+
+}
+
+// method id "adexchangebuyer.pubprofiles.list":
+
+type PubprofilesListCall struct {
+	s            *Service
+	accountId    int64
+	urlParams_   gensupport.URLParams
+	ifNoneMatch_ string
+	ctx_         context.Context
+}
+
+// List: Gets the requested publisher profile(s) by publisher accountId.
+func (r *PubprofilesService) List(accountId int64) *PubprofilesListCall {
+	c := &PubprofilesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.accountId = accountId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *PubprofilesListCall) Fields(s ...googleapi.Field) *PubprofilesListCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *PubprofilesListCall) IfNoneMatch(entityTag string) *PubprofilesListCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *PubprofilesListCall) Context(ctx context.Context) *PubprofilesListCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *PubprofilesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "publisher/{accountId}/profiles")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"accountId": strconv.FormatInt(c.accountId, 10),
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "adexchangebuyer.pubprofiles.list" call.
+// Exactly one of *GetPublisherProfilesByAccountIdResponse or error will
+// be non-nil. Any non-2xx status code is an error. Response headers are
+// in either
+// *GetPublisherProfilesByAccountIdResponse.ServerResponse.Header or (if
+// a response was returned at all) in error.(*googleapi.Error).Header.
+// Use googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *PubprofilesListCall) Do(opts ...googleapi.CallOption) (*GetPublisherProfilesByAccountIdResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &GetPublisherProfilesByAccountIdResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Gets the requested publisher profile(s) by publisher accountId.",
+	//   "httpMethod": "GET",
+	//   "id": "adexchangebuyer.pubprofiles.list",
+	//   "parameterOrder": [
+	//     "accountId"
+	//   ],
+	//   "parameters": {
+	//     "accountId": {
+	//       "description": "The accountId of the publisher to get profiles for.",
+	//       "format": "int32",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "integer"
+	//     }
+	//   },
+	//   "path": "publisher/{accountId}/profiles",
+	//   "response": {
+	//     "$ref": "GetPublisherProfilesByAccountIdResponse"
 	//   },
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/adexchange.buyer"

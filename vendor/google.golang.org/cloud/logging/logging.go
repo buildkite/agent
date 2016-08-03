@@ -335,11 +335,21 @@ func (c *Client) timeoutFlush() {
 	}
 }
 
-// Ping reports whether the client's connection to Google Cloud
-// Logging and the authentication configuration are valid.
+// Ping reports whether the client's connection to Google Cloud Logging and the
+// authentication configuration are valid. To accomplish this, Ping writes a
+// log entry "ping" to a log named "ping".
 func (c *Client) Ping() error {
-	_, err := c.logs.Write(c.projID, c.logName, &api.WriteLogEntriesRequest{
-		Entries: []*api.LogEntry{},
+	ent := &api.LogEntry{
+		Metadata: &api.LogEntryMetadata{
+			// Identical timestamps required for deduping in addition to identical insert IDs.
+			Timestamp:   time.Unix(0, 0).UTC().Format(time.RFC3339Nano),
+			ServiceName: c.serviceName(),
+		},
+		InsertId:    "ping", // dedup, so there is only ever one entry
+		TextPayload: "ping",
+	}
+	_, err := c.logs.Write(c.projID, "ping", &api.WriteLogEntriesRequest{
+		Entries: []*api.LogEntry{ent},
 	}).Do()
 	return err
 }
@@ -436,7 +446,7 @@ const userAgent = "gcloud-golang-logging/20150922"
 func NewClient(ctx context.Context, projectID, logName string, opts ...cloud.ClientOption) (*Client, error) {
 	httpClient, endpoint, err := transport.NewHTTPClient(ctx, append([]cloud.ClientOption{
 		cloud.WithEndpoint(prodAddr),
-		cloud.WithScopes(api.CloudPlatformScope),
+		cloud.WithScopes(Scope),
 		cloud.WithUserAgent(userAgent),
 	}, opts...)...)
 	if err != nil {

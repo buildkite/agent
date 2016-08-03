@@ -64,6 +64,12 @@ const (
 
 	// View and store your location data in Google Fit
 	FitnessLocationWriteScope = "https://www.googleapis.com/auth/fitness.location.write"
+
+	// View nutrition information in Google Fit
+	FitnessNutritionReadScope = "https://www.googleapis.com/auth/fitness.nutrition.read"
+
+	// View and store nutrition information in Google Fit
+	FitnessNutritionWriteScope = "https://www.googleapis.com/auth/fitness.nutrition.write"
 )
 
 func New(client *http.Client) (*Service, error) {
@@ -259,6 +265,24 @@ type AggregateRequest struct {
 	// since epoch, inclusive.
 	EndTimeMillis int64 `json:"endTimeMillis,omitempty,string"`
 
+	// FilteredDataQualityStandard: A list of acceptable data quality
+	// standards. Only data points which conform to at least one of the
+	// specified data quality standards will be returned. If the list is
+	// empty, all data points are returned.
+	//
+	// Possible values:
+	//   "dataQualityBloodGlucoseIso151972003"
+	//   "dataQualityBloodGlucoseIso151972013"
+	//   "dataQualityBloodPressureAami"
+	//   "dataQualityBloodPressureBhsAA"
+	//   "dataQualityBloodPressureBhsAB"
+	//   "dataQualityBloodPressureBhsBA"
+	//   "dataQualityBloodPressureBhsBB"
+	//   "dataQualityBloodPressureEsh2002"
+	//   "dataQualityBloodPressureEsh2010"
+	//   "dataQualityUnknown"
+	FilteredDataQualityStandard []string `json:"filteredDataQualityStandard,omitempty"`
+
 	// StartTimeMillis: The start of a window of time. Data that intersects
 	// with this time window will be aggregated. The time is in milliseconds
 	// since epoch, inclusive.
@@ -302,9 +326,6 @@ func (s *AggregateResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// Application: See:
-// google3/java/com/google/android/apps/heart/platform/api/Application.ja
-// va
 type Application struct {
 	// DetailsUrl: An optional URI that can be used to link back to the
 	// application.
@@ -396,6 +417,8 @@ type BucketByTime struct {
 	// will be included in the response with an empty dataset.
 	DurationMillis int64 `json:"durationMillis,omitempty,string"`
 
+	Period *BucketByTimePeriod `json:"period,omitempty"`
+
 	// ForceSendFields is a list of field names (e.g. "DurationMillis") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
@@ -407,6 +430,33 @@ type BucketByTime struct {
 
 func (s *BucketByTime) MarshalJSON() ([]byte, error) {
 	type noMethod BucketByTime
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type BucketByTimePeriod struct {
+	// TimeZoneId: org.joda.timezone.DateTimeZone
+	TimeZoneId string `json:"timeZoneId,omitempty"`
+
+	// Possible values:
+	//   "day"
+	//   "month"
+	//   "week"
+	Type string `json:"type,omitempty"`
+
+	Value int64 `json:"value,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "TimeZoneId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *BucketByTimePeriod) MarshalJSON() ([]byte, error) {
+	type noMethod BucketByTimePeriod
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -502,6 +552,19 @@ type DataSource struct {
 	// into the platform.
 	Application *Application `json:"application,omitempty"`
 
+	// Possible values:
+	//   "dataQualityBloodGlucoseIso151972003"
+	//   "dataQualityBloodGlucoseIso151972013"
+	//   "dataQualityBloodPressureAami"
+	//   "dataQualityBloodPressureBhsAA"
+	//   "dataQualityBloodPressureBhsAB"
+	//   "dataQualityBloodPressureBhsBA"
+	//   "dataQualityBloodPressureBhsBB"
+	//   "dataQualityBloodPressureEsh2002"
+	//   "dataQualityBloodPressureEsh2010"
+	//   "dataQualityUnknown"
+	DataQualityStandard []string `json:"dataQualityStandard,omitempty"`
+
 	// DataStreamId: A unique identifier for the data stream produced by
 	// this data source. The identifier includes:
 	//
@@ -586,8 +649,6 @@ func (s *DataSource) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// DataType: See:
-// google3/java/com/google/android/apps/heart/platform/api/DataType.java
 type DataType struct {
 	// Field: A field represents one dimension of a data type.
 	Field []*DataTypeField `json:"field,omitempty"`
@@ -733,6 +794,7 @@ type Device struct {
 	//
 	// Possible values:
 	//   "chestStrap"
+	//   "headMounted"
 	//   "phone"
 	//   "scale"
 	//   "tablet"
@@ -988,23 +1050,6 @@ func (r *UsersDataSourcesService) Create(userId string, datasource *DataSource) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesCreateCall) QuotaUser(quotaUser string) *UsersDataSourcesCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesCreateCall) UserIP(userIP string) *UsersDataSourcesCreateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1022,25 +1067,23 @@ func (c *UsersDataSourcesCreateCall) Context(ctx context.Context) *UsersDataSour
 }
 
 func (c *UsersDataSourcesCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.datasource)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.create" call.
@@ -1050,7 +1093,8 @@ func (c *UsersDataSourcesCreateCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UsersDataSourcesCreateCall) Do() (*DataSource, error) {
+func (c *UsersDataSourcesCreateCall) Do(opts ...googleapi.CallOption) (*DataSource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1074,7 +1118,8 @@ func (c *UsersDataSourcesCreateCall) Do() (*DataSource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1103,7 +1148,8 @@ func (c *UsersDataSourcesCreateCall) Do() (*DataSource, error) {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/fitness.activity.write",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -1119,29 +1165,12 @@ type UsersDataSourcesDeleteCall struct {
 	ctx_         context.Context
 }
 
-// Delete: Delete the data source if there are no datapoints associated
-// with it
+// Delete: Deletes the specified data source. The request will fail if
+// the data source contains any data points.
 func (r *UsersDataSourcesService) Delete(userId string, dataSourceId string) *UsersDataSourcesDeleteCall {
 	c := &UsersDataSourcesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.userId = userId
 	c.dataSourceId = dataSourceId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesDeleteCall) QuotaUser(quotaUser string) *UsersDataSourcesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesDeleteCall) UserIP(userIP string) *UsersDataSourcesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1162,20 +1191,19 @@ func (c *UsersDataSourcesDeleteCall) Context(ctx context.Context) *UsersDataSour
 }
 
 func (c *UsersDataSourcesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.delete" call.
@@ -1185,7 +1213,8 @@ func (c *UsersDataSourcesDeleteCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UsersDataSourcesDeleteCall) Do() (*DataSource, error) {
+func (c *UsersDataSourcesDeleteCall) Do(opts ...googleapi.CallOption) (*DataSource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1209,12 +1238,13 @@ func (c *UsersDataSourcesDeleteCall) Do() (*DataSource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Delete the data source if there are no datapoints associated with it",
+	//   "description": "Deletes the specified data source. The request will fail if the data source contains any data points.",
 	//   "httpMethod": "DELETE",
 	//   "id": "fitness.users.dataSources.delete",
 	//   "parameterOrder": [
@@ -1242,7 +1272,8 @@ func (c *UsersDataSourcesDeleteCall) Do() (*DataSource, error) {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/fitness.activity.write",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -1259,28 +1290,11 @@ type UsersDataSourcesGetCall struct {
 	ctx_         context.Context
 }
 
-// Get: Returns a data source identified by a data stream ID.
+// Get: Returns the specified data source.
 func (r *UsersDataSourcesService) Get(userId string, dataSourceId string) *UsersDataSourcesGetCall {
 	c := &UsersDataSourcesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.userId = userId
 	c.dataSourceId = dataSourceId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesGetCall) QuotaUser(quotaUser string) *UsersDataSourcesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesGetCall) UserIP(userIP string) *UsersDataSourcesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1311,23 +1325,22 @@ func (c *UsersDataSourcesGetCall) Context(ctx context.Context) *UsersDataSources
 }
 
 func (c *UsersDataSourcesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.get" call.
@@ -1337,7 +1350,8 @@ func (c *UsersDataSourcesGetCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UsersDataSourcesGetCall) Do() (*DataSource, error) {
+func (c *UsersDataSourcesGetCall) Do(opts ...googleapi.CallOption) (*DataSource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1361,12 +1375,13 @@ func (c *UsersDataSourcesGetCall) Do() (*DataSource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Returns a data source identified by a data stream ID.",
+	//   "description": "Returns the specified data source.",
 	//   "httpMethod": "GET",
 	//   "id": "fitness.users.dataSources.get",
 	//   "parameterOrder": [
@@ -1397,7 +1412,9 @@ func (c *UsersDataSourcesGetCall) Do() (*DataSource, error) {
 	//     "https://www.googleapis.com/auth/fitness.body.read",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
 	//     "https://www.googleapis.com/auth/fitness.location.read",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.read",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -1414,8 +1431,8 @@ type UsersDataSourcesListCall struct {
 }
 
 // List: Lists all data sources that are visible to the developer, using
-// the OAuth scopes provided. The list is not exhaustive: the user may
-// have private data sources that are only visible to other developers
+// the OAuth scopes provided. The list is not exhaustive; the user may
+// have private data sources that are only visible to other developers,
 // or calls using other scopes.
 func (r *UsersDataSourcesService) List(userId string) *UsersDataSourcesListCall {
 	c := &UsersDataSourcesListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
@@ -1428,23 +1445,6 @@ func (r *UsersDataSourcesService) List(userId string) *UsersDataSourcesListCall 
 // will be returned.
 func (c *UsersDataSourcesListCall) DataTypeName(dataTypeName ...string) *UsersDataSourcesListCall {
 	c.urlParams_.SetMulti("dataTypeName", append([]string{}, dataTypeName...))
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesListCall) QuotaUser(quotaUser string) *UsersDataSourcesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesListCall) UserIP(userIP string) *UsersDataSourcesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1475,22 +1475,21 @@ func (c *UsersDataSourcesListCall) Context(ctx context.Context) *UsersDataSource
 }
 
 func (c *UsersDataSourcesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.list" call.
@@ -1500,7 +1499,8 @@ func (c *UsersDataSourcesListCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UsersDataSourcesListCall) Do() (*ListDataSourcesResponse, error) {
+func (c *UsersDataSourcesListCall) Do(opts ...googleapi.CallOption) (*ListDataSourcesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1524,12 +1524,13 @@ func (c *UsersDataSourcesListCall) Do() (*ListDataSourcesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Lists all data sources that are visible to the developer, using the OAuth scopes provided. The list is not exhaustive: the user may have private data sources that are only visible to other developers or calls using other scopes.",
+	//   "description": "Lists all data sources that are visible to the developer, using the OAuth scopes provided. The list is not exhaustive; the user may have private data sources that are only visible to other developers, or calls using other scopes.",
 	//   "httpMethod": "GET",
 	//   "id": "fitness.users.dataSources.list",
 	//   "parameterOrder": [
@@ -1559,7 +1560,9 @@ func (c *UsersDataSourcesListCall) Do() (*ListDataSourcesResponse, error) {
 	//     "https://www.googleapis.com/auth/fitness.body.read",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
 	//     "https://www.googleapis.com/auth/fitness.location.read",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.read",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -1576,36 +1579,17 @@ type UsersDataSourcesPatchCall struct {
 	ctx_         context.Context
 }
 
-// Patch: Updates a given data source. It is an error to modify the data
-// source's data stream ID, data type, type, stream name or device
-// information apart from the device version. Changing these fields
-// would require a new unique data stream ID and separate data
-// source.
+// Patch: Updates the specified data source. The dataStreamId, dataType,
+// type, dataStreamName, and device properties with the exception of
+// version, cannot be modified.
 //
-// Data sources are identified by their data stream ID. This method
+// Data sources are identified by their dataStreamId. This method
 // supports patch semantics.
 func (r *UsersDataSourcesService) Patch(userId string, dataSourceId string, datasource *DataSource) *UsersDataSourcesPatchCall {
 	c := &UsersDataSourcesPatchCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.userId = userId
 	c.dataSourceId = dataSourceId
 	c.datasource = datasource
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesPatchCall) QuotaUser(quotaUser string) *UsersDataSourcesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesPatchCall) UserIP(userIP string) *UsersDataSourcesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1626,26 +1610,24 @@ func (c *UsersDataSourcesPatchCall) Context(ctx context.Context) *UsersDataSourc
 }
 
 func (c *UsersDataSourcesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.datasource)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.patch" call.
@@ -1655,7 +1637,8 @@ func (c *UsersDataSourcesPatchCall) doRequest(alt string) (*http.Response, error
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UsersDataSourcesPatchCall) Do() (*DataSource, error) {
+func (c *UsersDataSourcesPatchCall) Do(opts ...googleapi.CallOption) (*DataSource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1679,12 +1662,13 @@ func (c *UsersDataSourcesPatchCall) Do() (*DataSource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Updates a given data source. It is an error to modify the data source's data stream ID, data type, type, stream name or device information apart from the device version. Changing these fields would require a new unique data stream ID and separate data source.\n\nData sources are identified by their data stream ID. This method supports patch semantics.",
+	//   "description": "Updates the specified data source. The dataStreamId, dataType, type, dataStreamName, and device properties with the exception of version, cannot be modified.\n\nData sources are identified by their dataStreamId. This method supports patch semantics.",
 	//   "httpMethod": "PATCH",
 	//   "id": "fitness.users.dataSources.patch",
 	//   "parameterOrder": [
@@ -1715,7 +1699,8 @@ func (c *UsersDataSourcesPatchCall) Do() (*DataSource, error) {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/fitness.activity.write",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -1732,35 +1717,16 @@ type UsersDataSourcesUpdateCall struct {
 	ctx_         context.Context
 }
 
-// Update: Updates a given data source. It is an error to modify the
-// data source's data stream ID, data type, type, stream name or device
-// information apart from the device version. Changing these fields
-// would require a new unique data stream ID and separate data
-// source.
+// Update: Updates the specified data source. The dataStreamId,
+// dataType, type, dataStreamName, and device properties with the
+// exception of version, cannot be modified.
 //
-// Data sources are identified by their data stream ID.
+// Data sources are identified by their dataStreamId.
 func (r *UsersDataSourcesService) Update(userId string, dataSourceId string, datasource *DataSource) *UsersDataSourcesUpdateCall {
 	c := &UsersDataSourcesUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.userId = userId
 	c.dataSourceId = dataSourceId
 	c.datasource = datasource
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesUpdateCall) QuotaUser(quotaUser string) *UsersDataSourcesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesUpdateCall) UserIP(userIP string) *UsersDataSourcesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1781,26 +1747,24 @@ func (c *UsersDataSourcesUpdateCall) Context(ctx context.Context) *UsersDataSour
 }
 
 func (c *UsersDataSourcesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.datasource)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.update" call.
@@ -1810,7 +1774,8 @@ func (c *UsersDataSourcesUpdateCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UsersDataSourcesUpdateCall) Do() (*DataSource, error) {
+func (c *UsersDataSourcesUpdateCall) Do(opts ...googleapi.CallOption) (*DataSource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1834,12 +1799,13 @@ func (c *UsersDataSourcesUpdateCall) Do() (*DataSource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Updates a given data source. It is an error to modify the data source's data stream ID, data type, type, stream name or device information apart from the device version. Changing these fields would require a new unique data stream ID and separate data source.\n\nData sources are identified by their data stream ID.",
+	//   "description": "Updates the specified data source. The dataStreamId, dataType, type, dataStreamName, and device properties with the exception of version, cannot be modified.\n\nData sources are identified by their dataStreamId.",
 	//   "httpMethod": "PUT",
 	//   "id": "fitness.users.dataSources.update",
 	//   "parameterOrder": [
@@ -1870,7 +1836,8 @@ func (c *UsersDataSourcesUpdateCall) Do() (*DataSource, error) {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/fitness.activity.write",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -1916,23 +1883,6 @@ func (c *UsersDataSourcesDatasetsDeleteCall) ModifiedTimeMillis(modifiedTimeMill
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesDatasetsDeleteCall) QuotaUser(quotaUser string) *UsersDataSourcesDatasetsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesDatasetsDeleteCall) UserIP(userIP string) *UsersDataSourcesDatasetsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1950,25 +1900,25 @@ func (c *UsersDataSourcesDatasetsDeleteCall) Context(ctx context.Context) *Users
 }
 
 func (c *UsersDataSourcesDatasetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 		"datasetId":    c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.datasets.delete" call.
-func (c *UsersDataSourcesDatasetsDeleteCall) Do() error {
+func (c *UsersDataSourcesDatasetsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2023,7 +1973,8 @@ func (c *UsersDataSourcesDatasetsDeleteCall) Do() error {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/fitness.activity.write",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -2055,8 +2006,8 @@ func (r *UsersDataSourcesDatasetsService) Get(userId string, dataSourceId string
 }
 
 // Limit sets the optional parameter "limit": If specified, no more than
-// this many data points will be included in the dataset. If the there
-// are more data points in the dataset, nextPageToken will be set in the
+// this many data points will be included in the dataset. If there are
+// more data points in the dataset, nextPageToken will be set in the
 // dataset response.
 func (c *UsersDataSourcesDatasetsGetCall) Limit(limit int64) *UsersDataSourcesDatasetsGetCall {
 	c.urlParams_.Set("limit", fmt.Sprint(limit))
@@ -2071,23 +2022,6 @@ func (c *UsersDataSourcesDatasetsGetCall) Limit(limit int64) *UsersDataSourcesDa
 // those in the previous partial response.
 func (c *UsersDataSourcesDatasetsGetCall) PageToken(pageToken string) *UsersDataSourcesDatasetsGetCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesDatasetsGetCall) QuotaUser(quotaUser string) *UsersDataSourcesDatasetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesDatasetsGetCall) UserIP(userIP string) *UsersDataSourcesDatasetsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -2118,24 +2052,23 @@ func (c *UsersDataSourcesDatasetsGetCall) Context(ctx context.Context) *UsersDat
 }
 
 func (c *UsersDataSourcesDatasetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 		"datasetId":    c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.datasets.get" call.
@@ -2145,7 +2078,8 @@ func (c *UsersDataSourcesDatasetsGetCall) doRequest(alt string) (*http.Response,
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *UsersDataSourcesDatasetsGetCall) Do() (*Dataset, error) {
+func (c *UsersDataSourcesDatasetsGetCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2169,7 +2103,8 @@ func (c *UsersDataSourcesDatasetsGetCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2196,7 +2131,7 @@ func (c *UsersDataSourcesDatasetsGetCall) Do() (*Dataset, error) {
 	//       "type": "string"
 	//     },
 	//     "limit": {
-	//       "description": "If specified, no more than this many data points will be included in the dataset. If the there are more data points in the dataset, nextPageToken will be set in the dataset response.",
+	//       "description": "If specified, no more than this many data points will be included in the dataset. If there are more data points in the dataset, nextPageToken will be set in the dataset response.",
 	//       "format": "int32",
 	//       "location": "query",
 	//       "type": "integer"
@@ -2223,10 +2158,33 @@ func (c *UsersDataSourcesDatasetsGetCall) Do() (*Dataset, error) {
 	//     "https://www.googleapis.com/auth/fitness.body.read",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
 	//     "https://www.googleapis.com/auth/fitness.location.read",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.read",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *UsersDataSourcesDatasetsGetCall) Pages(ctx context.Context, f func(*Dataset) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }
 
 // method id "fitness.users.dataSources.datasets.patch":
@@ -2264,23 +2222,6 @@ func (c *UsersDataSourcesDatasetsPatchCall) CurrentTimeMillis(currentTimeMillis 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDataSourcesDatasetsPatchCall) QuotaUser(quotaUser string) *UsersDataSourcesDatasetsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDataSourcesDatasetsPatchCall) UserIP(userIP string) *UsersDataSourcesDatasetsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2298,27 +2239,25 @@ func (c *UsersDataSourcesDatasetsPatchCall) Context(ctx context.Context) *UsersD
 }
 
 func (c *UsersDataSourcesDatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataSources/{dataSourceId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":       c.userId,
 		"dataSourceId": c.dataSourceId,
 		"datasetId":    c.datasetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataSources.datasets.patch" call.
@@ -2328,7 +2267,8 @@ func (c *UsersDataSourcesDatasetsPatchCall) doRequest(alt string) (*http.Respons
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *UsersDataSourcesDatasetsPatchCall) Do() (*Dataset, error) {
+func (c *UsersDataSourcesDatasetsPatchCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2352,7 +2292,8 @@ func (c *UsersDataSourcesDatasetsPatchCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2401,7 +2342,8 @@ func (c *UsersDataSourcesDatasetsPatchCall) Do() (*Dataset, error) {
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/fitness.activity.write",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -2428,23 +2370,6 @@ func (r *UsersDatasetService) Aggregate(userId string, aggregaterequest *Aggrega
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersDatasetAggregateCall) QuotaUser(quotaUser string) *UsersDatasetAggregateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersDatasetAggregateCall) UserIP(userIP string) *UsersDatasetAggregateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2462,25 +2387,23 @@ func (c *UsersDatasetAggregateCall) Context(ctx context.Context) *UsersDatasetAg
 }
 
 func (c *UsersDatasetAggregateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.aggregaterequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/dataset:aggregate")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.dataset.aggregate" call.
@@ -2490,7 +2413,8 @@ func (c *UsersDatasetAggregateCall) doRequest(alt string) (*http.Response, error
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UsersDatasetAggregateCall) Do() (*AggregateResponse, error) {
+func (c *UsersDatasetAggregateCall) Do(opts ...googleapi.CallOption) (*AggregateResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2514,7 +2438,8 @@ func (c *UsersDatasetAggregateCall) Do() (*AggregateResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2546,7 +2471,9 @@ func (c *UsersDatasetAggregateCall) Do() (*AggregateResponse, error) {
 	//     "https://www.googleapis.com/auth/fitness.body.read",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
 	//     "https://www.googleapis.com/auth/fitness.location.read",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.read",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
@@ -2577,23 +2504,6 @@ func (c *UsersSessionsDeleteCall) CurrentTimeMillis(currentTimeMillis int64) *Us
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersSessionsDeleteCall) QuotaUser(quotaUser string) *UsersSessionsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersSessionsDeleteCall) UserIP(userIP string) *UsersSessionsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2611,24 +2521,24 @@ func (c *UsersSessionsDeleteCall) Context(ctx context.Context) *UsersSessionsDel
 }
 
 func (c *UsersSessionsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/sessions/{sessionId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":    c.userId,
 		"sessionId": c.sessionId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.sessions.delete" call.
-func (c *UsersSessionsDeleteCall) Do() error {
+func (c *UsersSessionsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2717,28 +2627,11 @@ func (c *UsersSessionsListCall) PageToken(pageToken string) *UsersSessionsListCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersSessionsListCall) QuotaUser(quotaUser string) *UsersSessionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StartTime sets the optional parameter "startTime": An RFC3339
 // timestamp. Only sessions ending between the start and end times will
 // be included in the response.
 func (c *UsersSessionsListCall) StartTime(startTime string) *UsersSessionsListCall {
 	c.urlParams_.Set("startTime", startTime)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersSessionsListCall) UserIP(userIP string) *UsersSessionsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -2769,22 +2662,21 @@ func (c *UsersSessionsListCall) Context(ctx context.Context) *UsersSessionsListC
 }
 
 func (c *UsersSessionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/sessions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId": c.userId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.sessions.list" call.
@@ -2794,7 +2686,8 @@ func (c *UsersSessionsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UsersSessionsListCall) Do() (*ListSessionsResponse, error) {
+func (c *UsersSessionsListCall) Do(opts ...googleapi.CallOption) (*ListSessionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2818,7 +2711,8 @@ func (c *UsersSessionsListCall) Do() (*ListSessionsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2867,10 +2761,33 @@ func (c *UsersSessionsListCall) Do() (*ListSessionsResponse, error) {
 	//     "https://www.googleapis.com/auth/fitness.body.read",
 	//     "https://www.googleapis.com/auth/fitness.body.write",
 	//     "https://www.googleapis.com/auth/fitness.location.read",
-	//     "https://www.googleapis.com/auth/fitness.location.write"
+	//     "https://www.googleapis.com/auth/fitness.location.write",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.read",
+	//     "https://www.googleapis.com/auth/fitness.nutrition.write"
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *UsersSessionsListCall) Pages(ctx context.Context, f func(*ListSessionsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }
 
 // method id "fitness.users.sessions.update":
@@ -2900,23 +2817,6 @@ func (c *UsersSessionsUpdateCall) CurrentTimeMillis(currentTimeMillis int64) *Us
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UsersSessionsUpdateCall) QuotaUser(quotaUser string) *UsersSessionsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UsersSessionsUpdateCall) UserIP(userIP string) *UsersSessionsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2934,26 +2834,24 @@ func (c *UsersSessionsUpdateCall) Context(ctx context.Context) *UsersSessionsUpd
 }
 
 func (c *UsersSessionsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.session)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{userId}/sessions/{sessionId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"userId":    c.userId,
 		"sessionId": c.sessionId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "fitness.users.sessions.update" call.
@@ -2963,7 +2861,8 @@ func (c *UsersSessionsUpdateCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *UsersSessionsUpdateCall) Do() (*Session, error) {
+func (c *UsersSessionsUpdateCall) Do(opts ...googleapi.CallOption) (*Session, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2987,7 +2886,8 @@ func (c *UsersSessionsUpdateCall) Do() (*Session, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

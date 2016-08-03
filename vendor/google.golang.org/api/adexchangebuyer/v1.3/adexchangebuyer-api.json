@@ -1,12 +1,12 @@
 {
  "kind": "discovery#restDescription",
- "etag": "\"ye6orv2F-1npMW3u9suM3a7C5Bo/x-hxDv4WHYdi0vSjXQ0j_GK7N_8\"",
+ "etag": "\"jQLIOHBVnDZie4rQHGH1WJF-INE/WMHCCoquLKng7CUJBG6EbXy4RDk\"",
  "discoveryVersion": "v1",
  "id": "adexchangebuyer:v1.3",
  "name": "adexchangebuyer",
  "canonicalName": "Ad Exchange Buyer",
  "version": "v1.3",
- "revision": "20151102",
+ "revision": "20160428",
  "title": "Ad Exchange Buyer API",
  "description": "Accesses your bidding-account information, submits creatives for validation, finds available direct deals, and retrieves performance reports.",
  "ownerDomain": "google.com",
@@ -596,6 +596,15 @@
      "type": "string",
      "description": "The name of the advertiser this deal is for."
     },
+    "allowsAlcohol": {
+     "type": "boolean",
+     "description": "Whether the publisher for this deal is eligible for alcohol ads."
+    },
+    "buyerAccountId": {
+     "type": "string",
+     "description": "The account id that this deal was negotiated for. It is either the buyer or the client that this deal was negotiated on behalf of.",
+     "format": "int64"
+    },
     "currencyCode": {
      "type": "string",
      "description": "The currency code that applies to the fixed_cpm value. If not set then assumed to be USD."
@@ -794,7 +803,7 @@
   "PerformanceReportList": {
    "id": "PerformanceReportList",
    "type": "object",
-   "description": "The configuration data for an Ad Exchange performance report list. https://sites.google.com/a/google.com/adx-integration/Home/engineering/binary-releases/rtb-api-release https://cs.corp.google.com/#piper///depot/google3/contentads/adx/tools/rtb_api/adxrtb.py",
+   "description": "The configuration data for an Ad Exchange performance report list.",
    "properties": {
     "kind": {
      "type": "string",

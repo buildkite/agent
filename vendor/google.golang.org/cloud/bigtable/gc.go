@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
-	durpb "google.golang.org/cloud/bigtable/internal/duration_proto"
-	bttdpb "google.golang.org/cloud/bigtable/internal/table_data_proto"
+	durpb "github.com/golang/protobuf/ptypes/duration"
+	bttdpb "google.golang.org/genproto/googleapis/bigtable/admin/v2"
 )
 
 // A GCPolicy represents a rule that determines which cells are eligible for garbage collection.

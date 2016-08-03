@@ -35,32 +35,38 @@ type service interface {
 	getJobType(ctx context.Context, projectId, jobID string) (jobType, error)
 	jobStatus(ctx context.Context, projectId, jobID string) (*JobStatus, error)
 
-	// Queries
-
-	// readQuery reads data resulting from a query job. If the job is not
-	// yet complete, an errIncompleteJob is returned. readQuery may be
-	// called repeatedly to wait for results indefinitely.
-	readQuery(ctx context.Context, conf *readQueryConf, pageToken string) (*readDataResult, error)
-
-	readTabledata(ctx context.Context, conf *readTableConf, pageToken string) (*readDataResult, error)
-
 	// Tables
 	createTable(ctx context.Context, conf *createTableConf) error
 	getTableMetadata(ctx context.Context, projectID, datasetID, tableID string) (*TableMetadata, error)
 	deleteTable(ctx context.Context, projectID, datasetID, tableID string) error
 	listTables(ctx context.Context, projectID, datasetID, pageToken string) ([]*Table, string, error)
 	patchTable(ctx context.Context, projectID, datasetID, tableID string, conf *patchTableConf) (*TableMetadata, error)
+
+	// Table data
+	readTabledata(ctx context.Context, conf *readTableConf, pageToken string) (*readDataResult, error)
+	insertRows(ctx context.Context, projectID, datasetID, tableID string, rows []*insertionRow, conf *insertRowsConf) error
+
+	// Datasets
+	insertDataset(ctx context.Context, datasetID, projectID string) error
+
+	// Misc
+
+	// readQuery reads data resulting from a query job. If the job is
+	// incomplete, an errIncompleteJob is returned. readQuery may be called
+	// repeatedly to poll for job completion.
+	readQuery(ctx context.Context, conf *readQueryConf, pageToken string) (*readDataResult, error)
 }
 
 type bigqueryService struct {
 	s *bq.Service
 }
 
-func newBigqueryService(client *http.Client) (*bigqueryService, error) {
+func newBigqueryService(client *http.Client, endpoint string) (*bigqueryService, error) {
 	s, err := bq.New(client)
 	if err != nil {
 		return nil, fmt.Errorf("constructing bigquery client: %v", err)
 	}
+	s.BasePath = endpoint
 
 	return &bigqueryService{s: s}, nil
 }
@@ -210,6 +216,53 @@ func (s *bigqueryService) readQuery(ctx context.Context, conf *readQueryConf, pa
 	return result, nil
 }
 
+type insertRowsConf struct {
+	templateSuffix      string
+	ignoreUnknownValues bool
+	skipInvalidRows     bool
+}
+
+func (s *bigqueryService) insertRows(ctx context.Context, projectID, datasetID, tableID string, rows []*insertionRow, conf *insertRowsConf) error {
+	req := &bq.TableDataInsertAllRequest{
+		TemplateSuffix:      conf.templateSuffix,
+		IgnoreUnknownValues: conf.ignoreUnknownValues,
+		SkipInvalidRows:     conf.skipInvalidRows,
+	}
+	for _, row := range rows {
+		m := make(map[string]bq.JsonValue)
+		for k, v := range row.Row {
+			m[k] = bq.JsonValue(v)
+		}
+		req.Rows = append(req.Rows, &bq.TableDataInsertAllRequestRows{
+			InsertId: row.InsertID,
+			Json:     m,
+		})
+	}
+	res, err := s.s.Tabledata.InsertAll(projectID, datasetID, tableID, req).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+	if len(res.InsertErrors) == 0 {
+		return nil
+	}
+
+	var errs PutMultiError
+	for _, e := range res.InsertErrors {
+		if int(e.Index) > len(rows) {
+			return fmt.Errorf("internal error: unexpected row index: %v", e.Index)
+		}
+		rie := RowInsertionError{
+			InsertID: rows[e.Index].InsertID,
+			RowIndex: int(e.Index),
+		}
+		for _, errp := range e.Errors {
+			rie.Errors = append(rie.Errors, errorFromErrorProto(errp))
+		}
+		errs = append(errs, rie)
+	}
+	return errs
+}
+
 type jobType int
 
 const (
@@ -287,7 +340,7 @@ func (s *bigqueryService) listTables(ctx context.Context, projectID, datasetID, 
 		return nil, "", err
 	}
 	for _, t := range res.Tables {
-		tables = append(tables, convertListedTable(t))
+		tables = append(tables, s.convertListedTable(t))
 	}
 	return tables, res.NextPageToken, nil
 }
@@ -296,6 +349,7 @@ type createTableConf struct {
 	projectID, datasetID, tableID string
 	expiration                    time.Time
 	viewQuery                     string
+	schema                        *bq.TableSchema
 }
 
 // createTable creates a table in the BigQuery service.
@@ -314,10 +368,14 @@ func (s *bigqueryService) createTable(ctx context.Context, conf *createTableConf
 	if !conf.expiration.IsZero() {
 		table.ExpirationTime = conf.expiration.UnixNano() / 1000
 	}
+	// TODO(jba): make it impossible to provide both a view query and a schema.
 	if conf.viewQuery != "" {
 		table.View = &bq.ViewDefinition{
 			Query: conf.viewQuery,
 		}
+	}
+	if conf.schema != nil {
+		table.Schema = conf.schema
 	}
 
 	_, err := s.s.Tables.Insert(conf.projectID, conf.datasetID, table).Context(ctx).Do()
@@ -364,11 +422,12 @@ func bqTableToMetadata(t *bq.Table) *TableMetadata {
 	return md
 }
 
-func convertListedTable(t *bq.TableListTables) *Table {
+func (s *bigqueryService) convertListedTable(t *bq.TableListTables) *Table {
 	return &Table{
 		ProjectID: t.TableReference.ProjectId,
 		DatasetID: t.TableReference.DatasetId,
 		TableID:   t.TableReference.TableId,
+		service:   s,
 	}
 }
 
@@ -400,4 +459,12 @@ func (s *bigqueryService) patchTable(ctx context.Context, projectID, datasetID, 
 		return nil, err
 	}
 	return bqTableToMetadata(table), nil
+}
+
+func (s *bigqueryService) insertDataset(ctx context.Context, datasetID, projectID string) error {
+	ds := &bq.Dataset{
+		DatasetReference: &bq.DatasetReference{DatasetId: datasetID},
+	}
+	_, err := s.s.Datasets.Insert(projectID, ds).Context(ctx).Do()
+	return err
 }
