@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/googleapi"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -90,7 +91,7 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 	if permission != "" {
 		call = call.PredefinedAcl(permission)
 	}
-	if res, err := call.Media(file).Do(); err == nil {
+	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
 		logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%v)", u.artifactPath(artifact), err))
