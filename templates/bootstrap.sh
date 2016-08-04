@@ -217,7 +217,7 @@ if [[ -e "$BUILDKITE_HOOKS_PATH/checkout" ]]; then
 else
   # If enabled, automatically run an ssh-keyscan on the git ssh host, to prevent
   # a yes/no promp from appearing when cloning/fetching
-  if [[ ! -z "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-}" ]] && [[ "$BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION" == "true" ]]; then
+  if [[ "${BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION:-false}" == "true" ]]; then
     # Only bother running the keyscan if the SSH host has been provided by
     # Buildkite. It won't be present if the host isn't using the SSH protocol
     if [[ ! -z "${BUILDKITE_REPO_SSH_HOST:-}" ]]; then
