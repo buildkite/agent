@@ -444,8 +444,10 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 		return
 	}
 
-	// If the keygen output doesn't contain the host, we can skip!
-	if !strings.Contains(keygenOutput, host) {
+	// If the keygen output already contains the host, we can skip!
+	if strings.Contains(keygenOutput, host) {
+		commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, knownHostPath)
+	} else {
 		// Scan the key and then write it to the known_host file
 		keyscanOutput, err := b.runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolBinaryPath, "ssh-keyscan"), host)
 		if err != nil {
