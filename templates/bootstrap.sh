@@ -67,12 +67,15 @@ function buildkite-debug {
   fi
 }
 
-# Runs the command, but only output what it's doing if we're in DEBUG mode
-function buildkite-run-debug {
+function buildkite-prompt-debug {
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     buildkite-prompt "$@"
   fi
+}
 
+# Runs the command, but only output what it's doing if we're in DEBUG mode
+function buildkite-run-debug {
+  buildkite-prompt-debug "$@"
   "$@"
 }
 
@@ -214,12 +217,23 @@ else
 
       # Only add the output from ssh-keyscan if it doesn't already exist in the
       # known_hosts file (unhashed or hashed).
-      if ! ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST" > /dev/null; then
+      #
+      # Note: We can't rely on exit status. Older versions of ssh-keygen always
+      # exit successful. Only the presence of output is an indicator of whether
+      # the host key was found or not.
+      buildkite-prompt-debug ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST"
+      if [ -z "$(ssh-keygen -f "$BUILDKITE_SSH_KNOWN_HOST_PATH" -F "$BUILDKITE_REPO_SSH_HOST")" ]; then
         buildkite-prompt ssh-keyscan "$BUILDKITE_REPO_SSH_HOST"
         ssh-keyscan "$BUILDKITE_REPO_SSH_HOST" >> "$BUILDKITE_SSH_KNOWN_HOST_PATH" ||
           buildkite-warning "Couldn't ssh key scan repository host $BUILDKITE_REPO_SSH_HOST into $BUILDKITE_SSH_KNOWN_HOST_PATH"
+      else
+        buildkite-debug "Found known hosts entry for '$BUILDKITE_REPO_SSH_HOST' in '$BUILDKITE_SSH_KNOWN_HOST_PATH'"
       fi
+    else
+      buildkite-debug "No repo host to scan for auto SSH fingerprint verification"
     fi
+  else
+    buildkite-debug "Skipping auto SSH fingerprint verification"
   fi
 
   # Disable any interactive Git/SSH prompting
