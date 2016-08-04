@@ -239,8 +239,9 @@ else
         buildkite-prompt ssh-keyscan "$BUILDKITE_REPO_SSH_HOST"
         ssh-keyscan "$BUILDKITE_REPO_SSH_HOST" >> "$BUILDKITE_SSH_KNOWN_HOST_PATH" ||
           buildkite-warning "Couldn't ssh key scan repository host $BUILDKITE_REPO_SSH_HOST into $BUILDKITE_SSH_KNOWN_HOST_PATH"
+        buildkite-debug-comment "Added \"$BUILDKITE_REPO_SSH_HOST\" to the list of known hosts at \"$BUILDKITE_SSH_KNOWN_HOST_PATH\""
       else
-        buildkite-debug-comment "Found known hosts entry for '$BUILDKITE_REPO_SSH_HOST' in '$BUILDKITE_SSH_KNOWN_HOST_PATH'"
+        buildkite-debug-comment "Host \"$BUILDKITE_REPO_SSH_HOST\" already in list of known hosts at \"$BUILDKITE_SSH_KNOWN_HOST_PATH\""
       fi
     else
       buildkite-debug-comment "No repo host to scan for auto SSH fingerprint verification"
@@ -315,7 +316,9 @@ else
   buildkite-debug "~~~ Saving Git information"
 
   # Check to see if the meta data exists before setting it
+  buildkite-debug-comment "Checking to see if Git data needs to be sent to Buildkite"
   if ! buildkite-run-debug buildkite-agent meta-data exists "buildkite:git:commit"; then
+    buildkite-debug-comment "Sending Git commit information back to Buildkite"
     buildkite-run-debug buildkite-agent meta-data set "buildkite:git:commit" "$(git show HEAD -s --format=fuller --no-color)"
     buildkite-run-debug buildkite-agent meta-data set "buildkite:git:branch" "$(git branch --contains HEAD --no-color)"
   fi
