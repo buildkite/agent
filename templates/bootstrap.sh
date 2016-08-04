@@ -50,6 +50,13 @@ function buildkite-prompt {
   echo
 }
 
+function buildkite-comment {
+  # Output a comment prefixed with a hash in grey
+  echo -ne "\033[90m"
+  echo "#" "$@"
+  echo -ne "\033[0m"
+}
+
 # Shows the command being run, and runs it
 function buildkite-prompt-and-run {
   buildkite-prompt "$@"
@@ -64,6 +71,12 @@ function buildkite-run {
 function buildkite-debug {
   if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
     echo "$@"
+  fi
+}
+
+function buildkite-debug-comment {
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    buildkite-comment "$@"
   fi
 }
 
@@ -119,17 +132,17 @@ function buildkite-hook {
 
     # Reset the bootstrap.sh flags
     buildkite-flags-reset
-  elif [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+  else
     # When in debug mode, show that we've skipped a hook
-    echo "~~~ Running $HOOK_LABEL hook"
-    echo "Skipping, no hook script found at: $HOOK_SCRIPT_PATH"
+    buildkite-debug "~~~ Running $HOOK_LABEL hook"
+    buildkite-debug-comment "Skipping, no hook script found at: $HOOK_SCRIPT_PATH"
   fi
 }
 
 # Exit from the bootstrap.sh script if the hook exits with a non-0 exit status
 function buildkite-hook-exit-on-error {
   if [[ -n "$BUILDKITE_LAST_HOOK_EXIT_STATUS" ]] && [[ $BUILDKITE_LAST_HOOK_EXIT_STATUS -ne 0 ]]; then
-    echo "Hook returned an exit status of $BUILDKITE_LAST_HOOK_EXIT_STATUS, exiting..."
+    buildkite-comment "Hook returned an exit status of $BUILDKITE_LAST_HOOK_EXIT_STATUS, exiting..."
     exit $BUILDKITE_LAST_HOOK_EXIT_STATUS
   fi
 }
@@ -227,13 +240,13 @@ else
         ssh-keyscan "$BUILDKITE_REPO_SSH_HOST" >> "$BUILDKITE_SSH_KNOWN_HOST_PATH" ||
           buildkite-warning "Couldn't ssh key scan repository host $BUILDKITE_REPO_SSH_HOST into $BUILDKITE_SSH_KNOWN_HOST_PATH"
       else
-        buildkite-debug "Found known hosts entry for '$BUILDKITE_REPO_SSH_HOST' in '$BUILDKITE_SSH_KNOWN_HOST_PATH'"
+        buildkite-debug-comment "Found known hosts entry for '$BUILDKITE_REPO_SSH_HOST' in '$BUILDKITE_SSH_KNOWN_HOST_PATH'"
       fi
     else
-      buildkite-debug "No repo host to scan for auto SSH fingerprint verification"
+      buildkite-debug-comment "No repo host to scan for auto SSH fingerprint verification"
     fi
   else
-    buildkite-debug "Skipping auto SSH fingerprint verification"
+    buildkite-debug-comment "Skipping auto SSH fingerprint verification"
   fi
 
   # Disable any interactive Git/SSH prompting
