@@ -488,23 +488,6 @@ func (r *ChangesService) Create(project string, managedZone string, change *Chan
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChangesCreateCall) QuotaUser(quotaUser string) *ChangesCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChangesCreateCall) UserIP(userIP string) *ChangesCreateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -522,22 +505,23 @@ func (c *ChangesCreateCall) Context(ctx context.Context) *ChangesCreateCall {
 }
 
 func (c *ChangesCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.change)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones/{managedZone}/changes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":     c.project,
 		"managedZone": c.managedZone,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -551,7 +535,8 @@ func (c *ChangesCreateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ChangesCreateCall) Do() (*Change, error) {
+func (c *ChangesCreateCall) Do(opts ...googleapi.CallOption) (*Change, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -575,7 +560,8 @@ func (c *ChangesCreateCall) Do() (*Change, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -637,23 +623,6 @@ func (r *ChangesService) Get(project string, managedZone string, changeId string
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChangesGetCall) QuotaUser(quotaUser string) *ChangesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChangesGetCall) UserIP(userIP string) *ChangesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -681,20 +650,22 @@ func (c *ChangesGetCall) Context(ctx context.Context) *ChangesGetCall {
 }
 
 func (c *ChangesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones/{managedZone}/changes/{changeId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":     c.project,
 		"managedZone": c.managedZone,
 		"changeId":    c.changeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -708,7 +679,8 @@ func (c *ChangesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ChangesGetCall) Do() (*Change, error) {
+func (c *ChangesGetCall) Do(opts ...googleapi.CallOption) (*Change, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -732,7 +704,8 @@ func (c *ChangesGetCall) Do() (*Change, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -814,15 +787,6 @@ func (c *ChangesListCall) PageToken(pageToken string) *ChangesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChangesListCall) QuotaUser(quotaUser string) *ChangesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SortBy sets the optional parameter "sortBy": Sorting criterion. The
 // only supported value is change sequence.
 //
@@ -837,14 +801,6 @@ func (c *ChangesListCall) SortBy(sortBy string) *ChangesListCall {
 // direction: 'ascending' or 'descending'.
 func (c *ChangesListCall) SortOrder(sortOrder string) *ChangesListCall {
 	c.urlParams_.Set("sortOrder", sortOrder)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChangesListCall) UserIP(userIP string) *ChangesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -875,19 +831,21 @@ func (c *ChangesListCall) Context(ctx context.Context) *ChangesListCall {
 }
 
 func (c *ChangesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones/{managedZone}/changes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":     c.project,
 		"managedZone": c.managedZone,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -901,7 +859,8 @@ func (c *ChangesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChangesListCall) Do() (*ChangesListResponse, error) {
+func (c *ChangesListCall) Do(opts ...googleapi.CallOption) (*ChangesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -925,7 +884,8 @@ func (c *ChangesListCall) Do() (*ChangesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -993,6 +953,27 @@ func (c *ChangesListCall) Do() (*ChangesListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ChangesListCall) Pages(ctx context.Context, f func(*ChangesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dns.managedZones.create":
 
 type ManagedZonesCreateCall struct {
@@ -1008,23 +989,6 @@ func (r *ManagedZonesService) Create(project string, managedzone *ManagedZone) *
 	c := &ManagedZonesCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.project = project
 	c.managedzone = managedzone
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ManagedZonesCreateCall) QuotaUser(quotaUser string) *ManagedZonesCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ManagedZonesCreateCall) UserIP(userIP string) *ManagedZonesCreateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1045,21 +1009,22 @@ func (c *ManagedZonesCreateCall) Context(ctx context.Context) *ManagedZonesCreat
 }
 
 func (c *ManagedZonesCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.managedzone)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -1073,7 +1038,8 @@ func (c *ManagedZonesCreateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ManagedZonesCreateCall) Do() (*ManagedZone, error) {
+func (c *ManagedZonesCreateCall) Do(opts ...googleapi.CallOption) (*ManagedZone, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1097,7 +1063,8 @@ func (c *ManagedZonesCreateCall) Do() (*ManagedZone, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1149,23 +1116,6 @@ func (r *ManagedZonesService) Delete(project string, managedZone string) *Manage
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ManagedZonesDeleteCall) QuotaUser(quotaUser string) *ManagedZonesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ManagedZonesDeleteCall) UserIP(userIP string) *ManagedZonesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1183,16 +1133,18 @@ func (c *ManagedZonesDeleteCall) Context(ctx context.Context) *ManagedZonesDelet
 }
 
 func (c *ManagedZonesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones/{managedZone}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":     c.project,
 		"managedZone": c.managedZone,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -1200,7 +1152,8 @@ func (c *ManagedZonesDeleteCall) doRequest(alt string) (*http.Response, error) {
 }
 
 // Do executes the "dns.managedZones.delete" call.
-func (c *ManagedZonesDeleteCall) Do() error {
+func (c *ManagedZonesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1260,23 +1213,6 @@ func (r *ManagedZonesService) Get(project string, managedZone string) *ManagedZo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ManagedZonesGetCall) QuotaUser(quotaUser string) *ManagedZonesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ManagedZonesGetCall) UserIP(userIP string) *ManagedZonesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1304,19 +1240,21 @@ func (c *ManagedZonesGetCall) Context(ctx context.Context) *ManagedZonesGetCall 
 }
 
 func (c *ManagedZonesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones/{managedZone}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":     c.project,
 		"managedZone": c.managedZone,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -1330,7 +1268,8 @@ func (c *ManagedZonesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ManagedZonesGetCall) Do() (*ManagedZone, error) {
+func (c *ManagedZonesGetCall) Do(opts ...googleapi.CallOption) (*ManagedZone, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1354,7 +1293,8 @@ func (c *ManagedZonesGetCall) Do() (*ManagedZone, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1435,23 +1375,6 @@ func (c *ManagedZonesListCall) PageToken(pageToken string) *ManagedZonesListCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ManagedZonesListCall) QuotaUser(quotaUser string) *ManagedZonesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ManagedZonesListCall) UserIP(userIP string) *ManagedZonesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1479,18 +1402,20 @@ func (c *ManagedZonesListCall) Context(ctx context.Context) *ManagedZonesListCal
 }
 
 func (c *ManagedZonesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -1504,7 +1429,8 @@ func (c *ManagedZonesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ManagedZonesListCall) Do() (*ManagedZonesListResponse, error) {
+func (c *ManagedZonesListCall) Do(opts ...googleapi.CallOption) (*ManagedZonesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1528,7 +1454,8 @@ func (c *ManagedZonesListCall) Do() (*ManagedZonesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1577,6 +1504,27 @@ func (c *ManagedZonesListCall) Do() (*ManagedZonesListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ManagedZonesListCall) Pages(ctx context.Context, f func(*ManagedZonesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dns.projects.get":
 
 type ProjectsGetCall struct {
@@ -1591,23 +1539,6 @@ type ProjectsGetCall struct {
 func (r *ProjectsService) Get(project string) *ProjectsGetCall {
 	c := &ProjectsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.project = project
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ProjectsGetCall) QuotaUser(quotaUser string) *ProjectsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ProjectsGetCall) UserIP(userIP string) *ProjectsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1638,18 +1569,20 @@ func (c *ProjectsGetCall) Context(ctx context.Context) *ProjectsGetCall {
 }
 
 func (c *ProjectsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -1663,7 +1596,8 @@ func (c *ProjectsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsGetCall) Do() (*Project, error) {
+func (c *ProjectsGetCall) Do(opts ...googleapi.CallOption) (*Project, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1687,7 +1621,8 @@ func (c *ProjectsGetCall) Do() (*Project, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1763,28 +1698,11 @@ func (c *ResourceRecordSetsListCall) PageToken(pageToken string) *ResourceRecord
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ResourceRecordSetsListCall) QuotaUser(quotaUser string) *ResourceRecordSetsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Type sets the optional parameter "type": Restricts the list to return
 // only records of this type. If present, the "name" parameter must also
 // be present.
 func (c *ResourceRecordSetsListCall) Type(type_ string) *ResourceRecordSetsListCall {
 	c.urlParams_.Set("type", type_)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ResourceRecordSetsListCall) UserIP(userIP string) *ResourceRecordSetsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1815,19 +1733,21 @@ func (c *ResourceRecordSetsListCall) Context(ctx context.Context) *ResourceRecor
 }
 
 func (c *ResourceRecordSetsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/managedZones/{managedZone}/rrsets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":     c.project,
 		"managedZone": c.managedZone,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
 	if c.ctx_ != nil {
 		return ctxhttp.Do(c.ctx_, c.s.client, req)
 	}
@@ -1841,7 +1761,8 @@ func (c *ResourceRecordSetsListCall) doRequest(alt string) (*http.Response, erro
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ResourceRecordSetsListCall) Do() (*ResourceRecordSetsListResponse, error) {
+func (c *ResourceRecordSetsListCall) Do(opts ...googleapi.CallOption) (*ResourceRecordSetsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1865,7 +1786,8 @@ func (c *ResourceRecordSetsListCall) Do() (*ResourceRecordSetsListResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1924,4 +1846,25 @@ func (c *ResourceRecordSetsListCall) Do() (*ResourceRecordSetsListResponse, erro
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ResourceRecordSetsListCall) Pages(ctx context.Context, f func(*ResourceRecordSetsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }

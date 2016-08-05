@@ -1157,6 +1157,13 @@ type CdnSettings struct {
 	// Youtube.
 	Format string `json:"format,omitempty"`
 
+	// FrameRate: The frame rate of the inbound video data.
+	//
+	// Possible values:
+	//   "30fps"
+	//   "60fps"
+	FrameRate string `json:"frameRate,omitempty"`
+
 	// IngestionInfo: The ingestionInfo object contains information that
 	// YouTube provides that you need to transmit your RTMP or HTTP stream
 	// to YouTube.
@@ -1169,6 +1176,17 @@ type CdnSettings struct {
 	//   "dash"
 	//   "rtmp"
 	IngestionType string `json:"ingestionType,omitempty"`
+
+	// Resolution: The resolution of the inbound video data.
+	//
+	// Possible values:
+	//   "1080p"
+	//   "1440p"
+	//   "240p"
+	//   "360p"
+	//   "480p"
+	//   "720p"
+	Resolution string `json:"resolution,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Format") to
 	// unconditionally include in API requests. By default, fields with
@@ -1509,24 +1527,6 @@ type ChannelConversionPings struct {
 
 func (s *ChannelConversionPings) MarshalJSON() ([]byte, error) {
 	type noMethod ChannelConversionPings
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-type ChannelId struct {
-	Value string `json:"value,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g. "Value") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-}
-
-func (s *ChannelId) MarshalJSON() ([]byte, error) {
-	type noMethod ChannelId
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -1919,10 +1919,13 @@ func (s *ChannelSettings) MarshalJSON() ([]byte, error) {
 }
 
 // ChannelSnippet: Basic details about a channel, including title,
-// description and thumbnails.
+// description and thumbnails. Next available id: 15.
 type ChannelSnippet struct {
 	// Country: The country of the channel.
 	Country string `json:"country,omitempty"`
+
+	// CustomUrl: The custom url of the channel.
+	CustomUrl string `json:"customUrl,omitempty"`
 
 	// DefaultLanguage: The language of the channel's default title and
 	// description.
@@ -2141,7 +2144,7 @@ func (s *CommentListResponse) MarshalJSON() ([]byte, error) {
 // text.
 type CommentSnippet struct {
 	// AuthorChannelId: The id of the author's YouTube channel, if any.
-	AuthorChannelId *ChannelId `json:"authorChannelId,omitempty"`
+	AuthorChannelId interface{} `json:"authorChannelId,omitempty"`
 
 	// AuthorChannelUrl: Link to the author's YouTube channel, if any.
 	AuthorChannelUrl string `json:"authorChannelUrl,omitempty"`
@@ -2383,7 +2386,7 @@ func (s *CommentThreadSnippet) MarshalJSON() ([]byte, error) {
 }
 
 // ContentRating: Ratings schemes. The country-specific ratings are
-// mostly for movies and shows. NEXT_ID: 66
+// mostly for movies and shows. NEXT_ID: 68
 type ContentRating struct {
 	// AcbRating: The video's Australian Classification Board (ACB) or
 	// Australian Communications and Media Authority (ACMA) rating. ACMA
@@ -2526,6 +2529,7 @@ type ContentRating struct {
 	//
 	// Possible values:
 	//   "cceM12"
+	//   "cceM14"
 	//   "cceM16"
 	//   "cceM18"
 	//   "cceM4"
@@ -2660,6 +2664,21 @@ type ContentRating struct {
 	//   "djctqViolence"
 	DjctqRatingReasons []string `json:"djctqRatingReasons,omitempty"`
 
+	// EcbmctRating: Rating system in Turkey - Evaluation and Classification
+	// Board of the Ministry of Culture and Tourism
+	//
+	// Possible values:
+	//   "ecbmct13a"
+	//   "ecbmct13plus"
+	//   "ecbmct15a"
+	//   "ecbmct15plus"
+	//   "ecbmct18plus"
+	//   "ecbmct7a"
+	//   "ecbmct7plus"
+	//   "ecbmctG"
+	//   "ecbmctUnrated"
+	EcbmctRating string `json:"ecbmctRating,omitempty"`
+
 	// EefilmRating: The video's rating in Estonia.
 	//
 	// Possible values:
@@ -2737,6 +2756,7 @@ type ContentRating struct {
 	// Publication Board.
 	//
 	// Possible values:
+	//   "fpb10"
 	//   "fpb1012Pg"
 	//   "fpb13"
 	//   "fpb16"
@@ -2748,6 +2768,23 @@ type ContentRating struct {
 	//   "fpbX18"
 	//   "fpbXx"
 	FpbRating string `json:"fpbRating,omitempty"`
+
+	// FpbRatingReasons: Reasons that explain why the video received its FPB
+	// (South Africa) rating.
+	//
+	// Possible values:
+	//   "fpbBlasphemy"
+	//   "fpbCriminalTechniques"
+	//   "fpbDrugs"
+	//   "fpbHorror"
+	//   "fpbImitativeActsTechniques"
+	//   "fpbLanguage"
+	//   "fpbNudity"
+	//   "fpbPrejudice"
+	//   "fpbSex"
+	//   "fpbSexualViolence"
+	//   "fpbViolence"
+	FpbRatingReasons []string `json:"fpbRatingReasons,omitempty"`
 
 	// FskRating: The video's Freiwillige Selbstkontrolle der Filmwirtschaft
 	// (FSK - Germany) rating.
@@ -2766,8 +2803,11 @@ type ContentRating struct {
 	// Possible values:
 	//   "grfilmE"
 	//   "grfilmK"
+	//   "grfilmK12"
 	//   "grfilmK13"
+	//   "grfilmK15"
 	//   "grfilmK17"
+	//   "grfilmK18"
 	//   "grfilmUnrated"
 	GrfilmRating string `json:"grfilmRating,omitempty"`
 
@@ -2973,6 +3013,8 @@ type ContentRating struct {
 	//   "moctwP"
 	//   "moctwPg"
 	//   "moctwR"
+	//   "moctwR12"
+	//   "moctwR15"
 	//   "moctwUnrated"
 	MoctwRating string `json:"moctwRating,omitempty"`
 
@@ -4026,6 +4068,10 @@ type LiveBroadcastContentDetails struct {
 	// to the broadcast.
 	BoundStreamId string `json:"boundStreamId,omitempty"`
 
+	// BoundStreamLastUpdateTimeMs: The date and time that the live stream
+	// referenced by boundStreamId was last updated.
+	BoundStreamLastUpdateTimeMs string `json:"boundStreamLastUpdateTimeMs,omitempty"`
+
 	// Possible values:
 	//   "closedCaptionsDisabled"
 	//   "closedCaptionsEmbedded"
@@ -4071,6 +4117,14 @@ type LiveBroadcastContentDetails struct {
 	// the monitor stream, which the broadcaster can use to review the event
 	// content before the broadcast stream is shown publicly.
 	MonitorStream *MonitorStreamInfo `json:"monitorStream,omitempty"`
+
+	// Projection: The projection format of this broadcast. This defaults to
+	// rectangular.
+	//
+	// Possible values:
+	//   "360"
+	//   "rectangular"
+	Projection string `json:"projection,omitempty"`
 
 	// RecordFromStart: Automatically start recording after the event goes
 	// live. The default value for this property is true.
@@ -4570,6 +4624,24 @@ func (s *LiveChatMessageAuthorDetails) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type LiveChatMessageDeletedDetails struct {
+	DeletedMessageId string `json:"deletedMessageId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DeletedMessageId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatMessageDeletedDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatMessageDeletedDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type LiveChatMessageListResponse struct {
 	// Etag: Etag of this resource.
 	Etag string `json:"etag,omitempty"`
@@ -4623,11 +4695,32 @@ func (s *LiveChatMessageListResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type LiveChatMessageRetractedDetails struct {
+	RetractedMessageId string `json:"retractedMessageId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "RetractedMessageId")
+	// to unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatMessageRetractedDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatMessageRetractedDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type LiveChatMessageSnippet struct {
 	// AuthorChannelId: The ID of the user that authored this message, this
 	// field is not always filled. textMessageEvent - the user that wrote
 	// the message fanFundingEvent - the user that funded the broadcast
 	// newSponsorEvent - the user that just became a sponsor
+	// messageDeletedEvent - the moderator that took the action
+	// messageRetractedEvent - the author that retracted their message
+	// userBannedEvent - the moderator that took the action
 	AuthorChannelId string `json:"authorChannelId,omitempty"`
 
 	// DisplayMessage: Contains a string that can be displayed to the user.
@@ -4645,6 +4738,18 @@ type LiveChatMessageSnippet struct {
 
 	LiveChatId string `json:"liveChatId,omitempty"`
 
+	MessageDeletedDetails *LiveChatMessageDeletedDetails `json:"messageDeletedDetails,omitempty"`
+
+	MessageRetractedDetails *LiveChatMessageRetractedDetails `json:"messageRetractedDetails,omitempty"`
+
+	PollClosedDetails *LiveChatPollClosedDetails `json:"pollClosedDetails,omitempty"`
+
+	PollEditedDetails *LiveChatPollEditedDetails `json:"pollEditedDetails,omitempty"`
+
+	PollOpenedDetails *LiveChatPollOpenedDetails `json:"pollOpenedDetails,omitempty"`
+
+	PollVotedDetails *LiveChatPollVotedDetails `json:"pollVotedDetails,omitempty"`
+
 	// PublishedAt: The date and time when the message was orignally
 	// published. The value is specified in ISO 8601
 	// (YYYY-MM-DDThh:mm:ss.sZ) format.
@@ -4660,12 +4765,21 @@ type LiveChatMessageSnippet struct {
 	// Possible values:
 	//   "chatEndedEvent"
 	//   "fanFundingEvent"
+	//   "messageDeletedEvent"
+	//   "messageRetractedEvent"
 	//   "newSponsorEvent"
+	//   "pollClosedEvent"
+	//   "pollEditedEvent"
+	//   "pollOpenedEvent"
+	//   "pollVotedEvent"
 	//   "sponsorOnlyModeEndedEvent"
 	//   "sponsorOnlyModeStartedEvent"
 	//   "textMessageEvent"
 	//   "tombstone"
+	//   "userBannedEvent"
 	Type string `json:"type,omitempty"`
+
+	UserBannedDetails *LiveChatUserBannedMessageDetails `json:"userBannedDetails,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "AuthorChannelId") to
 	// unconditionally include in API requests. By default, fields with
@@ -4790,6 +4904,112 @@ func (s *LiveChatModeratorSnippet) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type LiveChatPollClosedDetails struct {
+	// PollId: The id of the poll that was closed.
+	PollId string `json:"pollId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "PollId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatPollClosedDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatPollClosedDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type LiveChatPollEditedDetails struct {
+	Id string `json:"id,omitempty"`
+
+	Items []*LiveChatPollItem `json:"items,omitempty"`
+
+	Prompt string `json:"prompt,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Id") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatPollEditedDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatPollEditedDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type LiveChatPollItem struct {
+	// Description: Plain text description of the item.
+	Description string `json:"description,omitempty"`
+
+	ItemId string `json:"itemId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Description") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatPollItem) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatPollItem
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type LiveChatPollOpenedDetails struct {
+	Id string `json:"id,omitempty"`
+
+	Items []*LiveChatPollItem `json:"items,omitempty"`
+
+	Prompt string `json:"prompt,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Id") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatPollOpenedDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatPollOpenedDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type LiveChatPollVotedDetails struct {
+	// ItemId: The poll item the user chose.
+	ItemId string `json:"itemId,omitempty"`
+
+	// PollId: The poll the user voted on.
+	PollId string `json:"pollId,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ItemId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatPollVotedDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatPollVotedDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type LiveChatTextMessageDetails struct {
 	// MessageText: The user's message.
 	MessageText string `json:"messageText,omitempty"`
@@ -4805,6 +5025,36 @@ type LiveChatTextMessageDetails struct {
 
 func (s *LiveChatTextMessageDetails) MarshalJSON() ([]byte, error) {
 	type noMethod LiveChatTextMessageDetails
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type LiveChatUserBannedMessageDetails struct {
+	// BanDurationSeconds: The duration of the ban. This property is only
+	// present if the banType is temporary.
+	BanDurationSeconds uint64 `json:"banDurationSeconds,omitempty,string"`
+
+	// BanType: The type of ban.
+	//
+	// Possible values:
+	//   "permanent"
+	//   "temporary"
+	BanType string `json:"banType,omitempty"`
+
+	// BannedUserDetails: The details of the user that was banned.
+	BannedUserDetails *ChannelProfileDetails `json:"bannedUserDetails,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "BanDurationSeconds")
+	// to unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *LiveChatUserBannedMessageDetails) MarshalJSON() ([]byte, error) {
+	type noMethod LiveChatUserBannedMessageDetails
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -5871,6 +6121,8 @@ type SearchListResponse struct {
 	// pageToken parameter to retrieve the previous page in the result set.
 	PrevPageToken string `json:"prevPageToken,omitempty"`
 
+	RegionCode string `json:"regionCode,omitempty"`
+
 	TokenPagination *TokenPagination `json:"tokenPagination,omitempty"`
 
 	// VisitorId: The visitorId identifies the visitor.
@@ -6409,11 +6661,6 @@ type Video struct {
 	// ratio.
 	ContentDetails *VideoContentDetails `json:"contentDetails,omitempty"`
 
-	// ConversionPings: The conversionPings object encapsulates information
-	// about url pings that need to be respected by the App in different
-	// video contexts.
-	ConversionPings *VideoConversionPings `json:"conversionPings,omitempty"`
-
 	// Etag: Etag of this resource.
 	Etag string `json:"etag,omitempty"`
 
@@ -6852,6 +7099,13 @@ type VideoContentDetails struct {
 	// the video is licensed content.
 	LicensedContent bool `json:"licensedContent,omitempty"`
 
+	// Projection: Specifies the projection format of the video.
+	//
+	// Possible values:
+	//   "360"
+	//   "rectangular"
+	Projection string `json:"projection,omitempty"`
+
 	// RegionRestriction: The regionRestriction object contains information
 	// about the countries where a video is (or is not) viewable. The object
 	// will contain either the contentDetails.regionRestriction.allowed
@@ -6901,62 +7155,6 @@ type VideoContentDetailsRegionRestriction struct {
 
 func (s *VideoContentDetailsRegionRestriction) MarshalJSON() ([]byte, error) {
 	type noMethod VideoContentDetailsRegionRestriction
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-type VideoConversionPing struct {
-	// Context: Defines the context of the ping.
-	//
-	// Possible values:
-	//   "comment"
-	//   "dislike"
-	//   "like"
-	//   "share"
-	Context string `json:"context,omitempty"`
-
-	// ConversionUrl: The url (without the schema) that the app shall send
-	// the ping to. It's at caller's descretion to decide which schema to
-	// use (http vs https) Example of a returned url:
-	// //googleads.g.doubleclick.net/pagead/
-	// viewthroughconversion/962985656/?data=path%3DtHe_path%3Btype%3D
-	// like%3Butuid%3DGISQtTNGYqaYl4sKxoVvKA%3Bytvid%3DUrIaJUvIQDg&labe=defau
-	// lt The caller must append biscotti authentication (ms param in case
-	// of mobile, for example) to this ping.
-	ConversionUrl string `json:"conversionUrl,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g. "Context") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-}
-
-func (s *VideoConversionPing) MarshalJSON() ([]byte, error) {
-	type noMethod VideoConversionPing
-	raw := noMethod(*s)
-	return gensupport.MarshalJSON(raw, s.ForceSendFields)
-}
-
-type VideoConversionPings struct {
-	// Pings: Pings that the app shall fire for a video (authenticated by
-	// biscotti cookie). Each ping has a context, in which the app must fire
-	// the ping, and a url identifying the ping.
-	Pings []*VideoConversionPing `json:"pings,omitempty"`
-
-	// ForceSendFields is a list of field names (e.g. "Pings") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
-	ForceSendFields []string `json:"-"`
-}
-
-func (s *VideoConversionPings) MarshalJSON() ([]byte, error) {
-	type noMethod VideoConversionPings
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -7683,6 +7881,7 @@ type VideoStatus struct {
 	//   "copyright"
 	//   "duplicate"
 	//   "inappropriate"
+	//   "legal"
 	//   "length"
 	//   "termsOfUse"
 	//   "trademark"
@@ -7848,7 +8047,7 @@ func (s *VideoTopicDetails) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
-// WatchSettings: Branding properties for the watch.
+// WatchSettings: Branding properties for the watch. All deprecated.
 type WatchSettings struct {
 	// BackgroundColor: The text color for the video watch page's branded
 	// area.
@@ -7903,23 +8102,6 @@ func (r *ActivitiesService) Insert(part string, activity *Activity) *ActivitiesI
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ActivitiesInsertCall) QuotaUser(quotaUser string) *ActivitiesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ActivitiesInsertCall) UserIP(userIP string) *ActivitiesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7937,23 +8119,21 @@ func (c *ActivitiesInsertCall) Context(ctx context.Context) *ActivitiesInsertCal
 }
 
 func (c *ActivitiesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.activity)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "activities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.activities.insert" call.
@@ -7963,7 +8143,8 @@ func (c *ActivitiesInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ActivitiesInsertCall) Do() (*Activity, error) {
+func (c *ActivitiesInsertCall) Do(opts ...googleapi.CallOption) (*Activity, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7987,7 +8168,8 @@ func (c *ActivitiesInsertCall) Do() (*Activity, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8105,15 +8287,6 @@ func (c *ActivitiesListCall) PublishedBefore(publishedBefore string) *Activities
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ActivitiesListCall) QuotaUser(quotaUser string) *ActivitiesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RegionCode sets the optional parameter "regionCode": The regionCode
 // parameter instructs the API to return results for the specified
 // country. The parameter value is an ISO 3166-1 alpha-2 country code.
@@ -8122,14 +8295,6 @@ func (c *ActivitiesListCall) QuotaUser(quotaUser string) *ActivitiesListCall {
 // activity feed.
 func (c *ActivitiesListCall) RegionCode(regionCode string) *ActivitiesListCall {
 	c.urlParams_.Set("regionCode", regionCode)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ActivitiesListCall) UserIP(userIP string) *ActivitiesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8160,20 +8325,19 @@ func (c *ActivitiesListCall) Context(ctx context.Context) *ActivitiesListCall {
 }
 
 func (c *ActivitiesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "activities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.activities.list" call.
@@ -8183,7 +8347,8 @@ func (c *ActivitiesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ActivitiesListCall) Do() (*ActivityListResponse, error) {
+func (c *ActivitiesListCall) Do(opts ...googleapi.CallOption) (*ActivityListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8207,7 +8372,8 @@ func (c *ActivitiesListCall) Do() (*ActivityListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8285,6 +8451,27 @@ func (c *ActivitiesListCall) Do() (*ActivityListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ActivitiesListCall) Pages(ctx context.Context, f func(*ActivityListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.captions.delete":
 
 type CaptionsDeleteCall struct {
@@ -8326,23 +8513,6 @@ func (c *CaptionsDeleteCall) OnBehalfOfContentOwner(onBehalfOfContentOwner strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CaptionsDeleteCall) QuotaUser(quotaUser string) *CaptionsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CaptionsDeleteCall) UserIP(userIP string) *CaptionsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8360,21 +8530,21 @@ func (c *CaptionsDeleteCall) Context(ctx context.Context) *CaptionsDeleteCall {
 }
 
 func (c *CaptionsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "captions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.captions.delete" call.
-func (c *CaptionsDeleteCall) Do() error {
+func (c *CaptionsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8464,15 +8634,6 @@ func (c *CaptionsDownloadCall) OnBehalfOfContentOwner(onBehalfOfContentOwner str
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CaptionsDownloadCall) QuotaUser(quotaUser string) *CaptionsDownloadCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Tfmt sets the optional parameter "tfmt": The tfmt parameter specifies
 // that the caption track should be returned in a specific format. If
 // the parameter is not included in the request, the track is returned
@@ -8497,14 +8658,6 @@ func (c *CaptionsDownloadCall) Tfmt(tfmt string) *CaptionsDownloadCall {
 // such as Google Translate.
 func (c *CaptionsDownloadCall) Tlang(tlang string) *CaptionsDownloadCall {
 	c.urlParams_.Set("tlang", tlang)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CaptionsDownloadCall) UserIP(userIP string) *CaptionsDownloadCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8535,28 +8688,28 @@ func (c *CaptionsDownloadCall) Context(ctx context.Context) *CaptionsDownloadCal
 }
 
 func (c *CaptionsDownloadCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "captions/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"id": c.id,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Download fetches the API endpoint's "media" value, instead of the normal
 // API response value. If the returned error is nil, the Response is guaranteed to
 // have a 2xx status code. Callers must close the Response.Body as usual.
-func (c *CaptionsDownloadCall) Download() (*http.Response, error) {
+func (c *CaptionsDownloadCall) Download(opts ...googleapi.CallOption) (*http.Response, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("media")
 	if err != nil {
 		return nil, err
@@ -8569,7 +8722,8 @@ func (c *CaptionsDownloadCall) Download() (*http.Response, error) {
 }
 
 // Do executes the "youtube.captions.download" call.
-func (c *CaptionsDownloadCall) Do() error {
+func (c *CaptionsDownloadCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8641,16 +8795,15 @@ func (c *CaptionsDownloadCall) Do() error {
 // method id "youtube.captions.insert":
 
 type CaptionsInsertCall struct {
-	s                   *Service
-	caption             *Caption
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	caption          *Caption
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Insert: Uploads a caption track.
@@ -8687,15 +8840,6 @@ func (c *CaptionsInsertCall) OnBehalfOfContentOwner(onBehalfOfContentOwner strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CaptionsInsertCall) QuotaUser(quotaUser string) *CaptionsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Sync sets the optional parameter "sync": The sync parameter indicates
 // whether YouTube should automatically synchronize the caption file
 // with the audio track of the video. If you set the value to true,
@@ -8710,34 +8854,40 @@ func (c *CaptionsInsertCall) Sync(sync bool) *CaptionsInsertCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CaptionsInsertCall) UserIP(userIP string) *CaptionsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *CaptionsInsertCall) Media(r io.Reader, options ...googleapi.MediaOption) *CaptionsInsertCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *CaptionsInsertCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *CaptionsInsertCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -8769,39 +8919,42 @@ func (c *CaptionsInsertCall) Context(ctx context.Context) *CaptionsInsertCall {
 }
 
 func (c *CaptionsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.caption)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "captions")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.captions.insert" call.
@@ -8811,7 +8964,8 @@ func (c *CaptionsInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CaptionsInsertCall) Do() (*Caption, error) {
+func (c *CaptionsInsertCall) Do(opts ...googleapi.CallOption) (*Caption, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8829,26 +8983,32 @@ func (c *CaptionsInsertCall) Do() (*Caption, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &Caption{
 		ServerResponse: googleapi.ServerResponse{
@@ -8856,7 +9016,8 @@ func (c *CaptionsInsertCall) Do() (*Caption, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8979,23 +9140,6 @@ func (c *CaptionsListCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CaptionsListCall) QuotaUser(quotaUser string) *CaptionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CaptionsListCall) UserIP(userIP string) *CaptionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9023,20 +9167,19 @@ func (c *CaptionsListCall) Context(ctx context.Context) *CaptionsListCall {
 }
 
 func (c *CaptionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "captions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.captions.list" call.
@@ -9046,7 +9189,8 @@ func (c *CaptionsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CaptionsListCall) Do() (*CaptionListResponse, error) {
+func (c *CaptionsListCall) Do(opts ...googleapi.CallOption) (*CaptionListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9070,7 +9214,8 @@ func (c *CaptionsListCall) Do() (*CaptionListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9126,16 +9271,15 @@ func (c *CaptionsListCall) Do() (*CaptionListResponse, error) {
 // method id "youtube.captions.update":
 
 type CaptionsUpdateCall struct {
-	s                   *Service
-	caption             *Caption
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	caption          *Caption
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Update: Updates a caption track. When updating a caption track, you
@@ -9174,15 +9318,6 @@ func (c *CaptionsUpdateCall) OnBehalfOfContentOwner(onBehalfOfContentOwner strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CaptionsUpdateCall) QuotaUser(quotaUser string) *CaptionsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Sync sets the optional parameter "sync": Note: The API server only
 // processes the parameter value if the request contains an updated
 // caption file.
@@ -9196,34 +9331,40 @@ func (c *CaptionsUpdateCall) Sync(sync bool) *CaptionsUpdateCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CaptionsUpdateCall) UserIP(userIP string) *CaptionsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *CaptionsUpdateCall) Media(r io.Reader, options ...googleapi.MediaOption) *CaptionsUpdateCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *CaptionsUpdateCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *CaptionsUpdateCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -9255,39 +9396,42 @@ func (c *CaptionsUpdateCall) Context(ctx context.Context) *CaptionsUpdateCall {
 }
 
 func (c *CaptionsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.caption)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "captions")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.captions.update" call.
@@ -9297,7 +9441,8 @@ func (c *CaptionsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CaptionsUpdateCall) Do() (*Caption, error) {
+func (c *CaptionsUpdateCall) Do(opts ...googleapi.CallOption) (*Caption, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9315,26 +9460,32 @@ func (c *CaptionsUpdateCall) Do() (*Caption, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &Caption{
 		ServerResponse: googleapi.ServerResponse{
@@ -9342,7 +9493,8 @@ func (c *CaptionsUpdateCall) Do() (*Caption, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9417,10 +9569,9 @@ type ChannelBannersInsertCall struct {
 	channelbannerresource *ChannelBannerResource
 	urlParams_            gensupport.URLParams
 	media_                io.Reader
+	mediaBuffer_          *gensupport.MediaBuffer
 	mediaType_            string
-	resumable_            googleapi.SizeReaderAt
-	resumableMediaType_   string
-	protocol_             string
+	mediaSize_            int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
 	progressUpdater_      googleapi.ProgressUpdater
 	ctx_                  context.Context
 }
@@ -9461,43 +9612,40 @@ func (c *ChannelBannersInsertCall) OnBehalfOfContentOwner(onBehalfOfContentOwner
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelBannersInsertCall) QuotaUser(quotaUser string) *ChannelBannersInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelBannersInsertCall) UserIP(userIP string) *ChannelBannersInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *ChannelBannersInsertCall) Media(r io.Reader, options ...googleapi.MediaOption) *ChannelBannersInsertCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *ChannelBannersInsertCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *ChannelBannersInsertCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -9529,39 +9677,42 @@ func (c *ChannelBannersInsertCall) Context(ctx context.Context) *ChannelBannersI
 }
 
 func (c *ChannelBannersInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.channelbannerresource)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channelBanners/insert")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channelBanners.insert" call.
@@ -9571,7 +9722,8 @@ func (c *ChannelBannersInsertCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChannelBannersInsertCall) Do() (*ChannelBannerResource, error) {
+func (c *ChannelBannersInsertCall) Do(opts ...googleapi.CallOption) (*ChannelBannerResource, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9589,26 +9741,32 @@ func (c *ChannelBannersInsertCall) Do() (*ChannelBannerResource, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &ChannelBannerResource{
 		ServerResponse: googleapi.ServerResponse{
@@ -9616,7 +9774,8 @@ func (c *ChannelBannersInsertCall) Do() (*ChannelBannerResource, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9699,23 +9858,6 @@ func (c *ChannelSectionsDeleteCall) OnBehalfOfContentOwner(onBehalfOfContentOwne
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelSectionsDeleteCall) QuotaUser(quotaUser string) *ChannelSectionsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelSectionsDeleteCall) UserIP(userIP string) *ChannelSectionsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9733,21 +9875,21 @@ func (c *ChannelSectionsDeleteCall) Context(ctx context.Context) *ChannelSection
 }
 
 func (c *ChannelSectionsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channelSections")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channelSections.delete" call.
-func (c *ChannelSectionsDeleteCall) Do() error {
+func (c *ChannelSectionsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -9848,23 +9990,6 @@ func (c *ChannelSectionsInsertCall) OnBehalfOfContentOwnerChannel(onBehalfOfCont
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelSectionsInsertCall) QuotaUser(quotaUser string) *ChannelSectionsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelSectionsInsertCall) UserIP(userIP string) *ChannelSectionsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9882,23 +10007,21 @@ func (c *ChannelSectionsInsertCall) Context(ctx context.Context) *ChannelSection
 }
 
 func (c *ChannelSectionsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.channelsection)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channelSections")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channelSections.insert" call.
@@ -9908,7 +10031,8 @@ func (c *ChannelSectionsInsertCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChannelSectionsInsertCall) Do() (*ChannelSection, error) {
+func (c *ChannelSectionsInsertCall) Do(opts ...googleapi.CallOption) (*ChannelSection, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9932,7 +10056,8 @@ func (c *ChannelSectionsInsertCall) Do() (*ChannelSection, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10050,23 +10175,6 @@ func (c *ChannelSectionsListCall) OnBehalfOfContentOwner(onBehalfOfContentOwner 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelSectionsListCall) QuotaUser(quotaUser string) *ChannelSectionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelSectionsListCall) UserIP(userIP string) *ChannelSectionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10094,20 +10202,19 @@ func (c *ChannelSectionsListCall) Context(ctx context.Context) *ChannelSectionsL
 }
 
 func (c *ChannelSectionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channelSections")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channelSections.list" call.
@@ -10117,7 +10224,8 @@ func (c *ChannelSectionsListCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChannelSectionsListCall) Do() (*ChannelSectionListResponse, error) {
+func (c *ChannelSectionsListCall) Do(opts ...googleapi.CallOption) (*ChannelSectionListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10141,7 +10249,8 @@ func (c *ChannelSectionsListCall) Do() (*ChannelSectionListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10234,23 +10343,6 @@ func (c *ChannelSectionsUpdateCall) OnBehalfOfContentOwner(onBehalfOfContentOwne
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelSectionsUpdateCall) QuotaUser(quotaUser string) *ChannelSectionsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelSectionsUpdateCall) UserIP(userIP string) *ChannelSectionsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10268,23 +10360,21 @@ func (c *ChannelSectionsUpdateCall) Context(ctx context.Context) *ChannelSection
 }
 
 func (c *ChannelSectionsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.channelsection)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channelSections")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channelSections.update" call.
@@ -10294,7 +10384,8 @@ func (c *ChannelSectionsUpdateCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChannelSectionsUpdateCall) Do() (*ChannelSection, error) {
+func (c *ChannelSectionsUpdateCall) Do(opts ...googleapi.CallOption) (*ChannelSection, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10318,7 +10409,8 @@ func (c *ChannelSectionsUpdateCall) Do() (*ChannelSection, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10472,23 +10564,6 @@ func (c *ChannelsListCall) PageToken(pageToken string) *ChannelsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelsListCall) QuotaUser(quotaUser string) *ChannelsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelsListCall) UserIP(userIP string) *ChannelsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10516,20 +10591,19 @@ func (c *ChannelsListCall) Context(ctx context.Context) *ChannelsListCall {
 }
 
 func (c *ChannelsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channels")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channels.list" call.
@@ -10539,7 +10613,8 @@ func (c *ChannelsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChannelsListCall) Do() (*ChannelListResponse, error) {
+func (c *ChannelsListCall) Do(opts ...googleapi.CallOption) (*ChannelListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10563,7 +10638,8 @@ func (c *ChannelsListCall) Do() (*ChannelListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10651,6 +10727,27 @@ func (c *ChannelsListCall) Do() (*ChannelListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ChannelsListCall) Pages(ctx context.Context, f func(*ChannelListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.channels.update":
 
 type ChannelsUpdateCall struct {
@@ -10685,23 +10782,6 @@ func (c *ChannelsUpdateCall) OnBehalfOfContentOwner(onBehalfOfContentOwner strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChannelsUpdateCall) QuotaUser(quotaUser string) *ChannelsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChannelsUpdateCall) UserIP(userIP string) *ChannelsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10719,23 +10799,21 @@ func (c *ChannelsUpdateCall) Context(ctx context.Context) *ChannelsUpdateCall {
 }
 
 func (c *ChannelsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.channel)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "channels")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.channels.update" call.
@@ -10745,7 +10823,8 @@ func (c *ChannelsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ChannelsUpdateCall) Do() (*Channel, error) {
+func (c *ChannelsUpdateCall) Do(opts ...googleapi.CallOption) (*Channel, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10769,7 +10848,8 @@ func (c *ChannelsUpdateCall) Do() (*Channel, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10827,23 +10907,6 @@ func (r *CommentThreadsService) Insert(part string, commentthread *CommentThread
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentThreadsInsertCall) QuotaUser(quotaUser string) *CommentThreadsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentThreadsInsertCall) UserIP(userIP string) *CommentThreadsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10861,23 +10924,21 @@ func (c *CommentThreadsInsertCall) Context(ctx context.Context) *CommentThreadsI
 }
 
 func (c *CommentThreadsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.commentthread)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "commentThreads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.commentThreads.insert" call.
@@ -10887,7 +10948,8 @@ func (c *CommentThreadsInsertCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CommentThreadsInsertCall) Do() (*CommentThread, error) {
+func (c *CommentThreadsInsertCall) Do(opts ...googleapi.CallOption) (*CommentThread, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10911,7 +10973,8 @@ func (c *CommentThreadsInsertCall) Do() (*CommentThread, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11052,15 +11115,6 @@ func (c *CommentThreadsListCall) PageToken(pageToken string) *CommentThreadsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentThreadsListCall) QuotaUser(quotaUser string) *CommentThreadsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchTerms sets the optional parameter "searchTerms": The
 // searchTerms parameter instructs the API to limit the API response to
 // only contain comments that contain the specified search terms.
@@ -11082,14 +11136,6 @@ func (c *CommentThreadsListCall) SearchTerms(searchTerms string) *CommentThreads
 //   "plainText" - Returns the comments in plain text format.
 func (c *CommentThreadsListCall) TextFormat(textFormat string) *CommentThreadsListCall {
 	c.urlParams_.Set("textFormat", textFormat)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentThreadsListCall) UserIP(userIP string) *CommentThreadsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11128,20 +11174,19 @@ func (c *CommentThreadsListCall) Context(ctx context.Context) *CommentThreadsLis
 }
 
 func (c *CommentThreadsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "commentThreads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.commentThreads.list" call.
@@ -11151,7 +11196,8 @@ func (c *CommentThreadsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CommentThreadsListCall) Do() (*CommentThreadListResponse, error) {
+func (c *CommentThreadsListCall) Do(opts ...googleapi.CallOption) (*CommentThreadListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11175,7 +11221,8 @@ func (c *CommentThreadsListCall) Do() (*CommentThreadListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11288,6 +11335,27 @@ func (c *CommentThreadsListCall) Do() (*CommentThreadListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CommentThreadsListCall) Pages(ctx context.Context, f func(*CommentThreadListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.commentThreads.update":
 
 type CommentThreadsUpdateCall struct {
@@ -11302,23 +11370,6 @@ func (r *CommentThreadsService) Update(part string, commentthread *CommentThread
 	c := &CommentThreadsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.Set("part", part)
 	c.commentthread = commentthread
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentThreadsUpdateCall) QuotaUser(quotaUser string) *CommentThreadsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentThreadsUpdateCall) UserIP(userIP string) *CommentThreadsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11339,23 +11390,21 @@ func (c *CommentThreadsUpdateCall) Context(ctx context.Context) *CommentThreadsU
 }
 
 func (c *CommentThreadsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.commentthread)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "commentThreads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.commentThreads.update" call.
@@ -11365,7 +11414,8 @@ func (c *CommentThreadsUpdateCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CommentThreadsUpdateCall) Do() (*CommentThread, error) {
+func (c *CommentThreadsUpdateCall) Do(opts ...googleapi.CallOption) (*CommentThread, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11389,7 +11439,8 @@ func (c *CommentThreadsUpdateCall) Do() (*CommentThread, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11437,23 +11488,6 @@ func (r *CommentsService) Delete(id string) *CommentsDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentsDeleteCall) QuotaUser(quotaUser string) *CommentsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentsDeleteCall) UserIP(userIP string) *CommentsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11471,21 +11505,21 @@ func (c *CommentsDeleteCall) Context(ctx context.Context) *CommentsDeleteCall {
 }
 
 func (c *CommentsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "comments")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.comments.delete" call.
-func (c *CommentsDeleteCall) Do() error {
+func (c *CommentsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -11536,23 +11570,6 @@ func (r *CommentsService) Insert(part string, comment *Comment) *CommentsInsertC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentsInsertCall) QuotaUser(quotaUser string) *CommentsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentsInsertCall) UserIP(userIP string) *CommentsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11570,23 +11587,21 @@ func (c *CommentsInsertCall) Context(ctx context.Context) *CommentsInsertCall {
 }
 
 func (c *CommentsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.comment)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "comments")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.comments.insert" call.
@@ -11596,7 +11611,8 @@ func (c *CommentsInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CommentsInsertCall) Do() (*Comment, error) {
+func (c *CommentsInsertCall) Do(opts ...googleapi.CallOption) (*Comment, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11620,7 +11636,8 @@ func (c *CommentsInsertCall) Do() (*Comment, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11713,15 +11730,6 @@ func (c *CommentsListCall) ParentId(parentId string) *CommentsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentsListCall) QuotaUser(quotaUser string) *CommentsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // TextFormat sets the optional parameter "textFormat": This parameter
 // indicates whether the API should return comments formatted as HTML or
 // as plain text.
@@ -11732,14 +11740,6 @@ func (c *CommentsListCall) QuotaUser(quotaUser string) *CommentsListCall {
 //   "plainText" - Returns the comments in plain text format.
 func (c *CommentsListCall) TextFormat(textFormat string) *CommentsListCall {
 	c.urlParams_.Set("textFormat", textFormat)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentsListCall) UserIP(userIP string) *CommentsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11770,20 +11770,19 @@ func (c *CommentsListCall) Context(ctx context.Context) *CommentsListCall {
 }
 
 func (c *CommentsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "comments")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.comments.list" call.
@@ -11793,7 +11792,8 @@ func (c *CommentsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CommentsListCall) Do() (*CommentListResponse, error) {
+func (c *CommentsListCall) Do(opts ...googleapi.CallOption) (*CommentListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11817,7 +11817,8 @@ func (c *CommentsListCall) Do() (*CommentListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11885,6 +11886,27 @@ func (c *CommentsListCall) Do() (*CommentListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CommentsListCall) Pages(ctx context.Context, f func(*CommentListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.comments.markAsSpam":
 
 type CommentsMarkAsSpamCall struct {
@@ -11898,23 +11920,6 @@ type CommentsMarkAsSpamCall struct {
 func (r *CommentsService) MarkAsSpam(id string) *CommentsMarkAsSpamCall {
 	c := &CommentsMarkAsSpamCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.Set("id", id)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentsMarkAsSpamCall) QuotaUser(quotaUser string) *CommentsMarkAsSpamCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentsMarkAsSpamCall) UserIP(userIP string) *CommentsMarkAsSpamCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -11935,21 +11940,21 @@ func (c *CommentsMarkAsSpamCall) Context(ctx context.Context) *CommentsMarkAsSpa
 }
 
 func (c *CommentsMarkAsSpamCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "comments/markAsSpam")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.comments.markAsSpam" call.
-func (c *CommentsMarkAsSpamCall) Do() error {
+func (c *CommentsMarkAsSpamCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -12012,23 +12017,6 @@ func (c *CommentsSetModerationStatusCall) BanAuthor(banAuthor bool) *CommentsSet
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentsSetModerationStatusCall) QuotaUser(quotaUser string) *CommentsSetModerationStatusCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentsSetModerationStatusCall) UserIP(userIP string) *CommentsSetModerationStatusCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12046,21 +12034,21 @@ func (c *CommentsSetModerationStatusCall) Context(ctx context.Context) *Comments
 }
 
 func (c *CommentsSetModerationStatusCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "comments/setModerationStatus")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.comments.setModerationStatus" call.
-func (c *CommentsSetModerationStatusCall) Do() error {
+func (c *CommentsSetModerationStatusCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -12133,23 +12121,6 @@ func (r *CommentsService) Update(part string, comment *Comment) *CommentsUpdateC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CommentsUpdateCall) QuotaUser(quotaUser string) *CommentsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CommentsUpdateCall) UserIP(userIP string) *CommentsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12167,23 +12138,21 @@ func (c *CommentsUpdateCall) Context(ctx context.Context) *CommentsUpdateCall {
 }
 
 func (c *CommentsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.comment)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "comments")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.comments.update" call.
@@ -12193,7 +12162,8 @@ func (c *CommentsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CommentsUpdateCall) Do() (*Comment, error) {
+func (c *CommentsUpdateCall) Do(opts ...googleapi.CallOption) (*Comment, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12217,7 +12187,8 @@ func (c *CommentsUpdateCall) Do() (*Comment, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12299,23 +12270,6 @@ func (c *FanFundingEventsListCall) PageToken(pageToken string) *FanFundingEvents
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FanFundingEventsListCall) QuotaUser(quotaUser string) *FanFundingEventsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FanFundingEventsListCall) UserIP(userIP string) *FanFundingEventsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12343,20 +12297,19 @@ func (c *FanFundingEventsListCall) Context(ctx context.Context) *FanFundingEvent
 }
 
 func (c *FanFundingEventsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "fanFundingEvents")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.fanFundingEvents.list" call.
@@ -12366,7 +12319,8 @@ func (c *FanFundingEventsListCall) doRequest(alt string) (*http.Response, error)
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FanFundingEventsListCall) Do() (*FanFundingEventListResponse, error) {
+func (c *FanFundingEventsListCall) Do(opts ...googleapi.CallOption) (*FanFundingEventListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12390,7 +12344,8 @@ func (c *FanFundingEventsListCall) Do() (*FanFundingEventListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12441,6 +12396,27 @@ func (c *FanFundingEventsListCall) Do() (*FanFundingEventListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *FanFundingEventsListCall) Pages(ctx context.Context, f func(*FanFundingEventListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.guideCategories.list":
 
 type GuideCategoriesListCall struct {
@@ -12474,29 +12450,12 @@ func (c *GuideCategoriesListCall) Id(id string) *GuideCategoriesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *GuideCategoriesListCall) QuotaUser(quotaUser string) *GuideCategoriesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RegionCode sets the optional parameter "regionCode": The regionCode
 // parameter instructs the API to return the list of guide categories
 // available in the specified country. The parameter value is an ISO
 // 3166-1 alpha-2 country code.
 func (c *GuideCategoriesListCall) RegionCode(regionCode string) *GuideCategoriesListCall {
 	c.urlParams_.Set("regionCode", regionCode)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *GuideCategoriesListCall) UserIP(userIP string) *GuideCategoriesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -12527,20 +12486,19 @@ func (c *GuideCategoriesListCall) Context(ctx context.Context) *GuideCategoriesL
 }
 
 func (c *GuideCategoriesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "guideCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.guideCategories.list" call.
@@ -12550,7 +12508,8 @@ func (c *GuideCategoriesListCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *GuideCategoriesListCall) Do() (*GuideCategoryListResponse, error) {
+func (c *GuideCategoriesListCall) Do(opts ...googleapi.CallOption) (*GuideCategoryListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12574,7 +12533,8 @@ func (c *GuideCategoriesListCall) Do() (*GuideCategoryListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12647,23 +12607,6 @@ func (c *I18nLanguagesListCall) Hl(hl string) *I18nLanguagesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *I18nLanguagesListCall) QuotaUser(quotaUser string) *I18nLanguagesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *I18nLanguagesListCall) UserIP(userIP string) *I18nLanguagesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12691,20 +12634,19 @@ func (c *I18nLanguagesListCall) Context(ctx context.Context) *I18nLanguagesListC
 }
 
 func (c *I18nLanguagesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "i18nLanguages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.i18nLanguages.list" call.
@@ -12714,7 +12656,8 @@ func (c *I18nLanguagesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *I18nLanguagesListCall) Do() (*I18nLanguageListResponse, error) {
+func (c *I18nLanguagesListCall) Do(opts ...googleapi.CallOption) (*I18nLanguageListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12738,7 +12681,8 @@ func (c *I18nLanguagesListCall) Do() (*I18nLanguageListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12801,23 +12745,6 @@ func (c *I18nRegionsListCall) Hl(hl string) *I18nRegionsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *I18nRegionsListCall) QuotaUser(quotaUser string) *I18nRegionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *I18nRegionsListCall) UserIP(userIP string) *I18nRegionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12845,20 +12772,19 @@ func (c *I18nRegionsListCall) Context(ctx context.Context) *I18nRegionsListCall 
 }
 
 func (c *I18nRegionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "i18nRegions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.i18nRegions.list" call.
@@ -12868,7 +12794,8 @@ func (c *I18nRegionsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *I18nRegionsListCall) Do() (*I18nRegionListResponse, error) {
+func (c *I18nRegionsListCall) Do(opts ...googleapi.CallOption) (*I18nRegionListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12892,7 +12819,8 @@ func (c *I18nRegionsListCall) Do() (*I18nRegionListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12994,29 +12922,12 @@ func (c *LiveBroadcastsBindCall) OnBehalfOfContentOwnerChannel(onBehalfOfContent
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsBindCall) QuotaUser(quotaUser string) *LiveBroadcastsBindCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StreamId sets the optional parameter "streamId": The streamId
 // parameter specifies the unique ID of the video stream that is being
 // bound to a broadcast. If this parameter is omitted, the API will
 // remove any existing binding between the broadcast and a video stream.
 func (c *LiveBroadcastsBindCall) StreamId(streamId string) *LiveBroadcastsBindCall {
 	c.urlParams_.Set("streamId", streamId)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsBindCall) UserIP(userIP string) *LiveBroadcastsBindCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -13037,17 +12948,16 @@ func (c *LiveBroadcastsBindCall) Context(ctx context.Context) *LiveBroadcastsBin
 }
 
 func (c *LiveBroadcastsBindCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts/bind")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.bind" call.
@@ -13057,7 +12967,8 @@ func (c *LiveBroadcastsBindCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveBroadcastsBindCall) Do() (*LiveBroadcast, error) {
+func (c *LiveBroadcastsBindCall) Do(opts ...googleapi.CallOption) (*LiveBroadcast, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13081,7 +12992,8 @@ func (c *LiveBroadcastsBindCall) Do() (*LiveBroadcast, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -13223,23 +13135,6 @@ func (c *LiveBroadcastsControlCall) OnBehalfOfContentOwnerChannel(onBehalfOfCont
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsControlCall) QuotaUser(quotaUser string) *LiveBroadcastsControlCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsControlCall) UserIP(userIP string) *LiveBroadcastsControlCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Walltime sets the optional parameter "walltime": The walltime
 // parameter specifies the wall clock time at which the specified slate
 // change will occur. The value is specified in ISO 8601
@@ -13266,17 +13161,16 @@ func (c *LiveBroadcastsControlCall) Context(ctx context.Context) *LiveBroadcasts
 }
 
 func (c *LiveBroadcastsControlCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts/control")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.control" call.
@@ -13286,7 +13180,8 @@ func (c *LiveBroadcastsControlCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveBroadcastsControlCall) Do() (*LiveBroadcast, error) {
+func (c *LiveBroadcastsControlCall) Do(opts ...googleapi.CallOption) (*LiveBroadcast, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13310,7 +13205,8 @@ func (c *LiveBroadcastsControlCall) Do() (*LiveBroadcast, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -13434,23 +13330,6 @@ func (c *LiveBroadcastsDeleteCall) OnBehalfOfContentOwnerChannel(onBehalfOfConte
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsDeleteCall) QuotaUser(quotaUser string) *LiveBroadcastsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsDeleteCall) UserIP(userIP string) *LiveBroadcastsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -13468,21 +13347,21 @@ func (c *LiveBroadcastsDeleteCall) Context(ctx context.Context) *LiveBroadcastsD
 }
 
 func (c *LiveBroadcastsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.delete" call.
-func (c *LiveBroadcastsDeleteCall) Do() error {
+func (c *LiveBroadcastsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -13587,23 +13466,6 @@ func (c *LiveBroadcastsInsertCall) OnBehalfOfContentOwnerChannel(onBehalfOfConte
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsInsertCall) QuotaUser(quotaUser string) *LiveBroadcastsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsInsertCall) UserIP(userIP string) *LiveBroadcastsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -13621,23 +13483,21 @@ func (c *LiveBroadcastsInsertCall) Context(ctx context.Context) *LiveBroadcastsI
 }
 
 func (c *LiveBroadcastsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livebroadcast)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.insert" call.
@@ -13647,7 +13507,8 @@ func (c *LiveBroadcastsInsertCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveBroadcastsInsertCall) Do() (*LiveBroadcast, error) {
+func (c *LiveBroadcastsInsertCall) Do(opts ...googleapi.CallOption) (*LiveBroadcast, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13671,7 +13532,8 @@ func (c *LiveBroadcastsInsertCall) Do() (*LiveBroadcast, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -13839,23 +13701,6 @@ func (c *LiveBroadcastsListCall) PageToken(pageToken string) *LiveBroadcastsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsListCall) QuotaUser(quotaUser string) *LiveBroadcastsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsListCall) UserIP(userIP string) *LiveBroadcastsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -13883,20 +13728,19 @@ func (c *LiveBroadcastsListCall) Context(ctx context.Context) *LiveBroadcastsLis
 }
 
 func (c *LiveBroadcastsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.list" call.
@@ -13906,7 +13750,8 @@ func (c *LiveBroadcastsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveBroadcastsListCall) Do() (*LiveBroadcastListResponse, error) {
+func (c *LiveBroadcastsListCall) Do(opts ...googleapi.CallOption) (*LiveBroadcastListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13930,7 +13775,8 @@ func (c *LiveBroadcastsListCall) Do() (*LiveBroadcastListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14029,6 +13875,27 @@ func (c *LiveBroadcastsListCall) Do() (*LiveBroadcastListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LiveBroadcastsListCall) Pages(ctx context.Context, f func(*LiveBroadcastListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.liveBroadcasts.transition":
 
 type LiveBroadcastsTransitionCall struct {
@@ -14096,23 +13963,6 @@ func (c *LiveBroadcastsTransitionCall) OnBehalfOfContentOwnerChannel(onBehalfOfC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsTransitionCall) QuotaUser(quotaUser string) *LiveBroadcastsTransitionCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsTransitionCall) UserIP(userIP string) *LiveBroadcastsTransitionCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14130,17 +13980,16 @@ func (c *LiveBroadcastsTransitionCall) Context(ctx context.Context) *LiveBroadca
 }
 
 func (c *LiveBroadcastsTransitionCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts/transition")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.transition" call.
@@ -14150,7 +13999,8 @@ func (c *LiveBroadcastsTransitionCall) doRequest(alt string) (*http.Response, er
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveBroadcastsTransitionCall) Do() (*LiveBroadcast, error) {
+func (c *LiveBroadcastsTransitionCall) Do(opts ...googleapi.CallOption) (*LiveBroadcast, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14174,7 +14024,8 @@ func (c *LiveBroadcastsTransitionCall) Do() (*LiveBroadcast, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14302,23 +14153,6 @@ func (c *LiveBroadcastsUpdateCall) OnBehalfOfContentOwnerChannel(onBehalfOfConte
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveBroadcastsUpdateCall) QuotaUser(quotaUser string) *LiveBroadcastsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveBroadcastsUpdateCall) UserIP(userIP string) *LiveBroadcastsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14336,23 +14170,21 @@ func (c *LiveBroadcastsUpdateCall) Context(ctx context.Context) *LiveBroadcastsU
 }
 
 func (c *LiveBroadcastsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livebroadcast)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveBroadcasts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveBroadcasts.update" call.
@@ -14362,7 +14194,8 @@ func (c *LiveBroadcastsUpdateCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveBroadcastsUpdateCall) Do() (*LiveBroadcast, error) {
+func (c *LiveBroadcastsUpdateCall) Do(opts ...googleapi.CallOption) (*LiveBroadcast, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14386,7 +14219,8 @@ func (c *LiveBroadcastsUpdateCall) Do() (*LiveBroadcast, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14445,23 +14279,6 @@ func (r *LiveChatBansService) Delete(id string) *LiveChatBansDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatBansDeleteCall) QuotaUser(quotaUser string) *LiveChatBansDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatBansDeleteCall) UserIP(userIP string) *LiveChatBansDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14479,21 +14296,21 @@ func (c *LiveChatBansDeleteCall) Context(ctx context.Context) *LiveChatBansDelet
 }
 
 func (c *LiveChatBansDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/bans")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatBans.delete" call.
-func (c *LiveChatBansDeleteCall) Do() error {
+func (c *LiveChatBansDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -14544,23 +14361,6 @@ func (r *LiveChatBansService) Insert(part string, livechatban *LiveChatBan) *Liv
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatBansInsertCall) QuotaUser(quotaUser string) *LiveChatBansInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatBansInsertCall) UserIP(userIP string) *LiveChatBansInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14578,23 +14378,21 @@ func (c *LiveChatBansInsertCall) Context(ctx context.Context) *LiveChatBansInser
 }
 
 func (c *LiveChatBansInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livechatban)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/bans")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatBans.insert" call.
@@ -14604,7 +14402,8 @@ func (c *LiveChatBansInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LiveChatBansInsertCall) Do() (*LiveChatBan, error) {
+func (c *LiveChatBansInsertCall) Do(opts ...googleapi.CallOption) (*LiveChatBan, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14628,7 +14427,8 @@ func (c *LiveChatBansInsertCall) Do() (*LiveChatBan, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14677,23 +14477,6 @@ func (r *LiveChatMessagesService) Delete(id string) *LiveChatMessagesDeleteCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatMessagesDeleteCall) QuotaUser(quotaUser string) *LiveChatMessagesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatMessagesDeleteCall) UserIP(userIP string) *LiveChatMessagesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14711,21 +14494,21 @@ func (c *LiveChatMessagesDeleteCall) Context(ctx context.Context) *LiveChatMessa
 }
 
 func (c *LiveChatMessagesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/messages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatMessages.delete" call.
-func (c *LiveChatMessagesDeleteCall) Do() error {
+func (c *LiveChatMessagesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -14776,23 +14559,6 @@ func (r *LiveChatMessagesService) Insert(part string, livechatmessage *LiveChatM
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatMessagesInsertCall) QuotaUser(quotaUser string) *LiveChatMessagesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatMessagesInsertCall) UserIP(userIP string) *LiveChatMessagesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14810,23 +14576,21 @@ func (c *LiveChatMessagesInsertCall) Context(ctx context.Context) *LiveChatMessa
 }
 
 func (c *LiveChatMessagesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livechatmessage)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/messages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatMessages.insert" call.
@@ -14836,7 +14600,8 @@ func (c *LiveChatMessagesInsertCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveChatMessagesInsertCall) Do() (*LiveChatMessage, error) {
+func (c *LiveChatMessagesInsertCall) Do(opts ...googleapi.CallOption) (*LiveChatMessage, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14860,7 +14625,8 @@ func (c *LiveChatMessagesInsertCall) Do() (*LiveChatMessage, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14952,23 +14718,6 @@ func (c *LiveChatMessagesListCall) ProfileImageSize(profileImageSize int64) *Liv
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatMessagesListCall) QuotaUser(quotaUser string) *LiveChatMessagesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatMessagesListCall) UserIP(userIP string) *LiveChatMessagesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14996,20 +14745,19 @@ func (c *LiveChatMessagesListCall) Context(ctx context.Context) *LiveChatMessage
 }
 
 func (c *LiveChatMessagesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/messages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatMessages.list" call.
@@ -15019,7 +14767,8 @@ func (c *LiveChatMessagesListCall) doRequest(alt string) (*http.Response, error)
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveChatMessagesListCall) Do() (*LiveChatMessageListResponse, error) {
+func (c *LiveChatMessagesListCall) Do(opts ...googleapi.CallOption) (*LiveChatMessageListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15043,7 +14792,8 @@ func (c *LiveChatMessagesListCall) Do() (*LiveChatMessageListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15068,7 +14818,7 @@ func (c *LiveChatMessagesListCall) Do() (*LiveChatMessageListResponse, error) {
 	//       "type": "string"
 	//     },
 	//     "maxResults": {
-	//       "default": "200",
+	//       "default": "500",
 	//       "description": "The maxResults parameter specifies the maximum number of messages that should be returned in the result set.",
 	//       "format": "uint32",
 	//       "location": "query",
@@ -15109,6 +14859,27 @@ func (c *LiveChatMessagesListCall) Do() (*LiveChatMessageListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LiveChatMessagesListCall) Pages(ctx context.Context, f func(*LiveChatMessageListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.liveChatModerators.delete":
 
 type LiveChatModeratorsDeleteCall struct {
@@ -15121,23 +14892,6 @@ type LiveChatModeratorsDeleteCall struct {
 func (r *LiveChatModeratorsService) Delete(id string) *LiveChatModeratorsDeleteCall {
 	c := &LiveChatModeratorsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.Set("id", id)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatModeratorsDeleteCall) QuotaUser(quotaUser string) *LiveChatModeratorsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatModeratorsDeleteCall) UserIP(userIP string) *LiveChatModeratorsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -15158,21 +14912,21 @@ func (c *LiveChatModeratorsDeleteCall) Context(ctx context.Context) *LiveChatMod
 }
 
 func (c *LiveChatModeratorsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/moderators")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatModerators.delete" call.
-func (c *LiveChatModeratorsDeleteCall) Do() error {
+func (c *LiveChatModeratorsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -15223,23 +14977,6 @@ func (r *LiveChatModeratorsService) Insert(part string, livechatmoderator *LiveC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatModeratorsInsertCall) QuotaUser(quotaUser string) *LiveChatModeratorsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatModeratorsInsertCall) UserIP(userIP string) *LiveChatModeratorsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15257,23 +14994,21 @@ func (c *LiveChatModeratorsInsertCall) Context(ctx context.Context) *LiveChatMod
 }
 
 func (c *LiveChatModeratorsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livechatmoderator)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/moderators")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatModerators.insert" call.
@@ -15283,7 +15018,8 @@ func (c *LiveChatModeratorsInsertCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveChatModeratorsInsertCall) Do() (*LiveChatModerator, error) {
+func (c *LiveChatModeratorsInsertCall) Do(opts ...googleapi.CallOption) (*LiveChatModerator, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15307,7 +15043,8 @@ func (c *LiveChatModeratorsInsertCall) Do() (*LiveChatModerator, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15375,23 +15112,6 @@ func (c *LiveChatModeratorsListCall) PageToken(pageToken string) *LiveChatModera
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveChatModeratorsListCall) QuotaUser(quotaUser string) *LiveChatModeratorsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveChatModeratorsListCall) UserIP(userIP string) *LiveChatModeratorsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15419,20 +15139,19 @@ func (c *LiveChatModeratorsListCall) Context(ctx context.Context) *LiveChatModer
 }
 
 func (c *LiveChatModeratorsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveChat/moderators")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveChatModerators.list" call.
@@ -15442,7 +15161,8 @@ func (c *LiveChatModeratorsListCall) doRequest(alt string) (*http.Response, erro
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveChatModeratorsListCall) Do() (*LiveChatModeratorListResponse, error) {
+func (c *LiveChatModeratorsListCall) Do(opts ...googleapi.CallOption) (*LiveChatModeratorListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15466,7 +15186,8 @@ func (c *LiveChatModeratorsListCall) Do() (*LiveChatModeratorListResponse, error
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15517,6 +15238,27 @@ func (c *LiveChatModeratorsListCall) Do() (*LiveChatModeratorListResponse, error
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LiveChatModeratorsListCall) Pages(ctx context.Context, f func(*LiveChatModeratorListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }
 
 // method id "youtube.liveStreams.delete":
@@ -15578,23 +15320,6 @@ func (c *LiveStreamsDeleteCall) OnBehalfOfContentOwnerChannel(onBehalfOfContentO
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveStreamsDeleteCall) QuotaUser(quotaUser string) *LiveStreamsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveStreamsDeleteCall) UserIP(userIP string) *LiveStreamsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15612,21 +15337,21 @@ func (c *LiveStreamsDeleteCall) Context(ctx context.Context) *LiveStreamsDeleteC
 }
 
 func (c *LiveStreamsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveStreams")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveStreams.delete" call.
-func (c *LiveStreamsDeleteCall) Do() error {
+func (c *LiveStreamsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -15733,23 +15458,6 @@ func (c *LiveStreamsInsertCall) OnBehalfOfContentOwnerChannel(onBehalfOfContentO
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveStreamsInsertCall) QuotaUser(quotaUser string) *LiveStreamsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveStreamsInsertCall) UserIP(userIP string) *LiveStreamsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15767,23 +15475,21 @@ func (c *LiveStreamsInsertCall) Context(ctx context.Context) *LiveStreamsInsertC
 }
 
 func (c *LiveStreamsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livestream)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveStreams")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveStreams.insert" call.
@@ -15793,7 +15499,8 @@ func (c *LiveStreamsInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LiveStreamsInsertCall) Do() (*LiveStream, error) {
+func (c *LiveStreamsInsertCall) Do(opts ...googleapi.CallOption) (*LiveStream, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15817,7 +15524,8 @@ func (c *LiveStreamsInsertCall) Do() (*LiveStream, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15957,23 +15665,6 @@ func (c *LiveStreamsListCall) PageToken(pageToken string) *LiveStreamsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveStreamsListCall) QuotaUser(quotaUser string) *LiveStreamsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveStreamsListCall) UserIP(userIP string) *LiveStreamsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16001,20 +15692,19 @@ func (c *LiveStreamsListCall) Context(ctx context.Context) *LiveStreamsListCall 
 }
 
 func (c *LiveStreamsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveStreams")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveStreams.list" call.
@@ -16024,7 +15714,8 @@ func (c *LiveStreamsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LiveStreamsListCall) Do() (*LiveStreamListResponse, error) {
+func (c *LiveStreamsListCall) Do(opts ...googleapi.CallOption) (*LiveStreamListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16048,7 +15739,8 @@ func (c *LiveStreamsListCall) Do() (*LiveStreamListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16114,6 +15806,27 @@ func (c *LiveStreamsListCall) Do() (*LiveStreamListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *LiveStreamsListCall) Pages(ctx context.Context, f func(*LiveStreamListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.liveStreams.update":
 
 type LiveStreamsUpdateCall struct {
@@ -16177,23 +15890,6 @@ func (c *LiveStreamsUpdateCall) OnBehalfOfContentOwnerChannel(onBehalfOfContentO
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LiveStreamsUpdateCall) QuotaUser(quotaUser string) *LiveStreamsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LiveStreamsUpdateCall) UserIP(userIP string) *LiveStreamsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16211,23 +15907,21 @@ func (c *LiveStreamsUpdateCall) Context(ctx context.Context) *LiveStreamsUpdateC
 }
 
 func (c *LiveStreamsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.livestream)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "liveStreams")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.liveStreams.update" call.
@@ -16237,7 +15931,8 @@ func (c *LiveStreamsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LiveStreamsUpdateCall) Do() (*LiveStream, error) {
+func (c *LiveStreamsUpdateCall) Do(opts ...googleapi.CallOption) (*LiveStream, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16261,7 +15956,8 @@ func (c *LiveStreamsUpdateCall) Do() (*LiveStream, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16320,23 +16016,6 @@ func (r *PlaylistItemsService) Delete(id string) *PlaylistItemsDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistItemsDeleteCall) QuotaUser(quotaUser string) *PlaylistItemsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistItemsDeleteCall) UserIP(userIP string) *PlaylistItemsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16354,21 +16033,21 @@ func (c *PlaylistItemsDeleteCall) Context(ctx context.Context) *PlaylistItemsDel
 }
 
 func (c *PlaylistItemsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlistItems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlistItems.delete" call.
-func (c *PlaylistItemsDeleteCall) Do() error {
+func (c *PlaylistItemsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -16438,23 +16117,6 @@ func (c *PlaylistItemsInsertCall) OnBehalfOfContentOwner(onBehalfOfContentOwner 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistItemsInsertCall) QuotaUser(quotaUser string) *PlaylistItemsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistItemsInsertCall) UserIP(userIP string) *PlaylistItemsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16472,23 +16134,21 @@ func (c *PlaylistItemsInsertCall) Context(ctx context.Context) *PlaylistItemsIns
 }
 
 func (c *PlaylistItemsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.playlistitem)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlistItems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlistItems.insert" call.
@@ -16498,7 +16158,8 @@ func (c *PlaylistItemsInsertCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlaylistItemsInsertCall) Do() (*PlaylistItem, error) {
+func (c *PlaylistItemsInsertCall) Do(opts ...googleapi.CallOption) (*PlaylistItem, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16522,7 +16183,8 @@ func (c *PlaylistItemsInsertCall) Do() (*PlaylistItem, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16633,23 +16295,6 @@ func (c *PlaylistItemsListCall) PlaylistId(playlistId string) *PlaylistItemsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistItemsListCall) QuotaUser(quotaUser string) *PlaylistItemsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistItemsListCall) UserIP(userIP string) *PlaylistItemsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // VideoId sets the optional parameter "videoId": The videoId parameter
 // specifies that the request should return only the playlist items that
 // contain the specified video.
@@ -16685,20 +16330,19 @@ func (c *PlaylistItemsListCall) Context(ctx context.Context) *PlaylistItemsListC
 }
 
 func (c *PlaylistItemsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlistItems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlistItems.list" call.
@@ -16708,7 +16352,8 @@ func (c *PlaylistItemsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlaylistItemsListCall) Do() (*PlaylistItemListResponse, error) {
+func (c *PlaylistItemsListCall) Do(opts ...googleapi.CallOption) (*PlaylistItemListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16732,7 +16377,8 @@ func (c *PlaylistItemsListCall) Do() (*PlaylistItemListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16800,6 +16446,27 @@ func (c *PlaylistItemsListCall) Do() (*PlaylistItemListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *PlaylistItemsListCall) Pages(ctx context.Context, f func(*PlaylistItemListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.playlistItems.update":
 
 type PlaylistItemsUpdateCall struct {
@@ -16815,23 +16482,6 @@ func (r *PlaylistItemsService) Update(part string, playlistitem *PlaylistItem) *
 	c := &PlaylistItemsUpdateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.Set("part", part)
 	c.playlistitem = playlistitem
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistItemsUpdateCall) QuotaUser(quotaUser string) *PlaylistItemsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistItemsUpdateCall) UserIP(userIP string) *PlaylistItemsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -16852,23 +16502,21 @@ func (c *PlaylistItemsUpdateCall) Context(ctx context.Context) *PlaylistItemsUpd
 }
 
 func (c *PlaylistItemsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.playlistitem)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlistItems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlistItems.update" call.
@@ -16878,7 +16526,8 @@ func (c *PlaylistItemsUpdateCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlaylistItemsUpdateCall) Do() (*PlaylistItem, error) {
+func (c *PlaylistItemsUpdateCall) Do(opts ...googleapi.CallOption) (*PlaylistItem, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16902,7 +16551,8 @@ func (c *PlaylistItemsUpdateCall) Do() (*PlaylistItem, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16970,23 +16620,6 @@ func (c *PlaylistsDeleteCall) OnBehalfOfContentOwner(onBehalfOfContentOwner stri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistsDeleteCall) QuotaUser(quotaUser string) *PlaylistsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistsDeleteCall) UserIP(userIP string) *PlaylistsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17004,21 +16637,21 @@ func (c *PlaylistsDeleteCall) Context(ctx context.Context) *PlaylistsDeleteCall 
 }
 
 func (c *PlaylistsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlists.delete" call.
-func (c *PlaylistsDeleteCall) Do() error {
+func (c *PlaylistsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -17119,23 +16752,6 @@ func (c *PlaylistsInsertCall) OnBehalfOfContentOwnerChannel(onBehalfOfContentOwn
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistsInsertCall) QuotaUser(quotaUser string) *PlaylistsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistsInsertCall) UserIP(userIP string) *PlaylistsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17153,23 +16769,21 @@ func (c *PlaylistsInsertCall) Context(ctx context.Context) *PlaylistsInsertCall 
 }
 
 func (c *PlaylistsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.playlist)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlists.insert" call.
@@ -17179,7 +16793,8 @@ func (c *PlaylistsInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlaylistsInsertCall) Do() (*Playlist, error) {
+func (c *PlaylistsInsertCall) Do(opts ...googleapi.CallOption) (*Playlist, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17203,7 +16818,8 @@ func (c *PlaylistsInsertCall) Do() (*Playlist, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17361,23 +16977,6 @@ func (c *PlaylistsListCall) PageToken(pageToken string) *PlaylistsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistsListCall) QuotaUser(quotaUser string) *PlaylistsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistsListCall) UserIP(userIP string) *PlaylistsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17405,20 +17004,19 @@ func (c *PlaylistsListCall) Context(ctx context.Context) *PlaylistsListCall {
 }
 
 func (c *PlaylistsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlists.list" call.
@@ -17428,7 +17026,8 @@ func (c *PlaylistsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlaylistsListCall) Do() (*PlaylistListResponse, error) {
+func (c *PlaylistsListCall) Do(opts ...googleapi.CallOption) (*PlaylistListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17452,7 +17051,8 @@ func (c *PlaylistsListCall) Do() (*PlaylistListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17529,6 +17129,27 @@ func (c *PlaylistsListCall) Do() (*PlaylistListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *PlaylistsListCall) Pages(ctx context.Context, f func(*PlaylistListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.playlists.update":
 
 type PlaylistsUpdateCall struct {
@@ -17565,23 +17186,6 @@ func (c *PlaylistsUpdateCall) OnBehalfOfContentOwner(onBehalfOfContentOwner stri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlaylistsUpdateCall) QuotaUser(quotaUser string) *PlaylistsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlaylistsUpdateCall) UserIP(userIP string) *PlaylistsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17599,23 +17203,21 @@ func (c *PlaylistsUpdateCall) Context(ctx context.Context) *PlaylistsUpdateCall 
 }
 
 func (c *PlaylistsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.playlist)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "playlists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.playlists.update" call.
@@ -17625,7 +17227,8 @@ func (c *PlaylistsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlaylistsUpdateCall) Do() (*Playlist, error) {
+func (c *PlaylistsUpdateCall) Do(opts ...googleapi.CallOption) (*Playlist, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17649,7 +17252,8 @@ func (c *PlaylistsUpdateCall) Do() (*Playlist, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17905,15 +17509,6 @@ func (c *SearchListCall) Q(q string) *SearchListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SearchListCall) QuotaUser(quotaUser string) *SearchListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RegionCode sets the optional parameter "regionCode": The regionCode
 // parameter instructs the API to return search results for the
 // specified country. The parameter value is an ISO 3166-1 alpha-2
@@ -17979,14 +17574,6 @@ func (c *SearchListCall) TopicId(topicId string) *SearchListCall {
 // value is a comma-separated list of resource types.
 func (c *SearchListCall) Type(type_ string) *SearchListCall {
 	c.urlParams_.Set("type", type_)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SearchListCall) UserIP(userIP string) *SearchListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -18152,20 +17739,19 @@ func (c *SearchListCall) Context(ctx context.Context) *SearchListCall {
 }
 
 func (c *SearchListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.search.list" call.
@@ -18175,7 +17761,8 @@ func (c *SearchListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SearchListCall) Do() (*SearchListResponse, error) {
+func (c *SearchListCall) Do(opts ...googleapi.CallOption) (*SearchListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18199,7 +17786,8 @@ func (c *SearchListCall) Do() (*SearchListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18512,6 +18100,27 @@ func (c *SearchListCall) Do() (*SearchListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *SearchListCall) Pages(ctx context.Context, f func(*SearchListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.sponsors.list":
 
 type SponsorsListCall struct {
@@ -18556,23 +18165,6 @@ func (c *SponsorsListCall) PageToken(pageToken string) *SponsorsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SponsorsListCall) QuotaUser(quotaUser string) *SponsorsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SponsorsListCall) UserIP(userIP string) *SponsorsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18600,20 +18192,19 @@ func (c *SponsorsListCall) Context(ctx context.Context) *SponsorsListCall {
 }
 
 func (c *SponsorsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sponsors")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.sponsors.list" call.
@@ -18623,7 +18214,8 @@ func (c *SponsorsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SponsorsListCall) Do() (*SponsorListResponse, error) {
+func (c *SponsorsListCall) Do(opts ...googleapi.CallOption) (*SponsorListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18647,7 +18239,8 @@ func (c *SponsorsListCall) Do() (*SponsorListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18707,6 +18300,27 @@ func (c *SponsorsListCall) Do() (*SponsorListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *SponsorsListCall) Pages(ctx context.Context, f func(*SponsorListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.subscriptions.delete":
 
 type SubscriptionsDeleteCall struct {
@@ -18719,23 +18333,6 @@ type SubscriptionsDeleteCall struct {
 func (r *SubscriptionsService) Delete(id string) *SubscriptionsDeleteCall {
 	c := &SubscriptionsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.Set("id", id)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubscriptionsDeleteCall) QuotaUser(quotaUser string) *SubscriptionsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubscriptionsDeleteCall) UserIP(userIP string) *SubscriptionsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -18756,21 +18353,21 @@ func (c *SubscriptionsDeleteCall) Context(ctx context.Context) *SubscriptionsDel
 }
 
 func (c *SubscriptionsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "subscriptions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.subscriptions.delete" call.
-func (c *SubscriptionsDeleteCall) Do() error {
+func (c *SubscriptionsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -18822,23 +18419,6 @@ func (r *SubscriptionsService) Insert(part string, subscription *Subscription) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubscriptionsInsertCall) QuotaUser(quotaUser string) *SubscriptionsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubscriptionsInsertCall) UserIP(userIP string) *SubscriptionsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18856,23 +18436,21 @@ func (c *SubscriptionsInsertCall) Context(ctx context.Context) *SubscriptionsIns
 }
 
 func (c *SubscriptionsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.subscription)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "subscriptions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.subscriptions.insert" call.
@@ -18882,7 +18460,8 @@ func (c *SubscriptionsInsertCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SubscriptionsInsertCall) Do() (*Subscription, error) {
+func (c *SubscriptionsInsertCall) Do(opts ...googleapi.CallOption) (*Subscription, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18906,7 +18485,8 @@ func (c *SubscriptionsInsertCall) Do() (*Subscription, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18999,9 +18579,18 @@ func (c *SubscriptionsListCall) Mine(mine bool) *SubscriptionsListCall {
 	return c
 }
 
+// MyRecentSubscribers sets the optional parameter
+// "myRecentSubscribers": Set this parameter's value to true to retrieve
+// a feed of the subscribers of the authenticated user in reverse
+// chronological order (newest first).
+func (c *SubscriptionsListCall) MyRecentSubscribers(myRecentSubscribers bool) *SubscriptionsListCall {
+	c.urlParams_.Set("myRecentSubscribers", fmt.Sprint(myRecentSubscribers))
+	return c
+}
+
 // MySubscribers sets the optional parameter "mySubscribers": Set this
 // parameter's value to true to retrieve a feed of the subscribers of
-// the authenticated user.
+// the authenticated user in no particular order.
 func (c *SubscriptionsListCall) MySubscribers(mySubscribers bool) *SubscriptionsListCall {
 	c.urlParams_.Set("mySubscribers", fmt.Sprint(mySubscribers))
 	return c
@@ -19073,23 +18662,6 @@ func (c *SubscriptionsListCall) PageToken(pageToken string) *SubscriptionsListCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubscriptionsListCall) QuotaUser(quotaUser string) *SubscriptionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubscriptionsListCall) UserIP(userIP string) *SubscriptionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19117,20 +18689,19 @@ func (c *SubscriptionsListCall) Context(ctx context.Context) *SubscriptionsListC
 }
 
 func (c *SubscriptionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "subscriptions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.subscriptions.list" call.
@@ -19140,7 +18711,8 @@ func (c *SubscriptionsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SubscriptionsListCall) Do() (*SubscriptionListResponse, error) {
+func (c *SubscriptionsListCall) Do(opts ...googleapi.CallOption) (*SubscriptionListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19164,7 +18736,8 @@ func (c *SubscriptionsListCall) Do() (*SubscriptionListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19205,8 +18778,13 @@ func (c *SubscriptionsListCall) Do() (*SubscriptionListResponse, error) {
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
+	//     "myRecentSubscribers": {
+	//       "description": "Set this parameter's value to true to retrieve a feed of the subscribers of the authenticated user in reverse chronological order (newest first).",
+	//       "location": "query",
+	//       "type": "boolean"
+	//     },
 	//     "mySubscribers": {
-	//       "description": "Set this parameter's value to true to retrieve a feed of the subscribers of the authenticated user.",
+	//       "description": "Set this parameter's value to true to retrieve a feed of the subscribers of the authenticated user in no particular order.",
 	//       "location": "query",
 	//       "type": "boolean"
 	//     },
@@ -19262,18 +18840,38 @@ func (c *SubscriptionsListCall) Do() (*SubscriptionListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *SubscriptionsListCall) Pages(ctx context.Context, f func(*SubscriptionListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.thumbnails.set":
 
 type ThumbnailsSetCall struct {
-	s                   *Service
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Set: Uploads a custom video thumbnail to YouTube and sets it for a
@@ -19303,43 +18901,40 @@ func (c *ThumbnailsSetCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ThumbnailsSetCall) QuotaUser(quotaUser string) *ThumbnailsSetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ThumbnailsSetCall) UserIP(userIP string) *ThumbnailsSetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *ThumbnailsSetCall) Media(r io.Reader, options ...googleapi.MediaOption) *ThumbnailsSetCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *ThumbnailsSetCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *ThumbnailsSetCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -19371,36 +18966,37 @@ func (c *ThumbnailsSetCall) Context(ctx context.Context) *ThumbnailsSetCall {
 }
 
 func (c *ThumbnailsSetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "thumbnails/set")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	body = new(bytes.Buffer)
-	ctype := "application/json"
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.thumbnails.set" call.
@@ -19410,7 +19006,8 @@ func (c *ThumbnailsSetCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ThumbnailsSetCall) Do() (*ThumbnailSetResponse, error) {
+func (c *ThumbnailsSetCall) Do(opts ...googleapi.CallOption) (*ThumbnailSetResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19428,26 +19025,32 @@ func (c *ThumbnailsSetCall) Do() (*ThumbnailSetResponse, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &ThumbnailSetResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -19455,7 +19058,8 @@ func (c *ThumbnailsSetCall) Do() (*ThumbnailSetResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19536,23 +19140,6 @@ func (c *VideoAbuseReportReasonsListCall) Hl(hl string) *VideoAbuseReportReasons
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideoAbuseReportReasonsListCall) QuotaUser(quotaUser string) *VideoAbuseReportReasonsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideoAbuseReportReasonsListCall) UserIP(userIP string) *VideoAbuseReportReasonsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19580,20 +19167,19 @@ func (c *VideoAbuseReportReasonsListCall) Context(ctx context.Context) *VideoAbu
 }
 
 func (c *VideoAbuseReportReasonsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videoAbuseReportReasons")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videoAbuseReportReasons.list" call.
@@ -19604,7 +19190,8 @@ func (c *VideoAbuseReportReasonsListCall) doRequest(alt string) (*http.Response,
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *VideoAbuseReportReasonsListCall) Do() (*VideoAbuseReportReasonListResponse, error) {
+func (c *VideoAbuseReportReasonsListCall) Do(opts ...googleapi.CallOption) (*VideoAbuseReportReasonListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19628,7 +19215,8 @@ func (c *VideoAbuseReportReasonsListCall) Do() (*VideoAbuseReportReasonListRespo
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19698,29 +19286,12 @@ func (c *VideoCategoriesListCall) Id(id string) *VideoCategoriesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideoCategoriesListCall) QuotaUser(quotaUser string) *VideoCategoriesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RegionCode sets the optional parameter "regionCode": The regionCode
 // parameter instructs the API to return the list of video categories
 // available in the specified country. The parameter value is an ISO
 // 3166-1 alpha-2 country code.
 func (c *VideoCategoriesListCall) RegionCode(regionCode string) *VideoCategoriesListCall {
 	c.urlParams_.Set("regionCode", regionCode)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideoCategoriesListCall) UserIP(userIP string) *VideoCategoriesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -19751,20 +19322,19 @@ func (c *VideoCategoriesListCall) Context(ctx context.Context) *VideoCategoriesL
 }
 
 func (c *VideoCategoriesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videoCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videoCategories.list" call.
@@ -19774,7 +19344,8 @@ func (c *VideoCategoriesListCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *VideoCategoriesListCall) Do() (*VideoCategoryListResponse, error) {
+func (c *VideoCategoriesListCall) Do(opts ...googleapi.CallOption) (*VideoCategoryListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19798,7 +19369,8 @@ func (c *VideoCategoriesListCall) Do() (*VideoCategoryListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19881,23 +19453,6 @@ func (c *VideosDeleteCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosDeleteCall) QuotaUser(quotaUser string) *VideosDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosDeleteCall) UserIP(userIP string) *VideosDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19915,21 +19470,21 @@ func (c *VideosDeleteCall) Context(ctx context.Context) *VideosDeleteCall {
 }
 
 func (c *VideosDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.delete" call.
-func (c *VideosDeleteCall) Do() error {
+func (c *VideosDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -20004,23 +19559,6 @@ func (c *VideosGetRatingCall) OnBehalfOfContentOwner(onBehalfOfContentOwner stri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosGetRatingCall) QuotaUser(quotaUser string) *VideosGetRatingCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosGetRatingCall) UserIP(userIP string) *VideosGetRatingCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20048,20 +19586,19 @@ func (c *VideosGetRatingCall) Context(ctx context.Context) *VideosGetRatingCall 
 }
 
 func (c *VideosGetRatingCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos/getRating")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.getRating" call.
@@ -20071,7 +19608,8 @@ func (c *VideosGetRatingCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *VideosGetRatingCall) Do() (*VideoGetRatingResponse, error) {
+func (c *VideosGetRatingCall) Do(opts ...googleapi.CallOption) (*VideoGetRatingResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20095,7 +19633,8 @@ func (c *VideosGetRatingCall) Do() (*VideoGetRatingResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20135,16 +19674,15 @@ func (c *VideosGetRatingCall) Do() (*VideoGetRatingResponse, error) {
 // method id "youtube.videos.insert":
 
 type VideosInsertCall struct {
-	s                   *Service
-	video               *Video
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	video            *Video
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Insert: Uploads a video to YouTube and optionally sets the video's
@@ -20221,15 +19759,6 @@ func (c *VideosInsertCall) OnBehalfOfContentOwnerChannel(onBehalfOfContentOwnerC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosInsertCall) QuotaUser(quotaUser string) *VideosInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Stabilize sets the optional parameter "stabilize": The stabilize
 // parameter indicates whether YouTube should adjust the video to remove
 // shaky camera motions.
@@ -20238,34 +19767,40 @@ func (c *VideosInsertCall) Stabilize(stabilize bool) *VideosInsertCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosInsertCall) UserIP(userIP string) *VideosInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *VideosInsertCall) Media(r io.Reader, options ...googleapi.MediaOption) *VideosInsertCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *VideosInsertCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *VideosInsertCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -20297,39 +19832,42 @@ func (c *VideosInsertCall) Context(ctx context.Context) *VideosInsertCall {
 }
 
 func (c *VideosInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.video)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.insert" call.
@@ -20339,7 +19877,8 @@ func (c *VideosInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VideosInsertCall) Do() (*Video, error) {
+func (c *VideosInsertCall) Do(opts ...googleapi.CallOption) (*Video, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20357,26 +19896,32 @@ func (c *VideosInsertCall) Do() (*Video, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &Video{
 		ServerResponse: googleapi.ServerResponse{
@@ -20384,7 +19929,8 @@ func (c *VideosInsertCall) Do() (*Video, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20577,15 +20123,6 @@ func (c *VideosListCall) PageToken(pageToken string) *VideosListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosListCall) QuotaUser(quotaUser string) *VideosListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RegionCode sets the optional parameter "regionCode": The regionCode
 // parameter instructs the API to select a video chart available in the
 // specified region. This parameter can only be used in conjunction with
@@ -20593,14 +20130,6 @@ func (c *VideosListCall) QuotaUser(quotaUser string) *VideosListCall {
 // country code.
 func (c *VideosListCall) RegionCode(regionCode string) *VideosListCall {
 	c.urlParams_.Set("regionCode", regionCode)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosListCall) UserIP(userIP string) *VideosListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -20641,20 +20170,19 @@ func (c *VideosListCall) Context(ctx context.Context) *VideosListCall {
 }
 
 func (c *VideosListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.list" call.
@@ -20664,7 +20192,8 @@ func (c *VideosListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *VideosListCall) Do() (*VideoListResponse, error) {
+func (c *VideosListCall) Do(opts ...googleapi.CallOption) (*VideoListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20688,7 +20217,8 @@ func (c *VideosListCall) Do() (*VideoListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20790,6 +20320,27 @@ func (c *VideosListCall) Do() (*VideoListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *VideosListCall) Pages(ctx context.Context, f func(*VideoListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "youtube.videos.rate":
 
 type VideosRateCall struct {
@@ -20804,23 +20355,6 @@ func (r *VideosService) Rate(id string, rating string) *VideosRateCall {
 	c := &VideosRateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.urlParams_.Set("id", id)
 	c.urlParams_.Set("rating", rating)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosRateCall) QuotaUser(quotaUser string) *VideosRateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosRateCall) UserIP(userIP string) *VideosRateCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -20841,21 +20375,21 @@ func (c *VideosRateCall) Context(ctx context.Context) *VideosRateCall {
 }
 
 func (c *VideosRateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos/rate")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.rate" call.
-func (c *VideosRateCall) Do() error {
+func (c *VideosRateCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -20941,23 +20475,6 @@ func (c *VideosReportAbuseCall) OnBehalfOfContentOwner(onBehalfOfContentOwner st
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosReportAbuseCall) QuotaUser(quotaUser string) *VideosReportAbuseCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosReportAbuseCall) UserIP(userIP string) *VideosReportAbuseCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20975,27 +20492,26 @@ func (c *VideosReportAbuseCall) Context(ctx context.Context) *VideosReportAbuseC
 }
 
 func (c *VideosReportAbuseCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.videoabusereport)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos/reportAbuse")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.reportAbuse" call.
-func (c *VideosReportAbuseCall) Do() error {
+func (c *VideosReportAbuseCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -21065,23 +20581,6 @@ func (c *VideosUpdateCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *VideosUpdateCall) QuotaUser(quotaUser string) *VideosUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *VideosUpdateCall) UserIP(userIP string) *VideosUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21099,23 +20598,21 @@ func (c *VideosUpdateCall) Context(ctx context.Context) *VideosUpdateCall {
 }
 
 func (c *VideosUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.video)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "videos")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.videos.update" call.
@@ -21125,7 +20622,8 @@ func (c *VideosUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *VideosUpdateCall) Do() (*Video, error) {
+func (c *VideosUpdateCall) Do(opts ...googleapi.CallOption) (*Video, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21149,7 +20647,8 @@ func (c *VideosUpdateCall) Do() (*Video, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -21192,16 +20691,15 @@ func (c *VideosUpdateCall) Do() (*Video, error) {
 // method id "youtube.watermarks.set":
 
 type WatermarksSetCall struct {
-	s                   *Service
-	invideobranding     *InvideoBranding
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	invideobranding  *InvideoBranding
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Set: Uploads a watermark image to YouTube and sets it for a channel.
@@ -21230,43 +20728,40 @@ func (c *WatermarksSetCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *WatermarksSetCall) QuotaUser(quotaUser string) *WatermarksSetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *WatermarksSetCall) UserIP(userIP string) *WatermarksSetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *WatermarksSetCall) Media(r io.Reader, options ...googleapi.MediaOption) *WatermarksSetCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *WatermarksSetCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *WatermarksSetCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -21298,43 +20793,47 @@ func (c *WatermarksSetCall) Context(ctx context.Context) *WatermarksSetCall {
 }
 
 func (c *WatermarksSetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.invideobranding)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "watermarks/set")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.watermarks.set" call.
-func (c *WatermarksSetCall) Do() error {
+func (c *WatermarksSetCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -21343,26 +20842,32 @@ func (c *WatermarksSetCall) Do() error {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return err
+		}
 	}
 	return nil
 	// {
@@ -21451,23 +20956,6 @@ func (c *WatermarksUnsetCall) OnBehalfOfContentOwner(onBehalfOfContentOwner stri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *WatermarksUnsetCall) QuotaUser(quotaUser string) *WatermarksUnsetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *WatermarksUnsetCall) UserIP(userIP string) *WatermarksUnsetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21485,21 +20973,21 @@ func (c *WatermarksUnsetCall) Context(ctx context.Context) *WatermarksUnsetCall 
 }
 
 func (c *WatermarksUnsetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "watermarks/unset")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtube.watermarks.unset" call.
-func (c *WatermarksUnsetCall) Do() error {
+func (c *WatermarksUnsetCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err

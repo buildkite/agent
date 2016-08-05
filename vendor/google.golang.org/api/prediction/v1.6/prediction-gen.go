@@ -47,6 +47,9 @@ const basePath = "https://www.googleapis.com/prediction/v1.6/projects/"
 
 // OAuth2 scopes used by this API.
 const (
+	// View and manage your data across Google Cloud Platform services
+	CloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+
 	// Manage your data and permissions in Google Cloud Storage
 	DevstorageFullControlScope = "https://www.googleapis.com/auth/devstorage.full_control"
 
@@ -756,23 +759,6 @@ func (r *HostedmodelsService) Predict(project string, hostedModelName string, in
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *HostedmodelsPredictCall) QuotaUser(quotaUser string) *HostedmodelsPredictCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *HostedmodelsPredictCall) UserIP(userIP string) *HostedmodelsPredictCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -790,26 +776,24 @@ func (c *HostedmodelsPredictCall) Context(ctx context.Context) *HostedmodelsPred
 }
 
 func (c *HostedmodelsPredictCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.input)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/hostedmodels/{hostedModelName}/predict")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":         c.project,
 		"hostedModelName": c.hostedModelName,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.hostedmodels.predict" call.
@@ -819,7 +803,8 @@ func (c *HostedmodelsPredictCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *HostedmodelsPredictCall) Do() (*Output, error) {
+func (c *HostedmodelsPredictCall) Do(opts ...googleapi.CallOption) (*Output, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -843,7 +828,8 @@ func (c *HostedmodelsPredictCall) Do() (*Output, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -877,6 +863,7 @@ func (c *HostedmodelsPredictCall) Do() (*Output, error) {
 	//     "$ref": "Output"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }
@@ -900,23 +887,6 @@ func (r *TrainedmodelsService) Analyze(project string, id string) *Trainedmodels
 	c := &TrainedmodelsAnalyzeCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.project = project
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsAnalyzeCall) QuotaUser(quotaUser string) *TrainedmodelsAnalyzeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsAnalyzeCall) UserIP(userIP string) *TrainedmodelsAnalyzeCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -947,23 +917,22 @@ func (c *TrainedmodelsAnalyzeCall) Context(ctx context.Context) *TrainedmodelsAn
 }
 
 func (c *TrainedmodelsAnalyzeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels/{id}/analyze")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"id":      c.id,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.analyze" call.
@@ -973,7 +942,8 @@ func (c *TrainedmodelsAnalyzeCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TrainedmodelsAnalyzeCall) Do() (*Analyze, error) {
+func (c *TrainedmodelsAnalyzeCall) Do(opts ...googleapi.CallOption) (*Analyze, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -997,7 +967,8 @@ func (c *TrainedmodelsAnalyzeCall) Do() (*Analyze, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1028,6 +999,7 @@ func (c *TrainedmodelsAnalyzeCall) Do() (*Analyze, error) {
 	//     "$ref": "Analyze"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }
@@ -1052,23 +1024,6 @@ func (r *TrainedmodelsService) Delete(project string, id string) *TrainedmodelsD
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsDeleteCall) QuotaUser(quotaUser string) *TrainedmodelsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsDeleteCall) UserIP(userIP string) *TrainedmodelsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1086,24 +1041,24 @@ func (c *TrainedmodelsDeleteCall) Context(ctx context.Context) *TrainedmodelsDel
 }
 
 func (c *TrainedmodelsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"id":      c.id,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.delete" call.
-func (c *TrainedmodelsDeleteCall) Do() error {
+func (c *TrainedmodelsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1137,6 +1092,7 @@ func (c *TrainedmodelsDeleteCall) Do() error {
 	//   },
 	//   "path": "{project}/trainedmodels/{id}",
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }
@@ -1159,23 +1115,6 @@ func (r *TrainedmodelsService) Get(project string, id string) *TrainedmodelsGetC
 	c := &TrainedmodelsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.project = project
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsGetCall) QuotaUser(quotaUser string) *TrainedmodelsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsGetCall) UserIP(userIP string) *TrainedmodelsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1206,23 +1145,22 @@ func (c *TrainedmodelsGetCall) Context(ctx context.Context) *TrainedmodelsGetCal
 }
 
 func (c *TrainedmodelsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"id":      c.id,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.get" call.
@@ -1232,7 +1170,8 @@ func (c *TrainedmodelsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TrainedmodelsGetCall) Do() (*Insert2, error) {
+func (c *TrainedmodelsGetCall) Do(opts ...googleapi.CallOption) (*Insert2, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1256,7 +1195,8 @@ func (c *TrainedmodelsGetCall) Do() (*Insert2, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1287,6 +1227,7 @@ func (c *TrainedmodelsGetCall) Do() (*Insert2, error) {
 	//     "$ref": "Insert2"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }
@@ -1311,23 +1252,6 @@ func (r *TrainedmodelsService) Insert(project string, insert *Insert) *Trainedmo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsInsertCall) QuotaUser(quotaUser string) *TrainedmodelsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsInsertCall) UserIP(userIP string) *TrainedmodelsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1345,25 +1269,23 @@ func (c *TrainedmodelsInsertCall) Context(ctx context.Context) *TrainedmodelsIns
 }
 
 func (c *TrainedmodelsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.insert)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.insert" call.
@@ -1373,7 +1295,8 @@ func (c *TrainedmodelsInsertCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TrainedmodelsInsertCall) Do() (*Insert2, error) {
+func (c *TrainedmodelsInsertCall) Do(opts ...googleapi.CallOption) (*Insert2, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1397,7 +1320,8 @@ func (c *TrainedmodelsInsertCall) Do() (*Insert2, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1424,6 +1348,7 @@ func (c *TrainedmodelsInsertCall) Do() (*Insert2, error) {
 	//     "$ref": "Insert2"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/devstorage.full_control",
 	//     "https://www.googleapis.com/auth/devstorage.read_only",
 	//     "https://www.googleapis.com/auth/devstorage.read_write",
@@ -1463,23 +1388,6 @@ func (c *TrainedmodelsListCall) PageToken(pageToken string) *TrainedmodelsListCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsListCall) QuotaUser(quotaUser string) *TrainedmodelsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsListCall) UserIP(userIP string) *TrainedmodelsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1507,22 +1415,21 @@ func (c *TrainedmodelsListCall) Context(ctx context.Context) *TrainedmodelsListC
 }
 
 func (c *TrainedmodelsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels/list")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.list" call.
@@ -1532,7 +1439,8 @@ func (c *TrainedmodelsListCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *TrainedmodelsListCall) Do() (*List, error) {
+func (c *TrainedmodelsListCall) Do(opts ...googleapi.CallOption) (*List, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1556,7 +1464,8 @@ func (c *TrainedmodelsListCall) Do() (*List, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1592,10 +1501,32 @@ func (c *TrainedmodelsListCall) Do() (*List, error) {
 	//     "$ref": "List"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *TrainedmodelsListCall) Pages(ctx context.Context, f func(*List) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }
 
 // method id "prediction.trainedmodels.predict":
@@ -1618,23 +1549,6 @@ func (r *TrainedmodelsService) Predict(project string, id string, input *Input) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsPredictCall) QuotaUser(quotaUser string) *TrainedmodelsPredictCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsPredictCall) UserIP(userIP string) *TrainedmodelsPredictCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1652,26 +1566,24 @@ func (c *TrainedmodelsPredictCall) Context(ctx context.Context) *TrainedmodelsPr
 }
 
 func (c *TrainedmodelsPredictCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.input)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels/{id}/predict")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"id":      c.id,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.predict" call.
@@ -1681,7 +1593,8 @@ func (c *TrainedmodelsPredictCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TrainedmodelsPredictCall) Do() (*Output, error) {
+func (c *TrainedmodelsPredictCall) Do(opts ...googleapi.CallOption) (*Output, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1705,7 +1618,8 @@ func (c *TrainedmodelsPredictCall) Do() (*Output, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1739,6 +1653,7 @@ func (c *TrainedmodelsPredictCall) Do() (*Output, error) {
 	//     "$ref": "Output"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }
@@ -1765,23 +1680,6 @@ func (r *TrainedmodelsService) Update(project string, id string, update *Update)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TrainedmodelsUpdateCall) QuotaUser(quotaUser string) *TrainedmodelsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TrainedmodelsUpdateCall) UserIP(userIP string) *TrainedmodelsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1799,26 +1697,24 @@ func (c *TrainedmodelsUpdateCall) Context(ctx context.Context) *TrainedmodelsUpd
 }
 
 func (c *TrainedmodelsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.update)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/trainedmodels/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"id":      c.id,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "prediction.trainedmodels.update" call.
@@ -1828,7 +1724,8 @@ func (c *TrainedmodelsUpdateCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TrainedmodelsUpdateCall) Do() (*Insert2, error) {
+func (c *TrainedmodelsUpdateCall) Do(opts ...googleapi.CallOption) (*Insert2, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1852,7 +1749,8 @@ func (c *TrainedmodelsUpdateCall) Do() (*Insert2, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1886,6 +1784,7 @@ func (c *TrainedmodelsUpdateCall) Do() (*Insert2, error) {
 	//     "$ref": "Insert2"
 	//   },
 	//   "scopes": [
+	//     "https://www.googleapis.com/auth/cloud-platform",
 	//     "https://www.googleapis.com/auth/prediction"
 	//   ]
 	// }

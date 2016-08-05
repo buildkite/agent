@@ -150,7 +150,7 @@ type SubscriptionPurchase struct {
 	AutoRenewing bool `json:"autoRenewing,omitempty"`
 
 	// InitiationTimestampMsec: Time at which the subscription was granted,
-	// in milliseconds since Epoch.
+	// in milliseconds since the Epoch.
 	InitiationTimestampMsec int64 `json:"initiationTimestampMsec,omitempty,string"`
 
 	// Kind: This kind represents a subscriptionPurchase object in the
@@ -158,7 +158,7 @@ type SubscriptionPurchase struct {
 	Kind string `json:"kind,omitempty"`
 
 	// ValidUntilTimestampMsec: Time at which the subscription will expire,
-	// in milliseconds since Epoch.
+	// in milliseconds since the Epoch.
 	ValidUntilTimestampMsec int64 `json:"validUntilTimestampMsec,omitempty,string"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -201,23 +201,6 @@ func (r *InapppurchasesService) Get(packageName string, productId string, token 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InapppurchasesGetCall) QuotaUser(quotaUser string) *InapppurchasesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InapppurchasesGetCall) UserIP(userIP string) *InapppurchasesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -245,24 +228,23 @@ func (c *InapppurchasesGetCall) Context(ctx context.Context) *InapppurchasesGetC
 }
 
 func (c *InapppurchasesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inapp/{productId}/purchases/{token}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageName,
 		"productId":   c.productId,
 		"token":       c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inapppurchases.get" call.
@@ -272,7 +254,8 @@ func (c *InapppurchasesGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *InapppurchasesGetCall) Do() (*InappPurchase, error) {
+func (c *InapppurchasesGetCall) Do(opts ...googleapi.CallOption) (*InappPurchase, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -296,7 +279,8 @@ func (c *InapppurchasesGetCall) Do() (*InappPurchase, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -361,23 +345,6 @@ func (r *PurchasesService) Cancel(packageName string, subscriptionId string, tok
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesCancelCall) QuotaUser(quotaUser string) *PurchasesCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesCancelCall) UserIP(userIP string) *PurchasesCancelCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -395,25 +362,25 @@ func (c *PurchasesCancelCall) Context(ctx context.Context) *PurchasesCancelCall 
 }
 
 func (c *PurchasesCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/subscriptions/{subscriptionId}/purchases/{token}/cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.cancel" call.
-func (c *PurchasesCancelCall) Do() error {
+func (c *PurchasesCancelCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -482,23 +449,6 @@ func (r *PurchasesService) Get(packageName string, subscriptionId string, token 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesGetCall) QuotaUser(quotaUser string) *PurchasesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesGetCall) UserIP(userIP string) *PurchasesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -526,24 +476,23 @@ func (c *PurchasesGetCall) Context(ctx context.Context) *PurchasesGetCall {
 }
 
 func (c *PurchasesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/subscriptions/{subscriptionId}/purchases/{token}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.get" call.
@@ -553,7 +502,8 @@ func (c *PurchasesGetCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PurchasesGetCall) Do() (*SubscriptionPurchase, error) {
+func (c *PurchasesGetCall) Do(opts ...googleapi.CallOption) (*SubscriptionPurchase, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -577,7 +527,8 @@ func (c *PurchasesGetCall) Do() (*SubscriptionPurchase, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

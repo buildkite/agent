@@ -696,23 +696,6 @@ func (r *RollingUpdatesService) Cancel(project string, zone string, rollingUpdat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesCancelCall) QuotaUser(quotaUser string) *RollingUpdatesCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesCancelCall) UserIP(userIP string) *RollingUpdatesCancelCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -730,21 +713,20 @@ func (c *RollingUpdatesCancelCall) Context(ctx context.Context) *RollingUpdatesC
 }
 
 func (c *RollingUpdatesCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates/{rollingUpdate}/cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":       c.project,
 		"zone":          c.zone,
 		"rollingUpdate": c.rollingUpdate,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.cancel" call.
@@ -754,7 +736,8 @@ func (c *RollingUpdatesCancelCall) doRequest(alt string) (*http.Response, error)
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RollingUpdatesCancelCall) Do() (*Operation, error) {
+func (c *RollingUpdatesCancelCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -778,7 +761,8 @@ func (c *RollingUpdatesCancelCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -846,23 +830,6 @@ func (r *RollingUpdatesService) Get(project string, zone string, rollingUpdate s
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesGetCall) QuotaUser(quotaUser string) *RollingUpdatesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesGetCall) UserIP(userIP string) *RollingUpdatesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -890,24 +857,23 @@ func (c *RollingUpdatesGetCall) Context(ctx context.Context) *RollingUpdatesGetC
 }
 
 func (c *RollingUpdatesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates/{rollingUpdate}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":       c.project,
 		"zone":          c.zone,
 		"rollingUpdate": c.rollingUpdate,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.get" call.
@@ -917,7 +883,8 @@ func (c *RollingUpdatesGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RollingUpdatesGetCall) Do() (*RollingUpdate, error) {
+func (c *RollingUpdatesGetCall) Do(opts ...googleapi.CallOption) (*RollingUpdate, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -941,7 +908,8 @@ func (c *RollingUpdatesGetCall) Do() (*RollingUpdate, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1010,23 +978,6 @@ func (r *RollingUpdatesService) Insert(project string, zone string, rollingupdat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesInsertCall) QuotaUser(quotaUser string) *RollingUpdatesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesInsertCall) UserIP(userIP string) *RollingUpdatesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1044,26 +995,24 @@ func (c *RollingUpdatesInsertCall) Context(ctx context.Context) *RollingUpdatesI
 }
 
 func (c *RollingUpdatesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.rollingupdate)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"zone":    c.zone,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.insert" call.
@@ -1073,7 +1022,8 @@ func (c *RollingUpdatesInsertCall) doRequest(alt string) (*http.Response, error)
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RollingUpdatesInsertCall) Do() (*Operation, error) {
+func (c *RollingUpdatesInsertCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1097,7 +1047,8 @@ func (c *RollingUpdatesInsertCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1183,23 +1134,6 @@ func (c *RollingUpdatesListCall) PageToken(pageToken string) *RollingUpdatesList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesListCall) QuotaUser(quotaUser string) *RollingUpdatesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesListCall) UserIP(userIP string) *RollingUpdatesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1227,23 +1161,22 @@ func (c *RollingUpdatesListCall) Context(ctx context.Context) *RollingUpdatesLis
 }
 
 func (c *RollingUpdatesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"zone":    c.zone,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.list" call.
@@ -1253,7 +1186,8 @@ func (c *RollingUpdatesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RollingUpdatesListCall) Do() (*RollingUpdateList, error) {
+func (c *RollingUpdatesListCall) Do(opts ...googleapi.CallOption) (*RollingUpdateList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1277,7 +1211,8 @@ func (c *RollingUpdatesListCall) Do() (*RollingUpdateList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1337,6 +1272,27 @@ func (c *RollingUpdatesListCall) Do() (*RollingUpdateList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *RollingUpdatesListCall) Pages(ctx context.Context, f func(*RollingUpdateList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "replicapoolupdater.rollingUpdates.listInstanceUpdates":
 
 type RollingUpdatesListInstanceUpdatesCall struct {
@@ -1383,23 +1339,6 @@ func (c *RollingUpdatesListInstanceUpdatesCall) PageToken(pageToken string) *Rol
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesListInstanceUpdatesCall) QuotaUser(quotaUser string) *RollingUpdatesListInstanceUpdatesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesListInstanceUpdatesCall) UserIP(userIP string) *RollingUpdatesListInstanceUpdatesCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1427,24 +1366,23 @@ func (c *RollingUpdatesListInstanceUpdatesCall) Context(ctx context.Context) *Ro
 }
 
 func (c *RollingUpdatesListInstanceUpdatesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates/{rollingUpdate}/instanceUpdates")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":       c.project,
 		"zone":          c.zone,
 		"rollingUpdate": c.rollingUpdate,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.listInstanceUpdates" call.
@@ -1454,7 +1392,8 @@ func (c *RollingUpdatesListInstanceUpdatesCall) doRequest(alt string) (*http.Res
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RollingUpdatesListInstanceUpdatesCall) Do() (*InstanceUpdateList, error) {
+func (c *RollingUpdatesListInstanceUpdatesCall) Do(opts ...googleapi.CallOption) (*InstanceUpdateList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1478,7 +1417,8 @@ func (c *RollingUpdatesListInstanceUpdatesCall) Do() (*InstanceUpdateList, error
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1545,6 +1485,27 @@ func (c *RollingUpdatesListInstanceUpdatesCall) Do() (*InstanceUpdateList, error
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *RollingUpdatesListInstanceUpdatesCall) Pages(ctx context.Context, f func(*InstanceUpdateList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "replicapoolupdater.rollingUpdates.pause":
 
 type RollingUpdatesPauseCall struct {
@@ -1568,23 +1529,6 @@ func (r *RollingUpdatesService) Pause(project string, zone string, rollingUpdate
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesPauseCall) QuotaUser(quotaUser string) *RollingUpdatesPauseCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesPauseCall) UserIP(userIP string) *RollingUpdatesPauseCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1602,21 +1546,20 @@ func (c *RollingUpdatesPauseCall) Context(ctx context.Context) *RollingUpdatesPa
 }
 
 func (c *RollingUpdatesPauseCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates/{rollingUpdate}/pause")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":       c.project,
 		"zone":          c.zone,
 		"rollingUpdate": c.rollingUpdate,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.pause" call.
@@ -1626,7 +1569,8 @@ func (c *RollingUpdatesPauseCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RollingUpdatesPauseCall) Do() (*Operation, error) {
+func (c *RollingUpdatesPauseCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1650,7 +1594,8 @@ func (c *RollingUpdatesPauseCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1718,23 +1663,6 @@ func (r *RollingUpdatesService) Resume(project string, zone string, rollingUpdat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesResumeCall) QuotaUser(quotaUser string) *RollingUpdatesResumeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesResumeCall) UserIP(userIP string) *RollingUpdatesResumeCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1752,21 +1680,20 @@ func (c *RollingUpdatesResumeCall) Context(ctx context.Context) *RollingUpdatesR
 }
 
 func (c *RollingUpdatesResumeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates/{rollingUpdate}/resume")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":       c.project,
 		"zone":          c.zone,
 		"rollingUpdate": c.rollingUpdate,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.resume" call.
@@ -1776,7 +1703,8 @@ func (c *RollingUpdatesResumeCall) doRequest(alt string) (*http.Response, error)
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RollingUpdatesResumeCall) Do() (*Operation, error) {
+func (c *RollingUpdatesResumeCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1800,7 +1728,8 @@ func (c *RollingUpdatesResumeCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1869,23 +1798,6 @@ func (r *RollingUpdatesService) Rollback(project string, zone string, rollingUpd
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RollingUpdatesRollbackCall) QuotaUser(quotaUser string) *RollingUpdatesRollbackCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RollingUpdatesRollbackCall) UserIP(userIP string) *RollingUpdatesRollbackCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1903,21 +1815,20 @@ func (c *RollingUpdatesRollbackCall) Context(ctx context.Context) *RollingUpdate
 }
 
 func (c *RollingUpdatesRollbackCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/rollingUpdates/{rollingUpdate}/rollback")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":       c.project,
 		"zone":          c.zone,
 		"rollingUpdate": c.rollingUpdate,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.rollingUpdates.rollback" call.
@@ -1927,7 +1838,8 @@ func (c *RollingUpdatesRollbackCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *RollingUpdatesRollbackCall) Do() (*Operation, error) {
+func (c *RollingUpdatesRollbackCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1951,7 +1863,8 @@ func (c *RollingUpdatesRollbackCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2018,23 +1931,6 @@ func (r *ZoneOperationsService) Get(project string, zone string, operation strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ZoneOperationsGetCall) QuotaUser(quotaUser string) *ZoneOperationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ZoneOperationsGetCall) UserIP(userIP string) *ZoneOperationsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2062,24 +1958,23 @@ func (c *ZoneOperationsGetCall) Context(ctx context.Context) *ZoneOperationsGetC
 }
 
 func (c *ZoneOperationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/operations/{operation}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project":   c.project,
 		"zone":      c.zone,
 		"operation": c.operation,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.zoneOperations.get" call.
@@ -2089,7 +1984,8 @@ func (c *ZoneOperationsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ZoneOperationsGetCall) Do() (*Operation, error) {
+func (c *ZoneOperationsGetCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2113,7 +2009,8 @@ func (c *ZoneOperationsGetCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2202,23 +2099,6 @@ func (c *ZoneOperationsListCall) PageToken(pageToken string) *ZoneOperationsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ZoneOperationsListCall) QuotaUser(quotaUser string) *ZoneOperationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ZoneOperationsListCall) UserIP(userIP string) *ZoneOperationsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2246,23 +2126,22 @@ func (c *ZoneOperationsListCall) Context(ctx context.Context) *ZoneOperationsLis
 }
 
 func (c *ZoneOperationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{project}/zones/{zone}/operations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 		"zone":    c.zone,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "replicapoolupdater.zoneOperations.list" call.
@@ -2272,7 +2151,8 @@ func (c *ZoneOperationsListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ZoneOperationsListCall) Do() (*OperationList, error) {
+func (c *ZoneOperationsListCall) Do(opts ...googleapi.CallOption) (*OperationList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2296,7 +2176,8 @@ func (c *ZoneOperationsListCall) Do() (*OperationList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2352,4 +2233,25 @@ func (c *ZoneOperationsListCall) Do() (*OperationList, error) {
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ZoneOperationsListCall) Pages(ctx context.Context, f func(*OperationList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }

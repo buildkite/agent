@@ -1,13 +1,13 @@
 {
  "kind": "discovery#restDescription",
- "etag": "\"bRFOOrZKfO9LweMbPqu0kcu6De8/J2wq1WcZfpjeQfZa1hSleFHi_7g\"",
+ "etag": "\"jQLIOHBVnDZie4rQHGH1WJF-INE/xUykUeDoZBMkhqViXbAjUkEVLQw\"",
  "discoveryVersion": "v1",
  "id": "dataproc:v1beta1",
  "name": "dataproc",
  "version": "v1beta1",
- "revision": "20151209",
+ "revision": "20160503",
  "title": "Google Cloud Dataproc API",
- "description": "An API for managing Hadoop-based clusters and jobs on Google Cloud Platform.",
+ "description": "Manages Hadoop-based clusters and jobs on Google Cloud Platform.",
  "ownerDomain": "google.com",
  "ownerName": "Google",
  "icons": {
@@ -155,7 +155,7 @@
     },
     "gceClusterConfiguration": {
      "$ref": "GceClusterConfiguration",
-     "description": "[Optional] The shared Google Compute Engine configuration settings for all instances in a cluster."
+     "description": "[Required] The shared Google Compute Engine configuration settings for all instances in a cluster."
     },
     "masterConfiguration": {
      "$ref": "InstanceGroupConfiguration",
@@ -189,16 +189,34 @@
    "properties": {
     "zoneUri": {
      "type": "string",
-     "description": "[Required] The zone where the Google Compute Engine cluster will be located. Example: `compute.googleapis.com/projects/[project_id]/zones/us-east1-a`."
+     "description": "[Required] The zone where the Google Compute Engine cluster will be located. Example: `https://www.googleapis.com/compute/v1/projects/[project_id]/zones/[zone]`."
     },
     "networkUri": {
      "type": "string",
-     "description": "The Google Compute Engine network to be used for machine communications. Inbound SSH connections are necessary to complete cluster configuration. Example: `compute.googleapis.com/projects/[project_id]/zones/us-east1-a/default`."
+     "description": "The Google Compute Engine network to be used for machine communications. Cannot be specified with subnetwork_uri. If neither network_uri nor subnetwork_uri is specified, the \"default\" network of the project is used, if it exists. Cannot be a \"Custom Subnet Network\" (see https://cloud.google.com/compute/docs/subnetworks for more information). Example: `https://www.googleapis.com/compute/v1/projects/[project_id]/regions/global/default`."
+    },
+    "subnetworkUri": {
+     "type": "string",
+     "description": "The Google Compute Engine subnetwork to be used for machine communications. Cannot be specified with network_uri. Example: `https://www.googleapis.com/compute/v1/projects/[project_id]/regions/us-east1/sub0`."
     },
     "serviceAccountScopes": {
      "type": "array",
      "description": "The URIs of service account scopes to be included in Google Compute Engine instances. The following base set of scopes is always included: - https://www.googleapis.com/auth/cloud.useraccounts.readonly - https://www.googleapis.com/auth/devstorage.read_write - https://www.googleapis.com/auth/logging.write If no scopes are specfied, the following defaults are also provided: - https://www.googleapis.com/auth/bigquery - https://www.googleapis.com/auth/bigtable.admin.table - https://www.googleapis.com/auth/bigtable.data - https://www.googleapis.com/auth/devstorage.full_control",
      "items": {
+      "type": "string"
+     }
+    },
+    "tags": {
+     "type": "array",
+     "description": "The Google Compute Engine tags to add to all instances.",
+     "items": {
+      "type": "string"
+     }
+    },
+    "metadata": {
+     "type": "object",
+     "description": "The Google Compute Engine metadata entries to add to all instances.",
+     "additionalProperties": {
       "type": "string"
      }
     }
@@ -223,11 +241,11 @@
     },
     "imageUri": {
      "type": "string",
-     "description": "[Output-only] The Google Compute Engine image resource used for cluster instances. Inferred from `SoftwareConfiguration.image_version`. Example: `compute.googleapis.com/projects/debian-cloud/global/images/backports-debian-7-wheezy-v20140904`."
+     "description": "[Output-only] The Google Compute Engine image resource used for cluster instances. Inferred from `SoftwareConfiguration.image_version`."
     },
     "machineTypeUri": {
      "type": "string",
-     "description": "The Google Compute Engine machine type used for cluster instances. Example: `compute.googleapis.com/projects/[project_id]/zones/us-east1-a/machineTypes/n1-standard-2`."
+     "description": "The Google Compute Engine machine type used for cluster instances. Example: `https://www.googleapis.com/compute/v1/projects/[project_id]/zones/us-east1-a/machineTypes/n1-standard-2`."
     },
     "diskConfiguration": {
      "$ref": "DiskConfiguration",
@@ -283,6 +301,13 @@
     "imageVersion": {
      "type": "string",
      "description": "[Optional] The version of software inside the cluster. It must match the regular expression `[0-9]+\\.[0-9]+`. If unspecified, it defaults to the latest version (see [Cloud Dataproc Versioning](/dataproc/versioning))."
+    },
+    "properties": {
+     "type": "object",
+     "description": "[Optional] The properties to set on daemon configuration files. Property keys are specified in \"prefix:property\" format, such as \"core:fs.defaultFS\". The following are supported prefixes and their mappings: core - core-site.xml hdfs - hdfs-site.xml mapred - mapred-site.xml yarn - yarn-site.xml hive - hive-site.xml pig - pig.properties spark - spark-defaults.conf",
+     "additionalProperties": {
+      "type": "string"
+     }
     }
    }
   },
@@ -335,7 +360,7 @@
    "properties": {
     "name": {
      "type": "string",
-     "description": "The server-assigned name, which is only unique within the same service that originally returns it. If you use the default HTTP mapping above, the `name` should have the format of `operations/some/unique/name`."
+     "description": "The server-assigned name, which is only unique within the same service that originally returns it. If you use the default HTTP mapping, the `name` should have the format of `operations/some/unique/name`."
     },
     "metadata": {
      "type": "object",
@@ -975,6 +1000,80 @@
    "type": "object",
    "description": "The request message for Operations.CancelOperation."
   },
+  "DiagnoseClusterResults": {
+   "id": "DiagnoseClusterResults",
+   "type": "object",
+   "description": "The location of diagnostic output.",
+   "properties": {
+    "outputUri": {
+     "type": "string",
+     "description": "[Output-only] The Google Cloud Storage URI of the diagnostic output. This is a plain text file with a summary of collected diagnostics."
+    }
+   }
+  },
+  "ClusterOperationMetadata": {
+   "id": "ClusterOperationMetadata",
+   "type": "object",
+   "description": "Metadata describing the operation.",
+   "properties": {
+    "clusterName": {
+     "type": "string",
+     "description": "Name of the cluster for the operation."
+    },
+    "clusterUuid": {
+     "type": "string",
+     "description": "Cluster UUId for the operation."
+    },
+    "status": {
+     "$ref": "ClusterOperationStatus",
+     "description": "[Output-only] Current operation status."
+    },
+    "statusHistory": {
+     "type": "array",
+     "description": "[Output-only] The previous operation status.",
+     "items": {
+      "$ref": "ClusterOperationStatus"
+     }
+    },
+    "operationType": {
+     "type": "string",
+     "description": "[Output-only] The operation type."
+    },
+    "description": {
+     "type": "string",
+     "description": "[Output-only] Short description of operation."
+    }
+   }
+  },
+  "ClusterOperationStatus": {
+   "id": "ClusterOperationStatus",
+   "type": "object",
+   "description": "The status of the operation.",
+   "properties": {
+    "state": {
+     "type": "string",
+     "description": "A message containing the operation state.",
+     "enum": [
+      "UNKNOWN",
+      "PENDING",
+      "RUNNING",
+      "DONE"
+     ]
+    },
+    "innerState": {
+     "type": "string",
+     "description": "A message containing the detailed operation state."
+    },
+    "details": {
+     "type": "string",
+     "description": "A message containing any operation metadata details."
+    },
+    "stateStartTime": {
+     "type": "string",
+     "description": "The time this state was entered."
+    }
+   }
+  },
   "DiagnoseClusterOutputLocation": {
    "id": "DiagnoseClusterOutputLocation",
    "type": "object",
@@ -1039,6 +1138,14 @@
      "items": {
       "$ref": "OperationStatus"
      }
+    },
+    "operationType": {
+     "type": "string",
+     "description": "[Output-only] The operation type."
+    },
+    "description": {
+     "type": "string",
+     "description": "[Output-only] Short description of operation."
     }
    }
   },
@@ -1123,7 +1230,7 @@
         },
         "updateMask": {
          "type": "string",
-         "description": "[Required] Specifies the path, relative to Cluster, of the field to update. For example, to change the number of workers in a cluster to 5, the update_mask parameter would be specified as configuration.worker_configuration.num_instances, and the `PATCH` request body would specify the new value, as follows: { \"configuration\":{ \"workerConfiguration\":{ \"numInstances\":\"5\" } } } Note: Currently, configuration.worker_configuration.num_instances is the only field that can be updated.",
+         "description": "[Required] Specifies the path, relative to Cluster, of the field to update. For example, to change the number of workers in a cluster to 5, the update_mask parameter would be specified as configuration.worker_configuration.num_instances, and the `PATCH` request body would specify the new value, as follows: { \"configuration\":{ \"workerConfiguration\":{ \"numInstances\":\"5\" } } } Similarly, to change the number of preemptible workers in a cluster to 5, the update_mask parameter would be config.secondary_worker_config.num_instances, and the `PATCH` request body would be set as follows: { \"config\":{ \"secondaryWorkerConfig\":{ \"numInstances\":\"5\" } } } Note: Currently, config.worker_config.num_instances and config.secondary_worker_config.num_instances are the only fields that can be updated.",
          "location": "query"
         }
        },

@@ -47,7 +47,7 @@ const basePath = "https://www.googleapis.com/"
 
 // OAuth2 scopes used by this API.
 const (
-	// Know your basic profile info and list of people in your circles.
+	// Know the list of people in your circles, your age range, and language
 	PlusLoginScope = "https://www.googleapis.com/auth/plus.login"
 
 	// Know who you are on Google
@@ -293,23 +293,6 @@ func (s *Service) GetCertForOpenIdConnect() *GetCertForOpenIdConnectCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *GetCertForOpenIdConnectCall) QuotaUser(quotaUser string) *GetCertForOpenIdConnectCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *GetCertForOpenIdConnectCall) UserIP(userIP string) *GetCertForOpenIdConnectCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -337,20 +320,19 @@ func (c *GetCertForOpenIdConnectCall) Context(ctx context.Context) *GetCertForOp
 }
 
 func (c *GetCertForOpenIdConnectCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "oauth2/v2/certs")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "oauth2.getCertForOpenIdConnect" call.
@@ -360,7 +342,8 @@ func (c *GetCertForOpenIdConnectCall) doRequest(alt string) (*http.Response, err
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *GetCertForOpenIdConnectCall) Do() (*Jwk, error) {
+func (c *GetCertForOpenIdConnectCall) Do(opts ...googleapi.CallOption) (*Jwk, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -384,7 +367,8 @@ func (c *GetCertForOpenIdConnectCall) Do() (*Jwk, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -425,26 +409,9 @@ func (c *TokeninfoCall) IdToken(idToken string) *TokeninfoCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TokeninfoCall) QuotaUser(quotaUser string) *TokeninfoCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // TokenHandle sets the optional parameter "token_handle":
 func (c *TokeninfoCall) TokenHandle(tokenHandle string) *TokeninfoCall {
 	c.urlParams_.Set("token_handle", tokenHandle)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TokeninfoCall) UserIP(userIP string) *TokeninfoCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -465,17 +432,16 @@ func (c *TokeninfoCall) Context(ctx context.Context) *TokeninfoCall {
 }
 
 func (c *TokeninfoCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "oauth2/v2/tokeninfo")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "oauth2.tokeninfo" call.
@@ -485,7 +451,8 @@ func (c *TokeninfoCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *TokeninfoCall) Do() (*Tokeninfo, error) {
+func (c *TokeninfoCall) Do(opts ...googleapi.CallOption) (*Tokeninfo, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -509,7 +476,8 @@ func (c *TokeninfoCall) Do() (*Tokeninfo, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -553,23 +521,6 @@ func (r *UserinfoService) Get() *UserinfoGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserinfoGetCall) QuotaUser(quotaUser string) *UserinfoGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserinfoGetCall) UserIP(userIP string) *UserinfoGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -597,20 +548,19 @@ func (c *UserinfoGetCall) Context(ctx context.Context) *UserinfoGetCall {
 }
 
 func (c *UserinfoGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "oauth2/v2/userinfo")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "oauth2.userinfo.get" call.
@@ -620,7 +570,8 @@ func (c *UserinfoGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserinfoGetCall) Do() (*Userinfoplus, error) {
+func (c *UserinfoGetCall) Do(opts ...googleapi.CallOption) (*Userinfoplus, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -644,7 +595,8 @@ func (c *UserinfoGetCall) Do() (*Userinfoplus, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -680,23 +632,6 @@ func (r *UserinfoV2MeService) Get() *UserinfoV2MeGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserinfoV2MeGetCall) QuotaUser(quotaUser string) *UserinfoV2MeGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserinfoV2MeGetCall) UserIP(userIP string) *UserinfoV2MeGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -724,20 +659,19 @@ func (c *UserinfoV2MeGetCall) Context(ctx context.Context) *UserinfoV2MeGetCall 
 }
 
 func (c *UserinfoV2MeGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userinfo/v2/me")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "oauth2.userinfo.v2.me.get" call.
@@ -747,7 +681,8 @@ func (c *UserinfoV2MeGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserinfoV2MeGetCall) Do() (*Userinfoplus, error) {
+func (c *UserinfoV2MeGetCall) Do(opts ...googleapi.CallOption) (*Userinfoplus, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -771,7 +706,8 @@ func (c *UserinfoV2MeGetCall) Do() (*Userinfoplus, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

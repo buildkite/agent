@@ -60,6 +60,7 @@ func New(client *http.Client) (*Service, error) {
 	s.Entitlements = NewEntitlementsService(s)
 	s.Inappproducts = NewInappproductsService(s)
 	s.Purchases = NewPurchasesService(s)
+	s.Reviews = NewReviewsService(s)
 	return s, nil
 }
 
@@ -75,6 +76,8 @@ type Service struct {
 	Inappproducts *InappproductsService
 
 	Purchases *PurchasesService
+
+	Reviews *ReviewsService
 }
 
 func (s *Service) userAgent() string {
@@ -237,6 +240,15 @@ func NewPurchasesSubscriptionsService(s *Service) *PurchasesSubscriptionsService
 }
 
 type PurchasesSubscriptionsService struct {
+	s *Service
+}
+
+func NewReviewsService(s *Service) *ReviewsService {
+	rs := &ReviewsService{s: s}
+	return rs
+}
+
+type ReviewsService struct {
 	s *Service
 }
 
@@ -469,6 +481,50 @@ type AppEdit struct {
 
 func (s *AppEdit) MarshalJSON() ([]byte, error) {
 	type noMethod AppEdit
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type Comment struct {
+	// DeveloperComment: A comment from a developer.
+	DeveloperComment *DeveloperComment `json:"developerComment,omitempty"`
+
+	// UserComment: A comment from a user.
+	UserComment *UserComment `json:"userComment,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DeveloperComment") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Comment) MarshalJSON() ([]byte, error) {
+	type noMethod Comment
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type DeveloperComment struct {
+	// LastModified: The last time at which this comment was updated.
+	LastModified *Timestamp `json:"lastModified,omitempty"`
+
+	// Text: The content of the comment, i.e. reply body.
+	Text string `json:"text,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "LastModified") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DeveloperComment) MarshalJSON() ([]byte, error) {
+	type noMethod DeveloperComment
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -1250,6 +1306,126 @@ func (s *Prorate) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type Review struct {
+	// AuthorName: The name of the user who wrote the review.
+	AuthorName string `json:"authorName,omitempty"`
+
+	// Comments: A repeated field containing comments for the review.
+	Comments []*Comment `json:"comments,omitempty"`
+
+	// ReviewId: Unique identifier for this review.
+	ReviewId string `json:"reviewId,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "AuthorName") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Review) MarshalJSON() ([]byte, error) {
+	type noMethod Review
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type ReviewReplyResult struct {
+	// LastEdited: The time at which the reply took effect.
+	LastEdited *Timestamp `json:"lastEdited,omitempty"`
+
+	// ReplyText: The reply text that was applied.
+	ReplyText string `json:"replyText,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "LastEdited") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ReviewReplyResult) MarshalJSON() ([]byte, error) {
+	type noMethod ReviewReplyResult
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type ReviewsListResponse struct {
+	PageInfo *PageInfo `json:"pageInfo,omitempty"`
+
+	Reviews []*Review `json:"reviews,omitempty"`
+
+	TokenPagination *TokenPagination `json:"tokenPagination,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "PageInfo") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ReviewsListResponse) MarshalJSON() ([]byte, error) {
+	type noMethod ReviewsListResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type ReviewsReplyRequest struct {
+	// ReplyText: The text to set as the reply. Replies of more than
+	// approximately 350 characters will be rejected. HTML tags will be
+	// stripped.
+	ReplyText string `json:"replyText,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ReplyText") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ReviewsReplyRequest) MarshalJSON() ([]byte, error) {
+	type noMethod ReviewsReplyRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type ReviewsReplyResponse struct {
+	Result *ReviewReplyResult `json:"result,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "Result") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ReviewsReplyResponse) MarshalJSON() ([]byte, error) {
+	type noMethod ReviewsReplyResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type Season struct {
 	// End: Inclusive end date of the recurrence period.
 	End *MonthDay `json:"end,omitempty"`
@@ -1281,9 +1457,10 @@ func (s *Season) MarshalJSON() ([]byte, error) {
 // SubscriptionDeferralInfo: A SubscriptionDeferralInfo contains the
 // data needed to defer a subscription purchase to a future expiry time.
 type SubscriptionDeferralInfo struct {
-	// DesiredExpiryTimeMillis: The desired next expiry time for the
-	// subscription in milliseconds since Epoch. The given time must be
-	// after the current expiry time for the subscription.
+	// DesiredExpiryTimeMillis: The desired next expiry time to assign to
+	// the subscription, in milliseconds since the Epoch. The given time
+	// must be later/greater than the current expiry time for the
+	// subscription.
 	DesiredExpiryTimeMillis int64 `json:"desiredExpiryTimeMillis,omitempty,string"`
 
 	// ExpectedExpiryTimeMillis: The expected expiry time for the
@@ -1314,16 +1491,48 @@ type SubscriptionPurchase struct {
 	// when it reaches its current expiry time.
 	AutoRenewing bool `json:"autoRenewing,omitempty"`
 
+	// CancelReason: The reason why a subscription was cancelled or is not
+	// auto-renewing. Possible values are:
+	// - User cancelled the subscription
+	// - Subscription was cancelled by the system, for example because of a
+	// billing problem
+	CancelReason int64 `json:"cancelReason,omitempty"`
+
+	// CountryCode: ISO 3166-1 alpha-2 billing country/region code of the
+	// user at the time the subscription was granted.
+	CountryCode string `json:"countryCode,omitempty"`
+
+	// DeveloperPayload: A developer-specified string that contains
+	// supplemental information about an order.
+	DeveloperPayload string `json:"developerPayload,omitempty"`
+
 	// ExpiryTimeMillis: Time at which the subscription will expire, in
-	// milliseconds since Epoch.
+	// milliseconds since the Epoch.
 	ExpiryTimeMillis int64 `json:"expiryTimeMillis,omitempty,string"`
 
 	// Kind: This kind represents a subscriptionPurchase object in the
 	// androidpublisher service.
 	Kind string `json:"kind,omitempty"`
 
+	// PaymentState: The payment state of the subscription. Possible values
+	// are:
+	// - Payment pending
+	// - Payment received
+	PaymentState int64 `json:"paymentState,omitempty"`
+
+	// PriceAmountMicros: Price of the subscription, not including tax.
+	// Price is expressed in micro-units, where 1,000,000 micro-units
+	// represents one unit of the currency. For example, if the subscription
+	// price is €1.99, price_amount_micros is 1990000.
+	PriceAmountMicros int64 `json:"priceAmountMicros,omitempty,string"`
+
+	// PriceCurrencyCode: ISO 4217 currency code for the subscription price.
+	// For example, if the price is specified in British pounds sterling,
+	// price_currency_code is "GBP".
+	PriceCurrencyCode string `json:"priceCurrencyCode,omitempty"`
+
 	// StartTimeMillis: Time at which the subscription was granted, in
-	// milliseconds since Epoch.
+	// milliseconds since the Epoch.
 	StartTimeMillis int64 `json:"startTimeMillis,omitempty,string"`
 
 	// ServerResponse contains the HTTP response code and headers from the
@@ -1413,6 +1622,26 @@ func (s *Testers) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type Timestamp struct {
+	Nanos int64 `json:"nanos,omitempty"`
+
+	Seconds int64 `json:"seconds,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "Nanos") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Timestamp) MarshalJSON() ([]byte, error) {
+	type noMethod Timestamp
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type TokenPagination struct {
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
@@ -1485,6 +1714,56 @@ func (s *TracksListResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type UserComment struct {
+	// AndroidOsVersion: Integer Android SDK version of the user's device at
+	// the time the review was written, e.g. 23 is Marshmallow. May be
+	// absent.
+	AndroidOsVersion int64 `json:"androidOsVersion,omitempty"`
+
+	// AppVersionCode: Integer version code of the app as installed at the
+	// time the review was written. May be absent.
+	AppVersionCode int64 `json:"appVersionCode,omitempty"`
+
+	// AppVersionName: String version name of the app as installed at the
+	// time the review was written. May be absent.
+	AppVersionName string `json:"appVersionName,omitempty"`
+
+	// Device: Codename for the reviewer's device, e.g. klte, flounder. May
+	// be absent.
+	Device string `json:"device,omitempty"`
+
+	// LastModified: The last time at which this comment was updated.
+	LastModified *Timestamp `json:"lastModified,omitempty"`
+
+	// ReviewerLanguage: Language code for the reviewer. This is taken from
+	// the device settings so is not guaranteed to match the language the
+	// review is written in. May be absent.
+	ReviewerLanguage string `json:"reviewerLanguage,omitempty"`
+
+	// StarRating: The star rating associated with the review, from 1 to 5.
+	StarRating int64 `json:"starRating,omitempty"`
+
+	// Text: The content of the comment, i.e. review body. In some cases
+	// users have been able to write a review with separate title and body;
+	// in those cases the title and body are concatenated and separated by a
+	// tab character.
+	Text string `json:"text,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AndroidOsVersion") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *UserComment) MarshalJSON() ([]byte, error) {
+	type noMethod UserComment
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // method id "androidpublisher.edits.commit":
 
 type EditsCommitCall struct {
@@ -1501,23 +1780,6 @@ func (r *EditsService) Commit(packageNameid string, editId string) *EditsCommitC
 	c := &EditsCommitCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.packageNameid = packageNameid
 	c.editId = editId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsCommitCall) QuotaUser(quotaUser string) *EditsCommitCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsCommitCall) UserIP(userIP string) *EditsCommitCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1538,20 +1800,19 @@ func (c *EditsCommitCall) Context(ctx context.Context) *EditsCommitCall {
 }
 
 func (c *EditsCommitCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}:commit")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.commit" call.
@@ -1561,7 +1822,8 @@ func (c *EditsCommitCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsCommitCall) Do() (*AppEdit, error) {
+func (c *EditsCommitCall) Do(opts ...googleapi.CallOption) (*AppEdit, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1585,7 +1847,8 @@ func (c *EditsCommitCall) Do() (*AppEdit, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1642,23 +1905,6 @@ func (r *EditsService) Delete(packageNameid string, editId string) *EditsDeleteC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsDeleteCall) QuotaUser(quotaUser string) *EditsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsDeleteCall) UserIP(userIP string) *EditsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1676,24 +1922,24 @@ func (c *EditsDeleteCall) Context(ctx context.Context) *EditsDeleteCall {
 }
 
 func (c *EditsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.delete" call.
-func (c *EditsDeleteCall) Do() error {
+func (c *EditsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1754,23 +2000,6 @@ func (r *EditsService) Get(packageNameid string, editId string) *EditsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsGetCall) QuotaUser(quotaUser string) *EditsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsGetCall) UserIP(userIP string) *EditsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1798,23 +2027,22 @@ func (c *EditsGetCall) Context(ctx context.Context) *EditsGetCall {
 }
 
 func (c *EditsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.get" call.
@@ -1824,7 +2052,8 @@ func (c *EditsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsGetCall) Do() (*AppEdit, error) {
+func (c *EditsGetCall) Do(opts ...googleapi.CallOption) (*AppEdit, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1848,7 +2077,8 @@ func (c *EditsGetCall) Do() (*AppEdit, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1904,23 +2134,6 @@ func (r *EditsService) Insert(packageNameid string, appedit *AppEdit) *EditsInse
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsInsertCall) QuotaUser(quotaUser string) *EditsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsInsertCall) UserIP(userIP string) *EditsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1938,25 +2151,23 @@ func (c *EditsInsertCall) Context(ctx context.Context) *EditsInsertCall {
 }
 
 func (c *EditsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.appedit)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.insert" call.
@@ -1966,7 +2177,8 @@ func (c *EditsInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsInsertCall) Do() (*AppEdit, error) {
+func (c *EditsInsertCall) Do(opts ...googleapi.CallOption) (*AppEdit, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1990,7 +2202,8 @@ func (c *EditsInsertCall) Do() (*AppEdit, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2042,23 +2255,6 @@ func (r *EditsService) Validate(packageNameid string, editId string) *EditsValid
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsValidateCall) QuotaUser(quotaUser string) *EditsValidateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsValidateCall) UserIP(userIP string) *EditsValidateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2076,20 +2272,19 @@ func (c *EditsValidateCall) Context(ctx context.Context) *EditsValidateCall {
 }
 
 func (c *EditsValidateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}:validate")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.validate" call.
@@ -2099,7 +2294,8 @@ func (c *EditsValidateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsValidateCall) Do() (*AppEdit, error) {
+func (c *EditsValidateCall) Do(opts ...googleapi.CallOption) (*AppEdit, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2123,7 +2319,8 @@ func (c *EditsValidateCall) Do() (*AppEdit, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2183,23 +2380,6 @@ func (r *EditsApklistingsService) Delete(packageNameid string, editId string, ap
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApklistingsDeleteCall) QuotaUser(quotaUser string) *EditsApklistingsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApklistingsDeleteCall) UserIP(userIP string) *EditsApklistingsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2217,26 +2397,26 @@ func (c *EditsApklistingsDeleteCall) Context(ctx context.Context) *EditsApklisti
 }
 
 func (c *EditsApklistingsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageNameid,
 		"editId":         c.editId,
 		"apkVersionCode": strconv.FormatInt(c.apkVersionCode, 10),
 		"language":       c.language,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apklistings.delete" call.
-func (c *EditsApklistingsDeleteCall) Do() error {
+func (c *EditsApklistingsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2312,23 +2492,6 @@ func (r *EditsApklistingsService) Deleteall(packageNameid string, editId string,
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApklistingsDeleteallCall) QuotaUser(quotaUser string) *EditsApklistingsDeleteallCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApklistingsDeleteallCall) UserIP(userIP string) *EditsApklistingsDeleteallCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2346,25 +2509,25 @@ func (c *EditsApklistingsDeleteallCall) Context(ctx context.Context) *EditsApkli
 }
 
 func (c *EditsApklistingsDeleteallCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/listings")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageNameid,
 		"editId":         c.editId,
 		"apkVersionCode": strconv.FormatInt(c.apkVersionCode, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apklistings.deleteall" call.
-func (c *EditsApklistingsDeleteallCall) Do() error {
+func (c *EditsApklistingsDeleteallCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2436,23 +2599,6 @@ func (r *EditsApklistingsService) Get(packageNameid string, editId string, apkVe
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApklistingsGetCall) QuotaUser(quotaUser string) *EditsApklistingsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApklistingsGetCall) UserIP(userIP string) *EditsApklistingsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2480,25 +2626,24 @@ func (c *EditsApklistingsGetCall) Context(ctx context.Context) *EditsApklistings
 }
 
 func (c *EditsApklistingsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageNameid,
 		"editId":         c.editId,
 		"apkVersionCode": strconv.FormatInt(c.apkVersionCode, 10),
 		"language":       c.language,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apklistings.get" call.
@@ -2508,7 +2653,8 @@ func (c *EditsApklistingsGetCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EditsApklistingsGetCall) Do() (*ApkListing, error) {
+func (c *EditsApklistingsGetCall) Do(opts ...googleapi.CallOption) (*ApkListing, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2532,7 +2678,8 @@ func (c *EditsApklistingsGetCall) Do() (*ApkListing, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2606,23 +2753,6 @@ func (r *EditsApklistingsService) List(packageNameid string, editId string, apkV
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApklistingsListCall) QuotaUser(quotaUser string) *EditsApklistingsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApklistingsListCall) UserIP(userIP string) *EditsApklistingsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2650,24 +2780,23 @@ func (c *EditsApklistingsListCall) Context(ctx context.Context) *EditsApklisting
 }
 
 func (c *EditsApklistingsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/listings")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageNameid,
 		"editId":         c.editId,
 		"apkVersionCode": strconv.FormatInt(c.apkVersionCode, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apklistings.list" call.
@@ -2677,7 +2806,8 @@ func (c *EditsApklistingsListCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsApklistingsListCall) Do() (*ApkListingsListResponse, error) {
+func (c *EditsApklistingsListCall) Do(opts ...googleapi.CallOption) (*ApkListingsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2701,7 +2831,8 @@ func (c *EditsApklistingsListCall) Do() (*ApkListingsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2772,23 +2903,6 @@ func (r *EditsApklistingsService) Patch(packageNameid string, editId string, apk
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApklistingsPatchCall) QuotaUser(quotaUser string) *EditsApklistingsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApklistingsPatchCall) UserIP(userIP string) *EditsApklistingsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2806,28 +2920,26 @@ func (c *EditsApklistingsPatchCall) Context(ctx context.Context) *EditsApklistin
 }
 
 func (c *EditsApklistingsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.apklisting)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageNameid,
 		"editId":         c.editId,
 		"apkVersionCode": strconv.FormatInt(c.apkVersionCode, 10),
 		"language":       c.language,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apklistings.patch" call.
@@ -2837,7 +2949,8 @@ func (c *EditsApklistingsPatchCall) doRequest(alt string) (*http.Response, error
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EditsApklistingsPatchCall) Do() (*ApkListing, error) {
+func (c *EditsApklistingsPatchCall) Do(opts ...googleapi.CallOption) (*ApkListing, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2861,7 +2974,8 @@ func (c *EditsApklistingsPatchCall) Do() (*ApkListing, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2941,23 +3055,6 @@ func (r *EditsApklistingsService) Update(packageNameid string, editId string, ap
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApklistingsUpdateCall) QuotaUser(quotaUser string) *EditsApklistingsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApklistingsUpdateCall) UserIP(userIP string) *EditsApklistingsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2975,28 +3072,26 @@ func (c *EditsApklistingsUpdateCall) Context(ctx context.Context) *EditsApklisti
 }
 
 func (c *EditsApklistingsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.apklisting)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageNameid,
 		"editId":         c.editId,
 		"apkVersionCode": strconv.FormatInt(c.apkVersionCode, 10),
 		"language":       c.language,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apklistings.update" call.
@@ -3006,7 +3101,8 @@ func (c *EditsApklistingsUpdateCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EditsApklistingsUpdateCall) Do() (*ApkListing, error) {
+func (c *EditsApklistingsUpdateCall) Do(opts ...googleapi.CallOption) (*ApkListing, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3030,7 +3126,8 @@ func (c *EditsApklistingsUpdateCall) Do() (*ApkListing, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3109,23 +3206,6 @@ func (r *EditsApksService) Addexternallyhosted(packageNameid string, editId stri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApksAddexternallyhostedCall) QuotaUser(quotaUser string) *EditsApksAddexternallyhostedCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApksAddexternallyhostedCall) UserIP(userIP string) *EditsApksAddexternallyhostedCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3143,26 +3223,24 @@ func (c *EditsApksAddexternallyhostedCall) Context(ctx context.Context) *EditsAp
 }
 
 func (c *EditsApksAddexternallyhostedCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.apksaddexternallyhostedrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/externallyHosted")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apks.addexternallyhosted" call.
@@ -3172,7 +3250,8 @@ func (c *EditsApksAddexternallyhostedCall) doRequest(alt string) (*http.Response
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsApksAddexternallyhostedCall) Do() (*ApksAddExternallyHostedResponse, error) {
+func (c *EditsApksAddexternallyhostedCall) Do(opts ...googleapi.CallOption) (*ApksAddExternallyHostedResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3196,7 +3275,8 @@ func (c *EditsApksAddexternallyhostedCall) Do() (*ApksAddExternallyHostedRespons
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3255,23 +3335,6 @@ func (r *EditsApksService) List(packageNameid string, editId string) *EditsApksL
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApksListCall) QuotaUser(quotaUser string) *EditsApksListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApksListCall) UserIP(userIP string) *EditsApksListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3299,23 +3362,22 @@ func (c *EditsApksListCall) Context(ctx context.Context) *EditsApksListCall {
 }
 
 func (c *EditsApksListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apks.list" call.
@@ -3325,7 +3387,8 @@ func (c *EditsApksListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsApksListCall) Do() (*ApksListResponse, error) {
+func (c *EditsApksListCall) Do(opts ...googleapi.CallOption) (*ApksListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3349,7 +3412,8 @@ func (c *EditsApksListCall) Do() (*ApksListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3388,17 +3452,16 @@ func (c *EditsApksListCall) Do() (*ApksListResponse, error) {
 // method id "androidpublisher.edits.apks.upload":
 
 type EditsApksUploadCall struct {
-	s                   *Service
-	packageNameid       string
-	editId              string
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	packageNameid    string
+	editId           string
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Upload:
@@ -3409,43 +3472,40 @@ func (r *EditsApksService) Upload(packageNameid string, editId string) *EditsApk
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsApksUploadCall) QuotaUser(quotaUser string) *EditsApksUploadCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsApksUploadCall) UserIP(userIP string) *EditsApksUploadCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *EditsApksUploadCall) Media(r io.Reader, options ...googleapi.MediaOption) *EditsApksUploadCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *EditsApksUploadCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *EditsApksUploadCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -3477,39 +3537,40 @@ func (c *EditsApksUploadCall) Context(ctx context.Context) *EditsApksUploadCall 
 }
 
 func (c *EditsApksUploadCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	body = new(bytes.Buffer)
-	ctype := "application/json"
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.apks.upload" call.
@@ -3519,7 +3580,8 @@ func (c *EditsApksUploadCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *EditsApksUploadCall) Do() (*Apk, error) {
+func (c *EditsApksUploadCall) Do(opts ...googleapi.CallOption) (*Apk, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3537,26 +3599,32 @@ func (c *EditsApksUploadCall) Do() (*Apk, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &Apk{
 		ServerResponse: googleapi.ServerResponse{
@@ -3564,7 +3632,8 @@ func (c *EditsApksUploadCall) Do() (*Apk, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3638,23 +3707,6 @@ func (r *EditsDetailsService) Get(packageNameid string, editId string) *EditsDet
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsDetailsGetCall) QuotaUser(quotaUser string) *EditsDetailsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsDetailsGetCall) UserIP(userIP string) *EditsDetailsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3682,23 +3734,22 @@ func (c *EditsDetailsGetCall) Context(ctx context.Context) *EditsDetailsGetCall 
 }
 
 func (c *EditsDetailsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/details")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.details.get" call.
@@ -3708,7 +3759,8 @@ func (c *EditsDetailsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EditsDetailsGetCall) Do() (*AppDetails, error) {
+func (c *EditsDetailsGetCall) Do(opts ...googleapi.CallOption) (*AppDetails, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3732,7 +3784,8 @@ func (c *EditsDetailsGetCall) Do() (*AppDetails, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3790,23 +3843,6 @@ func (r *EditsDetailsService) Patch(packageNameid string, editId string, appdeta
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsDetailsPatchCall) QuotaUser(quotaUser string) *EditsDetailsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsDetailsPatchCall) UserIP(userIP string) *EditsDetailsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3824,26 +3860,24 @@ func (c *EditsDetailsPatchCall) Context(ctx context.Context) *EditsDetailsPatchC
 }
 
 func (c *EditsDetailsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.appdetails)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/details")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.details.patch" call.
@@ -3853,7 +3887,8 @@ func (c *EditsDetailsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EditsDetailsPatchCall) Do() (*AppDetails, error) {
+func (c *EditsDetailsPatchCall) Do(opts ...googleapi.CallOption) (*AppDetails, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3877,7 +3912,8 @@ func (c *EditsDetailsPatchCall) Do() (*AppDetails, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3937,23 +3973,6 @@ func (r *EditsDetailsService) Update(packageNameid string, editId string, appdet
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsDetailsUpdateCall) QuotaUser(quotaUser string) *EditsDetailsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsDetailsUpdateCall) UserIP(userIP string) *EditsDetailsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3971,26 +3990,24 @@ func (c *EditsDetailsUpdateCall) Context(ctx context.Context) *EditsDetailsUpdat
 }
 
 func (c *EditsDetailsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.appdetails)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/details")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.details.update" call.
@@ -4000,7 +4017,8 @@ func (c *EditsDetailsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EditsDetailsUpdateCall) Do() (*AppDetails, error) {
+func (c *EditsDetailsUpdateCall) Do(opts ...googleapi.CallOption) (*AppDetails, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4024,7 +4042,8 @@ func (c *EditsDetailsUpdateCall) Do() (*AppDetails, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4087,23 +4106,6 @@ func (r *EditsExpansionfilesService) Get(packageNameid string, editId string, ap
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsExpansionfilesGetCall) QuotaUser(quotaUser string) *EditsExpansionfilesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsExpansionfilesGetCall) UserIP(userIP string) *EditsExpansionfilesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4131,25 +4133,24 @@ func (c *EditsExpansionfilesGetCall) Context(ctx context.Context) *EditsExpansio
 }
 
 func (c *EditsExpansionfilesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/expansionFiles/{expansionFileType}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":       c.packageNameid,
 		"editId":            c.editId,
 		"apkVersionCode":    strconv.FormatInt(c.apkVersionCode, 10),
 		"expansionFileType": c.expansionFileType,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.expansionfiles.get" call.
@@ -4159,7 +4160,8 @@ func (c *EditsExpansionfilesGetCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsExpansionfilesGetCall) Do() (*ExpansionFile, error) {
+func (c *EditsExpansionfilesGetCall) Do(opts ...googleapi.CallOption) (*ExpansionFile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4183,7 +4185,8 @@ func (c *EditsExpansionfilesGetCall) Do() (*ExpansionFile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4268,23 +4271,6 @@ func (r *EditsExpansionfilesService) Patch(packageNameid string, editId string, 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsExpansionfilesPatchCall) QuotaUser(quotaUser string) *EditsExpansionfilesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsExpansionfilesPatchCall) UserIP(userIP string) *EditsExpansionfilesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4302,28 +4288,26 @@ func (c *EditsExpansionfilesPatchCall) Context(ctx context.Context) *EditsExpans
 }
 
 func (c *EditsExpansionfilesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.expansionfile)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/expansionFiles/{expansionFileType}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":       c.packageNameid,
 		"editId":            c.editId,
 		"apkVersionCode":    strconv.FormatInt(c.apkVersionCode, 10),
 		"expansionFileType": c.expansionFileType,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.expansionfiles.patch" call.
@@ -4333,7 +4317,8 @@ func (c *EditsExpansionfilesPatchCall) doRequest(alt string) (*http.Response, er
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsExpansionfilesPatchCall) Do() (*ExpansionFile, error) {
+func (c *EditsExpansionfilesPatchCall) Do(opts ...googleapi.CallOption) (*ExpansionFile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4357,7 +4342,8 @@ func (c *EditsExpansionfilesPatchCall) Do() (*ExpansionFile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4445,23 +4431,6 @@ func (r *EditsExpansionfilesService) Update(packageNameid string, editId string,
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsExpansionfilesUpdateCall) QuotaUser(quotaUser string) *EditsExpansionfilesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsExpansionfilesUpdateCall) UserIP(userIP string) *EditsExpansionfilesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4479,28 +4448,26 @@ func (c *EditsExpansionfilesUpdateCall) Context(ctx context.Context) *EditsExpan
 }
 
 func (c *EditsExpansionfilesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.expansionfile)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/expansionFiles/{expansionFileType}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":       c.packageNameid,
 		"editId":            c.editId,
 		"apkVersionCode":    strconv.FormatInt(c.apkVersionCode, 10),
 		"expansionFileType": c.expansionFileType,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.expansionfiles.update" call.
@@ -4510,7 +4477,8 @@ func (c *EditsExpansionfilesUpdateCall) doRequest(alt string) (*http.Response, e
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsExpansionfilesUpdateCall) Do() (*ExpansionFile, error) {
+func (c *EditsExpansionfilesUpdateCall) Do(opts ...googleapi.CallOption) (*ExpansionFile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4534,7 +4502,8 @@ func (c *EditsExpansionfilesUpdateCall) Do() (*ExpansionFile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4599,19 +4568,18 @@ func (c *EditsExpansionfilesUpdateCall) Do() (*ExpansionFile, error) {
 // method id "androidpublisher.edits.expansionfiles.upload":
 
 type EditsExpansionfilesUploadCall struct {
-	s                   *Service
-	packageNameid       string
-	editId              string
-	apkVersionCode      int64
-	expansionFileType   string
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                 *Service
+	packageNameid     string
+	editId            string
+	apkVersionCode    int64
+	expansionFileType string
+	urlParams_        gensupport.URLParams
+	media_            io.Reader
+	mediaBuffer_      *gensupport.MediaBuffer
+	mediaType_        string
+	mediaSize_        int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_  googleapi.ProgressUpdater
+	ctx_              context.Context
 }
 
 // Upload: Uploads and attaches a new Expansion File to the APK
@@ -4625,43 +4593,40 @@ func (r *EditsExpansionfilesService) Upload(packageNameid string, editId string,
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsExpansionfilesUploadCall) QuotaUser(quotaUser string) *EditsExpansionfilesUploadCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsExpansionfilesUploadCall) UserIP(userIP string) *EditsExpansionfilesUploadCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *EditsExpansionfilesUploadCall) Media(r io.Reader, options ...googleapi.MediaOption) *EditsExpansionfilesUploadCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *EditsExpansionfilesUploadCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *EditsExpansionfilesUploadCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -4693,41 +4658,42 @@ func (c *EditsExpansionfilesUploadCall) Context(ctx context.Context) *EditsExpan
 }
 
 func (c *EditsExpansionfilesUploadCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/apks/{apkVersionCode}/expansionFiles/{expansionFileType}")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	body = new(bytes.Buffer)
-	ctype := "application/json"
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":       c.packageNameid,
 		"editId":            c.editId,
 		"apkVersionCode":    strconv.FormatInt(c.apkVersionCode, 10),
 		"expansionFileType": c.expansionFileType,
 	})
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.expansionfiles.upload" call.
@@ -4737,7 +4703,8 @@ func (c *EditsExpansionfilesUploadCall) doRequest(alt string) (*http.Response, e
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsExpansionfilesUploadCall) Do() (*ExpansionFilesUploadResponse, error) {
+func (c *EditsExpansionfilesUploadCall) Do(opts ...googleapi.CallOption) (*ExpansionFilesUploadResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4755,26 +4722,32 @@ func (c *EditsExpansionfilesUploadCall) Do() (*ExpansionFilesUploadResponse, err
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &ExpansionFilesUploadResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -4782,7 +4755,8 @@ func (c *EditsExpansionfilesUploadCall) Do() (*ExpansionFilesUploadResponse, err
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4882,23 +4856,6 @@ func (r *EditsImagesService) Delete(packageNameid string, editId string, languag
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsImagesDeleteCall) QuotaUser(quotaUser string) *EditsImagesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsImagesDeleteCall) UserIP(userIP string) *EditsImagesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4916,11 +4873,14 @@ func (c *EditsImagesDeleteCall) Context(ctx context.Context) *EditsImagesDeleteC
 }
 
 func (c *EditsImagesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}/{imageType}/{imageId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
@@ -4928,15 +4888,12 @@ func (c *EditsImagesDeleteCall) doRequest(alt string) (*http.Response, error) {
 		"imageType":   c.imageType,
 		"imageId":     c.imageId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.images.delete" call.
-func (c *EditsImagesDeleteCall) Do() error {
+func (c *EditsImagesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -5041,23 +4998,6 @@ func (r *EditsImagesService) Deleteall(packageNameid string, editId string, lang
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsImagesDeleteallCall) QuotaUser(quotaUser string) *EditsImagesDeleteallCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsImagesDeleteallCall) UserIP(userIP string) *EditsImagesDeleteallCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5075,22 +5015,21 @@ func (c *EditsImagesDeleteallCall) Context(ctx context.Context) *EditsImagesDele
 }
 
 func (c *EditsImagesDeleteallCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}/{imageType}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 		"imageType":   c.imageType,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.images.deleteall" call.
@@ -5100,7 +5039,8 @@ func (c *EditsImagesDeleteallCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsImagesDeleteallCall) Do() (*ImagesDeleteAllResponse, error) {
+func (c *EditsImagesDeleteallCall) Do(opts ...googleapi.CallOption) (*ImagesDeleteAllResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5124,7 +5064,8 @@ func (c *EditsImagesDeleteallCall) Do() (*ImagesDeleteAllResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5219,23 +5160,6 @@ func (r *EditsImagesService) List(packageNameid string, editId string, language 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsImagesListCall) QuotaUser(quotaUser string) *EditsImagesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsImagesListCall) UserIP(userIP string) *EditsImagesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5263,25 +5187,24 @@ func (c *EditsImagesListCall) Context(ctx context.Context) *EditsImagesListCall 
 }
 
 func (c *EditsImagesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}/{imageType}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 		"imageType":   c.imageType,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.images.list" call.
@@ -5291,7 +5214,8 @@ func (c *EditsImagesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsImagesListCall) Do() (*ImagesListResponse, error) {
+func (c *EditsImagesListCall) Do(opts ...googleapi.CallOption) (*ImagesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5315,7 +5239,8 @@ func (c *EditsImagesListCall) Do() (*ImagesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5390,19 +5315,18 @@ func (c *EditsImagesListCall) Do() (*ImagesListResponse, error) {
 // method id "androidpublisher.edits.images.upload":
 
 type EditsImagesUploadCall struct {
-	s                   *Service
-	packageNameid       string
-	editId              string
-	language            string
-	imageType           string
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	packageNameid    string
+	editId           string
+	language         string
+	imageType        string
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Upload: Uploads a new image and adds it to the list of images for the
@@ -5416,43 +5340,40 @@ func (r *EditsImagesService) Upload(packageNameid string, editId string, languag
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsImagesUploadCall) QuotaUser(quotaUser string) *EditsImagesUploadCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsImagesUploadCall) UserIP(userIP string) *EditsImagesUploadCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *EditsImagesUploadCall) Media(r io.Reader, options ...googleapi.MediaOption) *EditsImagesUploadCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *EditsImagesUploadCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *EditsImagesUploadCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -5484,41 +5405,42 @@ func (c *EditsImagesUploadCall) Context(ctx context.Context) *EditsImagesUploadC
 }
 
 func (c *EditsImagesUploadCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}/{imageType}")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	body = new(bytes.Buffer)
-	ctype := "application/json"
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 		"imageType":   c.imageType,
 	})
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.images.upload" call.
@@ -5528,7 +5450,8 @@ func (c *EditsImagesUploadCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsImagesUploadCall) Do() (*ImagesUploadResponse, error) {
+func (c *EditsImagesUploadCall) Do(opts ...googleapi.CallOption) (*ImagesUploadResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5546,26 +5469,32 @@ func (c *EditsImagesUploadCall) Do() (*ImagesUploadResponse, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &ImagesUploadResponse{
 		ServerResponse: googleapi.ServerResponse{
@@ -5573,7 +5502,8 @@ func (c *EditsImagesUploadCall) Do() (*ImagesUploadResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5682,23 +5612,6 @@ func (r *EditsListingsService) Delete(packageNameid string, editId string, langu
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsListingsDeleteCall) QuotaUser(quotaUser string) *EditsListingsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsListingsDeleteCall) UserIP(userIP string) *EditsListingsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5716,25 +5629,25 @@ func (c *EditsListingsDeleteCall) Context(ctx context.Context) *EditsListingsDel
 }
 
 func (c *EditsListingsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.listings.delete" call.
-func (c *EditsListingsDeleteCall) Do() error {
+func (c *EditsListingsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -5799,23 +5712,6 @@ func (r *EditsListingsService) Deleteall(packageNameid string, editId string) *E
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsListingsDeleteallCall) QuotaUser(quotaUser string) *EditsListingsDeleteallCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsListingsDeleteallCall) UserIP(userIP string) *EditsListingsDeleteallCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5833,24 +5729,24 @@ func (c *EditsListingsDeleteallCall) Context(ctx context.Context) *EditsListings
 }
 
 func (c *EditsListingsDeleteallCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.listings.deleteall" call.
-func (c *EditsListingsDeleteallCall) Do() error {
+func (c *EditsListingsDeleteallCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -5911,23 +5807,6 @@ func (r *EditsListingsService) Get(packageNameid string, editId string, language
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsListingsGetCall) QuotaUser(quotaUser string) *EditsListingsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsListingsGetCall) UserIP(userIP string) *EditsListingsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5955,24 +5834,23 @@ func (c *EditsListingsGetCall) Context(ctx context.Context) *EditsListingsGetCal
 }
 
 func (c *EditsListingsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.listings.get" call.
@@ -5982,7 +5860,8 @@ func (c *EditsListingsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsListingsGetCall) Do() (*Listing, error) {
+func (c *EditsListingsGetCall) Do(opts ...googleapi.CallOption) (*Listing, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6006,7 +5885,8 @@ func (c *EditsListingsGetCall) Do() (*Listing, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6070,23 +5950,6 @@ func (r *EditsListingsService) List(packageNameid string, editId string) *EditsL
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsListingsListCall) QuotaUser(quotaUser string) *EditsListingsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsListingsListCall) UserIP(userIP string) *EditsListingsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6114,23 +5977,22 @@ func (c *EditsListingsListCall) Context(ctx context.Context) *EditsListingsListC
 }
 
 func (c *EditsListingsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.listings.list" call.
@@ -6140,7 +6002,8 @@ func (c *EditsListingsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsListingsListCall) Do() (*ListingsListResponse, error) {
+func (c *EditsListingsListCall) Do(opts ...googleapi.CallOption) (*ListingsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6164,7 +6027,8 @@ func (c *EditsListingsListCall) Do() (*ListingsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6224,23 +6088,6 @@ func (r *EditsListingsService) Patch(packageNameid string, editId string, langua
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsListingsPatchCall) QuotaUser(quotaUser string) *EditsListingsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsListingsPatchCall) UserIP(userIP string) *EditsListingsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6258,27 +6105,25 @@ func (c *EditsListingsPatchCall) Context(ctx context.Context) *EditsListingsPatc
 }
 
 func (c *EditsListingsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.listing)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.listings.patch" call.
@@ -6288,7 +6133,8 @@ func (c *EditsListingsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsListingsPatchCall) Do() (*Listing, error) {
+func (c *EditsListingsPatchCall) Do(opts ...googleapi.CallOption) (*Listing, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6312,7 +6158,8 @@ func (c *EditsListingsPatchCall) Do() (*Listing, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6381,23 +6228,6 @@ func (r *EditsListingsService) Update(packageNameid string, editId string, langu
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsListingsUpdateCall) QuotaUser(quotaUser string) *EditsListingsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsListingsUpdateCall) UserIP(userIP string) *EditsListingsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6415,27 +6245,25 @@ func (c *EditsListingsUpdateCall) Context(ctx context.Context) *EditsListingsUpd
 }
 
 func (c *EditsListingsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.listing)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/listings/{language}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"language":    c.language,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.listings.update" call.
@@ -6445,7 +6273,8 @@ func (c *EditsListingsUpdateCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsListingsUpdateCall) Do() (*Listing, error) {
+func (c *EditsListingsUpdateCall) Do(opts ...googleapi.CallOption) (*Listing, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6469,7 +6298,8 @@ func (c *EditsListingsUpdateCall) Do() (*Listing, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6537,23 +6367,6 @@ func (r *EditsTestersService) Get(packageNameid string, editId string, track str
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTestersGetCall) QuotaUser(quotaUser string) *EditsTestersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTestersGetCall) UserIP(userIP string) *EditsTestersGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6581,24 +6394,23 @@ func (c *EditsTestersGetCall) Context(ctx context.Context) *EditsTestersGetCall 
 }
 
 func (c *EditsTestersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/testers/{track}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"track":       c.track,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.testers.get" call.
@@ -6608,7 +6420,8 @@ func (c *EditsTestersGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsTestersGetCall) Do() (*Testers, error) {
+func (c *EditsTestersGetCall) Do(opts ...googleapi.CallOption) (*Testers, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6632,7 +6445,8 @@ func (c *EditsTestersGetCall) Do() (*Testers, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6708,23 +6522,6 @@ func (r *EditsTestersService) Patch(packageNameid string, editId string, track s
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTestersPatchCall) QuotaUser(quotaUser string) *EditsTestersPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTestersPatchCall) UserIP(userIP string) *EditsTestersPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6742,27 +6539,25 @@ func (c *EditsTestersPatchCall) Context(ctx context.Context) *EditsTestersPatchC
 }
 
 func (c *EditsTestersPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testers)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/testers/{track}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"track":       c.track,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.testers.patch" call.
@@ -6772,7 +6567,8 @@ func (c *EditsTestersPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsTestersPatchCall) Do() (*Testers, error) {
+func (c *EditsTestersPatchCall) Do(opts ...googleapi.CallOption) (*Testers, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6796,7 +6592,8 @@ func (c *EditsTestersPatchCall) Do() (*Testers, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -6875,23 +6672,6 @@ func (r *EditsTestersService) Update(packageNameid string, editId string, track 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTestersUpdateCall) QuotaUser(quotaUser string) *EditsTestersUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTestersUpdateCall) UserIP(userIP string) *EditsTestersUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -6909,27 +6689,25 @@ func (c *EditsTestersUpdateCall) Context(ctx context.Context) *EditsTestersUpdat
 }
 
 func (c *EditsTestersUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testers)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/testers/{track}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"track":       c.track,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.testers.update" call.
@@ -6939,7 +6717,8 @@ func (c *EditsTestersUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsTestersUpdateCall) Do() (*Testers, error) {
+func (c *EditsTestersUpdateCall) Do(opts ...googleapi.CallOption) (*Testers, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -6963,7 +6742,8 @@ func (c *EditsTestersUpdateCall) Do() (*Testers, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7042,23 +6822,6 @@ func (r *EditsTracksService) Get(packageNameid string, editId string, track stri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTracksGetCall) QuotaUser(quotaUser string) *EditsTracksGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTracksGetCall) UserIP(userIP string) *EditsTracksGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7086,24 +6849,23 @@ func (c *EditsTracksGetCall) Context(ctx context.Context) *EditsTracksGetCall {
 }
 
 func (c *EditsTracksGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/tracks/{track}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"track":       c.track,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.tracks.get" call.
@@ -7113,7 +6875,8 @@ func (c *EditsTracksGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsTracksGetCall) Do() (*Track, error) {
+func (c *EditsTracksGetCall) Do(opts ...googleapi.CallOption) (*Track, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7137,7 +6900,8 @@ func (c *EditsTracksGetCall) Do() (*Track, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7212,23 +6976,6 @@ func (r *EditsTracksService) List(packageNameid string, editId string) *EditsTra
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTracksListCall) QuotaUser(quotaUser string) *EditsTracksListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTracksListCall) UserIP(userIP string) *EditsTracksListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7256,23 +7003,22 @@ func (c *EditsTracksListCall) Context(ctx context.Context) *EditsTracksListCall 
 }
 
 func (c *EditsTracksListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/tracks")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.tracks.list" call.
@@ -7282,7 +7028,8 @@ func (c *EditsTracksListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EditsTracksListCall) Do() (*TracksListResponse, error) {
+func (c *EditsTracksListCall) Do(opts ...googleapi.CallOption) (*TracksListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7306,7 +7053,8 @@ func (c *EditsTracksListCall) Do() (*TracksListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7368,23 +7116,6 @@ func (r *EditsTracksService) Patch(packageNameid string, editId string, track st
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTracksPatchCall) QuotaUser(quotaUser string) *EditsTracksPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTracksPatchCall) UserIP(userIP string) *EditsTracksPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7402,27 +7133,25 @@ func (c *EditsTracksPatchCall) Context(ctx context.Context) *EditsTracksPatchCal
 }
 
 func (c *EditsTracksPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.track2)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/tracks/{track}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"track":       c.track,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.tracks.patch" call.
@@ -7432,7 +7161,8 @@ func (c *EditsTracksPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsTracksPatchCall) Do() (*Track, error) {
+func (c *EditsTracksPatchCall) Do(opts ...googleapi.CallOption) (*Track, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7456,7 +7186,8 @@ func (c *EditsTracksPatchCall) Do() (*Track, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7539,23 +7270,6 @@ func (r *EditsTracksService) Update(packageNameid string, editId string, track s
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EditsTracksUpdateCall) QuotaUser(quotaUser string) *EditsTracksUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EditsTracksUpdateCall) UserIP(userIP string) *EditsTracksUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7573,27 +7287,25 @@ func (c *EditsTracksUpdateCall) Context(ctx context.Context) *EditsTracksUpdateC
 }
 
 func (c *EditsTracksUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.track2)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/edits/{editId}/tracks/{track}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"editId":      c.editId,
 		"track":       c.track,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.edits.tracks.update" call.
@@ -7603,7 +7315,8 @@ func (c *EditsTracksUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *EditsTracksUpdateCall) Do() (*Track, error) {
+func (c *EditsTracksUpdateCall) Do(opts ...googleapi.CallOption) (*Track, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7627,7 +7340,8 @@ func (c *EditsTracksUpdateCall) Do() (*Track, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7718,15 +7432,6 @@ func (c *EntitlementsListCall) ProductId(productId string) *EntitlementsListCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EntitlementsListCall) QuotaUser(quotaUser string) *EntitlementsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StartIndex sets the optional parameter "startIndex":
 func (c *EntitlementsListCall) StartIndex(startIndex int64) *EntitlementsListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
@@ -7736,14 +7441,6 @@ func (c *EntitlementsListCall) StartIndex(startIndex int64) *EntitlementsListCal
 // Token sets the optional parameter "token":
 func (c *EntitlementsListCall) Token(token string) *EntitlementsListCall {
 	c.urlParams_.Set("token", token)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EntitlementsListCall) UserIP(userIP string) *EntitlementsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -7774,22 +7471,21 @@ func (c *EntitlementsListCall) Context(ctx context.Context) *EntitlementsListCal
 }
 
 func (c *EntitlementsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/entitlements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageName,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.entitlements.list" call.
@@ -7799,7 +7495,8 @@ func (c *EntitlementsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EntitlementsListCall) Do() (*EntitlementsListResponse, error) {
+func (c *EntitlementsListCall) Do(opts ...googleapi.CallOption) (*EntitlementsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7823,7 +7520,8 @@ func (c *EntitlementsListCall) Do() (*EntitlementsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -7885,23 +7583,6 @@ func (r *InappproductsService) Batch(inappproductsbatchrequest *InappproductsBat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsBatchCall) QuotaUser(quotaUser string) *InappproductsBatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsBatchCall) UserIP(userIP string) *InappproductsBatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -7919,23 +7600,21 @@ func (c *InappproductsBatchCall) Context(ctx context.Context) *InappproductsBatc
 }
 
 func (c *InappproductsBatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.inappproductsbatchrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "inappproducts/batch")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.batch" call.
@@ -7945,7 +7624,8 @@ func (c *InappproductsBatchCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *InappproductsBatchCall) Do() (*InappproductsBatchResponse, error) {
+func (c *InappproductsBatchCall) Do(opts ...googleapi.CallOption) (*InappproductsBatchResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -7969,7 +7649,8 @@ func (c *InappproductsBatchCall) Do() (*InappproductsBatchResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8008,23 +7689,6 @@ func (r *InappproductsService) Delete(packageNameid string, skuid string) *Inapp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsDeleteCall) QuotaUser(quotaUser string) *InappproductsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsDeleteCall) UserIP(userIP string) *InappproductsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8042,24 +7706,24 @@ func (c *InappproductsDeleteCall) Context(ctx context.Context) *InappproductsDel
 }
 
 func (c *InappproductsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inappproducts/{sku}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"sku":         c.skuid,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.delete" call.
-func (c *InappproductsDeleteCall) Do() error {
+func (c *InappproductsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -8118,23 +7782,6 @@ func (r *InappproductsService) Get(packageName string, skuid string) *Inappprodu
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsGetCall) QuotaUser(quotaUser string) *InappproductsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsGetCall) UserIP(userIP string) *InappproductsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8162,23 +7809,22 @@ func (c *InappproductsGetCall) Context(ctx context.Context) *InappproductsGetCal
 }
 
 func (c *InappproductsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inappproducts/{sku}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageName,
 		"sku":         c.skuid,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.get" call.
@@ -8188,7 +7834,8 @@ func (c *InappproductsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *InappproductsGetCall) Do() (*InAppProduct, error) {
+func (c *InappproductsGetCall) Do(opts ...googleapi.CallOption) (*InAppProduct, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8212,7 +7859,8 @@ func (c *InappproductsGetCall) Do() (*InAppProduct, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8276,23 +7924,6 @@ func (c *InappproductsInsertCall) AutoConvertMissingPrices(autoConvertMissingPri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsInsertCall) QuotaUser(quotaUser string) *InappproductsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsInsertCall) UserIP(userIP string) *InappproductsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8310,25 +7941,23 @@ func (c *InappproductsInsertCall) Context(ctx context.Context) *InappproductsIns
 }
 
 func (c *InappproductsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.inappproduct)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inappproducts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.insert" call.
@@ -8338,7 +7967,8 @@ func (c *InappproductsInsertCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *InappproductsInsertCall) Do() (*InAppProduct, error) {
+func (c *InappproductsInsertCall) Do(opts ...googleapi.CallOption) (*InAppProduct, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8362,7 +7992,8 @@ func (c *InappproductsInsertCall) Do() (*InAppProduct, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8424,15 +8055,6 @@ func (c *InappproductsListCall) MaxResults(maxResults int64) *InappproductsListC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsListCall) QuotaUser(quotaUser string) *InappproductsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StartIndex sets the optional parameter "startIndex":
 func (c *InappproductsListCall) StartIndex(startIndex int64) *InappproductsListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
@@ -8442,14 +8064,6 @@ func (c *InappproductsListCall) StartIndex(startIndex int64) *InappproductsListC
 // Token sets the optional parameter "token":
 func (c *InappproductsListCall) Token(token string) *InappproductsListCall {
 	c.urlParams_.Set("token", token)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsListCall) UserIP(userIP string) *InappproductsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -8480,22 +8094,21 @@ func (c *InappproductsListCall) Context(ctx context.Context) *InappproductsListC
 }
 
 func (c *InappproductsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inappproducts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.list" call.
@@ -8505,7 +8118,8 @@ func (c *InappproductsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *InappproductsListCall) Do() (*InappproductsListResponse, error) {
+func (c *InappproductsListCall) Do(opts ...googleapi.CallOption) (*InappproductsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8529,7 +8143,8 @@ func (c *InappproductsListCall) Do() (*InappproductsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8604,23 +8219,6 @@ func (c *InappproductsPatchCall) AutoConvertMissingPrices(autoConvertMissingPric
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsPatchCall) QuotaUser(quotaUser string) *InappproductsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsPatchCall) UserIP(userIP string) *InappproductsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8638,26 +8236,24 @@ func (c *InappproductsPatchCall) Context(ctx context.Context) *InappproductsPatc
 }
 
 func (c *InappproductsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.inappproduct)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inappproducts/{sku}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"sku":         c.skuid,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.patch" call.
@@ -8667,7 +8263,8 @@ func (c *InappproductsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *InappproductsPatchCall) Do() (*InAppProduct, error) {
+func (c *InappproductsPatchCall) Do(opts ...googleapi.CallOption) (*InAppProduct, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8691,7 +8288,8 @@ func (c *InappproductsPatchCall) Do() (*InAppProduct, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8766,23 +8364,6 @@ func (c *InappproductsUpdateCall) AutoConvertMissingPrices(autoConvertMissingPri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InappproductsUpdateCall) QuotaUser(quotaUser string) *InappproductsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InappproductsUpdateCall) UserIP(userIP string) *InappproductsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8800,26 +8381,24 @@ func (c *InappproductsUpdateCall) Context(ctx context.Context) *InappproductsUpd
 }
 
 func (c *InappproductsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.inappproduct)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/inappproducts/{sku}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageNameid,
 		"sku":         c.skuid,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.inappproducts.update" call.
@@ -8829,7 +8408,8 @@ func (c *InappproductsUpdateCall) doRequest(alt string) (*http.Response, error) 
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *InappproductsUpdateCall) Do() (*InAppProduct, error) {
+func (c *InappproductsUpdateCall) Do(opts ...googleapi.CallOption) (*InAppProduct, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -8853,7 +8433,8 @@ func (c *InappproductsUpdateCall) Do() (*InAppProduct, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -8919,23 +8500,6 @@ func (r *PurchasesProductsService) Get(packageName string, productId string, tok
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesProductsGetCall) QuotaUser(quotaUser string) *PurchasesProductsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesProductsGetCall) UserIP(userIP string) *PurchasesProductsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -8963,24 +8527,23 @@ func (c *PurchasesProductsGetCall) Context(ctx context.Context) *PurchasesProduc
 }
 
 func (c *PurchasesProductsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/purchases/products/{productId}/tokens/{token}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName": c.packageName,
 		"productId":   c.productId,
 		"token":       c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.products.get" call.
@@ -8990,7 +8553,8 @@ func (c *PurchasesProductsGetCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PurchasesProductsGetCall) Do() (*ProductPurchase, error) {
+func (c *PurchasesProductsGetCall) Do(opts ...googleapi.CallOption) (*ProductPurchase, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9014,7 +8578,8 @@ func (c *PurchasesProductsGetCall) Do() (*ProductPurchase, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9079,23 +8644,6 @@ func (r *PurchasesSubscriptionsService) Cancel(packageName string, subscriptionI
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesSubscriptionsCancelCall) QuotaUser(quotaUser string) *PurchasesSubscriptionsCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesSubscriptionsCancelCall) UserIP(userIP string) *PurchasesSubscriptionsCancelCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9113,25 +8661,25 @@ func (c *PurchasesSubscriptionsCancelCall) Context(ctx context.Context) *Purchas
 }
 
 func (c *PurchasesSubscriptionsCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}:cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.subscriptions.cancel" call.
-func (c *PurchasesSubscriptionsCancelCall) Do() error {
+func (c *PurchasesSubscriptionsCancelCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -9201,23 +8749,6 @@ func (r *PurchasesSubscriptionsService) Defer(packageName string, subscriptionId
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesSubscriptionsDeferCall) QuotaUser(quotaUser string) *PurchasesSubscriptionsDeferCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesSubscriptionsDeferCall) UserIP(userIP string) *PurchasesSubscriptionsDeferCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9235,27 +8766,25 @@ func (c *PurchasesSubscriptionsDeferCall) Context(ctx context.Context) *Purchase
 }
 
 func (c *PurchasesSubscriptionsDeferCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.subscriptionpurchasesdeferrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}:defer")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.subscriptions.defer" call.
@@ -9266,7 +8795,8 @@ func (c *PurchasesSubscriptionsDeferCall) doRequest(alt string) (*http.Response,
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *PurchasesSubscriptionsDeferCall) Do() (*SubscriptionPurchasesDeferResponse, error) {
+func (c *PurchasesSubscriptionsDeferCall) Do(opts ...googleapi.CallOption) (*SubscriptionPurchasesDeferResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9290,7 +8820,8 @@ func (c *PurchasesSubscriptionsDeferCall) Do() (*SubscriptionPurchasesDeferRespo
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9359,23 +8890,6 @@ func (r *PurchasesSubscriptionsService) Get(packageName string, subscriptionId s
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesSubscriptionsGetCall) QuotaUser(quotaUser string) *PurchasesSubscriptionsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesSubscriptionsGetCall) UserIP(userIP string) *PurchasesSubscriptionsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9403,24 +8917,23 @@ func (c *PurchasesSubscriptionsGetCall) Context(ctx context.Context) *PurchasesS
 }
 
 func (c *PurchasesSubscriptionsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.subscriptions.get" call.
@@ -9430,7 +8943,8 @@ func (c *PurchasesSubscriptionsGetCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PurchasesSubscriptionsGetCall) Do() (*SubscriptionPurchase, error) {
+func (c *PurchasesSubscriptionsGetCall) Do(opts ...googleapi.CallOption) (*SubscriptionPurchase, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -9454,7 +8968,8 @@ func (c *PurchasesSubscriptionsGetCall) Do() (*SubscriptionPurchase, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -9520,23 +9035,6 @@ func (r *PurchasesSubscriptionsService) Refund(packageName string, subscriptionI
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesSubscriptionsRefundCall) QuotaUser(quotaUser string) *PurchasesSubscriptionsRefundCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesSubscriptionsRefundCall) UserIP(userIP string) *PurchasesSubscriptionsRefundCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9554,25 +9052,25 @@ func (c *PurchasesSubscriptionsRefundCall) Context(ctx context.Context) *Purchas
 }
 
 func (c *PurchasesSubscriptionsRefundCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}:refund")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.subscriptions.refund" call.
-func (c *PurchasesSubscriptionsRefundCall) Do() error {
+func (c *PurchasesSubscriptionsRefundCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -9641,23 +9139,6 @@ func (r *PurchasesSubscriptionsService) Revoke(packageName string, subscriptionI
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PurchasesSubscriptionsRevokeCall) QuotaUser(quotaUser string) *PurchasesSubscriptionsRevokeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PurchasesSubscriptionsRevokeCall) UserIP(userIP string) *PurchasesSubscriptionsRevokeCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -9675,25 +9156,25 @@ func (c *PurchasesSubscriptionsRevokeCall) Context(ctx context.Context) *Purchas
 }
 
 func (c *PurchasesSubscriptionsRevokeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}:revoke")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"packageName":    c.packageName,
 		"subscriptionId": c.subscriptionId,
 		"token":          c.token,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "androidpublisher.purchases.subscriptions.revoke" call.
-func (c *PurchasesSubscriptionsRevokeCall) Do() error {
+func (c *PurchasesSubscriptionsRevokeCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -9733,6 +9214,424 @@ func (c *PurchasesSubscriptionsRevokeCall) Do() error {
 	//     }
 	//   },
 	//   "path": "{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}:revoke",
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/androidpublisher"
+	//   ]
+	// }
+
+}
+
+// method id "androidpublisher.reviews.get":
+
+type ReviewsGetCall struct {
+	s             *Service
+	packageNameid string
+	reviewId      string
+	urlParams_    gensupport.URLParams
+	ifNoneMatch_  string
+	ctx_          context.Context
+}
+
+// Get: Returns a single review.
+func (r *ReviewsService) Get(packageNameid string, reviewId string) *ReviewsGetCall {
+	c := &ReviewsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.packageNameid = packageNameid
+	c.reviewId = reviewId
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ReviewsGetCall) Fields(s ...googleapi.Field) *ReviewsGetCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ReviewsGetCall) IfNoneMatch(entityTag string) *ReviewsGetCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ReviewsGetCall) Context(ctx context.Context) *ReviewsGetCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ReviewsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/reviews/{reviewId}")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"packageName": c.packageNameid,
+		"reviewId":    c.reviewId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "androidpublisher.reviews.get" call.
+// Exactly one of *Review or error will be non-nil. Any non-2xx status
+// code is an error. Response headers are in either
+// *Review.ServerResponse.Header or (if a response was returned at all)
+// in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
+// check whether the returned error was because http.StatusNotModified
+// was returned.
+func (c *ReviewsGetCall) Do(opts ...googleapi.CallOption) (*Review, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &Review{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Returns a single review.",
+	//   "httpMethod": "GET",
+	//   "id": "androidpublisher.reviews.get",
+	//   "parameterOrder": [
+	//     "packageName",
+	//     "reviewId"
+	//   ],
+	//   "parameters": {
+	//     "packageName": {
+	//       "description": "Unique identifier for the Android app for which we want reviews; for example, \"com.spiffygame\".",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "reviewId": {
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "{packageName}/reviews/{reviewId}",
+	//   "response": {
+	//     "$ref": "Review"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/androidpublisher"
+	//   ]
+	// }
+
+}
+
+// method id "androidpublisher.reviews.list":
+
+type ReviewsListCall struct {
+	s             *Service
+	packageNameid string
+	urlParams_    gensupport.URLParams
+	ifNoneMatch_  string
+	ctx_          context.Context
+}
+
+// List: Returns a list of reviews.
+func (r *ReviewsService) List(packageNameid string) *ReviewsListCall {
+	c := &ReviewsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.packageNameid = packageNameid
+	return c
+}
+
+// MaxResults sets the optional parameter "maxResults":
+func (c *ReviewsListCall) MaxResults(maxResults int64) *ReviewsListCall {
+	c.urlParams_.Set("maxResults", fmt.Sprint(maxResults))
+	return c
+}
+
+// StartIndex sets the optional parameter "startIndex":
+func (c *ReviewsListCall) StartIndex(startIndex int64) *ReviewsListCall {
+	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
+	return c
+}
+
+// Token sets the optional parameter "token":
+func (c *ReviewsListCall) Token(token string) *ReviewsListCall {
+	c.urlParams_.Set("token", token)
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ReviewsListCall) Fields(s ...googleapi.Field) *ReviewsListCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// IfNoneMatch sets the optional parameter which makes the operation
+// fail if the object's ETag matches the given value. This is useful for
+// getting updates only after the object has changed since the last
+// request. Use googleapi.IsNotModified to check whether the response
+// error from Do is the result of In-None-Match.
+func (c *ReviewsListCall) IfNoneMatch(entityTag string) *ReviewsListCall {
+	c.ifNoneMatch_ = entityTag
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ReviewsListCall) Context(ctx context.Context) *ReviewsListCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ReviewsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
+	var body io.Reader = nil
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/reviews")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"packageName": c.packageNameid,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "androidpublisher.reviews.list" call.
+// Exactly one of *ReviewsListResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *ReviewsListResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ReviewsListCall) Do(opts ...googleapi.CallOption) (*ReviewsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &ReviewsListResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Returns a list of reviews.",
+	//   "httpMethod": "GET",
+	//   "id": "androidpublisher.reviews.list",
+	//   "parameterOrder": [
+	//     "packageName"
+	//   ],
+	//   "parameters": {
+	//     "maxResults": {
+	//       "format": "uint32",
+	//       "location": "query",
+	//       "type": "integer"
+	//     },
+	//     "packageName": {
+	//       "description": "Unique identifier for the Android app for which we want reviews; for example, \"com.spiffygame\".",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "startIndex": {
+	//       "format": "uint32",
+	//       "location": "query",
+	//       "type": "integer"
+	//     },
+	//     "token": {
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "{packageName}/reviews",
+	//   "response": {
+	//     "$ref": "ReviewsListResponse"
+	//   },
+	//   "scopes": [
+	//     "https://www.googleapis.com/auth/androidpublisher"
+	//   ]
+	// }
+
+}
+
+// method id "androidpublisher.reviews.reply":
+
+type ReviewsReplyCall struct {
+	s                   *Service
+	packageNameid       string
+	reviewId            string
+	reviewsreplyrequest *ReviewsReplyRequest
+	urlParams_          gensupport.URLParams
+	ctx_                context.Context
+}
+
+// Reply: Reply to a single review, or update an existing reply.
+func (r *ReviewsService) Reply(packageNameid string, reviewId string, reviewsreplyrequest *ReviewsReplyRequest) *ReviewsReplyCall {
+	c := &ReviewsReplyCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.packageNameid = packageNameid
+	c.reviewId = reviewId
+	c.reviewsreplyrequest = reviewsreplyrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *ReviewsReplyCall) Fields(s ...googleapi.Field) *ReviewsReplyCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *ReviewsReplyCall) Context(ctx context.Context) *ReviewsReplyCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *ReviewsReplyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.reviewsreplyrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "{packageName}/reviews/{reviewId}:reply")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.Expand(req.URL, map[string]string{
+		"packageName": c.packageNameid,
+		"reviewId":    c.reviewId,
+	})
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "androidpublisher.reviews.reply" call.
+// Exactly one of *ReviewsReplyResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *ReviewsReplyResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *ReviewsReplyCall) Do(opts ...googleapi.CallOption) (*ReviewsReplyResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &ReviewsReplyResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Reply to a single review, or update an existing reply.",
+	//   "httpMethod": "POST",
+	//   "id": "androidpublisher.reviews.reply",
+	//   "parameterOrder": [
+	//     "packageName",
+	//     "reviewId"
+	//   ],
+	//   "parameters": {
+	//     "packageName": {
+	//       "description": "Unique identifier for the Android app for which we want reviews; for example, \"com.spiffygame\".",
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "reviewId": {
+	//       "location": "path",
+	//       "required": true,
+	//       "type": "string"
+	//     }
+	//   },
+	//   "path": "{packageName}/reviews/{reviewId}:reply",
+	//   "request": {
+	//     "$ref": "ReviewsReplyRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "ReviewsReplyResponse"
+	//   },
 	//   "scopes": [
 	//     "https://www.googleapis.com/auth/androidpublisher"
 	//   ]

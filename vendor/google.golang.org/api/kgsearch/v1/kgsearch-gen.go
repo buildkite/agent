@@ -169,14 +169,6 @@ func (c *EntitiesSearchCall) Query(query string) *EntitiesSearchCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *EntitiesSearchCall) QuotaUser(quotaUser string) *EntitiesSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Types sets the optional parameter "types": Restricts returned
 // entities with these types, e.g. Person (as defined in
 // http://schema.org/Person).
@@ -212,20 +204,19 @@ func (c *EntitiesSearchCall) Context(ctx context.Context) *EntitiesSearchCall {
 }
 
 func (c *EntitiesSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/entities:search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "kgsearch.entities.search" call.
@@ -235,7 +226,8 @@ func (c *EntitiesSearchCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EntitiesSearchCall) Do() (*SearchResponse, error) {
+func (c *EntitiesSearchCall) Do(opts ...googleapi.CallOption) (*SearchResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -259,7 +251,8 @@ func (c *EntitiesSearchCall) Do() (*SearchResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

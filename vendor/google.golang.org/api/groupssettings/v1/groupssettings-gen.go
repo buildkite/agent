@@ -98,6 +98,9 @@ type Groups struct {
 	// ArchiveOnly: If the group is archive only
 	ArchiveOnly string `json:"archiveOnly,omitempty"`
 
+	// CustomFooterText: Custom footer text.
+	CustomFooterText string `json:"customFooterText,omitempty"`
+
 	// CustomReplyTo: Default email to which reply to any message should go.
 	CustomReplyTo string `json:"customReplyTo,omitempty"`
 
@@ -110,6 +113,9 @@ type Groups struct {
 
 	// Email: Email id of the group
 	Email string `json:"email,omitempty"`
+
+	// IncludeCustomFooter: Whether to include custom footer.
+	IncludeCustomFooter string `json:"includeCustomFooter,omitempty"`
 
 	// IncludeInGlobalAddressList: If this groups should be included in
 	// global address list or not.
@@ -159,13 +165,17 @@ type Groups struct {
 	// Possible values are: ALLOW MODERATE SILENTLY_MODERATE REJECT
 	SpamModerationLevel string `json:"spamModerationLevel,omitempty"`
 
+	// WhoCanAdd: Permissions to add members. Possible values are:
+	// ALL_MANAGERS_CAN_ADD ALL_MEMBERS_CAN_ADD NONE_CAN_ADD
+	WhoCanAdd string `json:"whoCanAdd,omitempty"`
+
 	// WhoCanContactOwner: Permission to contact owner of the group via web
-	// UI. Possbile values are: ANYONE_CAN_CONTACT ALL_IN_DOMAIN_CAN_CONTACT
+	// UI. Possible values are: ANYONE_CAN_CONTACT ALL_IN_DOMAIN_CAN_CONTACT
 	// ALL_MEMBERS_CAN_CONTACT ALL_MANAGERS_CAN_CONTACT
 	WhoCanContactOwner string `json:"whoCanContactOwner,omitempty"`
 
-	// WhoCanInvite: Permissions to invite members. Possbile values are:
-	// ALL_MEMBERS_CAN_INVITE ALL_MANAGERS_CAN_INVITE
+	// WhoCanInvite: Permissions to invite members. Possible values are:
+	// ALL_MEMBERS_CAN_INVITE ALL_MANAGERS_CAN_INVITE NONE_CAN_INVITE
 	WhoCanInvite string `json:"whoCanInvite,omitempty"`
 
 	// WhoCanJoin: Permissions to join the group. Possible values are:
@@ -174,7 +184,7 @@ type Groups struct {
 	WhoCanJoin string `json:"whoCanJoin,omitempty"`
 
 	// WhoCanLeaveGroup: Permission to leave the group. Possible values are:
-	// ALL_MANAGERS_CAN_LEAVE ALL_MEMBERS_CAN_LEAVE
+	// ALL_MANAGERS_CAN_LEAVE ALL_MEMBERS_CAN_LEAVE NONE_CAN_LEAVE
 	WhoCanLeaveGroup string `json:"whoCanLeaveGroup,omitempty"`
 
 	// WhoCanPostMessage: Permissions to post messages to the group.
@@ -182,12 +192,12 @@ type Groups struct {
 	// ALL_MEMBERS_CAN_POST ALL_IN_DOMAIN_CAN_POST ANYONE_CAN_POST
 	WhoCanPostMessage string `json:"whoCanPostMessage,omitempty"`
 
-	// WhoCanViewGroup: Permissions to view group. Possbile values are:
+	// WhoCanViewGroup: Permissions to view group. Possible values are:
 	// ANYONE_CAN_VIEW ALL_IN_DOMAIN_CAN_VIEW ALL_MEMBERS_CAN_VIEW
 	// ALL_MANAGERS_CAN_VIEW
 	WhoCanViewGroup string `json:"whoCanViewGroup,omitempty"`
 
-	// WhoCanViewMembership: Permissions to view membership. Possbile values
+	// WhoCanViewMembership: Permissions to view membership. Possible values
 	// are: ALL_IN_DOMAIN_CAN_VIEW ALL_MEMBERS_CAN_VIEW
 	// ALL_MANAGERS_CAN_VIEW
 	WhoCanViewMembership string `json:"whoCanViewMembership,omitempty"`
@@ -229,23 +239,6 @@ func (r *GroupsService) Get(groupUniqueId string) *GroupsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *GroupsGetCall) QuotaUser(quotaUser string) *GroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *GroupsGetCall) UserIP(userIP string) *GroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -273,22 +266,21 @@ func (c *GroupsGetCall) Context(ctx context.Context) *GroupsGetCall {
 }
 
 func (c *GroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{groupUniqueId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"groupUniqueId": c.groupUniqueId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "groupsSettings.groups.get" call.
@@ -298,7 +290,8 @@ func (c *GroupsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *GroupsGetCall) Do() (*Groups, error) {
+func (c *GroupsGetCall) Do(opts ...googleapi.CallOption) (*Groups, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -322,7 +315,8 @@ func (c *GroupsGetCall) Do() (*Groups, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -371,23 +365,6 @@ func (r *GroupsService) Patch(groupUniqueId string, groups *Groups) *GroupsPatch
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *GroupsPatchCall) QuotaUser(quotaUser string) *GroupsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *GroupsPatchCall) UserIP(userIP string) *GroupsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -405,25 +382,23 @@ func (c *GroupsPatchCall) Context(ctx context.Context) *GroupsPatchCall {
 }
 
 func (c *GroupsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.groups)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{groupUniqueId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"groupUniqueId": c.groupUniqueId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "groupsSettings.groups.patch" call.
@@ -433,7 +408,8 @@ func (c *GroupsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *GroupsPatchCall) Do() (*Groups, error) {
+func (c *GroupsPatchCall) Do(opts ...googleapi.CallOption) (*Groups, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -457,7 +433,8 @@ func (c *GroupsPatchCall) Do() (*Groups, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -508,23 +485,6 @@ func (r *GroupsService) Update(groupUniqueId string, groups *Groups) *GroupsUpda
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *GroupsUpdateCall) QuotaUser(quotaUser string) *GroupsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *GroupsUpdateCall) UserIP(userIP string) *GroupsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -542,25 +502,23 @@ func (c *GroupsUpdateCall) Context(ctx context.Context) *GroupsUpdateCall {
 }
 
 func (c *GroupsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.groups)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "{groupUniqueId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"groupUniqueId": c.groupUniqueId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "groupsSettings.groups.update" call.
@@ -570,7 +528,8 @@ func (c *GroupsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *GroupsUpdateCall) Do() (*Groups, error) {
+func (c *GroupsUpdateCall) Do(opts ...googleapi.CallOption) (*Groups, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -594,7 +553,8 @@ func (c *GroupsUpdateCall) Do() (*Groups, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

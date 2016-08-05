@@ -1,12 +1,12 @@
 {
  "kind": "discovery#restDescription",
- "etag": "\"ye6orv2F-1npMW3u9suM3a7C5Bo/JuFctzv7DbhH8sUX0olMhZkcdjY\"",
+ "etag": "\"jQLIOHBVnDZie4rQHGH1WJF-INE/cJbc53pk6BU16Ra4J3vrByHoh6w\"",
  "discoveryVersion": "v1",
  "id": "gamesManagement:v1management",
  "name": "gamesManagement",
  "canonicalName": "Games Management",
  "version": "v1management",
- "revision": "20151110",
+ "revision": "20160421",
  "title": "Google Play Game Services Management API",
  "description": "The Management API for Google Play Game Services.",
  "ownerDomain": "google.com",
@@ -74,7 +74,7 @@
      "description": "Share your Google+ profile information and view and manage your game activity"
     },
     "https://www.googleapis.com/auth/plus.login": {
-     "description": "Know your basic profile info and list of people in your circles."
+     "description": "Know the list of people in your circles, your age range, and language"
     }
    }
   }
@@ -316,9 +316,17 @@
       }
      }
     },
+    "originalPlayerId": {
+     "type": "string",
+     "description": "The player ID that was used for this player the first time they signed into the game in question. This is only populated for calls to player.get for the requesting player, only if the player ID has subsequently changed, and only to clients that support remapping player IDs."
+    },
     "playerId": {
      "type": "string",
      "description": "The ID of the player."
+    },
+    "profileSettings": {
+     "$ref": "ProfileSettings",
+     "description": "The player's profile settings. Controls whether or not the player's profile is visible to other players."
     },
     "title": {
      "type": "string",
@@ -365,6 +373,22 @@
      "items": {
       "type": "string"
      }
+    }
+   }
+  },
+  "ProfileSettings": {
+   "id": "ProfileSettings",
+   "type": "object",
+   "description": "This is a JSON template for profile settings",
+   "properties": {
+    "kind": {
+     "type": "string",
+     "description": "Uniquely identifies the type of this resource. Value is always the fixed string gamesManagement#profileSettings.",
+     "default": "gamesManagement#profileSettings"
+    },
+    "profileVisible": {
+     "type": "boolean",
+     "description": "The player's current profile visibility. This field is visible to both 1P and 3P APIs."
     }
    }
   },

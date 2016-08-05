@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"go/format"
+	"io"
 	"log"
 	"os"
 	"regexp"
@@ -41,16 +42,16 @@ import (
 var (
 	oFlag = flag.String("o", "", "if set, redirect stdout to this file")
 
-	config             *cbtrc.Config
-	client             *bigtable.Client
-	adminClient        *bigtable.AdminClient
-	clusterAdminClient *bigtable.ClusterAdminClient
+	config              *cbtrc.Config
+	client              *bigtable.Client
+	adminClient         *bigtable.AdminClient
+	instanceAdminClient *bigtable.InstanceAdminClient
 )
 
 func getClient() *bigtable.Client {
 	if client == nil {
 		var err error
-		client, err = bigtable.NewClient(context.Background(), config.Project, config.Zone, config.Cluster)
+		client, err = bigtable.NewClient(context.Background(), config.Project, config.Instance)
 		if err != nil {
 			log.Fatalf("Making bigtable.Client: %v", err)
 		}
@@ -61,7 +62,7 @@ func getClient() *bigtable.Client {
 func getAdminClient() *bigtable.AdminClient {
 	if adminClient == nil {
 		var err error
-		adminClient, err = bigtable.NewAdminClient(context.Background(), config.Project, config.Zone, config.Cluster)
+		adminClient, err = bigtable.NewAdminClient(context.Background(), config.Project, config.Instance)
 		if err != nil {
 			log.Fatalf("Making bigtable.AdminClient: %v", err)
 		}
@@ -69,15 +70,15 @@ func getAdminClient() *bigtable.AdminClient {
 	return adminClient
 }
 
-func getClusterAdminClient() *bigtable.ClusterAdminClient {
-	if clusterAdminClient == nil {
+func getInstanceAdminClient() *bigtable.InstanceAdminClient {
+	if instanceAdminClient == nil {
 		var err error
-		clusterAdminClient, err = bigtable.NewClusterAdminClient(context.Background(), config.Project)
+		instanceAdminClient, err = bigtable.NewInstanceAdminClient(context.Background(), config.Project)
 		if err != nil {
-			log.Fatalf("Making bigtable.ClusterAdminClient: %v", err)
+			log.Fatalf("Making bigtable.InstanceAdminClient: %v", err)
 		}
 	}
-	return clusterAdminClient
+	return instanceAdminClient
 }
 
 func main() {
@@ -88,7 +89,7 @@ func main() {
 	}
 	config.RegisterFlags()
 
-	flag.Usage = usage
+	flag.Usage = func() { usage(os.Stderr) }
 	flag.Parse()
 	if err := config.CheckFlags(); err != nil {
 		log.Fatal(err)
@@ -97,7 +98,7 @@ func main() {
 		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", config.Creds)
 	}
 	if flag.NArg() == 0 {
-		usage()
+		usage(os.Stderr)
 		os.Exit(1)
 	}
 
@@ -124,10 +125,11 @@ func main() {
 	log.Fatalf("Unknown command %q", flag.Arg(0))
 }
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [flags] <command> ...\n", os.Args[0])
-	flag.PrintDefaults()
-	fmt.Fprintf(os.Stderr, "\n%s", cmdSummary)
+func usage(w io.Writer) {
+	fmt.Fprintf(w, "Usage: %s [flags] <command> ...\n", os.Args[0])
+	flag.CommandLine.SetOutput(w)
+	flag.CommandLine.PrintDefaults()
+	fmt.Fprintf(w, "\n%s", cmdSummary)
 }
 
 var cmdSummary string // generated in init, below
@@ -144,11 +146,10 @@ func init() {
 }
 
 var configHelp = `
-For convenience, values of the -project, -zone, -cluster and -creds flags
+For convenience, values of the -project, -instance and -creds flags
 may be specified in ` + cbtrc.Filename() + ` in this format:
 	project = my-project-123
-	zone = us-central1-b
-	cluster = my-cluster
+	instance = my-instance
 	creds = path-to-account-key.json
 All values are optional, and all will be overridden by flags.
 `
@@ -196,7 +197,7 @@ var commands = []struct {
 	},
 	{
 		Name:  "doc",
-		Desc:  "Print documentation for cbt",
+		Desc:  "Print godoc-suitable documentation for cbt",
 		do:    doDoc,
 		Usage: "cbt doc",
 	},
@@ -207,10 +208,10 @@ var commands = []struct {
 		Usage: "cbt help [command]",
 	},
 	{
-		Name:  "listclusters",
-		Desc:  "List clusters in a project",
-		do:    doListClusters,
-		Usage: "cbt listclusters",
+		Name:  "listinstances",
+		Desc:  "List instances in a project",
+		do:    doListInstances,
+		Usage: "cbt listinstances",
 	},
 	{
 		Name:  "lookup",
@@ -226,13 +227,20 @@ var commands = []struct {
 			"cbt ls <table>		List column families in <table>",
 	},
 	{
+		Name:  "mddoc",
+		Desc:  "Print documentation for cbt in Markdown format",
+		do:    doMDDoc,
+		Usage: "cbt mddoc",
+	},
+	{
 		Name: "read",
 		Desc: "Read rows",
 		do:   doRead,
-		Usage: "cbt read <table> [start=<row>] [limit=<row>] [prefix=<prefix>]\n" +
+		Usage: "cbt read <table> [start=<row>] [end=<row>] [prefix=<prefix>] [count=<n>]\n" +
 			"  start=<row>		Start reading at this row\n" +
-			"  limit=<row>		Stop reading before this row\n" +
-			"  prefix=<prefix>	Read rows with this prefix\n",
+			"  end=<row>		Stop reading before this row\n" +
+			"  prefix=<prefix>	Read rows with this prefix\n" +
+			"  count=<n>		Read only this many rows\n",
 	},
 	{
 		Name: "set",
@@ -245,14 +253,15 @@ var commands = []struct {
 			"  If it cannot be parsed, the `@ts` part will be\n" +
 			"  interpreted as part of the value.",
 	},
-	/* TODO(dsymonds): Re-enable when there's a ClusterAdmin API.
 	{
-		Name:  "setclustersize",
-		Desc:  "Set size of a cluster",
-		do:    doSetClusterSize,
-		Usage: "cbt setclustersize <num_nodes>",
+		Name: "setgcpolicy",
+		Desc: "Set the GC policy for a column family",
+		do:   doSetGCPolicy,
+		Usage: "cbt setgcpolicy <table> <family> ( maxage=<d> | maxversions=<n> )\n" +
+			"\n" +
+			`  maxage=<d>		Maximum timestamp age to preserve (e.g. "1h", "4d")` + "\n" +
+			"  maxversions=<n>	Maximum number of versions to preserve",
 	},
-	*/
 }
 
 func doCount(ctx context.Context, args ...string) {
@@ -326,21 +335,38 @@ func doDeleteTable(ctx context.Context, args ...string) {
 
 // to break circular dependencies
 var (
-	doDocFn  func(ctx context.Context, args ...string)
-	doHelpFn func(ctx context.Context, args ...string)
+	doDocFn   func(ctx context.Context, args ...string)
+	doHelpFn  func(ctx context.Context, args ...string)
+	doMDDocFn func(ctx context.Context, args ...string)
 )
 
 func init() {
 	doDocFn = doDocReal
 	doHelpFn = doHelpReal
+	doMDDocFn = doMDDocReal
 }
 
-func doDoc(ctx context.Context, args ...string)  { doDocFn(ctx, args...) }
-func doHelp(ctx context.Context, args ...string) { doHelpFn(ctx, args...) }
+func doDoc(ctx context.Context, args ...string)   { doDocFn(ctx, args...) }
+func doHelp(ctx context.Context, args ...string)  { doHelpFn(ctx, args...) }
+func doMDDoc(ctx context.Context, args ...string) { doMDDocFn(ctx, args...) }
+
+func docFlags() []*flag.Flag {
+	// Only include specific flags, in a specific order.
+	var flags []*flag.Flag
+	for _, name := range []string{"project", "instance", "creds"} {
+		f := flag.Lookup(name)
+		if f == nil {
+			log.Fatalf("Flag not linked: -%s", name)
+		}
+		flags = append(flags, f)
+	}
+	return flags
+}
 
 func doDocReal(ctx context.Context, args ...string) {
 	data := map[string]interface{}{
 		"Commands": commands,
+		"Flags":    docFlags(),
 	}
 	var buf bytes.Buffer
 	if err := docTemplate.Execute(&buf, data); err != nil {
@@ -353,14 +379,16 @@ func doDocReal(ctx context.Context, args ...string) {
 	os.Stdout.Write(out)
 }
 
+func indentLines(s, ind string) string {
+	ss := strings.Split(s, "\n")
+	for i, p := range ss {
+		ss[i] = ind + p
+	}
+	return strings.Join(ss, "\n")
+}
+
 var docTemplate = template.Must(template.New("doc").Funcs(template.FuncMap{
-	"indent": func(s, ind string) string {
-		ss := strings.Split(s, "\n")
-		for i, p := range ss {
-			ss[i] = ind + p
-		}
-		return strings.Join(ss, "\n")
-	},
+	"indent": indentLines,
 }).
 	Parse(`
 // DO NOT EDIT. THIS IS AUTOMATICALLY GENERATED.
@@ -380,6 +408,11 @@ The commands are:
 
 Use "cbt help <command>" for more information about a command.
 
+The options are:
+{{range .Flags}}
+	-{{.Name}} string
+		{{.Usage}}{{end}}
+
 {{range .Commands}}
 {{.Desc}}
 
@@ -395,7 +428,7 @@ package main
 
 func doHelpReal(ctx context.Context, args ...string) {
 	if len(args) == 0 {
-		fmt.Print(cmdSummary)
+		usage(os.Stdout)
 		return
 	}
 	for _, cmd := range commands {
@@ -407,19 +440,19 @@ func doHelpReal(ctx context.Context, args ...string) {
 	log.Fatalf("Don't know command %q", args[0])
 }
 
-func doListClusters(ctx context.Context, args ...string) {
+func doListInstances(ctx context.Context, args ...string) {
 	if len(args) != 0 {
-		log.Fatalf("usage: cbt listclusters")
+		log.Fatalf("usage: cbt listinstances")
 	}
-	cis, err := getClusterAdminClient().Clusters(ctx)
+	is, err := getInstanceAdminClient().Instances(ctx)
 	if err != nil {
-		log.Fatalf("Getting list of clusters: %v", err)
+		log.Fatalf("Getting list of instances: %v", err)
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 10, 8, 4, '\t', 0)
-	fmt.Fprintf(tw, "Cluster Name\tZone\tInfo\n")
-	fmt.Fprintf(tw, "------------\t----\t----\n")
-	for _, ci := range cis {
-		fmt.Fprintf(tw, "%s\t%s\t%s (%d serve nodes)\n", ci.Name, ci.Zone, ci.DisplayName, ci.ServeNodes)
+	fmt.Fprintf(tw, "Instance Name\tInfo\n")
+	fmt.Fprintf(tw, "-------------\t----\n")
+	for _, i := range is {
+		fmt.Fprintf(tw, "%s\t%s\n", i.Name, i.DisplayName)
 	}
 	tw.Flush()
 }
@@ -489,6 +522,49 @@ func doLS(ctx context.Context, args ...string) {
 	}
 }
 
+func doMDDocReal(ctx context.Context, args ...string) {
+	data := map[string]interface{}{
+		"Commands": commands,
+		"Flags":    docFlags(),
+	}
+	var buf bytes.Buffer
+	if err := mddocTemplate.Execute(&buf, data); err != nil {
+		log.Fatalf("Bad mddoc template: %v", err)
+	}
+	io.Copy(os.Stdout, &buf)
+}
+
+var mddocTemplate = template.Must(template.New("mddoc").Funcs(template.FuncMap{
+	"indent": indentLines,
+}).
+	Parse(`
+Cbt is a tool for doing basic interactions with Cloud Bigtable.
+
+Usage:
+
+	cbt [options] command [arguments]
+
+The commands are:
+{{range .Commands}}
+	{{printf "%-25s %s" .Name .Desc}}{{end}}
+
+Use "cbt help <command>" for more information about a command.
+
+The options are:
+{{range .Flags}}
+	-{{.Name}} string
+		{{.Usage}}{{end}}
+
+{{range .Commands}}
+## {{.Desc}}
+
+{{indent .Usage "\t"}}
+
+
+
+{{end}}
+`))
+
 func doRead(ctx context.Context, args ...string) {
 	if len(args) < 1 {
 		log.Fatalf("usage: cbt read <table> [args ...]")
@@ -505,17 +581,20 @@ func doRead(ctx context.Context, args ...string) {
 		switch key {
 		default:
 			log.Fatalf("Unknown arg key %q", key)
-		case "start", "limit", "prefix":
+		case "limit":
+			// Be nicer; we used to support this, but renamed it to "end".
+			log.Fatalf("Unknown arg key %q; did you mean %q?", key, "end")
+		case "start", "end", "prefix", "count":
 			parsed[key] = val
 		}
 	}
-	if (parsed["start"] != "" || parsed["limit"] != "") && parsed["prefix"] != "" {
-		log.Fatal(`"start"/"limit" may not be mixed with "prefix"`)
+	if (parsed["start"] != "" || parsed["end"] != "") && parsed["prefix"] != "" {
+		log.Fatal(`"start"/"end" may not be mixed with "prefix"`)
 	}
 
 	var rr bigtable.RowRange
-	if start, limit := parsed["start"], parsed["limit"]; limit != "" {
-		rr = bigtable.NewRange(start, limit)
+	if start, end := parsed["start"], parsed["end"]; end != "" {
+		rr = bigtable.NewRange(start, end)
 	} else if start != "" {
 		rr = bigtable.InfiniteRange(start)
 	}
@@ -523,11 +602,20 @@ func doRead(ctx context.Context, args ...string) {
 		rr = bigtable.PrefixRange(prefix)
 	}
 
+	var opts []bigtable.ReadOption
+	if count := parsed["count"]; count != "" {
+		n, err := strconv.ParseInt(count, 0, 64)
+		if err != nil {
+			log.Fatalf("Bad count %q: %v", count, err)
+		}
+		opts = append(opts, bigtable.LimitRows(n))
+	}
+
 	// TODO(dsymonds): Support filters.
 	err := tbl.ReadRows(ctx, rr, func(r bigtable.Row) bool {
 		printRow(r)
 		return true
-	})
+	}, opts...)
 	if err != nil {
 		log.Fatalf("Reading rows: %v", err)
 	}
@@ -564,17 +652,73 @@ func doSet(ctx context.Context, args ...string) {
 	}
 }
 
-/* TODO(dsymonds): Re-enable when there's a ClusterAdmin API.
-func doSetClusterSize(ctx context.Context, args ...string) {
-	if len(args) != 1 {
-		log.Fatalf("usage: cbt setclustersize <num_nodes>")
+func doSetGCPolicy(ctx context.Context, args ...string) {
+	if len(args) < 3 {
+		log.Fatalf("usage: cbt setgcpolicy <table> <family> ( maxage=<d> | maxversions=<n> )")
 	}
-	n, err := strconv.ParseInt(args[0], 0, 32)
-	if err != nil {
-		log.Fatalf("Bad num_nodes value %q: %v", args[0], err)
+	table := args[0]
+	fam := args[1]
+
+	var pol bigtable.GCPolicy
+	switch p := args[2]; {
+	case strings.HasPrefix(p, "maxage="):
+		d, err := parseDuration(p[7:])
+		if err != nil {
+			log.Fatal(err)
+		}
+		pol = bigtable.MaxAgePolicy(d)
+	case strings.HasPrefix(p, "maxversions="):
+		n, err := strconv.ParseUint(p[12:], 10, 16)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pol = bigtable.MaxVersionsPolicy(int(n))
+	default:
+		log.Fatalf("Bad GC policy %q", p)
 	}
-	if err := getAdminClient().SetClusterSize(ctx, int(n)); err != nil {
-		log.Fatalf("Setting cluster size: %v", err)
+	if err := getAdminClient().SetGCPolicy(ctx, table, fam, pol); err != nil {
+		log.Fatalf("Setting GC policy: %v", err)
 	}
 }
-*/
+
+// parseDuration parses a duration string.
+// It is similar to Go's time.ParseDuration, except with a different set of supported units,
+// and only simple formats supported.
+func parseDuration(s string) (time.Duration, error) {
+	// [0-9]+[a-z]+
+
+	// Split [0-9]+ from [a-z]+.
+	i := 0
+	for ; i < len(s); i++ {
+		c := s[i]
+		if c < '0' || c > '9' {
+			break
+		}
+	}
+	ds, u := s[:i], s[i:]
+	if ds == "" || u == "" {
+		return 0, fmt.Errorf("invalid duration %q", s)
+	}
+	// Parse them.
+	d, err := strconv.ParseUint(ds, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration %q: %v", s, err)
+	}
+	unit, ok := unitMap[u]
+	if !ok {
+		return 0, fmt.Errorf("unknown unit %q in duration %q", u, s)
+	}
+	if d > uint64((1<<63-1)/unit) {
+		// overflow
+		return 0, fmt.Errorf("invalid duration %q overflows", s)
+	}
+	return time.Duration(d) * unit, nil
+}
+
+var unitMap = map[string]time.Duration{
+	"ms": time.Millisecond,
+	"s":  time.Second,
+	"m":  time.Minute,
+	"h":  time.Hour,
+	"d":  24 * time.Hour,
+}

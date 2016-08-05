@@ -81,6 +81,10 @@ type RelyingpartyService struct {
 // CreateAuthUriResponse: Response of creating the IDP authentication
 // URL.
 type CreateAuthUriResponse struct {
+	// AllProviders: all providers the user has once used to do federated
+	// login
+	AllProviders []string `json:"allProviders,omitempty"`
+
 	// AuthUri: The URI used by the IDP to authenticate the user.
 	AuthUri string `json:"authUri,omitempty"`
 
@@ -109,7 +113,7 @@ type CreateAuthUriResponse struct {
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "AuthUri") to
+	// ForceSendFields is a list of field names (e.g. "AllProviders") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -175,6 +179,41 @@ type DownloadAccountResponse struct {
 
 func (s *DownloadAccountResponse) MarshalJSON() ([]byte, error) {
 	type noMethod DownloadAccountResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// EmailTemplate: Template for an email template.
+type EmailTemplate struct {
+	// Body: Email body.
+	Body string `json:"body,omitempty"`
+
+	// Format: Email body format.
+	Format string `json:"format,omitempty"`
+
+	// From: From address of the email.
+	From string `json:"from,omitempty"`
+
+	// FromDisplayName: From display name.
+	FromDisplayName string `json:"fromDisplayName,omitempty"`
+
+	// ReplyTo: Reply-to address.
+	ReplyTo string `json:"replyTo,omitempty"`
+
+	// Subject: Subject of the email.
+	Subject string `json:"subject,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Body") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *EmailTemplate) MarshalJSON() ([]byte, error) {
+	type noMethod EmailTemplate
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -287,6 +326,10 @@ type IdentitytoolkitRelyingpartyCreateAuthUriRequest struct {
 	// federated login flow.
 	ContinueUri string `json:"continueUri,omitempty"`
 
+	// HostedDomain: The hosted domain to restrict sign-in to accounts at
+	// that domain for Google Apps hosted accounts.
+	HostedDomain string `json:"hostedDomain,omitempty"`
+
 	// Identifier: The email or federated ID of the user.
 	Identifier string `json:"identifier,omitempty"`
 
@@ -329,15 +372,23 @@ func (s *IdentitytoolkitRelyingpartyCreateAuthUriRequest) MarshalJSON() ([]byte,
 // IdentitytoolkitRelyingpartyDeleteAccountRequest: Request to delete
 // account.
 type IdentitytoolkitRelyingpartyDeleteAccountRequest struct {
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
+	// IdToken: The GITKit token or STS id token of the authenticated user.
+	IdToken string `json:"idToken,omitempty"`
+
 	// LocalId: The local ID of the user.
 	LocalId string `json:"localId,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "LocalId") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "DelegatedProjectNumber") to unconditionally include in API requests.
+	// By default, fields with empty values are omitted from API requests.
+	// However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -350,6 +401,10 @@ func (s *IdentitytoolkitRelyingpartyDeleteAccountRequest) MarshalJSON() ([]byte,
 // IdentitytoolkitRelyingpartyDownloadAccountRequest: Request to
 // download user account in batch.
 type IdentitytoolkitRelyingpartyDownloadAccountRequest struct {
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
 	// MaxResults: The max number of results to return in the response.
 	MaxResults int64 `json:"maxResults,omitempty"`
 
@@ -357,12 +412,13 @@ type IdentitytoolkitRelyingpartyDownloadAccountRequest struct {
 	// the previous response.
 	NextPageToken string `json:"nextPageToken,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "MaxResults") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "DelegatedProjectNumber") to unconditionally include in API requests.
+	// By default, fields with empty values are omitted from API requests.
+	// However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -375,6 +431,10 @@ func (s *IdentitytoolkitRelyingpartyDownloadAccountRequest) MarshalJSON() ([]byt
 // IdentitytoolkitRelyingpartyGetAccountInfoRequest: Request to get the
 // account information.
 type IdentitytoolkitRelyingpartyGetAccountInfoRequest struct {
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
 	// Email: The list of emails of the users to inquiry.
 	Email []string `json:"email,omitempty"`
 
@@ -384,12 +444,13 @@ type IdentitytoolkitRelyingpartyGetAccountInfoRequest struct {
 	// LocalId: The list of local ID's of the users to inquiry.
 	LocalId []string `json:"localId,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Email") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "DelegatedProjectNumber") to unconditionally include in API requests.
+	// By default, fields with empty values are omitted from API requests.
+	// However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -408,11 +469,32 @@ type IdentitytoolkitRelyingpartyGetProjectConfigResponse struct {
 	// ApiKey: Browser API key, needed when making http request to Apiary.
 	ApiKey string `json:"apiKey,omitempty"`
 
+	// AuthorizedDomains: Authorized domains.
+	AuthorizedDomains []string `json:"authorizedDomains,omitempty"`
+
+	// ChangeEmailTemplate: Change email template.
+	ChangeEmailTemplate *EmailTemplate `json:"changeEmailTemplate,omitempty"`
+
+	// EnableAnonymousUser: Whether anonymous user is enabled.
+	EnableAnonymousUser bool `json:"enableAnonymousUser,omitempty"`
+
 	// IdpConfig: OAuth2 provider configuration.
 	IdpConfig []*IdpConfig `json:"idpConfig,omitempty"`
 
+	// LegacyResetPasswordTemplate: Legacy reset password email template.
+	LegacyResetPasswordTemplate *EmailTemplate `json:"legacyResetPasswordTemplate,omitempty"`
+
 	// ProjectId: Project ID of the relying party.
 	ProjectId string `json:"projectId,omitempty"`
+
+	// ResetPasswordTemplate: Reset password email template.
+	ResetPasswordTemplate *EmailTemplate `json:"resetPasswordTemplate,omitempty"`
+
+	// UseEmailSending: Whether to use email sending provided by Firebear.
+	UseEmailSending bool `json:"useEmailSending,omitempty"`
+
+	// VerifyEmailTemplate: Verify email template.
+	VerifyEmailTemplate *EmailTemplate `json:"verifyEmailTemplate,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -472,6 +554,19 @@ type IdentitytoolkitRelyingpartySetAccountInfoRequest struct {
 	// CaptchaResponse: Response to the captcha.
 	CaptchaResponse string `json:"captchaResponse,omitempty"`
 
+	// CreatedAt: The timestamp when the account is created.
+	CreatedAt int64 `json:"createdAt,omitempty,string"`
+
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
+	// DeleteAttribute: The attributes users request to delete.
+	DeleteAttribute []string `json:"deleteAttribute,omitempty"`
+
+	// DeleteProvider: The IDPs the user request to delete.
+	DeleteProvider []string `json:"deleteProvider,omitempty"`
+
 	// DisableUser: Whether to disable the user.
 	DisableUser bool `json:"disableUser,omitempty"`
 
@@ -490,6 +585,9 @@ type IdentitytoolkitRelyingpartySetAccountInfoRequest struct {
 	// InstanceId: Instance id token of the app.
 	InstanceId string `json:"instanceId,omitempty"`
 
+	// LastLoginAt: Last login timestamp.
+	LastLoginAt int64 `json:"lastLoginAt,omitempty,string"`
+
 	// LocalId: The local ID of the user.
 	LocalId string `json:"localId,omitempty"`
 
@@ -499,8 +597,15 @@ type IdentitytoolkitRelyingpartySetAccountInfoRequest struct {
 	// Password: The new password of the user.
 	Password string `json:"password,omitempty"`
 
+	// PhotoUrl: The photo url of the user.
+	PhotoUrl string `json:"photoUrl,omitempty"`
+
 	// Provider: The associated IDPs of the user.
 	Provider []string `json:"provider,omitempty"`
+
+	// ReturnSecureToken: Whether return sts id token and refresh token
+	// instead of gitkit token.
+	ReturnSecureToken bool `json:"returnSecureToken,omitempty"`
 
 	// UpgradeToFederatedLogin: Mark the user to upgrade to federated login.
 	UpgradeToFederatedLogin bool `json:"upgradeToFederatedLogin,omitempty"`
@@ -519,6 +624,83 @@ type IdentitytoolkitRelyingpartySetAccountInfoRequest struct {
 
 func (s *IdentitytoolkitRelyingpartySetAccountInfoRequest) MarshalJSON() ([]byte, error) {
 	type noMethod IdentitytoolkitRelyingpartySetAccountInfoRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// IdentitytoolkitRelyingpartySetProjectConfigRequest: Request to set
+// the project configuration.
+type IdentitytoolkitRelyingpartySetProjectConfigRequest struct {
+	// AllowPasswordUser: Whether to allow password user sign in or sign up.
+	AllowPasswordUser bool `json:"allowPasswordUser,omitempty"`
+
+	// ApiKey: Browser API key, needed when making http request to Apiary.
+	ApiKey string `json:"apiKey,omitempty"`
+
+	// AuthorizedDomains: Authorized domains for widget redirect.
+	AuthorizedDomains []string `json:"authorizedDomains,omitempty"`
+
+	// ChangeEmailTemplate: Change email template.
+	ChangeEmailTemplate *EmailTemplate `json:"changeEmailTemplate,omitempty"`
+
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
+	// EnableAnonymousUser: Whether to enable anonymous user.
+	EnableAnonymousUser bool `json:"enableAnonymousUser,omitempty"`
+
+	// IdpConfig: Oauth2 provider configuration.
+	IdpConfig []*IdpConfig `json:"idpConfig,omitempty"`
+
+	// LegacyResetPasswordTemplate: Legacy reset password email template.
+	LegacyResetPasswordTemplate *EmailTemplate `json:"legacyResetPasswordTemplate,omitempty"`
+
+	// ResetPasswordTemplate: Reset password email template.
+	ResetPasswordTemplate *EmailTemplate `json:"resetPasswordTemplate,omitempty"`
+
+	// UseEmailSending: Whether to use email sending provided by Firebear.
+	UseEmailSending bool `json:"useEmailSending,omitempty"`
+
+	// VerifyEmailTemplate: Verify email template.
+	VerifyEmailTemplate *EmailTemplate `json:"verifyEmailTemplate,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "AllowPasswordUser")
+	// to unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *IdentitytoolkitRelyingpartySetProjectConfigRequest) MarshalJSON() ([]byte, error) {
+	type noMethod IdentitytoolkitRelyingpartySetProjectConfigRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// IdentitytoolkitRelyingpartySetProjectConfigResponse: Response of
+// setting the project configuration.
+type IdentitytoolkitRelyingpartySetProjectConfigResponse struct {
+	// ProjectId: Project ID of the relying party.
+	ProjectId string `json:"projectId,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "ProjectId") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *IdentitytoolkitRelyingpartySetProjectConfigResponse) MarshalJSON() ([]byte, error) {
+	type noMethod IdentitytoolkitRelyingpartySetProjectConfigResponse
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -572,9 +754,52 @@ func (s *IdentitytoolkitRelyingpartySignOutUserResponse) MarshalJSON() ([]byte, 
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+// IdentitytoolkitRelyingpartySignupNewUserRequest: Request to signup
+// new user, create anonymous user or anonymous user reauth.
+type IdentitytoolkitRelyingpartySignupNewUserRequest struct {
+	// CaptchaChallenge: The captcha challenge.
+	CaptchaChallenge string `json:"captchaChallenge,omitempty"`
+
+	// CaptchaResponse: Response to the captcha.
+	CaptchaResponse string `json:"captchaResponse,omitempty"`
+
+	// DisplayName: The name of the user.
+	DisplayName string `json:"displayName,omitempty"`
+
+	// Email: The email of the user.
+	Email string `json:"email,omitempty"`
+
+	// IdToken: The GITKit token of the authenticated user.
+	IdToken string `json:"idToken,omitempty"`
+
+	// InstanceId: Instance id token of the app.
+	InstanceId string `json:"instanceId,omitempty"`
+
+	// Password: The new password of the user.
+	Password string `json:"password,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "CaptchaChallenge") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *IdentitytoolkitRelyingpartySignupNewUserRequest) MarshalJSON() ([]byte, error) {
+	type noMethod IdentitytoolkitRelyingpartySignupNewUserRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // IdentitytoolkitRelyingpartyUploadAccountRequest: Request to upload
 // user account in batch.
 type IdentitytoolkitRelyingpartyUploadAccountRequest struct {
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
 	// HashAlgorithm: The password hash algorithm.
 	HashAlgorithm string `json:"hashAlgorithm,omitempty"`
 
@@ -595,12 +820,13 @@ type IdentitytoolkitRelyingpartyUploadAccountRequest struct {
 	// Users: The account info to be stored.
 	Users []*UserInfo `json:"users,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "HashAlgorithm") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "DelegatedProjectNumber") to unconditionally include in API requests.
+	// By default, fields with empty values are omitted from API requests.
+	// However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -613,6 +839,13 @@ func (s *IdentitytoolkitRelyingpartyUploadAccountRequest) MarshalJSON() ([]byte,
 // IdentitytoolkitRelyingpartyVerifyAssertionRequest: Request to verify
 // the IDP assertion.
 type IdentitytoolkitRelyingpartyVerifyAssertionRequest struct {
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
+	// IdToken: The GITKit token of the authenticated user.
+	IdToken string `json:"idToken,omitempty"`
+
 	// InstanceId: Instance id token of the app.
 	InstanceId string `json:"instanceId,omitempty"`
 
@@ -630,16 +863,21 @@ type IdentitytoolkitRelyingpartyVerifyAssertionRequest struct {
 	// ReturnRefreshToken: Whether to return refresh tokens.
 	ReturnRefreshToken bool `json:"returnRefreshToken,omitempty"`
 
+	// ReturnSecureToken: Whether return sts id token and refresh token
+	// instead of gitkit token.
+	ReturnSecureToken bool `json:"returnSecureToken,omitempty"`
+
 	// SessionId: Session ID, which should match the one in previous
 	// createAuthUri request.
 	SessionId string `json:"sessionId,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "InstanceId") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "DelegatedProjectNumber") to unconditionally include in API requests.
+	// By default, fields with empty values are omitted from API requests.
+	// However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -652,18 +890,27 @@ func (s *IdentitytoolkitRelyingpartyVerifyAssertionRequest) MarshalJSON() ([]byt
 // IdentitytoolkitRelyingpartyVerifyCustomTokenRequest: Request to
 // verify a custom token
 type IdentitytoolkitRelyingpartyVerifyCustomTokenRequest struct {
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
 	// InstanceId: Instance id token of the app.
 	InstanceId string `json:"instanceId,omitempty"`
+
+	// ReturnSecureToken: Whether return sts id token and refresh token
+	// instead of gitkit token.
+	ReturnSecureToken bool `json:"returnSecureToken,omitempty"`
 
 	// Token: The custom token to verify
 	Token string `json:"token,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "InstanceId") to
-	// unconditionally include in API requests. By default, fields with
-	// empty values are omitted from API requests. However, any non-pointer,
-	// non-interface field appearing in ForceSendFields will be sent to the
-	// server regardless of whether the field is empty or not. This may be
-	// used to include empty fields in Patch requests.
+	// ForceSendFields is a list of field names (e.g.
+	// "DelegatedProjectNumber") to unconditionally include in API requests.
+	// By default, fields with empty values are omitted from API requests.
+	// However, any non-pointer, non-interface field appearing in
+	// ForceSendFields will be sent to the server regardless of whether the
+	// field is empty or not. This may be used to include empty fields in
+	// Patch requests.
 	ForceSendFields []string `json:"-"`
 }
 
@@ -682,8 +929,15 @@ type IdentitytoolkitRelyingpartyVerifyPasswordRequest struct {
 	// CaptchaResponse: Response to the captcha.
 	CaptchaResponse string `json:"captchaResponse,omitempty"`
 
+	// DelegatedProjectNumber: GCP project number of the requesting
+	// delegated app. Currently only intended for Firebase V1 migration.
+	DelegatedProjectNumber int64 `json:"delegatedProjectNumber,omitempty,string"`
+
 	// Email: The email of the user.
 	Email string `json:"email,omitempty"`
+
+	// IdToken: The GITKit token of the authenticated user.
+	IdToken string `json:"idToken,omitempty"`
 
 	// InstanceId: Instance id token of the app.
 	InstanceId string `json:"instanceId,omitempty"`
@@ -694,6 +948,10 @@ type IdentitytoolkitRelyingpartyVerifyPasswordRequest struct {
 	// PendingIdToken: The GITKit token for the non-trusted IDP, which is to
 	// be confirmed by the user.
 	PendingIdToken string `json:"pendingIdToken,omitempty"`
+
+	// ReturnSecureToken: Whether return sts id token and refresh token
+	// instead of gitkit token.
+	ReturnSecureToken bool `json:"returnSecureToken,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "CaptchaChallenge") to
 	// unconditionally include in API requests. By default, fields with
@@ -724,6 +982,12 @@ type IdpConfig struct {
 
 	// Provider: OAuth2 provider.
 	Provider string `json:"provider,omitempty"`
+
+	// Secret: OAuth2 client secret.
+	Secret string `json:"secret,omitempty"`
+
+	// WhitelistedAudiences: Whitelisted client IDs for audience check.
+	WhitelistedAudiences []string `json:"whitelistedAudiences,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "ClientId") to
 	// unconditionally include in API requests. By default, fields with
@@ -817,17 +1081,34 @@ type SetAccountInfoResponse struct {
 	// Email: The email of the user.
 	Email string `json:"email,omitempty"`
 
+	// ExpiresIn: If idToken is STS id token, then this field will be
+	// expiration time of STS id token in seconds.
+	ExpiresIn int64 `json:"expiresIn,omitempty,string"`
+
 	// IdToken: The Gitkit id token to login the newly sign up user.
 	IdToken string `json:"idToken,omitempty"`
 
 	// Kind: The fixed string "identitytoolkit#SetAccountInfoResponse".
 	Kind string `json:"kind,omitempty"`
 
+	// LocalId: The local ID of the user.
+	LocalId string `json:"localId,omitempty"`
+
 	// NewEmail: The new email the user attempts to change to.
 	NewEmail string `json:"newEmail,omitempty"`
 
+	// PasswordHash: The user's hashed password.
+	PasswordHash string `json:"passwordHash,omitempty"`
+
+	// PhotoUrl: The photo url of the user.
+	PhotoUrl string `json:"photoUrl,omitempty"`
+
 	// ProviderUserInfo: The user's profiles at the associated IdPs.
 	ProviderUserInfo []*SetAccountInfoResponseProviderUserInfo `json:"providerUserInfo,omitempty"`
+
+	// RefreshToken: If idToken is STS id token, then this field will be
+	// refresh token.
+	RefreshToken string `json:"refreshToken,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -852,6 +1133,9 @@ type SetAccountInfoResponseProviderUserInfo struct {
 	// DisplayName: The user's display name at the IDP.
 	DisplayName string `json:"displayName,omitempty"`
 
+	// FederatedId: User's identifier at IDP.
+	FederatedId string `json:"federatedId,omitempty"`
+
 	// PhotoUrl: The user's photo url at the IDP.
 	PhotoUrl string `json:"photoUrl,omitempty"`
 
@@ -871,6 +1155,51 @@ type SetAccountInfoResponseProviderUserInfo struct {
 
 func (s *SetAccountInfoResponseProviderUserInfo) MarshalJSON() ([]byte, error) {
 	type noMethod SetAccountInfoResponseProviderUserInfo
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// SignupNewUserResponse: Response of signing up new user, creating
+// anonymous user or anonymous user reauth.
+type SignupNewUserResponse struct {
+	// DisplayName: The name of the user.
+	DisplayName string `json:"displayName,omitempty"`
+
+	// Email: The email of the user.
+	Email string `json:"email,omitempty"`
+
+	// ExpiresIn: If idToken is STS id token, then this field will be
+	// expiration time of STS id token in seconds.
+	ExpiresIn int64 `json:"expiresIn,omitempty,string"`
+
+	// IdToken: The Gitkit id token to login the newly sign up user.
+	IdToken string `json:"idToken,omitempty"`
+
+	// Kind: The fixed string "identitytoolkit#SignupNewUserResponse".
+	Kind string `json:"kind,omitempty"`
+
+	// LocalId: The RP local ID of the user.
+	LocalId string `json:"localId,omitempty"`
+
+	// RefreshToken: If idToken is STS id token, then this field will be
+	// refresh token.
+	RefreshToken string `json:"refreshToken,omitempty"`
+
+	// ServerResponse contains the HTTP response code and headers from the
+	// server.
+	googleapi.ServerResponse `json:"-"`
+
+	// ForceSendFields is a list of field names (e.g. "DisplayName") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *SignupNewUserResponse) MarshalJSON() ([]byte, error) {
+	type noMethod SignupNewUserResponse
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -926,6 +1255,9 @@ func (s *UploadAccountResponseError) MarshalJSON() ([]byte, error) {
 
 // UserInfo: Template for an individual account info.
 type UserInfo struct {
+	// CreatedAt: User creation timestamp.
+	CreatedAt int64 `json:"createdAt,omitempty,string"`
+
 	// Disabled: Whether the user is disabled.
 	Disabled bool `json:"disabled,omitempty"`
 
@@ -937,6 +1269,9 @@ type UserInfo struct {
 
 	// EmailVerified: Whether the email has been verified.
 	EmailVerified bool `json:"emailVerified,omitempty"`
+
+	// LastLoginAt: last login timestamp.
+	LastLoginAt int64 `json:"lastLoginAt,omitempty,string"`
 
 	// LocalId: The local ID of the user.
 	LocalId string `json:"localId,omitempty"`
@@ -962,7 +1297,7 @@ type UserInfo struct {
 	// Version: Version of the user's password.
 	Version int64 `json:"version,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Disabled") to
+	// ForceSendFields is a list of field names (e.g. "CreatedAt") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -981,6 +1316,9 @@ type UserInfoProviderUserInfo struct {
 	// DisplayName: The user's display name at the IDP.
 	DisplayName string `json:"displayName,omitempty"`
 
+	// Email: User's email at IDP.
+	Email string `json:"email,omitempty"`
+
 	// FederatedId: User's identifier at IDP.
 	FederatedId string `json:"federatedId,omitempty"`
 
@@ -991,6 +1329,9 @@ type UserInfoProviderUserInfo struct {
 	// name, e.g., google.com, aol.com, live.net and yahoo.com. For other
 	// OpenID IdPs it's the OP identifier.
 	ProviderId string `json:"providerId,omitempty"`
+
+	// RawId: User's raw identifier directly returned from IDP.
+	RawId string `json:"rawId,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "DisplayName") to
 	// unconditionally include in API requests. By default, fields with
@@ -1038,6 +1379,10 @@ type VerifyAssertionResponse struct {
 	// EmailVerified: The value is true if the IDP is also the email
 	// provider. It means the user owns the email.
 	EmailVerified bool `json:"emailVerified,omitempty"`
+
+	// ExpiresIn: If idToken is STS id token, then this field will be
+	// expiration time of STS id token in seconds.
+	ExpiresIn int64 `json:"expiresIn,omitempty,string"`
 
 	// FederatedId: The unique ID identifies the IdP account.
 	FederatedId string `json:"federatedId,omitempty"`
@@ -1089,12 +1434,18 @@ type VerifyAssertionResponse struct {
 	// OauthExpireIn: The lifetime in seconds of the OAuth2 access token.
 	OauthExpireIn int64 `json:"oauthExpireIn,omitempty"`
 
+	// OauthIdToken: The OIDC id token.
+	OauthIdToken string `json:"oauthIdToken,omitempty"`
+
 	// OauthRequestToken: The user approved request token for the OpenID
 	// OAuth extension.
 	OauthRequestToken string `json:"oauthRequestToken,omitempty"`
 
 	// OauthScope: The scope for the OpenID OAuth extension.
 	OauthScope string `json:"oauthScope,omitempty"`
+
+	// OauthTokenSecret: The OAuth1 access token secret.
+	OauthTokenSecret string `json:"oauthTokenSecret,omitempty"`
 
 	// OriginalEmail: The original email stored in the mapping storage. It's
 	// returned when the federated ID is associated to a different email.
@@ -1110,6 +1461,13 @@ type VerifyAssertionResponse struct {
 	// param is federated ID in the createAuthUri request. The domain part
 	// of the federated ID is returned.
 	ProviderId string `json:"providerId,omitempty"`
+
+	// RefreshToken: If idToken is STS id token, then this field will be
+	// refresh token.
+	RefreshToken string `json:"refreshToken,omitempty"`
+
+	// ScreenName: The screen_name of a Twitter user.
+	ScreenName string `json:"screenName,omitempty"`
 
 	// TimeZone: The timezone of the user.
 	TimeZone string `json:"timeZone,omitempty"`
@@ -1139,17 +1497,25 @@ func (s *VerifyAssertionResponse) MarshalJSON() ([]byte, error) {
 
 // VerifyCustomTokenResponse: Response from verifying a custom token
 type VerifyCustomTokenResponse struct {
+	// ExpiresIn: If idToken is STS id token, then this field will be
+	// expiration time of STS id token in seconds.
+	ExpiresIn int64 `json:"expiresIn,omitempty,string"`
+
 	// IdToken: The GITKit token for authenticated user.
 	IdToken string `json:"idToken,omitempty"`
 
 	// Kind: The fixed string "identitytoolkit#VerifyCustomTokenResponse".
 	Kind string `json:"kind,omitempty"`
 
+	// RefreshToken: If idToken is STS id token, then this field will be
+	// refresh token.
+	RefreshToken string `json:"refreshToken,omitempty"`
+
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
 	googleapi.ServerResponse `json:"-"`
 
-	// ForceSendFields is a list of field names (e.g. "IdToken") to
+	// ForceSendFields is a list of field names (e.g. "ExpiresIn") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -1173,6 +1539,10 @@ type VerifyPasswordResponse struct {
 	// may not own the email.
 	Email string `json:"email,omitempty"`
 
+	// ExpiresIn: If idToken is STS id token, then this field will be
+	// expiration time of STS id token in seconds.
+	ExpiresIn int64 `json:"expiresIn,omitempty,string"`
+
 	// IdToken: The GITKit token for authenticated user.
 	IdToken string `json:"idToken,omitempty"`
 
@@ -1194,6 +1564,10 @@ type VerifyPasswordResponse struct {
 
 	// PhotoUrl: The URI of the user's photo at IdP
 	PhotoUrl string `json:"photoUrl,omitempty"`
+
+	// RefreshToken: If idToken is STS id token, then this field will be
+	// refresh token.
+	RefreshToken string `json:"refreshToken,omitempty"`
 
 	// Registered: Whether the email is registered.
 	Registered bool `json:"registered,omitempty"`
@@ -1234,23 +1608,6 @@ func (r *RelyingpartyService) CreateAuthUri(identitytoolkitrelyingpartycreateaut
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyCreateAuthUriCall) QuotaUser(quotaUser string) *RelyingpartyCreateAuthUriCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyCreateAuthUriCall) UserIP(userIP string) *RelyingpartyCreateAuthUriCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1268,23 +1625,21 @@ func (c *RelyingpartyCreateAuthUriCall) Context(ctx context.Context) *Relyingpar
 }
 
 func (c *RelyingpartyCreateAuthUriCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartycreateauthurirequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "createAuthUri")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.createAuthUri" call.
@@ -1294,7 +1649,8 @@ func (c *RelyingpartyCreateAuthUriCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyCreateAuthUriCall) Do() (*CreateAuthUriResponse, error) {
+func (c *RelyingpartyCreateAuthUriCall) Do(opts ...googleapi.CallOption) (*CreateAuthUriResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1318,7 +1674,8 @@ func (c *RelyingpartyCreateAuthUriCall) Do() (*CreateAuthUriResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1353,23 +1710,6 @@ func (r *RelyingpartyService) DeleteAccount(identitytoolkitrelyingpartydeleteacc
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyDeleteAccountCall) QuotaUser(quotaUser string) *RelyingpartyDeleteAccountCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyDeleteAccountCall) UserIP(userIP string) *RelyingpartyDeleteAccountCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1387,23 +1727,21 @@ func (c *RelyingpartyDeleteAccountCall) Context(ctx context.Context) *Relyingpar
 }
 
 func (c *RelyingpartyDeleteAccountCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartydeleteaccountrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "deleteAccount")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.deleteAccount" call.
@@ -1413,7 +1751,8 @@ func (c *RelyingpartyDeleteAccountCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyDeleteAccountCall) Do() (*DeleteAccountResponse, error) {
+func (c *RelyingpartyDeleteAccountCall) Do(opts ...googleapi.CallOption) (*DeleteAccountResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1437,7 +1776,8 @@ func (c *RelyingpartyDeleteAccountCall) Do() (*DeleteAccountResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1472,23 +1812,6 @@ func (r *RelyingpartyService) DownloadAccount(identitytoolkitrelyingpartydownloa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyDownloadAccountCall) QuotaUser(quotaUser string) *RelyingpartyDownloadAccountCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyDownloadAccountCall) UserIP(userIP string) *RelyingpartyDownloadAccountCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1506,23 +1829,21 @@ func (c *RelyingpartyDownloadAccountCall) Context(ctx context.Context) *Relyingp
 }
 
 func (c *RelyingpartyDownloadAccountCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartydownloadaccountrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "downloadAccount")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.downloadAccount" call.
@@ -1532,7 +1853,8 @@ func (c *RelyingpartyDownloadAccountCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyDownloadAccountCall) Do() (*DownloadAccountResponse, error) {
+func (c *RelyingpartyDownloadAccountCall) Do(opts ...googleapi.CallOption) (*DownloadAccountResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1556,7 +1878,8 @@ func (c *RelyingpartyDownloadAccountCall) Do() (*DownloadAccountResponse, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1591,23 +1914,6 @@ func (r *RelyingpartyService) GetAccountInfo(identitytoolkitrelyingpartygetaccou
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyGetAccountInfoCall) QuotaUser(quotaUser string) *RelyingpartyGetAccountInfoCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyGetAccountInfoCall) UserIP(userIP string) *RelyingpartyGetAccountInfoCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1625,23 +1931,21 @@ func (c *RelyingpartyGetAccountInfoCall) Context(ctx context.Context) *Relyingpa
 }
 
 func (c *RelyingpartyGetAccountInfoCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartygetaccountinforequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "getAccountInfo")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.getAccountInfo" call.
@@ -1651,7 +1955,8 @@ func (c *RelyingpartyGetAccountInfoCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyGetAccountInfoCall) Do() (*GetAccountInfoResponse, error) {
+func (c *RelyingpartyGetAccountInfoCall) Do(opts ...googleapi.CallOption) (*GetAccountInfoResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1675,7 +1980,8 @@ func (c *RelyingpartyGetAccountInfoCall) Do() (*GetAccountInfoResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1710,23 +2016,6 @@ func (r *RelyingpartyService) GetOobConfirmationCode(relyingparty *Relyingparty)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyGetOobConfirmationCodeCall) QuotaUser(quotaUser string) *RelyingpartyGetOobConfirmationCodeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyGetOobConfirmationCodeCall) UserIP(userIP string) *RelyingpartyGetOobConfirmationCodeCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1744,23 +2033,21 @@ func (c *RelyingpartyGetOobConfirmationCodeCall) Context(ctx context.Context) *R
 }
 
 func (c *RelyingpartyGetOobConfirmationCodeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.relyingparty)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "getOobConfirmationCode")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.getOobConfirmationCode" call.
@@ -1770,7 +2057,8 @@ func (c *RelyingpartyGetOobConfirmationCodeCall) doRequest(alt string) (*http.Re
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyGetOobConfirmationCodeCall) Do() (*GetOobConfirmationCodeResponse, error) {
+func (c *RelyingpartyGetOobConfirmationCodeCall) Do(opts ...googleapi.CallOption) (*GetOobConfirmationCodeResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1794,7 +2082,8 @@ func (c *RelyingpartyGetOobConfirmationCodeCall) Do() (*GetOobConfirmationCodeRe
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1828,20 +2117,18 @@ func (r *RelyingpartyService) GetProjectConfig() *RelyingpartyGetProjectConfigCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyGetProjectConfigCall) QuotaUser(quotaUser string) *RelyingpartyGetProjectConfigCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// DelegatedProjectNumber sets the optional parameter
+// "delegatedProjectNumber": Delegated GCP project number of the
+// request.
+func (c *RelyingpartyGetProjectConfigCall) DelegatedProjectNumber(delegatedProjectNumber string) *RelyingpartyGetProjectConfigCall {
+	c.urlParams_.Set("delegatedProjectNumber", delegatedProjectNumber)
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyGetProjectConfigCall) UserIP(userIP string) *RelyingpartyGetProjectConfigCall {
-	c.urlParams_.Set("userIp", userIP)
+// ProjectNumber sets the optional parameter "projectNumber": GCP
+// project number of the request.
+func (c *RelyingpartyGetProjectConfigCall) ProjectNumber(projectNumber string) *RelyingpartyGetProjectConfigCall {
+	c.urlParams_.Set("projectNumber", projectNumber)
 	return c
 }
 
@@ -1872,20 +2159,19 @@ func (c *RelyingpartyGetProjectConfigCall) Context(ctx context.Context) *Relying
 }
 
 func (c *RelyingpartyGetProjectConfigCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "getProjectConfig")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.getProjectConfig" call.
@@ -1897,7 +2183,8 @@ func (c *RelyingpartyGetProjectConfigCall) doRequest(alt string) (*http.Response
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RelyingpartyGetProjectConfigCall) Do() (*IdentitytoolkitRelyingpartyGetProjectConfigResponse, error) {
+func (c *RelyingpartyGetProjectConfigCall) Do(opts ...googleapi.CallOption) (*IdentitytoolkitRelyingpartyGetProjectConfigResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1921,7 +2208,8 @@ func (c *RelyingpartyGetProjectConfigCall) Do() (*IdentitytoolkitRelyingpartyGet
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1929,6 +2217,18 @@ func (c *RelyingpartyGetProjectConfigCall) Do() (*IdentitytoolkitRelyingpartyGet
 	//   "description": "Get project configuration.",
 	//   "httpMethod": "GET",
 	//   "id": "identitytoolkit.relyingparty.getProjectConfig",
+	//   "parameters": {
+	//     "delegatedProjectNumber": {
+	//       "description": "Delegated GCP project number of the request.",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
+	//     "projectNumber": {
+	//       "description": "GCP project number of the request.",
+	//       "location": "query",
+	//       "type": "string"
+	//     }
+	//   },
 	//   "path": "getProjectConfig",
 	//   "response": {
 	//     "$ref": "IdentitytoolkitRelyingpartyGetProjectConfigResponse"
@@ -1949,23 +2249,6 @@ type RelyingpartyGetPublicKeysCall struct {
 // GetPublicKeys: Get token signing public key.
 func (r *RelyingpartyService) GetPublicKeys() *RelyingpartyGetPublicKeysCall {
 	c := &RelyingpartyGetPublicKeysCall{s: r.s, urlParams_: make(gensupport.URLParams)}
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyGetPublicKeysCall) QuotaUser(quotaUser string) *RelyingpartyGetPublicKeysCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyGetPublicKeysCall) UserIP(userIP string) *RelyingpartyGetPublicKeysCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1996,24 +2279,24 @@ func (c *RelyingpartyGetPublicKeysCall) Context(ctx context.Context) *Relyingpar
 }
 
 func (c *RelyingpartyGetPublicKeysCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "publicKeys")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.getPublicKeys" call.
-func (c *RelyingpartyGetPublicKeysCall) Do() (map[string]string, error) {
+func (c *RelyingpartyGetPublicKeysCall) Do(opts ...googleapi.CallOption) (map[string]string, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return nil, err
@@ -2023,7 +2306,8 @@ func (c *RelyingpartyGetPublicKeysCall) Do() (map[string]string, error) {
 		return nil, err
 	}
 	var ret map[string]string
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2054,23 +2338,6 @@ func (r *RelyingpartyService) GetRecaptchaParam() *RelyingpartyGetRecaptchaParam
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyGetRecaptchaParamCall) QuotaUser(quotaUser string) *RelyingpartyGetRecaptchaParamCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyGetRecaptchaParamCall) UserIP(userIP string) *RelyingpartyGetRecaptchaParamCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2098,20 +2365,19 @@ func (c *RelyingpartyGetRecaptchaParamCall) Context(ctx context.Context) *Relyin
 }
 
 func (c *RelyingpartyGetRecaptchaParamCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "getRecaptchaParam")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.getRecaptchaParam" call.
@@ -2121,7 +2387,8 @@ func (c *RelyingpartyGetRecaptchaParamCall) doRequest(alt string) (*http.Respons
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyGetRecaptchaParamCall) Do() (*GetRecaptchaParamResponse, error) {
+func (c *RelyingpartyGetRecaptchaParamCall) Do(opts ...googleapi.CallOption) (*GetRecaptchaParamResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2145,7 +2412,8 @@ func (c *RelyingpartyGetRecaptchaParamCall) Do() (*GetRecaptchaParamResponse, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2177,23 +2445,6 @@ func (r *RelyingpartyService) ResetPassword(identitytoolkitrelyingpartyresetpass
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyResetPasswordCall) QuotaUser(quotaUser string) *RelyingpartyResetPasswordCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyResetPasswordCall) UserIP(userIP string) *RelyingpartyResetPasswordCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2211,23 +2462,21 @@ func (c *RelyingpartyResetPasswordCall) Context(ctx context.Context) *Relyingpar
 }
 
 func (c *RelyingpartyResetPasswordCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartyresetpasswordrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "resetPassword")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.resetPassword" call.
@@ -2237,7 +2486,8 @@ func (c *RelyingpartyResetPasswordCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyResetPasswordCall) Do() (*ResetPasswordResponse, error) {
+func (c *RelyingpartyResetPasswordCall) Do(opts ...googleapi.CallOption) (*ResetPasswordResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2261,7 +2511,8 @@ func (c *RelyingpartyResetPasswordCall) Do() (*ResetPasswordResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2296,23 +2547,6 @@ func (r *RelyingpartyService) SetAccountInfo(identitytoolkitrelyingpartysetaccou
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartySetAccountInfoCall) QuotaUser(quotaUser string) *RelyingpartySetAccountInfoCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartySetAccountInfoCall) UserIP(userIP string) *RelyingpartySetAccountInfoCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2330,23 +2564,21 @@ func (c *RelyingpartySetAccountInfoCall) Context(ctx context.Context) *Relyingpa
 }
 
 func (c *RelyingpartySetAccountInfoCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartysetaccountinforequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "setAccountInfo")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.setAccountInfo" call.
@@ -2356,7 +2588,8 @@ func (c *RelyingpartySetAccountInfoCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartySetAccountInfoCall) Do() (*SetAccountInfoResponse, error) {
+func (c *RelyingpartySetAccountInfoCall) Do(opts ...googleapi.CallOption) (*SetAccountInfoResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2380,7 +2613,8 @@ func (c *RelyingpartySetAccountInfoCall) Do() (*SetAccountInfoResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2394,6 +2628,110 @@ func (c *RelyingpartySetAccountInfoCall) Do() (*SetAccountInfoResponse, error) {
 	//   },
 	//   "response": {
 	//     "$ref": "SetAccountInfoResponse"
+	//   }
+	// }
+
+}
+
+// method id "identitytoolkit.relyingparty.setProjectConfig":
+
+type RelyingpartySetProjectConfigCall struct {
+	s                                                  *Service
+	identitytoolkitrelyingpartysetprojectconfigrequest *IdentitytoolkitRelyingpartySetProjectConfigRequest
+	urlParams_                                         gensupport.URLParams
+	ctx_                                               context.Context
+}
+
+// SetProjectConfig: Set project configuration.
+func (r *RelyingpartyService) SetProjectConfig(identitytoolkitrelyingpartysetprojectconfigrequest *IdentitytoolkitRelyingpartySetProjectConfigRequest) *RelyingpartySetProjectConfigCall {
+	c := &RelyingpartySetProjectConfigCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.identitytoolkitrelyingpartysetprojectconfigrequest = identitytoolkitrelyingpartysetprojectconfigrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *RelyingpartySetProjectConfigCall) Fields(s ...googleapi.Field) *RelyingpartySetProjectConfigCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *RelyingpartySetProjectConfigCall) Context(ctx context.Context) *RelyingpartySetProjectConfigCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *RelyingpartySetProjectConfigCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartysetprojectconfigrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "setProjectConfig")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "identitytoolkit.relyingparty.setProjectConfig" call.
+// Exactly one of *IdentitytoolkitRelyingpartySetProjectConfigResponse
+// or error will be non-nil. Any non-2xx status code is an error.
+// Response headers are in either
+// *IdentitytoolkitRelyingpartySetProjectConfigResponse.ServerResponse.He
+// ader or (if a response was returned at all) in
+// error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
+// whether the returned error was because http.StatusNotModified was
+// returned.
+func (c *RelyingpartySetProjectConfigCall) Do(opts ...googleapi.CallOption) (*IdentitytoolkitRelyingpartySetProjectConfigResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &IdentitytoolkitRelyingpartySetProjectConfigResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Set project configuration.",
+	//   "httpMethod": "POST",
+	//   "id": "identitytoolkit.relyingparty.setProjectConfig",
+	//   "path": "setProjectConfig",
+	//   "request": {
+	//     "$ref": "IdentitytoolkitRelyingpartySetProjectConfigRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "IdentitytoolkitRelyingpartySetProjectConfigResponse"
 	//   }
 	// }
 
@@ -2415,23 +2753,6 @@ func (r *RelyingpartyService) SignOutUser(identitytoolkitrelyingpartysignoutuser
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartySignOutUserCall) QuotaUser(quotaUser string) *RelyingpartySignOutUserCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartySignOutUserCall) UserIP(userIP string) *RelyingpartySignOutUserCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2449,23 +2770,21 @@ func (c *RelyingpartySignOutUserCall) Context(ctx context.Context) *Relyingparty
 }
 
 func (c *RelyingpartySignOutUserCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartysignoutuserrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "signOutUser")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.signOutUser" call.
@@ -2477,7 +2796,8 @@ func (c *RelyingpartySignOutUserCall) doRequest(alt string) (*http.Response, err
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *RelyingpartySignOutUserCall) Do() (*IdentitytoolkitRelyingpartySignOutUserResponse, error) {
+func (c *RelyingpartySignOutUserCall) Do(opts ...googleapi.CallOption) (*IdentitytoolkitRelyingpartySignOutUserResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2501,7 +2821,8 @@ func (c *RelyingpartySignOutUserCall) Do() (*IdentitytoolkitRelyingpartySignOutU
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2515,6 +2836,108 @@ func (c *RelyingpartySignOutUserCall) Do() (*IdentitytoolkitRelyingpartySignOutU
 	//   },
 	//   "response": {
 	//     "$ref": "IdentitytoolkitRelyingpartySignOutUserResponse"
+	//   }
+	// }
+
+}
+
+// method id "identitytoolkit.relyingparty.signupNewUser":
+
+type RelyingpartySignupNewUserCall struct {
+	s                                               *Service
+	identitytoolkitrelyingpartysignupnewuserrequest *IdentitytoolkitRelyingpartySignupNewUserRequest
+	urlParams_                                      gensupport.URLParams
+	ctx_                                            context.Context
+}
+
+// SignupNewUser: Signup new user.
+func (r *RelyingpartyService) SignupNewUser(identitytoolkitrelyingpartysignupnewuserrequest *IdentitytoolkitRelyingpartySignupNewUserRequest) *RelyingpartySignupNewUserCall {
+	c := &RelyingpartySignupNewUserCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.identitytoolkitrelyingpartysignupnewuserrequest = identitytoolkitrelyingpartysignupnewuserrequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *RelyingpartySignupNewUserCall) Fields(s ...googleapi.Field) *RelyingpartySignupNewUserCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *RelyingpartySignupNewUserCall) Context(ctx context.Context) *RelyingpartySignupNewUserCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *RelyingpartySignupNewUserCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartysignupnewuserrequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "signupNewUser")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "identitytoolkit.relyingparty.signupNewUser" call.
+// Exactly one of *SignupNewUserResponse or error will be non-nil. Any
+// non-2xx status code is an error. Response headers are in either
+// *SignupNewUserResponse.ServerResponse.Header or (if a response was
+// returned at all) in error.(*googleapi.Error).Header. Use
+// googleapi.IsNotModified to check whether the returned error was
+// because http.StatusNotModified was returned.
+func (c *RelyingpartySignupNewUserCall) Do(opts ...googleapi.CallOption) (*SignupNewUserResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if res != nil && res.StatusCode == http.StatusNotModified {
+		if res.Body != nil {
+			res.Body.Close()
+		}
+		return nil, &googleapi.Error{
+			Code:   res.StatusCode,
+			Header: res.Header,
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return nil, err
+	}
+	ret := &SignupNewUserResponse{
+		ServerResponse: googleapi.ServerResponse{
+			Header:         res.Header,
+			HTTPStatusCode: res.StatusCode,
+		},
+	}
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
+		return nil, err
+	}
+	return ret, nil
+	// {
+	//   "description": "Signup new user.",
+	//   "httpMethod": "POST",
+	//   "id": "identitytoolkit.relyingparty.signupNewUser",
+	//   "path": "signupNewUser",
+	//   "request": {
+	//     "$ref": "IdentitytoolkitRelyingpartySignupNewUserRequest"
+	//   },
+	//   "response": {
+	//     "$ref": "SignupNewUserResponse"
 	//   }
 	// }
 
@@ -2536,23 +2959,6 @@ func (r *RelyingpartyService) UploadAccount(identitytoolkitrelyingpartyuploadacc
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyUploadAccountCall) QuotaUser(quotaUser string) *RelyingpartyUploadAccountCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyUploadAccountCall) UserIP(userIP string) *RelyingpartyUploadAccountCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2570,23 +2976,21 @@ func (c *RelyingpartyUploadAccountCall) Context(ctx context.Context) *Relyingpar
 }
 
 func (c *RelyingpartyUploadAccountCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartyuploadaccountrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "uploadAccount")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.uploadAccount" call.
@@ -2596,7 +3000,8 @@ func (c *RelyingpartyUploadAccountCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyUploadAccountCall) Do() (*UploadAccountResponse, error) {
+func (c *RelyingpartyUploadAccountCall) Do(opts ...googleapi.CallOption) (*UploadAccountResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2620,7 +3025,8 @@ func (c *RelyingpartyUploadAccountCall) Do() (*UploadAccountResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2655,23 +3061,6 @@ func (r *RelyingpartyService) VerifyAssertion(identitytoolkitrelyingpartyverifya
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyVerifyAssertionCall) QuotaUser(quotaUser string) *RelyingpartyVerifyAssertionCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyVerifyAssertionCall) UserIP(userIP string) *RelyingpartyVerifyAssertionCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2689,23 +3078,21 @@ func (c *RelyingpartyVerifyAssertionCall) Context(ctx context.Context) *Relyingp
 }
 
 func (c *RelyingpartyVerifyAssertionCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartyverifyassertionrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "verifyAssertion")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.verifyAssertion" call.
@@ -2715,7 +3102,8 @@ func (c *RelyingpartyVerifyAssertionCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyVerifyAssertionCall) Do() (*VerifyAssertionResponse, error) {
+func (c *RelyingpartyVerifyAssertionCall) Do(opts ...googleapi.CallOption) (*VerifyAssertionResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2739,7 +3127,8 @@ func (c *RelyingpartyVerifyAssertionCall) Do() (*VerifyAssertionResponse, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2774,23 +3163,6 @@ func (r *RelyingpartyService) VerifyCustomToken(identitytoolkitrelyingpartyverif
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyVerifyCustomTokenCall) QuotaUser(quotaUser string) *RelyingpartyVerifyCustomTokenCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyVerifyCustomTokenCall) UserIP(userIP string) *RelyingpartyVerifyCustomTokenCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2808,23 +3180,21 @@ func (c *RelyingpartyVerifyCustomTokenCall) Context(ctx context.Context) *Relyin
 }
 
 func (c *RelyingpartyVerifyCustomTokenCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartyverifycustomtokenrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "verifyCustomToken")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.verifyCustomToken" call.
@@ -2834,7 +3204,8 @@ func (c *RelyingpartyVerifyCustomTokenCall) doRequest(alt string) (*http.Respons
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyVerifyCustomTokenCall) Do() (*VerifyCustomTokenResponse, error) {
+func (c *RelyingpartyVerifyCustomTokenCall) Do(opts ...googleapi.CallOption) (*VerifyCustomTokenResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2858,7 +3229,8 @@ func (c *RelyingpartyVerifyCustomTokenCall) Do() (*VerifyCustomTokenResponse, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2893,23 +3265,6 @@ func (r *RelyingpartyService) VerifyPassword(identitytoolkitrelyingpartyverifypa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RelyingpartyVerifyPasswordCall) QuotaUser(quotaUser string) *RelyingpartyVerifyPasswordCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RelyingpartyVerifyPasswordCall) UserIP(userIP string) *RelyingpartyVerifyPasswordCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2927,23 +3282,21 @@ func (c *RelyingpartyVerifyPasswordCall) Context(ctx context.Context) *Relyingpa
 }
 
 func (c *RelyingpartyVerifyPasswordCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.identitytoolkitrelyingpartyverifypasswordrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "verifyPassword")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "identitytoolkit.relyingparty.verifyPassword" call.
@@ -2953,7 +3306,8 @@ func (c *RelyingpartyVerifyPasswordCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RelyingpartyVerifyPasswordCall) Do() (*VerifyPasswordResponse, error) {
+func (c *RelyingpartyVerifyPasswordCall) Do(opts ...googleapi.CallOption) (*VerifyPasswordResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2977,7 +3331,8 @@ func (c *RelyingpartyVerifyPasswordCall) Do() (*VerifyPasswordResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

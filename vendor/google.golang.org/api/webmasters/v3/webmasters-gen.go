@@ -252,6 +252,10 @@ type SearchAnalyticsQueryRequest struct {
 	// equal to the end date. This value is included in the range.
 	StartDate string `json:"startDate,omitempty"`
 
+	// StartRow: [Optional; Default is 0] Zero-based index of the first row
+	// in the response. Must be a non-negative number.
+	StartRow int64 `json:"startRow,omitempty"`
+
 	// ForceSendFields is a list of field names (e.g. "AggregationType") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
@@ -652,23 +656,6 @@ func (r *SearchanalyticsService) Query(siteUrl string, searchanalyticsqueryreque
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SearchanalyticsQueryCall) QuotaUser(quotaUser string) *SearchanalyticsQueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SearchanalyticsQueryCall) UserIP(userIP string) *SearchanalyticsQueryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -686,25 +673,23 @@ func (c *SearchanalyticsQueryCall) Context(ctx context.Context) *Searchanalytics
 }
 
 func (c *SearchanalyticsQueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.searchanalyticsqueryrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/searchAnalytics/query")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.searchanalytics.query" call.
@@ -714,7 +699,8 @@ func (c *SearchanalyticsQueryCall) doRequest(alt string) (*http.Response, error)
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SearchanalyticsQueryCall) Do() (*SearchAnalyticsQueryResponse, error) {
+func (c *SearchanalyticsQueryCall) Do(opts ...googleapi.CallOption) (*SearchAnalyticsQueryResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -738,7 +724,8 @@ func (c *SearchanalyticsQueryCall) Do() (*SearchAnalyticsQueryResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -790,23 +777,6 @@ func (r *SitemapsService) Delete(siteUrl string, feedpath string) *SitemapsDelet
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitemapsDeleteCall) QuotaUser(quotaUser string) *SitemapsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitemapsDeleteCall) UserIP(userIP string) *SitemapsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -824,24 +794,24 @@ func (c *SitemapsDeleteCall) Context(ctx context.Context) *SitemapsDeleteCall {
 }
 
 func (c *SitemapsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/sitemaps/{feedpath}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl":  c.siteUrl,
 		"feedpath": c.feedpath,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sitemaps.delete" call.
-func (c *SitemapsDeleteCall) Do() error {
+func (c *SitemapsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -900,23 +870,6 @@ func (r *SitemapsService) Get(siteUrl string, feedpath string) *SitemapsGetCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitemapsGetCall) QuotaUser(quotaUser string) *SitemapsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitemapsGetCall) UserIP(userIP string) *SitemapsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -944,23 +897,22 @@ func (c *SitemapsGetCall) Context(ctx context.Context) *SitemapsGetCall {
 }
 
 func (c *SitemapsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/sitemaps/{feedpath}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl":  c.siteUrl,
 		"feedpath": c.feedpath,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sitemaps.get" call.
@@ -970,7 +922,8 @@ func (c *SitemapsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SitemapsGetCall) Do() (*WmxSitemap, error) {
+func (c *SitemapsGetCall) Do(opts ...googleapi.CallOption) (*WmxSitemap, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -994,7 +947,8 @@ func (c *SitemapsGetCall) Do() (*WmxSitemap, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1051,28 +1005,11 @@ func (r *SitemapsService) List(siteUrl string) *SitemapsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitemapsListCall) QuotaUser(quotaUser string) *SitemapsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SitemapIndex sets the optional parameter "sitemapIndex": A URL of a
 // site's sitemap index. For example:
 // http://www.example.com/sitemapindex.xml
 func (c *SitemapsListCall) SitemapIndex(sitemapIndex string) *SitemapsListCall {
 	c.urlParams_.Set("sitemapIndex", sitemapIndex)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitemapsListCall) UserIP(userIP string) *SitemapsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -1103,22 +1040,21 @@ func (c *SitemapsListCall) Context(ctx context.Context) *SitemapsListCall {
 }
 
 func (c *SitemapsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/sitemaps")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sitemaps.list" call.
@@ -1128,7 +1064,8 @@ func (c *SitemapsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SitemapsListCall) Do() (*SitemapsListResponse, error) {
+func (c *SitemapsListCall) Do(opts ...googleapi.CallOption) (*SitemapsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1152,7 +1089,8 @@ func (c *SitemapsListCall) Do() (*SitemapsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1206,23 +1144,6 @@ func (r *SitemapsService) Submit(siteUrl string, feedpath string) *SitemapsSubmi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitemapsSubmitCall) QuotaUser(quotaUser string) *SitemapsSubmitCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitemapsSubmitCall) UserIP(userIP string) *SitemapsSubmitCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1240,24 +1161,24 @@ func (c *SitemapsSubmitCall) Context(ctx context.Context) *SitemapsSubmitCall {
 }
 
 func (c *SitemapsSubmitCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/sitemaps/{feedpath}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl":  c.siteUrl,
 		"feedpath": c.feedpath,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sitemaps.submit" call.
-func (c *SitemapsSubmitCall) Do() error {
+func (c *SitemapsSubmitCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1313,23 +1234,6 @@ func (r *SitesService) Add(siteUrl string) *SitesAddCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesAddCall) QuotaUser(quotaUser string) *SitesAddCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesAddCall) UserIP(userIP string) *SitesAddCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1347,23 +1251,23 @@ func (c *SitesAddCall) Context(ctx context.Context) *SitesAddCall {
 }
 
 func (c *SitesAddCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sites.add" call.
-func (c *SitesAddCall) Do() error {
+func (c *SitesAddCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1413,23 +1317,6 @@ func (r *SitesService) Delete(siteUrl string) *SitesDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesDeleteCall) QuotaUser(quotaUser string) *SitesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesDeleteCall) UserIP(userIP string) *SitesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1447,23 +1334,23 @@ func (c *SitesDeleteCall) Context(ctx context.Context) *SitesDeleteCall {
 }
 
 func (c *SitesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sites.delete" call.
-func (c *SitesDeleteCall) Do() error {
+func (c *SitesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1513,23 +1400,6 @@ func (r *SitesService) Get(siteUrl string) *SitesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesGetCall) QuotaUser(quotaUser string) *SitesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesGetCall) UserIP(userIP string) *SitesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1557,22 +1427,21 @@ func (c *SitesGetCall) Context(ctx context.Context) *SitesGetCall {
 }
 
 func (c *SitesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sites.get" call.
@@ -1582,7 +1451,8 @@ func (c *SitesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *SitesGetCall) Do() (*WmxSite, error) {
+func (c *SitesGetCall) Do(opts ...googleapi.CallOption) (*WmxSite, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1606,7 +1476,8 @@ func (c *SitesGetCall) Do() (*WmxSite, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1652,23 +1523,6 @@ func (r *SitesService) List() *SitesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesListCall) QuotaUser(quotaUser string) *SitesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesListCall) UserIP(userIP string) *SitesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1696,20 +1550,19 @@ func (c *SitesListCall) Context(ctx context.Context) *SitesListCall {
 }
 
 func (c *SitesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.sites.list" call.
@@ -1719,7 +1572,8 @@ func (c *SitesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SitesListCall) Do() (*SitesListResponse, error) {
+func (c *SitesListCall) Do(opts ...googleapi.CallOption) (*SitesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1743,7 +1597,8 @@ func (c *SitesListCall) Do() (*SitesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1787,6 +1642,7 @@ func (r *UrlcrawlerrorscountsService) Query(siteUrl string) *Urlcrawlerrorscount
 //
 // Possible values:
 //   "authPermissions"
+//   "flashContent"
 //   "manyToOneRedirect"
 //   "notFollowed"
 //   "notFound"
@@ -1819,23 +1675,6 @@ func (c *UrlcrawlerrorscountsQueryCall) Platform(platform string) *Urlcrawlerror
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UrlcrawlerrorscountsQueryCall) QuotaUser(quotaUser string) *UrlcrawlerrorscountsQueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UrlcrawlerrorscountsQueryCall) UserIP(userIP string) *UrlcrawlerrorscountsQueryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1863,22 +1702,21 @@ func (c *UrlcrawlerrorscountsQueryCall) Context(ctx context.Context) *Urlcrawler
 }
 
 func (c *UrlcrawlerrorscountsQueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/urlCrawlErrorsCounts/query")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.urlcrawlerrorscounts.query" call.
@@ -1889,7 +1727,8 @@ func (c *UrlcrawlerrorscountsQueryCall) doRequest(alt string) (*http.Response, e
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *UrlcrawlerrorscountsQueryCall) Do() (*UrlCrawlErrorsCountsQueryResponse, error) {
+func (c *UrlcrawlerrorscountsQueryCall) Do(opts ...googleapi.CallOption) (*UrlCrawlErrorsCountsQueryResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1913,7 +1752,8 @@ func (c *UrlcrawlerrorscountsQueryCall) Do() (*UrlCrawlErrorsCountsQueryResponse
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1929,6 +1769,7 @@ func (c *UrlcrawlerrorscountsQueryCall) Do() (*UrlCrawlErrorsCountsQueryResponse
 	//       "description": "The crawl error category. For example: serverError. If not specified, returns results for all categories.",
 	//       "enum": [
 	//         "authPermissions",
+	//         "flashContent",
 	//         "manyToOneRedirect",
 	//         "notFollowed",
 	//         "notFound",
@@ -1938,6 +1779,7 @@ func (c *UrlcrawlerrorscountsQueryCall) Do() (*UrlCrawlErrorsCountsQueryResponse
 	//         "soft404"
 	//       ],
 	//       "enumDescriptions": [
+	//         "",
 	//         "",
 	//         "",
 	//         "",
@@ -2011,23 +1853,6 @@ func (r *UrlcrawlerrorssamplesService) Get(siteUrl string, url string, category 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UrlcrawlerrorssamplesGetCall) QuotaUser(quotaUser string) *UrlcrawlerrorssamplesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UrlcrawlerrorssamplesGetCall) UserIP(userIP string) *UrlcrawlerrorssamplesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2055,23 +1880,22 @@ func (c *UrlcrawlerrorssamplesGetCall) Context(ctx context.Context) *Urlcrawlerr
 }
 
 func (c *UrlcrawlerrorssamplesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/urlCrawlErrorsSamples/{url}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 		"url":     c.url,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.urlcrawlerrorssamples.get" call.
@@ -2081,7 +1905,8 @@ func (c *UrlcrawlerrorssamplesGetCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UrlcrawlerrorssamplesGetCall) Do() (*UrlCrawlErrorsSample, error) {
+func (c *UrlcrawlerrorssamplesGetCall) Do(opts ...googleapi.CallOption) (*UrlCrawlErrorsSample, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2105,7 +1930,8 @@ func (c *UrlcrawlerrorssamplesGetCall) Do() (*UrlCrawlErrorsSample, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2124,6 +1950,7 @@ func (c *UrlcrawlerrorssamplesGetCall) Do() (*UrlCrawlErrorsSample, error) {
 	//       "description": "The crawl error category. For example: authPermissions",
 	//       "enum": [
 	//         "authPermissions",
+	//         "flashContent",
 	//         "manyToOneRedirect",
 	//         "notFollowed",
 	//         "notFound",
@@ -2133,6 +1960,7 @@ func (c *UrlcrawlerrorssamplesGetCall) Do() (*UrlCrawlErrorsSample, error) {
 	//         "soft404"
 	//       ],
 	//       "enumDescriptions": [
+	//         "",
 	//         "",
 	//         "",
 	//         "",
@@ -2207,23 +2035,6 @@ func (r *UrlcrawlerrorssamplesService) List(siteUrl string, category string, pla
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UrlcrawlerrorssamplesListCall) QuotaUser(quotaUser string) *UrlcrawlerrorssamplesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UrlcrawlerrorssamplesListCall) UserIP(userIP string) *UrlcrawlerrorssamplesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2251,22 +2062,21 @@ func (c *UrlcrawlerrorssamplesListCall) Context(ctx context.Context) *Urlcrawler
 }
 
 func (c *UrlcrawlerrorssamplesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/urlCrawlErrorsSamples")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.urlcrawlerrorssamples.list" call.
@@ -2277,7 +2087,8 @@ func (c *UrlcrawlerrorssamplesListCall) doRequest(alt string) (*http.Response, e
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *UrlcrawlerrorssamplesListCall) Do() (*UrlCrawlErrorsSamplesListResponse, error) {
+func (c *UrlcrawlerrorssamplesListCall) Do(opts ...googleapi.CallOption) (*UrlCrawlErrorsSamplesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2301,7 +2112,8 @@ func (c *UrlcrawlerrorssamplesListCall) Do() (*UrlCrawlErrorsSamplesListResponse
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2319,6 +2131,7 @@ func (c *UrlcrawlerrorssamplesListCall) Do() (*UrlCrawlErrorsSamplesListResponse
 	//       "description": "The crawl error category. For example: authPermissions",
 	//       "enum": [
 	//         "authPermissions",
+	//         "flashContent",
 	//         "manyToOneRedirect",
 	//         "notFollowed",
 	//         "notFound",
@@ -2328,6 +2141,7 @@ func (c *UrlcrawlerrorssamplesListCall) Do() (*UrlCrawlErrorsSamplesListResponse
 	//         "soft404"
 	//       ],
 	//       "enumDescriptions": [
+	//         "",
 	//         "",
 	//         "",
 	//         "",
@@ -2397,23 +2211,6 @@ func (r *UrlcrawlerrorssamplesService) MarkAsFixed(siteUrl string, url string, c
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UrlcrawlerrorssamplesMarkAsFixedCall) QuotaUser(quotaUser string) *UrlcrawlerrorssamplesMarkAsFixedCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UrlcrawlerrorssamplesMarkAsFixedCall) UserIP(userIP string) *UrlcrawlerrorssamplesMarkAsFixedCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2431,24 +2228,24 @@ func (c *UrlcrawlerrorssamplesMarkAsFixedCall) Context(ctx context.Context) *Url
 }
 
 func (c *UrlcrawlerrorssamplesMarkAsFixedCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "sites/{siteUrl}/urlCrawlErrorsSamples/{url}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"siteUrl": c.siteUrl,
 		"url":     c.url,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webmasters.urlcrawlerrorssamples.markAsFixed" call.
-func (c *UrlcrawlerrorssamplesMarkAsFixedCall) Do() error {
+func (c *UrlcrawlerrorssamplesMarkAsFixedCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2473,6 +2270,7 @@ func (c *UrlcrawlerrorssamplesMarkAsFixedCall) Do() error {
 	//       "description": "The crawl error category. For example: authPermissions",
 	//       "enum": [
 	//         "authPermissions",
+	//         "flashContent",
 	//         "manyToOneRedirect",
 	//         "notFollowed",
 	//         "notFound",
@@ -2482,6 +2280,7 @@ func (c *UrlcrawlerrorssamplesMarkAsFixedCall) Do() error {
 	//         "soft404"
 	//       ],
 	//       "enumDescriptions": [
+	//         "",
 	//         "",
 	//         "",
 	//         "",

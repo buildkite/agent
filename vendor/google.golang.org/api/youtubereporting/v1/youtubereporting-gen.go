@@ -141,16 +141,23 @@ type Job struct {
 	// CreateTime: The creation date/time of the job.
 	CreateTime string `json:"createTime,omitempty"`
 
+	// ExpireTime: The date/time when this job will expire/expired. After a
+	// job expired, no new reports are generated.
+	ExpireTime string `json:"expireTime,omitempty"`
+
 	// Id: The server-generated ID of the job (max. 40 characters).
 	Id string `json:"id,omitempty"`
 
-	// Name: The name of the job (max. 100 characters). TODO(lanthaler)
-	// Clarify what this will actually be used for
+	// Name: The name of the job (max. 100 characters).
 	Name string `json:"name,omitempty"`
 
 	// ReportTypeId: The type of reports this job creates. Corresponds to
 	// the ID of a ReportType.
 	ReportTypeId string `json:"reportTypeId,omitempty"`
+
+	// SystemManaged: True if this a system-managed job that cannot be
+	// modified by the user; otherwise false.
+	SystemManaged bool `json:"systemManaged,omitempty"`
 
 	// ServerResponse contains the HTTP response code and headers from the
 	// server.
@@ -302,6 +309,10 @@ type Report struct {
 	// Id: The server-generated ID of the report.
 	Id string `json:"id,omitempty"`
 
+	// JobExpireTime: The date/time when the job this report belongs to will
+	// expire/expired.
+	JobExpireTime string `json:"jobExpireTime,omitempty"`
+
 	// JobId: The ID of the job that created this report.
 	JobId string `json:"jobId,omitempty"`
 
@@ -330,13 +341,22 @@ func (s *Report) MarshalJSON() ([]byte, error) {
 
 // ReportType: A report type.
 type ReportType struct {
+	// DeprecateTime: The date/time when this report type was/will be
+	// deprecated.
+	DeprecateTime string `json:"deprecateTime,omitempty"`
+
 	// Id: The ID of the report type (max. 100 characters).
 	Id string `json:"id,omitempty"`
 
 	// Name: The name of the report type (max. 100 characters).
 	Name string `json:"name,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Id") to
+	// SystemManaged: True if this a system-managed report type; otherwise
+	// false. Reporting jobs for system-managed report types are created
+	// automatically and can thus not be used in the `CreateJob` method.
+	SystemManaged bool `json:"systemManaged,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "DeprecateTime") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -376,14 +396,6 @@ func (c *JobsCreateCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *JobsCreateCall) QuotaUser(quotaUser string) *JobsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -401,23 +413,21 @@ func (c *JobsCreateCall) Context(ctx context.Context) *JobsCreateCall {
 }
 
 func (c *JobsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.job)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/jobs")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.jobs.create" call.
@@ -427,7 +437,8 @@ func (c *JobsCreateCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *JobsCreateCall) Do() (*Job, error) {
+func (c *JobsCreateCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -451,7 +462,8 @@ func (c *JobsCreateCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -506,14 +518,6 @@ func (c *JobsDeleteCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *JobsDeleteCall) QuotaUser(quotaUser string) *JobsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -531,19 +535,18 @@ func (c *JobsDeleteCall) Context(ctx context.Context) *JobsDeleteCall {
 }
 
 func (c *JobsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/jobs/{jobId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"jobId": c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.jobs.delete" call.
@@ -553,7 +556,8 @@ func (c *JobsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *JobsDeleteCall) Do() (*Empty, error) {
+func (c *JobsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -577,7 +581,8 @@ func (c *JobsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -639,14 +644,6 @@ func (c *JobsGetCall) OnBehalfOfContentOwner(onBehalfOfContentOwner string) *Job
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *JobsGetCall) QuotaUser(quotaUser string) *JobsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -674,22 +671,21 @@ func (c *JobsGetCall) Context(ctx context.Context) *JobsGetCall {
 }
 
 func (c *JobsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/jobs/{jobId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"jobId": c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.jobs.get" call.
@@ -699,7 +695,8 @@ func (c *JobsGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *JobsGetCall) Do() (*Job, error) {
+func (c *JobsGetCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -723,7 +720,8 @@ func (c *JobsGetCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -774,6 +772,15 @@ func (r *JobsService) List() *JobsListCall {
 	return c
 }
 
+// IncludeSystemManaged sets the optional parameter
+// "includeSystemManaged": If set to true, also system-managed jobs will
+// be returned; otherwise only user-created jobs will be returned.
+// System-managed jobs can neither be modified nor deleted.
+func (c *JobsListCall) IncludeSystemManaged(includeSystemManaged bool) *JobsListCall {
+	c.urlParams_.Set("includeSystemManaged", fmt.Sprint(includeSystemManaged))
+	return c
+}
+
 // OnBehalfOfContentOwner sets the optional parameter
 // "onBehalfOfContentOwner": The content owner's external ID on which
 // behalf the user is acting on. If not set, the user is acting for
@@ -797,14 +804,6 @@ func (c *JobsListCall) PageSize(pageSize int64) *JobsListCall {
 // in response to the previous call to the `ListJobs` method.
 func (c *JobsListCall) PageToken(pageToken string) *JobsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *JobsListCall) QuotaUser(quotaUser string) *JobsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -835,20 +834,19 @@ func (c *JobsListCall) Context(ctx context.Context) *JobsListCall {
 }
 
 func (c *JobsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/jobs")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.jobs.list" call.
@@ -858,7 +856,8 @@ func (c *JobsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *JobsListCall) Do() (*ListJobsResponse, error) {
+func (c *JobsListCall) Do(opts ...googleapi.CallOption) (*ListJobsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -882,7 +881,8 @@ func (c *JobsListCall) Do() (*ListJobsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -891,6 +891,11 @@ func (c *JobsListCall) Do() (*ListJobsResponse, error) {
 	//   "httpMethod": "GET",
 	//   "id": "youtubereporting.jobs.list",
 	//   "parameters": {
+	//     "includeSystemManaged": {
+	//       "description": "If set to true, also system-managed jobs will be returned; otherwise only user-created jobs will be returned. System-managed jobs can neither be modified nor deleted.",
+	//       "location": "query",
+	//       "type": "boolean"
+	//     },
 	//     "onBehalfOfContentOwner": {
 	//       "description": "The content owner's external ID on which behalf the user is acting on. If not set, the user is acting for himself (his own channel).",
 	//       "location": "query",
@@ -918,6 +923,27 @@ func (c *JobsListCall) Do() (*ListJobsResponse, error) {
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *JobsListCall) Pages(ctx context.Context, f func(*ListJobsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }
 
 // method id "youtubereporting.jobs.reports.get":
@@ -948,14 +974,6 @@ func (c *JobsReportsGetCall) OnBehalfOfContentOwner(onBehalfOfContentOwner strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *JobsReportsGetCall) QuotaUser(quotaUser string) *JobsReportsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -983,23 +1001,22 @@ func (c *JobsReportsGetCall) Context(ctx context.Context) *JobsReportsGetCall {
 }
 
 func (c *JobsReportsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/jobs/{jobId}/reports/{reportId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"jobId":    c.jobId,
 		"reportId": c.reportId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.jobs.reports.get" call.
@@ -1009,7 +1026,8 @@ func (c *JobsReportsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *JobsReportsGetCall) Do() (*Report, error) {
+func (c *JobsReportsGetCall) Do(opts ...googleapi.CallOption) (*Report, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1033,7 +1051,8 @@ func (c *JobsReportsGetCall) Do() (*Report, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1127,11 +1146,19 @@ func (c *JobsReportsListCall) PageToken(pageToken string) *JobsReportsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *JobsReportsListCall) QuotaUser(quotaUser string) *JobsReportsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// StartTimeAtOrAfter sets the optional parameter "startTimeAtOrAfter":
+// If set, only reports whose start time is greater than or equal the
+// specified date/time are returned.
+func (c *JobsReportsListCall) StartTimeAtOrAfter(startTimeAtOrAfter string) *JobsReportsListCall {
+	c.urlParams_.Set("startTimeAtOrAfter", startTimeAtOrAfter)
+	return c
+}
+
+// StartTimeBefore sets the optional parameter "startTimeBefore": If
+// set, only reports whose start time is smaller than the specified
+// date/time are returned.
+func (c *JobsReportsListCall) StartTimeBefore(startTimeBefore string) *JobsReportsListCall {
+	c.urlParams_.Set("startTimeBefore", startTimeBefore)
 	return c
 }
 
@@ -1162,22 +1189,21 @@ func (c *JobsReportsListCall) Context(ctx context.Context) *JobsReportsListCall 
 }
 
 func (c *JobsReportsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/jobs/{jobId}/reports")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"jobId": c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.jobs.reports.list" call.
@@ -1187,7 +1213,8 @@ func (c *JobsReportsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *JobsReportsListCall) Do() (*ListReportsResponse, error) {
+func (c *JobsReportsListCall) Do(opts ...googleapi.CallOption) (*ListReportsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1211,7 +1238,8 @@ func (c *JobsReportsListCall) Do() (*ListReportsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1249,6 +1277,16 @@ func (c *JobsReportsListCall) Do() (*ListReportsResponse, error) {
 	//       "description": "A token identifying a page of results the server should return. Typically, this is the value of ListReportsResponse.next_page_token returned in response to the previous call to the `ListReports` method.",
 	//       "location": "query",
 	//       "type": "string"
+	//     },
+	//     "startTimeAtOrAfter": {
+	//       "description": "If set, only reports whose start time is greater than or equal the specified date/time are returned.",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
+	//     "startTimeBefore": {
+	//       "description": "If set, only reports whose start time is smaller than the specified date/time are returned.",
+	//       "location": "query",
+	//       "type": "string"
 	//     }
 	//   },
 	//   "path": "v1/jobs/{jobId}/reports",
@@ -1261,6 +1299,27 @@ func (c *JobsReportsListCall) Do() (*ListReportsResponse, error) {
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *JobsReportsListCall) Pages(ctx context.Context, f func(*ListReportsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }
 
 // method id "youtubereporting.media.download":
@@ -1278,14 +1337,6 @@ type MediaDownloadCall struct {
 func (r *MediaService) Download(resourceName string) *MediaDownloadCall {
 	c := &MediaDownloadCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resourceName = resourceName
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *MediaDownloadCall) QuotaUser(quotaUser string) *MediaDownloadCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1316,28 +1367,28 @@ func (c *MediaDownloadCall) Context(ctx context.Context) *MediaDownloadCall {
 }
 
 func (c *MediaDownloadCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/media/{+resourceName}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resourceName": c.resourceName,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Download fetches the API endpoint's "media" value, instead of the normal
 // API response value. If the returned error is nil, the Response is guaranteed to
 // have a 2xx status code. Callers must close the Response.Body as usual.
-func (c *MediaDownloadCall) Download() (*http.Response, error) {
+func (c *MediaDownloadCall) Download(opts ...googleapi.CallOption) (*http.Response, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("media")
 	if err != nil {
 		return nil, err
@@ -1356,7 +1407,8 @@ func (c *MediaDownloadCall) Download() (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *MediaDownloadCall) Do() (*Media, error) {
+func (c *MediaDownloadCall) Do(opts ...googleapi.CallOption) (*Media, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1380,7 +1432,8 @@ func (c *MediaDownloadCall) Do() (*Media, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1393,7 +1446,7 @@ func (c *MediaDownloadCall) Do() (*Media, error) {
 	//   ],
 	//   "parameters": {
 	//     "resourceName": {
-	//       "description": "Name of the media that is being downloaded. See [][ByteStream.ReadRequest.resource_name].",
+	//       "description": "Name of the media that is being downloaded. See ReadRequest.resource_name.",
 	//       "location": "path",
 	//       "pattern": "^.*$",
 	//       "required": true,
@@ -1428,6 +1481,15 @@ func (r *ReportTypesService) List() *ReportTypesListCall {
 	return c
 }
 
+// IncludeSystemManaged sets the optional parameter
+// "includeSystemManaged": If set to true, also system-managed report
+// types will be returned; otherwise only the report types that can be
+// used to create new reporting jobs will be returned.
+func (c *ReportTypesListCall) IncludeSystemManaged(includeSystemManaged bool) *ReportTypesListCall {
+	c.urlParams_.Set("includeSystemManaged", fmt.Sprint(includeSystemManaged))
+	return c
+}
+
 // OnBehalfOfContentOwner sets the optional parameter
 // "onBehalfOfContentOwner": The content owner's external ID on which
 // behalf the user is acting on. If not set, the user is acting for
@@ -1451,14 +1513,6 @@ func (c *ReportTypesListCall) PageSize(pageSize int64) *ReportTypesListCall {
 // in response to the previous call to the `ListReportTypes` method.
 func (c *ReportTypesListCall) PageToken(pageToken string) *ReportTypesListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ReportTypesListCall) QuotaUser(quotaUser string) *ReportTypesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1489,20 +1543,19 @@ func (c *ReportTypesListCall) Context(ctx context.Context) *ReportTypesListCall 
 }
 
 func (c *ReportTypesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1/reportTypes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "youtubereporting.reportTypes.list" call.
@@ -1512,7 +1565,8 @@ func (c *ReportTypesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReportTypesListCall) Do() (*ListReportTypesResponse, error) {
+func (c *ReportTypesListCall) Do(opts ...googleapi.CallOption) (*ListReportTypesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1536,7 +1590,8 @@ func (c *ReportTypesListCall) Do() (*ListReportTypesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1545,6 +1600,11 @@ func (c *ReportTypesListCall) Do() (*ListReportTypesResponse, error) {
 	//   "httpMethod": "GET",
 	//   "id": "youtubereporting.reportTypes.list",
 	//   "parameters": {
+	//     "includeSystemManaged": {
+	//       "description": "If set to true, also system-managed report types will be returned; otherwise only the report types that can be used to create new reporting jobs will be returned.",
+	//       "location": "query",
+	//       "type": "boolean"
+	//     },
 	//     "onBehalfOfContentOwner": {
 	//       "description": "The content owner's external ID on which behalf the user is acting on. If not set, the user is acting for himself (his own channel).",
 	//       "location": "query",
@@ -1572,4 +1632,25 @@ func (c *ReportTypesListCall) Do() (*ListReportTypesResponse, error) {
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ReportTypesListCall) Pages(ctx context.Context, f func(*ListReportTypesResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }

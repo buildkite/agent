@@ -150,6 +150,144 @@ type TablesService struct {
 	s *Service
 }
 
+type BigtableColumn struct {
+	// Encoding: [Optional] The encoding of the values when the type is not
+	// STRING. Acceptable encoding values are: TEXT - indicates values are
+	// alphanumeric text strings. BINARY - indicates values are encoded
+	// using HBase Bytes.toBytes family of functions. 'encoding' can also be
+	// set at the column family level. However, the setting at this level
+	// takes precedence if 'encoding' is set at both levels.
+	Encoding string `json:"encoding,omitempty"`
+
+	// FieldName: [Optional] If the qualifier is not a valid BigQuery field
+	// identifier i.e. does not match [a-zA-Z][a-zA-Z0-9_]*, a valid
+	// identifier must be provided as the column field name and is used as
+	// field name in queries.
+	FieldName string `json:"fieldName,omitempty"`
+
+	// OnlyReadLatest: [Optional] If this is set, only the latest version of
+	// value in this column are exposed. 'onlyReadLatest' can also be set at
+	// the column family level. However, the setting at this level takes
+	// precedence if 'onlyReadLatest' is set at both levels.
+	OnlyReadLatest bool `json:"onlyReadLatest,omitempty"`
+
+	// QualifierEncoded: [Required] Qualifier of the column. Columns in the
+	// parent column family that has this exact qualifier are exposed as .
+	// field. If the qualifier is valid UTF-8 string, it can be specified in
+	// the qualifier_string field. Otherwise, a base-64 encoded value must
+	// be set to qualifier_encoded. The column field name is the same as the
+	// column qualifier. However, if the qualifier is not a valid BigQuery
+	// field identifier i.e. does not match [a-zA-Z][a-zA-Z0-9_]*, a valid
+	// identifier must be provided as field_name.
+	QualifierEncoded string `json:"qualifierEncoded,omitempty"`
+
+	QualifierString string `json:"qualifierString,omitempty"`
+
+	// Type: [Optional] The type to convert the value in cells of this
+	// column. The values are expected to be encoded using HBase
+	// Bytes.toBytes function when using the BINARY encoding value.
+	// Following BigQuery types are allowed (case-sensitive) - BYTES STRING
+	// INTEGER FLOAT BOOLEAN Default type is BYTES. 'type' can also be set
+	// at the column family level. However, the setting at this level takes
+	// precedence if 'type' is set at both levels.
+	Type string `json:"type,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Encoding") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *BigtableColumn) MarshalJSON() ([]byte, error) {
+	type noMethod BigtableColumn
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type BigtableColumnFamily struct {
+	// Columns: [Optional] Lists of columns that should be exposed as
+	// individual fields as opposed to a list of (column name, value) pairs.
+	// All columns whose qualifier matches a qualifier in this list can be
+	// accessed as .. Other columns can be accessed as a list through
+	// .Column field.
+	Columns []*BigtableColumn `json:"columns,omitempty"`
+
+	// Encoding: [Optional] The encoding of the values when the type is not
+	// STRING. Acceptable encoding values are: TEXT - indicates values are
+	// alphanumeric text strings. BINARY - indicates values are encoded
+	// using HBase Bytes.toBytes family of functions. This can be overridden
+	// for a specific column by listing that column in 'columns' and
+	// specifying an encoding for it.
+	Encoding string `json:"encoding,omitempty"`
+
+	// FamilyId: Identifier of the column family.
+	FamilyId string `json:"familyId,omitempty"`
+
+	// OnlyReadLatest: [Optional] If this is set only the latest version of
+	// value are exposed for all columns in this column family. This can be
+	// overridden for a specific column by listing that column in 'columns'
+	// and specifying a different setting for that column.
+	OnlyReadLatest bool `json:"onlyReadLatest,omitempty"`
+
+	// Type: [Optional] The type to convert the value in cells of this
+	// column family. The values are expected to be encoded using HBase
+	// Bytes.toBytes function when using the BINARY encoding value.
+	// Following BigQuery types are allowed (case-sensitive) - BYTES STRING
+	// INTEGER FLOAT BOOLEAN Default type is BYTES. This can be overridden
+	// for a specific column by listing that column in 'columns' and
+	// specifying a type for it.
+	Type string `json:"type,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Columns") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *BigtableColumnFamily) MarshalJSON() ([]byte, error) {
+	type noMethod BigtableColumnFamily
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type BigtableOptions struct {
+	// ColumnFamilies: [Optional] List of column families to expose in the
+	// table schema along with their types. This list restricts the column
+	// families that can be referenced in queries and specifies their value
+	// types. You can use this list to do type conversions - see the 'type'
+	// field for more details. If you leave this list empty, all column
+	// families are present in the table schema and their values are read as
+	// BYTES. During a query only the column families referenced in that
+	// query are read from Bigtable.
+	ColumnFamilies []*BigtableColumnFamily `json:"columnFamilies,omitempty"`
+
+	// IgnoreUnspecifiedColumnFamilies: [Optional] If field is true, then
+	// the column families that are not specified in columnFamilies list are
+	// not exposed in the table schema. Otherwise, they are read with BYTES
+	// type values. The default value is false.
+	IgnoreUnspecifiedColumnFamilies bool `json:"ignoreUnspecifiedColumnFamilies,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ColumnFamilies") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *BigtableOptions) MarshalJSON() ([]byte, error) {
+	type noMethod BigtableOptions
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type CsvOptions struct {
 	// AllowJaggedRows: [Optional] Indicates if BigQuery should accept rows
 	// that are missing trailing optional columns. If true, BigQuery treats
@@ -192,7 +330,7 @@ type CsvOptions struct {
 	// file that BigQuery will skip when reading the data. The default value
 	// is 0. This property is useful if you have header rows in the file
 	// that should be skipped.
-	SkipLeadingRows int64 `json:"skipLeadingRows,omitempty"`
+	SkipLeadingRows int64 `json:"skipLeadingRows,omitempty,string"`
 
 	// ForceSendFields is a list of field names (e.g. "AllowJaggedRows") to
 	// unconditionally include in API requests. By default, fields with
@@ -228,7 +366,7 @@ type Dataset struct {
 	// DatasetReference: [Required] A reference that identifies the dataset.
 	DatasetReference *DatasetReference `json:"datasetReference,omitempty"`
 
-	// DefaultTableExpirationMs: [Experimental] The default lifetime of all
+	// DefaultTableExpirationMs: [Optional] The default lifetime of all
 	// tables in the dataset, in milliseconds. The minimum value is 3600000
 	// milliseconds (one hour). Once this property is set, all newly-created
 	// tables in the dataset will have an expirationTime property set to the
@@ -258,6 +396,16 @@ type Dataset struct {
 
 	// Kind: [Output-only] The resource type.
 	Kind string `json:"kind,omitempty"`
+
+	// Labels: [Experimental] The labels associated with this dataset. You
+	// can use these to organize and group your datasets. You can set this
+	// property when inserting or updating a dataset. Label keys and values
+	// can be no longer than 63 characters, can only contain letters,
+	// numeric characters, underscores and dashes. International characters
+	// are allowed. Label values are optional. Label keys must start with a
+	// letter and must be unique within a dataset. Both keys and values are
+	// additionally constrained to be <= 128 bytes in size.
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// LastModifiedTime: [Output-only] The date when this dataset or any of
 	// its tables was last modified, in milliseconds since the epoch.
@@ -392,6 +540,10 @@ type DatasetListDatasets struct {
 	// Kind: The resource type. This property always returns the value
 	// "bigquery#dataset".
 	Kind string `json:"kind,omitempty"`
+
+	// Labels: [Experimental] The labels associated with this dataset. You
+	// can use these to organize and group your datasets.
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "DatasetReference") to
 	// unconditionally include in API requests. By default, fields with
@@ -548,14 +700,27 @@ func (s *ExplainQueryStep) MarshalJSON() ([]byte, error) {
 }
 
 type ExternalDataConfiguration struct {
+	// Autodetect: [Experimental] Try to detect schema and format options
+	// automatically. Any option specified explicitly will be honored.
+	Autodetect bool `json:"autodetect,omitempty"`
+
+	// BigtableOptions: [Optional] Additional options if sourceFormat is set
+	// to BIGTABLE.
+	BigtableOptions *BigtableOptions `json:"bigtableOptions,omitempty"`
+
 	// Compression: [Optional] The compression type of the data source.
 	// Possible values include GZIP and NONE. The default value is NONE.
-	// This setting is ignored for Google Cloud Datastore backups.
+	// This setting is ignored for Google Cloud Bigtable, Google Cloud
+	// Datastore backups and Avro formats.
 	Compression string `json:"compression,omitempty"`
 
 	// CsvOptions: Additional properties to set if sourceFormat is set to
 	// CSV.
 	CsvOptions *CsvOptions `json:"csvOptions,omitempty"`
+
+	// GoogleSheetsOptions: [Optional] Additional options if sourceFormat is
+	// set to GOOGLE_SHEETS.
+	GoogleSheetsOptions *GoogleSheetsOptions `json:"googleSheetsOptions,omitempty"`
 
 	// IgnoreUnknownValues: [Optional] Indicates if BigQuery should allow
 	// extra values that are not represented in the table schema. If true,
@@ -564,38 +729,46 @@ type ExternalDataConfiguration struct {
 	// invalid error is returned in the job result. The default value is
 	// false. The sourceFormat property determines what BigQuery treats as
 	// an extra value: CSV: Trailing columns JSON: Named values that don't
-	// match any column names Google Cloud Datastore backups: This setting
-	// is ignored.
+	// match any column names Google Cloud Bigtable: This setting is
+	// ignored. Google Cloud Datastore backups: This setting is ignored.
+	// Avro: This setting is ignored.
 	IgnoreUnknownValues bool `json:"ignoreUnknownValues,omitempty"`
 
 	// MaxBadRecords: [Optional] The maximum number of bad records that
 	// BigQuery can ignore when reading data. If the number of bad records
 	// exceeds this value, an invalid error is returned in the job result.
 	// The default value is 0, which requires that all records are valid.
-	// This setting is ignored for Google Cloud Datastore backups.
+	// This setting is ignored for Google Cloud Bigtable, Google Cloud
+	// Datastore backups and Avro formats.
 	MaxBadRecords int64 `json:"maxBadRecords,omitempty"`
 
 	// Schema: [Optional] The schema for the data. Schema is required for
-	// CSV and JSON formats. Schema is disallowed for Google Cloud Datastore
-	// backups.
+	// CSV and JSON formats. Schema is disallowed for Google Cloud Bigtable,
+	// Cloud Datastore backups, and Avro formats.
 	Schema *TableSchema `json:"schema,omitempty"`
 
 	// SourceFormat: [Required] The data format. For CSV files, specify
-	// "CSV". For newline-delimited JSON, specify "NEWLINE_DELIMITED_JSON".
-	// For Google Cloud Datastore backups, specify "DATASTORE_BACKUP".
+	// "CSV". For Google sheets, specify "GOOGLE_SHEETS". For
+	// newline-delimited JSON, specify "NEWLINE_DELIMITED_JSON". For Avro
+	// files, specify "AVRO". For Google Cloud Datastore backups, specify
+	// "DATASTORE_BACKUP". [Experimental] For Google Cloud Bigtable, specify
+	// "BIGTABLE". Please note that reading from Google Cloud Bigtable is
+	// experimental and has to be enabled for your project. Please contact
+	// Google Cloud Support to enable this for your project.
 	SourceFormat string `json:"sourceFormat,omitempty"`
 
 	// SourceUris: [Required] The fully-qualified URIs that point to your
-	// data in Google Cloud Storage. Each URI can contain one '*' wildcard
-	// character and it must come after the 'bucket' name. Size limits
-	// related to load jobs apply to external data sources, plus an
-	// additional limit of 10 GB maximum size across all URIs. For Google
-	// Cloud Datastore backups, exactly one URI can be specified, and it
-	// must end with '.backup_info'. Also, the '*' wildcard character is not
-	// allowed.
+	// data in Google Cloud. For Google Cloud Storage URIs: Each URI can
+	// contain one '*' wildcard character and it must come after the
+	// 'bucket' name. Size limits related to load jobs apply to external
+	// data sources. For Google Cloud Bigtable URIs: Exactly one URI can be
+	// specified and it has be a fully specified and valid HTTPS URL for a
+	// Google Cloud Bigtable table. For Google Cloud Datastore backups,
+	// exactly one URI can be specified, and it must end with
+	// '.backup_info'. Also, the '*' wildcard character is not allowed.
 	SourceUris []string `json:"sourceUris,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Compression") to
+	// ForceSendFields is a list of field names (e.g. "Autodetect") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -638,6 +811,11 @@ type GetQueryResultsResponse struct {
 	// Kind: The resource type of the response.
 	Kind string `json:"kind,omitempty"`
 
+	// NumDmlAffectedRows: [Output-only, Experimental] The number of rows
+	// affected by a DML statement. Present only for DML statements INSERT,
+	// UPDATE or DELETE.
+	NumDmlAffectedRows int64 `json:"numDmlAffectedRows,omitempty,string"`
+
 	// PageToken: A token used for paging results.
 	PageToken string `json:"pageToken,omitempty"`
 
@@ -675,6 +853,37 @@ type GetQueryResultsResponse struct {
 
 func (s *GetQueryResultsResponse) MarshalJSON() ([]byte, error) {
 	type noMethod GetQueryResultsResponse
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+type GoogleSheetsOptions struct {
+	// SkipLeadingRows: [Optional] The number of rows at the top of a sheet
+	// that BigQuery will skip when reading the data. The default value is
+	// 0. This property is useful if you have header rows that should be
+	// skipped. When autodetect is on, behavior is the following: *
+	// skipLeadingRows unspecified - Autodetect tries to detect headers in
+	// the first row. If they are not detected, the row is read as data.
+	// Otherwise data is read starting from the second row. *
+	// skipLeadingRows is 0 - Instructs autodetect that there are no headers
+	// and data should be read starting from the first row. *
+	// skipLeadingRows = N > 0 - Autodetect skips N-1 rows and tries to
+	// detect headers in row N. If headers are not detected, row N is just
+	// skipped. Otherwise row N is used to extract column names for the
+	// detected schema.
+	SkipLeadingRows int64 `json:"skipLeadingRows,omitempty,string"`
+
+	// ForceSendFields is a list of field names (e.g. "SkipLeadingRows") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *GoogleSheetsOptions) MarshalJSON() ([]byte, error) {
+	type noMethod GoogleSheetsOptions
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -853,6 +1062,10 @@ type JobConfigurationLoad struct {
 	// value is false.
 	AllowQuotedNewlines bool `json:"allowQuotedNewlines,omitempty"`
 
+	// Autodetect: [Experimental] Indicates if we should automatically infer
+	// the options and schema for CSV and JSON sources.
+	Autodetect bool `json:"autodetect,omitempty"`
+
 	// CreateDisposition: [Optional] Specifies whether the job is allowed to
 	// create new tables. The following values are supported:
 	// CREATE_IF_NEEDED: If the table does not exist, BigQuery creates the
@@ -940,8 +1153,8 @@ type JobConfigurationLoad struct {
 
 	// SourceFormat: [Optional] The format of the data files. For CSV files,
 	// specify "CSV". For datastore backups, specify "DATASTORE_BACKUP". For
-	// newline-delimited JSON, specify "NEWLINE_DELIMITED_JSON". The default
-	// value is CSV.
+	// newline-delimited JSON, specify "NEWLINE_DELIMITED_JSON". For Avro,
+	// specify "AVRO". The default value is CSV.
 	SourceFormat string `json:"sourceFormat,omitempty"`
 
 	// SourceUris: [Required] The fully-qualified URIs that point to your
@@ -1015,6 +1228,12 @@ type JobConfigurationQuery struct {
 	// Default: 1
 	MaximumBillingTier *int64 `json:"maximumBillingTier,omitempty"`
 
+	// MaximumBytesBilled: [Optional] Limits the bytes billed for this job.
+	// Queries that will have bytes billed beyond this limit will fail
+	// (without incurring a charge). If unspecified, this will be set to
+	// your project default.
+	MaximumBytesBilled int64 `json:"maximumBytesBilled,omitempty,string"`
+
 	// PreserveNulls: [Deprecated] This property is deprecated.
 	PreserveNulls bool `json:"preserveNulls,omitempty"`
 
@@ -1026,11 +1245,20 @@ type JobConfigurationQuery struct {
 	// Query: [Required] BigQuery SQL query to execute.
 	Query string `json:"query,omitempty"`
 
-	// TableDefinitions: [Experimental] If querying an external data source
+	// TableDefinitions: [Optional] If querying an external data source
 	// outside of BigQuery, describes the data format, location and other
 	// properties of the data source. By defining these properties, the data
 	// source can then be queried as if it were a standard BigQuery table.
 	TableDefinitions map[string]ExternalDataConfiguration `json:"tableDefinitions,omitempty"`
+
+	// UseLegacySql: [Experimental] Specifies whether to use BigQuery's
+	// legacy SQL dialect for this query. The default value is true. If set
+	// to false, the query will use BigQuery's standard SQL:
+	// https://cloud.google.com/bigquery/sql-reference/ When useLegacySql is
+	// set to false, the values of allowLargeResults and flattenResults are
+	// ignored; query will be run as if allowLargeResults is true and
+	// flattenResults is false.
+	UseLegacySql bool `json:"useLegacySql,omitempty"`
 
 	// UseQueryCache: [Optional] Whether to look for the result in the query
 	// cache. The query cache is a best-effort cache that will be flushed
@@ -1273,9 +1501,23 @@ type JobStatistics2 struct {
 	// query cache.
 	CacheHit bool `json:"cacheHit,omitempty"`
 
+	// NumDmlAffectedRows: [Output-only, Experimental] The number of rows
+	// affected by a DML statement. Present only for DML statements INSERT,
+	// UPDATE or DELETE.
+	NumDmlAffectedRows int64 `json:"numDmlAffectedRows,omitempty,string"`
+
 	// QueryPlan: [Output-only, Experimental] Describes execution plan for
-	// the query as a list of stages.
+	// the query.
 	QueryPlan []*ExplainQueryStage `json:"queryPlan,omitempty"`
+
+	// ReferencedTables: [Output-only, Experimental] Referenced tables for
+	// the job. Queries that reference more than 50 tables will not have a
+	// complete list.
+	ReferencedTables []*TableReference `json:"referencedTables,omitempty"`
+
+	// Schema: [Output-only, Experimental] The schema of the results.
+	// Present only for successful dry run of non-legacy SQL queries.
+	Schema *TableSchema `json:"schema,omitempty"`
 
 	// TotalBytesBilled: [Output-only] Total bytes billed for the job.
 	TotalBytesBilled int64 `json:"totalBytesBilled,omitempty,string"`
@@ -1510,6 +1752,15 @@ type QueryRequest struct {
 	// results. The default value is 10000 milliseconds (10 seconds).
 	TimeoutMs int64 `json:"timeoutMs,omitempty"`
 
+	// UseLegacySql: [Experimental] Specifies whether to use BigQuery's
+	// legacy SQL dialect for this query. The default value is true. If set
+	// to false, the query will use BigQuery's standard SQL:
+	// https://cloud.google.com/bigquery/sql-reference/ When useLegacySql is
+	// set to false, the values of allowLargeResults and flattenResults are
+	// ignored; query will be run as if allowLargeResults is true and
+	// flattenResults is false.
+	UseLegacySql bool `json:"useLegacySql,omitempty"`
+
 	// UseQueryCache: [Optional] Whether to look for the result in the query
 	// cache. The query cache is a best-effort cache that will be flushed
 	// whenever tables in the query are modified. The default value is true.
@@ -1556,6 +1807,11 @@ type QueryResponse struct {
 
 	// Kind: The resource type.
 	Kind string `json:"kind,omitempty"`
+
+	// NumDmlAffectedRows: [Output-only, Experimental] The number of rows
+	// affected by a DML statement. Present only for DML statements INSERT,
+	// UPDATE or DELETE.
+	NumDmlAffectedRows int64 `json:"numDmlAffectedRows,omitempty,string"`
 
 	// PageToken: A token used for paging results.
 	PageToken string `json:"pageToken,omitempty"`
@@ -1644,7 +1900,7 @@ type Table struct {
 	// reclaimed.
 	ExpirationTime int64 `json:"expirationTime,omitempty,string"`
 
-	// ExternalDataConfiguration: [Experimental] Describes the data format,
+	// ExternalDataConfiguration: [Optional] Describes the data format,
 	// location, and other properties of a table stored outside of BigQuery.
 	// By defining these properties, the data source can then be queried as
 	// if it were a standard BigQuery table.
@@ -1671,6 +1927,10 @@ type Table struct {
 	// any data in the streaming buffer.
 	NumBytes int64 `json:"numBytes,omitempty,string"`
 
+	// NumLongTermBytes: [Output-only] The number of bytes in the table that
+	// are considered "long-term storage".
+	NumLongTermBytes int64 `json:"numLongTermBytes,omitempty,string"`
+
 	// NumRows: [Output-only] The number of rows of data in this table,
 	// excluding any data in the streaming buffer.
 	NumRows uint64 `json:"numRows,omitempty,string"`
@@ -1690,6 +1950,10 @@ type Table struct {
 
 	// TableReference: [Required] Reference describing the ID of this table.
 	TableReference *TableReference `json:"tableReference,omitempty"`
+
+	// TimePartitioning: [Experimental] If specified, configures time-based
+	// partitioning for this table.
+	TimePartitioning *TimePartitioning `json:"timePartitioning,omitempty"`
 
 	// Type: [Output-only] Describes the table type. The following values
 	// are supported: TABLE: A normal BigQuery table. VIEW: A virtual table
@@ -1755,10 +2019,11 @@ type TableDataInsertAllRequest struct {
 	// entire request to fail if any invalid rows exist.
 	SkipInvalidRows bool `json:"skipInvalidRows,omitempty"`
 
-	// TemplateSuffix: [Optional] If specified, treats the destination table
-	// as a base template, and inserts the rows into an instance table named
-	// "{destination}{templateSuffix}". BigQuery will manage creation of the
-	// instance table, using the schema of the base template table. See
+	// TemplateSuffix: [Experimental] If specified, treats the destination
+	// table as a base template, and inserts the rows into an instance table
+	// named "{destination}{templateSuffix}". BigQuery will manage creation
+	// of the instance table, using the schema of the base template table.
+	// See
 	// https://cloud.google.com/bigquery/streaming-data-into-bigquery#template-tables for considerations when working with templates
 	// tables.
 	TemplateSuffix string `json:"templateSuffix,omitempty"`
@@ -1909,8 +2174,8 @@ type TableFieldSchema struct {
 	Name string `json:"name,omitempty"`
 
 	// Type: [Required] The field data type. Possible values include STRING,
-	// INTEGER, FLOAT, BOOLEAN, TIMESTAMP or RECORD (where RECORD indicates
-	// that the field contains a nested schema).
+	// BYTES, INTEGER, FLOAT, BOOLEAN, TIMESTAMP or RECORD (where RECORD
+	// indicates that the field contains a nested schema).
 	Type string `json:"type,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Description") to
@@ -2060,6 +2325,30 @@ func (s *TableSchema) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+type TimePartitioning struct {
+	// ExpirationMs: [Optional] Number of milliseconds for which to keep the
+	// storage for a partition.
+	ExpirationMs int64 `json:"expirationMs,omitempty,string"`
+
+	// Type: [Required] The only type supported is DAY, which will generate
+	// one partition per day based on data loading time.
+	Type string `json:"type,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ExpirationMs") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *TimePartitioning) MarshalJSON() ([]byte, error) {
+	type noMethod TimePartitioning
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 type UserDefinedFunctionResource struct {
 	// InlineCode: [Pick one] An inline resource that contains code for a
 	// user-defined function (UDF). Providing a inline code resource is
@@ -2089,6 +2378,13 @@ type ViewDefinition struct {
 	// Query: [Required] A query that BigQuery executes when the view is
 	// referenced.
 	Query string `json:"query,omitempty"`
+
+	// UseLegacySql: [Experimental] Specifies whether to use BigQuery's
+	// legacy SQL for this view. The default value is true. If set to false,
+	// the view will use BigQuery's standard SQL:
+	// https://cloud.google.com/bigquery/sql-reference/ Queries and views
+	// that reference this view must use the same flag value.
+	UseLegacySql bool `json:"useLegacySql,omitempty"`
 
 	// UserDefinedFunctionResources: [Experimental] Describes user-defined
 	// function resources used in the query.
@@ -2138,23 +2434,6 @@ func (c *DatasetsDeleteCall) DeleteContents(deleteContents bool) *DatasetsDelete
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DatasetsDeleteCall) QuotaUser(quotaUser string) *DatasetsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DatasetsDeleteCall) UserIP(userIP string) *DatasetsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2172,24 +2451,24 @@ func (c *DatasetsDeleteCall) Context(ctx context.Context) *DatasetsDeleteCall {
 }
 
 func (c *DatasetsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.datasets.delete" call.
-func (c *DatasetsDeleteCall) Do() error {
+func (c *DatasetsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2254,23 +2533,6 @@ func (r *DatasetsService) Get(projectId string, datasetId string) *DatasetsGetCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DatasetsGetCall) QuotaUser(quotaUser string) *DatasetsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DatasetsGetCall) UserIP(userIP string) *DatasetsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2298,23 +2560,22 @@ func (c *DatasetsGetCall) Context(ctx context.Context) *DatasetsGetCall {
 }
 
 func (c *DatasetsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.datasets.get" call.
@@ -2324,7 +2585,8 @@ func (c *DatasetsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsGetCall) Do() (*Dataset, error) {
+func (c *DatasetsGetCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2348,7 +2610,8 @@ func (c *DatasetsGetCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2405,23 +2668,6 @@ func (r *DatasetsService) Insert(projectId string, dataset *Dataset) *DatasetsIn
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DatasetsInsertCall) QuotaUser(quotaUser string) *DatasetsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DatasetsInsertCall) UserIP(userIP string) *DatasetsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2439,25 +2685,23 @@ func (c *DatasetsInsertCall) Context(ctx context.Context) *DatasetsInsertCall {
 }
 
 func (c *DatasetsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.datasets.insert" call.
@@ -2467,7 +2711,8 @@ func (c *DatasetsInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsInsertCall) Do() (*Dataset, error) {
+func (c *DatasetsInsertCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2491,7 +2736,8 @@ func (c *DatasetsInsertCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2550,6 +2796,18 @@ func (c *DatasetsListCall) All(all bool) *DatasetsListCall {
 	return c
 }
 
+// Filter sets the optional parameter "filter": An expression for
+// filtering the results of the request by label. The syntax is
+// "labels.[:]". Multiple filters can be ANDed together by connecting
+// with a space. Example: "labels.department:receiving labels.active".
+// See
+// https://cloud.google.com/bigquery/docs/labeling-datasets#filtering_datasets_using_labels for
+// details.
+func (c *DatasetsListCall) Filter(filter string) *DatasetsListCall {
+	c.urlParams_.Set("filter", filter)
+	return c
+}
+
 // MaxResults sets the optional parameter "maxResults": The maximum
 // number of results to return
 func (c *DatasetsListCall) MaxResults(maxResults int64) *DatasetsListCall {
@@ -2561,23 +2819,6 @@ func (c *DatasetsListCall) MaxResults(maxResults int64) *DatasetsListCall {
 // returned by a previous call, to request the next page of results
 func (c *DatasetsListCall) PageToken(pageToken string) *DatasetsListCall {
 	c.urlParams_.Set("pageToken", pageToken)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DatasetsListCall) QuotaUser(quotaUser string) *DatasetsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DatasetsListCall) UserIP(userIP string) *DatasetsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -2608,22 +2849,21 @@ func (c *DatasetsListCall) Context(ctx context.Context) *DatasetsListCall {
 }
 
 func (c *DatasetsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.datasets.list" call.
@@ -2633,7 +2873,8 @@ func (c *DatasetsListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *DatasetsListCall) Do() (*DatasetList, error) {
+func (c *DatasetsListCall) Do(opts ...googleapi.CallOption) (*DatasetList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2657,7 +2898,8 @@ func (c *DatasetsListCall) Do() (*DatasetList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2673,6 +2915,11 @@ func (c *DatasetsListCall) Do() (*DatasetList, error) {
 	//       "description": "Whether to list all datasets, including hidden ones",
 	//       "location": "query",
 	//       "type": "boolean"
+	//     },
+	//     "filter": {
+	//       "description": "An expression for filtering the results of the request by label. The syntax is \"labels.[:]\". Multiple filters can be ANDed together by connecting with a space. Example: \"labels.department:receiving labels.active\". See https://cloud.google.com/bigquery/docs/labeling-datasets#filtering_datasets_using_labels for details.",
+	//       "location": "query",
+	//       "type": "string"
 	//     },
 	//     "maxResults": {
 	//       "description": "The maximum number of results to return",
@@ -2705,6 +2952,27 @@ func (c *DatasetsListCall) Do() (*DatasetList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *DatasetsListCall) Pages(ctx context.Context, f func(*DatasetList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "bigquery.datasets.patch":
 
 type DatasetsPatchCall struct {
@@ -2728,23 +2996,6 @@ func (r *DatasetsService) Patch(projectId string, datasetId string, dataset *Dat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DatasetsPatchCall) QuotaUser(quotaUser string) *DatasetsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DatasetsPatchCall) UserIP(userIP string) *DatasetsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2762,26 +3013,24 @@ func (c *DatasetsPatchCall) Context(ctx context.Context) *DatasetsPatchCall {
 }
 
 func (c *DatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.datasets.patch" call.
@@ -2791,7 +3040,8 @@ func (c *DatasetsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsPatchCall) Do() (*Dataset, error) {
+func (c *DatasetsPatchCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2815,7 +3065,8 @@ func (c *DatasetsPatchCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2878,23 +3129,6 @@ func (r *DatasetsService) Update(projectId string, datasetId string, dataset *Da
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DatasetsUpdateCall) QuotaUser(quotaUser string) *DatasetsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DatasetsUpdateCall) UserIP(userIP string) *DatasetsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2912,26 +3146,24 @@ func (c *DatasetsUpdateCall) Context(ctx context.Context) *DatasetsUpdateCall {
 }
 
 func (c *DatasetsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dataset)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.datasets.update" call.
@@ -2941,7 +3173,8 @@ func (c *DatasetsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DatasetsUpdateCall) Do() (*Dataset, error) {
+func (c *DatasetsUpdateCall) Do(opts ...googleapi.CallOption) (*Dataset, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2965,7 +3198,8 @@ func (c *DatasetsUpdateCall) Do() (*Dataset, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3027,23 +3261,6 @@ func (r *JobsService) Cancel(projectId string, jobId string) *JobsCancelCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *JobsCancelCall) QuotaUser(quotaUser string) *JobsCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *JobsCancelCall) UserIP(userIP string) *JobsCancelCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3061,20 +3278,19 @@ func (c *JobsCancelCall) Context(ctx context.Context) *JobsCancelCall {
 }
 
 func (c *JobsCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "project/{projectId}/jobs/{jobId}/cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.jobs.cancel" call.
@@ -3084,7 +3300,8 @@ func (c *JobsCancelCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *JobsCancelCall) Do() (*JobCancelResponse, error) {
+func (c *JobsCancelCall) Do(opts ...googleapi.CallOption) (*JobCancelResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3108,7 +3325,8 @@ func (c *JobsCancelCall) Do() (*JobCancelResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3167,23 +3385,6 @@ func (r *JobsService) Get(projectId string, jobId string) *JobsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *JobsGetCall) QuotaUser(quotaUser string) *JobsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *JobsGetCall) UserIP(userIP string) *JobsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3211,23 +3412,22 @@ func (c *JobsGetCall) Context(ctx context.Context) *JobsGetCall {
 }
 
 func (c *JobsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/jobs/{jobId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.jobs.get" call.
@@ -3237,7 +3437,8 @@ func (c *JobsGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *JobsGetCall) Do() (*Job, error) {
+func (c *JobsGetCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3261,7 +3462,8 @@ func (c *JobsGetCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3333,15 +3535,6 @@ func (c *JobsGetQueryResultsCall) PageToken(pageToken string) *JobsGetQueryResul
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *JobsGetQueryResultsCall) QuotaUser(quotaUser string) *JobsGetQueryResultsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StartIndex sets the optional parameter "startIndex": Zero-based index
 // of the starting row
 func (c *JobsGetQueryResultsCall) StartIndex(startIndex uint64) *JobsGetQueryResultsCall {
@@ -3355,14 +3548,6 @@ func (c *JobsGetQueryResultsCall) StartIndex(startIndex uint64) *JobsGetQueryRes
 // 'jobComplete' field in the response will be false
 func (c *JobsGetQueryResultsCall) TimeoutMs(timeoutMs int64) *JobsGetQueryResultsCall {
 	c.urlParams_.Set("timeoutMs", fmt.Sprint(timeoutMs))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *JobsGetQueryResultsCall) UserIP(userIP string) *JobsGetQueryResultsCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -3393,23 +3578,22 @@ func (c *JobsGetQueryResultsCall) Context(ctx context.Context) *JobsGetQueryResu
 }
 
 func (c *JobsGetQueryResultsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/queries/{jobId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.jobs.getQueryResults" call.
@@ -3419,7 +3603,8 @@ func (c *JobsGetQueryResultsCall) doRequest(alt string) (*http.Response, error) 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *JobsGetQueryResultsCall) Do() (*GetQueryResultsResponse, error) {
+func (c *JobsGetQueryResultsCall) Do(opts ...googleapi.CallOption) (*GetQueryResultsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3443,7 +3628,8 @@ func (c *JobsGetQueryResultsCall) Do() (*GetQueryResultsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3505,20 +3691,40 @@ func (c *JobsGetQueryResultsCall) Do() (*GetQueryResultsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *JobsGetQueryResultsCall) Pages(ctx context.Context, f func(*GetQueryResultsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.PageToken == "" {
+			return nil
+		}
+		c.PageToken(x.PageToken)
+	}
+}
+
 // method id "bigquery.jobs.insert":
 
 type JobsInsertCall struct {
-	s                   *Service
-	projectId           string
-	job                 *Job
-	urlParams_          gensupport.URLParams
-	media_              io.Reader
-	mediaType_          string
-	resumable_          googleapi.SizeReaderAt
-	resumableMediaType_ string
-	protocol_           string
-	progressUpdater_    googleapi.ProgressUpdater
-	ctx_                context.Context
+	s                *Service
+	projectId        string
+	job              *Job
+	urlParams_       gensupport.URLParams
+	media_           io.Reader
+	mediaBuffer_     *gensupport.MediaBuffer
+	mediaType_       string
+	mediaSize_       int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
+	progressUpdater_ googleapi.ProgressUpdater
+	ctx_             context.Context
 }
 
 // Insert: Starts a new asynchronous job. Requires the Can View project
@@ -3530,43 +3736,40 @@ func (r *JobsService) Insert(projectId string, job *Job) *JobsInsertCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *JobsInsertCall) QuotaUser(quotaUser string) *JobsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *JobsInsertCall) UserIP(userIP string) *JobsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *JobsInsertCall) Media(r io.Reader, options ...googleapi.MediaOption) *JobsInsertCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *JobsInsertCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *JobsInsertCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -3598,41 +3801,44 @@ func (c *JobsInsertCall) Context(ctx context.Context) *JobsInsertCall {
 }
 
 func (c *JobsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.job)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/jobs")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.jobs.insert" call.
@@ -3642,7 +3848,8 @@ func (c *JobsInsertCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *JobsInsertCall) Do() (*Job, error) {
+func (c *JobsInsertCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3660,26 +3867,32 @@ func (c *JobsInsertCall) Do() (*Job, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &Job{
 		ServerResponse: googleapi.ServerResponse{
@@ -3687,7 +3900,8 @@ func (c *JobsInsertCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3793,15 +4007,6 @@ func (c *JobsListCall) Projection(projection string) *JobsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *JobsListCall) QuotaUser(quotaUser string) *JobsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StateFilter sets the optional parameter "stateFilter": Filter for job
 // state
 //
@@ -3811,14 +4016,6 @@ func (c *JobsListCall) QuotaUser(quotaUser string) *JobsListCall {
 //   "running" - Running jobs
 func (c *JobsListCall) StateFilter(stateFilter ...string) *JobsListCall {
 	c.urlParams_.SetMulti("stateFilter", append([]string{}, stateFilter...))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *JobsListCall) UserIP(userIP string) *JobsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -3849,22 +4046,21 @@ func (c *JobsListCall) Context(ctx context.Context) *JobsListCall {
 }
 
 func (c *JobsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/jobs")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.jobs.list" call.
@@ -3874,7 +4070,8 @@ func (c *JobsListCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *JobsListCall) Do() (*JobList, error) {
+func (c *JobsListCall) Do(opts ...googleapi.CallOption) (*JobList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3898,7 +4095,8 @@ func (c *JobsListCall) Do() (*JobList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3975,6 +4173,27 @@ func (c *JobsListCall) Do() (*JobList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *JobsListCall) Pages(ctx context.Context, f func(*JobList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "bigquery.jobs.query":
 
 type JobsQueryCall struct {
@@ -3991,23 +4210,6 @@ func (r *JobsService) Query(projectId string, queryrequest *QueryRequest) *JobsQ
 	c := &JobsQueryCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
 	c.queryrequest = queryrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *JobsQueryCall) QuotaUser(quotaUser string) *JobsQueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *JobsQueryCall) UserIP(userIP string) *JobsQueryCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4028,25 +4230,23 @@ func (c *JobsQueryCall) Context(ctx context.Context) *JobsQueryCall {
 }
 
 func (c *JobsQueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.queryrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/queries")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.jobs.query" call.
@@ -4056,7 +4256,8 @@ func (c *JobsQueryCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *JobsQueryCall) Do() (*QueryResponse, error) {
+func (c *JobsQueryCall) Do(opts ...googleapi.CallOption) (*QueryResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4080,7 +4281,8 @@ func (c *JobsQueryCall) Do() (*QueryResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4145,23 +4347,6 @@ func (c *ProjectsListCall) PageToken(pageToken string) *ProjectsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ProjectsListCall) QuotaUser(quotaUser string) *ProjectsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ProjectsListCall) UserIP(userIP string) *ProjectsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4189,20 +4374,19 @@ func (c *ProjectsListCall) Context(ctx context.Context) *ProjectsListCall {
 }
 
 func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.projects.list" call.
@@ -4212,7 +4396,8 @@ func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsListCall) Do() (*ProjectList, error) {
+func (c *ProjectsListCall) Do(opts ...googleapi.CallOption) (*ProjectList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4236,7 +4421,8 @@ func (c *ProjectsListCall) Do() (*ProjectList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4270,6 +4456,27 @@ func (c *ProjectsListCall) Do() (*ProjectList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsListCall) Pages(ctx context.Context, f func(*ProjectList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "bigquery.tabledata.insertAll":
 
 type TabledataInsertAllCall struct {
@@ -4293,23 +4500,6 @@ func (r *TabledataService) InsertAll(projectId string, datasetId string, tableId
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TabledataInsertAllCall) QuotaUser(quotaUser string) *TabledataInsertAllCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TabledataInsertAllCall) UserIP(userIP string) *TabledataInsertAllCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4327,27 +4517,25 @@ func (c *TabledataInsertAllCall) Context(ctx context.Context) *TabledataInsertAl
 }
 
 func (c *TabledataInsertAllCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.tabledatainsertallrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables/{tableId}/insertAll")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tabledata.insertAll" call.
@@ -4357,7 +4545,8 @@ func (c *TabledataInsertAllCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TabledataInsertAllCall) Do() (*TableDataInsertAllResponse, error) {
+func (c *TabledataInsertAllCall) Do(opts ...googleapi.CallOption) (*TableDataInsertAllResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4381,7 +4570,8 @@ func (c *TabledataInsertAllCall) Do() (*TableDataInsertAllResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4466,27 +4656,10 @@ func (c *TabledataListCall) PageToken(pageToken string) *TabledataListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TabledataListCall) QuotaUser(quotaUser string) *TabledataListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // StartIndex sets the optional parameter "startIndex": Zero-based index
 // of the starting row to read
 func (c *TabledataListCall) StartIndex(startIndex uint64) *TabledataListCall {
 	c.urlParams_.Set("startIndex", fmt.Sprint(startIndex))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TabledataListCall) UserIP(userIP string) *TabledataListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -4517,24 +4690,23 @@ func (c *TabledataListCall) Context(ctx context.Context) *TabledataListCall {
 }
 
 func (c *TabledataListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables/{tableId}/data")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tabledata.list" call.
@@ -4544,7 +4716,8 @@ func (c *TabledataListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TabledataListCall) Do() (*TableDataList, error) {
+func (c *TabledataListCall) Do(opts ...googleapi.CallOption) (*TableDataList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4568,7 +4741,8 @@ func (c *TabledataListCall) Do() (*TableDataList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4631,6 +4805,27 @@ func (c *TabledataListCall) Do() (*TableDataList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *TabledataListCall) Pages(ctx context.Context, f func(*TableDataList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.PageToken == "" {
+			return nil
+		}
+		c.PageToken(x.PageToken)
+	}
+}
+
 // method id "bigquery.tables.delete":
 
 type TablesDeleteCall struct {
@@ -4652,23 +4847,6 @@ func (r *TablesService) Delete(projectId string, datasetId string, tableId strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TablesDeleteCall) QuotaUser(quotaUser string) *TablesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TablesDeleteCall) UserIP(userIP string) *TablesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4686,25 +4864,25 @@ func (c *TablesDeleteCall) Context(ctx context.Context) *TablesDeleteCall {
 }
 
 func (c *TablesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables/{tableId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tables.delete" call.
-func (c *TablesDeleteCall) Do() error {
+func (c *TablesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -4775,23 +4953,6 @@ func (r *TablesService) Get(projectId string, datasetId string, tableId string) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TablesGetCall) QuotaUser(quotaUser string) *TablesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TablesGetCall) UserIP(userIP string) *TablesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4819,24 +4980,23 @@ func (c *TablesGetCall) Context(ctx context.Context) *TablesGetCall {
 }
 
 func (c *TablesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables/{tableId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tables.get" call.
@@ -4846,7 +5006,8 @@ func (c *TablesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TablesGetCall) Do() (*Table, error) {
+func (c *TablesGetCall) Do(opts ...googleapi.CallOption) (*Table, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -4870,7 +5031,8 @@ func (c *TablesGetCall) Do() (*Table, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -4936,23 +5098,6 @@ func (r *TablesService) Insert(projectId string, datasetId string, table *Table)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TablesInsertCall) QuotaUser(quotaUser string) *TablesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TablesInsertCall) UserIP(userIP string) *TablesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -4970,26 +5115,24 @@ func (c *TablesInsertCall) Context(ctx context.Context) *TablesInsertCall {
 }
 
 func (c *TablesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.table)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tables.insert" call.
@@ -4999,7 +5142,8 @@ func (c *TablesInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TablesInsertCall) Do() (*Table, error) {
+func (c *TablesInsertCall) Do(opts ...googleapi.CallOption) (*Table, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5023,7 +5167,8 @@ func (c *TablesInsertCall) Do() (*Table, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5098,23 +5243,6 @@ func (c *TablesListCall) PageToken(pageToken string) *TablesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TablesListCall) QuotaUser(quotaUser string) *TablesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TablesListCall) UserIP(userIP string) *TablesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5142,23 +5270,22 @@ func (c *TablesListCall) Context(ctx context.Context) *TablesListCall {
 }
 
 func (c *TablesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tables.list" call.
@@ -5168,7 +5295,8 @@ func (c *TablesListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *TablesListCall) Do() (*TableList, error) {
+func (c *TablesListCall) Do(opts ...googleapi.CallOption) (*TableList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5192,7 +5320,8 @@ func (c *TablesListCall) Do() (*TableList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5242,6 +5371,27 @@ func (c *TablesListCall) Do() (*TableList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *TablesListCall) Pages(ctx context.Context, f func(*TableList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "bigquery.tables.patch":
 
 type TablesPatchCall struct {
@@ -5267,23 +5417,6 @@ func (r *TablesService) Patch(projectId string, datasetId string, tableId string
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TablesPatchCall) QuotaUser(quotaUser string) *TablesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TablesPatchCall) UserIP(userIP string) *TablesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5301,27 +5434,25 @@ func (c *TablesPatchCall) Context(ctx context.Context) *TablesPatchCall {
 }
 
 func (c *TablesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.table)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables/{tableId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tables.patch" call.
@@ -5331,7 +5462,8 @@ func (c *TablesPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TablesPatchCall) Do() (*Table, error) {
+func (c *TablesPatchCall) Do(opts ...googleapi.CallOption) (*Table, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5355,7 +5487,8 @@ func (c *TablesPatchCall) Do() (*Table, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -5427,23 +5560,6 @@ func (r *TablesService) Update(projectId string, datasetId string, tableId strin
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TablesUpdateCall) QuotaUser(quotaUser string) *TablesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TablesUpdateCall) UserIP(userIP string) *TablesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -5461,27 +5577,25 @@ func (c *TablesUpdateCall) Context(ctx context.Context) *TablesUpdateCall {
 }
 
 func (c *TablesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.table)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "projects/{projectId}/datasets/{datasetId}/tables/{tableId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"datasetId": c.datasetId,
 		"tableId":   c.tableId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "bigquery.tables.update" call.
@@ -5491,7 +5605,8 @@ func (c *TablesUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *TablesUpdateCall) Do() (*Table, error) {
+func (c *TablesUpdateCall) Do(opts ...googleapi.CallOption) (*Table, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -5515,7 +5630,8 @@ func (c *TablesUpdateCall) Do() (*Table, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

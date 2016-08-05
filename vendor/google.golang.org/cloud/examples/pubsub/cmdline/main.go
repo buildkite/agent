@@ -17,38 +17,38 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/cloud"
-	"google.golang.org/cloud/compute/metadata"
 	"google.golang.org/cloud/pubsub"
 )
 
 var (
-	jsonFile  = flag.String("j", "", "A path to your JSON key file for your service account downloaded from Google Developer Console, not needed if you run it on Compute Engine instances.")
 	projID    = flag.String("p", "", "The ID of your Google Cloud project.")
 	reportMPS = flag.Bool("report", false, "Reports the incoming/outgoing message rate in msg/sec if set.")
-	size      = flag.Int("size", 10, "Batch size for pull_messages and publish_messages subcommands.")
+	size      = flag.Int("size", 10, "Batch size for publish_messages subcommand.")
 )
 
 const (
 	usage = `Available arguments are:
     create_topic <name>
+    topic_exists <name>
     delete_topic <name>
+    list_topic_subscriptions <name>
+    list_topics
     create_subscription <name> <linked_topic>
+    show_subscription <name>
+    subscription_exists <name>
     delete_subscription <name>
+    list_subscriptions
     publish <topic> <message>
     pull_messages <subscription> <numworkers>
     publish_messages <topic> <numworkers>
@@ -71,225 +71,321 @@ func checkArgs(argv []string, min int) {
 	}
 }
 
-// newClient creates http.Client with a jwt service account when
-// jsonFile flag is specified, otherwise by obtaining the GCE service
-// account's access token.
-func newClient(jsonFile string) (*http.Client, error) {
-	if jsonFile != "" {
-		jsonKey, err := ioutil.ReadFile(jsonFile)
-		if err != nil {
-			return nil, err
-		}
-		conf, err := google.JWTConfigFromJSON(jsonKey, pubsub.ScopePubSub)
-		if err != nil {
-			return nil, err
-		}
-		return conf.Client(oauth2.NoContext), nil
-	}
-	if metadata.OnGCE() {
-		c := &http.Client{
-			Transport: &oauth2.Transport{
-				Source: google.ComputeTokenSource(""),
-			},
-		}
-		if *projID == "" {
-			projectID, err := metadata.ProjectID()
-			if err != nil {
-				return nil, fmt.Errorf("ProjectID failed, %v", err)
-			}
-			*projID = projectID
-		}
-		return c, nil
-	}
-	return nil, errors.New("Could not create an authenticated client.")
-}
-
-func listTopics(ctx context.Context, argv []string) {
-	panic("listTopics not implemented yet")
-}
-
-func createTopic(ctx context.Context, argv []string) {
+func createTopic(client *pubsub.Client, argv []string) {
 	checkArgs(argv, 2)
 	topic := argv[1]
-	err := pubsub.CreateTopic(ctx, topic)
+	_, err := client.NewTopic(context.Background(), topic)
 	if err != nil {
-		log.Fatalf("CreateTopic failed, %v", err)
+		log.Fatalf("Creating topic failed: %v", err)
 	}
 	fmt.Printf("Topic %s was created.\n", topic)
 }
 
-func deleteTopic(ctx context.Context, argv []string) {
+func listTopics(client *pubsub.Client, argv []string) {
+	ctx := context.Background()
+	checkArgs(argv, 1)
+	topics := client.Topics(ctx)
+	for {
+		switch topic, err := topics.Next(); err {
+		case nil:
+			fmt.Println(topic.Name())
+		case pubsub.Done:
+			return
+		default:
+			log.Fatalf("Listing topics failed: %v", err)
+		}
+	}
+}
+
+func listTopicSubscriptions(client *pubsub.Client, argv []string) {
+	ctx := context.Background()
 	checkArgs(argv, 2)
 	topic := argv[1]
-	err := pubsub.DeleteTopic(ctx, topic)
+	subs := client.Topic(topic).Subscriptions(ctx)
+	for {
+		switch sub, err := subs.Next(); err {
+		case nil:
+			fmt.Println(sub.Name())
+		case pubsub.Done:
+			return
+		default:
+			log.Fatalf("Listing subscriptions failed: %v", err)
+		}
+	}
+}
+
+func checkTopicExists(client *pubsub.Client, argv []string) {
+	checkArgs(argv, 1)
+	topic := argv[1]
+	exists, err := client.Topic(topic).Exists(context.Background())
 	if err != nil {
-		log.Fatalf("DeleteTopic failed, %v", err)
+		log.Fatalf("Checking topic exists failed: %v", err)
+	}
+	fmt.Println(exists)
+}
+
+func deleteTopic(client *pubsub.Client, argv []string) {
+	checkArgs(argv, 2)
+	topic := argv[1]
+	err := client.Topic(topic).Delete(context.Background())
+	if err != nil {
+		log.Fatalf("Deleting topic failed: %v", err)
 	}
 	fmt.Printf("Topic %s was deleted.\n", topic)
 }
 
-func listSubscriptions(ctx context.Context, argv []string) {
-	panic("listSubscriptions not implemented yet")
-}
-
-func createSubscription(ctx context.Context, argv []string) {
+func createSubscription(client *pubsub.Client, argv []string) {
 	checkArgs(argv, 3)
 	sub := argv[1]
 	topic := argv[2]
-	err := pubsub.CreateSub(ctx, sub, topic, 60*time.Second, "")
+	_, err := client.NewSubscription(context.Background(), sub, client.Topic(topic), 0, nil)
 	if err != nil {
-		log.Fatalf("CreateSub failed, %v", err)
+		log.Fatalf("Creating Subscription failed: %v", err)
 	}
 	fmt.Printf("Subscription %s was created.\n", sub)
 }
 
-func deleteSubscription(ctx context.Context, argv []string) {
+func showSubscription(client *pubsub.Client, argv []string) {
 	checkArgs(argv, 2)
 	sub := argv[1]
-	err := pubsub.DeleteSub(ctx, sub)
+	conf, err := client.Subscription(sub).Config(context.Background())
 	if err != nil {
-		log.Fatalf("DeleteSub failed, %v", err)
+		log.Fatalf("Getting Subscription failed: %v", err)
+	}
+	fmt.Printf("%+v\n", conf)
+	exists, err := conf.Topic.Exists(context.Background())
+	if err != nil {
+		log.Fatalf("Checking whether topic exists: %v", err)
+	}
+	if !exists {
+		fmt.Println("The topic for this subscription has been deleted.")
+	}
+}
+
+func checkSubscriptionExists(client *pubsub.Client, argv []string) {
+	checkArgs(argv, 1)
+	sub := argv[1]
+	exists, err := client.Subscription(sub).Exists(context.Background())
+	if err != nil {
+		log.Fatalf("Checking subscription exists failed: %v", err)
+	}
+	fmt.Println(exists)
+}
+
+func deleteSubscription(client *pubsub.Client, argv []string) {
+	checkArgs(argv, 2)
+	sub := argv[1]
+	err := client.Subscription(sub).Delete(context.Background())
+	if err != nil {
+		log.Fatalf("Deleting Subscription failed: %v", err)
 	}
 	fmt.Printf("Subscription %s was deleted.\n", sub)
 }
 
-func publish(ctx context.Context, argv []string) {
+func listSubscriptions(client *pubsub.Client, argv []string) {
+	ctx := context.Background()
+	checkArgs(argv, 1)
+	subs := client.Subscriptions(ctx)
+	for {
+		switch sub, err := subs.Next(); err {
+		case nil:
+			fmt.Println(sub.Name())
+		case pubsub.Done:
+			return
+		default:
+			log.Fatalf("Listing subscriptions failed: %v", err)
+		}
+	}
+}
+
+func publish(client *pubsub.Client, argv []string) {
 	checkArgs(argv, 3)
 	topic := argv[1]
 	message := argv[2]
-	msgIDs, err := pubsub.Publish(ctx, topic, &pubsub.Message{
+	msgIDs, err := client.Topic(topic).Publish(context.Background(), &pubsub.Message{
 		Data: []byte(message),
 	})
 	if err != nil {
 		log.Fatalf("Publish failed, %v", err)
 	}
-	fmt.Printf("Message '%s' published to a topic %s and the message id is %s\n", message, topic, msgIDs[0])
+	fmt.Printf("Message '%s' published to topic %s and the message id is %s\n", message, topic, msgIDs[0])
 }
 
+// reporter maintains a counter and reports stats about the rate of increase of that counter.
 type reporter struct {
 	reportTitle string
 	lastC       uint64
 	c           uint64
-	result      <-chan int
+	count       chan int
+
+	// Close done to shut down reporter.
+	done chan struct{}
 }
 
-func (r *reporter) report() {
+// newReporter constructs a reporter which logs stats if --report is true.
+// Users must call Stop once the reporter is no longer needed.
+func newReporter(reportTitle string) *reporter {
+	rep := &reporter{reportTitle: reportTitle}
+	rep.start()
+	return rep
+}
+
+func (r *reporter) start() {
 	ticker := time.NewTicker(tick)
-	defer func() {
-		ticker.Stop()
+	r.done = make(chan struct{})
+	r.count = make(chan int, 1024)
+	go func() {
+		defer func() {
+			ticker.Stop()
+		}()
+		for {
+			select {
+			case <-ticker.C:
+				n := r.c - r.lastC
+				r.lastC = r.c
+				mps := n / uint64(tick/time.Second)
+				if *reportMPS {
+					log.Printf("%s ~%d msgs/s, total: %d", r.reportTitle, mps, r.c)
+				}
+			case n := <-r.count:
+				r.c += uint64(n)
+			case <-r.done:
+				return
+			}
+		}
 	}()
-	for {
-		select {
-		case <-ticker.C:
-			n := r.c - r.lastC
-			r.lastC = r.c
-			mps := n / uint64(tick/time.Second)
-			log.Printf("%s ~%d msgs/s, total: %d", r.reportTitle, mps, r.c)
-		case n := <-r.result:
-			r.c += uint64(n)
-		}
+}
+
+// Inc increments the message count by n.
+func (r *reporter) Inc(n int) {
+	r.count <- n
+}
+
+// Stop Stops the reporting that was started by Start.
+func (r *reporter) Stop() {
+	close(r.done)
+}
+
+var quit chan os.Signal
+
+func init() {
+	quit = make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+}
+
+func shouldQuit() bool {
+	select {
+	case <-quit:
+		signal.Stop(quit)
+		close(quit)
+		return true
+	default:
+		return false
 	}
 }
 
-func ack(ctx context.Context, sub string, ackID ...string) {
-	err := pubsub.Ack(ctx, sub, ackID...)
-	if err != nil {
-		log.Printf("Ack failed, %v\n", err)
+// genMessages generates a batch of messages to send.
+func genMessages(prefix string) []*pubsub.Message {
+	msgs := make([]*pubsub.Message, *size)
+	for i := 0; i < *size; i++ {
+		msgs[i] = &pubsub.Message{
+			Data: []byte(fmt.Sprintf("%s Message: %d", prefix, i)),
+		}
 	}
+	return msgs
 }
 
-func pullLoop(ctx context.Context, sub string, result chan<- int) {
-	for {
-		msgs, err := pubsub.PullWait(ctx, sub, *size)
-		if err != nil {
-			log.Printf("PullWait failed, %v\n", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		if len(msgs) == 0 {
-			log.Println("Received no messages")
-			continue
-		}
-		if *reportMPS {
-			result <- len(msgs)
-		}
-		ackIDs := make([]string, len(msgs))
-		for i, msg := range msgs {
-			if !*reportMPS {
-				fmt.Printf("Got a message: %s\n", msg.Data)
-			}
-			ackIDs[i] = msg.AckID
-		}
-		go ack(ctx, sub, ackIDs...)
-	}
-}
-
-func pullMessages(ctx context.Context, argv []string) {
-	checkArgs(argv, 3)
-	sub := argv[1]
-	workers, err := strconv.Atoi(argv[2])
-	if err != nil {
-		log.Fatalf("Atoi failed, %v", err)
-	}
-	result := make(chan int, 1024)
-	for i := 0; i < int(workers); i++ {
-		go pullLoop(ctx, sub, result)
-	}
-	if *reportMPS {
-		r := reporter{reportTitle: "Received", result: result}
-		r.report()
-	} else {
-		select {}
-	}
-}
-
-func publishLoop(ctx context.Context, topic string, workerid int, result chan<- int) {
+// publish publishes a series of messages to the named topic.
+func publishMessageBatches(client *pubsub.Client, topicName string, workerID int, rep *reporter) {
 	var r uint64
-	for {
-		msgs := make([]*pubsub.Message, *size)
-		for i := 0; i < *size; i++ {
-			msgs[i] = &pubsub.Message{
-				Data: []byte(fmt.Sprintf("Worker: %d, Round: %d, Message: %d", workerid, r, i)),
-			}
-		}
-		_, err := pubsub.Publish(ctx, topic, msgs...)
-		if err != nil {
+	topic := client.Topic(topicName)
+	for !shouldQuit() {
+		msgPrefix := fmt.Sprintf("Worker: %d, Round: %d,", workerID, r)
+		if _, err := topic.Publish(context.Background(), genMessages(msgPrefix)...); err != nil {
 			log.Printf("Publish failed, %v\n", err)
 			return
 		}
 		r++
-		if *reportMPS {
-			result <- *size
-		}
+		rep.Inc(*size)
 	}
 }
 
-func publishMessages(ctx context.Context, argv []string) {
+func publishMessages(client *pubsub.Client, argv []string) {
 	checkArgs(argv, 3)
 	topic := argv[1]
 	workers, err := strconv.Atoi(argv[2])
 	if err != nil {
 		log.Fatalf("Atoi failed, %v", err)
 	}
-	result := make(chan int, 1024)
+	rep := newReporter("Sent")
+	defer rep.Stop()
+
+	var wg sync.WaitGroup
 	for i := 0; i < int(workers); i++ {
-		go publishLoop(ctx, topic, i, result)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			publishMessageBatches(client, topic, i, rep)
+		}()
 	}
-	if *reportMPS {
-		r := reporter{reportTitle: "Sent", result: result}
-		r.report()
-	} else {
-		select {}
+	wg.Wait()
+}
+
+// processMessages reads Messages from msgs and processes them, until mgss is closed.
+// It calls Done on each Message that is read from msgs.
+func processMessages(msgs <-chan *pubsub.Message, rep *reporter, printMsg bool) {
+	for m := range msgs {
+		if printMsg {
+			fmt.Printf("Got a message: %s\n", m.Data)
+		}
+		rep.Inc(1)
+		m.Done(true)
 	}
 }
 
-// This example demonstrates calling the Cloud Pub/Sub API. As of 22
-// Oct 2014, the Cloud Pub/Sub API is only available if you're
-// whitelisted. If you're interested in using it, please apply for the
-// Limited Preview program at the following form:
-// http://goo.gl/Wql9HL
+// pullMessages reads messages from a subscription, and farms them out to a
+// number of goroutines for processing.
+func pullMessages(client *pubsub.Client, argv []string) {
+	checkArgs(argv, 3)
+	sub := client.Subscription(argv[1])
+
+	workers, err := strconv.Atoi(argv[2])
+	if err != nil {
+		log.Fatalf("Atoi failed, %v", err)
+	}
+
+	rep := newReporter("Received")
+	defer rep.Stop()
+
+	msgs := make(chan *pubsub.Message)
+	for i := 0; i < int(workers); i++ {
+		go processMessages(msgs, rep, !*reportMPS)
+	}
+
+	it, err := sub.Pull(context.Background(), pubsub.MaxExtension(time.Minute))
+	if err != nil {
+		log.Fatalf("failed to construct iterator: %v", err)
+	}
+	defer it.Stop()
+
+	for !shouldQuit() {
+		m, err := it.Next()
+		if err != nil {
+			log.Fatalf("error reading from iterator: %v", err)
+		}
+		msgs <- m
+	}
+
+	// Shut down all processMessages goroutines.
+	close(msgs)
+
+	// The deferred call to it.Stop will block until each m.Done has been
+	// called on each message.
+}
+
+// This example demonstrates calling the Cloud Pub/Sub API.
 //
-// Also, before running this example, be sure to enable Cloud Pub/Sub
+// Before running this example, be sure to enable Cloud Pub/Sub
 // service on your project in Developer Console at:
 // https://console.developers.google.com/
 //
@@ -328,27 +424,33 @@ func main() {
 	flag.Parse()
 	argv := flag.Args()
 	checkArgs(argv, 1)
-	client, err := newClient(*jsonFile)
-	if err != nil {
-		log.Fatalf("clientAndId failed, %v", err)
-	}
 	if *projID == "" {
 		usageAndExit("Please specify Project ID.")
 	}
-	ctx := cloud.NewContext(*projID, client)
-	m := map[string]func(ctx context.Context, argv []string){
-		"create_topic":        createTopic,
-		"delete_topic":        deleteTopic,
-		"create_subscription": createSubscription,
-		"delete_subscription": deleteSubscription,
-		"publish":             publish,
-		"pull_messages":       pullMessages,
-		"publish_messages":    publishMessages,
+	client, err := pubsub.NewClient(context.Background(), *projID)
+	if err != nil {
+		log.Fatalf("creating pubsub client: %v", err)
+	}
+
+	commands := map[string]func(client *pubsub.Client, argv []string){
+		"create_topic":             createTopic,
+		"delete_topic":             deleteTopic,
+		"list_topics":              listTopics,
+		"list_topic_subscriptions": listTopicSubscriptions,
+		"topic_exists":             checkTopicExists,
+		"create_subscription":      createSubscription,
+		"show_subscription":        showSubscription,
+		"delete_subscription":      deleteSubscription,
+		"subscription_exists":      checkSubscriptionExists,
+		"list_subscriptions":       listSubscriptions,
+		"publish":                  publish,
+		"publish_messages":         publishMessages,
+		"pull_messages":            pullMessages,
 	}
 	subcommand := argv[0]
-	f, ok := m[subcommand]
-	if !ok {
+	if f, ok := commands[subcommand]; ok {
+		f(client, argv)
+	} else {
 		usageAndExit(fmt.Sprintf("Function not found for %s", subcommand))
 	}
-	f(ctx, argv)
 }

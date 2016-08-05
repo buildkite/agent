@@ -53,6 +53,7 @@ func New(client *http.Client) (*Service, error) {
 	s.Lineitems = NewLineitemsService(s)
 	s.Queries = NewQueriesService(s)
 	s.Reports = NewReportsService(s)
+	s.Rubicon = NewRubiconService(s)
 	return s, nil
 }
 
@@ -66,6 +67,8 @@ type Service struct {
 	Queries *QueriesService
 
 	Reports *ReportsService
+
+	Rubicon *RubiconService
 }
 
 func (s *Service) userAgent() string {
@@ -99,6 +102,15 @@ func NewReportsService(s *Service) *ReportsService {
 }
 
 type ReportsService struct {
+	s *Service
+}
+
+func NewRubiconService(s *Service) *RubiconService {
+	rs := &RubiconService{s: s}
+	return rs
+}
+
+type RubiconService struct {
 	s *Service
 }
 
@@ -200,6 +212,7 @@ type FilterPair struct {
 	//   "FILTER_DATA_PROVIDER"
 	//   "FILTER_DATE"
 	//   "FILTER_DAY_OF_WEEK"
+	//   "FILTER_DFP_ORDER_ID"
 	//   "FILTER_DMA"
 	//   "FILTER_EXCHANGE_ID"
 	//   "FILTER_FLOODLIGHT_PIXEL_ID"
@@ -237,7 +250,36 @@ type FilterPair struct {
 	//   "FILTER_SITE_LANGUAGE"
 	//   "FILTER_TARGETED_USER_LIST"
 	//   "FILTER_TIME_OF_DAY"
+	//   "FILTER_TRUEVIEW_AD_GROUP_AD_ID"
+	//   "FILTER_TRUEVIEW_AD_GROUP_ID"
+	//   "FILTER_TRUEVIEW_AGE"
+	//   "FILTER_TRUEVIEW_CATEGORY"
+	//   "FILTER_TRUEVIEW_CITY"
 	//   "FILTER_TRUEVIEW_CONVERSION_TYPE"
+	//   "FILTER_TRUEVIEW_COUNTRY"
+	//   "FILTER_TRUEVIEW_CUSTOM_AFFINITY"
+	//   "FILTER_TRUEVIEW_DMA"
+	//   "FILTER_TRUEVIEW_GENDER"
+	//   "FILTER_TRUEVIEW_IAR_AGE"
+	//   "FILTER_TRUEVIEW_IAR_CATEGORY"
+	//   "FILTER_TRUEVIEW_IAR_CITY"
+	//   "FILTER_TRUEVIEW_IAR_COUNTRY"
+	//   "FILTER_TRUEVIEW_IAR_GENDER"
+	//   "FILTER_TRUEVIEW_IAR_INTEREST"
+	//   "FILTER_TRUEVIEW_IAR_LANGUAGE"
+	//   "FILTER_TRUEVIEW_IAR_PARENTAL_STATUS"
+	//   "FILTER_TRUEVIEW_IAR_REGION"
+	//   "FILTER_TRUEVIEW_IAR_REMARKETING_LIST"
+	//   "FILTER_TRUEVIEW_IAR_TIME_OF_DAY"
+	//   "FILTER_TRUEVIEW_IAR_ZIPCODE"
+	//   "FILTER_TRUEVIEW_INTEREST"
+	//   "FILTER_TRUEVIEW_KEYWORD"
+	//   "FILTER_TRUEVIEW_PARENTAL_STATUS"
+	//   "FILTER_TRUEVIEW_PLACEMENT"
+	//   "FILTER_TRUEVIEW_REGION"
+	//   "FILTER_TRUEVIEW_REMARKETING_LIST"
+	//   "FILTER_TRUEVIEW_URL"
+	//   "FILTER_TRUEVIEW_ZIPCODE"
 	//   "FILTER_UNKNOWN"
 	//   "FILTER_USER_LIST"
 	//   "FILTER_USER_LIST_FIRST_PARTY"
@@ -334,6 +376,71 @@ func (s *ListReportsResponse) MarshalJSON() ([]byte, error) {
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
 
+// Note: Publisher comment from Rubicon.
+type Note struct {
+	// Id: Note id.
+	Id int64 `json:"id,omitempty,string"`
+
+	// Message: Message from publisher.
+	Message string `json:"message,omitempty"`
+
+	// Source: Equals "publisher" for notification from Rubicon.
+	Source string `json:"source,omitempty"`
+
+	// Timestamp: Time when the note was added, e.g.
+	// "2015-12-16T17:25:35.000-08:00".
+	Timestamp string `json:"timestamp,omitempty"`
+
+	// Username: Publisher user name.
+	Username string `json:"username,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Id") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *Note) MarshalJSON() ([]byte, error) {
+	type noMethod Note
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// NotifyProposalChangeRequest: NotifyProposalChange request.
+type NotifyProposalChangeRequest struct {
+	// Action: Action taken by publisher. One of: Accept, Decline, Append
+	Action string `json:"action,omitempty"`
+
+	// Href: URL to access proposal detail.
+	Href string `json:"href,omitempty"`
+
+	// Id: Below are contents of notification from Rubicon. Proposal id.
+	Id int64 `json:"id,omitempty,string"`
+
+	// Notes: Notes from publisher
+	Notes []*Note `json:"notes,omitempty"`
+
+	// Token: Deal token, available when proposal is accepted by publisher.
+	Token string `json:"token,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Action") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *NotifyProposalChangeRequest) MarshalJSON() ([]byte, error) {
+	type noMethod NotifyProposalChangeRequest
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // Parameters: Parameters of a query or report.
 type Parameters struct {
 	// Filters: Filters used to match traffic data in your report.
@@ -365,6 +472,7 @@ type Parameters struct {
 	//   "FILTER_DATA_PROVIDER"
 	//   "FILTER_DATE"
 	//   "FILTER_DAY_OF_WEEK"
+	//   "FILTER_DFP_ORDER_ID"
 	//   "FILTER_DMA"
 	//   "FILTER_EXCHANGE_ID"
 	//   "FILTER_FLOODLIGHT_PIXEL_ID"
@@ -402,7 +510,36 @@ type Parameters struct {
 	//   "FILTER_SITE_LANGUAGE"
 	//   "FILTER_TARGETED_USER_LIST"
 	//   "FILTER_TIME_OF_DAY"
+	//   "FILTER_TRUEVIEW_AD_GROUP_AD_ID"
+	//   "FILTER_TRUEVIEW_AD_GROUP_ID"
+	//   "FILTER_TRUEVIEW_AGE"
+	//   "FILTER_TRUEVIEW_CATEGORY"
+	//   "FILTER_TRUEVIEW_CITY"
 	//   "FILTER_TRUEVIEW_CONVERSION_TYPE"
+	//   "FILTER_TRUEVIEW_COUNTRY"
+	//   "FILTER_TRUEVIEW_CUSTOM_AFFINITY"
+	//   "FILTER_TRUEVIEW_DMA"
+	//   "FILTER_TRUEVIEW_GENDER"
+	//   "FILTER_TRUEVIEW_IAR_AGE"
+	//   "FILTER_TRUEVIEW_IAR_CATEGORY"
+	//   "FILTER_TRUEVIEW_IAR_CITY"
+	//   "FILTER_TRUEVIEW_IAR_COUNTRY"
+	//   "FILTER_TRUEVIEW_IAR_GENDER"
+	//   "FILTER_TRUEVIEW_IAR_INTEREST"
+	//   "FILTER_TRUEVIEW_IAR_LANGUAGE"
+	//   "FILTER_TRUEVIEW_IAR_PARENTAL_STATUS"
+	//   "FILTER_TRUEVIEW_IAR_REGION"
+	//   "FILTER_TRUEVIEW_IAR_REMARKETING_LIST"
+	//   "FILTER_TRUEVIEW_IAR_TIME_OF_DAY"
+	//   "FILTER_TRUEVIEW_IAR_ZIPCODE"
+	//   "FILTER_TRUEVIEW_INTEREST"
+	//   "FILTER_TRUEVIEW_KEYWORD"
+	//   "FILTER_TRUEVIEW_PARENTAL_STATUS"
+	//   "FILTER_TRUEVIEW_PLACEMENT"
+	//   "FILTER_TRUEVIEW_REGION"
+	//   "FILTER_TRUEVIEW_REMARKETING_LIST"
+	//   "FILTER_TRUEVIEW_URL"
+	//   "FILTER_TRUEVIEW_ZIPCODE"
 	//   "FILTER_UNKNOWN"
 	//   "FILTER_USER_LIST"
 	//   "FILTER_USER_LIST_FIRST_PARTY"
@@ -599,6 +736,7 @@ type Parameters struct {
 	//   "METRIC_PROFIT_VIEWABLE_ECPM_ADVERTISER"
 	//   "METRIC_PROFIT_VIEWABLE_ECPM_PARTNER"
 	//   "METRIC_PROFIT_VIEWABLE_ECPM_USD"
+	//   "METRIC_REACH_COOKIE_REACH"
 	//   "METRIC_REVENUE_ADVERTISER"
 	//   "METRIC_REVENUE_ECPAPC_ADVERTISER"
 	//   "METRIC_REVENUE_ECPAPC_PARTNER"
@@ -660,6 +798,9 @@ type Parameters struct {
 	//   "METRIC_TOTAL_MEDIA_COST_VIEWABLE_ECPM_ADVERTISER"
 	//   "METRIC_TOTAL_MEDIA_COST_VIEWABLE_ECPM_PARTNER"
 	//   "METRIC_TOTAL_MEDIA_COST_VIEWABLE_ECPM_USD"
+	//   "METRIC_TRUEVIEW_AVERAGE_CPE_ADVERTISER"
+	//   "METRIC_TRUEVIEW_AVERAGE_CPE_PARTNER"
+	//   "METRIC_TRUEVIEW_AVERAGE_CPE_USD"
 	//   "METRIC_TRUEVIEW_CONVERSION_COST_MANY_PER_VIEW_ADVERTISER"
 	//   "METRIC_TRUEVIEW_CONVERSION_COST_MANY_PER_VIEW_PARTNER"
 	//   "METRIC_TRUEVIEW_CONVERSION_COST_MANY_PER_VIEW_USD"
@@ -685,6 +826,8 @@ type Parameters struct {
 	//   "METRIC_TRUEVIEW_EARNED_SHARES"
 	//   "METRIC_TRUEVIEW_EARNED_SUBSCRIBERS"
 	//   "METRIC_TRUEVIEW_EARNED_VIEWS"
+	//   "METRIC_TRUEVIEW_ENGAGEMENTS"
+	//   "METRIC_TRUEVIEW_ENGAGEMENT_RATE"
 	//   "METRIC_TRUEVIEW_IMPRESSION_SHARE"
 	//   "METRIC_TRUEVIEW_LOST_IS_BUDGET"
 	//   "METRIC_TRUEVIEW_LOST_IS_RANK"
@@ -725,8 +868,12 @@ type Parameters struct {
 	//   "TYPE_NIELSEN_DAILY_REACH_BUILD"
 	//   "TYPE_NIELSEN_ONLINE_GLOBAL_MARKET"
 	//   "TYPE_NIELSEN_SITE"
+	//   "TYPE_NOT_SUPPORTED"
 	//   "TYPE_ORDER_ID"
 	//   "TYPE_PAGE_CATEGORY"
+	//   "TYPE_PETRA_NIELSEN_AUDIENCE_PROFILE"
+	//   "TYPE_PETRA_NIELSEN_DAILY_REACH_BUILD"
+	//   "TYPE_PETRA_NIELSEN_ONLINE_GLOBAL_MARKET"
 	//   "TYPE_PIXEL_LOAD"
 	//   "TYPE_REACH_AND_FREQUENCY"
 	//   "TYPE_THIRD_PARTY_DATA_PROVIDER"
@@ -823,6 +970,7 @@ type QueryMetadata struct {
 	//   "PREVIOUS_WEEK"
 	//   "PREVIOUS_YEAR"
 	//   "QUARTER_TO_DATE"
+	//   "TYPE_NOT_SUPPORTED"
 	//   "WEEK_TO_DATE"
 	//   "YEAR_TO_DATE"
 	DataRange string `json:"dataRange,omitempty"`
@@ -1149,6 +1297,7 @@ type RunQueryRequest struct {
 	//   "PREVIOUS_WEEK"
 	//   "PREVIOUS_YEAR"
 	//   "QUARTER_TO_DATE"
+	//   "TYPE_NOT_SUPPORTED"
 	//   "WEEK_TO_DATE"
 	//   "YEAR_TO_DATE"
 	DataRange string `json:"dataRange,omitempty"`
@@ -1276,23 +1425,6 @@ func (r *LineitemsService) Downloadlineitems(downloadlineitemsrequest *DownloadL
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LineitemsDownloadlineitemsCall) QuotaUser(quotaUser string) *LineitemsDownloadlineitemsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LineitemsDownloadlineitemsCall) UserIP(userIP string) *LineitemsDownloadlineitemsCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1310,23 +1442,21 @@ func (c *LineitemsDownloadlineitemsCall) Context(ctx context.Context) *Lineitems
 }
 
 func (c *LineitemsDownloadlineitemsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.downloadlineitemsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "lineitems/downloadlineitems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.lineitems.downloadlineitems" call.
@@ -1336,7 +1466,8 @@ func (c *LineitemsDownloadlineitemsCall) doRequest(alt string) (*http.Response, 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LineitemsDownloadlineitemsCall) Do() (*DownloadLineItemsResponse, error) {
+func (c *LineitemsDownloadlineitemsCall) Do(opts ...googleapi.CallOption) (*DownloadLineItemsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1360,7 +1491,8 @@ func (c *LineitemsDownloadlineitemsCall) Do() (*DownloadLineItemsResponse, error
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1395,23 +1527,6 @@ func (r *LineitemsService) Uploadlineitems(uploadlineitemsrequest *UploadLineIte
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LineitemsUploadlineitemsCall) QuotaUser(quotaUser string) *LineitemsUploadlineitemsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LineitemsUploadlineitemsCall) UserIP(userIP string) *LineitemsUploadlineitemsCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1429,23 +1544,21 @@ func (c *LineitemsUploadlineitemsCall) Context(ctx context.Context) *LineitemsUp
 }
 
 func (c *LineitemsUploadlineitemsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.uploadlineitemsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "lineitems/uploadlineitems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.lineitems.uploadlineitems" call.
@@ -1455,7 +1568,8 @@ func (c *LineitemsUploadlineitemsCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LineitemsUploadlineitemsCall) Do() (*UploadLineItemsResponse, error) {
+func (c *LineitemsUploadlineitemsCall) Do(opts ...googleapi.CallOption) (*UploadLineItemsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1479,7 +1593,8 @@ func (c *LineitemsUploadlineitemsCall) Do() (*UploadLineItemsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1514,23 +1629,6 @@ func (r *QueriesService) Createquery(query *Query) *QueriesCreatequeryCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QueriesCreatequeryCall) QuotaUser(quotaUser string) *QueriesCreatequeryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QueriesCreatequeryCall) UserIP(userIP string) *QueriesCreatequeryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1548,23 +1646,21 @@ func (c *QueriesCreatequeryCall) Context(ctx context.Context) *QueriesCreatequer
 }
 
 func (c *QueriesCreatequeryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.query)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "query")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.queries.createquery" call.
@@ -1574,7 +1670,8 @@ func (c *QueriesCreatequeryCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *QueriesCreatequeryCall) Do() (*Query, error) {
+func (c *QueriesCreatequeryCall) Do(opts ...googleapi.CallOption) (*Query, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1598,7 +1695,8 @@ func (c *QueriesCreatequeryCall) Do() (*Query, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1634,23 +1732,6 @@ func (r *QueriesService) Deletequery(queryId int64) *QueriesDeletequeryCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QueriesDeletequeryCall) QuotaUser(quotaUser string) *QueriesDeletequeryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QueriesDeletequeryCall) UserIP(userIP string) *QueriesDeletequeryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1668,23 +1749,23 @@ func (c *QueriesDeletequeryCall) Context(ctx context.Context) *QueriesDeletequer
 }
 
 func (c *QueriesDeletequeryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "query/{queryId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"queryId": strconv.FormatInt(c.queryId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.queries.deletequery" call.
-func (c *QueriesDeletequeryCall) Do() error {
+func (c *QueriesDeletequeryCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -1732,23 +1813,6 @@ func (r *QueriesService) Getquery(queryId int64) *QueriesGetqueryCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QueriesGetqueryCall) QuotaUser(quotaUser string) *QueriesGetqueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QueriesGetqueryCall) UserIP(userIP string) *QueriesGetqueryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1776,22 +1840,21 @@ func (c *QueriesGetqueryCall) Context(ctx context.Context) *QueriesGetqueryCall 
 }
 
 func (c *QueriesGetqueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "query/{queryId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"queryId": strconv.FormatInt(c.queryId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.queries.getquery" call.
@@ -1801,7 +1864,8 @@ func (c *QueriesGetqueryCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *QueriesGetqueryCall) Do() (*Query, error) {
+func (c *QueriesGetqueryCall) Do(opts ...googleapi.CallOption) (*Query, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1825,7 +1889,8 @@ func (c *QueriesGetqueryCall) Do() (*Query, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1868,23 +1933,6 @@ func (r *QueriesService) Listqueries() *QueriesListqueriesCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QueriesListqueriesCall) QuotaUser(quotaUser string) *QueriesListqueriesCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QueriesListqueriesCall) UserIP(userIP string) *QueriesListqueriesCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1912,20 +1960,19 @@ func (c *QueriesListqueriesCall) Context(ctx context.Context) *QueriesListquerie
 }
 
 func (c *QueriesListqueriesCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "queries")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.queries.listqueries" call.
@@ -1935,7 +1982,8 @@ func (c *QueriesListqueriesCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *QueriesListqueriesCall) Do() (*ListQueriesResponse, error) {
+func (c *QueriesListqueriesCall) Do(opts ...googleapi.CallOption) (*ListQueriesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1959,7 +2007,8 @@ func (c *QueriesListqueriesCall) Do() (*ListQueriesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1993,23 +2042,6 @@ func (r *QueriesService) Runquery(queryId int64, runqueryrequest *RunQueryReques
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *QueriesRunqueryCall) QuotaUser(quotaUser string) *QueriesRunqueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *QueriesRunqueryCall) UserIP(userIP string) *QueriesRunqueryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2027,29 +2059,28 @@ func (c *QueriesRunqueryCall) Context(ctx context.Context) *QueriesRunqueryCall 
 }
 
 func (c *QueriesRunqueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.runqueryrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "query/{queryId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"queryId": strconv.FormatInt(c.queryId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.queries.runquery" call.
-func (c *QueriesRunqueryCall) Do() error {
+func (c *QueriesRunqueryCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -2100,23 +2131,6 @@ func (r *ReportsService) Listreports(queryId int64) *ReportsListreportsCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsListreportsCall) QuotaUser(quotaUser string) *ReportsListreportsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsListreportsCall) UserIP(userIP string) *ReportsListreportsCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2144,22 +2158,21 @@ func (c *ReportsListreportsCall) Context(ctx context.Context) *ReportsListreport
 }
 
 func (c *ReportsListreportsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "queries/{queryId}/reports")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"queryId": strconv.FormatInt(c.queryId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "doubleclickbidmanager.reports.listreports" call.
@@ -2169,7 +2182,8 @@ func (c *ReportsListreportsCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReportsListreportsCall) Do() (*ListReportsResponse, error) {
+func (c *ReportsListreportsCall) Do(opts ...googleapi.CallOption) (*ListReportsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2193,7 +2207,8 @@ func (c *ReportsListreportsCall) Do() (*ListReportsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2216,6 +2231,81 @@ func (c *ReportsListreportsCall) Do() (*ListReportsResponse, error) {
 	//   "path": "queries/{queryId}/reports",
 	//   "response": {
 	//     "$ref": "ListReportsResponse"
+	//   }
+	// }
+
+}
+
+// method id "doubleclickbidmanager.rubicon.notifyproposalchange":
+
+type RubiconNotifyproposalchangeCall struct {
+	s                           *Service
+	notifyproposalchangerequest *NotifyProposalChangeRequest
+	urlParams_                  gensupport.URLParams
+	ctx_                        context.Context
+}
+
+// Notifyproposalchange: Update proposal upon actions of Rubicon
+// publisher.
+func (r *RubiconService) Notifyproposalchange(notifyproposalchangerequest *NotifyProposalChangeRequest) *RubiconNotifyproposalchangeCall {
+	c := &RubiconNotifyproposalchangeCall{s: r.s, urlParams_: make(gensupport.URLParams)}
+	c.notifyproposalchangerequest = notifyproposalchangerequest
+	return c
+}
+
+// Fields allows partial responses to be retrieved. See
+// https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
+// for more information.
+func (c *RubiconNotifyproposalchangeCall) Fields(s ...googleapi.Field) *RubiconNotifyproposalchangeCall {
+	c.urlParams_.Set("fields", googleapi.CombineFields(s))
+	return c
+}
+
+// Context sets the context to be used in this call's Do method. Any
+// pending HTTP request will be aborted if the provided context is
+// canceled.
+func (c *RubiconNotifyproposalchangeCall) Context(ctx context.Context) *RubiconNotifyproposalchangeCall {
+	c.ctx_ = ctx
+	return c
+}
+
+func (c *RubiconNotifyproposalchangeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	var body io.Reader = nil
+	body, err := googleapi.WithoutDataWrapper.JSONReader(c.notifyproposalchangerequest)
+	if err != nil {
+		return nil, err
+	}
+	reqHeaders.Set("Content-Type", "application/json")
+	c.urlParams_.Set("alt", alt)
+	urls := googleapi.ResolveRelative(c.s.BasePath, "rubicon/notifyproposalchange")
+	urls += "?" + c.urlParams_.Encode()
+	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
+	googleapi.SetOpaque(req.URL)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
+}
+
+// Do executes the "doubleclickbidmanager.rubicon.notifyproposalchange" call.
+func (c *RubiconNotifyproposalchangeCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
+	res, err := c.doRequest("json")
+	if err != nil {
+		return err
+	}
+	defer googleapi.CloseBody(res)
+	if err := googleapi.CheckResponse(res); err != nil {
+		return err
+	}
+	return nil
+	// {
+	//   "description": "Update proposal upon actions of Rubicon publisher.",
+	//   "httpMethod": "POST",
+	//   "id": "doubleclickbidmanager.rubicon.notifyproposalchange",
+	//   "path": "rubicon/notifyproposalchange",
+	//   "request": {
+	//     "$ref": "NotifyProposalChangeRequest"
 	//   }
 	// }
 

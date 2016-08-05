@@ -845,6 +845,14 @@ type Account struct {
 	// - "37" for PLN
 	// - "39" for INR
 	// - "40" for THB
+	// - "41" for IDR
+	// - "42" for CZK
+	// - "43" for RON
+	// - "44" for HUF
+	// - "45" for RUB
+	// - "46" for AED
+	// - "47" for BGN
+	// - "48" for HRK
 	CurrencyId int64 `json:"currencyId,omitempty,string"`
 
 	// DefaultCreativeSizeId: Default placement dimensions for this account.
@@ -1194,6 +1202,7 @@ type AccountUserProfile struct {
 	// Possible values:
 	//   "INTERNAL_ADMINISTRATOR"
 	//   "NORMAL_USER"
+	//   "READ_ONLY_SUPER_USER"
 	//   "SUPER_USER"
 	UserAccessType string `json:"userAccessType,omitempty"`
 
@@ -2765,6 +2774,7 @@ type Creative struct {
 	// Possible values:
 	//   "ARTWORK_TYPE_FLASH"
 	//   "ARTWORK_TYPE_HTML5"
+	//   "ARTWORK_TYPE_IMAGE"
 	//   "ARTWORK_TYPE_MIXED"
 	ArtworkType string `json:"artworkType,omitempty"`
 
@@ -2789,8 +2799,9 @@ type Creative struct {
 	BackgroundColor string `json:"backgroundColor,omitempty"`
 
 	// BackupImageClickThroughUrl: Click-through URL for backup image.
-	// Applicable to the following creative types: ENHANCED_BANNER,
-	// FLASH_INPAGE, and HTML5_BANNER.
+	// Applicable to the following creative types: FLASH_INPAGE, and
+	// HTML5_BANNER. Applicable to ENHANCED_BANNER when the primary asset
+	// type is not HTML_IMAGE.
 	BackupImageClickThroughUrl string `json:"backupImageClickThroughUrl,omitempty"`
 
 	// BackupImageFeatures: List of feature dependencies that will cause a
@@ -2801,7 +2812,8 @@ type Creative struct {
 	// features detected by DCM for all the assets of this creative and can
 	// then be modified by the client. To reset this field, copy over all
 	// the creativeAssets' detected features. Applicable to the following
-	// creative types: ENHANCED_BANNER and HTML5_BANNER.
+	// creative types: HTML5_BANNER. Applicable to ENHANCED_BANNER when the
+	// primary asset is not HTML_IMAGE.
 	//
 	// Possible values:
 	//   "APPLICATION_CACHE"
@@ -2873,13 +2885,14 @@ type Creative struct {
 	BackupImageFeatures []string `json:"backupImageFeatures,omitempty"`
 
 	// BackupImageReportingLabel: Reporting label used for HTML5 banner
-	// backup image. Applicable to the following creative types:
-	// ENHANCED_BANNER.
+	// backup image. Applicable to ENHANCED_BANNER when the primary asset
+	// type is not HTML_IMAGE.
 	BackupImageReportingLabel string `json:"backupImageReportingLabel,omitempty"`
 
 	// BackupImageTargetWindow: Target window for backup image. Applicable
-	// to the following creative types: ENHANCED_BANNER, FLASH_INPAGE, and
-	// HTML5_BANNER.
+	// to the following creative types: FLASH_INPAGE, and HTML5_BANNER.
+	// Applicable to ENHANCED_BANNER when the primary asset type is not
+	// HTML_IMAGE.
 	BackupImageTargetWindow *TargetWindow `json:"backupImageTargetWindow,omitempty"`
 
 	// ClickTags: Click tags of the creative. For ENHANCED_BANNER,
@@ -2892,8 +2905,9 @@ type Creative struct {
 	// entry in this list for each image creative asset. A click tag is
 	// matched with a corresponding creative asset by matching the
 	// clickTag.name field with the creativeAsset.assetIdentifier.name
-	// field. Applicable to the following creative types: ENHANCED_BANNER,
-	// ENHANCED_IMAGE, FLASH_INPAGE, HTML5_BANNER.
+	// field. Applicable to the following creative types: ENHANCED_IMAGE,
+	// FLASH_INPAGE HTML5_BANNER. Applicable to ENHANCED_BANNER when the
+	// primary asset type is not HTML_IMAGE.
 	ClickTags []*ClickTag `json:"clickTags,omitempty"`
 
 	// CommercialId: Industry standard ID assigned to creative for reach and
@@ -2934,8 +2948,8 @@ type Creative struct {
 	// creative need to be automatically converted to HTML5. This flag is
 	// enabled by default and users can choose to disable it if they don't
 	// want the system to generate and use HTML5 asset for this creative.
-	// Applicable to the following creative types: ENHANCED_BANNER and
-	// FLASH_INPAGE.
+	// Applicable to the following creative type: FLASH_INPAGE. Applicable
+	// to ENHANCED_BANNER when the primary asset type is not HTML_IMAGE.
 	ConvertFlashToHtml5 bool `json:"convertFlashToHtml5,omitempty"`
 
 	// CounterCustomEvents: List of counter events configured for the
@@ -2965,8 +2979,9 @@ type Creative struct {
 	// For ENHANCED_BANNER and ENHANCED_IMAGE creatives, these are read-only
 	// and auto-generated from clickTags, For ENHANCED_BANNER, an event is
 	// also created from the backupImageReportingLabel. Applicable to the
-	// following creative types: ENHANCED_BANNER, ENHANCED_IMAGE, all
-	// RICH_MEDIA, and all VPAID.
+	// following creative types: ENHANCED_IMAGE, all RICH_MEDIA, and all
+	// VPAID. Applicable to ENHANCED_BANNER when the primary asset is not
+	// HTML_IMAGE.
 	ExitCustomEvents []*CreativeCustomEvent `json:"exitCustomEvents,omitempty"`
 
 	// FsCommand: OpenWindow FSCommand of this creative. This lets the SWF
@@ -3043,18 +3058,20 @@ type Creative struct {
 
 	// RequiredFlashVersion: The internal Flash version for this creative as
 	// calculated by DoubleClick Studio. This is a read-only field.
-	// Applicable to the following creative types: FLASH_INPAGE,
-	// ENHANCED_BANNER, all RICH_MEDIA, and all VPAID.
+	// Applicable to the following creative types: FLASH_INPAGE, all
+	// RICH_MEDIA, and all VPAID. Applicable to ENHANCED_BANNER when the
+	// primary asset type is not HTML_IMAGE.
 	RequiredFlashVersion int64 `json:"requiredFlashVersion,omitempty"`
 
 	// Size: Size associated with this creative. When inserting or updating
 	// a creative either the size ID field or size width and height fields
 	// can be used. This is a required field when applicable; however for
-	// IMAGE and FLASH_INPAGE creatives, if left blank, this field will be
-	// automatically set using the actual size of the associated image
-	// assets. Applicable to the following creative types: ENHANCED_BANNER,
-	// ENHANCED_IMAGE, FLASH_INPAGE, HTML5_BANNER, IMAGE, and all
-	// RICH_MEDIA.
+	// IMAGE and FLASH_INPAGE creatives, and for ENHANCED_BANNER creatives
+	// with a primary asset of type HTML_IMAGE, if left blank, this field
+	// will be automatically set using the actual size of the associated
+	// image assets. Applicable to the following creative types:
+	// ENHANCED_BANNER, ENHANCED_IMAGE, FLASH_INPAGE, HTML5_BANNER, IMAGE,
+	// and all RICH_MEDIA.
 	Size *Size `json:"size,omitempty"`
 
 	// Skippable: Whether the user can choose to skip the creative.
@@ -3093,12 +3110,12 @@ type Creative struct {
 
 	// ThirdPartyBackupImageImpressionsUrl: Third-party URL used to record
 	// backup image impressions. Applicable to the following creative types:
-	// all RICH_MEDIA
+	// all RICH_MEDIA.
 	ThirdPartyBackupImageImpressionsUrl string `json:"thirdPartyBackupImageImpressionsUrl,omitempty"`
 
 	// ThirdPartyRichMediaImpressionsUrl: Third-party URL used to record
 	// rich media impressions. Applicable to the following creative types:
-	// all RICH_MEDIA
+	// all RICH_MEDIA.
 	ThirdPartyRichMediaImpressionsUrl string `json:"thirdPartyRichMediaImpressionsUrl,omitempty"`
 
 	// ThirdPartyUrls: Third-party URLs for tracking in-stream video
@@ -3109,7 +3126,8 @@ type Creative struct {
 	// TimerCustomEvents: List of timer events configured for the creative.
 	// For ENHANCED_IMAGE creatives, these are read-only and auto-generated
 	// from clickTags. Applicable to the following creative types:
-	// ENHANCED_IMAGE, all RICH_MEDIA, and all VPAID.
+	// ENHANCED_IMAGE, all RICH_MEDIA, and all VPAID. Applicable to
+	// ENHANCED_BANNER when the primary asset is not HTML_IMAGE.
 	TimerCustomEvents []*CreativeCustomEvent `json:"timerCustomEvents,omitempty"`
 
 	// TotalFileSize: Combined size of all creative assets. This is a
@@ -3188,8 +3206,9 @@ func (s *Creative) MarshalJSON() ([]byte, error) {
 // CreativeAsset: Creative Asset.
 type CreativeAsset struct {
 	// ActionScript3: Whether ActionScript3 is enabled for the flash asset.
-	// This is a read-only field. Applicable to the following creative
-	// types: FLASH_INPAGE and ENHANCED_BANNER.
+	// This is a read-only field. Applicable to the following creative type:
+	// FLASH_INPAGE. Applicable to ENHANCED_BANNER when the primary asset
+	// type is not HTML_IMAGE.
 	ActionScript3 bool `json:"actionScript3,omitempty"`
 
 	// Active: Whether the video asset is active. This is a read-only field
@@ -3214,6 +3233,7 @@ type CreativeAsset struct {
 	// Possible values:
 	//   "ARTWORK_TYPE_FLASH"
 	//   "ARTWORK_TYPE_HTML5"
+	//   "ARTWORK_TYPE_IMAGE"
 	//   "ARTWORK_TYPE_MIXED"
 	ArtworkType string `json:"artworkType,omitempty"`
 
@@ -3369,8 +3389,9 @@ type CreativeAsset struct {
 	FileSize int64 `json:"fileSize,omitempty,string"`
 
 	// FlashVersion: Flash version of the asset. This is a read-only field.
-	// Applicable to the following creative types: FLASH_INPAGE,
-	// ENHANCED_BANNER, all RICH_MEDIA, and all VPAID.
+	// Applicable to the following creative types: FLASH_INPAGE, all
+	// RICH_MEDIA, and all VPAID. Applicable to ENHANCED_BANNER when the
+	// primary asset type is not HTML_IMAGE.
 	FlashVersion int64 `json:"flashVersion,omitempty"`
 
 	// HideFlashObjects: Whether to hide Flash objects flag for an asset.
@@ -3470,8 +3491,8 @@ type CreativeAsset struct {
 	// assets and is applicable to INSTREAM_VIDEO and VPAID_LINEAR
 	// creatives.
 	// ALTERNATE_VIDEO refers to the DCM representation of child asset
-	// videos from Studio, and is applicable to VPAID_LINEAR creatives.
-	// These cannot be added or removed within DCM.
+	// videos from Studio, and is applicable to VPAID_LINEAR_VIDEO
+	// creatives. These cannot be added or removed within DCM.
 	// For VPAID_LINEAR creatives, PARENT_VIDEO, TRANSCODED_VIDEO and
 	// ALTERNATE_VIDEO assets that are marked active serve as backup in case
 	// the VPAID creative cannot be served. Only PARENT_VIDEO assets can be
@@ -3492,8 +3513,9 @@ type CreativeAsset struct {
 	// field when applicable; however for IMAGE and FLASH_INPAGE creatives,
 	// if left blank, this field will be automatically set using the actual
 	// size of the associated image asset. Applicable to the following
-	// creative types: ENHANCED_BANNER, ENHANCED_IMAGE, FLASH_INPAGE,
-	// HTML5_BANNER, IMAGE, and all RICH_MEDIA.
+	// creative types: ENHANCED_IMAGE, FLASH_INPAGE, HTML5_BANNER, IMAGE,
+	// and all RICH_MEDIA. Applicable to ENHANCED_BANNER when the primary
+	// asset type is not HTML_IMAGE.
 	Size *Size `json:"size,omitempty"`
 
 	// SslCompliant: Whether the asset is SSL-compliant. This is a read-only
@@ -3700,27 +3722,30 @@ type CreativeAssetMetadata struct {
 	// field.
 	//
 	// Possible values are:
-	// - "CLICK_TAG_NON_TOP_LEVEL"
+	// - "ADMOB_REFERENCED"
+	// - "ASSET_FORMAT_UNSUPPORTED_DCM"
+	// - "ASSET_INVALID"
+	// - "CLICK_TAG_HARD_CODED"
+	// - "CLICK_TAG_INVALID"
+	// - "CLICK_TAG_IN_GWD"
 	// - "CLICK_TAG_MISSING"
 	// - "CLICK_TAG_MORE_THAN_ONE"
-	// - "CLICK_TAG_INVALID"
-	// - "ORPHANED_ASSET"
-	// - "PRIMARY_HTML_MISSING"
+	// - "CLICK_TAG_NON_TOP_LEVEL"
+	// - "COMPONENT_UNSUPPORTED_DCM"
+	// - "ENABLER_UNSUPPORTED_METHOD_DCM"
 	// - "EXTERNAL_FILE_REFERENCED"
-	// - "MRAID_REFERENCED"
-	// - "ADMOB_REFERENCED"
+	// - "FILE_DETAIL_EMPTY"
 	// - "FILE_TYPE_INVALID"
-	// - "ZIP_INVALID"
+	// - "GWD_PROPERTIES_INVALID"
+	// - "HTML5_FEATURE_UNSUPPORTED"
 	// - "LINKED_FILE_NOT_FOUND"
 	// - "MAX_FLASH_VERSION_11"
+	// - "MRAID_REFERENCED"
 	// - "NOT_SSL_COMPLIANT"
-	// - "FILE_DETAIL_EMPTY"
-	// - "ASSET_INVALID"
-	// - "GWD_PROPERTIES_INVALID"
-	// - "ENABLER_UNSUPPORTED_METHOD_DCM"
-	// - "ASSET_FORMAT_UNSUPPORTED_DCM"
-	// - "COMPONENT_UNSUPPORTED_DCM"
-	// - "HTML5_FEATURE_UNSUPPORTED' "
+	// - "ORPHANED_ASSET"
+	// - "PRIMARY_HTML_MISSING"
+	// - "SVG_INVALID"
+	// - "ZIP_INVALID"
 	//
 	// Possible values:
 	//   "ADMOB_REFERENCED"
@@ -3745,6 +3770,7 @@ type CreativeAssetMetadata struct {
 	//   "NOT_SSL_COMPLIANT"
 	//   "ORPHANED_ASSET"
 	//   "PRIMARY_HTML_MISSING"
+	//   "SVG_INVALID"
 	//   "ZIP_INVALID"
 	WarnedValidationRules []string `json:"warnedValidationRules,omitempty"`
 
@@ -3877,6 +3903,7 @@ type CreativeCustomEvent struct {
 	// Possible values:
 	//   "ARTWORK_TYPE_FLASH"
 	//   "ARTWORK_TYPE_HTML5"
+	//   "ARTWORK_TYPE_IMAGE"
 	//   "ARTWORK_TYPE_MIXED"
 	ArtworkType string `json:"artworkType,omitempty"`
 
@@ -4233,6 +4260,7 @@ type CreativeOptimizationConfiguration struct {
 	//   "POST_CLICK"
 	//   "POST_CLICK_AND_IMPRESSION"
 	//   "POST_IMPRESSION"
+	//   "VIDEO_COMPLETION"
 	OptimizationModel string `json:"optimizationModel,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Id") to
@@ -4863,6 +4891,14 @@ type DirectorySite struct {
 	// - "37" for PLN
 	// - "39" for INR
 	// - "40" for THB
+	// - "41" for IDR
+	// - "42" for CZK
+	// - "43" for RON
+	// - "44" for HUF
+	// - "45" for RUB
+	// - "46" for AED
+	// - "47" for BGN
+	// - "48" for HRK
 	CurrencyId int64 `json:"currencyId,omitempty,string"`
 
 	// Description: Description of this directory site.
@@ -7391,7 +7427,7 @@ type Placement struct {
 	// Compatibility: Placement compatibility. WEB and WEB_INTERSTITIAL
 	// refer to rendering either on desktop or on mobile devices for regular
 	// or interstitial ads, respectively. APP and APP_INTERSTITIAL are for
-	// rendering in mobile apps.IN_STREAM_VIDEO refers to rendering in
+	// rendering in mobile apps. IN_STREAM_VIDEO refers to rendering in
 	// in-stream video ads developed with the VAST standard. This field is
 	// required on insertion.
 	//
@@ -8618,11 +8654,17 @@ type RemarketingList struct {
 	// ListSource: Product from which this remarketing list was originated.
 	//
 	// Possible values:
+	//   "REMARKETING_LIST_SOURCE_ADX"
 	//   "REMARKETING_LIST_SOURCE_DBM"
 	//   "REMARKETING_LIST_SOURCE_DFA"
+	//   "REMARKETING_LIST_SOURCE_DFP"
 	//   "REMARKETING_LIST_SOURCE_DMP"
 	//   "REMARKETING_LIST_SOURCE_GA"
+	//   "REMARKETING_LIST_SOURCE_GPLUS"
 	//   "REMARKETING_LIST_SOURCE_OTHER"
+	//   "REMARKETING_LIST_SOURCE_PLAY_STORE"
+	//   "REMARKETING_LIST_SOURCE_XFP"
+	//   "REMARKETING_LIST_SOURCE_YOUTUBE"
 	ListSource string `json:"listSource,omitempty"`
 
 	// Name: Name of the remarketing list. This is a required field. Must be
@@ -9961,11 +10003,17 @@ type TargetableRemarketingList struct {
 	// originated.
 	//
 	// Possible values:
+	//   "REMARKETING_LIST_SOURCE_ADX"
 	//   "REMARKETING_LIST_SOURCE_DBM"
 	//   "REMARKETING_LIST_SOURCE_DFA"
+	//   "REMARKETING_LIST_SOURCE_DFP"
 	//   "REMARKETING_LIST_SOURCE_DMP"
 	//   "REMARKETING_LIST_SOURCE_GA"
+	//   "REMARKETING_LIST_SOURCE_GPLUS"
 	//   "REMARKETING_LIST_SOURCE_OTHER"
+	//   "REMARKETING_LIST_SOURCE_PLAY_STORE"
+	//   "REMARKETING_LIST_SOURCE_XFP"
+	//   "REMARKETING_LIST_SOURCE_YOUTUBE"
 	ListSource string `json:"listSource,omitempty"`
 
 	// Name: Name of the targetable remarketing list. Is no greater than 128
@@ -10128,7 +10176,9 @@ type ThirdPartyTrackingUrl struct {
 	//   "VIDEO_MIDPOINT"
 	//   "VIDEO_MUTE"
 	//   "VIDEO_PAUSE"
+	//   "VIDEO_PROGRESS"
 	//   "VIDEO_REWIND"
+	//   "VIDEO_SKIP"
 	//   "VIDEO_START"
 	//   "VIDEO_STOP"
 	//   "VIDEO_THIRD_QUARTILE"
@@ -10528,23 +10578,6 @@ func (r *AccountActiveAdSummariesService) Get(profileId int64, summaryAccountId 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountActiveAdSummariesGetCall) QuotaUser(quotaUser string) *AccountActiveAdSummariesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountActiveAdSummariesGetCall) UserIP(userIP string) *AccountActiveAdSummariesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10572,23 +10605,22 @@ func (c *AccountActiveAdSummariesGetCall) Context(ctx context.Context) *AccountA
 }
 
 func (c *AccountActiveAdSummariesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountActiveAdSummaries/{summaryAccountId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":        strconv.FormatInt(c.profileId, 10),
 		"summaryAccountId": strconv.FormatInt(c.summaryAccountId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountActiveAdSummaries.get" call.
@@ -10598,7 +10630,8 @@ func (c *AccountActiveAdSummariesGetCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountActiveAdSummariesGetCall) Do() (*AccountActiveAdSummary, error) {
+func (c *AccountActiveAdSummariesGetCall) Do(opts ...googleapi.CallOption) (*AccountActiveAdSummary, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10622,7 +10655,8 @@ func (c *AccountActiveAdSummariesGetCall) Do() (*AccountActiveAdSummary, error) 
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10680,23 +10714,6 @@ func (r *AccountPermissionGroupsService) Get(profileId int64, id int64) *Account
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountPermissionGroupsGetCall) QuotaUser(quotaUser string) *AccountPermissionGroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountPermissionGroupsGetCall) UserIP(userIP string) *AccountPermissionGroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10724,23 +10741,22 @@ func (c *AccountPermissionGroupsGetCall) Context(ctx context.Context) *AccountPe
 }
 
 func (c *AccountPermissionGroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountPermissionGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountPermissionGroups.get" call.
@@ -10750,7 +10766,8 @@ func (c *AccountPermissionGroupsGetCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountPermissionGroupsGetCall) Do() (*AccountPermissionGroup, error) {
+func (c *AccountPermissionGroupsGetCall) Do(opts ...googleapi.CallOption) (*AccountPermissionGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10774,7 +10791,8 @@ func (c *AccountPermissionGroupsGetCall) Do() (*AccountPermissionGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10830,23 +10848,6 @@ func (r *AccountPermissionGroupsService) List(profileId int64) *AccountPermissio
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountPermissionGroupsListCall) QuotaUser(quotaUser string) *AccountPermissionGroupsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountPermissionGroupsListCall) UserIP(userIP string) *AccountPermissionGroupsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -10874,22 +10875,21 @@ func (c *AccountPermissionGroupsListCall) Context(ctx context.Context) *AccountP
 }
 
 func (c *AccountPermissionGroupsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountPermissionGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountPermissionGroups.list" call.
@@ -10900,7 +10900,8 @@ func (c *AccountPermissionGroupsListCall) doRequest(alt string) (*http.Response,
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AccountPermissionGroupsListCall) Do() (*AccountPermissionGroupsListResponse, error) {
+func (c *AccountPermissionGroupsListCall) Do(opts ...googleapi.CallOption) (*AccountPermissionGroupsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -10924,7 +10925,8 @@ func (c *AccountPermissionGroupsListCall) Do() (*AccountPermissionGroupsListResp
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -10974,23 +10976,6 @@ func (r *AccountPermissionsService) Get(profileId int64, id int64) *AccountPermi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountPermissionsGetCall) QuotaUser(quotaUser string) *AccountPermissionsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountPermissionsGetCall) UserIP(userIP string) *AccountPermissionsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11018,23 +11003,22 @@ func (c *AccountPermissionsGetCall) Context(ctx context.Context) *AccountPermiss
 }
 
 func (c *AccountPermissionsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountPermissions/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountPermissions.get" call.
@@ -11044,7 +11028,8 @@ func (c *AccountPermissionsGetCall) doRequest(alt string) (*http.Response, error
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountPermissionsGetCall) Do() (*AccountPermission, error) {
+func (c *AccountPermissionsGetCall) Do(opts ...googleapi.CallOption) (*AccountPermission, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11068,7 +11053,8 @@ func (c *AccountPermissionsGetCall) Do() (*AccountPermission, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11124,23 +11110,6 @@ func (r *AccountPermissionsService) List(profileId int64) *AccountPermissionsLis
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountPermissionsListCall) QuotaUser(quotaUser string) *AccountPermissionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountPermissionsListCall) UserIP(userIP string) *AccountPermissionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11168,22 +11137,21 @@ func (c *AccountPermissionsListCall) Context(ctx context.Context) *AccountPermis
 }
 
 func (c *AccountPermissionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountPermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountPermissions.list" call.
@@ -11193,7 +11161,8 @@ func (c *AccountPermissionsListCall) doRequest(alt string) (*http.Response, erro
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountPermissionsListCall) Do() (*AccountPermissionsListResponse, error) {
+func (c *AccountPermissionsListCall) Do(opts ...googleapi.CallOption) (*AccountPermissionsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11217,7 +11186,8 @@ func (c *AccountPermissionsListCall) Do() (*AccountPermissionsListResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11267,23 +11237,6 @@ func (r *AccountUserProfilesService) Get(profileId int64, id int64) *AccountUser
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountUserProfilesGetCall) QuotaUser(quotaUser string) *AccountUserProfilesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountUserProfilesGetCall) UserIP(userIP string) *AccountUserProfilesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11311,23 +11264,22 @@ func (c *AccountUserProfilesGetCall) Context(ctx context.Context) *AccountUserPr
 }
 
 func (c *AccountUserProfilesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountUserProfiles/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountUserProfiles.get" call.
@@ -11337,7 +11289,8 @@ func (c *AccountUserProfilesGetCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountUserProfilesGetCall) Do() (*AccountUserProfile, error) {
+func (c *AccountUserProfilesGetCall) Do(opts ...googleapi.CallOption) (*AccountUserProfile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11361,7 +11314,8 @@ func (c *AccountUserProfilesGetCall) Do() (*AccountUserProfile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11418,23 +11372,6 @@ func (r *AccountUserProfilesService) Insert(profileId int64, accountuserprofile 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountUserProfilesInsertCall) QuotaUser(quotaUser string) *AccountUserProfilesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountUserProfilesInsertCall) UserIP(userIP string) *AccountUserProfilesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11452,25 +11389,23 @@ func (c *AccountUserProfilesInsertCall) Context(ctx context.Context) *AccountUse
 }
 
 func (c *AccountUserProfilesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.accountuserprofile)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountUserProfiles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountUserProfiles.insert" call.
@@ -11480,7 +11415,8 @@ func (c *AccountUserProfilesInsertCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountUserProfilesInsertCall) Do() (*AccountUserProfile, error) {
+func (c *AccountUserProfilesInsertCall) Do(opts ...googleapi.CallOption) (*AccountUserProfile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11504,7 +11440,8 @@ func (c *AccountUserProfilesInsertCall) Do() (*AccountUserProfile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11587,15 +11524,6 @@ func (c *AccountUserProfilesListCall) PageToken(pageToken string) *AccountUserPr
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountUserProfilesListCall) QuotaUser(quotaUser string) *AccountUserProfilesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name, ID or email. Wildcards (*) are
 // allowed. For example, "user profile*2015" will return objects with
@@ -11639,14 +11567,6 @@ func (c *AccountUserProfilesListCall) SubaccountId(subaccountId int64) *AccountU
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountUserProfilesListCall) UserIP(userIP string) *AccountUserProfilesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // UserRoleId sets the optional parameter "userRoleId": Select only user
 // profiles with the specified user role ID.
 func (c *AccountUserProfilesListCall) UserRoleId(userRoleId int64) *AccountUserProfilesListCall {
@@ -11681,22 +11601,21 @@ func (c *AccountUserProfilesListCall) Context(ctx context.Context) *AccountUserP
 }
 
 func (c *AccountUserProfilesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountUserProfiles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountUserProfiles.list" call.
@@ -11706,7 +11625,8 @@ func (c *AccountUserProfilesListCall) doRequest(alt string) (*http.Response, err
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountUserProfilesListCall) Do() (*AccountUserProfilesListResponse, error) {
+func (c *AccountUserProfilesListCall) Do(opts ...googleapi.CallOption) (*AccountUserProfilesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11730,7 +11650,8 @@ func (c *AccountUserProfilesListCall) Do() (*AccountUserProfilesListResponse, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11827,6 +11748,27 @@ func (c *AccountUserProfilesListCall) Do() (*AccountUserProfilesListResponse, er
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AccountUserProfilesListCall) Pages(ctx context.Context, f func(*AccountUserProfilesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.accountUserProfiles.patch":
 
 type AccountUserProfilesPatchCall struct {
@@ -11847,23 +11789,6 @@ func (r *AccountUserProfilesService) Patch(profileId int64, id int64, accountuse
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountUserProfilesPatchCall) QuotaUser(quotaUser string) *AccountUserProfilesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountUserProfilesPatchCall) UserIP(userIP string) *AccountUserProfilesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -11881,25 +11806,23 @@ func (c *AccountUserProfilesPatchCall) Context(ctx context.Context) *AccountUser
 }
 
 func (c *AccountUserProfilesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.accountuserprofile)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountUserProfiles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountUserProfiles.patch" call.
@@ -11909,7 +11832,8 @@ func (c *AccountUserProfilesPatchCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountUserProfilesPatchCall) Do() (*AccountUserProfile, error) {
+func (c *AccountUserProfilesPatchCall) Do(opts ...googleapi.CallOption) (*AccountUserProfile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -11933,7 +11857,8 @@ func (c *AccountUserProfilesPatchCall) Do() (*AccountUserProfile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -11993,23 +11918,6 @@ func (r *AccountUserProfilesService) Update(profileId int64, accountuserprofile 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountUserProfilesUpdateCall) QuotaUser(quotaUser string) *AccountUserProfilesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountUserProfilesUpdateCall) UserIP(userIP string) *AccountUserProfilesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12027,25 +11935,23 @@ func (c *AccountUserProfilesUpdateCall) Context(ctx context.Context) *AccountUse
 }
 
 func (c *AccountUserProfilesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.accountuserprofile)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accountUserProfiles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accountUserProfiles.update" call.
@@ -12055,7 +11961,8 @@ func (c *AccountUserProfilesUpdateCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountUserProfilesUpdateCall) Do() (*AccountUserProfile, error) {
+func (c *AccountUserProfilesUpdateCall) Do(opts ...googleapi.CallOption) (*AccountUserProfile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12079,7 +11986,8 @@ func (c *AccountUserProfilesUpdateCall) Do() (*AccountUserProfile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12132,23 +12040,6 @@ func (r *AccountsService) Get(profileId int64, id int64) *AccountsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsGetCall) QuotaUser(quotaUser string) *AccountsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsGetCall) UserIP(userIP string) *AccountsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12176,23 +12067,22 @@ func (c *AccountsGetCall) Context(ctx context.Context) *AccountsGetCall {
 }
 
 func (c *AccountsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accounts/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accounts.get" call.
@@ -12202,7 +12092,8 @@ func (c *AccountsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *AccountsGetCall) Do() (*Account, error) {
+func (c *AccountsGetCall) Do(opts ...googleapi.CallOption) (*Account, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12226,7 +12117,8 @@ func (c *AccountsGetCall) Do() (*Account, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12315,15 +12207,6 @@ func (c *AccountsListCall) PageToken(pageToken string) *AccountsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsListCall) QuotaUser(quotaUser string) *AccountsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "account*2015" will return objects with names like "account
@@ -12359,14 +12242,6 @@ func (c *AccountsListCall) SortOrder(sortOrder string) *AccountsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsListCall) UserIP(userIP string) *AccountsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12394,22 +12269,21 @@ func (c *AccountsListCall) Context(ctx context.Context) *AccountsListCall {
 }
 
 func (c *AccountsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accounts.list" call.
@@ -12419,7 +12293,8 @@ func (c *AccountsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AccountsListCall) Do() (*AccountsListResponse, error) {
+func (c *AccountsListCall) Do(opts ...googleapi.CallOption) (*AccountsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12443,7 +12318,8 @@ func (c *AccountsListCall) Do() (*AccountsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12528,6 +12404,27 @@ func (c *AccountsListCall) Do() (*AccountsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AccountsListCall) Pages(ctx context.Context, f func(*AccountsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.accounts.patch":
 
 type AccountsPatchCall struct {
@@ -12548,23 +12445,6 @@ func (r *AccountsService) Patch(profileId int64, id int64, account *Account) *Ac
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsPatchCall) QuotaUser(quotaUser string) *AccountsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsPatchCall) UserIP(userIP string) *AccountsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12582,25 +12462,23 @@ func (c *AccountsPatchCall) Context(ctx context.Context) *AccountsPatchCall {
 }
 
 func (c *AccountsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.account)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accounts.patch" call.
@@ -12610,7 +12488,8 @@ func (c *AccountsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *AccountsPatchCall) Do() (*Account, error) {
+func (c *AccountsPatchCall) Do(opts ...googleapi.CallOption) (*Account, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12634,7 +12513,8 @@ func (c *AccountsPatchCall) Do() (*Account, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12694,23 +12574,6 @@ func (r *AccountsService) Update(profileId int64, account *Account) *AccountsUpd
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AccountsUpdateCall) QuotaUser(quotaUser string) *AccountsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AccountsUpdateCall) UserIP(userIP string) *AccountsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12728,25 +12591,23 @@ func (c *AccountsUpdateCall) Context(ctx context.Context) *AccountsUpdateCall {
 }
 
 func (c *AccountsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.account)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/accounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.accounts.update" call.
@@ -12756,7 +12617,8 @@ func (c *AccountsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *AccountsUpdateCall) Do() (*Account, error) {
+func (c *AccountsUpdateCall) Do(opts ...googleapi.CallOption) (*Account, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12780,7 +12642,8 @@ func (c *AccountsUpdateCall) Do() (*Account, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12833,23 +12696,6 @@ func (r *AdsService) Get(profileId int64, id int64) *AdsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdsGetCall) QuotaUser(quotaUser string) *AdsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdsGetCall) UserIP(userIP string) *AdsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -12877,23 +12723,22 @@ func (c *AdsGetCall) Context(ctx context.Context) *AdsGetCall {
 }
 
 func (c *AdsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/ads/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.ads.get" call.
@@ -12903,7 +12748,8 @@ func (c *AdsGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AdsGetCall) Do() (*Ad, error) {
+func (c *AdsGetCall) Do(opts ...googleapi.CallOption) (*Ad, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -12927,7 +12773,8 @@ func (c *AdsGetCall) Do() (*Ad, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -12984,23 +12831,6 @@ func (r *AdsService) Insert(profileId int64, ad *Ad) *AdsInsertCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdsInsertCall) QuotaUser(quotaUser string) *AdsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdsInsertCall) UserIP(userIP string) *AdsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -13018,25 +12848,23 @@ func (c *AdsInsertCall) Context(ctx context.Context) *AdsInsertCall {
 }
 
 func (c *AdsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.ad)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/ads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.ads.insert" call.
@@ -13046,7 +12874,8 @@ func (c *AdsInsertCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AdsInsertCall) Do() (*Ad, error) {
+func (c *AdsInsertCall) Do(opts ...googleapi.CallOption) (*Ad, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13070,7 +12899,8 @@ func (c *AdsInsertCall) Do() (*Ad, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -13303,15 +13133,6 @@ func (c *AdsListCall) PlacementIds(placementIds ...int64) *AdsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdsListCall) QuotaUser(quotaUser string) *AdsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RemarketingListIds sets the optional parameter "remarketingListIds":
 // Select only ads whose list targeting expression use these remarketing
 // list IDs.
@@ -13396,14 +13217,6 @@ func (c *AdsListCall) Type(type_ ...string) *AdsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdsListCall) UserIP(userIP string) *AdsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -13431,22 +13244,21 @@ func (c *AdsListCall) Context(ctx context.Context) *AdsListCall {
 }
 
 func (c *AdsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/ads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.ads.list" call.
@@ -13456,7 +13268,8 @@ func (c *AdsListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdsListCall) Do() (*AdsListResponse, error) {
+func (c *AdsListCall) Do(opts ...googleapi.CallOption) (*AdsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13480,7 +13293,8 @@ func (c *AdsListCall) Do() (*AdsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -13747,6 +13561,27 @@ func (c *AdsListCall) Do() (*AdsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AdsListCall) Pages(ctx context.Context, f func(*AdsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.ads.patch":
 
 type AdsPatchCall struct {
@@ -13763,23 +13598,6 @@ func (r *AdsService) Patch(profileId int64, id int64, ad *Ad) *AdsPatchCall {
 	c.profileId = profileId
 	c.urlParams_.Set("id", fmt.Sprint(id))
 	c.ad = ad
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdsPatchCall) QuotaUser(quotaUser string) *AdsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdsPatchCall) UserIP(userIP string) *AdsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -13800,25 +13618,23 @@ func (c *AdsPatchCall) Context(ctx context.Context) *AdsPatchCall {
 }
 
 func (c *AdsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.ad)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/ads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.ads.patch" call.
@@ -13828,7 +13644,8 @@ func (c *AdsPatchCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AdsPatchCall) Do() (*Ad, error) {
+func (c *AdsPatchCall) Do(opts ...googleapi.CallOption) (*Ad, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13852,7 +13669,8 @@ func (c *AdsPatchCall) Do() (*Ad, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -13912,23 +13730,6 @@ func (r *AdsService) Update(profileId int64, ad *Ad) *AdsUpdateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdsUpdateCall) QuotaUser(quotaUser string) *AdsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdsUpdateCall) UserIP(userIP string) *AdsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -13946,25 +13747,23 @@ func (c *AdsUpdateCall) Context(ctx context.Context) *AdsUpdateCall {
 }
 
 func (c *AdsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.ad)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/ads")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.ads.update" call.
@@ -13974,7 +13773,8 @@ func (c *AdsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *AdsUpdateCall) Do() (*Ad, error) {
+func (c *AdsUpdateCall) Do(opts ...googleapi.CallOption) (*Ad, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -13998,7 +13798,8 @@ func (c *AdsUpdateCall) Do() (*Ad, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14050,23 +13851,6 @@ func (r *AdvertiserGroupsService) Delete(profileId int64, id int64) *AdvertiserG
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertiserGroupsDeleteCall) QuotaUser(quotaUser string) *AdvertiserGroupsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertiserGroupsDeleteCall) UserIP(userIP string) *AdvertiserGroupsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14084,24 +13868,24 @@ func (c *AdvertiserGroupsDeleteCall) Context(ctx context.Context) *AdvertiserGro
 }
 
 func (c *AdvertiserGroupsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertiserGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertiserGroups.delete" call.
-func (c *AdvertiserGroupsDeleteCall) Do() error {
+func (c *AdvertiserGroupsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -14162,23 +13946,6 @@ func (r *AdvertiserGroupsService) Get(profileId int64, id int64) *AdvertiserGrou
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertiserGroupsGetCall) QuotaUser(quotaUser string) *AdvertiserGroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertiserGroupsGetCall) UserIP(userIP string) *AdvertiserGroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14206,23 +13973,22 @@ func (c *AdvertiserGroupsGetCall) Context(ctx context.Context) *AdvertiserGroups
 }
 
 func (c *AdvertiserGroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertiserGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertiserGroups.get" call.
@@ -14232,7 +13998,8 @@ func (c *AdvertiserGroupsGetCall) doRequest(alt string) (*http.Response, error) 
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdvertiserGroupsGetCall) Do() (*AdvertiserGroup, error) {
+func (c *AdvertiserGroupsGetCall) Do(opts ...googleapi.CallOption) (*AdvertiserGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14256,7 +14023,8 @@ func (c *AdvertiserGroupsGetCall) Do() (*AdvertiserGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14313,23 +14081,6 @@ func (r *AdvertiserGroupsService) Insert(profileId int64, advertisergroup *Adver
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertiserGroupsInsertCall) QuotaUser(quotaUser string) *AdvertiserGroupsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertiserGroupsInsertCall) UserIP(userIP string) *AdvertiserGroupsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14347,25 +14098,23 @@ func (c *AdvertiserGroupsInsertCall) Context(ctx context.Context) *AdvertiserGro
 }
 
 func (c *AdvertiserGroupsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.advertisergroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertiserGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertiserGroups.insert" call.
@@ -14375,7 +14124,8 @@ func (c *AdvertiserGroupsInsertCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdvertiserGroupsInsertCall) Do() (*AdvertiserGroup, error) {
+func (c *AdvertiserGroupsInsertCall) Do(opts ...googleapi.CallOption) (*AdvertiserGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14399,7 +14149,8 @@ func (c *AdvertiserGroupsInsertCall) Do() (*AdvertiserGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14475,15 +14226,6 @@ func (c *AdvertiserGroupsListCall) PageToken(pageToken string) *AdvertiserGroups
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertiserGroupsListCall) QuotaUser(quotaUser string) *AdvertiserGroupsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "advertiser*2015" will return objects with names like
@@ -14520,14 +14262,6 @@ func (c *AdvertiserGroupsListCall) SortOrder(sortOrder string) *AdvertiserGroups
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertiserGroupsListCall) UserIP(userIP string) *AdvertiserGroupsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14555,22 +14289,21 @@ func (c *AdvertiserGroupsListCall) Context(ctx context.Context) *AdvertiserGroup
 }
 
 func (c *AdvertiserGroupsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertiserGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertiserGroups.list" call.
@@ -14580,7 +14313,8 @@ func (c *AdvertiserGroupsListCall) doRequest(alt string) (*http.Response, error)
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdvertiserGroupsListCall) Do() (*AdvertiserGroupsListResponse, error) {
+func (c *AdvertiserGroupsListCall) Do(opts ...googleapi.CallOption) (*AdvertiserGroupsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14604,7 +14338,8 @@ func (c *AdvertiserGroupsListCall) Do() (*AdvertiserGroupsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14684,6 +14419,27 @@ func (c *AdvertiserGroupsListCall) Do() (*AdvertiserGroupsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AdvertiserGroupsListCall) Pages(ctx context.Context, f func(*AdvertiserGroupsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.advertiserGroups.patch":
 
 type AdvertiserGroupsPatchCall struct {
@@ -14704,23 +14460,6 @@ func (r *AdvertiserGroupsService) Patch(profileId int64, id int64, advertisergro
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertiserGroupsPatchCall) QuotaUser(quotaUser string) *AdvertiserGroupsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertiserGroupsPatchCall) UserIP(userIP string) *AdvertiserGroupsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14738,25 +14477,23 @@ func (c *AdvertiserGroupsPatchCall) Context(ctx context.Context) *AdvertiserGrou
 }
 
 func (c *AdvertiserGroupsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.advertisergroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertiserGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertiserGroups.patch" call.
@@ -14766,7 +14503,8 @@ func (c *AdvertiserGroupsPatchCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdvertiserGroupsPatchCall) Do() (*AdvertiserGroup, error) {
+func (c *AdvertiserGroupsPatchCall) Do(opts ...googleapi.CallOption) (*AdvertiserGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14790,7 +14528,8 @@ func (c *AdvertiserGroupsPatchCall) Do() (*AdvertiserGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14850,23 +14589,6 @@ func (r *AdvertiserGroupsService) Update(profileId int64, advertisergroup *Adver
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertiserGroupsUpdateCall) QuotaUser(quotaUser string) *AdvertiserGroupsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertiserGroupsUpdateCall) UserIP(userIP string) *AdvertiserGroupsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -14884,25 +14606,23 @@ func (c *AdvertiserGroupsUpdateCall) Context(ctx context.Context) *AdvertiserGro
 }
 
 func (c *AdvertiserGroupsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.advertisergroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertiserGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertiserGroups.update" call.
@@ -14912,7 +14632,8 @@ func (c *AdvertiserGroupsUpdateCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdvertiserGroupsUpdateCall) Do() (*AdvertiserGroup, error) {
+func (c *AdvertiserGroupsUpdateCall) Do(opts ...googleapi.CallOption) (*AdvertiserGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -14936,7 +14657,8 @@ func (c *AdvertiserGroupsUpdateCall) Do() (*AdvertiserGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -14989,23 +14711,6 @@ func (r *AdvertisersService) Get(profileId int64, id int64) *AdvertisersGetCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertisersGetCall) QuotaUser(quotaUser string) *AdvertisersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertisersGetCall) UserIP(userIP string) *AdvertisersGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15033,23 +14738,22 @@ func (c *AdvertisersGetCall) Context(ctx context.Context) *AdvertisersGetCall {
 }
 
 func (c *AdvertisersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertisers/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertisers.get" call.
@@ -15059,7 +14763,8 @@ func (c *AdvertisersGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *AdvertisersGetCall) Do() (*Advertiser, error) {
+func (c *AdvertisersGetCall) Do(opts ...googleapi.CallOption) (*Advertiser, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15083,7 +14788,8 @@ func (c *AdvertisersGetCall) Do() (*Advertiser, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15140,23 +14846,6 @@ func (r *AdvertisersService) Insert(profileId int64, advertiser *Advertiser) *Ad
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertisersInsertCall) QuotaUser(quotaUser string) *AdvertisersInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertisersInsertCall) UserIP(userIP string) *AdvertisersInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15174,25 +14863,23 @@ func (c *AdvertisersInsertCall) Context(ctx context.Context) *AdvertisersInsertC
 }
 
 func (c *AdvertisersInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.advertiser)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertisers")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertisers.insert" call.
@@ -15202,7 +14889,8 @@ func (c *AdvertisersInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *AdvertisersInsertCall) Do() (*Advertiser, error) {
+func (c *AdvertisersInsertCall) Do(opts ...googleapi.CallOption) (*Advertiser, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15226,7 +14914,8 @@ func (c *AdvertisersInsertCall) Do() (*Advertiser, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15340,15 +15029,6 @@ func (c *AdvertisersListCall) PageToken(pageToken string) *AdvertisersListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertisersListCall) QuotaUser(quotaUser string) *AdvertisersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "advertiser*2015" will return objects with names like
@@ -15402,14 +15082,6 @@ func (c *AdvertisersListCall) SubaccountId(subaccountId int64) *AdvertisersListC
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertisersListCall) UserIP(userIP string) *AdvertisersListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15437,22 +15109,21 @@ func (c *AdvertisersListCall) Context(ctx context.Context) *AdvertisersListCall 
 }
 
 func (c *AdvertisersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertisers")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertisers.list" call.
@@ -15462,7 +15133,8 @@ func (c *AdvertisersListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *AdvertisersListCall) Do() (*AdvertisersListResponse, error) {
+func (c *AdvertisersListCall) Do(opts ...googleapi.CallOption) (*AdvertisersListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15486,7 +15158,8 @@ func (c *AdvertisersListCall) Do() (*AdvertisersListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15609,6 +15282,27 @@ func (c *AdvertisersListCall) Do() (*AdvertisersListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *AdvertisersListCall) Pages(ctx context.Context, f func(*AdvertisersListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.advertisers.patch":
 
 type AdvertisersPatchCall struct {
@@ -15629,23 +15323,6 @@ func (r *AdvertisersService) Patch(profileId int64, id int64, advertiser *Advert
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertisersPatchCall) QuotaUser(quotaUser string) *AdvertisersPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertisersPatchCall) UserIP(userIP string) *AdvertisersPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15663,25 +15340,23 @@ func (c *AdvertisersPatchCall) Context(ctx context.Context) *AdvertisersPatchCal
 }
 
 func (c *AdvertisersPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.advertiser)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertisers")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertisers.patch" call.
@@ -15691,7 +15366,8 @@ func (c *AdvertisersPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *AdvertisersPatchCall) Do() (*Advertiser, error) {
+func (c *AdvertisersPatchCall) Do(opts ...googleapi.CallOption) (*Advertiser, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15715,7 +15391,8 @@ func (c *AdvertisersPatchCall) Do() (*Advertiser, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15775,23 +15452,6 @@ func (r *AdvertisersService) Update(profileId int64, advertiser *Advertiser) *Ad
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *AdvertisersUpdateCall) QuotaUser(quotaUser string) *AdvertisersUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *AdvertisersUpdateCall) UserIP(userIP string) *AdvertisersUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15809,25 +15469,23 @@ func (c *AdvertisersUpdateCall) Context(ctx context.Context) *AdvertisersUpdateC
 }
 
 func (c *AdvertisersUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.advertiser)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/advertisers")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.advertisers.update" call.
@@ -15837,7 +15495,8 @@ func (c *AdvertisersUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *AdvertisersUpdateCall) Do() (*Advertiser, error) {
+func (c *AdvertisersUpdateCall) Do(opts ...googleapi.CallOption) (*Advertiser, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -15861,7 +15520,8 @@ func (c *AdvertisersUpdateCall) Do() (*Advertiser, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -15912,23 +15572,6 @@ func (r *BrowsersService) List(profileId int64) *BrowsersListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *BrowsersListCall) QuotaUser(quotaUser string) *BrowsersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *BrowsersListCall) UserIP(userIP string) *BrowsersListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -15956,22 +15599,21 @@ func (c *BrowsersListCall) Context(ctx context.Context) *BrowsersListCall {
 }
 
 func (c *BrowsersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/browsers")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.browsers.list" call.
@@ -15981,7 +15623,8 @@ func (c *BrowsersListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *BrowsersListCall) Do() (*BrowsersListResponse, error) {
+func (c *BrowsersListCall) Do(opts ...googleapi.CallOption) (*BrowsersListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16005,7 +15648,8 @@ func (c *BrowsersListCall) Do() (*BrowsersListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16058,23 +15702,6 @@ func (r *CampaignCreativeAssociationsService) Insert(profileId int64, campaignId
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignCreativeAssociationsInsertCall) QuotaUser(quotaUser string) *CampaignCreativeAssociationsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignCreativeAssociationsInsertCall) UserIP(userIP string) *CampaignCreativeAssociationsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16092,26 +15719,24 @@ func (c *CampaignCreativeAssociationsInsertCall) Context(ctx context.Context) *C
 }
 
 func (c *CampaignCreativeAssociationsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.campaigncreativeassociation)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/campaignCreativeAssociations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaignCreativeAssociations.insert" call.
@@ -16121,7 +15746,8 @@ func (c *CampaignCreativeAssociationsInsertCall) doRequest(alt string) (*http.Re
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CampaignCreativeAssociationsInsertCall) Do() (*CampaignCreativeAssociation, error) {
+func (c *CampaignCreativeAssociationsInsertCall) Do(opts ...googleapi.CallOption) (*CampaignCreativeAssociation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16145,7 +15771,8 @@ func (c *CampaignCreativeAssociationsInsertCall) Do() (*CampaignCreativeAssociat
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16221,15 +15848,6 @@ func (c *CampaignCreativeAssociationsListCall) PageToken(pageToken string) *Camp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignCreativeAssociationsListCall) QuotaUser(quotaUser string) *CampaignCreativeAssociationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SortOrder sets the optional parameter "sortOrder": Order of sorted
 // results, default is ASCENDING.
 //
@@ -16238,14 +15856,6 @@ func (c *CampaignCreativeAssociationsListCall) QuotaUser(quotaUser string) *Camp
 //   "DESCENDING"
 func (c *CampaignCreativeAssociationsListCall) SortOrder(sortOrder string) *CampaignCreativeAssociationsListCall {
 	c.urlParams_.Set("sortOrder", sortOrder)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignCreativeAssociationsListCall) UserIP(userIP string) *CampaignCreativeAssociationsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -16276,23 +15886,22 @@ func (c *CampaignCreativeAssociationsListCall) Context(ctx context.Context) *Cam
 }
 
 func (c *CampaignCreativeAssociationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/campaignCreativeAssociations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaignCreativeAssociations.list" call.
@@ -16304,7 +15913,8 @@ func (c *CampaignCreativeAssociationsListCall) doRequest(alt string) (*http.Resp
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *CampaignCreativeAssociationsListCall) Do() (*CampaignCreativeAssociationsListResponse, error) {
+func (c *CampaignCreativeAssociationsListCall) Do(opts ...googleapi.CallOption) (*CampaignCreativeAssociationsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16328,7 +15938,8 @@ func (c *CampaignCreativeAssociationsListCall) Do() (*CampaignCreativeAssociatio
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16391,6 +16002,27 @@ func (c *CampaignCreativeAssociationsListCall) Do() (*CampaignCreativeAssociatio
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CampaignCreativeAssociationsListCall) Pages(ctx context.Context, f func(*CampaignCreativeAssociationsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.campaigns.get":
 
 type CampaignsGetCall struct {
@@ -16407,23 +16039,6 @@ func (r *CampaignsService) Get(profileId int64, id int64) *CampaignsGetCall {
 	c := &CampaignsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignsGetCall) QuotaUser(quotaUser string) *CampaignsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignsGetCall) UserIP(userIP string) *CampaignsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -16454,23 +16069,22 @@ func (c *CampaignsGetCall) Context(ctx context.Context) *CampaignsGetCall {
 }
 
 func (c *CampaignsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaigns.get" call.
@@ -16480,7 +16094,8 @@ func (c *CampaignsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CampaignsGetCall) Do() (*Campaign, error) {
+func (c *CampaignsGetCall) Do(opts ...googleapi.CallOption) (*Campaign, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16504,7 +16119,8 @@ func (c *CampaignsGetCall) Do() (*Campaign, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16563,23 +16179,6 @@ func (r *CampaignsService) Insert(profileId int64, defaultLandingPageName string
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignsInsertCall) QuotaUser(quotaUser string) *CampaignsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignsInsertCall) UserIP(userIP string) *CampaignsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16597,25 +16196,23 @@ func (c *CampaignsInsertCall) Context(ctx context.Context) *CampaignsInsertCall 
 }
 
 func (c *CampaignsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.campaign)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaigns.insert" call.
@@ -16625,7 +16222,8 @@ func (c *CampaignsInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CampaignsInsertCall) Do() (*Campaign, error) {
+func (c *CampaignsInsertCall) Do(opts ...googleapi.CallOption) (*Campaign, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16649,7 +16247,8 @@ func (c *CampaignsInsertCall) Do() (*Campaign, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -16797,15 +16396,6 @@ func (c *CampaignsListCall) PageToken(pageToken string) *CampaignsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignsListCall) QuotaUser(quotaUser string) *CampaignsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for campaigns by name or ID. Wildcards (*) are allowed. For
 // example, "campaign*2015" will return campaigns with names like
@@ -16848,14 +16438,6 @@ func (c *CampaignsListCall) SubaccountId(subaccountId int64) *CampaignsListCall 
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignsListCall) UserIP(userIP string) *CampaignsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -16883,22 +16465,21 @@ func (c *CampaignsListCall) Context(ctx context.Context) *CampaignsListCall {
 }
 
 func (c *CampaignsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaigns.list" call.
@@ -16908,7 +16489,8 @@ func (c *CampaignsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CampaignsListCall) Do() (*CampaignsListResponse, error) {
+func (c *CampaignsListCall) Do(opts ...googleapi.CallOption) (*CampaignsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -16932,7 +16514,8 @@ func (c *CampaignsListCall) Do() (*CampaignsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17055,6 +16638,27 @@ func (c *CampaignsListCall) Do() (*CampaignsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CampaignsListCall) Pages(ctx context.Context, f func(*CampaignsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.campaigns.patch":
 
 type CampaignsPatchCall struct {
@@ -17075,23 +16679,6 @@ func (r *CampaignsService) Patch(profileId int64, id int64, campaign *Campaign) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignsPatchCall) QuotaUser(quotaUser string) *CampaignsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignsPatchCall) UserIP(userIP string) *CampaignsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17109,25 +16696,23 @@ func (c *CampaignsPatchCall) Context(ctx context.Context) *CampaignsPatchCall {
 }
 
 func (c *CampaignsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.campaign)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaigns.patch" call.
@@ -17137,7 +16722,8 @@ func (c *CampaignsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CampaignsPatchCall) Do() (*Campaign, error) {
+func (c *CampaignsPatchCall) Do(opts ...googleapi.CallOption) (*Campaign, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17161,7 +16747,8 @@ func (c *CampaignsPatchCall) Do() (*Campaign, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17221,23 +16808,6 @@ func (r *CampaignsService) Update(profileId int64, campaign *Campaign) *Campaign
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CampaignsUpdateCall) QuotaUser(quotaUser string) *CampaignsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CampaignsUpdateCall) UserIP(userIP string) *CampaignsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17255,25 +16825,23 @@ func (c *CampaignsUpdateCall) Context(ctx context.Context) *CampaignsUpdateCall 
 }
 
 func (c *CampaignsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.campaign)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.campaigns.update" call.
@@ -17283,7 +16851,8 @@ func (c *CampaignsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CampaignsUpdateCall) Do() (*Campaign, error) {
+func (c *CampaignsUpdateCall) Do(opts ...googleapi.CallOption) (*Campaign, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17307,7 +16876,8 @@ func (c *CampaignsUpdateCall) Do() (*Campaign, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17360,23 +16930,6 @@ func (r *ChangeLogsService) Get(profileId int64, id int64) *ChangeLogsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChangeLogsGetCall) QuotaUser(quotaUser string) *ChangeLogsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChangeLogsGetCall) UserIP(userIP string) *ChangeLogsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -17404,23 +16957,22 @@ func (c *ChangeLogsGetCall) Context(ctx context.Context) *ChangeLogsGetCall {
 }
 
 func (c *ChangeLogsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/changeLogs/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.changeLogs.get" call.
@@ -17430,7 +16982,8 @@ func (c *ChangeLogsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ChangeLogsGetCall) Do() (*ChangeLog, error) {
+func (c *ChangeLogsGetCall) Do(opts ...googleapi.CallOption) (*ChangeLog, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17454,7 +17007,8 @@ func (c *ChangeLogsGetCall) Do() (*ChangeLog, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17621,6 +17175,7 @@ func (c *ChangeLogsListCall) ObjectIds(objectIds ...int64) *ChangeLogsListCall {
 //   "OBJECT_MEDIA_ORDER"
 //   "OBJECT_PLACEMENT"
 //   "OBJECT_PLACEMENT_STRATEGY"
+//   "OBJECT_PLAYSTORE_LINK"
 //   "OBJECT_PROVIDED_LIST_CLIENT"
 //   "OBJECT_RATE_CARD"
 //   "OBJECT_REMARKETING_LIST"
@@ -17643,28 +17198,11 @@ func (c *ChangeLogsListCall) PageToken(pageToken string) *ChangeLogsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ChangeLogsListCall) QuotaUser(quotaUser string) *ChangeLogsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Select only
 // change logs whose object ID, user name, old or new values match the
 // search string.
 func (c *ChangeLogsListCall) SearchString(searchString string) *ChangeLogsListCall {
 	c.urlParams_.Set("searchString", searchString)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ChangeLogsListCall) UserIP(userIP string) *ChangeLogsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -17706,22 +17244,21 @@ func (c *ChangeLogsListCall) Context(ctx context.Context) *ChangeLogsListCall {
 }
 
 func (c *ChangeLogsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/changeLogs")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.changeLogs.list" call.
@@ -17731,7 +17268,8 @@ func (c *ChangeLogsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ChangeLogsListCall) Do() (*ChangeLogsListResponse, error) {
+func (c *ChangeLogsListCall) Do(opts ...googleapi.CallOption) (*ChangeLogsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -17755,7 +17293,8 @@ func (c *ChangeLogsListCall) Do() (*ChangeLogsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -17869,6 +17408,7 @@ func (c *ChangeLogsListCall) Do() (*ChangeLogsListResponse, error) {
 	//         "OBJECT_MEDIA_ORDER",
 	//         "OBJECT_PLACEMENT",
 	//         "OBJECT_PLACEMENT_STRATEGY",
+	//         "OBJECT_PLAYSTORE_LINK",
 	//         "OBJECT_PROVIDED_LIST_CLIENT",
 	//         "OBJECT_RATE_CARD",
 	//         "OBJECT_REMARKETING_LIST",
@@ -17881,6 +17421,7 @@ func (c *ChangeLogsListCall) Do() (*ChangeLogsListResponse, error) {
 	//         "OBJECT_USER_ROLE"
 	//       ],
 	//       "enumDescriptions": [
+	//         "",
 	//         "",
 	//         "",
 	//         "",
@@ -17957,6 +17498,27 @@ func (c *ChangeLogsListCall) Do() (*ChangeLogsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ChangeLogsListCall) Pages(ctx context.Context, f func(*ChangeLogsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.cities.list":
 
 type CitiesListCall struct {
@@ -18003,15 +17565,6 @@ func (c *CitiesListCall) NamePrefix(namePrefix string) *CitiesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CitiesListCall) QuotaUser(quotaUser string) *CitiesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RegionDartIds sets the optional parameter "regionDartIds": Select
 // only cities from these regions.
 func (c *CitiesListCall) RegionDartIds(regionDartIds ...int64) *CitiesListCall {
@@ -18020,14 +17573,6 @@ func (c *CitiesListCall) RegionDartIds(regionDartIds ...int64) *CitiesListCall {
 		regionDartIds_ = append(regionDartIds_, fmt.Sprint(v))
 	}
 	c.urlParams_.SetMulti("regionDartIds", regionDartIds_)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CitiesListCall) UserIP(userIP string) *CitiesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -18058,22 +17603,21 @@ func (c *CitiesListCall) Context(ctx context.Context) *CitiesListCall {
 }
 
 func (c *CitiesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/cities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.cities.list" call.
@@ -18083,7 +17627,8 @@ func (c *CitiesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CitiesListCall) Do() (*CitiesListResponse, error) {
+func (c *CitiesListCall) Do(opts ...googleapi.CallOption) (*CitiesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18107,7 +17652,8 @@ func (c *CitiesListCall) Do() (*CitiesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18183,23 +17729,6 @@ func (r *ConnectionTypesService) Get(profileId int64, id int64) *ConnectionTypes
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ConnectionTypesGetCall) QuotaUser(quotaUser string) *ConnectionTypesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ConnectionTypesGetCall) UserIP(userIP string) *ConnectionTypesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18227,23 +17756,22 @@ func (c *ConnectionTypesGetCall) Context(ctx context.Context) *ConnectionTypesGe
 }
 
 func (c *ConnectionTypesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/connectionTypes/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.connectionTypes.get" call.
@@ -18253,7 +17781,8 @@ func (c *ConnectionTypesGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ConnectionTypesGetCall) Do() (*ConnectionType, error) {
+func (c *ConnectionTypesGetCall) Do(opts ...googleapi.CallOption) (*ConnectionType, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18277,7 +17806,8 @@ func (c *ConnectionTypesGetCall) Do() (*ConnectionType, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18333,23 +17863,6 @@ func (r *ConnectionTypesService) List(profileId int64) *ConnectionTypesListCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ConnectionTypesListCall) QuotaUser(quotaUser string) *ConnectionTypesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ConnectionTypesListCall) UserIP(userIP string) *ConnectionTypesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18377,22 +17890,21 @@ func (c *ConnectionTypesListCall) Context(ctx context.Context) *ConnectionTypesL
 }
 
 func (c *ConnectionTypesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/connectionTypes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.connectionTypes.list" call.
@@ -18402,7 +17914,8 @@ func (c *ConnectionTypesListCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ConnectionTypesListCall) Do() (*ConnectionTypesListResponse, error) {
+func (c *ConnectionTypesListCall) Do(opts ...googleapi.CallOption) (*ConnectionTypesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18426,7 +17939,8 @@ func (c *ConnectionTypesListCall) Do() (*ConnectionTypesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18475,23 +17989,6 @@ func (r *ContentCategoriesService) Delete(profileId int64, id int64) *ContentCat
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ContentCategoriesDeleteCall) QuotaUser(quotaUser string) *ContentCategoriesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ContentCategoriesDeleteCall) UserIP(userIP string) *ContentCategoriesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18509,24 +18006,24 @@ func (c *ContentCategoriesDeleteCall) Context(ctx context.Context) *ContentCateg
 }
 
 func (c *ContentCategoriesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/contentCategories/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.contentCategories.delete" call.
-func (c *ContentCategoriesDeleteCall) Do() error {
+func (c *ContentCategoriesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -18587,23 +18084,6 @@ func (r *ContentCategoriesService) Get(profileId int64, id int64) *ContentCatego
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ContentCategoriesGetCall) QuotaUser(quotaUser string) *ContentCategoriesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ContentCategoriesGetCall) UserIP(userIP string) *ContentCategoriesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18631,23 +18111,22 @@ func (c *ContentCategoriesGetCall) Context(ctx context.Context) *ContentCategori
 }
 
 func (c *ContentCategoriesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/contentCategories/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.contentCategories.get" call.
@@ -18657,7 +18136,8 @@ func (c *ContentCategoriesGetCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ContentCategoriesGetCall) Do() (*ContentCategory, error) {
+func (c *ContentCategoriesGetCall) Do(opts ...googleapi.CallOption) (*ContentCategory, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18681,7 +18161,8 @@ func (c *ContentCategoriesGetCall) Do() (*ContentCategory, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18738,23 +18219,6 @@ func (r *ContentCategoriesService) Insert(profileId int64, contentcategory *Cont
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ContentCategoriesInsertCall) QuotaUser(quotaUser string) *ContentCategoriesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ContentCategoriesInsertCall) UserIP(userIP string) *ContentCategoriesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18772,25 +18236,23 @@ func (c *ContentCategoriesInsertCall) Context(ctx context.Context) *ContentCateg
 }
 
 func (c *ContentCategoriesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.contentcategory)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/contentCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.contentCategories.insert" call.
@@ -18800,7 +18262,8 @@ func (c *ContentCategoriesInsertCall) doRequest(alt string) (*http.Response, err
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ContentCategoriesInsertCall) Do() (*ContentCategory, error) {
+func (c *ContentCategoriesInsertCall) Do(opts ...googleapi.CallOption) (*ContentCategory, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -18824,7 +18287,8 @@ func (c *ContentCategoriesInsertCall) Do() (*ContentCategory, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -18900,15 +18364,6 @@ func (c *ContentCategoriesListCall) PageToken(pageToken string) *ContentCategori
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ContentCategoriesListCall) QuotaUser(quotaUser string) *ContentCategoriesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "contentcategory*2015" will return objects with names like
@@ -18945,14 +18400,6 @@ func (c *ContentCategoriesListCall) SortOrder(sortOrder string) *ContentCategori
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ContentCategoriesListCall) UserIP(userIP string) *ContentCategoriesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -18980,22 +18427,21 @@ func (c *ContentCategoriesListCall) Context(ctx context.Context) *ContentCategor
 }
 
 func (c *ContentCategoriesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/contentCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.contentCategories.list" call.
@@ -19005,7 +18451,8 @@ func (c *ContentCategoriesListCall) doRequest(alt string) (*http.Response, error
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ContentCategoriesListCall) Do() (*ContentCategoriesListResponse, error) {
+func (c *ContentCategoriesListCall) Do(opts ...googleapi.CallOption) (*ContentCategoriesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19029,7 +18476,8 @@ func (c *ContentCategoriesListCall) Do() (*ContentCategoriesListResponse, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19109,6 +18557,27 @@ func (c *ContentCategoriesListCall) Do() (*ContentCategoriesListResponse, error)
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ContentCategoriesListCall) Pages(ctx context.Context, f func(*ContentCategoriesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.contentCategories.patch":
 
 type ContentCategoriesPatchCall struct {
@@ -19129,23 +18598,6 @@ func (r *ContentCategoriesService) Patch(profileId int64, id int64, contentcateg
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ContentCategoriesPatchCall) QuotaUser(quotaUser string) *ContentCategoriesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ContentCategoriesPatchCall) UserIP(userIP string) *ContentCategoriesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19163,25 +18615,23 @@ func (c *ContentCategoriesPatchCall) Context(ctx context.Context) *ContentCatego
 }
 
 func (c *ContentCategoriesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.contentcategory)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/contentCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.contentCategories.patch" call.
@@ -19191,7 +18641,8 @@ func (c *ContentCategoriesPatchCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ContentCategoriesPatchCall) Do() (*ContentCategory, error) {
+func (c *ContentCategoriesPatchCall) Do(opts ...googleapi.CallOption) (*ContentCategory, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19215,7 +18666,8 @@ func (c *ContentCategoriesPatchCall) Do() (*ContentCategory, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19275,23 +18727,6 @@ func (r *ContentCategoriesService) Update(profileId int64, contentcategory *Cont
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ContentCategoriesUpdateCall) QuotaUser(quotaUser string) *ContentCategoriesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ContentCategoriesUpdateCall) UserIP(userIP string) *ContentCategoriesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19309,25 +18744,23 @@ func (c *ContentCategoriesUpdateCall) Context(ctx context.Context) *ContentCateg
 }
 
 func (c *ContentCategoriesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.contentcategory)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/contentCategories")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.contentCategories.update" call.
@@ -19337,7 +18770,8 @@ func (c *ContentCategoriesUpdateCall) doRequest(alt string) (*http.Response, err
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ContentCategoriesUpdateCall) Do() (*ContentCategory, error) {
+func (c *ContentCategoriesUpdateCall) Do(opts ...googleapi.CallOption) (*ContentCategory, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19361,7 +18795,8 @@ func (c *ContentCategoriesUpdateCall) Do() (*ContentCategory, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19414,23 +18849,6 @@ func (r *CountriesService) Get(profileId int64, dartId int64) *CountriesGetCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CountriesGetCall) QuotaUser(quotaUser string) *CountriesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CountriesGetCall) UserIP(userIP string) *CountriesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19458,23 +18876,22 @@ func (c *CountriesGetCall) Context(ctx context.Context) *CountriesGetCall {
 }
 
 func (c *CountriesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/countries/{dartId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"dartId":    strconv.FormatInt(c.dartId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.countries.get" call.
@@ -19484,7 +18901,8 @@ func (c *CountriesGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *CountriesGetCall) Do() (*Country, error) {
+func (c *CountriesGetCall) Do(opts ...googleapi.CallOption) (*Country, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19508,7 +18926,8 @@ func (c *CountriesGetCall) Do() (*Country, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19564,23 +18983,6 @@ func (r *CountriesService) List(profileId int64) *CountriesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CountriesListCall) QuotaUser(quotaUser string) *CountriesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CountriesListCall) UserIP(userIP string) *CountriesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19608,22 +19010,21 @@ func (c *CountriesListCall) Context(ctx context.Context) *CountriesListCall {
 }
 
 func (c *CountriesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/countries")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.countries.list" call.
@@ -19633,7 +19034,8 @@ func (c *CountriesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CountriesListCall) Do() (*CountriesListResponse, error) {
+func (c *CountriesListCall) Do(opts ...googleapi.CallOption) (*CountriesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19657,7 +19059,8 @@ func (c *CountriesListCall) Do() (*CountriesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19697,10 +19100,9 @@ type CreativeAssetsInsertCall struct {
 	creativeassetmetadata *CreativeAssetMetadata
 	urlParams_            gensupport.URLParams
 	media_                io.Reader
+	mediaBuffer_          *gensupport.MediaBuffer
 	mediaType_            string
-	resumable_            googleapi.SizeReaderAt
-	resumableMediaType_   string
-	protocol_             string
+	mediaSize_            int64 // mediaSize, if known.  Used only for calls to progressUpdater_.
 	progressUpdater_      googleapi.ProgressUpdater
 	ctx_                  context.Context
 }
@@ -19714,43 +19116,40 @@ func (r *CreativeAssetsService) Insert(profileId int64, advertiserId int64, crea
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeAssetsInsertCall) QuotaUser(quotaUser string) *CreativeAssetsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeAssetsInsertCall) UserIP(userIP string) *CreativeAssetsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
-// Media specifies the media to upload in a single chunk. At most one of
-// Media and ResumableMedia may be set.
+// Media specifies the media to upload in one or more chunks. The chunk
+// size may be controlled by supplying a MediaOption generated by
+// googleapi.ChunkSize. The chunk size defaults to
+// googleapi.DefaultUploadChunkSize.The Content-Type header used in the
+// upload request will be determined by sniffing the contents of r,
+// unless a MediaOption generated by googleapi.ContentType is
+// supplied.
+// At most one of Media and ResumableMedia may be set.
 func (c *CreativeAssetsInsertCall) Media(r io.Reader, options ...googleapi.MediaOption) *CreativeAssetsInsertCall {
 	opts := googleapi.ProcessMediaOptions(options)
-	c.media_, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
-	c.protocol_ = "multipart"
+	chunkSize := opts.ChunkSize
+	if !opts.ForceEmptyContentType {
+		r, c.mediaType_ = gensupport.DetermineContentType(r, opts.ContentType)
+	}
+	c.media_, c.mediaBuffer_ = gensupport.PrepareUpload(r, chunkSize)
 	return c
 }
 
 // ResumableMedia specifies the media to upload in chunks and can be
-// canceled with ctx. At most one of Media and ResumableMedia may be
-// set. mediaType identifies the MIME media type of the upload, such as
-// "image/png". If mediaType is "", it will be auto-detected. The
-// provided ctx will supersede any context previously provided to the
-// Context method.
+// canceled with ctx.
+//
+// Deprecated: use Media instead.
+//
+// At most one of Media and ResumableMedia may be set. mediaType
+// identifies the MIME media type of the upload, such as "image/png". If
+// mediaType is "", it will be auto-detected. The provided ctx will
+// supersede any context previously provided to the Context method.
 func (c *CreativeAssetsInsertCall) ResumableMedia(ctx context.Context, r io.ReaderAt, size int64, mediaType string) *CreativeAssetsInsertCall {
 	c.ctx_ = ctx
-	c.resumable_ = io.NewSectionReader(r, 0, size)
-	c.resumableMediaType_ = mediaType
-	c.protocol_ = "resumable"
+	rdr := gensupport.ReaderAtToReader(r, size)
+	rdr, c.mediaType_ = gensupport.DetermineContentType(rdr, mediaType)
+	c.mediaBuffer_ = gensupport.NewMediaBuffer(rdr, googleapi.DefaultUploadChunkSize)
+	c.media_ = nil
+	c.mediaSize_ = size
 	return c
 }
 
@@ -19782,42 +19181,45 @@ func (c *CreativeAssetsInsertCall) Context(ctx context.Context) *CreativeAssetsI
 }
 
 func (c *CreativeAssetsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativeassetmetadata)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeAssets/{advertiserId}/creativeAssets")
-	if c.media_ != nil || c.resumable_ != nil {
+	if c.media_ != nil || c.mediaBuffer_ != nil {
 		urls = strings.Replace(urls, "https://www.googleapis.com/", "https://www.googleapis.com/upload/", 1)
-		c.urlParams_.Set("uploadType", c.protocol_)
+		protocol := "multipart"
+		if c.mediaBuffer_ != nil {
+			protocol = "resumable"
+		}
+		c.urlParams_.Set("uploadType", protocol)
 	}
-	urls += "?" + c.urlParams_.Encode()
-	if c.protocol_ != "resumable" && c.media_ != nil {
-		var combined io.ReadCloser
-		combined, ctype = gensupport.CombineBodyMedia(body, ctype, c.media_, c.mediaType_)
+	if body == nil {
+		body = new(bytes.Buffer)
+		reqHeaders.Set("Content-Type", "application/json")
+	}
+	if c.media_ != nil {
+		combined, ctype := gensupport.CombineBodyMedia(body, "application/json", c.media_, c.mediaType_)
 		defer combined.Close()
+		reqHeaders.Set("Content-Type", ctype)
 		body = combined
 	}
+	if c.mediaBuffer_ != nil && c.mediaType_ != "" {
+		reqHeaders.Set("X-Upload-Content-Type", c.mediaType_)
+	}
+	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":    strconv.FormatInt(c.profileId, 10),
 		"advertiserId": strconv.FormatInt(c.advertiserId, 10),
 	})
-	if c.protocol_ == "resumable" {
-		if c.resumableMediaType_ == "" {
-			c.resumableMediaType_ = gensupport.DetectMediaType(c.resumable_)
-		}
-		req.Header.Set("X-Upload-Content-Type", c.resumableMediaType_)
-	}
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeAssets.insert" call.
@@ -19827,7 +19229,8 @@ func (c *CreativeAssetsInsertCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeAssetsInsertCall) Do() (*CreativeAssetMetadata, error) {
+func (c *CreativeAssetsInsertCall) Do(opts ...googleapi.CallOption) (*CreativeAssetMetadata, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -19845,26 +19248,32 @@ func (c *CreativeAssetsInsertCall) Do() (*CreativeAssetMetadata, error) {
 	if err := googleapi.CheckResponse(res); err != nil {
 		return nil, err
 	}
-	if c.protocol_ == "resumable" {
+	if c.mediaBuffer_ != nil {
 		loc := res.Header.Get("Location")
-		rx := &googleapi.ResumableUpload{
-			Client:        c.s.client,
-			UserAgent:     c.s.userAgent(),
-			URI:           loc,
-			Media:         c.resumable_,
-			MediaType:     c.resumableMediaType_,
-			ContentLength: c.resumable_.Size(),
+		rx := &gensupport.ResumableUpload{
+			Client:    c.s.client,
+			UserAgent: c.s.userAgent(),
+			URI:       loc,
+			Media:     c.mediaBuffer_,
+			MediaType: c.mediaType_,
 			Callback: func(curr int64) {
 				if c.progressUpdater_ != nil {
-					c.progressUpdater_(curr, c.resumable_.Size())
+					c.progressUpdater_(curr, c.mediaSize_)
 				}
 			},
 		}
-		res, err = rx.Upload(c.ctx_)
+		ctx := c.ctx_
+		if ctx == nil {
+			ctx = context.TODO()
+		}
+		res, err = rx.Upload(ctx)
 		if err != nil {
 			return nil, err
 		}
 		defer res.Body.Close()
+		if err := googleapi.CheckResponse(res); err != nil {
+			return nil, err
+		}
 	}
 	ret := &CreativeAssetMetadata{
 		ServerResponse: googleapi.ServerResponse{
@@ -19872,7 +19281,8 @@ func (c *CreativeAssetsInsertCall) Do() (*CreativeAssetMetadata, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -19884,7 +19294,7 @@ func (c *CreativeAssetsInsertCall) Do() (*CreativeAssetMetadata, error) {
 	//     "accept": [
 	//       "*/*"
 	//     ],
-	//     "maxSize": "100MB",
+	//     "maxSize": "1024MB",
 	//     "protocols": {
 	//       "resumable": {
 	//         "multipart": true,
@@ -19951,23 +19361,6 @@ func (r *CreativeFieldValuesService) Delete(profileId int64, creativeFieldId int
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldValuesDeleteCall) QuotaUser(quotaUser string) *CreativeFieldValuesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldValuesDeleteCall) UserIP(userIP string) *CreativeFieldValuesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -19985,25 +19378,25 @@ func (c *CreativeFieldValuesDeleteCall) Context(ctx context.Context) *CreativeFi
 }
 
 func (c *CreativeFieldValuesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{creativeFieldId}/creativeFieldValues/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":       strconv.FormatInt(c.profileId, 10),
 		"creativeFieldId": strconv.FormatInt(c.creativeFieldId, 10),
 		"id":              strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFieldValues.delete" call.
-func (c *CreativeFieldValuesDeleteCall) Do() error {
+func (c *CreativeFieldValuesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -20074,23 +19467,6 @@ func (r *CreativeFieldValuesService) Get(profileId int64, creativeFieldId int64,
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldValuesGetCall) QuotaUser(quotaUser string) *CreativeFieldValuesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldValuesGetCall) UserIP(userIP string) *CreativeFieldValuesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20118,24 +19494,23 @@ func (c *CreativeFieldValuesGetCall) Context(ctx context.Context) *CreativeField
 }
 
 func (c *CreativeFieldValuesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{creativeFieldId}/creativeFieldValues/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":       strconv.FormatInt(c.profileId, 10),
 		"creativeFieldId": strconv.FormatInt(c.creativeFieldId, 10),
 		"id":              strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFieldValues.get" call.
@@ -20145,7 +19520,8 @@ func (c *CreativeFieldValuesGetCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldValuesGetCall) Do() (*CreativeFieldValue, error) {
+func (c *CreativeFieldValuesGetCall) Do(opts ...googleapi.CallOption) (*CreativeFieldValue, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20169,7 +19545,8 @@ func (c *CreativeFieldValuesGetCall) Do() (*CreativeFieldValue, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20236,23 +19613,6 @@ func (r *CreativeFieldValuesService) Insert(profileId int64, creativeFieldId int
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldValuesInsertCall) QuotaUser(quotaUser string) *CreativeFieldValuesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldValuesInsertCall) UserIP(userIP string) *CreativeFieldValuesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20270,26 +19630,24 @@ func (c *CreativeFieldValuesInsertCall) Context(ctx context.Context) *CreativeFi
 }
 
 func (c *CreativeFieldValuesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativefieldvalue)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{creativeFieldId}/creativeFieldValues")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":       strconv.FormatInt(c.profileId, 10),
 		"creativeFieldId": strconv.FormatInt(c.creativeFieldId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFieldValues.insert" call.
@@ -20299,7 +19657,8 @@ func (c *CreativeFieldValuesInsertCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldValuesInsertCall) Do() (*CreativeFieldValue, error) {
+func (c *CreativeFieldValuesInsertCall) Do(opts ...googleapi.CallOption) (*CreativeFieldValue, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20323,7 +19682,8 @@ func (c *CreativeFieldValuesInsertCall) Do() (*CreativeFieldValue, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20409,15 +19769,6 @@ func (c *CreativeFieldValuesListCall) PageToken(pageToken string) *CreativeField
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldValuesListCall) QuotaUser(quotaUser string) *CreativeFieldValuesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for creative field values by their values. Wildcards (e.g.
 // *) are not allowed.
@@ -20448,14 +19799,6 @@ func (c *CreativeFieldValuesListCall) SortOrder(sortOrder string) *CreativeField
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldValuesListCall) UserIP(userIP string) *CreativeFieldValuesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20483,23 +19826,22 @@ func (c *CreativeFieldValuesListCall) Context(ctx context.Context) *CreativeFiel
 }
 
 func (c *CreativeFieldValuesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{creativeFieldId}/creativeFieldValues")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":       strconv.FormatInt(c.profileId, 10),
 		"creativeFieldId": strconv.FormatInt(c.creativeFieldId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFieldValues.list" call.
@@ -20509,7 +19851,8 @@ func (c *CreativeFieldValuesListCall) doRequest(alt string) (*http.Response, err
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldValuesListCall) Do() (*CreativeFieldValuesListResponse, error) {
+func (c *CreativeFieldValuesListCall) Do(opts ...googleapi.CallOption) (*CreativeFieldValuesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20533,7 +19876,8 @@ func (c *CreativeFieldValuesListCall) Do() (*CreativeFieldValuesListResponse, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20621,6 +19965,27 @@ func (c *CreativeFieldValuesListCall) Do() (*CreativeFieldValuesListResponse, er
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CreativeFieldValuesListCall) Pages(ctx context.Context, f func(*CreativeFieldValuesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.creativeFieldValues.patch":
 
 type CreativeFieldValuesPatchCall struct {
@@ -20643,23 +20008,6 @@ func (r *CreativeFieldValuesService) Patch(profileId int64, creativeFieldId int6
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldValuesPatchCall) QuotaUser(quotaUser string) *CreativeFieldValuesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldValuesPatchCall) UserIP(userIP string) *CreativeFieldValuesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20677,26 +20025,24 @@ func (c *CreativeFieldValuesPatchCall) Context(ctx context.Context) *CreativeFie
 }
 
 func (c *CreativeFieldValuesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativefieldvalue)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{creativeFieldId}/creativeFieldValues")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":       strconv.FormatInt(c.profileId, 10),
 		"creativeFieldId": strconv.FormatInt(c.creativeFieldId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFieldValues.patch" call.
@@ -20706,7 +20052,8 @@ func (c *CreativeFieldValuesPatchCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldValuesPatchCall) Do() (*CreativeFieldValue, error) {
+func (c *CreativeFieldValuesPatchCall) Do(opts ...googleapi.CallOption) (*CreativeFieldValue, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20730,7 +20077,8 @@ func (c *CreativeFieldValuesPatchCall) Do() (*CreativeFieldValue, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20800,23 +20148,6 @@ func (r *CreativeFieldValuesService) Update(profileId int64, creativeFieldId int
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldValuesUpdateCall) QuotaUser(quotaUser string) *CreativeFieldValuesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldValuesUpdateCall) UserIP(userIP string) *CreativeFieldValuesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20834,26 +20165,24 @@ func (c *CreativeFieldValuesUpdateCall) Context(ctx context.Context) *CreativeFi
 }
 
 func (c *CreativeFieldValuesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativefieldvalue)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{creativeFieldId}/creativeFieldValues")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":       strconv.FormatInt(c.profileId, 10),
 		"creativeFieldId": strconv.FormatInt(c.creativeFieldId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFieldValues.update" call.
@@ -20863,7 +20192,8 @@ func (c *CreativeFieldValuesUpdateCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldValuesUpdateCall) Do() (*CreativeFieldValue, error) {
+func (c *CreativeFieldValuesUpdateCall) Do(opts ...googleapi.CallOption) (*CreativeFieldValue, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -20887,7 +20217,8 @@ func (c *CreativeFieldValuesUpdateCall) Do() (*CreativeFieldValue, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -20947,23 +20278,6 @@ func (r *CreativeFieldsService) Delete(profileId int64, id int64) *CreativeField
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldsDeleteCall) QuotaUser(quotaUser string) *CreativeFieldsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldsDeleteCall) UserIP(userIP string) *CreativeFieldsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -20981,24 +20295,24 @@ func (c *CreativeFieldsDeleteCall) Context(ctx context.Context) *CreativeFieldsD
 }
 
 func (c *CreativeFieldsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFields.delete" call.
-func (c *CreativeFieldsDeleteCall) Do() error {
+func (c *CreativeFieldsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -21059,23 +20373,6 @@ func (r *CreativeFieldsService) Get(profileId int64, id int64) *CreativeFieldsGe
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldsGetCall) QuotaUser(quotaUser string) *CreativeFieldsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldsGetCall) UserIP(userIP string) *CreativeFieldsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21103,23 +20400,22 @@ func (c *CreativeFieldsGetCall) Context(ctx context.Context) *CreativeFieldsGetC
 }
 
 func (c *CreativeFieldsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFields.get" call.
@@ -21129,7 +20425,8 @@ func (c *CreativeFieldsGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldsGetCall) Do() (*CreativeField, error) {
+func (c *CreativeFieldsGetCall) Do(opts ...googleapi.CallOption) (*CreativeField, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21153,7 +20450,8 @@ func (c *CreativeFieldsGetCall) Do() (*CreativeField, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -21210,23 +20508,6 @@ func (r *CreativeFieldsService) Insert(profileId int64, creativefield *CreativeF
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldsInsertCall) QuotaUser(quotaUser string) *CreativeFieldsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldsInsertCall) UserIP(userIP string) *CreativeFieldsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21244,25 +20525,23 @@ func (c *CreativeFieldsInsertCall) Context(ctx context.Context) *CreativeFieldsI
 }
 
 func (c *CreativeFieldsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativefield)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFields.insert" call.
@@ -21272,7 +20551,8 @@ func (c *CreativeFieldsInsertCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldsInsertCall) Do() (*CreativeField, error) {
+func (c *CreativeFieldsInsertCall) Do(opts ...googleapi.CallOption) (*CreativeField, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21296,7 +20576,8 @@ func (c *CreativeFieldsInsertCall) Do() (*CreativeField, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -21383,15 +20664,6 @@ func (c *CreativeFieldsListCall) PageToken(pageToken string) *CreativeFieldsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldsListCall) QuotaUser(quotaUser string) *CreativeFieldsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for creative fields by name or ID. Wildcards (*) are
 // allowed. For example, "creativefield*2015" will return creative
@@ -21428,14 +20700,6 @@ func (c *CreativeFieldsListCall) SortOrder(sortOrder string) *CreativeFieldsList
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldsListCall) UserIP(userIP string) *CreativeFieldsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21463,22 +20727,21 @@ func (c *CreativeFieldsListCall) Context(ctx context.Context) *CreativeFieldsLis
 }
 
 func (c *CreativeFieldsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFields.list" call.
@@ -21488,7 +20751,8 @@ func (c *CreativeFieldsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldsListCall) Do() (*CreativeFieldsListResponse, error) {
+func (c *CreativeFieldsListCall) Do(opts ...googleapi.CallOption) (*CreativeFieldsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21512,7 +20776,8 @@ func (c *CreativeFieldsListCall) Do() (*CreativeFieldsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -21599,6 +20864,27 @@ func (c *CreativeFieldsListCall) Do() (*CreativeFieldsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CreativeFieldsListCall) Pages(ctx context.Context, f func(*CreativeFieldsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.creativeFields.patch":
 
 type CreativeFieldsPatchCall struct {
@@ -21619,23 +20905,6 @@ func (r *CreativeFieldsService) Patch(profileId int64, id int64, creativefield *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldsPatchCall) QuotaUser(quotaUser string) *CreativeFieldsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldsPatchCall) UserIP(userIP string) *CreativeFieldsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21653,25 +20922,23 @@ func (c *CreativeFieldsPatchCall) Context(ctx context.Context) *CreativeFieldsPa
 }
 
 func (c *CreativeFieldsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativefield)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFields.patch" call.
@@ -21681,7 +20948,8 @@ func (c *CreativeFieldsPatchCall) doRequest(alt string) (*http.Response, error) 
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldsPatchCall) Do() (*CreativeField, error) {
+func (c *CreativeFieldsPatchCall) Do(opts ...googleapi.CallOption) (*CreativeField, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21705,7 +20973,8 @@ func (c *CreativeFieldsPatchCall) Do() (*CreativeField, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -21765,23 +21034,6 @@ func (r *CreativeFieldsService) Update(profileId int64, creativefield *CreativeF
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeFieldsUpdateCall) QuotaUser(quotaUser string) *CreativeFieldsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeFieldsUpdateCall) UserIP(userIP string) *CreativeFieldsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21799,25 +21051,23 @@ func (c *CreativeFieldsUpdateCall) Context(ctx context.Context) *CreativeFieldsU
 }
 
 func (c *CreativeFieldsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativefield)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeFields")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeFields.update" call.
@@ -21827,7 +21077,8 @@ func (c *CreativeFieldsUpdateCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeFieldsUpdateCall) Do() (*CreativeField, error) {
+func (c *CreativeFieldsUpdateCall) Do(opts ...googleapi.CallOption) (*CreativeField, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21851,7 +21102,8 @@ func (c *CreativeFieldsUpdateCall) Do() (*CreativeField, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -21904,23 +21156,6 @@ func (r *CreativeGroupsService) Get(profileId int64, id int64) *CreativeGroupsGe
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeGroupsGetCall) QuotaUser(quotaUser string) *CreativeGroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeGroupsGetCall) UserIP(userIP string) *CreativeGroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -21948,23 +21183,22 @@ func (c *CreativeGroupsGetCall) Context(ctx context.Context) *CreativeGroupsGetC
 }
 
 func (c *CreativeGroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeGroups.get" call.
@@ -21974,7 +21208,8 @@ func (c *CreativeGroupsGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeGroupsGetCall) Do() (*CreativeGroup, error) {
+func (c *CreativeGroupsGetCall) Do(opts ...googleapi.CallOption) (*CreativeGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -21998,7 +21233,8 @@ func (c *CreativeGroupsGetCall) Do() (*CreativeGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -22055,23 +21291,6 @@ func (r *CreativeGroupsService) Insert(profileId int64, creativegroup *CreativeG
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeGroupsInsertCall) QuotaUser(quotaUser string) *CreativeGroupsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeGroupsInsertCall) UserIP(userIP string) *CreativeGroupsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -22089,25 +21308,23 @@ func (c *CreativeGroupsInsertCall) Context(ctx context.Context) *CreativeGroupsI
 }
 
 func (c *CreativeGroupsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativegroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeGroups.insert" call.
@@ -22117,7 +21334,8 @@ func (c *CreativeGroupsInsertCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeGroupsInsertCall) Do() (*CreativeGroup, error) {
+func (c *CreativeGroupsInsertCall) Do(opts ...googleapi.CallOption) (*CreativeGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -22141,7 +21359,8 @@ func (c *CreativeGroupsInsertCall) Do() (*CreativeGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -22235,15 +21454,6 @@ func (c *CreativeGroupsListCall) PageToken(pageToken string) *CreativeGroupsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeGroupsListCall) QuotaUser(quotaUser string) *CreativeGroupsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for creative groups by name or ID. Wildcards (*) are
 // allowed. For example, "creativegroup*2015" will return creative
@@ -22280,14 +21490,6 @@ func (c *CreativeGroupsListCall) SortOrder(sortOrder string) *CreativeGroupsList
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeGroupsListCall) UserIP(userIP string) *CreativeGroupsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -22315,22 +21517,21 @@ func (c *CreativeGroupsListCall) Context(ctx context.Context) *CreativeGroupsLis
 }
 
 func (c *CreativeGroupsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeGroups.list" call.
@@ -22340,7 +21541,8 @@ func (c *CreativeGroupsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeGroupsListCall) Do() (*CreativeGroupsListResponse, error) {
+func (c *CreativeGroupsListCall) Do(opts ...googleapi.CallOption) (*CreativeGroupsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -22364,7 +21566,8 @@ func (c *CreativeGroupsListCall) Do() (*CreativeGroupsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -22457,6 +21660,27 @@ func (c *CreativeGroupsListCall) Do() (*CreativeGroupsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CreativeGroupsListCall) Pages(ctx context.Context, f func(*CreativeGroupsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.creativeGroups.patch":
 
 type CreativeGroupsPatchCall struct {
@@ -22477,23 +21701,6 @@ func (r *CreativeGroupsService) Patch(profileId int64, id int64, creativegroup *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeGroupsPatchCall) QuotaUser(quotaUser string) *CreativeGroupsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeGroupsPatchCall) UserIP(userIP string) *CreativeGroupsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -22511,25 +21718,23 @@ func (c *CreativeGroupsPatchCall) Context(ctx context.Context) *CreativeGroupsPa
 }
 
 func (c *CreativeGroupsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativegroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeGroups.patch" call.
@@ -22539,7 +21744,8 @@ func (c *CreativeGroupsPatchCall) doRequest(alt string) (*http.Response, error) 
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeGroupsPatchCall) Do() (*CreativeGroup, error) {
+func (c *CreativeGroupsPatchCall) Do(opts ...googleapi.CallOption) (*CreativeGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -22563,7 +21769,8 @@ func (c *CreativeGroupsPatchCall) Do() (*CreativeGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -22623,23 +21830,6 @@ func (r *CreativeGroupsService) Update(profileId int64, creativegroup *CreativeG
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativeGroupsUpdateCall) QuotaUser(quotaUser string) *CreativeGroupsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativeGroupsUpdateCall) UserIP(userIP string) *CreativeGroupsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -22657,25 +21847,23 @@ func (c *CreativeGroupsUpdateCall) Context(ctx context.Context) *CreativeGroupsU
 }
 
 func (c *CreativeGroupsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creativegroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creativeGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creativeGroups.update" call.
@@ -22685,7 +21873,8 @@ func (c *CreativeGroupsUpdateCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativeGroupsUpdateCall) Do() (*CreativeGroup, error) {
+func (c *CreativeGroupsUpdateCall) Do(opts ...googleapi.CallOption) (*CreativeGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -22709,7 +21898,8 @@ func (c *CreativeGroupsUpdateCall) Do() (*CreativeGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -22762,23 +21952,6 @@ func (r *CreativesService) Get(profileId int64, id int64) *CreativesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesGetCall) QuotaUser(quotaUser string) *CreativesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesGetCall) UserIP(userIP string) *CreativesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -22806,23 +21979,22 @@ func (c *CreativesGetCall) Context(ctx context.Context) *CreativesGetCall {
 }
 
 func (c *CreativesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creatives/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creatives.get" call.
@@ -22832,7 +22004,8 @@ func (c *CreativesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CreativesGetCall) Do() (*Creative, error) {
+func (c *CreativesGetCall) Do(opts ...googleapi.CallOption) (*Creative, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -22856,7 +22029,8 @@ func (c *CreativesGetCall) Do() (*Creative, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -22913,23 +22087,6 @@ func (r *CreativesService) Insert(profileId int64, creative *Creative) *Creative
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesInsertCall) QuotaUser(quotaUser string) *CreativesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesInsertCall) UserIP(userIP string) *CreativesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -22947,25 +22104,23 @@ func (c *CreativesInsertCall) Context(ctx context.Context) *CreativesInsertCall 
 }
 
 func (c *CreativesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creative)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creatives")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creatives.insert" call.
@@ -22975,7 +22130,8 @@ func (c *CreativesInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CreativesInsertCall) Do() (*Creative, error) {
+func (c *CreativesInsertCall) Do(opts ...googleapi.CallOption) (*Creative, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -22999,7 +22155,8 @@ func (c *CreativesInsertCall) Do() (*Creative, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -23126,15 +22283,6 @@ func (c *CreativesListCall) PageToken(pageToken string) *CreativesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesListCall) QuotaUser(quotaUser string) *CreativesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // RenderingIds sets the optional parameter "renderingIds": Select only
 // creatives with these rendering IDs.
 func (c *CreativesListCall) RenderingIds(renderingIds ...int64) *CreativesListCall {
@@ -23232,14 +22380,6 @@ func (c *CreativesListCall) Types(types ...string) *CreativesListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesListCall) UserIP(userIP string) *CreativesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -23267,22 +22407,21 @@ func (c *CreativesListCall) Context(ctx context.Context) *CreativesListCall {
 }
 
 func (c *CreativesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creatives")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creatives.list" call.
@@ -23292,7 +22431,8 @@ func (c *CreativesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *CreativesListCall) Do() (*CreativesListResponse, error) {
+func (c *CreativesListCall) Do(opts ...googleapi.CallOption) (*CreativesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -23316,7 +22456,8 @@ func (c *CreativesListCall) Do() (*CreativesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -23510,6 +22651,27 @@ func (c *CreativesListCall) Do() (*CreativesListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *CreativesListCall) Pages(ctx context.Context, f func(*CreativesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.creatives.patch":
 
 type CreativesPatchCall struct {
@@ -23530,23 +22692,6 @@ func (r *CreativesService) Patch(profileId int64, id int64, creative *Creative) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesPatchCall) QuotaUser(quotaUser string) *CreativesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesPatchCall) UserIP(userIP string) *CreativesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -23564,25 +22709,23 @@ func (c *CreativesPatchCall) Context(ctx context.Context) *CreativesPatchCall {
 }
 
 func (c *CreativesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creative)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creatives")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creatives.patch" call.
@@ -23592,7 +22735,8 @@ func (c *CreativesPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CreativesPatchCall) Do() (*Creative, error) {
+func (c *CreativesPatchCall) Do(opts ...googleapi.CallOption) (*Creative, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -23616,7 +22760,8 @@ func (c *CreativesPatchCall) Do() (*Creative, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -23676,23 +22821,6 @@ func (r *CreativesService) Update(profileId int64, creative *Creative) *Creative
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *CreativesUpdateCall) QuotaUser(quotaUser string) *CreativesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *CreativesUpdateCall) UserIP(userIP string) *CreativesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -23710,25 +22838,23 @@ func (c *CreativesUpdateCall) Context(ctx context.Context) *CreativesUpdateCall 
 }
 
 func (c *CreativesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.creative)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/creatives")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.creatives.update" call.
@@ -23738,7 +22864,8 @@ func (c *CreativesUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *CreativesUpdateCall) Do() (*Creative, error) {
+func (c *CreativesUpdateCall) Do(opts ...googleapi.CallOption) (*Creative, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -23762,7 +22889,8 @@ func (c *CreativesUpdateCall) Do() (*Creative, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -23829,23 +22957,6 @@ func (c *DimensionValuesQueryCall) PageToken(pageToken string) *DimensionValuesQ
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DimensionValuesQueryCall) QuotaUser(quotaUser string) *DimensionValuesQueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DimensionValuesQueryCall) UserIP(userIP string) *DimensionValuesQueryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -23863,25 +22974,23 @@ func (c *DimensionValuesQueryCall) Context(ctx context.Context) *DimensionValues
 }
 
 func (c *DimensionValuesQueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.dimensionvaluerequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/dimensionvalues/query")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.dimensionValues.query" call.
@@ -23891,7 +23000,8 @@ func (c *DimensionValuesQueryCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DimensionValuesQueryCall) Do() (*DimensionValueList, error) {
+func (c *DimensionValuesQueryCall) Do(opts ...googleapi.CallOption) (*DimensionValueList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -23915,7 +23025,8 @@ func (c *DimensionValuesQueryCall) Do() (*DimensionValueList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -23981,23 +23092,6 @@ func (r *DirectorySiteContactsService) Get(profileId int64, id int64) *Directory
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DirectorySiteContactsGetCall) QuotaUser(quotaUser string) *DirectorySiteContactsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DirectorySiteContactsGetCall) UserIP(userIP string) *DirectorySiteContactsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -24025,23 +23119,22 @@ func (c *DirectorySiteContactsGetCall) Context(ctx context.Context) *DirectorySi
 }
 
 func (c *DirectorySiteContactsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/directorySiteContacts/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.directorySiteContacts.get" call.
@@ -24051,7 +23144,8 @@ func (c *DirectorySiteContactsGetCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DirectorySiteContactsGetCall) Do() (*DirectorySiteContact, error) {
+func (c *DirectorySiteContactsGetCall) Do(opts ...googleapi.CallOption) (*DirectorySiteContact, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -24075,7 +23169,8 @@ func (c *DirectorySiteContactsGetCall) Do() (*DirectorySiteContact, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -24168,15 +23263,6 @@ func (c *DirectorySiteContactsListCall) PageToken(pageToken string) *DirectorySi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DirectorySiteContactsListCall) QuotaUser(quotaUser string) *DirectorySiteContactsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name, ID or email. Wildcards (*) are
 // allowed. For example, "directory site contact*2015" will return
@@ -24214,14 +23300,6 @@ func (c *DirectorySiteContactsListCall) SortOrder(sortOrder string) *DirectorySi
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DirectorySiteContactsListCall) UserIP(userIP string) *DirectorySiteContactsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -24249,22 +23327,21 @@ func (c *DirectorySiteContactsListCall) Context(ctx context.Context) *DirectoryS
 }
 
 func (c *DirectorySiteContactsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/directorySiteContacts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.directorySiteContacts.list" call.
@@ -24275,7 +23352,8 @@ func (c *DirectorySiteContactsListCall) doRequest(alt string) (*http.Response, e
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *DirectorySiteContactsListCall) Do() (*DirectorySiteContactsListResponse, error) {
+func (c *DirectorySiteContactsListCall) Do(opts ...googleapi.CallOption) (*DirectorySiteContactsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -24299,7 +23377,8 @@ func (c *DirectorySiteContactsListCall) Do() (*DirectorySiteContactsListResponse
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -24386,6 +23465,27 @@ func (c *DirectorySiteContactsListCall) Do() (*DirectorySiteContactsListResponse
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *DirectorySiteContactsListCall) Pages(ctx context.Context, f func(*DirectorySiteContactsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.directorySites.get":
 
 type DirectorySitesGetCall struct {
@@ -24402,23 +23502,6 @@ func (r *DirectorySitesService) Get(profileId int64, id int64) *DirectorySitesGe
 	c := &DirectorySitesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DirectorySitesGetCall) QuotaUser(quotaUser string) *DirectorySitesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DirectorySitesGetCall) UserIP(userIP string) *DirectorySitesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -24449,23 +23532,22 @@ func (c *DirectorySitesGetCall) Context(ctx context.Context) *DirectorySitesGetC
 }
 
 func (c *DirectorySitesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/directorySites/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.directorySites.get" call.
@@ -24475,7 +23557,8 @@ func (c *DirectorySitesGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DirectorySitesGetCall) Do() (*DirectorySite, error) {
+func (c *DirectorySitesGetCall) Do(opts ...googleapi.CallOption) (*DirectorySite, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -24499,7 +23582,8 @@ func (c *DirectorySitesGetCall) Do() (*DirectorySite, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -24556,23 +23640,6 @@ func (r *DirectorySitesService) Insert(profileId int64, directorysite *Directory
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DirectorySitesInsertCall) QuotaUser(quotaUser string) *DirectorySitesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DirectorySitesInsertCall) UserIP(userIP string) *DirectorySitesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -24590,25 +23657,23 @@ func (c *DirectorySitesInsertCall) Context(ctx context.Context) *DirectorySitesI
 }
 
 func (c *DirectorySitesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.directorysite)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/directorySites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.directorySites.insert" call.
@@ -24618,7 +23683,8 @@ func (c *DirectorySitesInsertCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DirectorySitesInsertCall) Do() (*DirectorySite, error) {
+func (c *DirectorySitesInsertCall) Do(opts ...googleapi.CallOption) (*DirectorySite, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -24642,7 +23708,8 @@ func (c *DirectorySitesInsertCall) Do() (*DirectorySite, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -24771,15 +23838,6 @@ func (c *DirectorySitesListCall) ParentId(parentId int64) *DirectorySitesListCal
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *DirectorySitesListCall) QuotaUser(quotaUser string) *DirectorySitesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name, ID or URL. Wildcards (*) are allowed.
 // For example, "directory site*2015" will return objects with names
@@ -24816,14 +23874,6 @@ func (c *DirectorySitesListCall) SortOrder(sortOrder string) *DirectorySitesList
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *DirectorySitesListCall) UserIP(userIP string) *DirectorySitesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -24851,22 +23901,21 @@ func (c *DirectorySitesListCall) Context(ctx context.Context) *DirectorySitesLis
 }
 
 func (c *DirectorySitesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/directorySites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.directorySites.list" call.
@@ -24876,7 +23925,8 @@ func (c *DirectorySitesListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DirectorySitesListCall) Do() (*DirectorySitesListResponse, error) {
+func (c *DirectorySitesListCall) Do(opts ...googleapi.CallOption) (*DirectorySitesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -24900,7 +23950,8 @@ func (c *DirectorySitesListCall) Do() (*DirectorySitesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -25017,6 +24068,27 @@ func (c *DirectorySitesListCall) Do() (*DirectorySitesListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *DirectorySitesListCall) Pages(ctx context.Context, f func(*DirectorySitesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.eventTags.delete":
 
 type EventTagsDeleteCall struct {
@@ -25032,23 +24104,6 @@ func (r *EventTagsService) Delete(profileId int64, id int64) *EventTagsDeleteCal
 	c := &EventTagsDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventTagsDeleteCall) QuotaUser(quotaUser string) *EventTagsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventTagsDeleteCall) UserIP(userIP string) *EventTagsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -25069,24 +24124,24 @@ func (c *EventTagsDeleteCall) Context(ctx context.Context) *EventTagsDeleteCall 
 }
 
 func (c *EventTagsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/eventTags/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.eventTags.delete" call.
-func (c *EventTagsDeleteCall) Do() error {
+func (c *EventTagsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -25147,23 +24202,6 @@ func (r *EventTagsService) Get(profileId int64, id int64) *EventTagsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventTagsGetCall) QuotaUser(quotaUser string) *EventTagsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventTagsGetCall) UserIP(userIP string) *EventTagsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -25191,23 +24229,22 @@ func (c *EventTagsGetCall) Context(ctx context.Context) *EventTagsGetCall {
 }
 
 func (c *EventTagsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/eventTags/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.eventTags.get" call.
@@ -25217,7 +24254,8 @@ func (c *EventTagsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EventTagsGetCall) Do() (*EventTag, error) {
+func (c *EventTagsGetCall) Do(opts ...googleapi.CallOption) (*EventTag, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -25241,7 +24279,8 @@ func (c *EventTagsGetCall) Do() (*EventTag, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -25298,23 +24337,6 @@ func (r *EventTagsService) Insert(profileId int64, eventtag *EventTag) *EventTag
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventTagsInsertCall) QuotaUser(quotaUser string) *EventTagsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventTagsInsertCall) UserIP(userIP string) *EventTagsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -25332,25 +24354,23 @@ func (c *EventTagsInsertCall) Context(ctx context.Context) *EventTagsInsertCall 
 }
 
 func (c *EventTagsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.eventtag)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/eventTags")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.eventTags.insert" call.
@@ -25360,7 +24380,8 @@ func (c *EventTagsInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EventTagsInsertCall) Do() (*EventTag, error) {
+func (c *EventTagsInsertCall) Do(opts ...googleapi.CallOption) (*EventTag, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -25384,7 +24405,8 @@ func (c *EventTagsInsertCall) Do() (*EventTag, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -25508,15 +24530,6 @@ func (c *EventTagsListCall) Ids(ids ...int64) *EventTagsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventTagsListCall) QuotaUser(quotaUser string) *EventTagsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "eventtag*2015" will return objects with names like
@@ -25552,14 +24565,6 @@ func (c *EventTagsListCall) SortOrder(sortOrder string) *EventTagsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventTagsListCall) UserIP(userIP string) *EventTagsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -25587,22 +24592,21 @@ func (c *EventTagsListCall) Context(ctx context.Context) *EventTagsListCall {
 }
 
 func (c *EventTagsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/eventTags")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.eventTags.list" call.
@@ -25612,7 +24616,8 @@ func (c *EventTagsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *EventTagsListCall) Do() (*EventTagsListResponse, error) {
+func (c *EventTagsListCall) Do(opts ...googleapi.CallOption) (*EventTagsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -25636,7 +24641,8 @@ func (c *EventTagsListCall) Do() (*EventTagsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -25769,23 +24775,6 @@ func (r *EventTagsService) Patch(profileId int64, id int64, eventtag *EventTag) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventTagsPatchCall) QuotaUser(quotaUser string) *EventTagsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventTagsPatchCall) UserIP(userIP string) *EventTagsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -25803,25 +24792,23 @@ func (c *EventTagsPatchCall) Context(ctx context.Context) *EventTagsPatchCall {
 }
 
 func (c *EventTagsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.eventtag)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/eventTags")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.eventTags.patch" call.
@@ -25831,7 +24818,8 @@ func (c *EventTagsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EventTagsPatchCall) Do() (*EventTag, error) {
+func (c *EventTagsPatchCall) Do(opts ...googleapi.CallOption) (*EventTag, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -25855,7 +24843,8 @@ func (c *EventTagsPatchCall) Do() (*EventTag, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -25915,23 +24904,6 @@ func (r *EventTagsService) Update(profileId int64, eventtag *EventTag) *EventTag
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *EventTagsUpdateCall) QuotaUser(quotaUser string) *EventTagsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *EventTagsUpdateCall) UserIP(userIP string) *EventTagsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -25949,25 +24921,23 @@ func (c *EventTagsUpdateCall) Context(ctx context.Context) *EventTagsUpdateCall 
 }
 
 func (c *EventTagsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.eventtag)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/eventTags")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.eventTags.update" call.
@@ -25977,7 +24947,8 @@ func (c *EventTagsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *EventTagsUpdateCall) Do() (*EventTag, error) {
+func (c *EventTagsUpdateCall) Do(opts ...googleapi.CallOption) (*EventTag, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -26001,7 +24972,8 @@ func (c *EventTagsUpdateCall) Do() (*EventTag, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -26054,23 +25026,6 @@ func (r *FilesService) Get(reportId int64, fileId int64) *FilesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FilesGetCall) QuotaUser(quotaUser string) *FilesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FilesGetCall) UserIP(userIP string) *FilesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -26098,29 +25053,29 @@ func (c *FilesGetCall) Context(ctx context.Context) *FilesGetCall {
 }
 
 func (c *FilesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "reports/{reportId}/files/{fileId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"reportId": strconv.FormatInt(c.reportId, 10),
 		"fileId":   strconv.FormatInt(c.fileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Download fetches the API endpoint's "media" value, instead of the normal
 // API response value. If the returned error is nil, the Response is guaranteed to
 // have a 2xx status code. Callers must close the Response.Body as usual.
-func (c *FilesGetCall) Download() (*http.Response, error) {
+func (c *FilesGetCall) Download(opts ...googleapi.CallOption) (*http.Response, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("media")
 	if err != nil {
 		return nil, err
@@ -26139,7 +25094,8 @@ func (c *FilesGetCall) Download() (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *FilesGetCall) Do() (*File, error) {
+func (c *FilesGetCall) Do(opts ...googleapi.CallOption) (*File, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -26163,7 +25119,8 @@ func (c *FilesGetCall) Do() (*File, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -26234,15 +25191,6 @@ func (c *FilesListCall) PageToken(pageToken string) *FilesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FilesListCall) QuotaUser(quotaUser string) *FilesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Scope sets the optional parameter "scope": The scope that defines
 // which results are returned, default is 'MINE'.
 //
@@ -26277,14 +25225,6 @@ func (c *FilesListCall) SortOrder(sortOrder string) *FilesListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FilesListCall) UserIP(userIP string) *FilesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -26312,22 +25252,21 @@ func (c *FilesListCall) Context(ctx context.Context) *FilesListCall {
 }
 
 func (c *FilesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/files")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.files.list" call.
@@ -26337,7 +25276,8 @@ func (c *FilesListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *FilesListCall) Do() (*FileList, error) {
+func (c *FilesListCall) Do(opts ...googleapi.CallOption) (*FileList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -26361,7 +25301,8 @@ func (c *FilesListCall) Do() (*FileList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -26449,6 +25390,27 @@ func (c *FilesListCall) Do() (*FileList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *FilesListCall) Pages(ctx context.Context, f func(*FileList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.floodlightActivities.delete":
 
 type FloodlightActivitiesDeleteCall struct {
@@ -26464,23 +25426,6 @@ func (r *FloodlightActivitiesService) Delete(profileId int64, id int64) *Floodli
 	c := &FloodlightActivitiesDeleteCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesDeleteCall) QuotaUser(quotaUser string) *FloodlightActivitiesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesDeleteCall) UserIP(userIP string) *FloodlightActivitiesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -26501,24 +25446,24 @@ func (c *FloodlightActivitiesDeleteCall) Context(ctx context.Context) *Floodligh
 }
 
 func (c *FloodlightActivitiesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.delete" call.
-func (c *FloodlightActivitiesDeleteCall) Do() error {
+func (c *FloodlightActivitiesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -26584,23 +25529,6 @@ func (c *FloodlightActivitiesGeneratetagCall) FloodlightActivityId(floodlightAct
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesGeneratetagCall) QuotaUser(quotaUser string) *FloodlightActivitiesGeneratetagCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesGeneratetagCall) UserIP(userIP string) *FloodlightActivitiesGeneratetagCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -26618,19 +25546,18 @@ func (c *FloodlightActivitiesGeneratetagCall) Context(ctx context.Context) *Floo
 }
 
 func (c *FloodlightActivitiesGeneratetagCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities/generatetag")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.generatetag" call.
@@ -26641,7 +25568,8 @@ func (c *FloodlightActivitiesGeneratetagCall) doRequest(alt string) (*http.Respo
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivitiesGeneratetagCall) Do() (*FloodlightActivitiesGenerateTagResponse, error) {
+func (c *FloodlightActivitiesGeneratetagCall) Do(opts ...googleapi.CallOption) (*FloodlightActivitiesGenerateTagResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -26665,7 +25593,8 @@ func (c *FloodlightActivitiesGeneratetagCall) Do() (*FloodlightActivitiesGenerat
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -26721,23 +25650,6 @@ func (r *FloodlightActivitiesService) Get(profileId int64, id int64) *Floodlight
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesGetCall) QuotaUser(quotaUser string) *FloodlightActivitiesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesGetCall) UserIP(userIP string) *FloodlightActivitiesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -26765,23 +25677,22 @@ func (c *FloodlightActivitiesGetCall) Context(ctx context.Context) *FloodlightAc
 }
 
 func (c *FloodlightActivitiesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.get" call.
@@ -26791,7 +25702,8 @@ func (c *FloodlightActivitiesGetCall) doRequest(alt string) (*http.Response, err
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivitiesGetCall) Do() (*FloodlightActivity, error) {
+func (c *FloodlightActivitiesGetCall) Do(opts ...googleapi.CallOption) (*FloodlightActivity, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -26815,7 +25727,8 @@ func (c *FloodlightActivitiesGetCall) Do() (*FloodlightActivity, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -26872,23 +25785,6 @@ func (r *FloodlightActivitiesService) Insert(profileId int64, floodlightactivity
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesInsertCall) QuotaUser(quotaUser string) *FloodlightActivitiesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesInsertCall) UserIP(userIP string) *FloodlightActivitiesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -26906,25 +25802,23 @@ func (c *FloodlightActivitiesInsertCall) Context(ctx context.Context) *Floodligh
 }
 
 func (c *FloodlightActivitiesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightactivity)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.insert" call.
@@ -26934,7 +25828,8 @@ func (c *FloodlightActivitiesInsertCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivitiesInsertCall) Do() (*FloodlightActivity, error) {
+func (c *FloodlightActivitiesInsertCall) Do(opts ...googleapi.CallOption) (*FloodlightActivity, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -26958,7 +25853,8 @@ func (c *FloodlightActivitiesInsertCall) Do() (*FloodlightActivity, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -27093,15 +25989,6 @@ func (c *FloodlightActivitiesListCall) PageToken(pageToken string) *FloodlightAc
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesListCall) QuotaUser(quotaUser string) *FloodlightActivitiesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "floodlightactivity*2015" will return objects with names
@@ -27145,14 +26032,6 @@ func (c *FloodlightActivitiesListCall) TagString(tagString string) *FloodlightAc
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesListCall) UserIP(userIP string) *FloodlightActivitiesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -27180,22 +26059,21 @@ func (c *FloodlightActivitiesListCall) Context(ctx context.Context) *FloodlightA
 }
 
 func (c *FloodlightActivitiesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.list" call.
@@ -27205,7 +26083,8 @@ func (c *FloodlightActivitiesListCall) doRequest(alt string) (*http.Response, er
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivitiesListCall) Do() (*FloodlightActivitiesListResponse, error) {
+func (c *FloodlightActivitiesListCall) Do(opts ...googleapi.CallOption) (*FloodlightActivitiesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -27229,7 +26108,8 @@ func (c *FloodlightActivitiesListCall) Do() (*FloodlightActivitiesListResponse, 
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -27356,6 +26236,27 @@ func (c *FloodlightActivitiesListCall) Do() (*FloodlightActivitiesListResponse, 
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *FloodlightActivitiesListCall) Pages(ctx context.Context, f func(*FloodlightActivitiesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.floodlightActivities.patch":
 
 type FloodlightActivitiesPatchCall struct {
@@ -27376,23 +26277,6 @@ func (r *FloodlightActivitiesService) Patch(profileId int64, id int64, floodligh
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesPatchCall) QuotaUser(quotaUser string) *FloodlightActivitiesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesPatchCall) UserIP(userIP string) *FloodlightActivitiesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -27410,25 +26294,23 @@ func (c *FloodlightActivitiesPatchCall) Context(ctx context.Context) *Floodlight
 }
 
 func (c *FloodlightActivitiesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightactivity)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.patch" call.
@@ -27438,7 +26320,8 @@ func (c *FloodlightActivitiesPatchCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivitiesPatchCall) Do() (*FloodlightActivity, error) {
+func (c *FloodlightActivitiesPatchCall) Do(opts ...googleapi.CallOption) (*FloodlightActivity, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -27462,7 +26345,8 @@ func (c *FloodlightActivitiesPatchCall) Do() (*FloodlightActivity, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -27522,23 +26406,6 @@ func (r *FloodlightActivitiesService) Update(profileId int64, floodlightactivity
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivitiesUpdateCall) QuotaUser(quotaUser string) *FloodlightActivitiesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivitiesUpdateCall) UserIP(userIP string) *FloodlightActivitiesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -27556,25 +26423,23 @@ func (c *FloodlightActivitiesUpdateCall) Context(ctx context.Context) *Floodligh
 }
 
 func (c *FloodlightActivitiesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightactivity)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivities.update" call.
@@ -27584,7 +26449,8 @@ func (c *FloodlightActivitiesUpdateCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivitiesUpdateCall) Do() (*FloodlightActivity, error) {
+func (c *FloodlightActivitiesUpdateCall) Do(opts ...googleapi.CallOption) (*FloodlightActivity, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -27608,7 +26474,8 @@ func (c *FloodlightActivitiesUpdateCall) Do() (*FloodlightActivity, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -27660,23 +26527,6 @@ func (r *FloodlightActivityGroupsService) Delete(profileId int64, id int64) *Flo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivityGroupsDeleteCall) QuotaUser(quotaUser string) *FloodlightActivityGroupsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivityGroupsDeleteCall) UserIP(userIP string) *FloodlightActivityGroupsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -27694,24 +26544,24 @@ func (c *FloodlightActivityGroupsDeleteCall) Context(ctx context.Context) *Flood
 }
 
 func (c *FloodlightActivityGroupsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivityGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivityGroups.delete" call.
-func (c *FloodlightActivityGroupsDeleteCall) Do() error {
+func (c *FloodlightActivityGroupsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -27772,23 +26622,6 @@ func (r *FloodlightActivityGroupsService) Get(profileId int64, id int64) *Floodl
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivityGroupsGetCall) QuotaUser(quotaUser string) *FloodlightActivityGroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivityGroupsGetCall) UserIP(userIP string) *FloodlightActivityGroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -27816,23 +26649,22 @@ func (c *FloodlightActivityGroupsGetCall) Context(ctx context.Context) *Floodlig
 }
 
 func (c *FloodlightActivityGroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivityGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivityGroups.get" call.
@@ -27842,7 +26674,8 @@ func (c *FloodlightActivityGroupsGetCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivityGroupsGetCall) Do() (*FloodlightActivityGroup, error) {
+func (c *FloodlightActivityGroupsGetCall) Do(opts ...googleapi.CallOption) (*FloodlightActivityGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -27866,7 +26699,8 @@ func (c *FloodlightActivityGroupsGetCall) Do() (*FloodlightActivityGroup, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -27923,23 +26757,6 @@ func (r *FloodlightActivityGroupsService) Insert(profileId int64, floodlightacti
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivityGroupsInsertCall) QuotaUser(quotaUser string) *FloodlightActivityGroupsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivityGroupsInsertCall) UserIP(userIP string) *FloodlightActivityGroupsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -27957,25 +26774,23 @@ func (c *FloodlightActivityGroupsInsertCall) Context(ctx context.Context) *Flood
 }
 
 func (c *FloodlightActivityGroupsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightactivitygroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivityGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivityGroups.insert" call.
@@ -27985,7 +26800,8 @@ func (c *FloodlightActivityGroupsInsertCall) doRequest(alt string) (*http.Respon
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivityGroupsInsertCall) Do() (*FloodlightActivityGroup, error) {
+func (c *FloodlightActivityGroupsInsertCall) Do(opts ...googleapi.CallOption) (*FloodlightActivityGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -28009,7 +26825,8 @@ func (c *FloodlightActivityGroupsInsertCall) Do() (*FloodlightActivityGroup, err
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -28105,15 +26922,6 @@ func (c *FloodlightActivityGroupsListCall) PageToken(pageToken string) *Floodlig
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivityGroupsListCall) QuotaUser(quotaUser string) *FloodlightActivityGroupsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "floodlightactivitygroup*2015" will return objects with
@@ -28162,14 +26970,6 @@ func (c *FloodlightActivityGroupsListCall) Type(type_ string) *FloodlightActivit
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivityGroupsListCall) UserIP(userIP string) *FloodlightActivityGroupsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -28197,22 +26997,21 @@ func (c *FloodlightActivityGroupsListCall) Context(ctx context.Context) *Floodli
 }
 
 func (c *FloodlightActivityGroupsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivityGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivityGroups.list" call.
@@ -28223,7 +27022,8 @@ func (c *FloodlightActivityGroupsListCall) doRequest(alt string) (*http.Response
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *FloodlightActivityGroupsListCall) Do() (*FloodlightActivityGroupsListResponse, error) {
+func (c *FloodlightActivityGroupsListCall) Do(opts ...googleapi.CallOption) (*FloodlightActivityGroupsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -28247,7 +27047,8 @@ func (c *FloodlightActivityGroupsListCall) Do() (*FloodlightActivityGroupsListRe
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -28352,6 +27153,27 @@ func (c *FloodlightActivityGroupsListCall) Do() (*FloodlightActivityGroupsListRe
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *FloodlightActivityGroupsListCall) Pages(ctx context.Context, f func(*FloodlightActivityGroupsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.floodlightActivityGroups.patch":
 
 type FloodlightActivityGroupsPatchCall struct {
@@ -28372,23 +27194,6 @@ func (r *FloodlightActivityGroupsService) Patch(profileId int64, id int64, flood
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivityGroupsPatchCall) QuotaUser(quotaUser string) *FloodlightActivityGroupsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivityGroupsPatchCall) UserIP(userIP string) *FloodlightActivityGroupsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -28406,25 +27211,23 @@ func (c *FloodlightActivityGroupsPatchCall) Context(ctx context.Context) *Floodl
 }
 
 func (c *FloodlightActivityGroupsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightactivitygroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivityGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivityGroups.patch" call.
@@ -28434,7 +27237,8 @@ func (c *FloodlightActivityGroupsPatchCall) doRequest(alt string) (*http.Respons
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivityGroupsPatchCall) Do() (*FloodlightActivityGroup, error) {
+func (c *FloodlightActivityGroupsPatchCall) Do(opts ...googleapi.CallOption) (*FloodlightActivityGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -28458,7 +27262,8 @@ func (c *FloodlightActivityGroupsPatchCall) Do() (*FloodlightActivityGroup, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -28518,23 +27323,6 @@ func (r *FloodlightActivityGroupsService) Update(profileId int64, floodlightacti
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightActivityGroupsUpdateCall) QuotaUser(quotaUser string) *FloodlightActivityGroupsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightActivityGroupsUpdateCall) UserIP(userIP string) *FloodlightActivityGroupsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -28552,25 +27340,23 @@ func (c *FloodlightActivityGroupsUpdateCall) Context(ctx context.Context) *Flood
 }
 
 func (c *FloodlightActivityGroupsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightactivitygroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightActivityGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightActivityGroups.update" call.
@@ -28580,7 +27366,8 @@ func (c *FloodlightActivityGroupsUpdateCall) doRequest(alt string) (*http.Respon
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightActivityGroupsUpdateCall) Do() (*FloodlightActivityGroup, error) {
+func (c *FloodlightActivityGroupsUpdateCall) Do(opts ...googleapi.CallOption) (*FloodlightActivityGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -28604,7 +27391,8 @@ func (c *FloodlightActivityGroupsUpdateCall) Do() (*FloodlightActivityGroup, err
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -28657,23 +27445,6 @@ func (r *FloodlightConfigurationsService) Get(profileId int64, id int64) *Floodl
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightConfigurationsGetCall) QuotaUser(quotaUser string) *FloodlightConfigurationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightConfigurationsGetCall) UserIP(userIP string) *FloodlightConfigurationsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -28701,23 +27472,22 @@ func (c *FloodlightConfigurationsGetCall) Context(ctx context.Context) *Floodlig
 }
 
 func (c *FloodlightConfigurationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightConfigurations/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightConfigurations.get" call.
@@ -28727,7 +27497,8 @@ func (c *FloodlightConfigurationsGetCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightConfigurationsGetCall) Do() (*FloodlightConfiguration, error) {
+func (c *FloodlightConfigurationsGetCall) Do(opts ...googleapi.CallOption) (*FloodlightConfiguration, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -28751,7 +27522,8 @@ func (c *FloodlightConfigurationsGetCall) Do() (*FloodlightConfiguration, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -28820,23 +27592,6 @@ func (c *FloodlightConfigurationsListCall) Ids(ids ...int64) *FloodlightConfigur
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightConfigurationsListCall) QuotaUser(quotaUser string) *FloodlightConfigurationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightConfigurationsListCall) UserIP(userIP string) *FloodlightConfigurationsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -28864,22 +27619,21 @@ func (c *FloodlightConfigurationsListCall) Context(ctx context.Context) *Floodli
 }
 
 func (c *FloodlightConfigurationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightConfigurations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightConfigurations.list" call.
@@ -28890,7 +27644,8 @@ func (c *FloodlightConfigurationsListCall) doRequest(alt string) (*http.Response
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *FloodlightConfigurationsListCall) Do() (*FloodlightConfigurationsListResponse, error) {
+func (c *FloodlightConfigurationsListCall) Do(opts ...googleapi.CallOption) (*FloodlightConfigurationsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -28914,7 +27669,8 @@ func (c *FloodlightConfigurationsListCall) Do() (*FloodlightConfigurationsListRe
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -28972,23 +27728,6 @@ func (r *FloodlightConfigurationsService) Patch(profileId int64, id int64, flood
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightConfigurationsPatchCall) QuotaUser(quotaUser string) *FloodlightConfigurationsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightConfigurationsPatchCall) UserIP(userIP string) *FloodlightConfigurationsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -29006,25 +27745,23 @@ func (c *FloodlightConfigurationsPatchCall) Context(ctx context.Context) *Floodl
 }
 
 func (c *FloodlightConfigurationsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightconfiguration)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightConfigurations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightConfigurations.patch" call.
@@ -29034,7 +27771,8 @@ func (c *FloodlightConfigurationsPatchCall) doRequest(alt string) (*http.Respons
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightConfigurationsPatchCall) Do() (*FloodlightConfiguration, error) {
+func (c *FloodlightConfigurationsPatchCall) Do(opts ...googleapi.CallOption) (*FloodlightConfiguration, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -29058,7 +27796,8 @@ func (c *FloodlightConfigurationsPatchCall) Do() (*FloodlightConfiguration, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -29118,23 +27857,6 @@ func (r *FloodlightConfigurationsService) Update(profileId int64, floodlightconf
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *FloodlightConfigurationsUpdateCall) QuotaUser(quotaUser string) *FloodlightConfigurationsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *FloodlightConfigurationsUpdateCall) UserIP(userIP string) *FloodlightConfigurationsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -29152,25 +27874,23 @@ func (c *FloodlightConfigurationsUpdateCall) Context(ctx context.Context) *Flood
 }
 
 func (c *FloodlightConfigurationsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.floodlightconfiguration)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/floodlightConfigurations")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.floodlightConfigurations.update" call.
@@ -29180,7 +27900,8 @@ func (c *FloodlightConfigurationsUpdateCall) doRequest(alt string) (*http.Respon
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *FloodlightConfigurationsUpdateCall) Do() (*FloodlightConfiguration, error) {
+func (c *FloodlightConfigurationsUpdateCall) Do(opts ...googleapi.CallOption) (*FloodlightConfiguration, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -29204,7 +27925,8 @@ func (c *FloodlightConfigurationsUpdateCall) Do() (*FloodlightConfiguration, err
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -29259,23 +27981,6 @@ func (r *InventoryItemsService) Get(profileId int64, projectId int64, id int64) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InventoryItemsGetCall) QuotaUser(quotaUser string) *InventoryItemsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InventoryItemsGetCall) UserIP(userIP string) *InventoryItemsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -29303,24 +28008,23 @@ func (c *InventoryItemsGetCall) Context(ctx context.Context) *InventoryItemsGetC
 }
 
 func (c *InventoryItemsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{projectId}/inventoryItems/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"projectId": strconv.FormatInt(c.projectId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.inventoryItems.get" call.
@@ -29330,7 +28034,8 @@ func (c *InventoryItemsGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *InventoryItemsGetCall) Do() (*InventoryItem, error) {
+func (c *InventoryItemsGetCall) Do(opts ...googleapi.CallOption) (*InventoryItem, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -29354,7 +28059,8 @@ func (c *InventoryItemsGetCall) Do() (*InventoryItem, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -29463,15 +28169,6 @@ func (c *InventoryItemsListCall) PageToken(pageToken string) *InventoryItemsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *InventoryItemsListCall) QuotaUser(quotaUser string) *InventoryItemsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SiteId sets the optional parameter "siteId": Select only inventory
 // items that are associated with these sites.
 func (c *InventoryItemsListCall) SiteId(siteId ...int64) *InventoryItemsListCall {
@@ -29505,14 +28202,6 @@ func (c *InventoryItemsListCall) SortOrder(sortOrder string) *InventoryItemsList
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *InventoryItemsListCall) UserIP(userIP string) *InventoryItemsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -29540,23 +28229,22 @@ func (c *InventoryItemsListCall) Context(ctx context.Context) *InventoryItemsLis
 }
 
 func (c *InventoryItemsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{projectId}/inventoryItems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"projectId": strconv.FormatInt(c.projectId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.inventoryItems.list" call.
@@ -29566,7 +28254,8 @@ func (c *InventoryItemsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *InventoryItemsListCall) Do() (*InventoryItemsListResponse, error) {
+func (c *InventoryItemsListCall) Do(opts ...googleapi.CallOption) (*InventoryItemsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -29590,7 +28279,8 @@ func (c *InventoryItemsListCall) Do() (*InventoryItemsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -29692,6 +28382,27 @@ func (c *InventoryItemsListCall) Do() (*InventoryItemsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *InventoryItemsListCall) Pages(ctx context.Context, f func(*InventoryItemsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.landingPages.delete":
 
 type LandingPagesDeleteCall struct {
@@ -29712,23 +28423,6 @@ func (r *LandingPagesService) Delete(profileId int64, campaignId int64, id int64
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LandingPagesDeleteCall) QuotaUser(quotaUser string) *LandingPagesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LandingPagesDeleteCall) UserIP(userIP string) *LandingPagesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -29746,25 +28440,25 @@ func (c *LandingPagesDeleteCall) Context(ctx context.Context) *LandingPagesDelet
 }
 
 func (c *LandingPagesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/landingPages/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 		"id":         strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.landingPages.delete" call.
-func (c *LandingPagesDeleteCall) Do() error {
+func (c *LandingPagesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -29835,23 +28529,6 @@ func (r *LandingPagesService) Get(profileId int64, campaignId int64, id int64) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LandingPagesGetCall) QuotaUser(quotaUser string) *LandingPagesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LandingPagesGetCall) UserIP(userIP string) *LandingPagesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -29879,24 +28556,23 @@ func (c *LandingPagesGetCall) Context(ctx context.Context) *LandingPagesGetCall 
 }
 
 func (c *LandingPagesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/landingPages/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 		"id":         strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.landingPages.get" call.
@@ -29906,7 +28582,8 @@ func (c *LandingPagesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LandingPagesGetCall) Do() (*LandingPage, error) {
+func (c *LandingPagesGetCall) Do(opts ...googleapi.CallOption) (*LandingPage, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -29930,7 +28607,8 @@ func (c *LandingPagesGetCall) Do() (*LandingPage, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -29997,23 +28675,6 @@ func (r *LandingPagesService) Insert(profileId int64, campaignId int64, landingp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LandingPagesInsertCall) QuotaUser(quotaUser string) *LandingPagesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LandingPagesInsertCall) UserIP(userIP string) *LandingPagesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30031,26 +28692,24 @@ func (c *LandingPagesInsertCall) Context(ctx context.Context) *LandingPagesInser
 }
 
 func (c *LandingPagesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.landingpage)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/landingPages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.landingPages.insert" call.
@@ -30060,7 +28719,8 @@ func (c *LandingPagesInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LandingPagesInsertCall) Do() (*LandingPage, error) {
+func (c *LandingPagesInsertCall) Do(opts ...googleapi.CallOption) (*LandingPage, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30084,7 +28744,8 @@ func (c *LandingPagesInsertCall) Do() (*LandingPage, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -30145,23 +28806,6 @@ func (r *LandingPagesService) List(profileId int64, campaignId int64) *LandingPa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LandingPagesListCall) QuotaUser(quotaUser string) *LandingPagesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LandingPagesListCall) UserIP(userIP string) *LandingPagesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30189,23 +28833,22 @@ func (c *LandingPagesListCall) Context(ctx context.Context) *LandingPagesListCal
 }
 
 func (c *LandingPagesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/landingPages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.landingPages.list" call.
@@ -30215,7 +28858,8 @@ func (c *LandingPagesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *LandingPagesListCall) Do() (*LandingPagesListResponse, error) {
+func (c *LandingPagesListCall) Do(opts ...googleapi.CallOption) (*LandingPagesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30239,7 +28883,8 @@ func (c *LandingPagesListCall) Do() (*LandingPagesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -30300,23 +28945,6 @@ func (r *LandingPagesService) Patch(profileId int64, campaignId int64, id int64,
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LandingPagesPatchCall) QuotaUser(quotaUser string) *LandingPagesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LandingPagesPatchCall) UserIP(userIP string) *LandingPagesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30334,26 +28962,24 @@ func (c *LandingPagesPatchCall) Context(ctx context.Context) *LandingPagesPatchC
 }
 
 func (c *LandingPagesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.landingpage)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/landingPages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.landingPages.patch" call.
@@ -30363,7 +28989,8 @@ func (c *LandingPagesPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LandingPagesPatchCall) Do() (*LandingPage, error) {
+func (c *LandingPagesPatchCall) Do(opts ...googleapi.CallOption) (*LandingPage, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30387,7 +29014,8 @@ func (c *LandingPagesPatchCall) Do() (*LandingPage, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -30457,23 +29085,6 @@ func (r *LandingPagesService) Update(profileId int64, campaignId int64, landingp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *LandingPagesUpdateCall) QuotaUser(quotaUser string) *LandingPagesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *LandingPagesUpdateCall) UserIP(userIP string) *LandingPagesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30491,26 +29102,24 @@ func (c *LandingPagesUpdateCall) Context(ctx context.Context) *LandingPagesUpdat
 }
 
 func (c *LandingPagesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.landingpage)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/campaigns/{campaignId}/landingPages")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":  strconv.FormatInt(c.profileId, 10),
 		"campaignId": strconv.FormatInt(c.campaignId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.landingPages.update" call.
@@ -30520,7 +29129,8 @@ func (c *LandingPagesUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *LandingPagesUpdateCall) Do() (*LandingPage, error) {
+func (c *LandingPagesUpdateCall) Do(opts ...googleapi.CallOption) (*LandingPage, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30544,7 +29154,8 @@ func (c *LandingPagesUpdateCall) Do() (*LandingPage, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -30603,23 +29214,6 @@ func (r *MetrosService) List(profileId int64) *MetrosListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MetrosListCall) QuotaUser(quotaUser string) *MetrosListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MetrosListCall) UserIP(userIP string) *MetrosListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30647,22 +29241,21 @@ func (c *MetrosListCall) Context(ctx context.Context) *MetrosListCall {
 }
 
 func (c *MetrosListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/metros")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.metros.list" call.
@@ -30672,7 +29265,8 @@ func (c *MetrosListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MetrosListCall) Do() (*MetrosListResponse, error) {
+func (c *MetrosListCall) Do(opts ...googleapi.CallOption) (*MetrosListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30696,7 +29290,8 @@ func (c *MetrosListCall) Do() (*MetrosListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -30746,23 +29341,6 @@ func (r *MobileCarriersService) Get(profileId int64, id int64) *MobileCarriersGe
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MobileCarriersGetCall) QuotaUser(quotaUser string) *MobileCarriersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MobileCarriersGetCall) UserIP(userIP string) *MobileCarriersGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30790,23 +29368,22 @@ func (c *MobileCarriersGetCall) Context(ctx context.Context) *MobileCarriersGetC
 }
 
 func (c *MobileCarriersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/mobileCarriers/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.mobileCarriers.get" call.
@@ -30816,7 +29393,8 @@ func (c *MobileCarriersGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MobileCarriersGetCall) Do() (*MobileCarrier, error) {
+func (c *MobileCarriersGetCall) Do(opts ...googleapi.CallOption) (*MobileCarrier, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30840,7 +29418,8 @@ func (c *MobileCarriersGetCall) Do() (*MobileCarrier, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -30896,23 +29475,6 @@ func (r *MobileCarriersService) List(profileId int64) *MobileCarriersListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *MobileCarriersListCall) QuotaUser(quotaUser string) *MobileCarriersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *MobileCarriersListCall) UserIP(userIP string) *MobileCarriersListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -30940,22 +29502,21 @@ func (c *MobileCarriersListCall) Context(ctx context.Context) *MobileCarriersLis
 }
 
 func (c *MobileCarriersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/mobileCarriers")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.mobileCarriers.list" call.
@@ -30965,7 +29526,8 @@ func (c *MobileCarriersListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *MobileCarriersListCall) Do() (*MobileCarriersListResponse, error) {
+func (c *MobileCarriersListCall) Do(opts ...googleapi.CallOption) (*MobileCarriersListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -30989,7 +29551,8 @@ func (c *MobileCarriersListCall) Do() (*MobileCarriersListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -31039,23 +29602,6 @@ func (r *OperatingSystemVersionsService) Get(profileId int64, id int64) *Operati
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OperatingSystemVersionsGetCall) QuotaUser(quotaUser string) *OperatingSystemVersionsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OperatingSystemVersionsGetCall) UserIP(userIP string) *OperatingSystemVersionsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -31083,23 +29629,22 @@ func (c *OperatingSystemVersionsGetCall) Context(ctx context.Context) *Operating
 }
 
 func (c *OperatingSystemVersionsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/operatingSystemVersions/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.operatingSystemVersions.get" call.
@@ -31109,7 +29654,8 @@ func (c *OperatingSystemVersionsGetCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OperatingSystemVersionsGetCall) Do() (*OperatingSystemVersion, error) {
+func (c *OperatingSystemVersionsGetCall) Do(opts ...googleapi.CallOption) (*OperatingSystemVersion, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -31133,7 +29679,8 @@ func (c *OperatingSystemVersionsGetCall) Do() (*OperatingSystemVersion, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -31189,23 +29736,6 @@ func (r *OperatingSystemVersionsService) List(profileId int64) *OperatingSystemV
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OperatingSystemVersionsListCall) QuotaUser(quotaUser string) *OperatingSystemVersionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OperatingSystemVersionsListCall) UserIP(userIP string) *OperatingSystemVersionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -31233,22 +29763,21 @@ func (c *OperatingSystemVersionsListCall) Context(ctx context.Context) *Operatin
 }
 
 func (c *OperatingSystemVersionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/operatingSystemVersions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.operatingSystemVersions.list" call.
@@ -31259,7 +29788,8 @@ func (c *OperatingSystemVersionsListCall) doRequest(alt string) (*http.Response,
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *OperatingSystemVersionsListCall) Do() (*OperatingSystemVersionsListResponse, error) {
+func (c *OperatingSystemVersionsListCall) Do(opts ...googleapi.CallOption) (*OperatingSystemVersionsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -31283,7 +29813,8 @@ func (c *OperatingSystemVersionsListCall) Do() (*OperatingSystemVersionsListResp
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -31333,23 +29864,6 @@ func (r *OperatingSystemsService) Get(profileId int64, dartId int64) *OperatingS
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OperatingSystemsGetCall) QuotaUser(quotaUser string) *OperatingSystemsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OperatingSystemsGetCall) UserIP(userIP string) *OperatingSystemsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -31377,23 +29891,22 @@ func (c *OperatingSystemsGetCall) Context(ctx context.Context) *OperatingSystems
 }
 
 func (c *OperatingSystemsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/operatingSystems/{dartId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"dartId":    strconv.FormatInt(c.dartId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.operatingSystems.get" call.
@@ -31403,7 +29916,8 @@ func (c *OperatingSystemsGetCall) doRequest(alt string) (*http.Response, error) 
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OperatingSystemsGetCall) Do() (*OperatingSystem, error) {
+func (c *OperatingSystemsGetCall) Do(opts ...googleapi.CallOption) (*OperatingSystem, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -31427,7 +29941,8 @@ func (c *OperatingSystemsGetCall) Do() (*OperatingSystem, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -31483,23 +29998,6 @@ func (r *OperatingSystemsService) List(profileId int64) *OperatingSystemsListCal
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OperatingSystemsListCall) QuotaUser(quotaUser string) *OperatingSystemsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OperatingSystemsListCall) UserIP(userIP string) *OperatingSystemsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -31527,22 +30025,21 @@ func (c *OperatingSystemsListCall) Context(ctx context.Context) *OperatingSystem
 }
 
 func (c *OperatingSystemsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/operatingSystems")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.operatingSystems.list" call.
@@ -31552,7 +30049,8 @@ func (c *OperatingSystemsListCall) doRequest(alt string) (*http.Response, error)
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OperatingSystemsListCall) Do() (*OperatingSystemsListResponse, error) {
+func (c *OperatingSystemsListCall) Do(opts ...googleapi.CallOption) (*OperatingSystemsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -31576,7 +30074,8 @@ func (c *OperatingSystemsListCall) Do() (*OperatingSystemsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -31628,23 +30127,6 @@ func (r *OrderDocumentsService) Get(profileId int64, projectId int64, id int64) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OrderDocumentsGetCall) QuotaUser(quotaUser string) *OrderDocumentsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OrderDocumentsGetCall) UserIP(userIP string) *OrderDocumentsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -31672,24 +30154,23 @@ func (c *OrderDocumentsGetCall) Context(ctx context.Context) *OrderDocumentsGetC
 }
 
 func (c *OrderDocumentsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{projectId}/orderDocuments/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"projectId": strconv.FormatInt(c.projectId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.orderDocuments.get" call.
@@ -31699,7 +30180,8 @@ func (c *OrderDocumentsGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OrderDocumentsGetCall) Do() (*OrderDocument, error) {
+func (c *OrderDocumentsGetCall) Do(opts ...googleapi.CallOption) (*OrderDocument, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -31723,7 +30205,8 @@ func (c *OrderDocumentsGetCall) Do() (*OrderDocument, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -31832,15 +30315,6 @@ func (c *OrderDocumentsListCall) PageToken(pageToken string) *OrderDocumentsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OrderDocumentsListCall) QuotaUser(quotaUser string) *OrderDocumentsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for order documents by name or ID. Wildcards (*) are
 // allowed. For example, "orderdocument*2015" will return order
@@ -31888,14 +30362,6 @@ func (c *OrderDocumentsListCall) SortOrder(sortOrder string) *OrderDocumentsList
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OrderDocumentsListCall) UserIP(userIP string) *OrderDocumentsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -31923,23 +30389,22 @@ func (c *OrderDocumentsListCall) Context(ctx context.Context) *OrderDocumentsLis
 }
 
 func (c *OrderDocumentsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{projectId}/orderDocuments")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"projectId": strconv.FormatInt(c.projectId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.orderDocuments.list" call.
@@ -31949,7 +30414,8 @@ func (c *OrderDocumentsListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OrderDocumentsListCall) Do() (*OrderDocumentsListResponse, error) {
+func (c *OrderDocumentsListCall) Do(opts ...googleapi.CallOption) (*OrderDocumentsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -31973,7 +30439,8 @@ func (c *OrderDocumentsListCall) Do() (*OrderDocumentsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -32080,6 +30547,27 @@ func (c *OrderDocumentsListCall) Do() (*OrderDocumentsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *OrderDocumentsListCall) Pages(ctx context.Context, f func(*OrderDocumentsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.orders.get":
 
 type OrdersGetCall struct {
@@ -32098,23 +30586,6 @@ func (r *OrdersService) Get(profileId int64, projectId int64, id int64) *OrdersG
 	c.profileId = profileId
 	c.projectId = projectId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OrdersGetCall) QuotaUser(quotaUser string) *OrdersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OrdersGetCall) UserIP(userIP string) *OrdersGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -32145,24 +30616,23 @@ func (c *OrdersGetCall) Context(ctx context.Context) *OrdersGetCall {
 }
 
 func (c *OrdersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{projectId}/orders/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"projectId": strconv.FormatInt(c.projectId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.orders.get" call.
@@ -32172,7 +30642,8 @@ func (c *OrdersGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OrdersGetCall) Do() (*Order, error) {
+func (c *OrdersGetCall) Do(opts ...googleapi.CallOption) (*Order, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -32196,7 +30667,8 @@ func (c *OrdersGetCall) Do() (*Order, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -32287,15 +30759,6 @@ func (c *OrdersListCall) PageToken(pageToken string) *OrdersListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *OrdersListCall) QuotaUser(quotaUser string) *OrdersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for orders by name or ID. Wildcards (*) are allowed. For
 // example, "order*2015" will return orders with names like "order June
@@ -32341,14 +30804,6 @@ func (c *OrdersListCall) SortOrder(sortOrder string) *OrdersListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *OrdersListCall) UserIP(userIP string) *OrdersListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -32376,23 +30831,22 @@ func (c *OrdersListCall) Context(ctx context.Context) *OrdersListCall {
 }
 
 func (c *OrdersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{projectId}/orders")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"projectId": strconv.FormatInt(c.projectId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.orders.list" call.
@@ -32402,7 +30856,8 @@ func (c *OrdersListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OrdersListCall) Do() (*OrdersListResponse, error) {
+func (c *OrdersListCall) Do(opts ...googleapi.CallOption) (*OrdersListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -32426,7 +30881,8 @@ func (c *OrdersListCall) Do() (*OrdersListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -32521,6 +30977,27 @@ func (c *OrdersListCall) Do() (*OrdersListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *OrdersListCall) Pages(ctx context.Context, f func(*OrdersListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.placementGroups.get":
 
 type PlacementGroupsGetCall struct {
@@ -32537,23 +31014,6 @@ func (r *PlacementGroupsService) Get(profileId int64, id int64) *PlacementGroups
 	c := &PlacementGroupsGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementGroupsGetCall) QuotaUser(quotaUser string) *PlacementGroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementGroupsGetCall) UserIP(userIP string) *PlacementGroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -32584,23 +31044,22 @@ func (c *PlacementGroupsGetCall) Context(ctx context.Context) *PlacementGroupsGe
 }
 
 func (c *PlacementGroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementGroups.get" call.
@@ -32610,7 +31069,8 @@ func (c *PlacementGroupsGetCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementGroupsGetCall) Do() (*PlacementGroup, error) {
+func (c *PlacementGroupsGetCall) Do(opts ...googleapi.CallOption) (*PlacementGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -32634,7 +31094,8 @@ func (c *PlacementGroupsGetCall) Do() (*PlacementGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -32691,23 +31152,6 @@ func (r *PlacementGroupsService) Insert(profileId int64, placementgroup *Placeme
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementGroupsInsertCall) QuotaUser(quotaUser string) *PlacementGroupsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementGroupsInsertCall) UserIP(userIP string) *PlacementGroupsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -32725,25 +31169,23 @@ func (c *PlacementGroupsInsertCall) Context(ctx context.Context) *PlacementGroup
 }
 
 func (c *PlacementGroupsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placementgroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementGroups.insert" call.
@@ -32753,7 +31195,8 @@ func (c *PlacementGroupsInsertCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementGroupsInsertCall) Do() (*PlacementGroup, error) {
+func (c *PlacementGroupsInsertCall) Do(opts ...googleapi.CallOption) (*PlacementGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -32777,7 +31220,8 @@ func (c *PlacementGroupsInsertCall) Do() (*PlacementGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -32981,15 +31425,6 @@ func (c *PlacementGroupsListCall) PricingTypes(pricingTypes ...string) *Placemen
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementGroupsListCall) QuotaUser(quotaUser string) *PlacementGroupsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for placement groups by name or ID. Wildcards (*) are
 // allowed. For example, "placement*2015" will return placement groups
@@ -33037,14 +31472,6 @@ func (c *PlacementGroupsListCall) SortOrder(sortOrder string) *PlacementGroupsLi
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementGroupsListCall) UserIP(userIP string) *PlacementGroupsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -33072,22 +31499,21 @@ func (c *PlacementGroupsListCall) Context(ctx context.Context) *PlacementGroupsL
 }
 
 func (c *PlacementGroupsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementGroups.list" call.
@@ -33097,7 +31523,8 @@ func (c *PlacementGroupsListCall) doRequest(alt string) (*http.Response, error) 
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementGroupsListCall) Do() (*PlacementGroupsListResponse, error) {
+func (c *PlacementGroupsListCall) Do(opts ...googleapi.CallOption) (*PlacementGroupsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -33121,7 +31548,8 @@ func (c *PlacementGroupsListCall) Do() (*PlacementGroupsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -33301,6 +31729,27 @@ func (c *PlacementGroupsListCall) Do() (*PlacementGroupsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *PlacementGroupsListCall) Pages(ctx context.Context, f func(*PlacementGroupsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.placementGroups.patch":
 
 type PlacementGroupsPatchCall struct {
@@ -33321,23 +31770,6 @@ func (r *PlacementGroupsService) Patch(profileId int64, id int64, placementgroup
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementGroupsPatchCall) QuotaUser(quotaUser string) *PlacementGroupsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementGroupsPatchCall) UserIP(userIP string) *PlacementGroupsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -33355,25 +31787,23 @@ func (c *PlacementGroupsPatchCall) Context(ctx context.Context) *PlacementGroups
 }
 
 func (c *PlacementGroupsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placementgroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementGroups.patch" call.
@@ -33383,7 +31813,8 @@ func (c *PlacementGroupsPatchCall) doRequest(alt string) (*http.Response, error)
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementGroupsPatchCall) Do() (*PlacementGroup, error) {
+func (c *PlacementGroupsPatchCall) Do(opts ...googleapi.CallOption) (*PlacementGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -33407,7 +31838,8 @@ func (c *PlacementGroupsPatchCall) Do() (*PlacementGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -33467,23 +31899,6 @@ func (r *PlacementGroupsService) Update(profileId int64, placementgroup *Placeme
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementGroupsUpdateCall) QuotaUser(quotaUser string) *PlacementGroupsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementGroupsUpdateCall) UserIP(userIP string) *PlacementGroupsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -33501,25 +31916,23 @@ func (c *PlacementGroupsUpdateCall) Context(ctx context.Context) *PlacementGroup
 }
 
 func (c *PlacementGroupsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placementgroup)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementGroups.update" call.
@@ -33529,7 +31942,8 @@ func (c *PlacementGroupsUpdateCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementGroupsUpdateCall) Do() (*PlacementGroup, error) {
+func (c *PlacementGroupsUpdateCall) Do(opts ...googleapi.CallOption) (*PlacementGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -33553,7 +31967,8 @@ func (c *PlacementGroupsUpdateCall) Do() (*PlacementGroup, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -33605,23 +32020,6 @@ func (r *PlacementStrategiesService) Delete(profileId int64, id int64) *Placemen
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementStrategiesDeleteCall) QuotaUser(quotaUser string) *PlacementStrategiesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementStrategiesDeleteCall) UserIP(userIP string) *PlacementStrategiesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -33639,24 +32037,24 @@ func (c *PlacementStrategiesDeleteCall) Context(ctx context.Context) *PlacementS
 }
 
 func (c *PlacementStrategiesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementStrategies/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementStrategies.delete" call.
-func (c *PlacementStrategiesDeleteCall) Do() error {
+func (c *PlacementStrategiesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -33717,23 +32115,6 @@ func (r *PlacementStrategiesService) Get(profileId int64, id int64) *PlacementSt
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementStrategiesGetCall) QuotaUser(quotaUser string) *PlacementStrategiesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementStrategiesGetCall) UserIP(userIP string) *PlacementStrategiesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -33761,23 +32142,22 @@ func (c *PlacementStrategiesGetCall) Context(ctx context.Context) *PlacementStra
 }
 
 func (c *PlacementStrategiesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementStrategies/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementStrategies.get" call.
@@ -33787,7 +32167,8 @@ func (c *PlacementStrategiesGetCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementStrategiesGetCall) Do() (*PlacementStrategy, error) {
+func (c *PlacementStrategiesGetCall) Do(opts ...googleapi.CallOption) (*PlacementStrategy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -33811,7 +32192,8 @@ func (c *PlacementStrategiesGetCall) Do() (*PlacementStrategy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -33868,23 +32250,6 @@ func (r *PlacementStrategiesService) Insert(profileId int64, placementstrategy *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementStrategiesInsertCall) QuotaUser(quotaUser string) *PlacementStrategiesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementStrategiesInsertCall) UserIP(userIP string) *PlacementStrategiesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -33902,25 +32267,23 @@ func (c *PlacementStrategiesInsertCall) Context(ctx context.Context) *PlacementS
 }
 
 func (c *PlacementStrategiesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placementstrategy)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementStrategies")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementStrategies.insert" call.
@@ -33930,7 +32293,8 @@ func (c *PlacementStrategiesInsertCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementStrategiesInsertCall) Do() (*PlacementStrategy, error) {
+func (c *PlacementStrategiesInsertCall) Do(opts ...googleapi.CallOption) (*PlacementStrategy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -33954,7 +32318,8 @@ func (c *PlacementStrategiesInsertCall) Do() (*PlacementStrategy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -34030,15 +32395,6 @@ func (c *PlacementStrategiesListCall) PageToken(pageToken string) *PlacementStra
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementStrategiesListCall) QuotaUser(quotaUser string) *PlacementStrategiesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "placementstrategy*2015" will return objects with names like
@@ -34075,14 +32431,6 @@ func (c *PlacementStrategiesListCall) SortOrder(sortOrder string) *PlacementStra
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementStrategiesListCall) UserIP(userIP string) *PlacementStrategiesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -34110,22 +32458,21 @@ func (c *PlacementStrategiesListCall) Context(ctx context.Context) *PlacementStr
 }
 
 func (c *PlacementStrategiesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementStrategies")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementStrategies.list" call.
@@ -34135,7 +32482,8 @@ func (c *PlacementStrategiesListCall) doRequest(alt string) (*http.Response, err
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementStrategiesListCall) Do() (*PlacementStrategiesListResponse, error) {
+func (c *PlacementStrategiesListCall) Do(opts ...googleapi.CallOption) (*PlacementStrategiesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -34159,7 +32507,8 @@ func (c *PlacementStrategiesListCall) Do() (*PlacementStrategiesListResponse, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -34239,6 +32588,27 @@ func (c *PlacementStrategiesListCall) Do() (*PlacementStrategiesListResponse, er
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *PlacementStrategiesListCall) Pages(ctx context.Context, f func(*PlacementStrategiesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.placementStrategies.patch":
 
 type PlacementStrategiesPatchCall struct {
@@ -34259,23 +32629,6 @@ func (r *PlacementStrategiesService) Patch(profileId int64, id int64, placements
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementStrategiesPatchCall) QuotaUser(quotaUser string) *PlacementStrategiesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementStrategiesPatchCall) UserIP(userIP string) *PlacementStrategiesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -34293,25 +32646,23 @@ func (c *PlacementStrategiesPatchCall) Context(ctx context.Context) *PlacementSt
 }
 
 func (c *PlacementStrategiesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placementstrategy)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementStrategies")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementStrategies.patch" call.
@@ -34321,7 +32672,8 @@ func (c *PlacementStrategiesPatchCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementStrategiesPatchCall) Do() (*PlacementStrategy, error) {
+func (c *PlacementStrategiesPatchCall) Do(opts ...googleapi.CallOption) (*PlacementStrategy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -34345,7 +32697,8 @@ func (c *PlacementStrategiesPatchCall) Do() (*PlacementStrategy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -34405,23 +32758,6 @@ func (r *PlacementStrategiesService) Update(profileId int64, placementstrategy *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementStrategiesUpdateCall) QuotaUser(quotaUser string) *PlacementStrategiesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementStrategiesUpdateCall) UserIP(userIP string) *PlacementStrategiesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -34439,25 +32775,23 @@ func (c *PlacementStrategiesUpdateCall) Context(ctx context.Context) *PlacementS
 }
 
 func (c *PlacementStrategiesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placementstrategy)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placementStrategies")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placementStrategies.update" call.
@@ -34467,7 +32801,8 @@ func (c *PlacementStrategiesUpdateCall) doRequest(alt string) (*http.Response, e
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementStrategiesUpdateCall) Do() (*PlacementStrategy, error) {
+func (c *PlacementStrategiesUpdateCall) Do(opts ...googleapi.CallOption) (*PlacementStrategy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -34491,7 +32826,8 @@ func (c *PlacementStrategiesUpdateCall) Do() (*PlacementStrategy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -34559,15 +32895,6 @@ func (c *PlacementsGeneratetagsCall) PlacementIds(placementIds ...int64) *Placem
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementsGeneratetagsCall) QuotaUser(quotaUser string) *PlacementsGeneratetagsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // TagFormats sets the optional parameter "tagFormats": Tag formats to
 // generate for these placements.
 //
@@ -34595,14 +32922,6 @@ func (c *PlacementsGeneratetagsCall) TagFormats(tagFormats ...string) *Placement
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementsGeneratetagsCall) UserIP(userIP string) *PlacementsGeneratetagsCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -34620,19 +32939,18 @@ func (c *PlacementsGeneratetagsCall) Context(ctx context.Context) *PlacementsGen
 }
 
 func (c *PlacementsGeneratetagsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placements/generatetags")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placements.generatetags" call.
@@ -34642,7 +32960,8 @@ func (c *PlacementsGeneratetagsCall) doRequest(alt string) (*http.Response, erro
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementsGeneratetagsCall) Do() (*PlacementsGenerateTagsResponse, error) {
+func (c *PlacementsGeneratetagsCall) Do(opts ...googleapi.CallOption) (*PlacementsGenerateTagsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -34666,7 +32985,8 @@ func (c *PlacementsGeneratetagsCall) Do() (*PlacementsGenerateTagsResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -34775,23 +33095,6 @@ func (r *PlacementsService) Get(profileId int64, id int64) *PlacementsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementsGetCall) QuotaUser(quotaUser string) *PlacementsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementsGetCall) UserIP(userIP string) *PlacementsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -34819,23 +33122,22 @@ func (c *PlacementsGetCall) Context(ctx context.Context) *PlacementsGetCall {
 }
 
 func (c *PlacementsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placements/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placements.get" call.
@@ -34845,7 +33147,8 @@ func (c *PlacementsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlacementsGetCall) Do() (*Placement, error) {
+func (c *PlacementsGetCall) Do(opts ...googleapi.CallOption) (*Placement, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -34869,7 +33172,8 @@ func (c *PlacementsGetCall) Do() (*Placement, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -34926,23 +33230,6 @@ func (r *PlacementsService) Insert(profileId int64, placement *Placement) *Place
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementsInsertCall) QuotaUser(quotaUser string) *PlacementsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementsInsertCall) UserIP(userIP string) *PlacementsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -34960,25 +33247,23 @@ func (c *PlacementsInsertCall) Context(ctx context.Context) *PlacementsInsertCal
 }
 
 func (c *PlacementsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placement)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placements.insert" call.
@@ -34988,7 +33273,8 @@ func (c *PlacementsInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlacementsInsertCall) Do() (*Placement, error) {
+func (c *PlacementsInsertCall) Do(opts ...googleapi.CallOption) (*Placement, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -35012,7 +33298,8 @@ func (c *PlacementsInsertCall) Do() (*Placement, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -35097,7 +33384,7 @@ func (c *PlacementsListCall) CampaignIds(campaignIds ...int64) *PlacementsListCa
 // only placements that are associated with these compatibilities. WEB
 // and WEB_INTERSTITIAL refer to rendering either on desktop or on
 // mobile devices for regular or interstitial ads respectively. APP and
-// APP_INTERSTITIAL are for rendering in mobile apps.IN_STREAM_VIDEO
+// APP_INTERSTITIAL are for rendering in mobile apps. IN_STREAM_VIDEO
 // refers to rendering in in-stream video ads developed with the VAST
 // standard.
 //
@@ -35241,15 +33528,6 @@ func (c *PlacementsListCall) PricingTypes(pricingTypes ...string) *PlacementsLis
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementsListCall) QuotaUser(quotaUser string) *PlacementsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for placements by name or ID. Wildcards (*) are allowed.
 // For example, "placement*2015" will return placements with names like
@@ -35307,14 +33585,6 @@ func (c *PlacementsListCall) SortOrder(sortOrder string) *PlacementsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementsListCall) UserIP(userIP string) *PlacementsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -35342,22 +33612,21 @@ func (c *PlacementsListCall) Context(ctx context.Context) *PlacementsListCall {
 }
 
 func (c *PlacementsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placements.list" call.
@@ -35367,7 +33636,8 @@ func (c *PlacementsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlacementsListCall) Do() (*PlacementsListResponse, error) {
+func (c *PlacementsListCall) Do(opts ...googleapi.CallOption) (*PlacementsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -35391,7 +33661,8 @@ func (c *PlacementsListCall) Do() (*PlacementsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -35423,7 +33694,7 @@ func (c *PlacementsListCall) Do() (*PlacementsListResponse, error) {
 	//       "type": "string"
 	//     },
 	//     "compatibilities": {
-	//       "description": "Select only placements that are associated with these compatibilities. WEB and WEB_INTERSTITIAL refer to rendering either on desktop or on mobile devices for regular or interstitial ads respectively. APP and APP_INTERSTITIAL are for rendering in mobile apps.IN_STREAM_VIDEO refers to rendering in in-stream video ads developed with the VAST standard.",
+	//       "description": "Select only placements that are associated with these compatibilities. WEB and WEB_INTERSTITIAL refer to rendering either on desktop or on mobile devices for regular or interstitial ads respectively. APP and APP_INTERSTITIAL are for rendering in mobile apps. IN_STREAM_VIDEO refers to rendering in in-stream video ads developed with the VAST standard.",
 	//       "enum": [
 	//         "APP",
 	//         "APP_INTERSTITIAL",
@@ -35605,6 +33876,27 @@ func (c *PlacementsListCall) Do() (*PlacementsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *PlacementsListCall) Pages(ctx context.Context, f func(*PlacementsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.placements.patch":
 
 type PlacementsPatchCall struct {
@@ -35625,23 +33917,6 @@ func (r *PlacementsService) Patch(profileId int64, id int64, placement *Placemen
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementsPatchCall) QuotaUser(quotaUser string) *PlacementsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementsPatchCall) UserIP(userIP string) *PlacementsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -35659,25 +33934,23 @@ func (c *PlacementsPatchCall) Context(ctx context.Context) *PlacementsPatchCall 
 }
 
 func (c *PlacementsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placement)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placements.patch" call.
@@ -35687,7 +33960,8 @@ func (c *PlacementsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlacementsPatchCall) Do() (*Placement, error) {
+func (c *PlacementsPatchCall) Do(opts ...googleapi.CallOption) (*Placement, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -35711,7 +33985,8 @@ func (c *PlacementsPatchCall) Do() (*Placement, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -35771,23 +34046,6 @@ func (r *PlacementsService) Update(profileId int64, placement *Placement) *Place
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlacementsUpdateCall) QuotaUser(quotaUser string) *PlacementsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlacementsUpdateCall) UserIP(userIP string) *PlacementsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -35805,25 +34063,23 @@ func (c *PlacementsUpdateCall) Context(ctx context.Context) *PlacementsUpdateCal
 }
 
 func (c *PlacementsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.placement)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/placements")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.placements.update" call.
@@ -35833,7 +34089,8 @@ func (c *PlacementsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlacementsUpdateCall) Do() (*Placement, error) {
+func (c *PlacementsUpdateCall) Do(opts ...googleapi.CallOption) (*Placement, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -35857,7 +34114,8 @@ func (c *PlacementsUpdateCall) Do() (*Placement, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -35910,23 +34168,6 @@ func (r *PlatformTypesService) Get(profileId int64, id int64) *PlatformTypesGetC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlatformTypesGetCall) QuotaUser(quotaUser string) *PlatformTypesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlatformTypesGetCall) UserIP(userIP string) *PlatformTypesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -35954,23 +34195,22 @@ func (c *PlatformTypesGetCall) Context(ctx context.Context) *PlatformTypesGetCal
 }
 
 func (c *PlatformTypesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/platformTypes/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.platformTypes.get" call.
@@ -35980,7 +34220,8 @@ func (c *PlatformTypesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PlatformTypesGetCall) Do() (*PlatformType, error) {
+func (c *PlatformTypesGetCall) Do(opts ...googleapi.CallOption) (*PlatformType, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -36004,7 +34245,8 @@ func (c *PlatformTypesGetCall) Do() (*PlatformType, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -36060,23 +34302,6 @@ func (r *PlatformTypesService) List(profileId int64) *PlatformTypesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PlatformTypesListCall) QuotaUser(quotaUser string) *PlatformTypesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PlatformTypesListCall) UserIP(userIP string) *PlatformTypesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -36104,22 +34329,21 @@ func (c *PlatformTypesListCall) Context(ctx context.Context) *PlatformTypesListC
 }
 
 func (c *PlatformTypesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/platformTypes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.platformTypes.list" call.
@@ -36129,7 +34353,8 @@ func (c *PlatformTypesListCall) doRequest(alt string) (*http.Response, error) {
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PlatformTypesListCall) Do() (*PlatformTypesListResponse, error) {
+func (c *PlatformTypesListCall) Do(opts ...googleapi.CallOption) (*PlatformTypesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -36153,7 +34378,8 @@ func (c *PlatformTypesListCall) Do() (*PlatformTypesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -36203,23 +34429,6 @@ func (r *PostalCodesService) Get(profileId int64, code string) *PostalCodesGetCa
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PostalCodesGetCall) QuotaUser(quotaUser string) *PostalCodesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PostalCodesGetCall) UserIP(userIP string) *PostalCodesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -36247,23 +34456,22 @@ func (c *PostalCodesGetCall) Context(ctx context.Context) *PostalCodesGetCall {
 }
 
 func (c *PostalCodesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/postalCodes/{code}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"code":      c.code,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.postalCodes.get" call.
@@ -36273,7 +34481,8 @@ func (c *PostalCodesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *PostalCodesGetCall) Do() (*PostalCode, error) {
+func (c *PostalCodesGetCall) Do(opts ...googleapi.CallOption) (*PostalCode, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -36297,7 +34506,8 @@ func (c *PostalCodesGetCall) Do() (*PostalCode, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -36352,23 +34562,6 @@ func (r *PostalCodesService) List(profileId int64) *PostalCodesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *PostalCodesListCall) QuotaUser(quotaUser string) *PostalCodesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *PostalCodesListCall) UserIP(userIP string) *PostalCodesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -36396,22 +34589,21 @@ func (c *PostalCodesListCall) Context(ctx context.Context) *PostalCodesListCall 
 }
 
 func (c *PostalCodesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/postalCodes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.postalCodes.list" call.
@@ -36421,7 +34613,8 @@ func (c *PostalCodesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *PostalCodesListCall) Do() (*PostalCodesListResponse, error) {
+func (c *PostalCodesListCall) Do(opts ...googleapi.CallOption) (*PostalCodesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -36445,7 +34638,8 @@ func (c *PostalCodesListCall) Do() (*PostalCodesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -36495,23 +34689,6 @@ func (r *ProjectsService) Get(profileId int64, id int64) *ProjectsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ProjectsGetCall) QuotaUser(quotaUser string) *ProjectsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ProjectsGetCall) UserIP(userIP string) *ProjectsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -36539,23 +34716,22 @@ func (c *ProjectsGetCall) Context(ctx context.Context) *ProjectsGetCall {
 }
 
 func (c *ProjectsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.projects.get" call.
@@ -36565,7 +34741,8 @@ func (c *ProjectsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsGetCall) Do() (*Project, error) {
+func (c *ProjectsGetCall) Do(opts ...googleapi.CallOption) (*Project, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -36589,7 +34766,8 @@ func (c *ProjectsGetCall) Do() (*Project, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -36681,15 +34859,6 @@ func (c *ProjectsListCall) PageToken(pageToken string) *ProjectsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ProjectsListCall) QuotaUser(quotaUser string) *ProjectsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for projects by name or ID. Wildcards (*) are allowed. For
 // example, "project*2015" will return projects with names like "project
@@ -36725,14 +34894,6 @@ func (c *ProjectsListCall) SortOrder(sortOrder string) *ProjectsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ProjectsListCall) UserIP(userIP string) *ProjectsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -36760,22 +34921,21 @@ func (c *ProjectsListCall) Context(ctx context.Context) *ProjectsListCall {
 }
 
 func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/projects")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.projects.list" call.
@@ -36785,7 +34945,8 @@ func (c *ProjectsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsListCall) Do() (*ProjectsListResponse, error) {
+func (c *ProjectsListCall) Do(opts ...googleapi.CallOption) (*ProjectsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -36809,7 +34970,8 @@ func (c *ProjectsListCall) Do() (*ProjectsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -36896,6 +35058,27 @@ func (c *ProjectsListCall) Do() (*ProjectsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsListCall) Pages(ctx context.Context, f func(*ProjectsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.regions.list":
 
 type RegionsListCall struct {
@@ -36910,23 +35093,6 @@ type RegionsListCall struct {
 func (r *RegionsService) List(profileId int64) *RegionsListCall {
 	c := &RegionsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RegionsListCall) QuotaUser(quotaUser string) *RegionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RegionsListCall) UserIP(userIP string) *RegionsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -36957,22 +35123,21 @@ func (c *RegionsListCall) Context(ctx context.Context) *RegionsListCall {
 }
 
 func (c *RegionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/regions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.regions.list" call.
@@ -36982,7 +35147,8 @@ func (c *RegionsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RegionsListCall) Do() (*RegionsListResponse, error) {
+func (c *RegionsListCall) Do(opts ...googleapi.CallOption) (*RegionsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37006,7 +35172,8 @@ func (c *RegionsListCall) Do() (*RegionsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -37056,23 +35223,6 @@ func (r *RemarketingListSharesService) Get(profileId int64, remarketingListId in
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListSharesGetCall) QuotaUser(quotaUser string) *RemarketingListSharesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListSharesGetCall) UserIP(userIP string) *RemarketingListSharesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -37100,23 +35250,22 @@ func (c *RemarketingListSharesGetCall) Context(ctx context.Context) *Remarketing
 }
 
 func (c *RemarketingListSharesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingListShares/{remarketingListId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId":         strconv.FormatInt(c.profileId, 10),
 		"remarketingListId": strconv.FormatInt(c.remarketingListId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingListShares.get" call.
@@ -37126,7 +35275,8 @@ func (c *RemarketingListSharesGetCall) doRequest(alt string) (*http.Response, er
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListSharesGetCall) Do() (*RemarketingListShare, error) {
+func (c *RemarketingListSharesGetCall) Do(opts ...googleapi.CallOption) (*RemarketingListShare, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37150,7 +35300,8 @@ func (c *RemarketingListSharesGetCall) Do() (*RemarketingListShare, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -37209,23 +35360,6 @@ func (r *RemarketingListSharesService) Patch(profileId int64, remarketingListId 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListSharesPatchCall) QuotaUser(quotaUser string) *RemarketingListSharesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListSharesPatchCall) UserIP(userIP string) *RemarketingListSharesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -37243,25 +35377,23 @@ func (c *RemarketingListSharesPatchCall) Context(ctx context.Context) *Remarketi
 }
 
 func (c *RemarketingListSharesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.remarketinglistshare)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingListShares")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingListShares.patch" call.
@@ -37271,7 +35403,8 @@ func (c *RemarketingListSharesPatchCall) doRequest(alt string) (*http.Response, 
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListSharesPatchCall) Do() (*RemarketingListShare, error) {
+func (c *RemarketingListSharesPatchCall) Do(opts ...googleapi.CallOption) (*RemarketingListShare, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37295,7 +35428,8 @@ func (c *RemarketingListSharesPatchCall) Do() (*RemarketingListShare, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -37355,23 +35489,6 @@ func (r *RemarketingListSharesService) Update(profileId int64, remarketinglistsh
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListSharesUpdateCall) QuotaUser(quotaUser string) *RemarketingListSharesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListSharesUpdateCall) UserIP(userIP string) *RemarketingListSharesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -37389,25 +35506,23 @@ func (c *RemarketingListSharesUpdateCall) Context(ctx context.Context) *Remarket
 }
 
 func (c *RemarketingListSharesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.remarketinglistshare)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingListShares")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingListShares.update" call.
@@ -37417,7 +35532,8 @@ func (c *RemarketingListSharesUpdateCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListSharesUpdateCall) Do() (*RemarketingListShare, error) {
+func (c *RemarketingListSharesUpdateCall) Do(opts ...googleapi.CallOption) (*RemarketingListShare, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37441,7 +35557,8 @@ func (c *RemarketingListSharesUpdateCall) Do() (*RemarketingListShare, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -37494,23 +35611,6 @@ func (r *RemarketingListsService) Get(profileId int64, id int64) *RemarketingLis
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListsGetCall) QuotaUser(quotaUser string) *RemarketingListsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListsGetCall) UserIP(userIP string) *RemarketingListsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -37538,23 +35638,22 @@ func (c *RemarketingListsGetCall) Context(ctx context.Context) *RemarketingLists
 }
 
 func (c *RemarketingListsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingLists/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingLists.get" call.
@@ -37564,7 +35663,8 @@ func (c *RemarketingListsGetCall) doRequest(alt string) (*http.Response, error) 
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListsGetCall) Do() (*RemarketingList, error) {
+func (c *RemarketingListsGetCall) Do(opts ...googleapi.CallOption) (*RemarketingList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37588,7 +35688,8 @@ func (c *RemarketingListsGetCall) Do() (*RemarketingList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -37645,23 +35746,6 @@ func (r *RemarketingListsService) Insert(profileId int64, remarketinglist *Remar
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListsInsertCall) QuotaUser(quotaUser string) *RemarketingListsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListsInsertCall) UserIP(userIP string) *RemarketingListsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -37679,25 +35763,23 @@ func (c *RemarketingListsInsertCall) Context(ctx context.Context) *RemarketingLi
 }
 
 func (c *RemarketingListsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.remarketinglist)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingLists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingLists.insert" call.
@@ -37707,7 +35789,8 @@ func (c *RemarketingListsInsertCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListsInsertCall) Do() (*RemarketingList, error) {
+func (c *RemarketingListsInsertCall) Do(opts ...googleapi.CallOption) (*RemarketingList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37731,7 +35814,8 @@ func (c *RemarketingListsInsertCall) Do() (*RemarketingList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -37825,15 +35909,6 @@ func (c *RemarketingListsListCall) PageToken(pageToken string) *RemarketingLists
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListsListCall) QuotaUser(quotaUser string) *RemarketingListsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SortField sets the optional parameter "sortField": Field by which to
 // sort the list.
 //
@@ -37853,14 +35928,6 @@ func (c *RemarketingListsListCall) SortField(sortField string) *RemarketingLists
 //   "DESCENDING"
 func (c *RemarketingListsListCall) SortOrder(sortOrder string) *RemarketingListsListCall {
 	c.urlParams_.Set("sortOrder", sortOrder)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListsListCall) UserIP(userIP string) *RemarketingListsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -37891,22 +35958,21 @@ func (c *RemarketingListsListCall) Context(ctx context.Context) *RemarketingList
 }
 
 func (c *RemarketingListsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingLists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingLists.list" call.
@@ -37916,7 +35982,8 @@ func (c *RemarketingListsListCall) doRequest(alt string) (*http.Response, error)
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListsListCall) Do() (*RemarketingListsListResponse, error) {
+func (c *RemarketingListsListCall) Do(opts ...googleapi.CallOption) (*RemarketingListsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -37940,7 +36007,8 @@ func (c *RemarketingListsListCall) Do() (*RemarketingListsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -38032,6 +36100,27 @@ func (c *RemarketingListsListCall) Do() (*RemarketingListsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *RemarketingListsListCall) Pages(ctx context.Context, f func(*RemarketingListsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.remarketingLists.patch":
 
 type RemarketingListsPatchCall struct {
@@ -38052,23 +36141,6 @@ func (r *RemarketingListsService) Patch(profileId int64, id int64, remarketingli
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListsPatchCall) QuotaUser(quotaUser string) *RemarketingListsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListsPatchCall) UserIP(userIP string) *RemarketingListsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -38086,25 +36158,23 @@ func (c *RemarketingListsPatchCall) Context(ctx context.Context) *RemarketingLis
 }
 
 func (c *RemarketingListsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.remarketinglist)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingLists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingLists.patch" call.
@@ -38114,7 +36184,8 @@ func (c *RemarketingListsPatchCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListsPatchCall) Do() (*RemarketingList, error) {
+func (c *RemarketingListsPatchCall) Do(opts ...googleapi.CallOption) (*RemarketingList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -38138,7 +36209,8 @@ func (c *RemarketingListsPatchCall) Do() (*RemarketingList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -38198,23 +36270,6 @@ func (r *RemarketingListsService) Update(profileId int64, remarketinglist *Remar
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *RemarketingListsUpdateCall) QuotaUser(quotaUser string) *RemarketingListsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *RemarketingListsUpdateCall) UserIP(userIP string) *RemarketingListsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -38232,25 +36287,23 @@ func (c *RemarketingListsUpdateCall) Context(ctx context.Context) *RemarketingLi
 }
 
 func (c *RemarketingListsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.remarketinglist)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/remarketingLists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.remarketingLists.update" call.
@@ -38260,7 +36313,8 @@ func (c *RemarketingListsUpdateCall) doRequest(alt string) (*http.Response, erro
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *RemarketingListsUpdateCall) Do() (*RemarketingList, error) {
+func (c *RemarketingListsUpdateCall) Do(opts ...googleapi.CallOption) (*RemarketingList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -38284,7 +36338,8 @@ func (c *RemarketingListsUpdateCall) Do() (*RemarketingList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -38336,23 +36391,6 @@ func (r *ReportsService) Delete(profileId int64, reportId int64) *ReportsDeleteC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsDeleteCall) QuotaUser(quotaUser string) *ReportsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsDeleteCall) UserIP(userIP string) *ReportsDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -38370,24 +36408,24 @@ func (c *ReportsDeleteCall) Context(ctx context.Context) *ReportsDeleteCall {
 }
 
 func (c *ReportsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.delete" call.
-func (c *ReportsDeleteCall) Do() error {
+func (c *ReportsDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -38448,23 +36486,6 @@ func (r *ReportsService) Get(profileId int64, reportId int64) *ReportsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsGetCall) QuotaUser(quotaUser string) *ReportsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsGetCall) UserIP(userIP string) *ReportsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -38492,23 +36513,22 @@ func (c *ReportsGetCall) Context(ctx context.Context) *ReportsGetCall {
 }
 
 func (c *ReportsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.get" call.
@@ -38518,7 +36538,8 @@ func (c *ReportsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ReportsGetCall) Do() (*Report, error) {
+func (c *ReportsGetCall) Do(opts ...googleapi.CallOption) (*Report, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -38542,7 +36563,8 @@ func (c *ReportsGetCall) Do() (*Report, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -38599,23 +36621,6 @@ func (r *ReportsService) Insert(profileId int64, report *Report) *ReportsInsertC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsInsertCall) QuotaUser(quotaUser string) *ReportsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsInsertCall) UserIP(userIP string) *ReportsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -38633,25 +36638,23 @@ func (c *ReportsInsertCall) Context(ctx context.Context) *ReportsInsertCall {
 }
 
 func (c *ReportsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.report)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.insert" call.
@@ -38661,7 +36664,8 @@ func (c *ReportsInsertCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ReportsInsertCall) Do() (*Report, error) {
+func (c *ReportsInsertCall) Do(opts ...googleapi.CallOption) (*Report, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -38685,7 +36689,8 @@ func (c *ReportsInsertCall) Do() (*Report, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -38750,15 +36755,6 @@ func (c *ReportsListCall) PageToken(pageToken string) *ReportsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsListCall) QuotaUser(quotaUser string) *ReportsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Scope sets the optional parameter "scope": The scope that defines
 // which results are returned, default is 'MINE'.
 //
@@ -38793,14 +36789,6 @@ func (c *ReportsListCall) SortOrder(sortOrder string) *ReportsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsListCall) UserIP(userIP string) *ReportsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -38828,22 +36816,21 @@ func (c *ReportsListCall) Context(ctx context.Context) *ReportsListCall {
 }
 
 func (c *ReportsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.list" call.
@@ -38853,7 +36840,8 @@ func (c *ReportsListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReportsListCall) Do() (*ReportList, error) {
+func (c *ReportsListCall) Do(opts ...googleapi.CallOption) (*ReportList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -38877,7 +36865,8 @@ func (c *ReportsListCall) Do() (*ReportList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -38965,6 +36954,27 @@ func (c *ReportsListCall) Do() (*ReportList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ReportsListCall) Pages(ctx context.Context, f func(*ReportList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.reports.patch":
 
 type ReportsPatchCall struct {
@@ -38985,23 +36995,6 @@ func (r *ReportsService) Patch(profileId int64, reportId int64, report *Report) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsPatchCall) QuotaUser(quotaUser string) *ReportsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsPatchCall) UserIP(userIP string) *ReportsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -39019,26 +37012,24 @@ func (c *ReportsPatchCall) Context(ctx context.Context) *ReportsPatchCall {
 }
 
 func (c *ReportsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.report)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.patch" call.
@@ -39048,7 +37039,8 @@ func (c *ReportsPatchCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ReportsPatchCall) Do() (*Report, error) {
+func (c *ReportsPatchCall) Do(opts ...googleapi.CallOption) (*Report, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -39072,7 +37064,8 @@ func (c *ReportsPatchCall) Do() (*Report, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -39132,27 +37125,10 @@ func (r *ReportsService) Run(profileId int64, reportId int64) *ReportsRunCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsRunCall) QuotaUser(quotaUser string) *ReportsRunCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Synchronous sets the optional parameter "synchronous": If set and
 // true, tries to run the report synchronously.
 func (c *ReportsRunCall) Synchronous(synchronous bool) *ReportsRunCall {
 	c.urlParams_.Set("synchronous", fmt.Sprint(synchronous))
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsRunCall) UserIP(userIP string) *ReportsRunCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -39173,20 +37149,19 @@ func (c *ReportsRunCall) Context(ctx context.Context) *ReportsRunCall {
 }
 
 func (c *ReportsRunCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}/run")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.run" call.
@@ -39196,7 +37171,8 @@ func (c *ReportsRunCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *ReportsRunCall) Do() (*File, error) {
+func (c *ReportsRunCall) Do(opts ...googleapi.CallOption) (*File, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -39220,7 +37196,8 @@ func (c *ReportsRunCall) Do() (*File, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -39284,23 +37261,6 @@ func (r *ReportsService) Update(profileId int64, reportId int64, report *Report)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsUpdateCall) QuotaUser(quotaUser string) *ReportsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsUpdateCall) UserIP(userIP string) *ReportsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -39318,26 +37278,24 @@ func (c *ReportsUpdateCall) Context(ctx context.Context) *ReportsUpdateCall {
 }
 
 func (c *ReportsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.report)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.update" call.
@@ -39347,7 +37305,8 @@ func (c *ReportsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ReportsUpdateCall) Do() (*Report, error) {
+func (c *ReportsUpdateCall) Do(opts ...googleapi.CallOption) (*Report, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -39371,7 +37330,8 @@ func (c *ReportsUpdateCall) Do() (*Report, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -39433,23 +37393,6 @@ func (r *ReportsCompatibleFieldsService) Query(profileId int64, report *Report) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsCompatibleFieldsQueryCall) QuotaUser(quotaUser string) *ReportsCompatibleFieldsQueryCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsCompatibleFieldsQueryCall) UserIP(userIP string) *ReportsCompatibleFieldsQueryCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -39467,25 +37410,23 @@ func (c *ReportsCompatibleFieldsQueryCall) Context(ctx context.Context) *Reports
 }
 
 func (c *ReportsCompatibleFieldsQueryCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.report)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/compatiblefields/query")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.compatibleFields.query" call.
@@ -39495,7 +37436,8 @@ func (c *ReportsCompatibleFieldsQueryCall) doRequest(alt string) (*http.Response
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ReportsCompatibleFieldsQueryCall) Do() (*CompatibleFields, error) {
+func (c *ReportsCompatibleFieldsQueryCall) Do(opts ...googleapi.CallOption) (*CompatibleFields, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -39519,7 +37461,8 @@ func (c *ReportsCompatibleFieldsQueryCall) Do() (*CompatibleFields, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -39574,23 +37517,6 @@ func (r *ReportsFilesService) Get(profileId int64, reportId int64, fileId int64)
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsFilesGetCall) QuotaUser(quotaUser string) *ReportsFilesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsFilesGetCall) UserIP(userIP string) *ReportsFilesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -39618,30 +37544,30 @@ func (c *ReportsFilesGetCall) Context(ctx context.Context) *ReportsFilesGetCall 
 }
 
 func (c *ReportsFilesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}/files/{fileId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 		"fileId":    strconv.FormatInt(c.fileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Download fetches the API endpoint's "media" value, instead of the normal
 // API response value. If the returned error is nil, the Response is guaranteed to
 // have a 2xx status code. Callers must close the Response.Body as usual.
-func (c *ReportsFilesGetCall) Download() (*http.Response, error) {
+func (c *ReportsFilesGetCall) Download(opts ...googleapi.CallOption) (*http.Response, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("media")
 	if err != nil {
 		return nil, err
@@ -39660,7 +37586,8 @@ func (c *ReportsFilesGetCall) Download() (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *ReportsFilesGetCall) Do() (*File, error) {
+func (c *ReportsFilesGetCall) Do(opts ...googleapi.CallOption) (*File, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -39684,7 +37611,8 @@ func (c *ReportsFilesGetCall) Do() (*File, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -39765,15 +37693,6 @@ func (c *ReportsFilesListCall) PageToken(pageToken string) *ReportsFilesListCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ReportsFilesListCall) QuotaUser(quotaUser string) *ReportsFilesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SortField sets the optional parameter "sortField": The field by which
 // to sort the list.
 //
@@ -39793,14 +37712,6 @@ func (c *ReportsFilesListCall) SortField(sortField string) *ReportsFilesListCall
 //   "DESCENDING" (default) - Descending order.
 func (c *ReportsFilesListCall) SortOrder(sortOrder string) *ReportsFilesListCall {
 	c.urlParams_.Set("sortOrder", sortOrder)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ReportsFilesListCall) UserIP(userIP string) *ReportsFilesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -39831,23 +37742,22 @@ func (c *ReportsFilesListCall) Context(ctx context.Context) *ReportsFilesListCal
 }
 
 func (c *ReportsFilesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/reports/{reportId}/files")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"reportId":  strconv.FormatInt(c.reportId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.reports.files.list" call.
@@ -39857,7 +37767,8 @@ func (c *ReportsFilesListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ReportsFilesListCall) Do() (*FileList, error) {
+func (c *ReportsFilesListCall) Do(opts ...googleapi.CallOption) (*FileList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -39881,7 +37792,8 @@ func (c *ReportsFilesListCall) Do() (*FileList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -39961,6 +37873,27 @@ func (c *ReportsFilesListCall) Do() (*FileList, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ReportsFilesListCall) Pages(ctx context.Context, f func(*FileList) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.sites.get":
 
 type SitesGetCall struct {
@@ -39977,23 +37910,6 @@ func (r *SitesService) Get(profileId int64, id int64) *SitesGetCall {
 	c := &SitesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
 	c.id = id
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesGetCall) QuotaUser(quotaUser string) *SitesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesGetCall) UserIP(userIP string) *SitesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -40024,23 +37940,22 @@ func (c *SitesGetCall) Context(ctx context.Context) *SitesGetCall {
 }
 
 func (c *SitesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sites/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sites.get" call.
@@ -40050,7 +37965,8 @@ func (c *SitesGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *SitesGetCall) Do() (*Site, error) {
+func (c *SitesGetCall) Do(opts ...googleapi.CallOption) (*Site, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -40074,7 +37990,8 @@ func (c *SitesGetCall) Do() (*Site, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -40131,23 +38048,6 @@ func (r *SitesService) Insert(profileId int64, site *Site) *SitesInsertCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesInsertCall) QuotaUser(quotaUser string) *SitesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesInsertCall) UserIP(userIP string) *SitesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -40165,25 +38065,23 @@ func (c *SitesInsertCall) Context(ctx context.Context) *SitesInsertCall {
 }
 
 func (c *SitesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.site)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sites.insert" call.
@@ -40193,7 +38091,8 @@ func (c *SitesInsertCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *SitesInsertCall) Do() (*Site, error) {
+func (c *SitesInsertCall) Do(opts ...googleapi.CallOption) (*Site, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -40217,7 +38116,8 @@ func (c *SitesInsertCall) Do() (*Site, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -40353,15 +38253,6 @@ func (c *SitesListCall) PageToken(pageToken string) *SitesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesListCall) QuotaUser(quotaUser string) *SitesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name, ID or keyName. Wildcards (*) are
 // allowed. For example, "site*2015" will return objects with names like
@@ -40410,14 +38301,6 @@ func (c *SitesListCall) UnmappedSite(unmappedSite bool) *SitesListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesListCall) UserIP(userIP string) *SitesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -40445,22 +38328,21 @@ func (c *SitesListCall) Context(ctx context.Context) *SitesListCall {
 }
 
 func (c *SitesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sites.list" call.
@@ -40470,7 +38352,8 @@ func (c *SitesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SitesListCall) Do() (*SitesListResponse, error) {
+func (c *SitesListCall) Do(opts ...googleapi.CallOption) (*SitesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -40494,7 +38377,8 @@ func (c *SitesListCall) Do() (*SitesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -40624,6 +38508,27 @@ func (c *SitesListCall) Do() (*SitesListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *SitesListCall) Pages(ctx context.Context, f func(*SitesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.sites.patch":
 
 type SitesPatchCall struct {
@@ -40644,23 +38549,6 @@ func (r *SitesService) Patch(profileId int64, id int64, site *Site) *SitesPatchC
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesPatchCall) QuotaUser(quotaUser string) *SitesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesPatchCall) UserIP(userIP string) *SitesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -40678,25 +38566,23 @@ func (c *SitesPatchCall) Context(ctx context.Context) *SitesPatchCall {
 }
 
 func (c *SitesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.site)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sites.patch" call.
@@ -40706,7 +38592,8 @@ func (c *SitesPatchCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *SitesPatchCall) Do() (*Site, error) {
+func (c *SitesPatchCall) Do(opts ...googleapi.CallOption) (*Site, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -40730,7 +38617,8 @@ func (c *SitesPatchCall) Do() (*Site, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -40790,23 +38678,6 @@ func (r *SitesService) Update(profileId int64, site *Site) *SitesUpdateCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SitesUpdateCall) QuotaUser(quotaUser string) *SitesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SitesUpdateCall) UserIP(userIP string) *SitesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -40824,25 +38695,23 @@ func (c *SitesUpdateCall) Context(ctx context.Context) *SitesUpdateCall {
 }
 
 func (c *SitesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.site)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sites")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sites.update" call.
@@ -40852,7 +38721,8 @@ func (c *SitesUpdateCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *SitesUpdateCall) Do() (*Site, error) {
+func (c *SitesUpdateCall) Do(opts ...googleapi.CallOption) (*Site, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -40876,7 +38746,8 @@ func (c *SitesUpdateCall) Do() (*Site, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -40929,23 +38800,6 @@ func (r *SizesService) Get(profileId int64, id int64) *SizesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SizesGetCall) QuotaUser(quotaUser string) *SizesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SizesGetCall) UserIP(userIP string) *SizesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -40973,23 +38827,22 @@ func (c *SizesGetCall) Context(ctx context.Context) *SizesGetCall {
 }
 
 func (c *SizesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sizes/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sizes.get" call.
@@ -40999,7 +38852,8 @@ func (c *SizesGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *SizesGetCall) Do() (*Size, error) {
+func (c *SizesGetCall) Do(opts ...googleapi.CallOption) (*Size, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -41023,7 +38877,8 @@ func (c *SizesGetCall) Do() (*Size, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -41080,23 +38935,6 @@ func (r *SizesService) Insert(profileId int64, size *Size) *SizesInsertCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SizesInsertCall) QuotaUser(quotaUser string) *SizesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SizesInsertCall) UserIP(userIP string) *SizesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -41114,25 +38952,23 @@ func (c *SizesInsertCall) Context(ctx context.Context) *SizesInsertCall {
 }
 
 func (c *SizesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.size)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sizes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sizes.insert" call.
@@ -41142,7 +38978,8 @@ func (c *SizesInsertCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *SizesInsertCall) Do() (*Size, error) {
+func (c *SizesInsertCall) Do(opts ...googleapi.CallOption) (*Size, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -41166,7 +39003,8 @@ func (c *SizesInsertCall) Do() (*Size, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -41242,23 +39080,6 @@ func (c *SizesListCall) Ids(ids ...int64) *SizesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SizesListCall) QuotaUser(quotaUser string) *SizesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SizesListCall) UserIP(userIP string) *SizesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Width sets the optional parameter "width": Select only sizes with
 // this width.
 func (c *SizesListCall) Width(width int64) *SizesListCall {
@@ -41293,22 +39114,21 @@ func (c *SizesListCall) Context(ctx context.Context) *SizesListCall {
 }
 
 func (c *SizesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/sizes")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.sizes.list" call.
@@ -41318,7 +39138,8 @@ func (c *SizesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SizesListCall) Do() (*SizesListResponse, error) {
+func (c *SizesListCall) Do(opts ...googleapi.CallOption) (*SizesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -41342,7 +39163,8 @@ func (c *SizesListCall) Do() (*SizesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -41416,23 +39238,6 @@ func (r *SubaccountsService) Get(profileId int64, id int64) *SubaccountsGetCall 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubaccountsGetCall) QuotaUser(quotaUser string) *SubaccountsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubaccountsGetCall) UserIP(userIP string) *SubaccountsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -41460,23 +39265,22 @@ func (c *SubaccountsGetCall) Context(ctx context.Context) *SubaccountsGetCall {
 }
 
 func (c *SubaccountsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/subaccounts/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.subaccounts.get" call.
@@ -41486,7 +39290,8 @@ func (c *SubaccountsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SubaccountsGetCall) Do() (*Subaccount, error) {
+func (c *SubaccountsGetCall) Do(opts ...googleapi.CallOption) (*Subaccount, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -41510,7 +39315,8 @@ func (c *SubaccountsGetCall) Do() (*Subaccount, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -41567,23 +39373,6 @@ func (r *SubaccountsService) Insert(profileId int64, subaccount *Subaccount) *Su
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubaccountsInsertCall) QuotaUser(quotaUser string) *SubaccountsInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubaccountsInsertCall) UserIP(userIP string) *SubaccountsInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -41601,25 +39390,23 @@ func (c *SubaccountsInsertCall) Context(ctx context.Context) *SubaccountsInsertC
 }
 
 func (c *SubaccountsInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.subaccount)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/subaccounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.subaccounts.insert" call.
@@ -41629,7 +39416,8 @@ func (c *SubaccountsInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SubaccountsInsertCall) Do() (*Subaccount, error) {
+func (c *SubaccountsInsertCall) Do(opts ...googleapi.CallOption) (*Subaccount, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -41653,7 +39441,8 @@ func (c *SubaccountsInsertCall) Do() (*Subaccount, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -41729,15 +39518,6 @@ func (c *SubaccountsListCall) PageToken(pageToken string) *SubaccountsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubaccountsListCall) QuotaUser(quotaUser string) *SubaccountsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "subaccount*2015" will return objects with names like
@@ -41773,14 +39553,6 @@ func (c *SubaccountsListCall) SortOrder(sortOrder string) *SubaccountsListCall {
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubaccountsListCall) UserIP(userIP string) *SubaccountsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -41808,22 +39580,21 @@ func (c *SubaccountsListCall) Context(ctx context.Context) *SubaccountsListCall 
 }
 
 func (c *SubaccountsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/subaccounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.subaccounts.list" call.
@@ -41833,7 +39604,8 @@ func (c *SubaccountsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *SubaccountsListCall) Do() (*SubaccountsListResponse, error) {
+func (c *SubaccountsListCall) Do(opts ...googleapi.CallOption) (*SubaccountsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -41857,7 +39629,8 @@ func (c *SubaccountsListCall) Do() (*SubaccountsListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -41937,6 +39710,27 @@ func (c *SubaccountsListCall) Do() (*SubaccountsListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *SubaccountsListCall) Pages(ctx context.Context, f func(*SubaccountsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.subaccounts.patch":
 
 type SubaccountsPatchCall struct {
@@ -41957,23 +39751,6 @@ func (r *SubaccountsService) Patch(profileId int64, id int64, subaccount *Subacc
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubaccountsPatchCall) QuotaUser(quotaUser string) *SubaccountsPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubaccountsPatchCall) UserIP(userIP string) *SubaccountsPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -41991,25 +39768,23 @@ func (c *SubaccountsPatchCall) Context(ctx context.Context) *SubaccountsPatchCal
 }
 
 func (c *SubaccountsPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.subaccount)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/subaccounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.subaccounts.patch" call.
@@ -42019,7 +39794,8 @@ func (c *SubaccountsPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SubaccountsPatchCall) Do() (*Subaccount, error) {
+func (c *SubaccountsPatchCall) Do(opts ...googleapi.CallOption) (*Subaccount, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -42043,7 +39819,8 @@ func (c *SubaccountsPatchCall) Do() (*Subaccount, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -42103,23 +39880,6 @@ func (r *SubaccountsService) Update(profileId int64, subaccount *Subaccount) *Su
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *SubaccountsUpdateCall) QuotaUser(quotaUser string) *SubaccountsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *SubaccountsUpdateCall) UserIP(userIP string) *SubaccountsUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -42137,25 +39897,23 @@ func (c *SubaccountsUpdateCall) Context(ctx context.Context) *SubaccountsUpdateC
 }
 
 func (c *SubaccountsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.subaccount)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/subaccounts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.subaccounts.update" call.
@@ -42165,7 +39923,8 @@ func (c *SubaccountsUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *SubaccountsUpdateCall) Do() (*Subaccount, error) {
+func (c *SubaccountsUpdateCall) Do(opts ...googleapi.CallOption) (*Subaccount, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -42189,7 +39948,8 @@ func (c *SubaccountsUpdateCall) Do() (*Subaccount, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -42242,23 +40002,6 @@ func (r *TargetableRemarketingListsService) Get(profileId int64, id int64) *Targ
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TargetableRemarketingListsGetCall) QuotaUser(quotaUser string) *TargetableRemarketingListsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TargetableRemarketingListsGetCall) UserIP(userIP string) *TargetableRemarketingListsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -42286,23 +40029,22 @@ func (c *TargetableRemarketingListsGetCall) Context(ctx context.Context) *Target
 }
 
 func (c *TargetableRemarketingListsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/targetableRemarketingLists/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.targetableRemarketingLists.get" call.
@@ -42312,7 +40054,8 @@ func (c *TargetableRemarketingListsGetCall) doRequest(alt string) (*http.Respons
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TargetableRemarketingListsGetCall) Do() (*TargetableRemarketingList, error) {
+func (c *TargetableRemarketingListsGetCall) Do(opts ...googleapi.CallOption) (*TargetableRemarketingList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -42336,7 +40079,8 @@ func (c *TargetableRemarketingListsGetCall) Do() (*TargetableRemarketingList, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -42428,15 +40172,6 @@ func (c *TargetableRemarketingListsListCall) PageToken(pageToken string) *Target
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TargetableRemarketingListsListCall) QuotaUser(quotaUser string) *TargetableRemarketingListsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SortField sets the optional parameter "sortField": Field by which to
 // sort the list.
 //
@@ -42456,14 +40191,6 @@ func (c *TargetableRemarketingListsListCall) SortField(sortField string) *Target
 //   "DESCENDING"
 func (c *TargetableRemarketingListsListCall) SortOrder(sortOrder string) *TargetableRemarketingListsListCall {
 	c.urlParams_.Set("sortOrder", sortOrder)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TargetableRemarketingListsListCall) UserIP(userIP string) *TargetableRemarketingListsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -42494,22 +40221,21 @@ func (c *TargetableRemarketingListsListCall) Context(ctx context.Context) *Targe
 }
 
 func (c *TargetableRemarketingListsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/targetableRemarketingLists")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.targetableRemarketingLists.list" call.
@@ -42520,7 +40246,8 @@ func (c *TargetableRemarketingListsListCall) doRequest(alt string) (*http.Respon
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TargetableRemarketingListsListCall) Do() (*TargetableRemarketingListsListResponse, error) {
+func (c *TargetableRemarketingListsListCall) Do(opts ...googleapi.CallOption) (*TargetableRemarketingListsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -42544,7 +40271,8 @@ func (c *TargetableRemarketingListsListCall) Do() (*TargetableRemarketingListsLi
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -42630,6 +40358,27 @@ func (c *TargetableRemarketingListsListCall) Do() (*TargetableRemarketingListsLi
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *TargetableRemarketingListsListCall) Pages(ctx context.Context, f func(*TargetableRemarketingListsListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.userProfiles.get":
 
 type UserProfilesGetCall struct {
@@ -42644,23 +40393,6 @@ type UserProfilesGetCall struct {
 func (r *UserProfilesService) Get(profileId int64) *UserProfilesGetCall {
 	c := &UserProfilesGetCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.profileId = profileId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserProfilesGetCall) QuotaUser(quotaUser string) *UserProfilesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserProfilesGetCall) UserIP(userIP string) *UserProfilesGetCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -42691,22 +40423,21 @@ func (c *UserProfilesGetCall) Context(ctx context.Context) *UserProfilesGetCall 
 }
 
 func (c *UserProfilesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userProfiles.get" call.
@@ -42716,7 +40447,8 @@ func (c *UserProfilesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserProfilesGetCall) Do() (*UserProfile, error) {
+func (c *UserProfilesGetCall) Do(opts ...googleapi.CallOption) (*UserProfile, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -42740,7 +40472,8 @@ func (c *UserProfilesGetCall) Do() (*UserProfile, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -42787,23 +40520,6 @@ func (r *UserProfilesService) List() *UserProfilesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserProfilesListCall) QuotaUser(quotaUser string) *UserProfilesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserProfilesListCall) UserIP(userIP string) *UserProfilesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -42831,20 +40547,19 @@ func (c *UserProfilesListCall) Context(ctx context.Context) *UserProfilesListCal
 }
 
 func (c *UserProfilesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userProfiles.list" call.
@@ -42854,7 +40569,8 @@ func (c *UserProfilesListCall) doRequest(alt string) (*http.Response, error) {
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UserProfilesListCall) Do() (*UserProfileList, error) {
+func (c *UserProfilesListCall) Do(opts ...googleapi.CallOption) (*UserProfileList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -42878,7 +40594,8 @@ func (c *UserProfilesListCall) Do() (*UserProfileList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -42917,23 +40634,6 @@ func (r *UserRolePermissionGroupsService) Get(profileId int64, id int64) *UserRo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolePermissionGroupsGetCall) QuotaUser(quotaUser string) *UserRolePermissionGroupsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolePermissionGroupsGetCall) UserIP(userIP string) *UserRolePermissionGroupsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -42961,23 +40661,22 @@ func (c *UserRolePermissionGroupsGetCall) Context(ctx context.Context) *UserRole
 }
 
 func (c *UserRolePermissionGroupsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRolePermissionGroups/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRolePermissionGroups.get" call.
@@ -42987,7 +40686,8 @@ func (c *UserRolePermissionGroupsGetCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UserRolePermissionGroupsGetCall) Do() (*UserRolePermissionGroup, error) {
+func (c *UserRolePermissionGroupsGetCall) Do(opts ...googleapi.CallOption) (*UserRolePermissionGroup, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -43011,7 +40711,8 @@ func (c *UserRolePermissionGroupsGetCall) Do() (*UserRolePermissionGroup, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -43067,23 +40768,6 @@ func (r *UserRolePermissionGroupsService) List(profileId int64) *UserRolePermiss
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolePermissionGroupsListCall) QuotaUser(quotaUser string) *UserRolePermissionGroupsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolePermissionGroupsListCall) UserIP(userIP string) *UserRolePermissionGroupsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -43111,22 +40795,21 @@ func (c *UserRolePermissionGroupsListCall) Context(ctx context.Context) *UserRol
 }
 
 func (c *UserRolePermissionGroupsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRolePermissionGroups")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRolePermissionGroups.list" call.
@@ -43137,7 +40820,8 @@ func (c *UserRolePermissionGroupsListCall) doRequest(alt string) (*http.Response
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *UserRolePermissionGroupsListCall) Do() (*UserRolePermissionGroupsListResponse, error) {
+func (c *UserRolePermissionGroupsListCall) Do(opts ...googleapi.CallOption) (*UserRolePermissionGroupsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -43161,7 +40845,8 @@ func (c *UserRolePermissionGroupsListCall) Do() (*UserRolePermissionGroupsListRe
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -43211,23 +40896,6 @@ func (r *UserRolePermissionsService) Get(profileId int64, id int64) *UserRolePer
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolePermissionsGetCall) QuotaUser(quotaUser string) *UserRolePermissionsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolePermissionsGetCall) UserIP(userIP string) *UserRolePermissionsGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -43255,23 +40923,22 @@ func (c *UserRolePermissionsGetCall) Context(ctx context.Context) *UserRolePermi
 }
 
 func (c *UserRolePermissionsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRolePermissions/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRolePermissions.get" call.
@@ -43281,7 +40948,8 @@ func (c *UserRolePermissionsGetCall) doRequest(alt string) (*http.Response, erro
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UserRolePermissionsGetCall) Do() (*UserRolePermission, error) {
+func (c *UserRolePermissionsGetCall) Do(opts ...googleapi.CallOption) (*UserRolePermission, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -43305,7 +40973,8 @@ func (c *UserRolePermissionsGetCall) Do() (*UserRolePermission, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -43372,23 +41041,6 @@ func (c *UserRolePermissionsListCall) Ids(ids ...int64) *UserRolePermissionsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolePermissionsListCall) QuotaUser(quotaUser string) *UserRolePermissionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolePermissionsListCall) UserIP(userIP string) *UserRolePermissionsListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -43416,22 +41068,21 @@ func (c *UserRolePermissionsListCall) Context(ctx context.Context) *UserRolePerm
 }
 
 func (c *UserRolePermissionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRolePermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRolePermissions.list" call.
@@ -43441,7 +41092,8 @@ func (c *UserRolePermissionsListCall) doRequest(alt string) (*http.Response, err
 // a response was returned at all) in error.(*googleapi.Error).Header.
 // Use googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UserRolePermissionsListCall) Do() (*UserRolePermissionsListResponse, error) {
+func (c *UserRolePermissionsListCall) Do(opts ...googleapi.CallOption) (*UserRolePermissionsListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -43465,7 +41117,8 @@ func (c *UserRolePermissionsListCall) Do() (*UserRolePermissionsListResponse, er
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -43521,23 +41174,6 @@ func (r *UserRolesService) Delete(profileId int64, id int64) *UserRolesDeleteCal
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolesDeleteCall) QuotaUser(quotaUser string) *UserRolesDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolesDeleteCall) UserIP(userIP string) *UserRolesDeleteCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -43555,24 +41191,24 @@ func (c *UserRolesDeleteCall) Context(ctx context.Context) *UserRolesDeleteCall 
 }
 
 func (c *UserRolesDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRoles/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRoles.delete" call.
-func (c *UserRolesDeleteCall) Do() error {
+func (c *UserRolesDeleteCall) Do(opts ...googleapi.CallOption) error {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if err != nil {
 		return err
@@ -43633,23 +41269,6 @@ func (r *UserRolesService) Get(profileId int64, id int64) *UserRolesGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolesGetCall) QuotaUser(quotaUser string) *UserRolesGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolesGetCall) UserIP(userIP string) *UserRolesGetCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -43677,23 +41296,22 @@ func (c *UserRolesGetCall) Context(ctx context.Context) *UserRolesGetCall {
 }
 
 func (c *UserRolesGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRoles/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 		"id":        strconv.FormatInt(c.id, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRoles.get" call.
@@ -43703,7 +41321,8 @@ func (c *UserRolesGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserRolesGetCall) Do() (*UserRole, error) {
+func (c *UserRolesGetCall) Do(opts ...googleapi.CallOption) (*UserRole, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -43727,7 +41346,8 @@ func (c *UserRolesGetCall) Do() (*UserRole, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -43784,23 +41404,6 @@ func (r *UserRolesService) Insert(profileId int64, userrole *UserRole) *UserRole
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolesInsertCall) QuotaUser(quotaUser string) *UserRolesInsertCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolesInsertCall) UserIP(userIP string) *UserRolesInsertCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -43818,25 +41421,23 @@ func (c *UserRolesInsertCall) Context(ctx context.Context) *UserRolesInsertCall 
 }
 
 func (c *UserRolesInsertCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.userrole)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRoles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRoles.insert" call.
@@ -43846,7 +41447,8 @@ func (c *UserRolesInsertCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserRolesInsertCall) Do() (*UserRole, error) {
+func (c *UserRolesInsertCall) Do(opts ...googleapi.CallOption) (*UserRole, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -43870,7 +41472,8 @@ func (c *UserRolesInsertCall) Do() (*UserRole, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -43954,15 +41557,6 @@ func (c *UserRolesListCall) PageToken(pageToken string) *UserRolesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolesListCall) QuotaUser(quotaUser string) *UserRolesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // SearchString sets the optional parameter "searchString": Allows
 // searching for objects by name or ID. Wildcards (*) are allowed. For
 // example, "userrole*2015" will return objects with names like
@@ -44005,14 +41599,6 @@ func (c *UserRolesListCall) SubaccountId(subaccountId int64) *UserRolesListCall 
 	return c
 }
 
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolesListCall) UserIP(userIP string) *UserRolesListCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -44040,22 +41626,21 @@ func (c *UserRolesListCall) Context(ctx context.Context) *UserRolesListCall {
 }
 
 func (c *UserRolesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRoles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRoles.list" call.
@@ -44065,7 +41650,8 @@ func (c *UserRolesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *UserRolesListCall) Do() (*UserRolesListResponse, error) {
+func (c *UserRolesListCall) Do(opts ...googleapi.CallOption) (*UserRolesListResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -44089,7 +41675,8 @@ func (c *UserRolesListCall) Do() (*UserRolesListResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -44180,6 +41767,27 @@ func (c *UserRolesListCall) Do() (*UserRolesListResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *UserRolesListCall) Pages(ctx context.Context, f func(*UserRolesListResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dfareporting.userRoles.patch":
 
 type UserRolesPatchCall struct {
@@ -44200,23 +41808,6 @@ func (r *UserRolesService) Patch(profileId int64, id int64, userrole *UserRole) 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolesPatchCall) QuotaUser(quotaUser string) *UserRolesPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolesPatchCall) UserIP(userIP string) *UserRolesPatchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -44234,25 +41825,23 @@ func (c *UserRolesPatchCall) Context(ctx context.Context) *UserRolesPatchCall {
 }
 
 func (c *UserRolesPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.userrole)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRoles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRoles.patch" call.
@@ -44262,7 +41851,8 @@ func (c *UserRolesPatchCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserRolesPatchCall) Do() (*UserRole, error) {
+func (c *UserRolesPatchCall) Do(opts ...googleapi.CallOption) (*UserRole, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -44286,7 +41876,8 @@ func (c *UserRolesPatchCall) Do() (*UserRole, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -44346,23 +41937,6 @@ func (r *UserRolesService) Update(profileId int64, userrole *UserRole) *UserRole
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *UserRolesUpdateCall) QuotaUser(quotaUser string) *UserRolesUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *UserRolesUpdateCall) UserIP(userIP string) *UserRolesUpdateCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -44380,25 +41954,23 @@ func (c *UserRolesUpdateCall) Context(ctx context.Context) *UserRolesUpdateCall 
 }
 
 func (c *UserRolesUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.userrole)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "userprofiles/{profileId}/userRoles")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"profileId": strconv.FormatInt(c.profileId, 10),
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dfareporting.userRoles.update" call.
@@ -44408,7 +41980,8 @@ func (c *UserRolesUpdateCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *UserRolesUpdateCall) Do() (*UserRole, error) {
+func (c *UserRolesUpdateCall) Do(opts ...googleapi.CallOption) (*UserRole, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -44432,7 +42005,8 @@ func (c *UserRolesUpdateCall) Do() (*UserRole, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

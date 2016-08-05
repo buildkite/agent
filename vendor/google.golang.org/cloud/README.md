@@ -7,7 +7,7 @@
 import "google.golang.org/cloud"
 ```
 
-**NOTE:** These packages are experimental, and may occasionally make
+**NOTE:** These packages are under development, and may occasionally make
 backwards-incompatible changes.
 
 **NOTE:** Github repo is a mirror of [https://code.googlesource.com/gocloud](https://code.googlesource.com/gocloud).
@@ -16,10 +16,10 @@ Go packages for Google Cloud Platform services. Supported APIs are:
 
 Google API                     | Status       | Package
 -------------------------------|--------------|-----------------------------------------------------------
-[Datastore][cloud-datastore]   | experimental | [`google.golang.org/cloud/datastore`][cloud-datastore-ref]
-[Cloud Storage][cloud-storage] | experimental | [`google.golang.org/cloud/storage`][cloud-storage-ref]
+[Datastore][cloud-datastore]   | beta         | [`google.golang.org/cloud/datastore`][cloud-datastore-ref]
+[Storage][cloud-storage]       | beta         | [`google.golang.org/cloud/storage`][cloud-storage-ref]
 [Pub/Sub][cloud-pubsub]        | experimental | [`google.golang.org/cloud/pubsub`][cloud-pubsub-ref]
-[BigTable][cloud-bigtable]     | stable       | [`google.golang.org/cloud/bigtable`][cloud-bigtable-ref]
+[Bigtable][cloud-bigtable]     | stable       | [`google.golang.org/cloud/bigtable`][cloud-bigtable-ref]
 [BigQuery][cloud-bigquery]     | experimental | [`google.golang.org/cloud/bigquery`][cloud-bigquery-ref]
 [Logging][cloud-logging]       | experimental | [`google.golang.org/cloud/logging`][cloud-logging-ref]
 
@@ -37,6 +37,17 @@ Google API                     | Status       | Package
 Documentation and examples are available at
 https://godoc.org/google.golang.org/cloud
 
+Visit or join the
+[google-api-go-announce group](https://groups.google.com/forum/#!forum/google-api-go-announce)
+for updates on these packages.
+
+## Go Versions Supported
+
+We support the two most recent major versions of Go. If Google App Engine uses
+an older version, we support that as well. You can see which versions are
+currently supported by looking at the lines following `go:` in
+[`.travis.yml`](.travis.yml).
+
 ## Authorization
 
 By default, each API will use [Google Application Default Credentials][default-creds]
@@ -46,11 +57,11 @@ application to run in many environments without requiring explicit configuration
 Manually-configured authorization can be achieved using the
 [`golang.org/x/oauth2`](https://godoc.org/golang.org/x/oauth2) package to
 create an `oauth2.TokenSource`. This token source can be passed to the `NewClient`
-function for the relevant API using a 
-[`cloud.WithTokenSource`][https://godoc.org/google.golang.org/cloud#WithTokenSource]
+function for the relevant API using a
+[`cloud.WithTokenSource`](https://godoc.org/google.golang.org/cloud#WithTokenSource)
 option.
 
-## Google Cloud Datastore
+## Google Cloud Datastore [![GoDoc](https://godoc.org/google.golang.org/cloud/datastore?status.svg)](https://godoc.org/google.golang.org/cloud/datastore)
 
 [Google Cloud Datastore][cloud-datastore] ([docs][cloud-datastore-docs]) is a fully-
 managed, schemaless database for storing non-relational data. Cloud Datastore
@@ -60,8 +71,6 @@ consistency for all other queries.
 
 Follow the [activation instructions][cloud-datastore-activation] to use the Google
 Cloud Datastore API with your project.
-
-https://godoc.org/google.golang.org/cloud/datastore
 
 First create a `datastore.Client` to use throughout your application:
 
@@ -93,7 +102,7 @@ if _, err := client.PutMulti(ctx, keys, posts); err != nil {
 }
 ```
 
-## Google Cloud Storage
+## Google Cloud Storage [![GoDoc](https://godoc.org/google.golang.org/cloud/storage?status.svg)](https://godoc.org/google.golang.org/cloud/storage)
 
 [Google Cloud Storage][cloud-storage] ([docs][cloud-storage-docs]) allows you to store
 data on Google infrastructure with very high reliability, performance and availability,
@@ -123,15 +132,12 @@ if err != nil {
 }
 ```
 
-## Google Cloud Pub/Sub
+## Google Cloud Pub/Sub [![GoDoc](https://godoc.org/google.golang.org/cloud/pubsub?status.svg)](https://godoc.org/google.golang.org/cloud/pubsub)
 
 [Google Cloud Pub/Sub][cloud-pubsub] ([docs][cloud-pubsub-docs]) allows you to connect
 your services with reliable, many-to-many, asynchronous messaging hosted on Google's
 infrastructure. Cloud Pub/Sub automatically scales as you need it and provides a foundation
 for building your own robust, global services.
-
-https://godoc.org/google.golang.org/cloud/pubsub
-
 
 ```go
 // Publish "hello world" on topic1.

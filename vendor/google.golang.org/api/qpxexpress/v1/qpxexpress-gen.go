@@ -952,6 +952,10 @@ type TripOptionsRequest struct {
 	// Solutions: The number of solutions to return, maximum 500.
 	Solutions int64 `json:"solutions,omitempty"`
 
+	// TicketingCountry: IATA country code representing the point of
+	// ticketing.
+	TicketingCountry string `json:"ticketingCountry,omitempty"`
+
 	// ForceSendFields is a list of field names (e.g. "MaxPrice") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
@@ -1064,23 +1068,6 @@ func (r *TripsService) Search(tripssearchrequest *TripsSearchRequest) *TripsSear
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *TripsSearchCall) QuotaUser(quotaUser string) *TripsSearchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *TripsSearchCall) UserIP(userIP string) *TripsSearchCall {
-	c.urlParams_.Set("userIp", userIP)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1098,23 +1085,21 @@ func (c *TripsSearchCall) Context(ctx context.Context) *TripsSearchCall {
 }
 
 func (c *TripsSearchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.tripssearchrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "search")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "qpxExpress.trips.search" call.
@@ -1124,7 +1109,8 @@ func (c *TripsSearchCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *TripsSearchCall) Do() (*TripsSearchResponse, error) {
+func (c *TripsSearchCall) Do(opts ...googleapi.CallOption) (*TripsSearchResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1148,7 +1134,8 @@ func (c *TripsSearchCall) Do() (*TripsSearchResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

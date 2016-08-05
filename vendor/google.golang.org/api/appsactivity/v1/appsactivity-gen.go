@@ -434,14 +434,23 @@ func (s *Target) MarshalJSON() ([]byte, error) {
 
 // User: A representation of a user.
 type User struct {
+	// IsDeleted: A boolean which indicates whether the specified User was
+	// deleted. If true, name, photo and permission_id will be omitted.
+	IsDeleted bool `json:"isDeleted,omitempty"`
+
 	// Name: The displayable name of the user.
 	Name string `json:"name,omitempty"`
+
+	// PermissionId: The permission ID associated with this user. Equivalent
+	// to the Drive API's permission ID for this user, returned as part of
+	// the Drive Permissions resource.
+	PermissionId string `json:"permissionId,omitempty"`
 
 	// Photo: The profile photo of the user. Not present if the user has no
 	// profile photo.
 	Photo *Photo `json:"photo,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "Name") to
+	// ForceSendFields is a list of field names (e.g. "IsDeleted") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -518,15 +527,6 @@ func (c *ActivitiesListCall) PageToken(pageToken string) *ActivitiesListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *ActivitiesListCall) QuotaUser(quotaUser string) *ActivitiesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Source sets the optional parameter "source": The Google service from
 // which to return activities. Possible values of source are:
 // - drive.google.com
@@ -540,14 +540,6 @@ func (c *ActivitiesListCall) Source(source string) *ActivitiesListCall {
 // currently authenticated user.
 func (c *ActivitiesListCall) UserId(userId string) *ActivitiesListCall {
 	c.urlParams_.Set("userId", userId)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *ActivitiesListCall) UserIP(userIP string) *ActivitiesListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -578,20 +570,19 @@ func (c *ActivitiesListCall) Context(ctx context.Context) *ActivitiesListCall {
 }
 
 func (c *ActivitiesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "activities")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "appsactivity.activities.list" call.
@@ -601,7 +592,8 @@ func (c *ActivitiesListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ActivitiesListCall) Do() (*ListActivitiesResponse, error) {
+func (c *ActivitiesListCall) Do(opts ...googleapi.CallOption) (*ListActivitiesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -625,7 +617,8 @@ func (c *ActivitiesListCall) Do() (*ListActivitiesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -695,4 +688,25 @@ func (c *ActivitiesListCall) Do() (*ListActivitiesResponse, error) {
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ActivitiesListCall) Pages(ctx context.Context, f func(*ListActivitiesResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }

@@ -1,6 +1,16 @@
-// Copyright 2015 Google Inc. All rights reserved.
-// Use of this source code is governed by the Apache 2.0
-// license that can be found in the LICENSE file.
+// Copyright 2015 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 /*
 helloworld tracks how often a user has visited the index page.
@@ -26,9 +36,8 @@ import (
 
 // User-provided constants.
 const (
-	project = "PROJECT_ID"
-	zone    = "CLUSTER_ZONE"
-	cluster = "CLUSTER_NAME"
+	project  = "PROJECT_ID"
+	instance = "INSTANCE"
 )
 
 var (
@@ -44,7 +53,7 @@ func main() {
 
 	// Set up admin client, tables, and column families.
 	// NewAdminClient uses Application Default Credentials to authenticate.
-	adminClient, err := bigtable.NewAdminClient(ctx, project, zone, cluster)
+	adminClient, err := bigtable.NewAdminClient(ctx, project, instance)
 	if err != nil {
 		log.Fatalf("Unable to create a table admin client. %v", err)
 	}
@@ -70,7 +79,7 @@ func main() {
 
 	// Set up Bigtable data operations client.
 	// NewClient uses Application Default Credentials to authenticate.
-	client, err = bigtable.NewClient(ctx, project, zone, cluster)
+	client, err = bigtable.NewClient(ctx, project, instance)
 	if err != nil {
 		log.Fatalf("Unable to create data operations client. %v", err)
 	}

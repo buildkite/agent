@@ -148,7 +148,7 @@ func (s *AcknowledgeRequest) MarshalJSON() ([]byte, error) {
 // Binding: Associates `members` with a `role`.
 type Binding struct {
 	// Members: Specifies the identities requesting access for a Cloud
-	// Platform resource. `members` can have the following formats: *
+	// Platform resource. `members` can have the following values: *
 	// `allUsers`: A special identifier that represents anyone who is on the
 	// internet; with or without a Google account. *
 	// `allAuthenticatedUsers`: A special identifier that represents anyone
@@ -347,7 +347,7 @@ func (s *ModifyPushConfigRequest) MarshalJSON() ([]byte, error) {
 // named list of permissions defined by IAM. **Example** { "bindings": [
 // { "role": "roles/owner", "members": [ "user:mike@example.com",
 // "group:admins@example.com", "domain:google.com",
-// "serviceAccount:my-other-app@appspot.gserviceaccount.com"] }, {
+// "serviceAccount:my-other-app@appspot.gserviceaccount.com", ] }, {
 // "role": "roles/viewer", "members": ["user:sean@example.com"] } ] }
 // For a description of IAM and its features, see the [IAM developer's
 // guide](https://cloud.google.com/iam).
@@ -357,7 +357,16 @@ type Policy struct {
 	// no members will result in an error.
 	Bindings []*Binding `json:"bindings,omitempty"`
 
-	// Etag: Can be used to perform a read-modify-write.
+	// Etag: `etag` is used for optimistic concurrency control as a way to
+	// help prevent simultaneous updates of a policy from overwriting each
+	// other. It is strongly suggested that systems make use of the `etag`
+	// in the read-modify-write cycle to perform policy updates in order to
+	// avoid race conditions: An `etag` is returned in the response to
+	// `getIamPolicy`, and systems are expected to put that etag in the
+	// request to `setIamPolicy` to ensure that their change will be applied
+	// to the same version of the policy. If no `etag` is provided in the
+	// call to `setIamPolicy`, then the existing policy is overwritten
+	// blindly.
 	Etag string `json:"etag,omitempty"`
 
 	// Version: Version of the `Policy`. The default version is 0.
@@ -615,13 +624,14 @@ type Subscription struct {
 	// message. After message delivery but before the ack deadline expires
 	// and before the message is acknowledged, it is an outstanding message
 	// and will not be delivered again during that time (on a best-effort
-	// basis). For pull delivery this value is used as the initial value for
-	// the ack deadline. To override this value for a given message, call
-	// `ModifyAckDeadline` with the corresponding `ack_id`. For push
-	// delivery, this value is also used to set the request timeout for the
-	// call to the push endpoint. If the subscriber never acknowledges the
-	// message, the Pub/Sub system will eventually redeliver the message. If
-	// this parameter is not set, the default value of 10 seconds is used.
+	// basis). For pull subscriptions, this value is used as the initial
+	// value for the ack deadline. To override this value for a given
+	// message, call `ModifyAckDeadline` with the corresponding `ack_id` if
+	// using pull. For push delivery, this value is also used to set the
+	// request timeout for the call to the push endpoint. If the subscriber
+	// never acknowledges the message, the Pub/Sub system will eventually
+	// redeliver the message. If this parameter is not set, the default
+	// value of 10 seconds is used.
 	AckDeadlineSeconds int64 `json:"ackDeadlineSeconds,omitempty"`
 
 	// Name: The name of the subscription. It must have the format
@@ -666,7 +676,7 @@ func (s *Subscription) MarshalJSON() ([]byte, error) {
 type TestIamPermissionsRequest struct {
 	// Permissions: The set of permissions to check for the `resource`.
 	// Permissions with wildcards (such as '*' or 'storage.*') are not
-	// allowed.
+	// allowed. For more information see IAM Overview.
 	Permissions []string `json:"permissions,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Permissions") to
@@ -762,14 +772,6 @@ func (r *ProjectsSubscriptionsService) Acknowledge(subscription string, acknowle
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsAcknowledgeCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsAcknowledgeCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -787,25 +789,23 @@ func (c *ProjectsSubscriptionsAcknowledgeCall) Context(ctx context.Context) *Pro
 }
 
 func (c *ProjectsSubscriptionsAcknowledgeCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.acknowledgerequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+subscription}:acknowledge")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"subscription": c.subscription,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.acknowledge" call.
@@ -815,7 +815,8 @@ func (c *ProjectsSubscriptionsAcknowledgeCall) doRequest(alt string) (*http.Resp
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSubscriptionsAcknowledgeCall) Do() (*Empty, error) {
+func (c *ProjectsSubscriptionsAcknowledgeCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -839,7 +840,8 @@ func (c *ProjectsSubscriptionsAcknowledgeCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -884,24 +886,15 @@ type ProjectsSubscriptionsCreateCall struct {
 	ctx_         context.Context
 }
 
-// Create: Creates a subscription to a given topic for a given
-// subscriber. If the subscription already exists, returns
-// `ALREADY_EXISTS`. If the corresponding topic doesn't exist, returns
-// `NOT_FOUND`. If the name is not provided in the request, the server
-// will assign a random name for this subscription on the same project
-// as the topic.
+// Create: Creates a subscription to a given topic. If the subscription
+// already exists, returns `ALREADY_EXISTS`. If the corresponding topic
+// doesn't exist, returns `NOT_FOUND`. If the name is not provided in
+// the request, the server will assign a random name for this
+// subscription on the same project as the topic.
 func (r *ProjectsSubscriptionsService) Create(name string, subscription *Subscription) *ProjectsSubscriptionsCreateCall {
 	c := &ProjectsSubscriptionsCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.name = name
 	c.subscription = subscription
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsCreateCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -922,25 +915,23 @@ func (c *ProjectsSubscriptionsCreateCall) Context(ctx context.Context) *Projects
 }
 
 func (c *ProjectsSubscriptionsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.subscription)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.create" call.
@@ -950,7 +941,8 @@ func (c *ProjectsSubscriptionsCreateCall) doRequest(alt string) (*http.Response,
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsSubscriptionsCreateCall) Do() (*Subscription, error) {
+func (c *ProjectsSubscriptionsCreateCall) Do(opts ...googleapi.CallOption) (*Subscription, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -974,12 +966,13 @@ func (c *ProjectsSubscriptionsCreateCall) Do() (*Subscription, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Creates a subscription to a given topic for a given subscriber. If the subscription already exists, returns `ALREADY_EXISTS`. If the corresponding topic doesn't exist, returns `NOT_FOUND`. If the name is not provided in the request, the server will assign a random name for this subscription on the same project as the topic.",
+	//   "description": "Creates a subscription to a given topic. If the subscription already exists, returns `ALREADY_EXISTS`. If the corresponding topic doesn't exist, returns `NOT_FOUND`. If the name is not provided in the request, the server will assign a random name for this subscription on the same project as the topic.",
 	//   "httpMethod": "PUT",
 	//   "id": "pubsub.projects.subscriptions.create",
 	//   "parameterOrder": [
@@ -1030,14 +1023,6 @@ func (r *ProjectsSubscriptionsService) Delete(subscription string) *ProjectsSubs
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsDeleteCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1055,19 +1040,18 @@ func (c *ProjectsSubscriptionsDeleteCall) Context(ctx context.Context) *Projects
 }
 
 func (c *ProjectsSubscriptionsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+subscription}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"subscription": c.subscription,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.delete" call.
@@ -1077,7 +1061,8 @@ func (c *ProjectsSubscriptionsDeleteCall) doRequest(alt string) (*http.Response,
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSubscriptionsDeleteCall) Do() (*Empty, error) {
+func (c *ProjectsSubscriptionsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1101,7 +1086,8 @@ func (c *ProjectsSubscriptionsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1150,14 +1136,6 @@ func (r *ProjectsSubscriptionsService) Get(subscription string) *ProjectsSubscri
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsGetCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1185,22 +1163,21 @@ func (c *ProjectsSubscriptionsGetCall) Context(ctx context.Context) *ProjectsSub
 }
 
 func (c *ProjectsSubscriptionsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+subscription}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"subscription": c.subscription,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.get" call.
@@ -1210,7 +1187,8 @@ func (c *ProjectsSubscriptionsGetCall) doRequest(alt string) (*http.Response, er
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsSubscriptionsGetCall) Do() (*Subscription, error) {
+func (c *ProjectsSubscriptionsGetCall) Do(opts ...googleapi.CallOption) (*Subscription, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1234,7 +1212,8 @@ func (c *ProjectsSubscriptionsGetCall) Do() (*Subscription, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1276,19 +1255,12 @@ type ProjectsSubscriptionsGetIamPolicyCall struct {
 	ctx_         context.Context
 }
 
-// GetIamPolicy: Gets the access control policy for a `resource`. Is
-// empty if the policy or the resource does not exist.
+// GetIamPolicy: Gets the access control policy for a `resource`.
+// Returns an empty policy if the resource exists and does not have a
+// policy set.
 func (r *ProjectsSubscriptionsService) GetIamPolicy(resource string) *ProjectsSubscriptionsGetIamPolicyCall {
 	c := &ProjectsSubscriptionsGetIamPolicyCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resource = resource
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsGetIamPolicyCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsGetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1319,22 +1291,21 @@ func (c *ProjectsSubscriptionsGetIamPolicyCall) Context(ctx context.Context) *Pr
 }
 
 func (c *ProjectsSubscriptionsGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+resource}:getIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.getIamPolicy" call.
@@ -1344,7 +1315,8 @@ func (c *ProjectsSubscriptionsGetIamPolicyCall) doRequest(alt string) (*http.Res
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSubscriptionsGetIamPolicyCall) Do() (*Policy, error) {
+func (c *ProjectsSubscriptionsGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1368,12 +1340,13 @@ func (c *ProjectsSubscriptionsGetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Gets the access control policy for a `resource`. Is empty if the policy or the resource does not exist.",
+	//   "description": "Gets the access control policy for a `resource`. Returns an empty policy if the resource exists and does not have a policy set.",
 	//   "httpMethod": "GET",
 	//   "id": "pubsub.projects.subscriptions.getIamPolicy",
 	//   "parameterOrder": [
@@ -1381,7 +1354,7 @@ func (c *ProjectsSubscriptionsGetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the documentation for the respective GetIamPolicy rpc.",
+	//       "description": "REQUIRED: The resource for which the policy is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `getIamPolicy` documentation.",
 	//       "location": "path",
 	//       "pattern": "^projects/[^/]*/subscriptions/[^/]*$",
 	//       "required": true,
@@ -1433,14 +1406,6 @@ func (c *ProjectsSubscriptionsListCall) PageToken(pageToken string) *ProjectsSub
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsListCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1468,22 +1433,21 @@ func (c *ProjectsSubscriptionsListCall) Context(ctx context.Context) *ProjectsSu
 }
 
 func (c *ProjectsSubscriptionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+project}/subscriptions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.list" call.
@@ -1493,7 +1457,8 @@ func (c *ProjectsSubscriptionsListCall) doRequest(alt string) (*http.Response, e
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsSubscriptionsListCall) Do() (*ListSubscriptionsResponse, error) {
+func (c *ProjectsSubscriptionsListCall) Do(opts ...googleapi.CallOption) (*ListSubscriptionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1517,7 +1482,8 @@ func (c *ProjectsSubscriptionsListCall) Do() (*ListSubscriptionsResponse, error)
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1560,6 +1526,27 @@ func (c *ProjectsSubscriptionsListCall) Do() (*ListSubscriptionsResponse, error)
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsSubscriptionsListCall) Pages(ctx context.Context, f func(*ListSubscriptionsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "pubsub.projects.subscriptions.modifyAckDeadline":
 
 type ProjectsSubscriptionsModifyAckDeadlineCall struct {
@@ -1581,14 +1568,6 @@ func (r *ProjectsSubscriptionsService) ModifyAckDeadline(subscription string, mo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsModifyAckDeadlineCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsModifyAckDeadlineCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1606,25 +1585,23 @@ func (c *ProjectsSubscriptionsModifyAckDeadlineCall) Context(ctx context.Context
 }
 
 func (c *ProjectsSubscriptionsModifyAckDeadlineCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.modifyackdeadlinerequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+subscription}:modifyAckDeadline")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"subscription": c.subscription,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.modifyAckDeadline" call.
@@ -1634,7 +1611,8 @@ func (c *ProjectsSubscriptionsModifyAckDeadlineCall) doRequest(alt string) (*htt
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSubscriptionsModifyAckDeadlineCall) Do() (*Empty, error) {
+func (c *ProjectsSubscriptionsModifyAckDeadlineCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1658,7 +1636,8 @@ func (c *ProjectsSubscriptionsModifyAckDeadlineCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1716,14 +1695,6 @@ func (r *ProjectsSubscriptionsService) ModifyPushConfig(subscription string, mod
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsModifyPushConfigCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsModifyPushConfigCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1741,25 +1712,23 @@ func (c *ProjectsSubscriptionsModifyPushConfigCall) Context(ctx context.Context)
 }
 
 func (c *ProjectsSubscriptionsModifyPushConfigCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.modifypushconfigrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+subscription}:modifyPushConfig")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"subscription": c.subscription,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.modifyPushConfig" call.
@@ -1769,7 +1738,8 @@ func (c *ProjectsSubscriptionsModifyPushConfigCall) doRequest(alt string) (*http
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSubscriptionsModifyPushConfigCall) Do() (*Empty, error) {
+func (c *ProjectsSubscriptionsModifyPushConfigCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1793,7 +1763,8 @@ func (c *ProjectsSubscriptionsModifyPushConfigCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1849,14 +1820,6 @@ func (r *ProjectsSubscriptionsService) Pull(subscription string, pullrequest *Pu
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsPullCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsPullCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1874,25 +1837,23 @@ func (c *ProjectsSubscriptionsPullCall) Context(ctx context.Context) *ProjectsSu
 }
 
 func (c *ProjectsSubscriptionsPullCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.pullrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+subscription}:pull")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"subscription": c.subscription,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.pull" call.
@@ -1902,7 +1863,8 @@ func (c *ProjectsSubscriptionsPullCall) doRequest(alt string) (*http.Response, e
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsSubscriptionsPullCall) Do() (*PullResponse, error) {
+func (c *ProjectsSubscriptionsPullCall) Do(opts ...googleapi.CallOption) (*PullResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1926,7 +1888,8 @@ func (c *ProjectsSubscriptionsPullCall) Do() (*PullResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1980,14 +1943,6 @@ func (r *ProjectsSubscriptionsService) SetIamPolicy(resource string, setiampolic
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsSetIamPolicyCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsSetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2005,25 +1960,23 @@ func (c *ProjectsSubscriptionsSetIamPolicyCall) Context(ctx context.Context) *Pr
 }
 
 func (c *ProjectsSubscriptionsSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+resource}:setIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.setIamPolicy" call.
@@ -2033,7 +1986,8 @@ func (c *ProjectsSubscriptionsSetIamPolicyCall) doRequest(alt string) (*http.Res
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsSubscriptionsSetIamPolicyCall) Do() (*Policy, error) {
+func (c *ProjectsSubscriptionsSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2057,7 +2011,8 @@ func (c *ProjectsSubscriptionsSetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2070,7 +2025,7 @@ func (c *ProjectsSubscriptionsSetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being specified. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the documentation for the respective SetIamPolicy rpc.",
+	//       "description": "REQUIRED: The resource for which the policy is being specified. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `setIamPolicy` documentation.",
 	//       "location": "path",
 	//       "pattern": "^projects/[^/]*/subscriptions/[^/]*$",
 	//       "required": true,
@@ -2111,14 +2066,6 @@ func (r *ProjectsSubscriptionsService) TestIamPermissions(resource string, testi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsSubscriptionsTestIamPermissionsCall) QuotaUser(quotaUser string) *ProjectsSubscriptionsTestIamPermissionsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2136,25 +2083,23 @@ func (c *ProjectsSubscriptionsTestIamPermissionsCall) Context(ctx context.Contex
 }
 
 func (c *ProjectsSubscriptionsTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+resource}:testIamPermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.subscriptions.testIamPermissions" call.
@@ -2164,7 +2109,8 @@ func (c *ProjectsSubscriptionsTestIamPermissionsCall) doRequest(alt string) (*ht
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsSubscriptionsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, error) {
+func (c *ProjectsSubscriptionsTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*TestIamPermissionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2188,7 +2134,8 @@ func (c *ProjectsSubscriptionsTestIamPermissionsCall) Do() (*TestIamPermissionsR
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2201,7 +2148,7 @@ func (c *ProjectsSubscriptionsTestIamPermissionsCall) Do() (*TestIamPermissionsR
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy detail is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the documentation for the respective TestIamPermissions rpc.",
+	//       "description": "REQUIRED: The resource for which the policy detail is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `testIamPermissions` documentation.",
 	//       "location": "path",
 	//       "pattern": "^projects/[^/]*/subscriptions/[^/]*$",
 	//       "required": true,
@@ -2241,14 +2188,6 @@ func (r *ProjectsTopicsService) Create(name string, topic *Topic) *ProjectsTopic
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsCreateCall) QuotaUser(quotaUser string) *ProjectsTopicsCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2266,25 +2205,23 @@ func (c *ProjectsTopicsCreateCall) Context(ctx context.Context) *ProjectsTopicsC
 }
 
 func (c *ProjectsTopicsCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.topic)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.create" call.
@@ -2294,7 +2231,8 @@ func (c *ProjectsTopicsCreateCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsTopicsCreateCall) Do() (*Topic, error) {
+func (c *ProjectsTopicsCreateCall) Do(opts ...googleapi.CallOption) (*Topic, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2318,7 +2256,8 @@ func (c *ProjectsTopicsCreateCall) Do() (*Topic, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2374,14 +2313,6 @@ func (r *ProjectsTopicsService) Delete(topic string) *ProjectsTopicsDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsDeleteCall) QuotaUser(quotaUser string) *ProjectsTopicsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2399,19 +2330,18 @@ func (c *ProjectsTopicsDeleteCall) Context(ctx context.Context) *ProjectsTopicsD
 }
 
 func (c *ProjectsTopicsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+topic}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"topic": c.topic,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.delete" call.
@@ -2421,7 +2351,8 @@ func (c *ProjectsTopicsDeleteCall) doRequest(alt string) (*http.Response, error)
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsTopicsDeleteCall) Do() (*Empty, error) {
+func (c *ProjectsTopicsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2445,7 +2376,8 @@ func (c *ProjectsTopicsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2494,14 +2426,6 @@ func (r *ProjectsTopicsService) Get(topic string) *ProjectsTopicsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsGetCall) QuotaUser(quotaUser string) *ProjectsTopicsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2529,22 +2453,21 @@ func (c *ProjectsTopicsGetCall) Context(ctx context.Context) *ProjectsTopicsGetC
 }
 
 func (c *ProjectsTopicsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+topic}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"topic": c.topic,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.get" call.
@@ -2554,7 +2477,8 @@ func (c *ProjectsTopicsGetCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsTopicsGetCall) Do() (*Topic, error) {
+func (c *ProjectsTopicsGetCall) Do(opts ...googleapi.CallOption) (*Topic, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2578,7 +2502,8 @@ func (c *ProjectsTopicsGetCall) Do() (*Topic, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2620,19 +2545,12 @@ type ProjectsTopicsGetIamPolicyCall struct {
 	ctx_         context.Context
 }
 
-// GetIamPolicy: Gets the access control policy for a `resource`. Is
-// empty if the policy or the resource does not exist.
+// GetIamPolicy: Gets the access control policy for a `resource`.
+// Returns an empty policy if the resource exists and does not have a
+// policy set.
 func (r *ProjectsTopicsService) GetIamPolicy(resource string) *ProjectsTopicsGetIamPolicyCall {
 	c := &ProjectsTopicsGetIamPolicyCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.resource = resource
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsGetIamPolicyCall) QuotaUser(quotaUser string) *ProjectsTopicsGetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -2663,22 +2581,21 @@ func (c *ProjectsTopicsGetIamPolicyCall) Context(ctx context.Context) *ProjectsT
 }
 
 func (c *ProjectsTopicsGetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+resource}:getIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.getIamPolicy" call.
@@ -2688,7 +2605,8 @@ func (c *ProjectsTopicsGetIamPolicyCall) doRequest(alt string) (*http.Response, 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsTopicsGetIamPolicyCall) Do() (*Policy, error) {
+func (c *ProjectsTopicsGetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2712,12 +2630,13 @@ func (c *ProjectsTopicsGetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
 	// {
-	//   "description": "Gets the access control policy for a `resource`. Is empty if the policy or the resource does not exist.",
+	//   "description": "Gets the access control policy for a `resource`. Returns an empty policy if the resource exists and does not have a policy set.",
 	//   "httpMethod": "GET",
 	//   "id": "pubsub.projects.topics.getIamPolicy",
 	//   "parameterOrder": [
@@ -2725,7 +2644,7 @@ func (c *ProjectsTopicsGetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the documentation for the respective GetIamPolicy rpc.",
+	//       "description": "REQUIRED: The resource for which the policy is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `getIamPolicy` documentation.",
 	//       "location": "path",
 	//       "pattern": "^projects/[^/]*/topics/[^/]*$",
 	//       "required": true,
@@ -2777,14 +2696,6 @@ func (c *ProjectsTopicsListCall) PageToken(pageToken string) *ProjectsTopicsList
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsListCall) QuotaUser(quotaUser string) *ProjectsTopicsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2812,22 +2723,21 @@ func (c *ProjectsTopicsListCall) Context(ctx context.Context) *ProjectsTopicsLis
 }
 
 func (c *ProjectsTopicsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+project}/topics")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"project": c.project,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.list" call.
@@ -2837,7 +2747,8 @@ func (c *ProjectsTopicsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsTopicsListCall) Do() (*ListTopicsResponse, error) {
+func (c *ProjectsTopicsListCall) Do(opts ...googleapi.CallOption) (*ListTopicsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2861,7 +2772,8 @@ func (c *ProjectsTopicsListCall) Do() (*ListTopicsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2904,6 +2816,27 @@ func (c *ProjectsTopicsListCall) Do() (*ListTopicsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsTopicsListCall) Pages(ctx context.Context, f func(*ListTopicsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "pubsub.projects.topics.publish":
 
 type ProjectsTopicsPublishCall struct {
@@ -2925,14 +2858,6 @@ func (r *ProjectsTopicsService) Publish(topic string, publishrequest *PublishReq
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsPublishCall) QuotaUser(quotaUser string) *ProjectsTopicsPublishCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2950,25 +2875,23 @@ func (c *ProjectsTopicsPublishCall) Context(ctx context.Context) *ProjectsTopics
 }
 
 func (c *ProjectsTopicsPublishCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.publishrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+topic}:publish")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"topic": c.topic,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.publish" call.
@@ -2978,7 +2901,8 @@ func (c *ProjectsTopicsPublishCall) doRequest(alt string) (*http.Response, error
 // at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsTopicsPublishCall) Do() (*PublishResponse, error) {
+func (c *ProjectsTopicsPublishCall) Do(opts ...googleapi.CallOption) (*PublishResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3002,7 +2926,8 @@ func (c *ProjectsTopicsPublishCall) Do() (*PublishResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3056,14 +2981,6 @@ func (r *ProjectsTopicsService) SetIamPolicy(resource string, setiampolicyreques
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsSetIamPolicyCall) QuotaUser(quotaUser string) *ProjectsTopicsSetIamPolicyCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3081,25 +2998,23 @@ func (c *ProjectsTopicsSetIamPolicyCall) Context(ctx context.Context) *ProjectsT
 }
 
 func (c *ProjectsTopicsSetIamPolicyCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.setiampolicyrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+resource}:setIamPolicy")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.setIamPolicy" call.
@@ -3109,7 +3024,8 @@ func (c *ProjectsTopicsSetIamPolicyCall) doRequest(alt string) (*http.Response, 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsTopicsSetIamPolicyCall) Do() (*Policy, error) {
+func (c *ProjectsTopicsSetIamPolicyCall) Do(opts ...googleapi.CallOption) (*Policy, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3133,7 +3049,8 @@ func (c *ProjectsTopicsSetIamPolicyCall) Do() (*Policy, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3146,7 +3063,7 @@ func (c *ProjectsTopicsSetIamPolicyCall) Do() (*Policy, error) {
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy is being specified. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the documentation for the respective SetIamPolicy rpc.",
+	//       "description": "REQUIRED: The resource for which the policy is being specified. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `setIamPolicy` documentation.",
 	//       "location": "path",
 	//       "pattern": "^projects/[^/]*/topics/[^/]*$",
 	//       "required": true,
@@ -3187,14 +3104,6 @@ func (r *ProjectsTopicsService) TestIamPermissions(resource string, testiampermi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsTestIamPermissionsCall) QuotaUser(quotaUser string) *ProjectsTopicsTestIamPermissionsCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3212,25 +3121,23 @@ func (c *ProjectsTopicsTestIamPermissionsCall) Context(ctx context.Context) *Pro
 }
 
 func (c *ProjectsTopicsTestIamPermissionsCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.testiampermissionsrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+resource}:testIamPermissions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"resource": c.resource,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.testIamPermissions" call.
@@ -3240,7 +3147,8 @@ func (c *ProjectsTopicsTestIamPermissionsCall) doRequest(alt string) (*http.Resp
 // was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsTopicsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse, error) {
+func (c *ProjectsTopicsTestIamPermissionsCall) Do(opts ...googleapi.CallOption) (*TestIamPermissionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3264,7 +3172,8 @@ func (c *ProjectsTopicsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3277,7 +3186,7 @@ func (c *ProjectsTopicsTestIamPermissionsCall) Do() (*TestIamPermissionsResponse
 	//   ],
 	//   "parameters": {
 	//     "resource": {
-	//       "description": "REQUIRED: The resource for which policy detail is being requested. `resource` is usually specified as a path, such as, `projects/{project}/zones/{zone}/disks/{disk}`. The format for the path specified in this value is resource specific and is specified in the documentation for the respective TestIamPermissions rpc.",
+	//       "description": "REQUIRED: The resource for which the policy detail is being requested. `resource` is usually specified as a path, such as `projects/*project*/zones/*zone*/disks/*disk*`. The format for the path specified in this value is resource specific and is specified in the `testIamPermissions` documentation.",
 	//       "location": "path",
 	//       "pattern": "^projects/[^/]*/topics/[^/]*$",
 	//       "required": true,
@@ -3332,14 +3241,6 @@ func (c *ProjectsTopicsSubscriptionsListCall) PageToken(pageToken string) *Proje
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsTopicsSubscriptionsListCall) QuotaUser(quotaUser string) *ProjectsTopicsSubscriptionsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3367,22 +3268,21 @@ func (c *ProjectsTopicsSubscriptionsListCall) Context(ctx context.Context) *Proj
 }
 
 func (c *ProjectsTopicsSubscriptionsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta2/{+topic}/subscriptions")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"topic": c.topic,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "pubsub.projects.topics.subscriptions.list" call.
@@ -3392,7 +3292,8 @@ func (c *ProjectsTopicsSubscriptionsListCall) doRequest(alt string) (*http.Respo
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsTopicsSubscriptionsListCall) Do() (*ListTopicSubscriptionsResponse, error) {
+func (c *ProjectsTopicsSubscriptionsListCall) Do(opts ...googleapi.CallOption) (*ListTopicSubscriptionsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3416,7 +3317,8 @@ func (c *ProjectsTopicsSubscriptionsListCall) Do() (*ListTopicSubscriptionsRespo
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3457,4 +3359,25 @@ func (c *ProjectsTopicsSubscriptionsListCall) Do() (*ListTopicSubscriptionsRespo
 	//   ]
 	// }
 
+}
+
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsTopicsSubscriptionsListCall) Pages(ctx context.Context, f func(*ListTopicSubscriptionsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
 }

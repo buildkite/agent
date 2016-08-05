@@ -186,7 +186,7 @@ type ClusterConfiguration struct {
 	// this project-level, per-location bucket for you.
 	ConfigurationBucket string `json:"configurationBucket,omitempty"`
 
-	// GceClusterConfiguration: [Optional] The shared Google Compute Engine
+	// GceClusterConfiguration: [Required] The shared Google Compute Engine
 	// configuration settings for all instances in a cluster.
 	GceClusterConfiguration *GceClusterConfiguration `json:"gceClusterConfiguration,omitempty"`
 
@@ -226,6 +226,76 @@ type ClusterConfiguration struct {
 
 func (s *ClusterConfiguration) MarshalJSON() ([]byte, error) {
 	type noMethod ClusterConfiguration
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// ClusterOperationMetadata: Metadata describing the operation.
+type ClusterOperationMetadata struct {
+	// ClusterName: Name of the cluster for the operation.
+	ClusterName string `json:"clusterName,omitempty"`
+
+	// ClusterUuid: Cluster UUId for the operation.
+	ClusterUuid string `json:"clusterUuid,omitempty"`
+
+	// Description: [Output-only] Short description of operation.
+	Description string `json:"description,omitempty"`
+
+	// OperationType: [Output-only] The operation type.
+	OperationType string `json:"operationType,omitempty"`
+
+	// Status: [Output-only] Current operation status.
+	Status *ClusterOperationStatus `json:"status,omitempty"`
+
+	// StatusHistory: [Output-only] The previous operation status.
+	StatusHistory []*ClusterOperationStatus `json:"statusHistory,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "ClusterName") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ClusterOperationMetadata) MarshalJSON() ([]byte, error) {
+	type noMethod ClusterOperationMetadata
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
+// ClusterOperationStatus: The status of the operation.
+type ClusterOperationStatus struct {
+	// Details: A message containing any operation metadata details.
+	Details string `json:"details,omitempty"`
+
+	// InnerState: A message containing the detailed operation state.
+	InnerState string `json:"innerState,omitempty"`
+
+	// State: A message containing the operation state.
+	//
+	// Possible values:
+	//   "UNKNOWN"
+	//   "PENDING"
+	//   "RUNNING"
+	//   "DONE"
+	State string `json:"state,omitempty"`
+
+	// StateStartTime: The time this state was entered.
+	StateStartTime string `json:"stateStartTime,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "Details") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *ClusterOperationStatus) MarshalJSON() ([]byte, error) {
+	type noMethod ClusterOperationStatus
 	raw := noMethod(*s)
 	return gensupport.MarshalJSON(raw, s.ForceSendFields)
 }
@@ -292,6 +362,28 @@ func (s *DiagnoseClusterOutputLocation) MarshalJSON() ([]byte, error) {
 type DiagnoseClusterRequest struct {
 }
 
+// DiagnoseClusterResults: The location of diagnostic output.
+type DiagnoseClusterResults struct {
+	// OutputUri: [Output-only] The Google Cloud Storage URI of the
+	// diagnostic output. This is a plain text file with a summary of
+	// collected diagnostics.
+	OutputUri string `json:"outputUri,omitempty"`
+
+	// ForceSendFields is a list of field names (e.g. "OutputUri") to
+	// unconditionally include in API requests. By default, fields with
+	// empty values are omitted from API requests. However, any non-pointer,
+	// non-interface field appearing in ForceSendFields will be sent to the
+	// server regardless of whether the field is empty or not. This may be
+	// used to include empty fields in Patch requests.
+	ForceSendFields []string `json:"-"`
+}
+
+func (s *DiagnoseClusterResults) MarshalJSON() ([]byte, error) {
+	type noMethod DiagnoseClusterResults
+	raw := noMethod(*s)
+	return gensupport.MarshalJSON(raw, s.ForceSendFields)
+}
+
 // DiskConfiguration: Specifies the configuration of disk options for a
 // group of VM instances.
 type DiskConfiguration struct {
@@ -337,11 +429,18 @@ type Empty struct {
 // of Google Compute Engine cluster instances, applicable to all
 // instances in the cluster.
 type GceClusterConfiguration struct {
+	// Metadata: The Google Compute Engine metadata entries to add to all
+	// instances.
+	Metadata map[string]string `json:"metadata,omitempty"`
+
 	// NetworkUri: The Google Compute Engine network to be used for machine
-	// communications. Inbound SSH connections are necessary to complete
-	// cluster configuration. Example:
-	// `compute.googleapis.com/projects/[project_id]/zones/us-east1-a/default
-	// `.
+	// communications. Cannot be specified with subnetwork_uri. If neither
+	// network_uri nor subnetwork_uri is specified, the "default" network of
+	// the project is used, if it exists. Cannot be a "Custom Subnet
+	// Network" (see https://cloud.google.com/compute/docs/subnetworks for
+	// more information). Example:
+	// `https://www.googleapis.com/compute/v1/projects/[project_id]/regions/g
+	// lobal/default`.
 	NetworkUri string `json:"networkUri,omitempty"`
 
 	// ServiceAccountScopes: The URIs of service account scopes to be
@@ -357,12 +456,23 @@ type GceClusterConfiguration struct {
 	// https://www.googleapis.com/auth/devstorage.full_control
 	ServiceAccountScopes []string `json:"serviceAccountScopes,omitempty"`
 
+	// SubnetworkUri: The Google Compute Engine subnetwork to be used for
+	// machine communications. Cannot be specified with network_uri.
+	// Example:
+	// `https://www.googleapis.com/compute/v1/projects/[project_id]/regions/u
+	// s-east1/sub0`.
+	SubnetworkUri string `json:"subnetworkUri,omitempty"`
+
+	// Tags: The Google Compute Engine tags to add to all instances.
+	Tags []string `json:"tags,omitempty"`
+
 	// ZoneUri: [Required] The zone where the Google Compute Engine cluster
 	// will be located. Example:
-	// `compute.googleapis.com/projects/[project_id]/zones/us-east1-a`.
+	// `https://www.googleapis.com/compute/v1/projects/[project_id]/zones/[zo
+	// ne]`.
 	ZoneUri string `json:"zoneUri,omitempty"`
 
-	// ForceSendFields is a list of field names (e.g. "NetworkUri") to
+	// ForceSendFields is a list of field names (e.g. "Metadata") to
 	// unconditionally include in API requests. By default, fields with
 	// empty values are omitted from API requests. However, any non-pointer,
 	// non-interface field appearing in ForceSendFields will be sent to the
@@ -490,9 +600,7 @@ type InstanceGroupConfiguration struct {
 
 	// ImageUri: [Output-only] The Google Compute Engine image resource used
 	// for cluster instances. Inferred from
-	// `SoftwareConfiguration.image_version`. Example:
-	// `compute.googleapis.com/projects/debian-cloud/global/images/backports-
-	// debian-7-wheezy-v20140904`.
+	// `SoftwareConfiguration.image_version`.
 	ImageUri string `json:"imageUri,omitempty"`
 
 	// InstanceNames: The list of instance names. Dataproc derives the names
@@ -507,8 +615,8 @@ type InstanceGroupConfiguration struct {
 
 	// MachineTypeUri: The Google Compute Engine machine type used for
 	// cluster instances. Example:
-	// `compute.googleapis.com/projects/[project_id]/zones/us-east1-a/machine
-	// Types/n1-standard-2`.
+	// `https://www.googleapis.com/compute/v1/projects/[project_id]/zones/us-
+	// east1-a/machineTypes/n1-standard-2`.
 	MachineTypeUri string `json:"machineTypeUri,omitempty"`
 
 	// ManagedGroupConfiguration: [Output-only] The configuration for Google
@@ -897,7 +1005,7 @@ type Operation struct {
 
 	// Name: The server-assigned name, which is only unique within the same
 	// service that originally returns it. If you use the default HTTP
-	// mapping above, the `name` should have the format of
+	// mapping, the `name` should have the format of
 	// `operations/some/unique/name`.
 	Name string `json:"name,omitempty"`
 
@@ -942,6 +1050,9 @@ type OperationMetadata1 struct {
 	// ClusterUuid: Cluster UUId for the operation.
 	ClusterUuid string `json:"clusterUuid,omitempty"`
 
+	// Description: [Output-only] Short description of operation.
+	Description string `json:"description,omitempty"`
+
 	// Details: A message containing any operation metadata details.
 	Details string `json:"details,omitempty"`
 
@@ -953,6 +1064,9 @@ type OperationMetadata1 struct {
 
 	// InsertTime: The time that the operation was requested.
 	InsertTime string `json:"insertTime,omitempty"`
+
+	// OperationType: [Output-only] The operation type.
+	OperationType string `json:"operationType,omitempty"`
 
 	// StartTime: The time that the operation was started by the server.
 	StartTime string `json:"startTime,omitempty"`
@@ -1158,6 +1272,14 @@ type SoftwareConfiguration struct {
 	// unspecified, it defaults to the latest version (see [Cloud Dataproc
 	// Versioning](/dataproc/versioning)).
 	ImageVersion string `json:"imageVersion,omitempty"`
+
+	// Properties: [Optional] The properties to set on daemon configuration
+	// files. Property keys are specified in "prefix:property" format, such
+	// as "core:fs.defaultFS". The following are supported prefixes and
+	// their mappings: core - core-site.xml hdfs - hdfs-site.xml mapred -
+	// mapred-site.xml yarn - yarn-site.xml hive - hive-site.xml pig -
+	// pig.properties spark - spark-defaults.conf
+	Properties map[string]string `json:"properties,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "ImageVersion") to
 	// unconditionally include in API requests. By default, fields with
@@ -1427,14 +1549,6 @@ func (r *OperationsService) Cancel(name string, canceloperationrequest *CancelOp
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsCancelCall) QuotaUser(quotaUser string) *OperationsCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1452,25 +1566,23 @@ func (c *OperationsCancelCall) Context(ctx context.Context) *OperationsCancelCal
 }
 
 func (c *OperationsCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.canceloperationrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+name}:cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.operations.cancel" call.
@@ -1480,7 +1592,8 @@ func (c *OperationsCancelCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OperationsCancelCall) Do() (*Empty, error) {
+func (c *OperationsCancelCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1504,7 +1617,8 @@ func (c *OperationsCancelCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1557,14 +1671,6 @@ func (r *OperationsService) Delete(name string) *OperationsDeleteCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsDeleteCall) QuotaUser(quotaUser string) *OperationsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1582,19 +1688,18 @@ func (c *OperationsDeleteCall) Context(ctx context.Context) *OperationsDeleteCal
 }
 
 func (c *OperationsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.operations.delete" call.
@@ -1604,7 +1709,8 @@ func (c *OperationsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *OperationsDeleteCall) Do() (*Empty, error) {
+func (c *OperationsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1628,7 +1734,8 @@ func (c *OperationsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1678,14 +1785,6 @@ func (r *OperationsService) Get(name string) *OperationsGetCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsGetCall) QuotaUser(quotaUser string) *OperationsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1713,22 +1812,21 @@ func (c *OperationsGetCall) Context(ctx context.Context) *OperationsGetCall {
 }
 
 func (c *OperationsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.operations.get" call.
@@ -1738,7 +1836,8 @@ func (c *OperationsGetCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *OperationsGetCall) Do() (*Operation, error) {
+func (c *OperationsGetCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1762,7 +1861,8 @@ func (c *OperationsGetCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1835,14 +1935,6 @@ func (c *OperationsListCall) PageToken(pageToken string) *OperationsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *OperationsListCall) QuotaUser(quotaUser string) *OperationsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1870,22 +1962,21 @@ func (c *OperationsListCall) Context(ctx context.Context) *OperationsListCall {
 }
 
 func (c *OperationsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/{+name}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"name": c.name,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.operations.list" call.
@@ -1895,7 +1986,8 @@ func (c *OperationsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *OperationsListCall) Do() (*ListOperationsResponse, error) {
+func (c *OperationsListCall) Do(opts ...googleapi.CallOption) (*ListOperationsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1919,7 +2011,8 @@ func (c *OperationsListCall) Do() (*ListOperationsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1966,6 +2059,27 @@ func (c *OperationsListCall) Do() (*ListOperationsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *OperationsListCall) Pages(ctx context.Context, f func(*ListOperationsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dataproc.projects.clusters.create":
 
 type ProjectsClustersCreateCall struct {
@@ -1981,14 +2095,6 @@ func (r *ProjectsClustersService) Create(projectId string, cluster *Cluster) *Pr
 	c := &ProjectsClustersCreateCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
 	c.cluster = cluster
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsClustersCreateCall) QuotaUser(quotaUser string) *ProjectsClustersCreateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -2009,25 +2115,23 @@ func (c *ProjectsClustersCreateCall) Context(ctx context.Context) *ProjectsClust
 }
 
 func (c *ProjectsClustersCreateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.cluster)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/clusters")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.clusters.create" call.
@@ -2037,7 +2141,8 @@ func (c *ProjectsClustersCreateCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsClustersCreateCall) Do() (*Operation, error) {
+func (c *ProjectsClustersCreateCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2061,7 +2166,8 @@ func (c *ProjectsClustersCreateCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2112,14 +2218,6 @@ func (r *ProjectsClustersService) Delete(projectId string, clusterName string) *
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsClustersDeleteCall) QuotaUser(quotaUser string) *ProjectsClustersDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2137,20 +2235,19 @@ func (c *ProjectsClustersDeleteCall) Context(ctx context.Context) *ProjectsClust
 }
 
 func (c *ProjectsClustersDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/clusters/{clusterName}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId":   c.projectId,
 		"clusterName": c.clusterName,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.clusters.delete" call.
@@ -2160,7 +2257,8 @@ func (c *ProjectsClustersDeleteCall) doRequest(alt string) (*http.Response, erro
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsClustersDeleteCall) Do() (*Operation, error) {
+func (c *ProjectsClustersDeleteCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2184,7 +2282,8 @@ func (c *ProjectsClustersDeleteCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2243,14 +2342,6 @@ func (r *ProjectsClustersService) Diagnose(projectId string, clusterName string,
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsClustersDiagnoseCall) QuotaUser(quotaUser string) *ProjectsClustersDiagnoseCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2268,26 +2359,24 @@ func (c *ProjectsClustersDiagnoseCall) Context(ctx context.Context) *ProjectsClu
 }
 
 func (c *ProjectsClustersDiagnoseCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.diagnoseclusterrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/clusters/{clusterName}:diagnose")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId":   c.projectId,
 		"clusterName": c.clusterName,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.clusters.diagnose" call.
@@ -2297,7 +2386,8 @@ func (c *ProjectsClustersDiagnoseCall) doRequest(alt string) (*http.Response, er
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsClustersDiagnoseCall) Do() (*Operation, error) {
+func (c *ProjectsClustersDiagnoseCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2321,7 +2411,8 @@ func (c *ProjectsClustersDiagnoseCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2380,14 +2471,6 @@ func (r *ProjectsClustersService) Get(projectId string, clusterName string) *Pro
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsClustersGetCall) QuotaUser(quotaUser string) *ProjectsClustersGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2415,23 +2498,22 @@ func (c *ProjectsClustersGetCall) Context(ctx context.Context) *ProjectsClusters
 }
 
 func (c *ProjectsClustersGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/clusters/{clusterName}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId":   c.projectId,
 		"clusterName": c.clusterName,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.clusters.get" call.
@@ -2441,7 +2523,8 @@ func (c *ProjectsClustersGetCall) doRequest(alt string) (*http.Response, error) 
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsClustersGetCall) Do() (*Cluster, error) {
+func (c *ProjectsClustersGetCall) Do(opts ...googleapi.CallOption) (*Cluster, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2465,7 +2548,8 @@ func (c *ProjectsClustersGetCall) Do() (*Cluster, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2533,14 +2617,6 @@ func (c *ProjectsClustersListCall) PageToken(pageToken string) *ProjectsClusters
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsClustersListCall) QuotaUser(quotaUser string) *ProjectsClustersListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2568,22 +2644,21 @@ func (c *ProjectsClustersListCall) Context(ctx context.Context) *ProjectsCluster
 }
 
 func (c *ProjectsClustersListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/clusters")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.clusters.list" call.
@@ -2593,7 +2668,8 @@ func (c *ProjectsClustersListCall) doRequest(alt string) (*http.Response, error)
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsClustersListCall) Do() (*ListClustersResponse, error) {
+func (c *ProjectsClustersListCall) Do(opts ...googleapi.CallOption) (*ListClustersResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2617,7 +2693,8 @@ func (c *ProjectsClustersListCall) Do() (*ListClustersResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2658,6 +2735,27 @@ func (c *ProjectsClustersListCall) Do() (*ListClustersResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsClustersListCall) Pages(ctx context.Context, f func(*ListClustersResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dataproc.projects.clusters.patch":
 
 type ProjectsClustersPatchCall struct {
@@ -2678,14 +2776,6 @@ func (r *ProjectsClustersService) Patch(projectId string, clusterName string, cl
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsClustersPatchCall) QuotaUser(quotaUser string) *ProjectsClustersPatchCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // UpdateMask sets the optional parameter "updateMask": [Required]
 // Specifies the path, relative to Cluster, of the field to update. For
 // example, to change the number of workers in a cluster to 5, the
@@ -2693,8 +2783,14 @@ func (c *ProjectsClustersPatchCall) QuotaUser(quotaUser string) *ProjectsCluster
 // configuration.worker_configuration.num_instances, and the `PATCH`
 // request body would specify the new value, as follows: {
 // "configuration":{ "workerConfiguration":{ "numInstances":"5" } } }
-// Note: Currently, configuration.worker_configuration.num_instances is
-// the only field that can be updated.
+// Similarly, to change the number of preemptible workers in a cluster
+// to 5, the update_mask parameter would be
+// config.secondary_worker_config.num_instances, and the `PATCH` request
+// body would be set as follows: { "config":{ "secondaryWorkerConfig":{
+// "numInstances":"5" } } } Note: Currently,
+// config.worker_config.num_instances and
+// config.secondary_worker_config.num_instances are the only fields that
+// can be updated.
 func (c *ProjectsClustersPatchCall) UpdateMask(updateMask string) *ProjectsClustersPatchCall {
 	c.urlParams_.Set("updateMask", updateMask)
 	return c
@@ -2717,26 +2813,24 @@ func (c *ProjectsClustersPatchCall) Context(ctx context.Context) *ProjectsCluste
 }
 
 func (c *ProjectsClustersPatchCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.cluster)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/clusters/{clusterName}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PATCH", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId":   c.projectId,
 		"clusterName": c.clusterName,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.clusters.patch" call.
@@ -2746,7 +2840,8 @@ func (c *ProjectsClustersPatchCall) doRequest(alt string) (*http.Response, error
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *ProjectsClustersPatchCall) Do() (*Operation, error) {
+func (c *ProjectsClustersPatchCall) Do(opts ...googleapi.CallOption) (*Operation, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2770,7 +2865,8 @@ func (c *ProjectsClustersPatchCall) Do() (*Operation, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2796,7 +2892,7 @@ func (c *ProjectsClustersPatchCall) Do() (*Operation, error) {
 	//       "type": "string"
 	//     },
 	//     "updateMask": {
-	//       "description": "[Required] Specifies the path, relative to Cluster, of the field to update. For example, to change the number of workers in a cluster to 5, the update_mask parameter would be specified as configuration.worker_configuration.num_instances, and the `PATCH` request body would specify the new value, as follows: { \"configuration\":{ \"workerConfiguration\":{ \"numInstances\":\"5\" } } } Note: Currently, configuration.worker_configuration.num_instances is the only field that can be updated.",
+	//       "description": "[Required] Specifies the path, relative to Cluster, of the field to update. For example, to change the number of workers in a cluster to 5, the update_mask parameter would be specified as configuration.worker_configuration.num_instances, and the `PATCH` request body would specify the new value, as follows: { \"configuration\":{ \"workerConfiguration\":{ \"numInstances\":\"5\" } } } Similarly, to change the number of preemptible workers in a cluster to 5, the update_mask parameter would be config.secondary_worker_config.num_instances, and the `PATCH` request body would be set as follows: { \"config\":{ \"secondaryWorkerConfig\":{ \"numInstances\":\"5\" } } } Note: Currently, config.worker_config.num_instances and config.secondary_worker_config.num_instances are the only fields that can be updated.",
 	//       "location": "query",
 	//       "type": "string"
 	//     }
@@ -2838,14 +2934,6 @@ func (r *ProjectsJobsService) Cancel(projectId string, jobId string, canceljobre
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsJobsCancelCall) QuotaUser(quotaUser string) *ProjectsJobsCancelCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -2863,26 +2951,24 @@ func (c *ProjectsJobsCancelCall) Context(ctx context.Context) *ProjectsJobsCance
 }
 
 func (c *ProjectsJobsCancelCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.canceljobrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/jobs/{jobId}:cancel")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.jobs.cancel" call.
@@ -2892,7 +2978,8 @@ func (c *ProjectsJobsCancelCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *ProjectsJobsCancelCall) Do() (*Job, error) {
+func (c *ProjectsJobsCancelCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2916,7 +3003,8 @@ func (c *ProjectsJobsCancelCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2975,14 +3063,6 @@ func (r *ProjectsJobsService) Delete(projectId string, jobId string) *ProjectsJo
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsJobsDeleteCall) QuotaUser(quotaUser string) *ProjectsJobsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3000,20 +3080,19 @@ func (c *ProjectsJobsDeleteCall) Context(ctx context.Context) *ProjectsJobsDelet
 }
 
 func (c *ProjectsJobsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/jobs/{jobId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.jobs.delete" call.
@@ -3023,7 +3102,8 @@ func (c *ProjectsJobsDeleteCall) doRequest(alt string) (*http.Response, error) {
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *ProjectsJobsDeleteCall) Do() (*Empty, error) {
+func (c *ProjectsJobsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3047,7 +3127,8 @@ func (c *ProjectsJobsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3103,14 +3184,6 @@ func (r *ProjectsJobsService) Get(projectId string, jobId string) *ProjectsJobsG
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsJobsGetCall) QuotaUser(quotaUser string) *ProjectsJobsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3138,23 +3211,22 @@ func (c *ProjectsJobsGetCall) Context(ctx context.Context) *ProjectsJobsGetCall 
 }
 
 func (c *ProjectsJobsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/jobs/{jobId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 		"jobId":     c.jobId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.jobs.get" call.
@@ -3164,7 +3236,8 @@ func (c *ProjectsJobsGetCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *ProjectsJobsGetCall) Do() (*Job, error) {
+func (c *ProjectsJobsGetCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3188,7 +3261,8 @@ func (c *ProjectsJobsGetCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3277,14 +3351,6 @@ func (c *ProjectsJobsListCall) PageToken(pageToken string) *ProjectsJobsListCall
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsJobsListCall) QuotaUser(quotaUser string) *ProjectsJobsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -3312,22 +3378,21 @@ func (c *ProjectsJobsListCall) Context(ctx context.Context) *ProjectsJobsListCal
 }
 
 func (c *ProjectsJobsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/jobs")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.jobs.list" call.
@@ -3337,7 +3402,8 @@ func (c *ProjectsJobsListCall) doRequest(alt string) (*http.Response, error) {
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ProjectsJobsListCall) Do() (*ListJobsResponse, error) {
+func (c *ProjectsJobsListCall) Do(opts ...googleapi.CallOption) (*ListJobsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3361,7 +3427,8 @@ func (c *ProjectsJobsListCall) Do() (*ListJobsResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -3417,6 +3484,27 @@ func (c *ProjectsJobsListCall) Do() (*ListJobsResponse, error) {
 
 }
 
+// Pages invokes f for each page of results.
+// A non-nil error returned from f will halt the iteration.
+// The provided context supersedes any context provided to the Context method.
+func (c *ProjectsJobsListCall) Pages(ctx context.Context, f func(*ListJobsResponse) error) error {
+	c.ctx_ = ctx
+	defer c.PageToken(c.urlParams_.Get("pageToken")) // reset paging to original point
+	for {
+		x, err := c.Do()
+		if err != nil {
+			return err
+		}
+		if err := f(x); err != nil {
+			return err
+		}
+		if x.NextPageToken == "" {
+			return nil
+		}
+		c.PageToken(x.NextPageToken)
+	}
+}
+
 // method id "dataproc.projects.jobs.submit":
 
 type ProjectsJobsSubmitCall struct {
@@ -3432,14 +3520,6 @@ func (r *ProjectsJobsService) Submit(projectId string, submitjobrequest *SubmitJ
 	c := &ProjectsJobsSubmitCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.projectId = projectId
 	c.submitjobrequest = submitjobrequest
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ProjectsJobsSubmitCall) QuotaUser(quotaUser string) *ProjectsJobsSubmitCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -3460,25 +3540,23 @@ func (c *ProjectsJobsSubmitCall) Context(ctx context.Context) *ProjectsJobsSubmi
 }
 
 func (c *ProjectsJobsSubmitCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.submitjobrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v1beta1/projects/{projectId}/jobs:submit")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"projectId": c.projectId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "dataproc.projects.jobs.submit" call.
@@ -3488,7 +3566,8 @@ func (c *ProjectsJobsSubmitCall) doRequest(alt string) (*http.Response, error) {
 // error.(*googleapi.Error).Header. Use googleapi.IsNotModified to check
 // whether the returned error was because http.StatusNotModified was
 // returned.
-func (c *ProjectsJobsSubmitCall) Do() (*Job, error) {
+func (c *ProjectsJobsSubmitCall) Do(opts ...googleapi.CallOption) (*Job, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -3512,7 +3591,8 @@ func (c *ProjectsJobsSubmitCall) Do() (*Job, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil

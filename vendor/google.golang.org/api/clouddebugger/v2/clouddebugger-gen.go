@@ -226,6 +226,10 @@ type Breakpoint struct {
 	// the breakpoint state will not change from here on.
 	IsFinalState bool `json:"isFinalState,omitempty"`
 
+	// Labels: A set of custom breakpoint properties, populated by the
+	// agent, to be displayed to the user.
+	Labels map[string]string `json:"labels,omitempty"`
+
 	// Location: Breakpoint source location.
 	Location *SourceLocation `json:"location,omitempty"`
 
@@ -273,7 +277,7 @@ type Breakpoint struct {
 	// `var_table_index` field is an index into this repeated field. The
 	// stored objects are nameless and get their name from the referencing
 	// variable. The effective variable is a merge of the referencing
-	// veariable and the referenced variable.
+	// variable and the referenced variable.
 	VariableTable []*Variable `json:"variableTable,omitempty"`
 
 	// ForceSendFields is a list of field names (e.g. "Action") to
@@ -1075,14 +1079,6 @@ func (r *ControllerDebuggeesService) Register(registerdebuggeerequest *RegisterD
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ControllerDebuggeesRegisterCall) QuotaUser(quotaUser string) *ControllerDebuggeesRegisterCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1100,23 +1096,21 @@ func (c *ControllerDebuggeesRegisterCall) Context(ctx context.Context) *Controll
 }
 
 func (c *ControllerDebuggeesRegisterCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.registerdebuggeerequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/controller/debuggees/register")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.controller.debuggees.register" call.
@@ -1126,7 +1120,8 @@ func (c *ControllerDebuggeesRegisterCall) doRequest(alt string) (*http.Response,
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ControllerDebuggeesRegisterCall) Do() (*RegisterDebuggeeResponse, error) {
+func (c *ControllerDebuggeesRegisterCall) Do(opts ...googleapi.CallOption) (*RegisterDebuggeeResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1150,7 +1145,8 @@ func (c *ControllerDebuggeesRegisterCall) Do() (*RegisterDebuggeeResponse, error
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1197,14 +1193,6 @@ type ControllerDebuggeesBreakpointsListCall struct {
 func (r *ControllerDebuggeesBreakpointsService) List(debuggeeId string) *ControllerDebuggeesBreakpointsListCall {
 	c := &ControllerDebuggeesBreakpointsListCall{s: r.s, urlParams_: make(gensupport.URLParams)}
 	c.debuggeeId = debuggeeId
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ControllerDebuggeesBreakpointsListCall) QuotaUser(quotaUser string) *ControllerDebuggeesBreakpointsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1255,22 +1243,21 @@ func (c *ControllerDebuggeesBreakpointsListCall) Context(ctx context.Context) *C
 }
 
 func (c *ControllerDebuggeesBreakpointsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/controller/debuggees/{debuggeeId}/breakpoints")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"debuggeeId": c.debuggeeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.controller.debuggees.breakpoints.list" call.
@@ -1280,7 +1267,8 @@ func (c *ControllerDebuggeesBreakpointsListCall) doRequest(alt string) (*http.Re
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ControllerDebuggeesBreakpointsListCall) Do() (*ListActiveBreakpointsResponse, error) {
+func (c *ControllerDebuggeesBreakpointsListCall) Do(opts ...googleapi.CallOption) (*ListActiveBreakpointsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1304,7 +1292,8 @@ func (c *ControllerDebuggeesBreakpointsListCall) Do() (*ListActiveBreakpointsRes
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1372,14 +1361,6 @@ func (r *ControllerDebuggeesBreakpointsService) Update(debuggeeId string, id str
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *ControllerDebuggeesBreakpointsUpdateCall) QuotaUser(quotaUser string) *ControllerDebuggeesBreakpointsUpdateCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Fields allows partial responses to be retrieved. See
 // https://developers.google.com/gdata/docs/2.0/basics#PartialResponse
 // for more information.
@@ -1397,26 +1378,24 @@ func (c *ControllerDebuggeesBreakpointsUpdateCall) Context(ctx context.Context) 
 }
 
 func (c *ControllerDebuggeesBreakpointsUpdateCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.updateactivebreakpointrequest)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/controller/debuggees/{debuggeeId}/breakpoints/{id}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("PUT", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"debuggeeId": c.debuggeeId,
 		"id":         c.id,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.controller.debuggees.breakpoints.update" call.
@@ -1426,7 +1405,8 @@ func (c *ControllerDebuggeesBreakpointsUpdateCall) doRequest(alt string) (*http.
 // response was returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *ControllerDebuggeesBreakpointsUpdateCall) Do() (*UpdateActiveBreakpointResponse, error) {
+func (c *ControllerDebuggeesBreakpointsUpdateCall) Do(opts ...googleapi.CallOption) (*UpdateActiveBreakpointResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1450,7 +1430,8 @@ func (c *ControllerDebuggeesBreakpointsUpdateCall) Do() (*UpdateActiveBreakpoint
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1506,6 +1487,14 @@ func (r *DebuggerDebuggeesService) List() *DebuggerDebuggeesListCall {
 	return c
 }
 
+// ClientVersion sets the optional parameter "clientVersion": The client
+// version making the call. Following: `domain/type/version` (e.g.,
+// `google.com/intellij/v1`).
+func (c *DebuggerDebuggeesListCall) ClientVersion(clientVersion string) *DebuggerDebuggeesListCall {
+	c.urlParams_.Set("clientVersion", clientVersion)
+	return c
+}
+
 // IncludeInactive sets the optional parameter "includeInactive": When
 // set to `true`, the result includes all debuggees. Otherwise, the
 // result includes only debuggees that are active.
@@ -1518,14 +1507,6 @@ func (c *DebuggerDebuggeesListCall) IncludeInactive(includeInactive bool) *Debug
 // Google Cloud project whose debuggees to list.
 func (c *DebuggerDebuggeesListCall) Project(project string) *DebuggerDebuggeesListCall {
 	c.urlParams_.Set("project", project)
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DebuggerDebuggeesListCall) QuotaUser(quotaUser string) *DebuggerDebuggeesListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -1556,20 +1537,19 @@ func (c *DebuggerDebuggeesListCall) Context(ctx context.Context) *DebuggerDebugg
 }
 
 func (c *DebuggerDebuggeesListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/debugger/debuggees")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.debugger.debuggees.list" call.
@@ -1579,7 +1559,8 @@ func (c *DebuggerDebuggeesListCall) doRequest(alt string) (*http.Response, error
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DebuggerDebuggeesListCall) Do() (*ListDebuggeesResponse, error) {
+func (c *DebuggerDebuggeesListCall) Do(opts ...googleapi.CallOption) (*ListDebuggeesResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1603,7 +1584,8 @@ func (c *DebuggerDebuggeesListCall) Do() (*ListDebuggeesResponse, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1612,6 +1594,11 @@ func (c *DebuggerDebuggeesListCall) Do() (*ListDebuggeesResponse, error) {
 	//   "httpMethod": "GET",
 	//   "id": "clouddebugger.debugger.debuggees.list",
 	//   "parameters": {
+	//     "clientVersion": {
+	//       "description": "The client version making the call. Following: `domain/type/version` (e.g., `google.com/intellij/v1`).",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "includeInactive": {
 	//       "description": "When set to `true`, the result includes all debuggees. Otherwise, the result includes only debuggees that are active.",
 	//       "location": "query",
@@ -1653,11 +1640,11 @@ func (r *DebuggerDebuggeesBreakpointsService) Delete(debuggeeId string, breakpoi
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DebuggerDebuggeesBreakpointsDeleteCall) QuotaUser(quotaUser string) *DebuggerDebuggeesBreakpointsDeleteCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// ClientVersion sets the optional parameter "clientVersion": The client
+// version making the call. Following: `domain/type/version` (e.g.,
+// `google.com/intellij/v1`).
+func (c *DebuggerDebuggeesBreakpointsDeleteCall) ClientVersion(clientVersion string) *DebuggerDebuggeesBreakpointsDeleteCall {
+	c.urlParams_.Set("clientVersion", clientVersion)
 	return c
 }
 
@@ -1678,20 +1665,19 @@ func (c *DebuggerDebuggeesBreakpointsDeleteCall) Context(ctx context.Context) *D
 }
 
 func (c *DebuggerDebuggeesBreakpointsDeleteCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/debugger/debuggees/{debuggeeId}/breakpoints/{breakpointId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("DELETE", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"debuggeeId":   c.debuggeeId,
 		"breakpointId": c.breakpointId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.debugger.debuggees.breakpoints.delete" call.
@@ -1701,7 +1687,8 @@ func (c *DebuggerDebuggeesBreakpointsDeleteCall) doRequest(alt string) (*http.Re
 // in error.(*googleapi.Error).Header. Use googleapi.IsNotModified to
 // check whether the returned error was because http.StatusNotModified
 // was returned.
-func (c *DebuggerDebuggeesBreakpointsDeleteCall) Do() (*Empty, error) {
+func (c *DebuggerDebuggeesBreakpointsDeleteCall) Do(opts ...googleapi.CallOption) (*Empty, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1725,7 +1712,8 @@ func (c *DebuggerDebuggeesBreakpointsDeleteCall) Do() (*Empty, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1742,6 +1730,11 @@ func (c *DebuggerDebuggeesBreakpointsDeleteCall) Do() (*Empty, error) {
 	//       "description": "ID of the breakpoint to delete.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "clientVersion": {
+	//       "description": "The client version making the call. Following: `domain/type/version` (e.g., `google.com/intellij/v1`).",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "debuggeeId": {
@@ -1782,11 +1775,11 @@ func (r *DebuggerDebuggeesBreakpointsService) Get(debuggeeId string, breakpointI
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DebuggerDebuggeesBreakpointsGetCall) QuotaUser(quotaUser string) *DebuggerDebuggeesBreakpointsGetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// ClientVersion sets the optional parameter "clientVersion": The client
+// version making the call. Following: `domain/type/version` (e.g.,
+// `google.com/intellij/v1`).
+func (c *DebuggerDebuggeesBreakpointsGetCall) ClientVersion(clientVersion string) *DebuggerDebuggeesBreakpointsGetCall {
+	c.urlParams_.Set("clientVersion", clientVersion)
 	return c
 }
 
@@ -1817,23 +1810,22 @@ func (c *DebuggerDebuggeesBreakpointsGetCall) Context(ctx context.Context) *Debu
 }
 
 func (c *DebuggerDebuggeesBreakpointsGetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/debugger/debuggees/{debuggeeId}/breakpoints/{breakpointId}")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"debuggeeId":   c.debuggeeId,
 		"breakpointId": c.breakpointId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.debugger.debuggees.breakpoints.get" call.
@@ -1843,7 +1835,8 @@ func (c *DebuggerDebuggeesBreakpointsGetCall) doRequest(alt string) (*http.Respo
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DebuggerDebuggeesBreakpointsGetCall) Do() (*GetBreakpointResponse, error) {
+func (c *DebuggerDebuggeesBreakpointsGetCall) Do(opts ...googleapi.CallOption) (*GetBreakpointResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -1867,7 +1860,8 @@ func (c *DebuggerDebuggeesBreakpointsGetCall) Do() (*GetBreakpointResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -1884,6 +1878,11 @@ func (c *DebuggerDebuggeesBreakpointsGetCall) Do() (*GetBreakpointResponse, erro
 	//       "description": "ID of the breakpoint to get.",
 	//       "location": "path",
 	//       "required": true,
+	//       "type": "string"
+	//     },
+	//     "clientVersion": {
+	//       "description": "The client version making the call. Following: `domain/type/version` (e.g., `google.com/intellij/v1`).",
+	//       "location": "query",
 	//       "type": "string"
 	//     },
 	//     "debuggeeId": {
@@ -1933,6 +1932,14 @@ func (c *DebuggerDebuggeesBreakpointsListCall) ActionValue(actionValue string) *
 	return c
 }
 
+// ClientVersion sets the optional parameter "clientVersion": The client
+// version making the call. Following: `domain/type/version` (e.g.,
+// `google.com/intellij/v1`).
+func (c *DebuggerDebuggeesBreakpointsListCall) ClientVersion(clientVersion string) *DebuggerDebuggeesBreakpointsListCall {
+	c.urlParams_.Set("clientVersion", clientVersion)
+	return c
+}
+
 // IncludeAllUsers sets the optional parameter "includeAllUsers": When
 // set to `true`, the response includes the list of breakpoints set by
 // any user. Otherwise, it includes only breakpoints set by the caller.
@@ -1946,14 +1953,6 @@ func (c *DebuggerDebuggeesBreakpointsListCall) IncludeAllUsers(includeAllUsers b
 // Otherwise, it includes only active breakpoints.
 func (c *DebuggerDebuggeesBreakpointsListCall) IncludeInactive(includeInactive bool) *DebuggerDebuggeesBreakpointsListCall {
 	c.urlParams_.Set("includeInactive", fmt.Sprint(includeInactive))
-	return c
-}
-
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DebuggerDebuggeesBreakpointsListCall) QuotaUser(quotaUser string) *DebuggerDebuggeesBreakpointsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
 	return c
 }
 
@@ -2003,22 +2002,21 @@ func (c *DebuggerDebuggeesBreakpointsListCall) Context(ctx context.Context) *Deb
 }
 
 func (c *DebuggerDebuggeesBreakpointsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/debugger/debuggees/{debuggeeId}/breakpoints")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"debuggeeId": c.debuggeeId,
 	})
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.debugger.debuggees.breakpoints.list" call.
@@ -2028,7 +2026,8 @@ func (c *DebuggerDebuggeesBreakpointsListCall) doRequest(alt string) (*http.Resp
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DebuggerDebuggeesBreakpointsListCall) Do() (*ListBreakpointsResponse, error) {
+func (c *DebuggerDebuggeesBreakpointsListCall) Do(opts ...googleapi.CallOption) (*ListBreakpointsResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2052,7 +2051,8 @@ func (c *DebuggerDebuggeesBreakpointsListCall) Do() (*ListBreakpointsResponse, e
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2070,6 +2070,11 @@ func (c *DebuggerDebuggeesBreakpointsListCall) Do() (*ListBreakpointsResponse, e
 	//         "CAPTURE",
 	//         "LOG"
 	//       ],
+	//       "location": "query",
+	//       "type": "string"
+	//     },
+	//     "clientVersion": {
+	//       "description": "The client version making the call. Following: `domain/type/version` (e.g., `google.com/intellij/v1`).",
 	//       "location": "query",
 	//       "type": "string"
 	//     },
@@ -2130,11 +2135,11 @@ func (r *DebuggerDebuggeesBreakpointsService) Set(debuggeeId string, breakpoint 
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-func (c *DebuggerDebuggeesBreakpointsSetCall) QuotaUser(quotaUser string) *DebuggerDebuggeesBreakpointsSetCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
+// ClientVersion sets the optional parameter "clientVersion": The client
+// version making the call. Following: `domain/type/version` (e.g.,
+// `google.com/intellij/v1`).
+func (c *DebuggerDebuggeesBreakpointsSetCall) ClientVersion(clientVersion string) *DebuggerDebuggeesBreakpointsSetCall {
+	c.urlParams_.Set("clientVersion", clientVersion)
 	return c
 }
 
@@ -2155,25 +2160,23 @@ func (c *DebuggerDebuggeesBreakpointsSetCall) Context(ctx context.Context) *Debu
 }
 
 func (c *DebuggerDebuggeesBreakpointsSetCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
 	var body io.Reader = nil
 	body, err := googleapi.WithoutDataWrapper.JSONReader(c.breakpoint)
 	if err != nil {
 		return nil, err
 	}
-	ctype := "application/json"
+	reqHeaders.Set("Content-Type", "application/json")
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "v2/debugger/debuggees/{debuggeeId}/breakpoints/set")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("POST", urls, body)
+	req.Header = reqHeaders
 	googleapi.Expand(req.URL, map[string]string{
 		"debuggeeId": c.debuggeeId,
 	})
-	req.Header.Set("Content-Type", ctype)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "clouddebugger.debugger.debuggees.breakpoints.set" call.
@@ -2183,7 +2186,8 @@ func (c *DebuggerDebuggeesBreakpointsSetCall) doRequest(alt string) (*http.Respo
 // returned at all) in error.(*googleapi.Error).Header. Use
 // googleapi.IsNotModified to check whether the returned error was
 // because http.StatusNotModified was returned.
-func (c *DebuggerDebuggeesBreakpointsSetCall) Do() (*SetBreakpointResponse, error) {
+func (c *DebuggerDebuggeesBreakpointsSetCall) Do(opts ...googleapi.CallOption) (*SetBreakpointResponse, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -2207,7 +2211,8 @@ func (c *DebuggerDebuggeesBreakpointsSetCall) Do() (*SetBreakpointResponse, erro
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
@@ -2219,6 +2224,11 @@ func (c *DebuggerDebuggeesBreakpointsSetCall) Do() (*SetBreakpointResponse, erro
 	//     "debuggeeId"
 	//   ],
 	//   "parameters": {
+	//     "clientVersion": {
+	//       "description": "The client version making the call. Following: `domain/type/version` (e.g., `google.com/intellij/v1`).",
+	//       "location": "query",
+	//       "type": "string"
+	//     },
 	//     "debuggeeId": {
 	//       "description": "ID of the debuggee where the breakpoint is to be set.",
 	//       "location": "path",

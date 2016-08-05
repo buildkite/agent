@@ -163,15 +163,6 @@ func (r *WebfontsService) List() *WebfontsListCall {
 	return c
 }
 
-// QuotaUser sets the optional parameter "quotaUser": Available to use
-// for quota purposes for server-side applications. Can be any arbitrary
-// string assigned to a user, but should not exceed 40 characters.
-// Overrides userIp if both are provided.
-func (c *WebfontsListCall) QuotaUser(quotaUser string) *WebfontsListCall {
-	c.urlParams_.Set("quotaUser", quotaUser)
-	return c
-}
-
 // Sort sets the optional parameter "sort": Enables sorting of the list
 //
 // Possible values:
@@ -182,14 +173,6 @@ func (c *WebfontsListCall) QuotaUser(quotaUser string) *WebfontsListCall {
 //   "trending" - Sort by trending
 func (c *WebfontsListCall) Sort(sort string) *WebfontsListCall {
 	c.urlParams_.Set("sort", sort)
-	return c
-}
-
-// UserIP sets the optional parameter "userIp": IP address of the site
-// where the request originates. Use this if you want to enforce
-// per-user limits.
-func (c *WebfontsListCall) UserIP(userIP string) *WebfontsListCall {
-	c.urlParams_.Set("userIp", userIP)
 	return c
 }
 
@@ -220,20 +203,19 @@ func (c *WebfontsListCall) Context(ctx context.Context) *WebfontsListCall {
 }
 
 func (c *WebfontsListCall) doRequest(alt string) (*http.Response, error) {
+	reqHeaders := make(http.Header)
+	reqHeaders.Set("User-Agent", c.s.userAgent())
+	if c.ifNoneMatch_ != "" {
+		reqHeaders.Set("If-None-Match", c.ifNoneMatch_)
+	}
 	var body io.Reader = nil
 	c.urlParams_.Set("alt", alt)
 	urls := googleapi.ResolveRelative(c.s.BasePath, "webfonts")
 	urls += "?" + c.urlParams_.Encode()
 	req, _ := http.NewRequest("GET", urls, body)
+	req.Header = reqHeaders
 	googleapi.SetOpaque(req.URL)
-	req.Header.Set("User-Agent", c.s.userAgent())
-	if c.ifNoneMatch_ != "" {
-		req.Header.Set("If-None-Match", c.ifNoneMatch_)
-	}
-	if c.ctx_ != nil {
-		return ctxhttp.Do(c.ctx_, c.s.client, req)
-	}
-	return c.s.client.Do(req)
+	return gensupport.SendRequest(c.ctx_, c.s.client, req)
 }
 
 // Do executes the "webfonts.webfonts.list" call.
@@ -243,7 +225,8 @@ func (c *WebfontsListCall) doRequest(alt string) (*http.Response, error) {
 // all) in error.(*googleapi.Error).Header. Use googleapi.IsNotModified
 // to check whether the returned error was because
 // http.StatusNotModified was returned.
-func (c *WebfontsListCall) Do() (*WebfontList, error) {
+func (c *WebfontsListCall) Do(opts ...googleapi.CallOption) (*WebfontList, error) {
+	gensupport.SetOptions(c.urlParams_, opts...)
 	res, err := c.doRequest("json")
 	if res != nil && res.StatusCode == http.StatusNotModified {
 		if res.Body != nil {
@@ -267,7 +250,8 @@ func (c *WebfontsListCall) Do() (*WebfontList, error) {
 			HTTPStatusCode: res.StatusCode,
 		},
 	}
-	if err := json.NewDecoder(res.Body).Decode(&ret); err != nil {
+	target := &ret
+	if err := json.NewDecoder(res.Body).Decode(target); err != nil {
 		return nil, err
 	}
 	return ret, nil
