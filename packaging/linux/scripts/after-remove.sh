@@ -1,6 +1,7 @@
 # Remove the system service we installed
 if command -v systemctl > /dev/null; then
   rm -f /lib/systemd/system/buildkite-agent.service
+  rm -f /lib/systemd/system/buildkite-agent@.service
 fi
 if [ -f /etc/init/buildkite-agent.conf ]; then
   rm -f /etc/init/buildkite-agent.conf
