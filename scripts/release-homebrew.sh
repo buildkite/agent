@@ -46,10 +46,8 @@ echo "--- :package: Calculating SHAs for releases/$BINARY_NAME"
 
 buildkite-agent artifact download "releases/$BINARY_NAME" .
 
-RELEASE_SHA1=$(sha1sum "releases/$BINARY_NAME" | cut -d" " -f1)
 RELEASE_SHA256=$(sha256sum "releases/$BINARY_NAME" | cut -d" " -f1)
 
-echo "Release SHA1: $RELEASE_SHA1"
 echo "Release SHA256: $RELEASE_SHA256"
 
 echo "--- :octocat: Fetching current homebrew formula from Github Contents API"
@@ -66,11 +64,10 @@ echo "--- :ruby: Updating formula file"
 echo "Homebrew release type: $BREW_RELEASE_TYPE"
 echo "Homebrew release version: $GITHUB_RELEASE_VERSION"
 echo "Homebrew release download URL: $DOWNLOAD_URL"
-echo "Homebrew release download SHA1: $RELEASE_SHA1"
 echo "Homebrew release download SHA256: $RELEASE_SHA256"
 
 cat $FORMULA_FILE |
-  ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $GITHUB_RELEASE_VERSION $DOWNLOAD_URL $RELEASE_SHA1 $RELEASE_SHA256 \
+  ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $GITHUB_RELEASE_VERSION $DOWNLOAD_URL $RELEASE_SHA256 \
   > $UPDATED_FORMULA_FILE
 
 echo "--- :rocket: Commiting new formula to master via Github Contents API"
