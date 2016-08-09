@@ -1072,7 +1072,7 @@ func (b *Bootstrap) Start() error {
 	// We need to manually run these hooks so we can customize their
 	// `exitOnError` behaviour
 	localCommandHookPath := b.localHookPath("command")
-	globalCommandHookPath := b.localHookPath("command")
+	globalCommandHookPath := b.globalHookPath("command")
 
 	if fileExists(localCommandHookPath) {
 		commandExitStatus = b.executeHook("local command", localCommandHookPath, false, nil)
