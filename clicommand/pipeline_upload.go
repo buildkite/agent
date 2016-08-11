@@ -55,7 +55,7 @@ type PipelineUploadConfig struct {
 
 var PipelineUploadCommand = cli.Command{
 	Name:        "upload",
-	Usage:       "Uploads a description of a build pipleine adds it to the currently running build after the current job.",
+	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job.",
 	Description: PipelineUploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
@@ -95,7 +95,7 @@ var PipelineUploadCommand = cli.Command{
 		var filename string
 
 		if cfg.FilePath != "" {
-			logger.Info("Reading pipeine config from \"%s\"", cfg.FilePath)
+			logger.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
 
 			filename = filepath.Base(cfg.FilePath)
 			input, err = ioutil.ReadFile(cfg.FilePath)
@@ -103,7 +103,7 @@ var PipelineUploadCommand = cli.Command{
 				logger.Fatal("Failed to read file: %s", err)
 			}
 		} else if stdin.IsPipe() {
-			logger.Info("Reading pipeine config from STDIN")
+			logger.Info("Reading pipeline config from STDIN")
 
 			input, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
