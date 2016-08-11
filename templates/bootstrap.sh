@@ -253,6 +253,10 @@ else
   # Disable any interactive Git/SSH prompting
   export GIT_TERMINAL_PROMPT=0
 
+  if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
+    buildkite-run git --version
+  fi
+
   # Do we need to do a git checkout?
   if [[ -d ".git" ]]; then
     buildkite-run git remote set-url origin "$BUILDKITE_REPO"
