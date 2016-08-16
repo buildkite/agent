@@ -40,6 +40,7 @@ type AgentStartConfig struct {
 	MetaData                     []string `cli:"meta-data"`
 	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
+	MetaDataGCP                  bool     `cli:"meta-data-gcp"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	NoColor                      bool     `cli:"no-color"`
@@ -118,6 +119,10 @@ var AgentStartCommand = cli.Command{
 		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
 			Usage: "Include the host's EC2 tags as meta-data",
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-gcp",
+			Usage: "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, and zone) as meta-data",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
@@ -209,6 +214,7 @@ var AgentStartCommand = cli.Command{
 			MetaData:        cfg.MetaData,
 			MetaDataEC2:     cfg.MetaDataEC2,
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
+			MetaDataGCP:     cfg.MetaDataGCP,
 			Endpoint:        cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
