@@ -122,7 +122,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-gcp",
-			Usage: "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, and zone) as meta-data",
+			Usage: "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, region, and zone) as meta-data",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
