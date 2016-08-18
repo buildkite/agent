@@ -37,7 +37,7 @@ if [[ "$GOOS" == "windows" ]]; then
 fi
 
 mkdir -p $BUILD_PATH
-go build -v -ldflags "-extldflags '-static' -X github.com/buildkite/agent/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
+go build -v -ldflags "-X github.com/buildkite/agent/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
 
 chmod +x $BUILD_PATH/$BINARY_FILENAME
 
