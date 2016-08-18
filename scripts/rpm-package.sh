@@ -48,7 +48,7 @@ bundle
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
 mkdir -p $YUM_PATH
-aws s3 sync "s3://$RPM_S3_BUCKET" "$YUM_PATH" --color --debug
+aws --region us-east-1 s3 sync "s3://$RPM_S3_BUCKET" "$YUM_PATH" --dryrun
 
 # Make sure we have a clean rpm folder
 rm -rf rpm
@@ -63,4 +63,4 @@ publish "i386"
 
 # Sync back our changes to S3
 echo "--- Syncing local $YUM_PATH changes back to s3://$RPM_S3_BUCKET"
-aws s3 sync "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --acl "public-read" --no-guess-mime-type --exclude "lost+found" --color --debug
+aws --region us-east-1 s3 sync "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --acl "public-read" --no-guess-mime-type --exclude "lost+found" --dryrun
