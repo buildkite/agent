@@ -36,6 +36,9 @@ if [[ "$GOOS" == "windows" ]]; then
   BINARY_FILENAME="$BINARY_FILENAME.exe"
 fi
 
+# Disable CGO completely
+export CGO_ENABLED=0
+
 mkdir -p $BUILD_PATH
 go build -v -ldflags "-X github.com/buildkite/agent/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
 
