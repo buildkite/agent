@@ -115,14 +115,17 @@ var AgentStartCommand = cli.Command{
 		cli.BoolFlag{
 			Name:  "meta-data-ec2",
 			Usage: "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
 			Usage: "Include the host's EC2 tags as meta-data",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-gcp",
 			Usage: "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, region, and zone) as meta-data",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
