@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"time"
 
+	"golang.org/x/net/http2"
 	"github.com/buildkite/agent/api"
 )
 
@@ -22,19 +23,22 @@ func APIClientEnableHTTPDebug() {
 }
 
 func (a APIClient) Create() *api.Client {
+	httpTransport := &http.Transport{
+		Proxy:              http.ProxyFromEnvironment,
+		DisableKeepAlives:  false,
+		DisableCompression: false,
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 30 * time.Second,
+	}
+	http2.ConfigureTransport(httpTransport)
+
 	// Create the transport used when making the Buildkite Agent API calls
 	transport := &api.AuthenticatedTransport{
 		Token: a.Token,
-		Transport: &http.Transport{
-			Proxy:              http.ProxyFromEnvironment,
-			DisableKeepAlives:  false,
-			DisableCompression: false,
-			Dial: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout: 30 * time.Second,
-		},
+		Transport: httpTransport,
 	}
 
 	// From the transport, create the a http client
