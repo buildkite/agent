@@ -2,6 +2,6 @@
 
 set -euo pipefail
 
-echo '--- Running tests'
+echo '+++ Running tests'
 
 go test $(go list ./... | grep -v /vendor/)
