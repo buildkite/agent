@@ -26,7 +26,7 @@ Use "buildkite-agent <command> --help" for more information about a command.
 
 ## Installing
 
-The agents page on Buildkite has personalised instructions for installing the agent with Ubuntu (via apt), Debian (via apt), Mac OS X (via homebrew), Windows and Linux. You can also run the agent [via Docker](https://hub.docker.com/r/buildkite/agent).
+The agents page on Buildkite has personalised instructions for installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via homebrew), Windows and Linux. You can also run the agent [via Docker](https://hub.docker.com/r/buildkite/agent).
 
 ## Starting
 

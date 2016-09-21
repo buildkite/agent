@@ -156,7 +156,7 @@ else
 
   # Set their token for them
   if [[ -n $TOKEN ]]; then
-    # Need "-i ''" for Mac OS X and FreeBSD
+    # Need "-i ''" for macOS X and FreeBSD
     if [[ $(uname) == 'Darwin' ]] || [[ $(uname) == 'FreeBSD' ]]; then
       sed -i '' "s/token=\"xxx\"/token=\"$TOKEN\"/g" "$DESTINATION"/buildkite-agent.cfg
     else
