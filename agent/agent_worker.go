@@ -1,14 +1,11 @@
 package agent
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/proctitle"
 	"github.com/buildkite/agent/retry"
 )
 
@@ -141,9 +138,6 @@ func (a *AgentWorker) Stop(graceful bool) {
 		return
 	}
 
-	// Update the proc title
-	a.UpdateProcTitle("stopping")
-
 	// If we have a ticker, stop it, and send a signal to the stop channel,
 	// which will cause the agent worker to stop looping immediatly.
 	if a.ticker != nil {
@@ -157,9 +151,6 @@ func (a *AgentWorker) Stop(graceful bool) {
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
 func (a *AgentWorker) Connect() error {
-	// Update the proc title
-	a.UpdateProcTitle("connecting")
-
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
 		if err != nil {
@@ -194,9 +185,6 @@ func (a *AgentWorker) Heartbeat() error {
 
 // Performs a ping, which returns what action the agent should take next.
 func (a *AgentWorker) Ping() {
-	// Update the proc title
-	a.UpdateProcTitle("pinging")
-
 	ping, _, err := a.APIClient.Pings.Get()
 	if err != nil {
 		// If a ping fails, we don't really care, because it'll
@@ -235,14 +223,8 @@ func (a *AgentWorker) Ping() {
 
 	// If we don't have a job, there's nothing to do!
 	if ping.Job == nil {
-		// Update the proc title
-		a.UpdateProcTitle("idle")
-
 		return
 	}
-
-	// Update the proc title
-	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(ping.Job.ID, "-")[0]))
 
 	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
@@ -297,17 +279,10 @@ func (a *AgentWorker) Ping() {
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
 // because we want to disconnect as fast as possible.
 func (a *AgentWorker) Disconnect() error {
-	// Update the proc title
-	a.UpdateProcTitle("disconnecting")
-
 	_, err := a.APIClient.Agents.Disconnect()
 	if err != nil {
 		logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
 	}
 
 	return err
-}
-
-func (a *AgentWorker) UpdateProcTitle(action string) {
-	proctitle.Replace(fmt.Sprintf("buildkite-agent v%s [%s]", Version(), action))
 }
