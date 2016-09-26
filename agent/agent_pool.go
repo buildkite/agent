@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"math/rand"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -104,28 +105,38 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Arch:              runtime.GOARCH,
 	}
 
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
-		tags, err := EC2MetaData{}.Get()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
-		} else {
-			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		for i := 0; i < 10; i++ {
+			tags, err := EC2MetaData{}.Get()
+			if err != nil {
+				// Don't blow up if we can't find them, just show a nasty error.
+				logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+				time.Sleep((1000 + r.Float32() * 1000) * time.Millisecond)
+			} else {
+				for tag, value := range tags {
+					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				}
+				break
 			}
 		}
 	}
 
 	// Attempt to add the EC2 tags
 	if r.MetaDataEC2Tags {
-		tags, err := EC2Tags{}.Get()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
-		} else {
-			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		for i := 0; i < 10; i++ {
+			tags, err := EC2Tags{}.Get()
+			if err != nil {
+				// Don't blow up if we can't find them, just show a nasty error.
+				logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+				time.Sleep((1000 + r.Float32() * 1000) * time.Millisecond)
+			} else {
+				for tag, value := range tags {
+					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				}
+				break
 			}
 		}
 	}
