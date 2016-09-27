@@ -109,36 +109,44 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
-		for i := 0; i < 10; i++ {
+		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2MetaData{}.Get()
 			if err != nil {
-				// Don't blow up if we can't find them, just show a nasty error.
-				logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
-				time.Sleep((1000 + r.Float32() * 1000) * time.Millisecond)
+				// retry.Do will sleep 1s per configuration and we tack on a few random ms
+				time.Sleep(1000 * r.Float32() * time.Millisecond)
 			} else {
 				for tag, value := range tags {
 					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
 				}
-				break
+				s.Break()
 			}
-		}
+			
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		
+		// Don't blow up if we can't find them, just show a nasty error.
+		logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 	}
 
 	// Attempt to add the EC2 tags
 	if r.MetaDataEC2Tags {
-		for i := 0; i < 10; i++ {
+		// same as above
+		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
 			if err != nil {
-				// Don't blow up if we can't find them, just show a nasty error.
-				logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
-				time.Sleep((1000 + r.Float32() * 1000) * time.Millisecond)
+				time.Sleep(1000 * r.Float32() * time.Millisecond)
 			} else {
 				for tag, value := range tags {
 					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
 				}
-				break
+				s.Break()
 			}
-		}
+			
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		
+		// Don't blow up if we can't find them, just show a nasty error.
+		logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
 	}
 
 	// Attempt to add the Google Cloud meta-data
