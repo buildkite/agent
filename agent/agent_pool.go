@@ -125,7 +125,9 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 		
 		// Don't blow up if we can't find them, just show a nasty error.
-		logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+		}
 	}
 
 	// Attempt to add the EC2 tags
@@ -146,7 +148,9 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
 		
 		// Don't blow up if we can't find them, just show a nasty error.
-		logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+		}
 	}
 
 	// Attempt to add the Google Cloud meta-data
