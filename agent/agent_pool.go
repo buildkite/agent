@@ -105,7 +105,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Arch:              runtime.GOARCH,
 	}
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	random := rand.New(rand.NewSource(time.Now().UnixNano()))
 	
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
@@ -113,7 +113,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 			tags, err := EC2MetaData{}.Get()
 			if err != nil {
 				// retry.Do will sleep 1s per configuration and we tack on a few random ms
-				time.Sleep(time.Duration(1000 * r.Float32()) * time.Millisecond)
+				time.Sleep(time.Duration(1000 * random.Float32()) * time.Millisecond)
 			} else {
 				for tag, value := range tags {
 					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
@@ -136,7 +136,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
 			if err != nil {
-				time.Sleep(time.Duration(1000 * r.Float32()) * time.Millisecond)
+				time.Sleep(time.Duration(1000 * random.Float32()) * time.Millisecond)
 			} else {
 				for tag, value := range tags {
 					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
