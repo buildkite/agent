@@ -109,9 +109,13 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
+		logger.Debug("Fetching EC2 meta-data...")
+
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2MetaData{}.Get()
 			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+
 				// retry.Do will sleep 1s per configuration and we tack on a few random ms
 				time.Sleep(time.Duration(1000 * random.Float32()) * time.Millisecond)
 			} else {
@@ -132,10 +136,14 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 	// Attempt to add the EC2 tags
 	if r.MetaDataEC2Tags {
+		logger.Debug("Fetching EC2 tags...")
+
 		// same as above
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
 			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+
 				time.Sleep(time.Duration(1000 * random.Float32()) * time.Millisecond)
 			} else {
 				for tag, value := range tags {
@@ -149,7 +157,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+			logger.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
 		}
 	}
 
