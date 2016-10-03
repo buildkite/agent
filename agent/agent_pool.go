@@ -106,27 +106,52 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
-		tags, err := EC2MetaData{}.Get()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
-		} else {
-			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		logger.Info("Fetching EC2 meta-data...")
+
+		err := retry.Do(func(s *retry.Stats) error {
+			tags, err := EC2MetaData{}.Get()
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			} else {
+				logger.Info("Successfully fetched EC2 meta-data")
+				for tag, value := range tags {
+					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				}
+				s.Break()
 			}
+
+			return err
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the EC2 tags
 	if r.MetaDataEC2Tags {
-		tags, err := EC2Tags{}.Get()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
-		} else {
-			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		logger.Info("Fetching EC2 tags...")
+
+		// same as above
+		err := retry.Do(func(s *retry.Stats) error {
+			tags, err := EC2Tags{}.Get()
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			} else {
+				logger.Info("Successfully fetched EC2 tags")
+				for tag, value := range tags {
+					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				}
+				s.Break()
 			}
+
+			return err
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
 		}
 	}
 
