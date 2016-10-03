@@ -126,7 +126,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
@@ -153,7 +153,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
