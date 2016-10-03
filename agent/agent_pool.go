@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"math/rand"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -104,29 +105,51 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Arch:              runtime.GOARCH,
 	}
 
+	random := rand.New(rand.NewSource(time.Now().UnixNano()))
+	
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
-		tags, err := EC2MetaData{}.Get()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
-		} else {
-			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		err := retry.Do(func(s *retry.Stats) error {
+			tags, err := EC2MetaData{}.Get()
+			if err != nil {
+				// retry.Do will sleep 1s per configuration and we tack on a few random ms
+				time.Sleep(time.Duration(1000 * random.Float32()) * time.Millisecond)
+			} else {
+				for tag, value := range tags {
+					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				}
+				s.Break()
 			}
+			
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the EC2 tags
 	if r.MetaDataEC2Tags {
-		tags, err := EC2Tags{}.Get()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
-		} else {
-			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+		// same as above
+		err := retry.Do(func(s *retry.Stats) error {
+			tags, err := EC2Tags{}.Get()
+			if err != nil {
+				time.Sleep(time.Duration(1000 * random.Float32()) * time.Millisecond)
+			} else {
+				for tag, value := range tags {
+					agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				}
+				s.Break()
 			}
+			
+			return err
+		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+		
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
 		}
 	}
 
