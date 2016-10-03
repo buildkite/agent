@@ -106,7 +106,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	}
 
 	random := rand.New(rand.NewSource(time.Now().UnixNano()))
-	
+
 	// Attempt to add the EC2 meta-data
 	if r.MetaDataEC2 {
 		err := retry.Do(func(s *retry.Stats) error {
@@ -120,10 +120,10 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 				}
 				s.Break()
 			}
-			
+
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
-		
+
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
@@ -143,10 +143,10 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 				}
 				s.Break()
 			}
-			
+
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
-		
+
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
