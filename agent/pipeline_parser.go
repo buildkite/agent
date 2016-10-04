@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -13,6 +14,8 @@ type PipelineParser struct {
 
 var variablesWithBracketsRegex = regexp.MustCompile(`([\\\$]?\$\{([^}]+?)})`)
 var variablesWithNoBracketsRegex = regexp.MustCompile(`([\\\$]?\$[a-zA-Z0-9_]+)`)
+
+var substringRegexp = regexp.MustCompile(`\A\s*:\s*(\-?\s*\d+)(?:\s*:\s*(\-?\s*\d+))?\s*\z`)
 
 func (p PipelineParser) Parse() (parsed []byte, err error) {
 	// Do a parse and handle ENV variables with the ${} syntax, i.e. ${FOO}
@@ -34,6 +37,74 @@ func (p PipelineParser) Parse() (parsed []byte, err error) {
 				vv, isEnvironmentVariableSet := os.LookupEnv(key)
 
 				switch {
+				case substringRegexp.MatchString(option):
+					// Substring Expansion -- select a substring of a variable with:
+					//
+					// ${parameter:offset}
+					// ${parameter:offset:length}
+					//
+					// In the first form select a substring of $parameter starting from
+					// 0-indexed offset until the end of $parameter. If offset is
+					// negative then it is an offset from the end of $parameter instead.
+					//
+					// In the second form, length is the number of characters from offset
+					// to select. If negeative, length is instead an offset from the end
+					// of $parameter.
+					//
+					match := substringRegexp.FindStringSubmatch(option)
+					lenvv := int64(len(vv))
+
+					offset, err := strconv.ParseInt(match[1], 10, 0)
+					if err != nil {
+						fmt.Println(err)
+						return []byte(v)
+					}
+
+					// Negative offsets = from end
+					if offset < 0 {
+						offset = lenvv - (-offset)
+					}
+
+					// Still negative = too far from end? Truncate to start.
+					if offset < 0 {
+						offset = 0
+					}
+
+					// Beyond end? Truncate to end.
+					if offset > lenvv {
+						offset = lenvv
+					}
+
+					// Length?
+					if len(match) < 3 || match[2] == "" {
+						vv = vv[offset:lenvv]
+					} else {
+						length, err := strconv.ParseInt(match[2], 10, 0)
+						if err != nil {
+							return []byte(v)
+						}
+
+						if length >= 0 {
+							// Positive length = from offset
+							length = offset + length
+
+							// Too far? Truncate to end.
+							if length > lenvv {
+								length = lenvv
+							}
+						} else {
+							// Negative length = from end
+							length = lenvv - (-length)
+
+							// Too far? Truncate to offset.
+							if length < offset {
+								length = offset
+							}
+						}
+
+						vv = vv[offset:length]
+					}
+
 				case strings.HasPrefix(option, "?"):
 					if vv == "" {
 						errorMessage := option[1:]
