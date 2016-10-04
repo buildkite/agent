@@ -13,6 +13,97 @@ func parse(s string) (string, error) {
 	return string(parsed[:]), err
 }
 
+func TestSubstringExpansion(t *testing.T) {
+	var result string
+	var err error
+
+	// Missing parameter value:
+
+	result, err = parse("${BUILDKITE_COMMIT:0}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:0:7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7:14}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	// Basic offsets:
+
+	os.Setenv("BUILDKITE_COMMIT", "1adf998e39f647b4b25842f107c6ed9d30a3a7c7")
+
+	result, err = parse("${BUILDKITE_COMMIT:0}")
+	assert.Nil(t, err)
+	assert.Equal(t, "1adf998e39f647b4b25842f107c6ed9d30a3a7c7", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "e39f647b4b25842f107c6ed9d30a3a7c7", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:-7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "0a3a7c7", result)
+
+	// Out of range offsets:
+
+	result, err = parse("${BUILDKITE_COMMIT:-128}")
+	assert.Nil(t, err)
+	assert.Equal(t, "1adf998e39f647b4b25842f107c6ed9d30a3a7c7", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:128}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	// Including lengths:
+
+	result, err = parse("${BUILDKITE_COMMIT:0:7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "1adf998", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7:7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "e39f647", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7:-7}")
+	assert.Nil(t, err)
+	assert.Equal(t, "e39f647b4b25842f107c6ed9d3", result)
+
+	// Zero-sized:
+
+	result, err = parse("${BUILDKITE_COMMIT:0:0}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7:0}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	// Out of range lengths:
+
+	result, err = parse("${BUILDKITE_COMMIT:0:128}")
+	assert.Nil(t, err)
+	assert.Equal(t, "1adf998e39f647b4b25842f107c6ed9d30a3a7c7", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7:128}")
+	assert.Nil(t, err)
+	assert.Equal(t, "e39f647b4b25842f107c6ed9d30a3a7c7", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:0:-128}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+
+	result, err = parse("${BUILDKITE_COMMIT:7:-128}")
+	assert.Nil(t, err)
+	assert.Equal(t, "", result)
+}
+
 func TestPipelineParser(t *testing.T) {
 	var result string
 	var err error
