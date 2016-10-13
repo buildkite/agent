@@ -1128,7 +1128,8 @@ func (b *Bootstrap) Start() error {
 					if k != "" {
 						buildScriptContents = buildScriptContents +
 							fmt.Sprintf("ECHO %s\n", windows.BatchEscape("\033[90m>\033[0m "+k)) +
-							k + "\n"
+							k + "\n" +
+							"if %errorlevel% neq 0 exit /b %errorlevel%\n"
 					}
 				}
 			} else {
