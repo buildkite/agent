@@ -71,6 +71,7 @@ fi
 if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
   if [ ! -f /lib/systemd/system/buildkite-agent.service ]; then
     cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
+    cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent@.service
   fi
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
