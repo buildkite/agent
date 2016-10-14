@@ -15,7 +15,10 @@ if command -v systemctl > /dev/null; then
   echo "Stopping buildkite-agent systemd service"
 
   systemctl --no-reload disable buildkite-agent || :
-    systemctl stop buildkite-agent || :
+  systemctl stop buildkite-agent || :
+
+  systemctl --no-reload disable "buildkite-agent@*" || :
+  systemctl stop "buildkite-agent@*" || :
 elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
   echo "Stopping buildkite-agent upstart service"
 
