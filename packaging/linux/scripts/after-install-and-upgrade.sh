@@ -52,7 +52,7 @@ BK_IS_UBUNTU_14_10=$?
 
 # Check if systemd exists
 command -v systemctl > /dev/null
-BK_SYSTEMD_EXITS=$?
+BK_SYSTEMD_EXISTS=$?
 
 # Check if upstart exists
 command -v initctl > /dev/null
@@ -68,7 +68,7 @@ if [ $BK_UPSTART_EXISTS -eq 0 ]; then
 fi
 
 # Install the relevant system process
-if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
+if [ $BK_SYSTEMD_EXISTS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
   cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
   cp /usr/share/buildkite-agent/systemd/buildkite-agent@.service /lib/systemd/system/buildkite-agent@.service
 
