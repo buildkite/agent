@@ -1,4 +1,4 @@
-package agent
+package envvar
 
 import (
 	"fmt"
@@ -8,30 +8,24 @@ import (
 	"strings"
 )
 
-type PipelineParser struct {
-	Data []byte
-}
-
 var variablesWithBracketsRegex = regexp.MustCompile(`([\\\$]?\$\{([^}]+?)})`)
 var variablesWithNoBracketsRegex = regexp.MustCompile(`([\\\$]?\$[a-zA-Z0-9_]+)`)
 
 var substringRegexp = regexp.MustCompile(`\A\s*:\s*(\-?\s*\d+)(?:\s*:\s*(\-?\s*\d+))?\s*\z`)
 
-func (p PipelineParser) Parse() (parsed []byte, err error) {
+func Interpolate(str string) (interpolated string, err error) {
 	// Do a parse and handle ENV variables with the ${} syntax, i.e. ${FOO}
-	parsed = variablesWithBracketsRegex.ReplaceAllFunc(p.Data, func(part []byte) []byte {
-		v := string(part[:])
-
+	interpolated = variablesWithBracketsRegex.ReplaceAllStringFunc(str, func(v string) string {
 		if err == nil {
-			key, option := p.extractKeyAndOptionFromVariable(v)
+			key, option := extractKeyAndOptionFromVariable(v)
 
 			// Just return the key by itself if it was escaped
-			if p.isPrefixedWithEscapeSequence(v) {
+			if isPrefixedWithEscapeSequence(v) {
 				v = key
 			} else {
-				err = p.isValidPosixEnvironmentVariable(v)
+				err = isValidPosixEnvironmentVariable(v)
 				if err != nil {
-					return []byte(v)
+					return v
 				}
 
 				vv, isEnvironmentVariableSet := os.LookupEnv(key)
@@ -57,7 +51,7 @@ func (p PipelineParser) Parse() (parsed []byte, err error) {
 					offset, err := strconv.ParseInt(match[1], 10, 0)
 					if err != nil {
 						fmt.Println(err)
-						return []byte(v)
+						return v
 					}
 
 					// Negative offsets = from end
@@ -81,7 +75,7 @@ func (p PipelineParser) Parse() (parsed []byte, err error) {
 					} else {
 						length, err := strconv.ParseInt(match[2], 10, 0)
 						if err != nil {
-							return []byte(v)
+							return v
 						}
 
 						if length >= 0 {
@@ -132,37 +126,35 @@ func (p PipelineParser) Parse() (parsed []byte, err error) {
 			}
 		}
 
-		return []byte(v)
+		return v
 	})
 
 	// Another parse but this time target ENV variables without the {}
 	// surrounding it, i.e. $FOO. These ones are super simple to replace.
-	parsed = variablesWithNoBracketsRegex.ReplaceAllFunc(parsed, func(part []byte) []byte {
-		v := string(part[:])
-
+	interpolated = variablesWithNoBracketsRegex.ReplaceAllStringFunc(interpolated, func(v string) string {
 		if err == nil {
-			key, _ := p.extractKeyAndOptionFromVariable(v)
+			key, _ := extractKeyAndOptionFromVariable(v)
 
 			// Just return the key by itself if it was escaped
-			if p.isPrefixedWithEscapeSequence(v) {
+			if isPrefixedWithEscapeSequence(v) {
 				v = key
 			} else {
-				err = p.isValidPosixEnvironmentVariable(v)
+				err = isValidPosixEnvironmentVariable(v)
 				if err != nil {
-					return []byte(v)
+					return v
 				}
 
 				v = os.Getenv(key)
 			}
 		}
 
-		return []byte(v)
+		return v
 	})
 
 	return
 }
 
-func (p PipelineParser) isPrefixedWithEscapeSequence(variable string) bool {
+func isPrefixedWithEscapeSequence(variable string) bool {
 	return strings.HasPrefix(variable, "$$") || strings.HasPrefix(variable, "\\$")
 }
 
@@ -171,7 +163,7 @@ var validPosixEnvironmentVariablePrefixRegex = regexp.MustCompile(`\A\${1}\{?[a-
 // Returns true if the variable is a valid POSIX environment variale. It will
 // return false if the variable begins with a number, or it starts with two $$
 // characters.
-func (p PipelineParser) isValidPosixEnvironmentVariable(variable string) error {
+func isValidPosixEnvironmentVariable(variable string) error {
 	if validPosixEnvironmentVariablePrefixRegex.MatchString(variable) {
 		return nil
 	} else {
@@ -185,7 +177,7 @@ var firstNonEnvironmentVariableCharacterRegex = regexp.MustCompile(`[^a-zA-Z0-9_
 // option.  For example, ${BEST_COMMAND:-lol} will be turned split into
 // "BEST_COMMAND" and ":-lol". Regualr environment variables like $FOO will
 // return "FOO" as the `key`, and a blank string as the `option`.
-func (p PipelineParser) extractKeyAndOptionFromVariable(variable string) (key string, option string) {
+func extractKeyAndOptionFromVariable(variable string) (key string, option string) {
 	if strings.HasPrefix(variable, "${") {
 		// Trim the first 2 characters `${` and the last character `}`
 		trimmed := variable[2 : len(variable)-1]
