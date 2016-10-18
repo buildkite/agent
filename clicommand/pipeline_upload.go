@@ -101,7 +101,6 @@ var PipelineUploadCommand = cli.Command{
 		var input []byte
 		var err error
 		var filename string
-		var format string
 
 		if cfg.FilePath != "" {
 			logger.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
@@ -117,11 +116,9 @@ var PipelineUploadCommand = cli.Command{
 			// Make sure a format was passed
 			if cfg.Format == "" {
 				logger.Fatal("A format defined with `--format (yaml or json)` is required when reading a config via STDIN, for example (./script/dynamic_step_generator | buildkite-agent pipeline upload --format json). See `buildkite-agent pipeline upload --help` for more information.")
-			} else if cfg.Format != "yaml" || cfg.Format != "json" {
+			} else if cfg.Format != "yaml" && cfg.Format != "json" {
 				logger.Fatal("Unknown pipeline format `%s` - only `yaml` and `json` are supported. See `buildkite-agent pipeline upload --help` for more information.", cfg.Format)
 			}
-
-			format = cfg.Format
 
 			// Now we can read from STDIN
 			input, err = ioutil.ReadAll(os.Stdin)
@@ -168,19 +165,22 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
+		// Make sure the file actually has something in it
 		if len(input) == 0 {
 			logger.Fatal("Config file is empty")
 		}
 
-		var parsed []byte
+		var parsed interface{}
 
-		logger.Debug("Parsing pipeline...")
-
-		// Interpolate the environment variables in the pipeline
-		parsed, err = agent.EnvironmentVariableInterpolator{Data: input}.Interpolate()
+		// Parse the pipeline
+		parsed, err = agent.PipelineParser{Format: cfg.Format, Filename: filename, Pipeline: input}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
+
+		logger.Fatal("%s", parsed)
+
+		var lol []byte
 
 		// Create the API client
 		client := agent.APIClient{
@@ -195,7 +195,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: parsed, FileName: filename, Replace: cfg.Replace})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: lol, FileName: filename, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
