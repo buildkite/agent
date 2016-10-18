@@ -8,12 +8,12 @@ import (
 )
 
 func parse(s string) (string, error) {
-	parsed, err := PipelineParser{Data: []byte(s)}.Parse()
+	parsed, err := EnvironmentVariableInterpolator{Data: []byte(s)}.Interpolate()
 
 	return string(parsed[:]), err
 }
 
-func TestPipelineParser(t *testing.T) {
+func TestEnvironmentVariableInterpolator(t *testing.T) {
 	var result string
 	var err error
 
@@ -193,7 +193,6 @@ func TestPipelineParser(t *testing.T) {
             - name: ":docker:"
               command: docker build -t $IMAGE --build-arg REVISION=$BUILDKITE_COMMIT .
 	`)
-
 
 	// The regex isn't greedy. The result of ENV_1 doesn't contain the
 	// `BUILDKITE_COMMIT` value, because the interpolator sees the actual

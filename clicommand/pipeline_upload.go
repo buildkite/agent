@@ -158,8 +158,8 @@ var PipelineUploadCommand = cli.Command{
 
 		logger.Debug("Parsing pipeline...")
 
-		// Parse the pipeline and prepare it for upload
-		parsed, err = agent.PipelineParser{Data: input}.Parse()
+		// Interpolate the environment variables in the pipeline
+		parsed, err = agent.EnvironmentVariableInterpolator{Data: input}.Interpolate()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
