@@ -29,8 +29,10 @@ Description:
    we look for the file in the following locations:
 
    - buildkite.yml
+   - buildkite.yaml
    - buildkite.json
    - .buildkite/pipeline.yml
+   - .buildkite/pipeline.yaml
    - .buildkite/pipeline.json
 
    You can also pipe build pipelines to the command, allowing you to create scripts
@@ -114,8 +116,10 @@ var PipelineUploadCommand = cli.Command{
 
 			paths := []string{
 				"buildkite.yml",
+				"buildkite.yaml",
 				"buildkite.json",
 				filepath.FromSlash(".buildkite/pipeline.yml"),
+				filepath.FromSlash(".buildkite/pipeline.yaml"),
 				filepath.FromSlash(".buildkite/pipeline.json"),
 			}
 
