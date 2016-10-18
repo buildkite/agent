@@ -1,206 +1,209 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
-	"regexp"
-	"strconv"
-	"strings"
+	"path/filepath"
+	"reflect"
+
+	"github.com/buildkite/agent/logger"
+	"github.com/ghodss/yaml"
 )
 
 type PipelineParser struct {
-	Data []byte
+	Filename string
+	Format   string
+	Pipeline []byte
 }
 
-var variablesWithBracketsRegex = regexp.MustCompile(`([\\\$]?\$\{([^}]+?)})`)
-var variablesWithNoBracketsRegex = regexp.MustCompile(`([\\\$]?\$[a-zA-Z0-9_]+)`)
+func (p PipelineParser) Parse() (pipeline interface{}, err error) {
+	format := p.Format
 
-var substringRegexp = regexp.MustCompile(`\A\s*:\s*(\-?\s*\d+)(?:\s*:\s*(\-?\s*\d+))?\s*\z`)
+	// If no format is passed, figure it out based on the filename
+	if format == "" {
+		logger.Debug("Pipeline format not supplied, inferring from filename `%s`", p.Filename)
 
-func (p PipelineParser) Parse() (parsed []byte, err error) {
-	// Do a parse and handle ENV variables with the ${} syntax, i.e. ${FOO}
-	parsed = variablesWithBracketsRegex.ReplaceAllFunc(p.Data, func(part []byte) []byte {
-		v := string(part[:])
-
-		if err == nil {
-			key, option := p.extractKeyAndOptionFromVariable(v)
-
-			// Just return the key by itself if it was escaped
-			if p.isPrefixedWithEscapeSequence(v) {
-				v = key
-			} else {
-				err = p.isValidPosixEnvironmentVariable(v)
-				if err != nil {
-					return []byte(v)
-				}
-
-				vv, isEnvironmentVariableSet := os.LookupEnv(key)
-
-				switch {
-				case substringRegexp.MatchString(option):
-					// Substring Expansion -- select a substring of a variable with:
-					//
-					// ${parameter:offset}
-					// ${parameter:offset:length}
-					//
-					// In the first form select a substring of $parameter starting from
-					// 0-indexed offset until the end of $parameter. If offset is
-					// negative then it is an offset from the end of $parameter instead.
-					//
-					// In the second form, length is the number of characters from offset
-					// to select. If negeative, length is instead an offset from the end
-					// of $parameter.
-					//
-					match := substringRegexp.FindStringSubmatch(option)
-					lenvv := int64(len(vv))
-
-					offset, err := strconv.ParseInt(match[1], 10, 0)
-					if err != nil {
-						fmt.Println(err)
-						return []byte(v)
-					}
-
-					// Negative offsets = from end
-					if offset < 0 {
-						offset = lenvv - (-offset)
-					}
-
-					// Still negative = too far from end? Truncate to start.
-					if offset < 0 {
-						offset = 0
-					}
-
-					// Beyond end? Truncate to end.
-					if offset > lenvv {
-						offset = lenvv
-					}
-
-					// Length?
-					if len(match) < 3 || match[2] == "" {
-						vv = vv[offset:lenvv]
-					} else {
-						length, err := strconv.ParseInt(match[2], 10, 0)
-						if err != nil {
-							return []byte(v)
-						}
-
-						if length >= 0 {
-							// Positive length = from offset
-							length = offset + length
-
-							// Too far? Truncate to end.
-							if length > lenvv {
-								length = lenvv
-							}
-						} else {
-							// Negative length = from end
-							length = lenvv - (-length)
-
-							// Too far? Truncate to offset.
-							if length < offset {
-								length = offset
-							}
-						}
-
-						vv = vv[offset:length]
-					}
-
-				case strings.HasPrefix(option, "?"):
-					if vv == "" {
-						errorMessage := option[1:]
-						if errorMessage == "" {
-							errorMessage = "not set"
-						}
-						err = fmt.Errorf("$%s: %s", key, errorMessage)
-					}
-
-				case strings.HasPrefix(option, ":-"):
-					if vv == "" {
-						vv = option[2:]
-					}
-
-				case strings.HasPrefix(option, "-"):
-					if !isEnvironmentVariableSet {
-						vv = option[1:]
-					}
-
-				case option != "":
-					err = fmt.Errorf("Invalid option `%s` for environment variable `%s`", option, key)
-				}
-
-				v = vv
-			}
+		format, err = inferFormatFromFilename(p.Filename)
+		if err != nil {
+			return nil, err
 		}
+	}
 
-		return []byte(v)
-	})
+	// Unmarshal the pipeline into an actual data structure
+	unmarshaled, err := unmarshal(p.Pipeline, format)
+	if err != nil {
+		return nil, err
+	}
 
-	// Another parse but this time target ENV variables without the {}
-	// surrounding it, i.e. $FOO. These ones are super simple to replace.
-	parsed = variablesWithNoBracketsRegex.ReplaceAllFunc(parsed, func(part []byte) []byte {
-		v := string(part[:])
+	// Recursivly go through the entire pipeline and perform environment
+	// variable interpolation on strings
+	interpolated, err := interpolate(unmarshaled)
+	if err != nil {
+		return nil, err
+	}
 
-		if err == nil {
-			key, _ := p.extractKeyAndOptionFromVariable(v)
-
-			// Just return the key by itself if it was escaped
-			if p.isPrefixedWithEscapeSequence(v) {
-				v = key
-			} else {
-				err = p.isValidPosixEnvironmentVariable(v)
-				if err != nil {
-					return []byte(v)
-				}
-
-				v = os.Getenv(key)
-			}
-		}
-
-		return []byte(v)
-	})
-
-	return
+	return interpolated, nil
 }
 
-func (p PipelineParser) isPrefixedWithEscapeSequence(variable string) bool {
-	return strings.HasPrefix(variable, "$$") || strings.HasPrefix(variable, "\\$")
-}
+func inferFormatFromFilename(filename string) (string, error) {
+	// Make sure we've got a filename in the first place
+	if filename == "" {
+		return "", fmt.Errorf("No filename to infer a format from")
+	}
 
-var validPosixEnvironmentVariablePrefixRegex = regexp.MustCompile(`\A\${1}\{?[a-zA-Z]`)
+	// Get the file extension
+	extension := filepath.Ext(filename)
+	if extension == "" {
+		return "", fmt.Errorf("No extension could be inferred from filename `%s`", filename)
+	}
 
-// Returns true if the variable is a valid POSIX environment variale. It will
-// return false if the variable begins with a number, or it starts with two $$
-// characters.
-func (p PipelineParser) isValidPosixEnvironmentVariable(variable string) error {
-	if validPosixEnvironmentVariablePrefixRegex.MatchString(variable) {
-		return nil
+	// Figure out the format from the extension
+	if extension == ".yaml" || extension == ".yml" {
+		return "yaml", nil
+	} else if extension == ".json" {
+		return "json", nil
 	} else {
-		return fmt.Errorf("Invalid environment variable `%s` - they can only start with a letter", variable)
+		return "", fmt.Errorf("Could not infer a pipeline from `%s` with extension `%s`. To force a format, please use `--format`", filename, extension)
 	}
 }
 
-var firstNonEnvironmentVariableCharacterRegex = regexp.MustCompile(`[^a-zA-Z0-9_]`)
+func unmarshal(pipeline []byte, format string) (interface{}, error) {
+	var unmarshaled interface{}
 
-// Takes an environment variable, and extracts the variable name and a suffixed
-// option.  For example, ${BEST_COMMAND:-lol} will be turned split into
-// "BEST_COMMAND" and ":-lol". Regualr environment variables like $FOO will
-// return "FOO" as the `key`, and a blank string as the `option`.
-func (p PipelineParser) extractKeyAndOptionFromVariable(variable string) (key string, option string) {
-	if strings.HasPrefix(variable, "${") {
-		// Trim the first 2 characters `${` and the last character `}`
-		trimmed := variable[2 : len(variable)-1]
+	if format == "yaml" {
+		logger.Debug("Parsing pipeline configuration as YAML")
 
-		optionsIndicies := firstNonEnvironmentVariableCharacterRegex.FindStringIndex(trimmed)
-		if len(optionsIndicies) > 0 {
-			key = trimmed[0:optionsIndicies[0]]
-			option = trimmed[optionsIndicies[0]:len(trimmed)]
+		err := yaml.Unmarshal(pipeline, &unmarshaled)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse YAML: %s", err)
+		}
+	} else if format == "json" {
+		logger.Debug("Parsing pipeline configuration as JSON")
+
+		err := json.Unmarshal(pipeline, &unmarshaled)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to parse JSON: %s", err)
+		}
+	} else {
+		if format == "" {
+			return nil, fmt.Errorf("No format was supplied or one could not be inferred")
 		} else {
-			key = trimmed
+			return nil, fmt.Errorf("Unknown format `%s`", format)
 		}
-	} else {
-		// Trim the first character `$`
-		key = variable[1:]
 	}
 
-	return
+	return unmarshaled, nil
+}
+
+// interpolate function inspired from: https://gist.github.com/hvoecking/10772475
+
+func interpolate(obj interface{}) (interface{}, error) {
+	// Wrap the original in a reflect.Value
+	original := reflect.ValueOf(obj)
+
+	copy := reflect.New(original.Type()).Elem()
+
+	err := interpolateRecursive(copy, original)
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove the reflection wrapper
+	return copy.Interface(), nil
+}
+
+func interpolateRecursive(copy, original reflect.Value) error {
+	switch original.Kind() {
+	// If it is a pointer we need to unwrap and call once again
+	case reflect.Ptr:
+		// To get the actual value of the original we have to call Elem()
+		// At the same time this unwraps the pointer so we don't end up in
+		// an infinite recursion
+		originalValue := original.Elem()
+
+		// Check if the pointer is nil
+		if !originalValue.IsValid() {
+			return nil
+		}
+
+		// Allocate a new object and set the pointer to it
+		copy.Set(reflect.New(originalValue.Type()))
+
+		// Unwrap the newly created pointer
+		err := interpolateRecursive(copy.Elem(), originalValue)
+		if err != nil {
+			return err
+		}
+
+	// If it is an interface (which is very similar to a pointer), do basically the
+	// same as for the pointer. Though a pointer is not the same as an interface so
+	// note that we have to call Elem() after creating a new object because otherwise
+	// we would end up with an actual pointer
+	case reflect.Interface:
+		// Get rid of the wrapping interface
+		originalValue := original.Elem()
+
+		// Create a new object. Now new gives us a pointer, but we want the value it
+		// points to, so we have to call Elem() to unwrap it
+		copyValue := reflect.New(originalValue.Type()).Elem()
+
+		err := interpolateRecursive(copyValue, originalValue)
+		if err != nil {
+			return err
+		}
+
+		copy.Set(copyValue)
+
+	// If it is a struct we interpolate each field
+	case reflect.Struct:
+		for i := 0; i < original.NumField(); i += 1 {
+			err := interpolateRecursive(copy.Field(i), original.Field(i))
+			if err != nil {
+				return err
+			}
+		}
+
+	// If it is a slice we create a new slice and interpolate each element
+	case reflect.Slice:
+		copy.Set(reflect.MakeSlice(original.Type(), original.Len(), original.Cap()))
+
+		for i := 0; i < original.Len(); i += 1 {
+			err := interpolateRecursive(copy.Index(i), original.Index(i))
+			if err != nil {
+				return err
+			}
+		}
+
+	// If it is a map we create a new map and interpolate each value
+	case reflect.Map:
+		copy.Set(reflect.MakeMap(original.Type()))
+
+		for _, key := range original.MapKeys() {
+			originalValue := original.MapIndex(key)
+
+			// New gives us a pointer, but again we want the value
+			copyValue := reflect.New(originalValue.Type()).Elem()
+			err := interpolateRecursive(copyValue, originalValue)
+			if err != nil {
+				return err
+			}
+
+			copy.SetMapIndex(key, copyValue)
+		}
+
+	// If it is a string interpolate it (yay finally we're doing what we came for)
+	case reflect.String:
+		str := original.Interface().(string)
+		interpolated, err := EnvironmentVariableInterpolator{Data: []byte(str)}.Interpolate()
+		if err != nil {
+			return err
+		}
+		copy.SetString(string(interpolated))
+
+	// And everything else will simply be taken from the original
+	default:
+		copy.Set(original)
+	}
+
+	return nil
 }
