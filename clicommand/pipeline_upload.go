@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/envvar"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
@@ -157,12 +158,12 @@ var PipelineUploadCommand = cli.Command{
 			logger.Fatal("Config file is empty")
 		}
 
-		var parsed []byte
+		var parsed string
 
 		logger.Debug("Parsing pipeline...")
 
 		// Parse the pipeline and prepare it for upload
-		parsed, err = agent.PipelineParser{Data: input}.Parse()
+		parsed, err = envvar.Interpolate(string(input))
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
@@ -180,7 +181,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: parsed, FileName: filename, Replace: cfg.Replace})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: []byte(parsed), FileName: filename, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
