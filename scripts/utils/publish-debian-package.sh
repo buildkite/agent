@@ -18,17 +18,17 @@ COMPONENT="main"
 
 # Some validations
 if [ -z "$GPG_SIGNING_KEY" ]; then
-  echo "Error: Missing ENV variable $GPG_SIGNING_KEY"
+  echo "Error: Missing ENV variable GPG_SIGNING_KEY"
   exit 1
 fi
 
 if [ -z "$GPG_PASSPHRASE_PASSWORD" ]; then
-  echo "Error: Missing ENV variable $GPG_PASSPHRASE_PASSWORD"
+  echo "Error: Missing ENV variable GPG_PASSPHRASE_PASSWORD"
   exit 1
 fi
 
 if [ -z "$GPG_PASSPHRASE_PATH" ]; then
-  echo "Error: Missing ENV variable $GPG_PASSPHRASE_PATH"
+  echo "Error: Missing ENV variable GPG_PASSPHRASE_PATH"
   exit 1
 fi
 
