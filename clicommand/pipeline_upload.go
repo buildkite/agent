@@ -32,7 +32,6 @@ Description:
    - buildkite.json
    - .buildkite/pipeline.yml
    - .buildkite/pipeline.json
-   - .buildkite/steps.json (deprecated, removed in v2.2)
 
    You can also pipe build pipelines to the command, allowing you to create scripts
    that generate dynamic pipelines.
@@ -40,7 +39,7 @@ Description:
 Example:
 
    $ buildkite-agent pipeline upload
-   $ buildkite-agent pipeline upload my-custom-steps.json
+   $ buildkite-agent pipeline upload my-custom-pipeline.yml
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
@@ -118,7 +117,6 @@ var PipelineUploadCommand = cli.Command{
 				"buildkite.json",
 				filepath.FromSlash(".buildkite/pipeline.yml"),
 				filepath.FromSlash(".buildkite/pipeline.json"),
-				filepath.FromSlash(".buildkite/steps.json"),
 			}
 
 			// Collect all the files that exist
