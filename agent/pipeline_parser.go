@@ -7,7 +7,7 @@ import (
 	"reflect"
 
 	"github.com/buildkite/agent/logger"
-	"github.com/go-yaml/yaml"
+	"github.com/ghodss/yaml"
 )
 
 type PipelineParser struct {

@@ -178,10 +178,6 @@ var PipelineUploadCommand = cli.Command{
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
 
-		logger.Fatal("%s", parsed)
-
-		var lol []byte
-
 		// Create the API client
 		client := agent.APIClient{
 			Endpoint: cfg.Endpoint,
@@ -195,7 +191,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: lol, FileName: filename, Replace: cfg.Replace})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: parsed, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
