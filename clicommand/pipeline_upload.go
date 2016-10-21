@@ -11,7 +11,6 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
-	"github.com/buildkite/agent/envvar"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
@@ -25,8 +24,8 @@ var PipelineUploadHelpDescription = `Usage:
 Description:
 
    Allows you to change the pipeline of a running build by uploading either a
-   JSON or Yaml configuration file. If no configuration file is provided,
-   we look for the file in the following locations:
+   YAML (recommended) or JSON configuration file. If no configuration file is
+   provided, the command looks for the file in the following locations:
 
    - buildkite.yml
    - buildkite.yaml
@@ -35,8 +34,8 @@ Description:
    - .buildkite/pipeline.yaml
    - .buildkite/pipeline.json
 
-   You can also pipe build pipelines to the command, allowing you to create scripts
-   that generate dynamic pipelines.
+   You can also pipe build pipelines to the command allowing you to create
+   scripts that generate dynamic pipelines.
 
 Example:
 
@@ -107,6 +106,7 @@ var PipelineUploadCommand = cli.Command{
 		} else if stdin.IsPipe() {
 			logger.Info("Reading pipeline config from STDIN")
 
+			// Actually read the file from STDIN
 			input, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
@@ -143,11 +143,6 @@ var PipelineUploadCommand = cli.Command{
 
 			logger.Info("Found config file \"%s\"", found)
 
-			// Warn about the deprecated steps.json
-			if found == filepath.FromSlash(".buildkite/steps.json") {
-				logger.Warn("The default steps.json file has been deprecated and will be removed in v2.2. Please rename to .buildkite/pipeline.json and wrap the steps array in a `steps` property: { \"steps\": [ ... ] } }")
-			}
-
 			// Read the default file
 			filename = path.Base(found)
 			input, err = ioutil.ReadFile(found)
@@ -156,16 +151,15 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
+		// Make sure the file actually has something in it
 		if len(input) == 0 {
 			logger.Fatal("Config file is empty")
 		}
 
-		var parsed string
+		var parsed interface{}
 
-		logger.Debug("Parsing pipeline...")
-
-		// Parse the pipeline and prepare it for upload
-		parsed, err = envvar.Interpolate(string(input))
+		// Parse the pipeline
+		parsed, err = agent.PipelineParser{Filename: filename, Pipeline: input}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
@@ -183,7 +177,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Data: []byte(parsed), FileName: filename, Replace: cfg.Replace})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: parsed, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			}
