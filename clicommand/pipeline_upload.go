@@ -41,11 +41,10 @@ Example:
 
    $ buildkite-agent pipeline upload
    $ buildkite-agent pipeline upload my-custom-pipeline.yml
-   $ ./script/dynamic_step_generator | buildkite-agent pipeline upload --format json`
+   $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
 	FilePath         string `cli:"arg:0" label:"upload paths"`
-	Format           string `cli:"format"`
 	Replace          bool   `cli:"replace"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
@@ -60,12 +59,6 @@ var PipelineUploadCommand = cli.Command{
 	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job.",
 	Description: PipelineUploadHelpDescription,
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "format",
-			Value:  "",
-			Usage:  "The file format of the pipeline (yaml, json). This argument is required when reading a build pipeline via STDIN.",
-			EnvVar: "BUILDKITE_PIPELINE_FORMAT",
-		},
 		cli.BoolFlag{
 			Name:   "replace",
 			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
@@ -113,14 +106,7 @@ var PipelineUploadCommand = cli.Command{
 		} else if stdin.IsPipe() {
 			logger.Info("Reading pipeline config from STDIN")
 
-			// Make sure a format was passed
-			if cfg.Format == "" {
-				logger.Fatal("A format defined with `--format (yaml or json)` is required when reading a config via STDIN, for example (./script/dynamic_step_generator | buildkite-agent pipeline upload --format json). See `buildkite-agent pipeline upload --help` for more information.")
-			} else if cfg.Format != "yaml" && cfg.Format != "json" {
-				logger.Fatal("Unknown pipeline format `%s` - only `yaml` and `json` are supported. See `buildkite-agent pipeline upload --help` for more information.", cfg.Format)
-			}
-
-			// Now we can read from STDIN
+			// Actually read the file from STDIN
 			input, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
@@ -173,7 +159,7 @@ var PipelineUploadCommand = cli.Command{
 		var parsed interface{}
 
 		// Parse the pipeline
-		parsed, err = agent.PipelineParser{Format: cfg.Format, Filename: filename, Pipeline: input}.Parse()
+		parsed, err = agent.PipelineParser{Filename: filename, Pipeline: input}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}

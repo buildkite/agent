@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"github.com/buildkite/agent/envvar"
 	"github.com/buildkite/agent/logger"
@@ -13,21 +14,14 @@ import (
 
 type PipelineParser struct {
 	Filename string
-	Format   string
 	Pipeline []byte
 }
 
 func (p PipelineParser) Parse() (pipeline interface{}, err error) {
-	format := p.Format
-
-	// If no format is passed, figure it out based on the filename
-	if format == "" {
-		logger.Debug("Pipeline format not supplied, inferring from filename `%s`", p.Filename)
-
-		format, err = inferFormatFromFilename(p.Filename)
-		if err != nil {
-			return nil, err
-		}
+	// First try and figure out the format from the filename
+	format, err := inferFormat(p.Pipeline, p.Filename)
+	if err != nil {
+		return nil, err
 	}
 
 	// Unmarshal the pipeline into an actual data structure
@@ -46,26 +40,27 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	return interpolated, nil
 }
 
-func inferFormatFromFilename(filename string) (string, error) {
-	// Make sure we've got a filename in the first place
-	if filename == "" {
-		return "", fmt.Errorf("No filename to infer a format from")
+func inferFormat(pipeline []byte, filename string) (string, error) {
+	// If we have a filename, try and figure out a format from that
+	if filename != "" {
+		extension := filepath.Ext(filename)
+		if extension == ".yaml" || extension == ".yml" {
+			return "yaml", nil
+		} else if extension == ".json" {
+			return "json", nil
+		}
 	}
 
-	// Get the file extension
-	extension := filepath.Ext(filename)
-	if extension == "" {
-		return "", fmt.Errorf("No extension could be inferred from filename `%s`", filename)
-	}
-
-	// Figure out the format from the extension
-	if extension == ".yaml" || extension == ".yml" {
-		return "yaml", nil
-	} else if extension == ".json" {
+	// Boo...we couldn't figure it out based on the filename. Next we'll
+	// use a very dirty and ugly way of detecting if the pipeline is JSON.
+	// It's not nice...but seems to work really well for our use case!
+	firstCharacter := string(strings.TrimSpace(string(pipeline))[0])
+	if firstCharacter == "{" || firstCharacter == "[" {
 		return "json", nil
-	} else {
-		return "", fmt.Errorf("Could not infer a pipeline from `%s` with extension `%s`. To force a format, please use `--format`", filename, extension)
 	}
+
+	// If nothing else could be figured out, then default to YAML
+	return "yaml", nil
 }
 
 func unmarshal(pipeline []byte, format string) (interface{}, error) {
@@ -76,7 +71,12 @@ func unmarshal(pipeline []byte, format string) (interface{}, error) {
 
 		err := yaml.Unmarshal(pipeline, &unmarshaled)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse YAML: %s", err)
+			// Error messages from the YAML parser have this ugly
+			// prefix, so I'll just strip it for the sake of the
+			// "aesthetics"
+			message := strings.Replace(fmt.Sprintf("%s", err), "error converting YAML to JSON: yaml: ", "", 1)
+
+			return nil, fmt.Errorf("Failed to parse YAML: %s", message)
 		}
 	} else if format == "json" {
 		logger.Debug("Parsing pipeline configuration as JSON")
@@ -87,7 +87,7 @@ func unmarshal(pipeline []byte, format string) (interface{}, error) {
 		}
 	} else {
 		if format == "" {
-			return nil, fmt.Errorf("No format was supplied or one could not be inferred")
+			return nil, fmt.Errorf("No format was supplied")
 		} else {
 			return nil, fmt.Errorf("Unknown format `%s`", format)
 		}
@@ -99,9 +99,15 @@ func unmarshal(pipeline []byte, format string) (interface{}, error) {
 // interpolate function inspired from: https://gist.github.com/hvoecking/10772475
 
 func interpolate(obj interface{}) (interface{}, error) {
+	// Make sure there's something actually to interpolate
+	if obj == nil {
+		return nil, nil
+	}
+
 	// Wrap the original in a reflect.Value
 	original := reflect.ValueOf(obj)
 
+	// Make a copy that we'll add the new values to
 	copy := reflect.New(original.Type()).Elem()
 
 	err := interpolateRecursive(copy, original)
@@ -143,6 +149,11 @@ func interpolateRecursive(copy, original reflect.Value) error {
 	case reflect.Interface:
 		// Get rid of the wrapping interface
 		originalValue := original.Elem()
+
+		// Check to make sure the interface isn't nil
+		if !originalValue.IsValid() {
+			return nil
+		}
 
 		// Create a new object. Now new gives us a pointer, but we want the value it
 		// points to, so we have to call Elem() to unwrap it
