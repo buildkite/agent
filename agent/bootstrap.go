@@ -433,7 +433,23 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	if runtime.GOOS == "windows" {
 		gitExecPathOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--exec-path")
 		if gitExecPathOutput != "" {
-			sshToolBinaryPath = filepath.Join(gitExecPathOutput, "..", "..", "..", "usr", "bin")
+			sshToolRelativePaths := [][]string{}
+			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})
+			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "bin"})
+
+
+			for _, segments := range sshToolRelativePaths {
+				segments = append([]string{gitExecPathOutput}, segments...)
+				directory := filepath.Join(segments...)
+				if _, err := os.Stat(filepath.Join(directory, "ssh-keygen.exe")); err == nil {
+					sshToolBinaryPath = directory
+					break
+				}
+			}
+
+			if sshToolBinaryPath == "" {
+				warningf("Could not find `ssh-keygen`")
+			}
 		}
 	}
 
