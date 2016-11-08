@@ -433,7 +433,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	if runtime.GOOS == "windows" {
 		gitExecPathOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--exec-path")
 		if gitExecPathOutput != "" {
-			sshToolBinaryPath = filepath.Join(gitExecPathOutput, "..", "..", "bin")
+			sshToolBinaryPath = filepath.Join(gitExecPathOutput, "..", "..", "..", "usr", "bin")
 		}
 	}
 
