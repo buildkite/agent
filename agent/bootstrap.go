@@ -446,10 +446,6 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 					break
 				}
 			}
-
-			if sshToolBinaryPath == "" {
-				warningf("Could not find `ssh-keygen`")
-			}
 		}
 	}
 
