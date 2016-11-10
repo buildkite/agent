@@ -84,7 +84,9 @@ func (a *AgentWorker) Start() error {
 	// Continue this loop until the the ticker is stopped, and we received
 	// a message on the stop channel.
 	for {
-		a.Ping()
+		if !a.stopping {
+			a.Ping()
+		}
 
 		select {
 		case <-a.ticker.C:
