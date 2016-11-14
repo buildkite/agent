@@ -1,4 +1,6 @@
-Copyright (c) 2014-2015 Keith Pitt, Buildkite Pty Ltd
+# Buildkite Agent Licence
+
+Copyright (c) 2014-2016 Buildkite Pty Ltd
 
 MIT License
 
@@ -20,3 +22,59 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
 LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Third-party dependencies
+
+- Golang, BSD-style
+  https://golang.org/LICENSE
+
+- goamz, LGPLv3
+  https://github.com/AdRoll/goamz/blob/master/LICENSE
+
+- gspt, MIT
+  https://github.com/erikdubbelboer/gspt/blob/master/LICENSE
+
+- aws-sdk-go, Apache 2.0
+  https://github.com/aws/aws-sdk-go/blob/master/LICENSE.txt
+
+- candiedyaml, Apache 2.0
+  https://github.com/cloudfoundry-incubator/candiedyaml/blob/master/LICENSE
+
+- cli, MIT
+  https://github.com/urfave/cli/blob/master/LICENSE
+
+- go-shlex, Apache 2.0
+  https://github.com/flynn-archive/go-shlex, Apache 2.0
+
+- yaml, MIT
+  https://github.com/ghodss/yaml/blob/master/LICENSE
+
+- go-querystring, BSD-3-Clause
+  https://github.com/google/go-querystring/blob/master/LICENSE
+
+- pty, MIT
+  https://github.com/kr/pty/blob/master/License
+
+- go-shellwords, MIT
+  https://github.com/mattn/go-shellwords
+
+- go-homedir, MIT
+  https://github.com/mitchellh/go-homedir
+
+- lockfile, MIT
+  https://github.com/nightlyone/lockfile/blob/master/LICENSE
+
+- reflections, MIT
+  https://github.com/oleiade/reflections/blob/master/LICENSE
+
+- uuid, BSD 3 Clause
+  https://github.com/pborman/uuid/blob/master/LICENSE
+
+- testify, MIT
+  https://github.com/stretchr/testify/blob/master/LICENCE.txt
+
+- go-ini, MIT
+  https://github.com/vaughan0/go-ini/blob/master/LICENSE
+
+- google-api-go-client, BSD 3 Clause
+  https://github.com/google/google-api-go-client/blob/master/LICENSE
