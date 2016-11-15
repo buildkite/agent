@@ -13,6 +13,7 @@ type Agent struct {
 	Hostname          string   `json:"hostname"`
 	Endpoint          string   `json:"endpoint"`
 	PingInterval      int      `json:"ping_interval"`
+	JobStatusInterval int      `json:"job_status_interval"`
 	HearbeatInterval  int      `json:"heartbeat_interval"`
 	OS                string   `json:"os"`
 	Arch              string   `json:"arch"`

@@ -271,14 +271,14 @@ func (r *JobRunner) onProcessStartCallback() {
 			jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
 			if err != nil {
 				// We don't really care if it fails, we'll just
-				// try again in a second anyway
+				// try again soon anyway
 				logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
 			} else if jobState.State == "canceling" || jobState.State == "canceled" {
 				r.Kill()
 			}
 
-			// Check for cancellations every few seconds
-			time.Sleep(3 * time.Second)
+			// Check for cancellations
+			time.Sleep(time.Duration(r.Agent.JobStatusInterval))
 		}
 
 		// Mark this routine as done in the wait group
