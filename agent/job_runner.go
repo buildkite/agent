@@ -278,7 +278,7 @@ func (r *JobRunner) onProcessStartCallback() {
 			}
 
 			// Check for cancellations
-			time.Sleep(time.Duration(r.Agent.JobStatusInterval))
+			time.Sleep(time.Duration(r.Agent.JobStatusInterval) * time.Second)
 		}
 
 		// Mark this routine as done in the wait group
