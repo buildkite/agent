@@ -122,7 +122,7 @@ elif [ -d /etc/init.d ]; then
     # Our current init.d script uses locks for service management which is
     # required for CentOS-6/Amazon Linux, however it doesn't quite work well on
     # Debian 7. So we'll use this ugly hack to figure out if we need to install a
-    # non-lock using version of the init.d script here.
+    # non-lock version of the init.d script here.
     command -v lsb_release > /dev/null && lsb_release -d | grep -q "Debian GNU/Linux 7.11 (wheezy)"
     BK_IS_DEBIAN_7=$?
 
