@@ -36,7 +36,7 @@ case "$1" in
         echo "Already started"
     else
         echo "Starting $name"
-        su - "$user" -c "$cmd" >>"$log" 2>&1 &
+        su --login --shell /bin/sh "$user" --command "$cmd" >>"$log" 2>&1 &
         echo $! > "$pid_file"
         if ! is_running; then
             echo "Unable to start, see $log"
