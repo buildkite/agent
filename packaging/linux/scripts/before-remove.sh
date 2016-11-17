@@ -27,5 +27,5 @@ elif [ -d /etc/init.d ]; then
   echo "Stopping buildkite-agent init.d script"
 
   /etc/init.d/buildkite-agent stop || :
-  command -v chkconfig > /dev/null && chkconfig --del buildkite-agent
+  command -v chkconfig > /dev/null && chkconfig --del buildkite-agent || :
 fi
