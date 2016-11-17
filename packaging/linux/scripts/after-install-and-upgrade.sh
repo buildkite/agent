@@ -119,7 +119,19 @@ elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
   START_COMMAND="sudo service buildkite-agent start"
 elif [ -d /etc/init.d ]; then
   if [ ! -f /etc/init.d/buildkite-agent ]; then
-    cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
+    # Our current init.d script uses locks for service management which is
+    # required for CentOS-6/Amazon Linux, however it doesn't quite work well on
+    # Debian 7. So we'll use this ugly hack to figure out if we need to install a
+    # non-lock version of the init.d script here.
+    command -v lsb_release > /dev/null && lsb_release -d | grep -q "Debian GNU/Linux 7.11 (wheezy)"
+    BK_IS_DEBIAN_7=$?
+
+    if [ $BK_IS_DEBIAN_7 -eq 0 ]; then
+      cp /usr/share/buildkite-agent/lsb/buildkite-agent-debian-7.sh /etc/init.d/buildkite-agent
+    else
+      cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
+    fi
+
     command -v chkconfig > /dev/null && chkconfig --add buildkite-agent
   fi
 
