@@ -17,7 +17,8 @@ cmd="/usr/bin/buildkite-agent start"
 
 name=$(basename "$(readlink -f "$0")")
 pid_file="/var/run/${name}.pid"
-lock_file="/var/lock/subsys/${name}"
+lock_dir="/var/lock/subsys"
+lock_file="${lock_dir}/${name}"
 log="/var/log/${name}.log"
 stderr_log="/var/log/${name}.err"
 
@@ -41,7 +42,9 @@ case "$1" in
             echo "Unable to start, see $log"
             exit 1
         fi
-        touch "$lock_file"
+        if [ -d "$lock_dir" ]; then
+            touch "$lock_file"
+        fi
     fi
     ;;
     stop)
@@ -67,7 +70,9 @@ case "$1" in
             if [ -f "$pid_file" ]; then
                 rm "$pid_file"
             fi
-        rm -f "$lock_file"
+            if [ -f "$lock_file" ]; then
+                rm -f "$lock_file"
+            fi
         fi
     else
         echo "Not running"
