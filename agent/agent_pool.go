@@ -5,6 +5,7 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"strings"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -19,6 +20,7 @@ type AgentPool struct {
 	ConfigFilePath     string
 	Name               string
 	Priority           string
+	Experiments        []string
 	MetaData           []string
 	MetaDataEC2        bool
 	MetaDataEC2Tags    bool
@@ -246,6 +248,10 @@ func (r *AgentPool) ShowBanner() {
 	logger.Debug("Build path: %s", r.AgentConfiguration.BuildPath)
 	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
 	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
+
+	if len(r.Experiments) > 0 {
+		logger.Debug("Experiments enabled: %s", strings.Join(r.Experiments, ", "))
+	}
 
 	if !r.AgentConfiguration.SSHFingerprintVerification {
 		logger.Debug("Automatic SSH fingerprint verification has been disabled")

@@ -38,6 +38,7 @@ type AgentStartConfig struct {
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	MetaData                     []string `cli:"meta-data"`
+	Experiments                  []string `cli:"experiment"`
 	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
 	MetaDataGCP                  bool     `cli:"meta-data-gcp"`
@@ -111,6 +112,12 @@ var AgentStartCommand = cli.Command{
 			Value:  &cli.StringSlice{},
 			Usage:  "Meta-data for the agent (default is \"queue=default\")",
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
+		},
+		cli.StringSliceFlag{
+			Name:   "experiment",
+			Value:  &cli.StringSlice{},
+			Usage:  "Enable experimental features within the buildkite-agent",
+			EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2",
@@ -214,6 +221,7 @@ var AgentStartCommand = cli.Command{
 			Token:           cfg.Token,
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
+			Experiments:     cfg.Experiments,
 			MetaData:        cfg.MetaData,
 			MetaDataEC2:     cfg.MetaDataEC2,
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
