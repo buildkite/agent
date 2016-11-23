@@ -78,3 +78,6 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 - google-api-go-client, BSD 3 Clause
   https://github.com/google/google-api-go-client/blob/master/LICENSE
+
+- msgpack, BSD 3 Clause
+  https://github.com/vmihailenco/msgpack/blob/v2/LICENSE
