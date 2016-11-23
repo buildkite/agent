@@ -113,12 +113,6 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Meta-data for the agent (default is \"queue=default\")",
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
 		},
-		cli.StringSliceFlag{
-			Name:   "experiment",
-			Value:  &cli.StringSlice{},
-			Usage:  "Enable experimental features within the buildkite-agent",
-			EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
-		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2",
 			Usage: "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
@@ -185,6 +179,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to run arbitrary console commands",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
+		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
@@ -221,7 +216,6 @@ var AgentStartCommand = cli.Command{
 			Token:           cfg.Token,
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
-			Experiments:     cfg.Experiments,
 			MetaData:        cfg.MetaData,
 			MetaDataEC2:     cfg.MetaDataEC2,
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,

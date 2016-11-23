@@ -8,21 +8,21 @@ type AgentsService struct {
 
 // Agent represents an agent on the Buildkite Agent API
 type Agent struct {
-	Name              string   `json:"name"`
-	AccessToken       string   `json:"access_token"`
-	Hostname          string   `json:"hostname"`
-	Endpoint          string   `json:"endpoint"`
-	PingInterval      int      `json:"ping_interval"`
-	JobStatusInterval int      `json:"job_status_interval"`
-	HearbeatInterval  int      `json:"heartbeat_interval"`
-	OS                string   `json:"os"`
-	Arch              string   `json:"arch"`
-	ScriptEvalEnabled bool     `json:"script_eval_enabled"`
-	Priority          string   `json:"priority,omitempty"`
-	Version           string   `json:"version"`
-	Build             string   `json:"build"`
-	MetaData          []string `json:"meta_data"`
-	PID               int      `json:"pid,omitempty"`
+	Name              string   `json:"name" msgpack:"name"`
+	AccessToken       string   `json:"access_token" msgpack:"access_token"`
+	Hostname          string   `json:"hostname" msgpack:"hostname"`
+	Endpoint          string   `json:"endpoint" msgpack:"endpoint"`
+	PingInterval      int      `json:"ping_interval" msgpack:"ping_interval"`
+	JobStatusInterval int      `json:"job_status_interval" msgpack:"job_status_interval"`
+	HearbeatInterval  int      `json:"heartbeat_interval" msgpack:"heartbeat_interval"`
+	OS                string   `json:"os" msgpack:"os"`
+	Arch              string   `json:"arch" msgpack:"arch"`
+	ScriptEvalEnabled bool     `json:"script_eval_enabled" msgpack:"script_eval_enabled"`
+	Priority          string   `json:"priority,omitempty" msgpack:"priority,omitempty"`
+	Version           string   `json:"version" msgpack:"version"`
+	Build             string   `json:"build" msgpack:"build"`
+	MetaData          []string `json:"meta_data" msgpack:"meta_data"`
+	PID               int      `json:"pid,omitempty" msgpack:"pid,omitempty"`
 }
 
 // Registers the agent against the Buildktie Agent API. The client for this
