@@ -1,5 +1,11 @@
 package api
 
+import (
+	"net/http"
+
+	"github.com/buildkite/agent/experiments"
+)
+
 // AgentsService handles communication with the agent related methods of the
 // Buildkite Agent API.
 type AgentsService struct {
@@ -28,7 +34,14 @@ type Agent struct {
 // Registers the agent against the Buildktie Agent API. The client for this
 // call must be authenticated using an Agent Registration Token
 func (as *AgentsService) Register(agent *Agent) (*Agent, *Response, error) {
-	req, err := as.client.NewRequest("POST", "register", agent)
+	var req *http.Request
+	var err error
+	if experiments.IsEnabled("msgpack") {
+		req, err = as.client.NewRequestWithMessagePack("POST", "register", agent)
+	} else {
+		req, err = as.client.NewRequest("POST", "register", agent)
+	}
+
 	if err != nil {
 		return nil, nil, err
 	}
