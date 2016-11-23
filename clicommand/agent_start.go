@@ -38,6 +38,7 @@ type AgentStartConfig struct {
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	MetaData                     []string `cli:"meta-data"`
+	Experiments                  []string `cli:"experiment"`
 	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
 	MetaDataGCP                  bool     `cli:"meta-data-gcp"`
@@ -178,6 +179,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to run arbitrary console commands",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
+		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
