@@ -59,6 +59,7 @@ func (p *Process) Start() error {
 	p.command.Env = append(currentEnv, p.Env...)
 
 	var waitGroup sync.WaitGroup
+	var lineCallbackWaitGroup sync.WaitGroup
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
@@ -166,7 +167,11 @@ func (p *Process) Start() error {
 				}
 			}
 
-			go p.LineCallback(string(line))
+			lineCallbackWaitGroup.Add(1)
+			go func(line string) {
+				defer lineCallbackWaitGroup.Done()
+				p.LineCallback(line)
+			}(string(line))
 		}
 
 		logger.Debug("[LineScanner] Finished")
@@ -199,6 +204,11 @@ func (p *Process) Start() error {
 	if err != nil {
 		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
+
+	// We need to make sure all the line callbacks have finish before
+	// finish up the process
+	logger.Debug("[Process] Waiting for line callbacks to finish")
+	lineCallbackWaitGroup.Wait()
 
 	// No error occurred so we can return nil
 	return nil
