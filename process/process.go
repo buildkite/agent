@@ -131,6 +131,7 @@ func (p *Process) Start() error {
 		reader := bufio.NewReader(lineReaderPipe)
 
 		var appending []byte
+		var lineCallbackWaitGroup sync.WaitGroup
 
 		for {
 			line, isPrefix, err := reader.ReadLine()
@@ -170,11 +171,19 @@ func (p *Process) Start() error {
 				}
 			}
 
-			go p.LineCallback(string(line))
+			lineCallbackWaitGroup.Add(1)
+			go func(line string) {
+				defer lineCallbackWaitGroup.Done()
+				p.LineCallback(line)
+			}(string(line))
 		}
 
-		logger.Debug("[LineScanner] Finished")
+		// We need to make sure all the line callbacks have finish before
+		// finish up the process
+		logger.Debug("[LineScanner] Waiting for callbacks to finish")
+		lineCallbackWaitGroup.Wait()
 
+		logger.Debug("[LineScanner] Finished")
 		waitGroup.Done()
 	}()
 
