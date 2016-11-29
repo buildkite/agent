@@ -1110,6 +1110,12 @@ func (b *Bootstrap) Start() error {
 			exitf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
+		// Also make sure that the script we've resolved is definitely within this
+		// repository checkout and isn't elsewhere on the system.
+		if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.currentWorkingDirectory()) {
+			exitf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
+		}
+
 		var headerLabel string
 		var buildScriptPath string
 		var promptDisplay string
