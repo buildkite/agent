@@ -1100,8 +1100,8 @@ func (b *Bootstrap) Start() error {
 			exitf("No command has been defined. Please go to \"Pipeline Settings\" and configure your build step's \"Command\"")
 		}
 
-		pathToCommand := filepath.Join(b.currentWorkingDirectory(), strings.Replace(b.Command, "\n", "", -1))
-		commandIsScript := fileExists(pathToCommand)
+		pathToCommand, err := filepath.Abs(filepath.Join(b.currentWorkingDirectory(), strings.Replace(b.Command, "\n", "", -1)))
+		commandIsScript := err == nil && fileExists(pathToCommand)
 
 		// If the command isn't a script, then it's something we need
 		// to eval. But before we even try running it, we should double
