@@ -170,16 +170,18 @@ func normalizeScriptFileName(filename string) string {
 	}
 }
 
-// Changes the permission of a file so it can be executed
+// Makes sure a file is executable
 func addExecutePermissiontoFile(filename string) {
 	s, err := os.Stat(filename)
 	if err != nil {
 		exitf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
 	}
 
-	err = os.Chmod(filename, s.Mode()|0100)
-	if err != nil {
-		exitf("Failed to mark \"%s\" as executable (%s)", filename, err)
+	if s.Mode() & 0100 == 0 {
+		err = os.Chmod(filename, s.Mode()|0100)
+		if err != nil {
+			exitf("Failed to mark \"%s\" as executable (%s)", filename, err)
+		}
 	}
 }
 
