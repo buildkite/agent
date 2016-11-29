@@ -1112,7 +1112,7 @@ func (b *Bootstrap) Start() error {
 
 		// Also make sure that the script we've resolved is definitely within this
 		// repository checkout and isn't elsewhere on the system.
-		if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.currentWorkingDirectory()) {
+		if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.currentWorkingDirectory() + string(os.PathSeparator)) {
 			exitf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
