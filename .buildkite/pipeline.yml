@@ -1,7 +1,4 @@
 steps:
-
-  - wait
-
   - name: ":hammer:"
     command: "scripts/tests.sh"
     plugins:
