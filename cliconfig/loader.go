@@ -163,6 +163,17 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		if len(l.CLI.Args()) > argIndex {
 			value = l.CLI.Args()[argIndex]
 		}
+
+		// Otherwise see if we can pull it from an environment variable
+		// (and fail gracefuly if we can't)
+		if value == nil {
+			envName, err := reflections.GetFieldTag(l.Config, fieldName, "env")
+			if err == nil {
+				if envValue, envSet := os.LookupEnv(envName); envSet {
+					value = envValue
+				}
+			}
+		}
 	} else {
 		// If the cli name didn't have the special format, then we need to
 		// either load from the context's flags, or from a config file.
