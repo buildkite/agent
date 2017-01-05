@@ -27,7 +27,7 @@ type Loader struct {
 	File *File
 }
 
-var ArgCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
+var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
 func Load(c *cli.Context, cfg interface{}) error {
@@ -148,7 +148,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	var value interface{}
 
 	// See the if the cli option is using the arg format i.e. (arg:1)
-	argMatch := ArgCliNameRegexp.FindStringSubmatch(cliName)
+	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
 	if len(argMatch) > 0 {
 		argNum := argMatch[1]
 
