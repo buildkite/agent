@@ -63,9 +63,17 @@ func (a *ArtifactDownloader) Download() error {
 			p.Spawn(func() {
 				var err error
 
-				// Handle downloading from S3
+				// Handle downloading from S3 and GS
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
 					err = S3Downloader{
+						Path:        artifact.Path,
+						Bucket:      artifact.UploadDestination,
+						Destination: downloadDestination,
+						Retries:     5,
+						DebugHTTP:   a.APIClient.DebugHTTP,
+					}.Start()
+				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
+					err = GSDownloader{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
