@@ -27,7 +27,7 @@ type Loader struct {
 	File *File
 }
 
-var CLISpecialNameRegex = regexp.MustCompile(`(arg):(\d+)`)
+var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
 func Load(c *cli.Context, cfg interface{}) error {
@@ -147,22 +147,31 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 
 	var value interface{}
 
-	// See the if the cli option is using the special format i.e. (arg:1)
-	special := CLISpecialNameRegex.FindStringSubmatch(cliName)
-	if len(special) == 3 {
-		// Should this cli option be loaded from the CLI arguments?
-		if special[1] == "arg" {
-			// Convert the arg position to an integer
-			i, err := strconv.Atoi(special[2])
-			if err != nil {
-				return fmt.Errorf("Failed to convert string to int: %s", err)
-			}
+	// See the if the cli option is using the arg format i.e. (arg:1)
+	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
+	if len(argMatch) > 0 {
+		argNum := argMatch[1]
 
-			// Only set the value if the args are long enough for
-			// the position to exist.
-			if len(l.CLI.Args()) > i {
-				// Get the value from the args
-				value = l.CLI.Args()[i]
+		// Convert the arg position to an integer
+		argIndex, err := strconv.Atoi(argNum)
+		if err != nil {
+			return fmt.Errorf("Failed to convert string to int: %s", err)
+		}
+
+		// Only set the value if the args are long enough for
+		// the position to exist.
+		if len(l.CLI.Args()) > argIndex {
+			value = l.CLI.Args()[argIndex]
+		}
+
+		// Otherwise see if we can pull it from an environment variable
+		// (and fail gracefuly if we can't)
+		if value == nil {
+			envName, err := reflections.GetFieldTag(l.Config, fieldName, "env")
+			if err == nil {
+				if envValue, envSet := os.LookupEnv(envName); envSet {
+					value = envValue
+				}
 			}
 		}
 	} else {
