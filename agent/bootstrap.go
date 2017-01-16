@@ -737,6 +737,26 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 	}
 }
 
+func (b *Bootstrap) gitClean() {
+	gitCleanFlags, err := shlex.Split(b.GitCleanFlags)
+	if err != nil {
+		exitf("There was an error trying to split `%s` into arguments (%s)", b.GitCleanFlags, err)
+	}
+
+	// Clean up the repository
+	gitCleanRepoArguments := []string{"clean"}
+	gitCleanRepoArguments = append(gitCleanRepoArguments, gitCleanFlags...)
+	b.runCommand("git", gitCleanRepoArguments...)
+
+	// Also clean up submodules if we can
+	if b.GitSubmodules {
+		gitCleanSubmoduleArguments := []string{"submodule", "foreach", "--recursive", "git", "clean"}
+		gitCleanSubmoduleArguments = append(gitCleanSubmoduleArguments, gitCleanFlags...)
+
+		b.runCommand("git", gitCleanSubmoduleArguments...)
+	}
+}
+
 func (b *Bootstrap) Start() error {
 	var err error
 
@@ -948,23 +968,8 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", gitCloneArguments...)
 		}
 
-		gitCleanFlags, err := shlex.Split(b.GitCleanFlags)
-		if err != nil {
-			exitf("There was an error trying to split `%s` into arguments (%s)", b.GitCleanFlags, err)
-		}
-
-		// Clean up the repository
-		gitCleanRepoArguments := []string{"clean"}
-		gitCleanRepoArguments = append(gitCleanRepoArguments, gitCleanFlags...)
-		b.runCommand("git", gitCleanRepoArguments...)
-
-		// Also clean up submodules if we can
-		if b.GitSubmodules {
-			gitCleanSubmoduleArguments := []string{"submodule", "foreach", "--recursive", "git", "clean"}
-			gitCleanSubmoduleArguments = append(gitCleanSubmoduleArguments, gitCleanFlags...)
-
-			b.runCommand("git", gitCleanSubmoduleArguments...)
-		}
+		// Git clean prior to checkout
+		b.gitClean()
 
 		// If a refspec is provided then use it instead.
 		// i.e. `refs/not/a/head`
@@ -1021,6 +1026,9 @@ func (b *Bootstrap) Start() error {
 			b.runCommand("git", "submodule", "update", "--init", "--recursive", "--force")
 			b.runCommand("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard")
 		}
+
+		// Git clean after checkout
+		b.gitClean()
 
 		if b.env.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
 			warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
