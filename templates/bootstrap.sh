@@ -157,6 +157,15 @@ function buildkite-local-hook {
   buildkite-hook-exit-on-error
 }
 
+function buildkite-git-clean {
+  BUILDKITE_GIT_CLEAN_FLAGS=${BUILDKITE_GIT_CLEAN_FLAGS:--fdq}
+  buildkite-run git clean "$BUILDKITE_GIT_CLEAN_FLAGS"
+
+  if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
+    buildkite-run git submodule foreach --recursive git clean "$BUILDKITE_GIT_CLEAN_FLAGS"
+  fi
+}
+
 ##############################################################
 #
 # PATH DEFAULTS
@@ -265,12 +274,8 @@ else
     buildkite-run git clone "$BUILDKITE_GIT_CLONE_FLAGS" -- "$BUILDKITE_REPO" .
   fi
 
-  BUILDKITE_GIT_CLEAN_FLAGS=${BUILDKITE_GIT_CLEAN_FLAGS:--fdq}
-  buildkite-run git clean "$BUILDKITE_GIT_CLEAN_FLAGS"
-
-  if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
-    buildkite-run git submodule foreach --recursive git clean "$BUILDKITE_GIT_CLEAN_FLAGS"
-  fi
+  # Git clean prior to checkout
+  buildkite-git-clean
 
   # If a refspec is provided then use it instead.
   # i.e. `refs/not/a/head`
@@ -321,6 +326,9 @@ else
 
     buildkite-run git submodule foreach --recursive git reset --hard
   fi
+
+  # Git clean after checkout
+  buildkite-git-clean
 
   # Grab author and commit information and send it back to Buildkite
   buildkite-debug "~~~ Saving Git information"
