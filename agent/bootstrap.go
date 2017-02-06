@@ -265,9 +265,8 @@ func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	for true {
 		err := lock.TryLock()
 		if err != nil {
-			if err == lockfile.ErrBusy {
-				// Keey track of how many times we tried to get the
-				// lock
+			if te, ok := err.(interface{ Temporary() bool }); ok && te.Temporary() {
+				// Keep track of how many times we tried to get the lock
 				attempts += 1
 				if attempts > seconds {
 					return nil, fmt.Errorf("Gave up trying to aquire a lock on \"%s\" (%s)", absolutePathToLock, err)

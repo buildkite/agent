@@ -2,24 +2,28 @@ lockfile
 =========
 Handle locking via pid files.
 
-[![Build Status][1]][2]
+[![Build Status Unix][1]][2]
+[![Build status Windows][3]][4]
 
 [1]: https://secure.travis-ci.org/nightlyone/lockfile.png
-[2]: http://travis-ci.org/nightlyone/lockfile
+[2]: https://travis-ci.org/nightlyone/lockfile
+[3]: https://ci.appveyor.com/api/projects/status/7mojkmauj81uvp8u/branch/master?svg=true
+[4]: https://ci.appveyor.com/project/nightlyone/lockfile/branch/master
 
 
 
 install
 -------
-Install [Go 1][3], either [from source][4] or [with a prepackaged binary][5].
+Install [Go 1][5], either [from source][6] or [with a prepackaged binary][7].
+For Windows suport, Go 1.4 or newer is required.
 
 Then run
 
 	go get github.com/nightlyone/lockfile
 
-[3]: http://golang.org
-[4]: http://golang.org/doc/install/source
-[5]: http://golang.org/doc/install
+[5]: http://golang.org
+[6]: http://golang.org/doc/install/source
+[7]: http://golang.org/doc/install
 
 LICENSE
 -------
@@ -27,7 +31,7 @@ BSD
 
 documentation
 -------------
-[package documentation at go.pkgdoc.org](http://go.pkgdoc.org/github.com/nightlyone/lockfile)
+[package documentation at godoc.org](http://godoc.org/github.com/nightlyone/lockfile)
 
 install
 -------------------
@@ -45,8 +49,4 @@ git commit hooks
 enable commit hooks via
 
         cd .git ; rm -rf hooks; ln -s ../git-hooks hooks ; cd ..
-
-
-
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/nightlyone/lockfile/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
 

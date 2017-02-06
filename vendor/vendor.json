@@ -1,0 +1,13 @@
+{
+	"comment": "",
+	"ignore": "",
+	"package": [
+		{
+			"checksumSHA1": "vTvxmnGAy79VT4n72ZsX7WwvHXw=",
+			"path": "github.com/nightlyone/lockfile",
+			"revision": "1d49c987357a327b5b03aa84cbddd582c328615d",
+			"revisionTime": "2016-09-28T00:14:32Z"
+		}
+	],
+	"rootPath": "github.com/buildkite/agent"
+}
