@@ -177,7 +177,7 @@ func addExecutePermissiontoFile(filename string) {
 		exitf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
 	}
 
-	if s.Mode() & 0100 == 0 {
+	if s.Mode()&0100 == 0 {
 		err = os.Chmod(filename, s.Mode()|0100)
 		if err != nil {
 			exitf("Failed to mark \"%s\" as executable (%s)", filename, err)
@@ -265,7 +265,9 @@ func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
 	for true {
 		err := lock.TryLock()
 		if err != nil {
-			if te, ok := err.(interface{ Temporary() bool }); ok && te.Temporary() {
+			if te, ok := err.(interface {
+				Temporary() bool
+			}); ok && te.Temporary() {
 				// Keep track of how many times we tried to get the lock
 				attempts += 1
 				if attempts > seconds {
@@ -437,7 +439,6 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 			sshToolRelativePaths := [][]string{}
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "bin"})
-
 
 			for _, segments := range sshToolRelativePaths {
 				segments = append([]string{gitExecPathOutput}, segments...)
@@ -1121,7 +1122,7 @@ func (b *Bootstrap) Start() error {
 
 		// Also make sure that the script we've resolved is definitely within this
 		// repository checkout and isn't elsewhere on the system.
-		if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.currentWorkingDirectory() + string(os.PathSeparator)) {
+		if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.currentWorkingDirectory()+string(os.PathSeparator)) {
 			exitf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
