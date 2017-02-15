@@ -23,6 +23,7 @@ import (
 type Process struct {
 	Pid        int
 	PTY        bool
+	Timestamp  bool
 	Script     string
 	Env        []string
 	ExitStatus string
@@ -67,7 +68,12 @@ func (p *Process) Start() error {
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
-	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
+	var multiWriter io.Writer
+	if p.Timestamp {
+		multiWriter = io.MultiWriter(lineWriterPipe)
+	} else {
+		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
+	}
 
 	logger.Info("Starting to run script: %s", p.command.Path)
 
@@ -169,6 +175,12 @@ func (p *Process) Start() error {
 				} else {
 					continue
 				}
+			}
+
+			// Create the prefixed buffer
+			if p.Timestamp {
+				currentTime := time.Now().UTC().Format(time.RFC3339)
+				p.buffer.WriteString(fmt.Sprintf("[%s] %s\n", currentTime, line))
 			}
 
 			lineCallbackWaitGroup.Add(1)

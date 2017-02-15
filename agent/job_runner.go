@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -59,11 +60,17 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// the Buildkite Agent API
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
+	timestamp, err := strconv.ParseBool(os.Getenv("BUILDKITE_TIMESTAMP_LINES"))
+	if err != nil {
+		timestamp = false
+	}
+
 	// The process that will run the bootstrap script
 	runner.process = process.Process{
 		Script:        r.AgentConfiguration.BootstrapScript,
 		Env:           r.createEnvironment(),
 		PTY:           r.AgentConfiguration.RunInPty,
+		Timestamp:     timestamp,
 		StartCallback: r.onProcessStartCallback,
 		LineCallback:  runner.headerTimesStreamer.Scan,
 	}.Create()
