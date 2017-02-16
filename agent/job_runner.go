@@ -60,13 +60,15 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
 	// The process that will run the bootstrap script
-	runner.process = &process.Process{
-		Script:        r.AgentConfiguration.BootstrapScript,
-		Env:           r.createEnvironment(),
-		PTY:           r.AgentConfiguration.RunInPty,
-		StartCallback: r.onProcessStartCallback,
-		LineCallback:  runner.headerTimesStreamer.Scan,
-	}
+	runner.process = process.Process{
+		Script:             r.AgentConfiguration.BootstrapScript,
+		Env:                r.createEnvironment(),
+		PTY:                r.AgentConfiguration.RunInPty,
+		Timestamp:          timestamp,
+		StartCallback:      r.onProcessStartCallback,
+		LineCallback:       runner.headerTimesStreamer.Scan,
+		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
+	}.Create()
 
 	return
 }

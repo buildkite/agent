@@ -35,8 +35,9 @@ type Process struct {
 	StartCallback func()
 
 	// For every line in the process output, this callback will be called
-	// with the contents of the line
-	LineCallback func(string)
+	// with the contents of the line if its filter returns true.
+	LineCallback       func(string)
+	LineCallbackFilter func(string) bool
 
 	// Running is stored as an int32 so we can use atomic operations to
 	// set/get it (it's accessed by multiple goroutines)
@@ -172,11 +173,37 @@ func (p *Process) Start() error {
 				}
 			}
 
-			lineCallbackWaitGroup.Add(1)
-			go func(line string) {
-				defer lineCallbackWaitGroup.Done()
-				p.LineCallback(line)
-			}(string(line))
+			// If we're timestamping this main thread will take
+			// the hit of running the regex so we can build up
+			// the timestamped buffer without breaking headers,
+			// otherwise we let the goroutines take the perf hit.
+
+			checkedForCallback := false
+			lineHasCallback := false
+			lineString := string(line)
+
+			// Create the prefixed buffer
+			if p.Timestamp {
+				lineHasCallback = p.LineCallbackFilter(lineString)
+				checkedForCallback = true
+				if lineHasCallback {
+					// Don't timestamp special lines (e.g. header)
+					p.buffer.WriteString(fmt.Sprintf("%s\n", line))
+				} else {
+					currentTime := time.Now().UTC().Format(time.RFC3339)
+					p.buffer.WriteString(fmt.Sprintf("[%s] %s\n", currentTime, line))
+				}
+			}
+
+			if lineHasCallback || !checkedForCallback {
+				lineCallbackWaitGroup.Add(1)
+				go func(line string) {
+					defer lineCallbackWaitGroup.Done()
+					if (checkedForCallback && lineHasCallback) || p.LineCallbackFilter(lineString) {
+						p.LineCallback(line)
+					}
+				}(lineString)
+			}
 		}
 
 		// We need to make sure all the line callbacks have finish before
