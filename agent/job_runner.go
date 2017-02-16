@@ -67,12 +67,13 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 	// The process that will run the bootstrap script
 	runner.process = process.Process{
-		Script:        r.AgentConfiguration.BootstrapScript,
-		Env:           r.createEnvironment(),
-		PTY:           r.AgentConfiguration.RunInPty,
-		Timestamp:     timestamp,
-		StartCallback: r.onProcessStartCallback,
-		LineCallback:  runner.headerTimesStreamer.Scan,
+		Script:             r.AgentConfiguration.BootstrapScript,
+		Env:                r.createEnvironment(),
+		PTY:                r.AgentConfiguration.RunInPty,
+		Timestamp:          timestamp,
+		StartCallback:      r.onProcessStartCallback,
+		LineCallback:       runner.headerTimesStreamer.Scan,
+		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
 	}.Create()
 
 	return
