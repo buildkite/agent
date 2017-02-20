@@ -26,7 +26,7 @@ type ArtifactUploader struct {
 	JobID string
 
 	// The path of the uploads
-	Paths string
+	Paths []string
 
 	// Where we'll be uploading artifacts
 	Destination string
@@ -42,7 +42,7 @@ func (a *ArtifactUploader) Upload() error {
 	if len(artifacts) == 0 {
 		logger.Info("No files matched paths: %s", a.Paths)
 	} else {
-		logger.Info("Found %d files that match \"%s\"", len(artifacts), a.Paths)
+		logger.Info("Found %d files to upload", len(artifacts))
 
 		err := a.upload(artifacts)
 		if err != nil {
@@ -54,48 +54,42 @@ func (a *ArtifactUploader) Upload() error {
 }
 
 func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
-	globPaths := strings.Split(a.Paths, ";")
-
-	for _, globPath := range globPaths {
-		workingDirectory := glob.Root(globPath)
-		globPath = strings.TrimSpace(globPath)
-
-		if globPath != "" {
-			logger.Debug("Searching for %s", filepath.Join(workingDirectory, globPath))
-
-			files, err := glob.Glob(workingDirectory, globPath)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, file := range files {
-				// Generate an absolute path for the artifact
-				absolutePath, err := filepath.Abs(file)
-				if err != nil {
-					return nil, err
-				}
-
-				if isDir, _ := glob.IsDir(absolutePath); isDir {
-					logger.Debug("Skipping directory %s", file)
-					continue
-				}
-
-				// Create a relative path (from the workingDirectory) to the artifact, by removing the
-				// first part of the absolutePath that is the workingDirectory.
-				relativePath := strings.Replace(absolutePath, workingDirectory, "", 1)
-
-				// Ensure the relativePath doesn't have a file seperator "/" as the first character
-				relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
-
-				// Build an artifact object using the paths we have.
-				artifact, err := a.build(relativePath, absolutePath, globPath)
-				if err != nil {
-					return nil, err
-				}
-
-				artifacts = append(artifacts, artifact)
-			}
+	for _, path := range a.Paths {
+		// Make sure the file exists
+		stat, err := os.Stat(path)
+		if err != nil && os.IsNotExist(err) {
+			logger.Fatal("Path does not exist: %s", path)
+		} else if err != nil {
+			return nil, err
 		}
+
+		if stat.IsDir() {
+			logger.Debug("Skipping directory: %s", path)
+			continue
+		}
+
+		// Generate an absolute path for the artifact
+		absolutePath, err := filepath.Abs(path)
+		if err != nil {
+			return nil, err
+		}
+
+		workingDirectory := glob.Root(path)
+
+		// Create a relative path (from the workingDirectory) to the artifact, by removing the
+		// first part of the absolutePath that is the workingDirectory.
+		relativePath := strings.Replace(absolutePath, workingDirectory, "", 1)
+
+		// Ensure the relativePath doesn't have a file seperator "/" as the first character
+		relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
+
+		// Build an artifact object using the paths we have.
+		artifact, err := a.build(relativePath, absolutePath, path)
+		if err != nil {
+			return nil, err
+		}
+
+		artifacts = append(artifacts, artifact)
 	}
 
 	return artifacts, nil

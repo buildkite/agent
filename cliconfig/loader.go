@@ -27,6 +27,10 @@ type Loader struct {
 	File *File
 }
 
+// Matches all non-option arguments
+var argsCliName = `arg:*`
+
+// Matches an indexed non-option argument
 var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
@@ -147,9 +151,11 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 
 	var value interface{}
 
-	// See the if the cli option is using the arg format i.e. (arg:1)
-	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
-	if len(argMatch) > 0 {
+	// Is this cli option just all arguments?
+	if cliName == argsCliName {
+		value = []string(l.CLI.Args())
+	} else if argMatch := argCliNameRegexp.FindStringSubmatch(cliName); len(argMatch) > 0 {
+		// See the if the cli option is using the arg format i.e. (arg:1)
 		argNum := argMatch[1]
 
 		// Convert the arg position to an integer
