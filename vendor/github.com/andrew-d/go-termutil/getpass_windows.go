@@ -5,36 +5,15 @@ package termutil
 import (
 	"syscall"
 	"io"
+	"errors"
 )
 
 var (
-	f_putwch uintptr // wint_t _putwch(wchar_t c)
 	f_getwch uintptr // wint_t _getwch(void)
 )
 
 func init() {
-	msvcrt := loadLibrary("msvcrt.dll")
-
-	f_putwch = getProcAddress(msvcrt, "_putwch")
-	f_getwch = getProcAddress(msvcrt, "_getwch")
-}
-
-func loadLibrary(name string) uintptr {
-	lib, err := syscall.LoadLibrary(name)
-	if err != nil {
-		panic(err)
-	}
-
-	return uintptr(lib)
-}
-
-func getProcAddress(library uintptr, name string) uintptr {
-	addr, err := syscall.GetProcAddress(syscall.Handle(library), name)
-	if err != nil {
-		panic(err)
-	}
-
-	return uintptr(addr)
+	f_getwch = syscall.MustLoadDLL("msvcrt.dll").MustFindProc("_getwch").Addr()
 }
 
 func GetPass(prompt string, prompt_fd, input_fd uintptr) ([]byte, error) {
@@ -61,8 +40,10 @@ func GetPass(prompt string, prompt_fd, input_fd uintptr) ([]byte, error) {
 	var chars []uint16
 	for {
 		ret, _, _ := syscall.Syscall(f_getwch, 0, 0, 0, 0)
-		if ret == 0x0010 || ret == 0x0013 {
+		if ret == 0x000A || ret == 0x000D {
 			break
+		} else if ret == 0x0003 {
+			return nil, errors.New("Input has been interrupted by user.")
 		} else if ret == 0x0008 {
 			chars = chars[0:len(chars)-2]
 		} else {

@@ -12,8 +12,10 @@ package ec2
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"github.com/AdRoll/goamz/aws"
 	"log"
@@ -119,39 +121,56 @@ type xmlErrors struct {
 var timeNow = time.Now
 
 func (ec2 *EC2) query(params map[string]string, resp interface{}) error {
-	params["Version"] = "2014-02-01"
-	params["Timestamp"] = timeNow().In(time.UTC).Format(time.RFC3339)
-	endpoint, err := url.Parse(ec2.Region.EC2Endpoint)
+	values := multimap(params)
+	values.Set("Version", "2014-02-01")
+	values.Set("Timestamp", timeNow().In(time.UTC).Format(time.RFC3339))
+
+	client := http.Client{}
+
+	req, err := http.NewRequest("GET", ec2.Region.EC2Endpoint.Endpoint, nil)
 	if err != nil {
 		return err
-	}
-	if endpoint.Path == "" {
-		endpoint.Path = "/"
-	}
-	if ec2.Auth.Token() != "" {
-		params["SecurityToken"] = ec2.Auth.Token()
 	}
 
-	sign(ec2.Auth, "GET", endpoint.Path, params, endpoint.Host)
-	endpoint.RawQuery = multimap(params).Encode()
-	if debug {
-		log.Printf("get { %v } -> {\n", endpoint.String())
+	if req.URL.Path == "" {
+		req.URL.Path = "/"
 	}
-	r, err := http.Get(endpoint.String())
+
+	req.URL.RawQuery = values.Encode()
+
+	if ec2.Region.EC2Endpoint.Signer == aws.V2Signature {
+		sgnr, err := aws.NewV2Signer(ec2.Auth, ec2.Region.EC2Endpoint)
+		sgnr.SignRequest(req)
+		if err != nil {
+			return err
+		}
+	} else if ec2.Region.EC2Endpoint.Signer == aws.V4Signature {
+		sgnr := aws.NewV4Signer(ec2.Auth, "ec2", ec2.Region)
+		sgnr.SignRequest(req)
+	} else {
+		str := fmt.Sprintf("Unknown signature type specified for region '%v'", ec2.Region.Name)
+		return errors.New(str)
+	}
+
+	r, err := client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer r.Body.Close()
 
 	if debug {
 		dump, _ := httputil.DumpResponse(r, true)
 		log.Printf("response:\n")
 		log.Printf("%v\n}\n", string(dump))
 	}
+
+	defer r.Body.Close()
+
 	if r.StatusCode != 200 {
 		return buildError(r)
 	}
+
 	err = xml.NewDecoder(r.Body).Decode(resp)
+
 	return err
 }
 
@@ -453,8 +472,8 @@ func (ec2 *EC2) RunInstances(options *RunInstancesOptions) (resp *RunInstancesRe
 		params["RamdiskId"] = options.RamdiskId
 	}
 	if options.UserData != nil {
-		userData := make([]byte, b64.EncodedLen(len(options.UserData)))
-		b64.Encode(userData, options.UserData)
+		userData := make([]byte, base64.StdEncoding.EncodedLen(len(options.UserData)))
+		base64.StdEncoding.Encode(userData, options.UserData)
 		params["UserData"] = string(userData)
 	}
 	if options.AvailabilityZone != "" {
@@ -1304,6 +1323,25 @@ func (ec2 *EC2) CreateTags(instIds []string, tags []Tag) (resp *SimpleResp, err 
 	for j, tag := range tags {
 		params["Tag."+strconv.Itoa(j+1)+".Key"] = tag.Key
 		params["Tag."+strconv.Itoa(j+1)+".Value"] = tag.Value
+	}
+
+	resp = &SimpleResp{}
+	err = ec2.query(params, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// DeleteTags deletes the specified set of tags from the specified set of resources.
+//
+// See http://goo.gl/t6XvYh for more details
+func (ec2 *EC2) DeleteTags(instIds []string, tags []Tag) (resp *SimpleResp, err error) {
+	params := makeParams("DeleteTags")
+	addParamsList(params, "ResourceId", instIds)
+
+	for j, tag := range tags {
+		params["Tag."+strconv.Itoa(j+1)+".Key"] = tag.Key
 	}
 
 	resp = &SimpleResp{}

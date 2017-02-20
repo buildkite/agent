@@ -20,14 +20,14 @@ Documentation is available at http://godoc.org/github.com/oleiade/reflections
 #### Into the gopath
 
 ```
-    go get github.com/oleiade/reflections
+    go get gopkg.in/oleiade/reflections.v1
 ```
 
 #### Import it in your code
 
 ```go
     import (
-        "github.com/oleiade/reflections"
+        "gopkg.in/oleiade/reflections.v1"
     )
 ```
 
@@ -77,6 +77,32 @@ provide *GetField* a structure or a pointer to structure as first argument.
     }
 
     secondFieldKind, err = GetFieldKind(s, "SecondField")
+    if err != nil {
+        log.Fatal(err)
+    }
+```
+
+##### GetFieldType
+
+*GetFieldType* returns the string literal of a structure field type. It can be used to operate type assertion over a structure fields at runtime.  You can whether provide *GetFieldType* a structure or a pointer to structure as first argument.
+
+```go
+    s := MyStruct{
+        FirstField:  "first value",
+        SecondField: 2,
+        ThirdField:  "third value",
+    }
+
+    var firstFieldKind string
+    var secondFieldKind string
+    var err error
+
+    firstFieldKind, err = GetFieldType(s, "FirstField")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    secondFieldKind, err = GetFieldType(s, "SecondField")
     if err != nil {
         log.Fatal(err)
     }
@@ -224,4 +250,3 @@ unexported fields cannot be set, and that field type and value type have to matc
 
 
 [![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/oleiade/reflections/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
-
