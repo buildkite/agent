@@ -29,14 +29,20 @@ func newBufReader(r io.Reader) bufReader {
 	return bufio.NewReader(r)
 }
 
-func Unmarshal(b []byte, v ...interface{}) error {
+func makeBuffer() []byte {
+	return make([]byte, 0, 64)
+}
+
+// Unmarshal decodes the MessagePack-encoded data and stores the result
+// in the value pointed to by v.
+func Unmarshal(data []byte, v ...interface{}) error {
 	if len(v) == 1 && v[0] != nil {
 		unmarshaler, ok := v[0].(Unmarshaler)
 		if ok {
-			return unmarshaler.UnmarshalMsgpack(b)
+			return unmarshaler.UnmarshalMsgpack(data)
 		}
 	}
-	return NewDecoder(bytes.NewReader(b)).Decode(v...)
+	return NewDecoder(bytes.NewReader(data)).Decode(v...)
 }
 
 type Decoder struct {
@@ -44,6 +50,7 @@ type Decoder struct {
 
 	r   bufReader
 	buf []byte
+	rec []byte // accumulates read data if not nil
 }
 
 func NewDecoder(r io.Reader) *Decoder {
@@ -51,7 +58,7 @@ func NewDecoder(r io.Reader) *Decoder {
 		DecodeMapFunc: decodeMap,
 
 		r:   newBufReader(r),
-		buf: make([]byte, 64),
+		buf: makeBuffer(),
 	}
 }
 
@@ -189,7 +196,7 @@ func (d *Decoder) DecodeValue(v reflect.Value) error {
 }
 
 func (d *Decoder) DecodeNil() error {
-	c, err := d.r.ReadByte()
+	c, err := d.readByte()
 	if err != nil {
 		return err
 	}
@@ -200,7 +207,7 @@ func (d *Decoder) DecodeNil() error {
 }
 
 func (d *Decoder) DecodeBool() (bool, error) {
-	c, err := d.r.ReadByte()
+	c, err := d.readByte()
 	if err != nil {
 		return false, err
 	}
@@ -245,7 +252,7 @@ func (d *Decoder) interfaceValue(v reflect.Value) error {
 //   - slices of any of the above,
 //   - maps of any of the above.
 func (d *Decoder) DecodeInterface() (interface{}, error) {
-	c, err := d.r.ReadByte()
+	c, err := d.readByte()
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +306,7 @@ func (d *Decoder) DecodeInterface() (interface{}, error) {
 
 // Skip skips next value.
 func (d *Decoder) Skip() error {
-	c, err := d.r.ReadByte()
+	c, err := d.readByte()
 	if err != nil {
 		return err
 	}
@@ -340,7 +347,7 @@ func (d *Decoder) Skip() error {
 	return fmt.Errorf("msgpack: unknown code %x", c)
 }
 
-// peekCode returns the next Msgpack code. See
+// peekCode returns next MessagePack code. See
 // https://github.com/msgpack/msgpack/blob/master/spec.md#formats for details.
 func (d *Decoder) PeekCode() (code byte, err error) {
 	code, err = d.r.ReadByte()
@@ -350,15 +357,43 @@ func (d *Decoder) PeekCode() (code byte, err error) {
 	return code, d.r.UnreadByte()
 }
 
-func (d *Decoder) gotNilCode() bool {
+func (d *Decoder) hasNilCode() bool {
 	code, err := d.PeekCode()
 	return err == nil && code == codes.Nil
 }
 
+func (d *Decoder) readByte() (byte, error) {
+	c, err := d.r.ReadByte()
+	if err != nil {
+		return 0, err
+	}
+	if d.rec != nil {
+		d.rec = append(d.rec, c)
+	}
+	return c, nil
+}
+
+func (d *Decoder) readFull(b []byte) error {
+	_, err := io.ReadFull(d.r, b)
+	if err != nil {
+		return err
+	}
+	if d.rec != nil {
+		d.rec = append(d.rec, b...)
+	}
+	return nil
+}
+
 func (d *Decoder) readN(n int) ([]byte, error) {
-	var err error
-	d.buf, err = readN(d.r, d.buf, n)
-	return d.buf, err
+	buf, err := readN(d.r, d.buf, n)
+	if err != nil {
+		return nil, err
+	}
+	d.buf = buf
+	if d.rec != nil {
+		d.rec = append(d.rec, buf...)
+	}
+	return buf, nil
 }
 
 func readN(r io.Reader, b []byte, n int) ([]byte, error) {
