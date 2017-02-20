@@ -22,6 +22,7 @@ type AgentPool struct {
 	MetaData           []string
 	MetaDataEC2        bool
 	MetaDataEC2Tags    bool
+	MetaDataGCP        bool
 	Endpoint           string
 	AgentConfiguration *AgentConfiguration
 }
@@ -122,6 +123,19 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
 			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+		} else {
+			for tag, value := range tags {
+				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+			}
+		}
+	}
+
+	// Attempt to add the Google Cloud meta-data
+	if r.MetaDataGCP {
+		tags, err := GCPMetaData{}.Get()
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			logger.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
 				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))

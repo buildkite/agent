@@ -39,6 +39,7 @@ type AgentStartConfig struct {
 	MetaData                         []string `cli:"meta-data"`
 	MetaDataEC2                      bool     `cli:"meta-data-ec2"`
 	MetaDataEC2Tags                  bool     `cli:"meta-data-ec2-tags"`
+	MetaDataGCP                      bool     `cli:"meta-data-gcp"`
 	NoColor                          bool     `cli:"no-color"`
 	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                    bool     `cli:"no-command-eval"`
@@ -119,6 +120,11 @@ var AgentStartCommand = cli.Command{
 			Name:  "meta-data-ec2-tags",
 			Usage: "Include the host's EC2 tags as meta-data",
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
+		},
+		cli.BoolFlag{
+			Name:   "meta-data-gcp",
+			Usage:  "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, region, and zone) as meta-data",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
 		},
 		cli.StringFlag{
 			Name:   "git-clean-flags",
@@ -207,6 +213,7 @@ var AgentStartCommand = cli.Command{
 			MetaData:        cfg.MetaData,
 			MetaDataEC2:     cfg.MetaDataEC2,
 			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
+			MetaDataGCP:     cfg.MetaDataGCP,
 			Endpoint:        cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:                cfg.BootstrapScript,
