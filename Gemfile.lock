@@ -1,19 +1,3 @@
-GIT
-  remote: git://github.com/jordansissel/fpm.git
-  revision: fd7ef059666c6730884d778aa69be1420e146bc0
-  specs:
-    fpm (1.8.1)
-      archive-tar-minitar (= 0.5.2)
-      arr-pm (~> 0.0.10)
-      backports (>= 2.6.2)
-      cabin (>= 0.6.0)
-      childprocess
-      clamp (~> 1.0.0)
-      ffi
-      json (>= 1.7.7, < 2.0)
-      pleaserun (~> 0.0.24)
-      ruby-xz
-
 GEM
   remote: https://rubygems.org/
   specs:
@@ -35,6 +19,17 @@ GEM
       thor (~> 0.19.0)
     dotenv (2.2.0)
     ffi (1.9.17)
+    fpm (1.8.1)
+      archive-tar-minitar (= 0.5.2)
+      arr-pm (~> 0.0.10)
+      backports (>= 2.6.2)
+      cabin (>= 0.6.0)
+      childprocess
+      clamp (~> 1.0.0)
+      ffi
+      json (>= 1.7.7, < 2.0)
+      pleaserun (~> 0.0.24)
+      ruby-xz
     insist (1.0.0)
     io-like (0.3.0)
     json (1.8.6)
@@ -60,7 +55,7 @@ PLATFORMS
 
 DEPENDENCIES
   deb-s3
-  fpm!
+  fpm
 
 BUNDLED WITH
-   1.13.6
+   1.14.2

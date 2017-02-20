@@ -1,4 +1,4 @@
-source 'https://rubygems.org'
+source "https://rubygems.org"
 
-gem 'fpm', github: "jordansissel/fpm"
-gem 'deb-s3'
+gem "fpm"
+gem "deb-s3"
