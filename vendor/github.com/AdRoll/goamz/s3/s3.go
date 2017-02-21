@@ -61,6 +61,8 @@ type Owner struct {
 //
 type Options struct {
 	SSE                  bool
+	SSEKMS               bool
+	SSEKMSKeyId          string
 	SSECustomerAlgorithm string
 	SSECustomerKey       string
 	SSECustomerKeyMD5    string
@@ -71,9 +73,8 @@ type Options struct {
 	ContentMD5           string
 	ContentDisposition   string
 	Range                string
+	StorageClass         StorageClass
 	// What else?
-	//// The following become headers so they are []strings rather than strings... I think
-	// x-amz-storage-class []string
 }
 
 type CopyOptions struct {
@@ -97,7 +98,7 @@ var attempts = aws.AttemptStrategy{
 
 // New creates a new S3.
 func New(auth aws.Auth, region aws.Region) *S3 {
-	return &S3{auth, region, 0, 0, 0, aws.V2Signature}
+	return &S3{auth, region, 0, 0, aws.V2Signature, 0}
 }
 
 // Bucket returns a Bucket with the given name.
@@ -163,6 +164,20 @@ const (
 	AuthenticatedRead = ACL("authenticated-read")
 	BucketOwnerRead   = ACL("bucket-owner-read")
 	BucketOwnerFull   = ACL("bucket-owner-full-control")
+)
+
+type StorageClass string
+
+const (
+	ReducedRedundancy = StorageClass("REDUCED_REDUNDANCY")
+	StandardStorage   = StorageClass("STANDARD")
+)
+
+type ServerSideEncryption string
+
+const (
+	S3Managed  = ServerSideEncryption("AES256")
+	KMSManaged = ServerSideEncryption("aws:kms")
 )
 
 // PutBucket creates a new bucket.
@@ -338,7 +353,7 @@ func (b *Bucket) Put(path string, data []byte, contType string, perm ACL, option
 func (b *Bucket) PutCopy(path string, perm ACL, options CopyOptions, source string) (*CopyObjectResult, error) {
 	headers := map[string][]string{
 		"x-amz-acl":         {string(perm)},
-		"x-amz-copy-source": {url.QueryEscape(source)},
+		"x-amz-copy-source": {escapePath(source)},
 	}
 	options.addHeaders(headers)
 	req := &request{
@@ -377,7 +392,12 @@ func (b *Bucket) PutReader(path string, r io.Reader, length int64, contType stri
 // addHeaders adds o's specified fields to headers
 func (o Options) addHeaders(headers map[string][]string) {
 	if o.SSE {
-		headers["x-amz-server-side-encryption"] = []string{"AES256"}
+		headers["x-amz-server-side-encryption"] = []string{string(S3Managed)}
+	} else if o.SSEKMS {
+		headers["x-amz-server-side-encryption"] = []string{string(KMSManaged)}
+		if len(o.SSEKMSKeyId) != 0 {
+			headers["x-amz-server-side-encryption-aws-kms-key-id"] = []string{o.SSEKMSKeyId}
+		}
 	} else if len(o.SSECustomerAlgorithm) != 0 && len(o.SSECustomerKey) != 0 && len(o.SSECustomerKeyMD5) != 0 {
 		// Amazon-managed keys and customer-managed keys are mutually exclusive
 		headers["x-amz-server-side-encryption-customer-algorithm"] = []string{o.SSECustomerAlgorithm}
@@ -401,6 +421,10 @@ func (o Options) addHeaders(headers map[string][]string) {
 	}
 	if len(o.ContentDisposition) != 0 {
 		headers["Content-Disposition"] = []string{o.ContentDisposition}
+	}
+	if len(o.StorageClass) != 0 {
+		headers["x-amz-storage-class"] = []string{string(o.StorageClass)}
+
 	}
 	for k, v := range o.Meta {
 		headers["x-amz-meta-"+k] = v
@@ -840,7 +864,15 @@ func (b *Bucket) UploadSignedURL(name, method, content_type string, expires time
 	signature := base64.StdEncoding.EncodeToString([]byte(macsum))
 	signature = strings.TrimSpace(signature)
 
-	signedurl, err := url.Parse("https://" + b.Name + ".s3.amazonaws.com/")
+	var signedurl *url.URL
+	var err error
+	if b.Region.S3Endpoint != "" {
+		signedurl, err = url.Parse(b.Region.S3Endpoint)
+		name = b.Name + "/" + name
+	} else {
+		signedurl, err = url.Parse("https://" + b.Name + ".s3.amazonaws.com/")
+	}
+
 	if err != nil {
 		log.Println("ERROR sining url for S3 upload", err)
 		return ""
@@ -866,6 +898,12 @@ func (b *Bucket) PostFormArgsEx(path string, expires time.Time, redirect string,
 	fields = map[string]string{
 		"AWSAccessKeyId": b.Auth.AccessKey,
 		"key":            path,
+	}
+
+	if token := b.S3.Auth.Token(); token != "" {
+		fields["x-amz-security-token"] = token
+		conditions = append(conditions,
+			fmt.Sprintf("{\"x-amz-security-token\": \"%s\"}", token))
 	}
 
 	if conds != nil {
@@ -1056,11 +1094,14 @@ func (s3 *S3) prepare(req *request) error {
 			return err
 		}
 
-		signpathPatiallyEscaped := partiallyEscapedPath(req.path)
+		signpathPartiallyEscaped := partiallyEscapedPath(req.path)
+		if strings.IndexAny(s3.Region.S3BucketEndpoint, "${bucket}") >= 0 {
+			signpathPartiallyEscaped = "/" + req.bucket + signpathPartiallyEscaped
+		}
 		req.headers["Host"] = []string{u.Host}
 		req.headers["Date"] = []string{time.Now().In(time.UTC).Format(time.RFC1123)}
 
-		sign(s3.Auth, req.method, signpathPatiallyEscaped, req.params, req.headers)
+		sign(s3.Auth, req.method, signpathPartiallyEscaped, req.params, req.headers)
 	} else {
 		hreq, err := s3.setupHttpRequest(req)
 		if err != nil {
@@ -1093,7 +1134,9 @@ func (s3 *S3) setupHttpRequest(req *request) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	u.Opaque = fmt.Sprintf("//%s%s", u.Host, partiallyEscapedPath(u.Path))
+	if s3.Region.Name != "generic" {
+		u.Opaque = fmt.Sprintf("//%s%s", u.Host, partiallyEscapedPath(u.Path))
+	}
 
 	hreq := http.Request{
 		URL:        u,
@@ -1233,7 +1276,7 @@ func shouldRetry(err error) bool {
 		return true
 	case *net.OpError:
 		switch e.Op {
-		case "read", "write":
+		case "dial", "read", "write":
 			return true
 		}
 	case *url.Error:
@@ -1242,7 +1285,14 @@ func shouldRetry(err error) bool {
 		// are received or parsed correctly. In that later case, e.Op is set to
 		// the HTTP method name with the first letter uppercased. We don't want
 		// to retry on POST operations, since those are not idempotent, all the
-		// other ones should be safe to retry.
+		// other ones should be safe to retry. The only case where all
+		// operations are safe to retry are "dial" errors, since in that case
+		// the POST request didn't make it to the server.
+
+		if netErr, ok := e.Err.(*net.OpError); ok && netErr.Op == "dial" {
+			return true
+		}
+
 		switch e.Op {
 		case "Get", "Put", "Delete", "Head":
 			return shouldRetry(e.Err)
@@ -1254,6 +1304,10 @@ func shouldRetry(err error) bool {
 		case "InternalError", "NoSuchUpload", "NoSuchBucket":
 			return true
 		}
+		switch e.StatusCode {
+		case 500, 503, 504:
+			return true
+		}
 	}
 	return false
 }
@@ -1261,4 +1315,8 @@ func shouldRetry(err error) bool {
 func hasCode(err error, code string) bool {
 	s3err, ok := err.(*Error)
 	return ok && s3err.Code == code
+}
+
+func escapePath(s string) string {
+	return (&url.URL{Path: s}).String()
 }

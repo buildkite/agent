@@ -51,7 +51,7 @@ type ServiceInfo struct {
 // See http://goo.gl/d8BP1 for more details.
 type Region struct {
 	Name                   string // the canonical name of this region.
-	EC2Endpoint            string
+	EC2Endpoint            ServiceInfo
 	S3Endpoint             string
 	S3BucketEndpoint       string // Not needed by AWS S3. Use ${bucket} for bucket name.
 	S3LocationConstraint   bool   // true if this region requires a LocationConstraint declaration.
@@ -62,6 +62,7 @@ type Region struct {
 	SESEndpoint            string
 	IAMEndpoint            string
 	ELBEndpoint            string
+	KMSEndpoint            string
 	DynamoDBEndpoint       string
 	CloudWatchServicepoint ServiceInfo
 	AutoScalingEndpoint    string
@@ -74,8 +75,10 @@ type Region struct {
 
 var Regions = map[string]Region{
 	APNortheast.Name:  APNortheast,
+	APNortheast2.Name: APNortheast2,
 	APSoutheast.Name:  APSoutheast,
 	APSoutheast2.Name: APSoutheast2,
+	APSouth.Name:      APSouth,
 	EUCentral.Name:    EUCentral,
 	EUWest.Name:       EUWest,
 	USEast.Name:       USEast,
@@ -83,6 +86,7 @@ var Regions = map[string]Region{
 	USWest2.Name:      USWest2,
 	USGovWest.Name:    USGovWest,
 	SAEast.Name:       SAEast,
+	CNNorth1.Name:     CNNorth1,
 }
 
 // Designates a signer interface suitable for signing AWS requests, params
@@ -403,7 +407,13 @@ func EnvAuth() (auth Auth, err error) {
 // http://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs
 func CredentialFileAuth(filePath string, profile string, expiration time.Duration) (auth Auth, err error) {
 	if profile == "" {
-		profile = "default"
+		profile = os.Getenv("AWS_DEFAULT_PROFILE")
+		if profile == "" {
+			profile = os.Getenv("AWS_PROFILE")
+			if profile == "" {
+				profile = "default"
+			}
+		}
 	}
 
 	if filePath == "" {
