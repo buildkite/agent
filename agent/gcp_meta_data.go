@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"google.golang.org/cloud/compute/metadata"
+	"cloud.google.com/go/compute/metadata"
 )
 
 type GCPMetaData struct {

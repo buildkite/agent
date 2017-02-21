@@ -72,7 +72,7 @@ func decodeMap(d *Decoder) (interface{}, error) {
 }
 
 func (d *Decoder) DecodeMapLen() (int, error) {
-	c, err := d.r.ReadByte()
+	c, err := d.readByte()
 	if err != nil {
 		return 0, err
 	}
@@ -196,9 +196,21 @@ func (d *Decoder) skipMap(c byte) error {
 }
 
 func decodeStructValue(d *Decoder, strct reflect.Value) error {
-	n, err := d.DecodeMapLen()
+	c, err := d.readByte()
 	if err != nil {
 		return err
+	}
+
+	var isArray bool
+
+	n, err := d.mapLen(c)
+	if err != nil {
+		var err2 error
+		n, err2 = d.arrayLen(c)
+		if err2 != nil {
+			return err
+		}
+		isArray = true
 	}
 	if n == -1 {
 		strct.Set(reflect.Zero(strct.Type()))
@@ -206,6 +218,25 @@ func decodeStructValue(d *Decoder, strct reflect.Value) error {
 	}
 
 	fields := structs.Fields(strct.Type())
+
+	if isArray {
+		for i, f := range fields.List {
+			if i >= n {
+				break
+			}
+			if err := f.DecodeValue(d, strct); err != nil {
+				return err
+			}
+		}
+		// Skip extra values.
+		for i := len(fields.List); i < n; i++ {
+			if err := d.Skip(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	for i := 0; i < n; i++ {
 		name, err := d.DecodeString()
 		if err != nil {

@@ -66,6 +66,28 @@ To test the commands locally:
 go run main.go start --debug --token "abc123"
 ```
 
+### Dependency management
+
+We're using [govendor](https://github.com/kardianos/govendor) to manage our Go depenencies. Install it with:
+
+```bash
+go get github.com/kardianos/govendor
+```
+
+If you introduce a new package, just add the import to your source file and run:
+
+```bash
+govendor fetch +missing
+```
+
+Or explicitly fetch it with a version using:
+
+```bash
+govendor fetch github.com/buildkite/go-buildkite@v2.0.0
+```
+
+Check out the [govendor repo](https://github.com/kardianos/govendor) and [dev guide](https://github.com/kardianos/govendor/blob/master/doc/dev-guide.md) for more docs.
+
 ## Contributing
 
 1. Fork it
