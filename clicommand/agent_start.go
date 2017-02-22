@@ -43,6 +43,7 @@ type AgentStartConfig struct {
 	NoAutoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                    bool     `cli:"no-command-eval"`
 	NoPTY                            bool     `cli:"no-pty"`
+	TimestampLines                   bool     `cli:"timestamp-lines"`
 	GitCleanFlags                    string   `cli:"git-clean-flags"`
 	GitCloneFlags                    string   `cli:"git-clone-flags"`
 	Endpoint                         string   `cli:"endpoint" validate:"required"`
@@ -111,13 +112,13 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-ec2",
-			Usage: "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
+			Name:   "meta-data-ec2",
+			Usage:  "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-ec2-tags",
-			Usage: "Include the host's EC2 tags as meta-data",
+			Name:   "meta-data-ec2-tags",
+			Usage:  "Include the host's EC2 tags as meta-data",
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
 		},
 		cli.StringFlag{
@@ -149,6 +150,11 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Directory where the hook scripts are found",
 			EnvVar: "BUILDKITE_HOOKS_PATH",
+		},
+		cli.BoolFlag{
+			Name:   "timestamp-lines",
+			Usage:  "Prepend timestamps on each line of output.",
+			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
 		},
 		cli.BoolFlag{
 			Name:   "no-pty",
@@ -215,6 +221,7 @@ var AgentStartCommand = cli.Command{
 				AutoSSHFingerprintVerification: !cfg.NoAutoSSHFingerprintVerification,
 				CommandEval:                    !cfg.NoCommandEval,
 				RunInPty:                       !cfg.NoPTY,
+				TimestampLines:                 cfg.TimestampLines,
 				GitCleanFlags:                  cfg.GitCleanFlags,
 				GitCloneFlags:                  cfg.GitCloneFlags,
 			},

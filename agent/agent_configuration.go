@@ -7,6 +7,7 @@ type AgentConfiguration struct {
 	AutoSSHFingerprintVerification bool
 	CommandEval                    bool
 	RunInPty                       bool
+	TimestampLines                 bool
 	GitCleanFlags                  string
 	GitCloneFlags                  string
 }
