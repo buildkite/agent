@@ -51,6 +51,7 @@ type AgentStartConfig struct {
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                bool     `cli:"no-command-eval"`
 	NoPTY                        bool     `cli:"no-pty"`
+	TimestampLines               bool     `cli:"timestamp-lines"`
 	Endpoint                     string   `cli:"endpoint" validate:"required"`
 	Debug                        bool     `cli:"debug"`
 	DebugHTTP                    bool     `cli:"debug-http"`
@@ -191,6 +192,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGINS_PATH",
 		},
 		cli.BoolFlag{
+			Name:   "timestamp-lines",
+			Usage:  "Prepend timestamps on each line of output.",
+			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
+		},
+		cli.BoolFlag{
 			Name:   "no-pty",
 			Usage:  "Do not run jobs within a pseudo terminal",
 			EnvVar: "BUILDKITE_NO_PTY",
@@ -294,6 +300,7 @@ var AgentStartCommand = cli.Command{
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
 				CommandEval:                !cfg.NoCommandEval,
 				RunInPty:                   !cfg.NoPTY,
+				TimestampLines:             cfg.TimestampLines,
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
 			},

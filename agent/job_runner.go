@@ -64,7 +64,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		Script:             r.AgentConfiguration.BootstrapScript,
 		Env:                r.createEnvironment(),
 		PTY:                r.AgentConfiguration.RunInPty,
-		Timestamp:          timestamp,
+		Timestamp:          r.AgentConfiguration.TimestampLines,
 		StartCallback:      r.onProcessStartCallback,
 		LineCallback:       runner.headerTimesStreamer.Scan,
 		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
