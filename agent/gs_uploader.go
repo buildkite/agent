@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -13,7 +14,6 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/mime"
-	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
