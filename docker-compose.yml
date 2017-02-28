@@ -3,7 +3,7 @@ version: '2'
 services:
 
   agent:
-    image: golang:1.7
+    image: golang:1.8
     working_dir: /go/src/github.com/buildkite/agent
     volumes:
       - ./:/go/src/github.com/buildkite/agent
