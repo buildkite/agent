@@ -73,18 +73,16 @@ func (h *HeaderTimesStreamer) Scan(line string) {
 	h.scanWaitGroup.Add(1)
 	defer h.scanWaitGroup.Done()
 
-	if h.lineIsHeader(line) {
-		logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+	logger.Debug("[HeaderTimesStreamer] Found header %q", line)
 
-		// Aquire a lock on the times and then add the current time to
-		// our times slice.
-		h.timesMutex.Lock()
-		h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
-		h.timesMutex.Unlock()
+	// Aquire a lock on the times and then add the current time to
+	// our times slice.
+	h.timesMutex.Lock()
+	h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
+	h.timesMutex.Unlock()
 
-		// Add the time to the wait group
-		h.uploadWaitGroup.Add(1)
-	}
+	// Add the time to the wait group
+	h.uploadWaitGroup.Add(1)
 }
 
 func (h *HeaderTimesStreamer) Upload() {
@@ -136,7 +134,7 @@ func (h *HeaderTimesStreamer) Stop() {
 	h.streamingMutex.Unlock()
 }
 
-func (h *HeaderTimesStreamer) lineIsHeader(line string) bool {
+func (h *HeaderTimesStreamer) LineIsHeader(line string) bool {
 	// Make sure all ANSI colors are removed from the string before we
 	// check to see if it's a header (sometimes a color escape sequence may
 	// be the first thing on the line, which will cause the regex to ignore
