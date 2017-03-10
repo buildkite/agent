@@ -39,11 +39,11 @@ type AgentStartConfig struct {
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
-	MetaData                     []string `cli:"meta-data"`
+	Tags                         []string `cli:"tags"`
 	Experiments                  []string `cli:"experiment"`
-	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
-	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
-	MetaDataGCP                  bool     `cli:"meta-data-gcp"`
+	EC2                          bool     `cli:"ec2"`
+	EC2Tags                      bool     `cli:"ec2-tags"`
+	GCPTags                      bool     `cli:"gcp"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	NoColor                      bool     `cli:"no-color"`
@@ -121,24 +121,24 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
 		cli.StringSliceFlag{
-			Name:   "meta-data",
+			Name:   "tags",
 			Value:  &cli.StringSlice{},
-			Usage:  "Meta-data for the agent (default is \"queue=default\")",
+			Usage:  "Tags for the agent (default is \"queue=default\")",
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2",
-			Usage: "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
+			Usage: "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id) as meta-data",
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
-			Usage: "Include the host's EC2 tags as meta-data",
+			Usage: "Include the host's EC2 tags as tags",
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-gcp",
-			Usage: "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, region, and zone) as meta-data",
+			Usage: "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone) as meta-data",
 			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
 		},
 		cli.StringFlag{
@@ -234,10 +234,10 @@ var AgentStartCommand = cli.Command{
 			Token:           cfg.Token,
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
-			MetaData:        cfg.MetaData,
-			MetaDataEC2:     cfg.MetaDataEC2,
-			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
-			MetaDataGCP:     cfg.MetaDataGCP,
+			Tags:            cfg.Tags,
+			EC2:             cfg.EC2,
+			EC2Tags:         cfg.EC2Tags,
+			GCP:             cfg.GCP,
 			Endpoint:        cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,

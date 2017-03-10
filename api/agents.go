@@ -27,7 +27,7 @@ type Agent struct {
 	Priority          string   `json:"priority,omitempty" msgpack:"priority,omitempty"`
 	Version           string   `json:"version" msgpack:"version"`
 	Build             string   `json:"build" msgpack:"build"`
-	MetaData          []string `json:"meta_data" msgpack:"meta_data"`
+	Tags              []string `json:"tags" msgpack:"tags"`
 	PID               int      `json:"pid,omitempty" msgpack:"pid,omitempty"`
 }
 
