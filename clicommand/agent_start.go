@@ -33,6 +33,7 @@ type AgentStartConfig struct {
 	Token                        string   `cli:"token" validate:"required"`
 	Name                         string   `cli:"name"`
 	Priority                     string   `cli:"priority"`
+	ExitAfterJob                 bool     `cli:"exit-after-job"`
 	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -106,6 +107,11 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "The priority of the agent (higher priorities are assigned work first)",
 			EnvVar: "BUILDKITE_AGENT_PRIORITY",
+		},
+		cli.BoolFlag{
+			Name:   "exit-after-job",
+			Usage:  "Shutdown the agent after running a job",
+			EnvVar: "BUILDKITE_AGENT_EXIT_AFTER_JOB",
 		},
 		cli.StringSliceFlag{
 			Name:   "meta-data",
@@ -231,6 +237,7 @@ var AgentStartCommand = cli.Command{
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
 				CommandEval:                !cfg.NoCommandEval,
 				RunInPty:                   !cfg.NoPTY,
+				ExitAfterJob:               cfg.ExitAfterJob,
 			},
 		}
 
