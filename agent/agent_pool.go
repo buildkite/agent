@@ -259,7 +259,7 @@ func (r *AgentPool) ShowBanner() {
 		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
 
-	if r.AgentConfiguration.ExitAfterJob {
-		logger.Debug("Agent will exit after a job run has completed")
+	if r.AgentConfiguration.DisconnectAfterJob {
+		logger.Debug("Agent will disconnect after a job run has completed")
 	}
 }

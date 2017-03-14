@@ -295,8 +295,8 @@ func (a *AgentWorker) Ping() {
 	// No more job, no more runner.
 	a.jobRunner = nil
 
-	if a.AgentConfiguration.ExitAfterJob {
-		logger.Info("Job finished. Exiting...")
+	if a.AgentConfiguration.DisconnectAfterJob {
+		logger.Info("Job finished. Disconnecting...")
 		a.Stop(true);
 	}
 }
