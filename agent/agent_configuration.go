@@ -11,4 +11,5 @@ type AgentConfiguration struct {
 	CommandEval                bool
 	RunInPty                   bool
 	DisconnectAfterJob         bool
+	DisconnectAfterJobTimeout  int
 }

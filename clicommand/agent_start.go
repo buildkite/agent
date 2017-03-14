@@ -34,6 +34,7 @@ type AgentStartConfig struct {
 	Name                         string   `cli:"name"`
 	Priority                     string   `cli:"priority"`
 	DisconnectAfterJob           bool     `cli:"disconnect-after-job"`
+	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout"`
 	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -112,6 +113,12 @@ var AgentStartCommand = cli.Command{
 			Name:   "disconnect-after-job",
 			Usage:  "Disconnect the agent after running a job",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
+		},
+		cli.IntFlag{
+			Name:   "disconnect-after-job-timeout",
+			Value:  120,
+			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
 		cli.StringSliceFlag{
 			Name:   "meta-data",
@@ -238,6 +245,7 @@ var AgentStartCommand = cli.Command{
 				CommandEval:                !cfg.NoCommandEval,
 				RunInPty:                   !cfg.NoPTY,
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
+				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
 			},
 		}
 
