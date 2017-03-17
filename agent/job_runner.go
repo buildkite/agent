@@ -67,6 +67,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		Timestamp:          r.AgentConfiguration.TimestampLines,
 		StartCallback:      r.onProcessStartCallback,
 		LineCallback:       runner.headerTimesStreamer.Scan,
+		LinePreProcessor:   runner.headerTimesStreamer.LinePreProcessor,
 		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
 	}.Create()
 

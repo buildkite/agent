@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -37,6 +38,7 @@ type Process struct {
 	// For every line in the process output, this callback will be called
 	// with the contents of the line if its filter returns true.
 	LineCallback       func(string)
+	LinePreProcessor   func(string) string
 	LineCallbackFilter func(string) bool
 
 	// Running is stored as an int32 so we can use atomic operations to
@@ -59,6 +61,12 @@ func (p *Process) Start() error {
 	currentEnv := os.Environ()
 	p.command.Env = append(currentEnv, p.Env...)
 
+	return &p
+}
+
+var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
+
+func (p *Process) Start() error {
 	var waitGroup sync.WaitGroup
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
@@ -180,13 +188,13 @@ func (p *Process) Start() error {
 
 			checkedForCallback := false
 			lineHasCallback := false
-			lineString := string(line)
+			lineString := p.LinePreProcessor(string(line))
 
 			// Create the prefixed buffer
 			if p.Timestamp {
 				lineHasCallback = p.LineCallbackFilter(lineString)
 				checkedForCallback = true
-				if lineHasCallback {
+				if lineHasCallback || headerExpansionRegex.MatchString(lineString) {
 					// Don't timestamp special lines (e.g. header)
 					p.buffer.WriteString(fmt.Sprintf("%s\n", line))
 				} else {
