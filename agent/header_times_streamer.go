@@ -134,14 +134,16 @@ func (h *HeaderTimesStreamer) Stop() {
 	h.streamingMutex.Unlock()
 }
 
-func (h *HeaderTimesStreamer) LineIsHeader(line string) bool {
+func (h *HeaderTimesStreamer) LinePreProcessor(line string) string {
 	// Make sure all ANSI colors are removed from the string before we
 	// check to see if it's a header (sometimes a color escape sequence may
 	// be the first thing on the line, which will cause the regex to ignore
 	// it)
-	sanitized := ANSIColorRegex.ReplaceAllString(line, "")
+	return ANSIColorRegex.ReplaceAllString(line, "")
+}
 
+func (h *HeaderTimesStreamer) LineIsHeader(line string) bool {
 	// To avoid running the regex over every single line, we'll first do a
 	// length check. Hopefully there are no heeaders over 500 characters!
-	return len(line) < 500 && HeaderRegex.MatchString(sanitized)
+	return len(line) < 500 && HeaderRegex.MatchString(line)
 }
