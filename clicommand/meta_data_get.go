@@ -26,6 +26,7 @@ Example:
 
 type MetaDataGetConfig struct {
 	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
+	Default          string `cli:"default"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -39,6 +40,11 @@ var MetaDataGetCommand = cli.Command{
 	Usage:       "Get data from a build",
 	Description: MetaDataGetHelpDescription,
 	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:  "default",
+			Value: "",
+			Usage: "If the meta-data value doesn't exist return this instead",
+		},
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
@@ -78,6 +84,7 @@ var MetaDataGetCommand = cli.Command{
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				s.Break()
+				return err
 			}
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
@@ -85,8 +92,23 @@ var MetaDataGetCommand = cli.Command{
 
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+
+		// Deal with the error if we got one
 		if err != nil {
-			logger.Fatal("Failed to get meta-data: %s", err)
+			// Buildkite returns a 404 if the key doesn't exist. If
+			// we get this status, and we've got a default - return
+			// that instead and bail early.
+			//
+			// We also use `IsSet` instead of `cfg.Default != ""`
+			// to allow people to use a default of a blank string.
+			if resp.StatusCode == 404 && c.IsSet("default") {
+				logger.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
+
+				fmt.Print(cfg.Default)
+				return
+			} else {
+				logger.Fatal("Failed to get meta-data: %s", err)
+			}
 		}
 
 		// Output the value to STDOUT
