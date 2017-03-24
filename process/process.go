@@ -146,7 +146,12 @@ func (p *Process) Start() error {
 			// has ended.
 			if isPrefix && appending == nil {
 				logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
-				appending = line
+				// bufio.ReadLine returns a slice which is only valid until the next invocation
+				// since it points to its own internal buffer array. To accumulate the entire
+				// result we make a copy of the first prefix, and insure there is spare capacity
+				// for future appends to minimize the need for resizing on append.
+				appending = make([]byte, len(line), (cap(line))*2)
+				copy(appending, line)
 
 				continue
 			}
