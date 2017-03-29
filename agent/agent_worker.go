@@ -89,19 +89,22 @@ func (a *AgentWorker) Start() error {
 		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.AgentConfiguration.DisconnectAfterJobTimeout))
 		go func() {
 			<-a.disconnectTimeoutTimer.C
+			logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
 
 			// Just double check that the agent isn't running a
 			// job. The timer is stopped just after this is
 			// assigned, but there's a potential race condition
 			// where in between accepting the job, and creating the
 			// `jobRunner`, the timer pops.
-			if a.jobRunner == nil {
-				logger.Debug("Disconnect timer has reached %d seconds, disconnecting...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+			if a.jobRunner == nil && !a.stopping {
+				logger.Debug("[DisconnectionTimer] The agent isn't running a job, going to signal a stop")
 				a.Stop(true);
+			} else {
+				logger.Debug("[DisconnectionTimer] Agent is running a job, going to just ignore and let it finish it's work")
 			}
 		}()
 
-		logger.Debug("Disconnect timer has started for %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+		logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 
 	// Continue this loop until the the ticker is stopped, and we received
@@ -326,6 +329,11 @@ func (a *AgentWorker) Ping() {
 
 	if a.AgentConfiguration.DisconnectAfterJob {
 		logger.Info("Job finished. Disconnecting...")
+
+		// We can just kill this timer now as well
+		a.disconnectTimeoutTimer.Stop()
+
+		// Tell the agent to finish up
 		a.Stop(true);
 	}
 }
