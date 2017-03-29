@@ -63,7 +63,13 @@ func (r *AgentPool) Start() error {
 
 	logger.Info("Agent successfully connected")
 	logger.Info("You can press Ctrl-C to stop the agent")
-	logger.Info("Waiting for work...")
+
+	if r.AgentConfiguration.DisconnectAfterJob {
+		logger.Info("Waiting for job to be assigned...")
+		logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
+	} else {
+		logger.Info("Waiting for work...")
+	}
 
 	// Start a signalwatcher so we can monitor signals and handle shutdowns
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
@@ -257,5 +263,9 @@ func (r *AgentPool) ShowBanner() {
 
 	if !r.AgentConfiguration.RunInPty {
 		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
+	}
+
+	if r.AgentConfiguration.DisconnectAfterJob {
+		logger.Debug("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 }

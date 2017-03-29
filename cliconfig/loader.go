@@ -189,6 +189,8 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 					value = strings.Split(configFileValue, ",")
 				} else if fieldKind == reflect.Bool {
 					value, _ = strconv.ParseBool(configFileValue)
+				} else if fieldKind == reflect.Int {
+					value, _ = strconv.Atoi(configFileValue)
 				} else {
 					return fmt.Errorf("Unable to convert string to type %s", fieldKind)
 				}
@@ -204,6 +206,8 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 				value = l.CLI.StringSlice(cliName)
 			} else if fieldKind == reflect.Bool {
 				value = l.CLI.Bool(cliName)
+			} else if fieldKind == reflect.Int {
+				value = l.CLI.Int(cliName)
 			} else {
 				return fmt.Errorf("Unable to handle type: %s", fieldKind)
 			}

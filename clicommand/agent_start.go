@@ -33,6 +33,8 @@ type AgentStartConfig struct {
 	Token                        string   `cli:"token" validate:"required"`
 	Name                         string   `cli:"name"`
 	Priority                     string   `cli:"priority"`
+	DisconnectAfterJob           bool     `cli:"disconnect-after-job"`
+	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout"`
 	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -106,6 +108,17 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "The priority of the agent (higher priorities are assigned work first)",
 			EnvVar: "BUILDKITE_AGENT_PRIORITY",
+		},
+		cli.BoolFlag{
+			Name:   "disconnect-after-job",
+			Usage:  "Disconnect the agent after running a job",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
+		},
+		cli.IntFlag{
+			Name:   "disconnect-after-job-timeout",
+			Value:  120,
+			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
 		cli.StringSliceFlag{
 			Name:   "meta-data",
@@ -211,6 +224,11 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPTY = true
 		}
 
+		// Make sure the DisconnectAfterJobTimeout value is correct
+		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
+			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
+		}
+
 		// Setup the agent
 		pool := agent.AgentPool{
 			Token:           cfg.Token,
@@ -231,6 +249,8 @@ var AgentStartCommand = cli.Command{
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
 				CommandEval:                !cfg.NoCommandEval,
 				RunInPty:                   !cfg.NoPTY,
+				DisconnectAfterJob:         cfg.DisconnectAfterJob,
+				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
 			},
 		}
 
