@@ -231,7 +231,7 @@ func (a *AgentWorker) Ping() {
 		// ping again after the interval.
 		logger.Warn("Failed to ping: %s", err)
 
-		// When the ping fails, we do wan to reset our disconnection
+		// When the ping fails, we wan't to reset our disconnection
 		// timer. It wouldnt' be very nice if we just killed the agent
 		// because Buildkite was having some connection issues.
 		if(a.disconnectTimeoutTimer != nil) {
