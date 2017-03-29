@@ -224,6 +224,11 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPTY = true
 		}
 
+		// Make sure the DisconnectAfterJobTimeout value is correct
+		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
+			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
+		}
+
 		// Setup the agent
 		pool := agent.AgentPool{
 			Token:           cfg.Token,
