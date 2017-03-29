@@ -65,7 +65,7 @@ func (r *AgentPool) Start() error {
 	logger.Info("You can press Ctrl-C to stop the agent")
 
 	if r.AgentConfiguration.DisconnectAfterJob {
-		logger.Info("Waiting for first job to be assigned...")
+		logger.Info("Waiting for job to be assigned...")
 		logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	} else {
 		logger.Info("Waiting for work...")
