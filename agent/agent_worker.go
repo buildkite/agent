@@ -320,7 +320,7 @@ func (a *AgentWorker) Ping() {
 
 	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
 	if(a.disconnectTimeoutTimer != nil) {
-		logger.Debug("Stopping disconnection timer...")
+		logger.Debug("[DisconnectionTimer] A job was assigned and accepted, stopping timer...")
 		a.disconnectTimeoutTimer.Stop()
 	}
 
