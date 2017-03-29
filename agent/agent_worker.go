@@ -31,6 +31,9 @@ type AgentWorker struct {
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
 
+	// Tracking the auto disconnect timer
+	disconnectTimeoutTimer *time.Timer
+
 	// Stop controls
 	stop      chan struct{}
 	stopping  bool
@@ -80,6 +83,26 @@ func (a *AgentWorker) Start() error {
 	// Create the ticker and stop channels
 	a.ticker = time.NewTicker(pingInterval)
 	a.stop = make(chan struct{})
+
+	// Setup a timer to automatically disconnect if no job has started
+	if a.AgentConfiguration.DisconnectAfterJob {
+		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.AgentConfiguration.DisconnectAfterJobTimeout))
+		go func() {
+			<-a.disconnectTimeoutTimer.C
+
+			// Just double check that the agent isn't running a
+			// job. The timer is stopped just after this is
+			// assigned, but there's a potential race condition
+			// where in between accepting the job, and creating the
+			// `jobRunner`, the timer pops.
+			if a.jobRunner == nil {
+				logger.Debug("Disconnect timer has reached %d seconds, disconnecting...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+				a.Stop(true);
+			}
+		}()
+
+		logger.Debug("Disconnect timer has started for %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+	}
 
 	// Continue this loop until the the ticker is stopped, and we received
 	// a message on the stop channel.
@@ -280,6 +303,12 @@ func (a *AgentWorker) Ping() {
 		AgentConfiguration: a.AgentConfiguration,
 		Job:                accepted,
 	}.Create()
+
+	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
+	if(a.disconnectTimeoutTimer != nil) {
+		logger.Debug("Stopping disconnection timer...")
+		a.disconnectTimeoutTimer.Stop()
+	}
 
 	// Was there an error creating the job runner?
 	if err != nil {
