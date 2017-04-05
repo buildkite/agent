@@ -788,6 +788,22 @@ func (b *Bootstrap) Start() error {
 
 	//////////////////////////////////////////////////////////////
 	//
+	// ENVIRONMENT SETUP
+	// A place for people to set up environment variables that
+	// might be needed for their build scripts, such as secret
+	// tokens and other information.
+	//
+	//////////////////////////////////////////////////////////////
+
+	// The global environment hook
+	//
+	// It's important to do this before checking out plugins, in case you want
+	// to use the global environment hook to whitelist the plugins that are
+	// allowed to be used.
+	b.executeGlobalHook("environment")
+
+	//////////////////////////////////////////////////////////////
+	//
 	// PLUGIN SETUP
 	//
 	//////////////////////////////////////////////////////////////
@@ -888,19 +904,7 @@ func (b *Bootstrap) Start() error {
 		}
 	}
 
-	//////////////////////////////////////////////////////////////
-	//
-	// ENVIRONMENT SETUP
-	// A place for people to set up environment variables that
-	// might be needed for their build scripts, such as secret
-	// tokens and other information.
-	//
-	//////////////////////////////////////////////////////////////
-
-	// The global environment hook
-	b.executeGlobalHook("environment")
-
-	// The plugin environment hook
+	// Now we can run plugin environment hooks too
 	b.executePluginHook(plugins, "environment")
 
 	//////////////////////////////////////////////////////////////
