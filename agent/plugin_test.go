@@ -55,6 +55,9 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 func TestPluginName(t *testing.T) {
 	var plugin *Plugin
 
+	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin.git"}
+	assert.Equal(t, plugin.Name(), "docker-compose")
+
 	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin"}
 	assert.Equal(t, plugin.Name(), "docker-compose")
 
@@ -246,9 +249,9 @@ func pluginEnvFromConfig(t *testing.T, configJson string) (*shell.Environment, e
 	jsonString := fmt.Sprintf(`[ { "%s": %s } ]`, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", configJson)
 
 	plugins, err := CreatePluginsFromJSON(jsonString)
-	
+
 	assert.Nil(t, err)
 	assert.Equal(t, 1, len(plugins))
-	
+
 	return plugins[0].ConfigurationToEnvironment()
 }
