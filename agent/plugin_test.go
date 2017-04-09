@@ -56,31 +56,31 @@ func TestPluginName(t *testing.T) {
 	var plugin *Plugin
 
 	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin.git"}
-	assert.Equal(t, plugin.Name(), "docker-compose")
+	assert.Equal(t, "docker-compose", plugin.Name())
 
 	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin"}
-	assert.Equal(t, plugin.Name(), "docker-compose")
+	assert.Equal(t, "docker-compose", plugin.Name())
 
 	plugin = &Plugin{Location: "github.com/my-org/docker-compose-buildkite-plugin"}
-	assert.Equal(t, plugin.Name(), "docker-compose")
+	assert.Equal(t, "docker-compose", plugin.Name())
 
 	plugin = &Plugin{Location: "github.com/buildkite/plugins/docker-compose"}
-	assert.Equal(t, plugin.Name(), "docker-compose")
+	assert.Equal(t, "docker-compose", plugin.Name())
 
 	plugin = &Plugin{Location: "github.com/buildkite/my-plugin"}
-	assert.Equal(t, plugin.Name(), "my-plugin")
+	assert.Equal(t, "my-plugin", plugin.Name())
 
 	plugin = &Plugin{Location: "~/Development/plugins/test"}
-	assert.Equal(t, plugin.Name(), "test")
+	assert.Equal(t, "test", plugin.Name())
 
 	plugin = &Plugin{Location: "~/Development/plugins/UPPER     CASE_party"}
-	assert.Equal(t, plugin.Name(), "upper-case-party")
+	assert.Equal(t, "upper-case-party", plugin.Name())
 
 	plugin = &Plugin{Location: "vendor/src/vendored with a space"}
-	assert.Equal(t, plugin.Name(), "vendored-with-a-space")
+	assert.Equal(t, "vendored-with-a-space", plugin.Name())
 
 	plugin = &Plugin{Location: ""}
-	assert.Equal(t, plugin.Name(), "")
+	assert.Equal(t, "", plugin.Name())
 }
 
 func TestIdentifier(t *testing.T) {
