@@ -355,16 +355,16 @@ func (b *Bootstrap) runScript(command string) int {
 		cmd = b.newCommand(command)
 	} else {
 		// If you run a script on Linux that doesn't have the
-		// #!/bin/sh thingy at the top, it will fail to run with a
+		// #!/bin/bash thingy at the top, it will fail to run with a
 		// "exec format error" error. You can solve it by adding the
-		// #!/bin/sh line to the top of the file, but that's
+		// #!/bin/bash line to the top of the file, but that's
 		// annoying, and people generally forget it, so we'll make it
 		// easy on them and add it for them here.
 		//
 		// We also need to make sure the script we pass has quotes
-		// around it, otherwise `/bin/sh -c run script with space.sh`
+		// around it, otherwise `/bin/bash -c run script with space.sh`
 		// fails.
-		cmd = b.newCommand("/bin/sh", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
+		cmd = b.newCommand("/bin/bash", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
 	}
 
 	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout, PTY: b.RunInPty})
@@ -481,7 +481,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 // Executes a hook and applyes any environment changes. The tricky thing with
 // hooks is that they can modify the ENV of a bootstrap. And it's impossible to
 // grab the ENV of a child process before it finishes, so we've got an awesome
-// ugly hack to get around this.  We essentially have a shell script that writes
+// ugly hack to get around this.  We essentially have a bash script that writes
 // the ENV to a file, runs the hook, then writes the ENV back to another file.
 // Once all that has finished, we compare the files, and apply what ever
 // changes to our running env. Cool huh?
@@ -518,7 +518,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 				"SET > \"" + tempEnvAfterFile.Name() + "\"\n" +
 				"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
 		} else {
-			hookScript = "#!/bin/sh\n" +
+			hookScript = "#!/bin/bash\n" +
 				"env > \"" + tempEnvBeforeFile.Name() + "\"\n" +
 				". \"" + absolutePathToHook + "\"\n" +
 				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
@@ -1165,7 +1165,7 @@ func (b *Bootstrap) Start() error {
 					}
 				}
 			} else {
-				buildScriptContents = "#!/bin/sh\nset -e\n"
+				buildScriptContents = "#!/bin/bash\nset -e\n"
 				for _, k := range strings.Split(b.Command, "\n") {
 					if k != "" {
 						buildScriptContents = buildScriptContents +
