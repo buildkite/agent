@@ -425,7 +425,7 @@ else
 
     # We'll actually run a temporary file with pipefail and exit-on-fail
     # containing the full script body, printed literally through printf
-    printf "#!/bin/bash\nset -eo pipefail\n%s\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_COMMAND_PATH"
+    printf "#!/bin/sh\nset -eo pipefail\n%s\n" "$BUILDKITE_COMMAND" > "$BUILDKITE_COMMAND_PATH"
 
     if [[ "$BUILDKITE_AGENT_DEBUG" == "true" ]]; then
       buildkite-run cat "./$BUILDKITE_COMMAND_PATH"
