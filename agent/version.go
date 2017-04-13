@@ -6,7 +6,7 @@ package agent
 //
 // On CI, the binaries are always build with the buildVersion variable set.
 
-var baseVersion string = "2.5.2"
+var baseVersion string = "2.6.0"
 var buildVersion string = ""
 
 func Version() string {
