@@ -53,13 +53,13 @@ func (p *Process) Run() error {
 		syscall.SIGQUIT)
 
 	go func() {
-		sig := <-signals
-		if cmd.Process != nil {
-			//fmt.Printf("Passing signal %v to sub-process %d\n", sig, cmd.Process.Pid)
-			cmd.Process.Signal(sig)
+		// Pass signals to the sub-process
+		for sig := range signals {
+			if cmd.Process != nil {
+				cmd.Process.Signal(sig)
+			}
 		}
 	}()
-
 	defer signal.Stop(signals)
 
 	if p.Config.PTY {
