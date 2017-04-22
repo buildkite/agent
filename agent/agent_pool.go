@@ -14,16 +14,16 @@ import (
 )
 
 type AgentPool struct {
-	APIClient      *api.Client
-	Token          string
-	ConfigFilePath string
-	Name           string
-	Priority       string
-	Tags           []string
-	EC2            bool
-	EC2Tags        bool
-	GCPTags        bool
-	Endpoint       string
+	APIClient       *api.Client
+	Token           string
+	ConfigFilePath  string
+	Name            string
+	Priority        string
+	Tags            []string
+	TagsFromEC2     bool
+	TagsFromEC2Tags bool
+	TagsFromGCP     bool
+	Endpoint        string
 	AgentConfiguration *AgentConfiguration
 }
 
@@ -112,7 +112,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	}
 
 	// Attempt to add the EC2 tags
-	if r.EC2 {
+	if r.TagsFromEC2 {
 		logger.Info("Fetching EC2 meta-data...")
 
 		err := retry.Do(func(s *retry.Stats) error {
@@ -137,7 +137,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	}
 
 	// Attempt to add the EC2 tags
-	if r.EC2Tags {
+	if r.TagsFromEC2Tags {
 		logger.Info("Fetching EC2 tags...")
 
 		// same as above
@@ -163,7 +163,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	}
 
 	// Attempt to add the Google Cloud meta-data
-	if r.GCPTags {
+	if r.TagsFromGCP {
 		tags, err := GCPMetaData{}.Get()
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
