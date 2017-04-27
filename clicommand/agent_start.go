@@ -53,6 +53,11 @@ type AgentStartConfig struct {
 	Debug                        bool     `cli:"debug"`
 	DebugHTTP                    bool     `cli:"debug-http"`
 	Experiments                  []string `cli:"experiment"`
+	/* Deprecated */
+	MetaData                     []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
+	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
+	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
+	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
 }
 
 func DefaultConfigFilePaths() (paths []string) {
@@ -124,7 +129,7 @@ var AgentStartCommand = cli.Command{
 			Name:   "tags",
 			Value:  &cli.StringSlice{},
 			Usage:  "Tags for the agent (default is \"queue=default\")",
-			EnvVar: "BUILDKITE_AGENT_META_DATA",
+			EnvVar: "BUILDKITE_AGENT_TAGS",
 		},
 		cli.BoolFlag{
 			Name:  "tags-from-ec2",
@@ -197,6 +202,28 @@ var AgentStartCommand = cli.Command{
 		NoColorFlag,
 		DebugFlag,
 		DebugHTTPFlag,
+		/* Deprecated flags which will be removed in v4 */
+		cli.StringSliceFlag{
+			Name:   "meta-data",
+			Value:  &cli.StringSlice{},
+			EnvVar: "BUILDKITE_AGENT_META_DATA",
+			Hidden: true,
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-ec2",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
+			Hidden: true,
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-ec2-tags",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
+			Hidden: true,
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-gcp",
+			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
+			Hidden: true,
+		},
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct

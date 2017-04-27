@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/utils"
 	"github.com/urfave/cli"
 	"github.com/oleiade/reflections"
@@ -100,10 +101,33 @@ func (l *Loader) Load() error {
 			}
 		}
 
+		// Check for field rename deprecations
+		renamedToFieldName, _ := reflections.GetFieldTag(l.Config, fieldName, "deprecated-and-renamed-to")
+		if renamedToFieldName != "" {
+			// If the deprecated field's value isn't empty, then we
+			// log a message, and set the proper config for them.
+			if !l.fieldValueIsEmpty(fieldName) {
+				renamedFieldCliName, _ := reflections.GetFieldTag(l.Config, renamedToFieldName, "cli")
+				if renamedFieldCliName != "" {
+					logger.Notice("The config option `%s` has been renamed to `%s` and will be removed from the next version of Buildkite Agent", cliName, renamedFieldCliName)
+				}
+
+				// Fetch the value of the deprecated config, and set the renamed
+				// config based on its value
+				value, _ := reflections.GetField(l.Config, fieldName)
+				if value != nil {
+					err := reflections.SetField(l.Config, renamedToFieldName, value)
+					if err != nil {
+						return fmt.Errorf("Could not set value `%s` to field `%s` (%s)", value, renamedToFieldName, err)
+					}
+				}
+			}
+		}
+
 		// Check for field deprecation
 		deprecationError, _ := reflections.GetFieldTag(l.Config, fieldName, "deprecated")
 		if deprecationError != "" {
-			// If the deprecated field's value isn't emtpy, then we
+			// If the deprecated field's value isn't empty, then we
 			// return the deprecation error message.
 			if !l.fieldValueIsEmpty(fieldName) {
 				return fmt.Errorf(deprecationError)
