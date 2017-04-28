@@ -109,7 +109,7 @@ func (l *Loader) Load() error {
 			if !l.fieldValueIsEmpty(fieldName) {
 				renamedFieldCliName, _ := reflections.GetFieldTag(l.Config, renamedToFieldName, "cli")
 				if renamedFieldCliName != "" {
-					logger.Notice("The config option `%s` has been renamed to `%s` and will be removed from the next version of Buildkite Agent", cliName, renamedFieldCliName)
+					logger.Warn("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName)
 				}
 
 				// Fetch the value of the deprecated config, and set the renamed
