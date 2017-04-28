@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 var StartDescription = `Usage:

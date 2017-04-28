@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/utils"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 	"github.com/oleiade/reflections"
 )
 

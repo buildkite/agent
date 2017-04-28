@@ -4,7 +4,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/experiments"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 	"github.com/oleiade/reflections"
 )
 
