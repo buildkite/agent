@@ -112,9 +112,16 @@ func (l *Loader) Load() error {
 					logger.Warn("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName)
 				}
 
+				// Error if they specify the deprecated version and the new version
+				renamedFieldValue, _ := reflections.GetField(l.Config, renamedToFieldName)
+				if renamedFieldValue != "" {
+					return fmt.Errorf("Can't set config option `%s` because `%s=%v` has already been set", cliName, renamedFieldCliName, renamedFieldValue)
+				}
+
 				// Fetch the value of the deprecated config, and set the renamed
 				// config based on its value
 				value, _ := reflections.GetField(l.Config, fieldName)
+
 				if value != nil {
 					err := reflections.SetField(l.Config, renamedToFieldName, value)
 					if err != nil {
@@ -133,7 +140,7 @@ func (l *Loader) Load() error {
 				return fmt.Errorf(deprecationError)
 			}
 		}
-
+		
 		// Perform validations
 		validationRules, _ := reflections.GetFieldTag(l.Config, fieldName, "validate")
 		if validationRules != "" {
