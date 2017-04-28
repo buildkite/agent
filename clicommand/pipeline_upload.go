@@ -14,7 +14,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 var PipelineUploadHelpDescription = `Usage:

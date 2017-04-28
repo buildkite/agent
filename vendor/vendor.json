@@ -57,12 +57,6 @@
 			"revisionTime": "2016-04-29T08:01:25Z"
 		},
 		{
-			"checksumSHA1": "bplZOqTp6JAbkn25zHEPIob25WI=",
-			"path": "github.com/codegangsta/cli",
-			"revision": "2526b57c56f30b50466c96c4133b1a4ad0f0191f",
-			"revisionTime": "2017-02-15T05:17:05Z"
-		},
-		{
 			"checksumSHA1": "dvabztWVQX8f6oMLRyv4dLH+TGY=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "346938d642f2ec3594ed81d874461961cd0faa76",
@@ -145,6 +139,12 @@
 			"path": "github.com/stretchr/testify/assert",
 			"revision": "4d4bfba8f1d1027c4fdbe371823030df51419987",
 			"revisionTime": "2017-01-30T11:31:45Z"
+		},
+		{
+			"checksumSHA1": "K/CP3EBR0TUpw8DPpjRExGEYNkY=",
+			"path": "github.com/urfave/cli",
+			"revision": "ab403a54a148f2d857920810291539e1f817ee7b",
+			"revisionTime": "2017-04-24T21:31:22Z"
 		},
 		{
 			"checksumSHA1": "xiderUuvye8Kpn7yX3niiJg32bE=",

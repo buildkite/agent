@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 var MetaDataExistsHelpDescription = `Usage:
