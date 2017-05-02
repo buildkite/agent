@@ -206,26 +206,22 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "meta-data",
 			Value:  &cli.StringSlice{},
-			Hidden: true, /* Seems to have no effect, so we include Usage */
-			Usage:  "Deprecated. Renamed to --tags",
+			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2",
-			Hidden: true, /* Seems to have no effect, so we include Usage */
-			Usage:  "Deprecated. Renamed to --tags-from-ec2",
+			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-ec2-tags",
-			Hidden: true, /* Seems to have no effect, so we include Usage */
-			Usage:  "Deprecated. Renamed to --tags-from-ec2-tags",
+			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
 		cli.BoolFlag{
 			Name:  "meta-data-gcp",
-			Hidden: true, /* Seems to have no effect, so we include Usage */
-			Usage:  "Deprecated. Renamed to --tags-from-gcp",
+			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
 		},
 	},
