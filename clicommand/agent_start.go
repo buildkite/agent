@@ -128,7 +128,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "tags",
 			Value:  &cli.StringSlice{},
-			Usage:  "A comma-separated list of tags for the agent (e.g. \"linux\" or \"linux,docker=true\")",
+			Usage:  "A comma-separated list of tags for the agent (e.g. \"linux\" or \"mac,xcode=8\")",
 			EnvVar: "BUILDKITE_AGENT_TAGS",
 		},
 		cli.BoolFlag{
