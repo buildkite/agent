@@ -39,11 +39,10 @@ type AgentStartConfig struct {
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
-	MetaData                     []string `cli:"meta-data"`
-	Experiments                  []string `cli:"experiment"`
-	MetaDataEC2                  bool     `cli:"meta-data-ec2"`
-	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags"`
-	MetaDataGCP                  bool     `cli:"meta-data-gcp"`
+	Tags                         []string `cli:"tags"`
+	TagsFromEC2                  bool     `cli:"tags-from-ec2"`
+	TagsFromEC2Tags              bool     `cli:"tags-from-ec2-tags"`
+	TagsFromGCP                  bool     `cli:"tags-from-gcp"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	NoColor                      bool     `cli:"no-color"`
@@ -53,6 +52,12 @@ type AgentStartConfig struct {
 	Endpoint                     string   `cli:"endpoint" validate:"required"`
 	Debug                        bool     `cli:"debug"`
 	DebugHTTP                    bool     `cli:"debug-http"`
+	Experiments                  []string `cli:"experiment"`
+	/* Deprecated */
+	MetaData                     []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
+	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
+	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
+	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
 }
 
 func DefaultConfigFilePaths() (paths []string) {
@@ -121,25 +126,25 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
 		},
 		cli.StringSliceFlag{
-			Name:   "meta-data",
+			Name:   "tags",
 			Value:  &cli.StringSlice{},
-			Usage:  "Meta-data for the agent (default is \"queue=default\")",
-			EnvVar: "BUILDKITE_AGENT_META_DATA",
+			Usage:  "A comma-separated list of tags for the agent (e.g. \"linux\" or \"mac,xcode=8\")",
+			EnvVar: "BUILDKITE_AGENT_TAGS",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-ec2",
-			Usage: "Include the host's EC2 meta-data (instance-id, instance-type, and ami-id) as meta-data",
-			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
+			Name:  "tags-from-ec2",
+			Usage: "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-ec2-tags",
-			Usage: "Include the host's EC2 tags as meta-data",
-			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2_TAGS",
+			Name:  "tags-from-ec2-tags",
+			Usage: "Include the host's EC2 tags as tags",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-gcp",
-			Usage: "Include the host's Google Cloud meta-data (instance-id, machine-type, preemptible, project-id, region, and zone) as meta-data",
-			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
+			Name:  "tags-from-gcp",
+			Usage: "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
@@ -197,6 +202,28 @@ var AgentStartCommand = cli.Command{
 		NoColorFlag,
 		DebugFlag,
 		DebugHTTPFlag,
+		/* Deprecated flags which will be removed in v4 */
+		cli.StringSliceFlag{
+			Name:   "meta-data",
+			Value:  &cli.StringSlice{},
+			Hidden: true,
+			EnvVar: "BUILDKITE_AGENT_META_DATA",
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-ec2",
+			Hidden: true,
+			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-ec2-tags",
+			Hidden: true,
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
+		},
+		cli.BoolFlag{
+			Name:  "meta-data-gcp",
+			Hidden: true,
+			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
+		},
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -234,10 +261,10 @@ var AgentStartCommand = cli.Command{
 			Token:           cfg.Token,
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
-			MetaData:        cfg.MetaData,
-			MetaDataEC2:     cfg.MetaDataEC2,
-			MetaDataEC2Tags: cfg.MetaDataEC2Tags,
-			MetaDataGCP:     cfg.MetaDataGCP,
+			Tags:            cfg.Tags,
+			TagsFromEC2:     cfg.TagsFromEC2,
+			TagsFromEC2Tags: cfg.TagsFromEC2Tags,
+			TagsFromGCP:     cfg.TagsFromGCP,
 			Endpoint:        cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
