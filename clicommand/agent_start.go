@@ -133,7 +133,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:  "tags-from-ec2",
-			Usage: "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id) as meta-data",
+			Usage: "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
 		},
 		cli.BoolFlag{
