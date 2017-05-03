@@ -84,6 +84,27 @@ steps:
       docker-compose#e8ce6c1:
         run: agent
 
+  - name: ":openbsd: amd64"
+    command: "scripts/build-binary.sh openbsd amd64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":openbsd: 386"
+    command: "scripts/build-binary.sh openbsd 386"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
+  - name: ":dragonflybsd: amd64"
+    command: "scripts/build-binary.sh dragonfly amd64"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#e8ce6c1:
+        run: agent
+
   - wait
 
   - name: ":mag:"

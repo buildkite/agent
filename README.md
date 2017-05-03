@@ -30,7 +30,7 @@ The agents page on Buildkite has personalised instructions for installing the ag
 
 ## Starting
 
-To start an agent all you need is your agent token, which you an find on your Agents page within Buildkite.
+To start an agent all you need is your agent token, which you can find on your Agents page within Buildkite.
 
 ```
 $ buildkite-agent start --token
