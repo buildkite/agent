@@ -1258,6 +1258,9 @@ func (b *Bootstrap) Start() error {
 		b.executePluginHook(plugins, "post-artifact")
 	}
 
+	// Run the `before-exit` global hook
+	b.executeGlobalHook("before-exit")
+
 	// Run the `before-exit` local hook
 	b.executeLocalHook("before-exit")
 
