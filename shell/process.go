@@ -56,7 +56,12 @@ func (p *Process) Run() error {
 		// Pass signals to the sub-process
 		for sig := range signals {
 			if cmd.Process != nil {
-				cmd.Process.Signal(sig)
+				// If possible, send to the process group (linux/darwin/bsd)
+				if ssig, ok := sig.(syscall.Signal); ok {
+					syscall.Kill(-cmd.Process.Pid, ssig)
+				} else {
+					cmd.Process.Signal(sig)
+				}
 			}
 		}
 	}()
