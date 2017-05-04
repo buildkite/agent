@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"syscall"
 )
 
@@ -43,6 +44,23 @@ func (p *Process) Run() error {
 	if p.Command.Dir != "" {
 		cmd.Dir = p.Command.Dir
 	}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT)
+
+	go func() {
+		// Pass signals to the sub-process
+		for sig := range signals {
+			if cmd.Process != nil {
+				cmd.Process.Signal(sig)
+			}
+		}
+	}()
+	defer signal.Stop(signals)
 
 	if p.Config.PTY {
 		// Start our process in a PTY
