@@ -580,6 +580,12 @@ if [[ -n "$BUILDKITE_ARTIFACT_PATHS" ]]; then
   buildkite-global-hook "post-artifact"
 fi
 
+# Run the per-checkout `pre-exit` hook
+buildkite-local-hook "pre-exit"
+
+# Run the global `pre-exit` hook
+buildkite-global-hook "pre-exit"
+
 # Be sure to exit this script with the same exit status that the users build
 # script exited with.
 exit $BUILDKITE_COMMAND_EXIT_STATUS
