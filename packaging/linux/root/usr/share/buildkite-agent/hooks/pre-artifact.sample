@@ -1,5 +1,5 @@
 #!/bin/bash
 
-# The `pre-artifact` hook will run just artifacts are uploaded
+# The `pre-artifact` hook will run just before artifacts are uploaded
 
 set -e
