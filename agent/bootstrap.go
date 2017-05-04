@@ -1258,6 +1258,12 @@ func (b *Bootstrap) Start() error {
 		b.executePluginHook(plugins, "post-artifact")
 	}
 
+	// Run the `before-exit` local hook
+	b.executeLocalHook("before-exit")
+
+	// Run the `before-exit` plugin hook
+	b.executePluginHook(plugins, "before-exit")
+
 	// Be sure to exit this script with the same exit status that the users
 	// build script exited with.
 	os.Exit(commandExitStatus)
