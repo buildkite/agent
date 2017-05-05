@@ -1,13 +1,14 @@
-package agent
+package bootstrap
 
 import (
 	"testing"
+
 	"github.com/stretchr/testify/assert"
 )
 
 var agentNameTests = []struct {
-	agentName   string
-	expected    string
+	agentName string
+	expected  string
 }{
 	{"My Agent", "My-Agent"},
 	{":docker: My Agent", "-docker--My-Agent"},

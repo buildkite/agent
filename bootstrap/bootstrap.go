@@ -1,4 +1,4 @@
-package agent
+package bootstrap
 
 import (
 	"bytes"
@@ -13,11 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/shell"
 	"github.com/buildkite/agent/shell/windows"
-	"github.com/flynn-archive/go-shlex"
-	"github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
+
+	shlex "github.com/flynn-archive/go-shlex"
+	homedir "github.com/mitchellh/go-homedir"
 )
 
 type Bootstrap struct {
@@ -626,7 +628,7 @@ func (b *Bootstrap) executeLocalHook(name string) int {
 }
 
 // Returns the absolute path to a plugin hook
-func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
+func (b *Bootstrap) pluginHookPath(plugin *agent.Plugin, name string) string {
 	id, err := plugin.Identifier()
 	if err != nil {
 		exitf("%s", err)
@@ -641,7 +643,7 @@ func (b *Bootstrap) pluginHookPath(plugin *Plugin, name string) string {
 }
 
 // Executes a plugin hook gracefully
-func (b *Bootstrap) executePluginHookGracefully(plugins []*Plugin, name string) int {
+func (b *Bootstrap) executePluginHookGracefully(plugins []*agent.Plugin, name string) int {
 	for _, p := range plugins {
 		env, _ := p.ConfigurationToEnvironment()
 		exitStatus := b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), false, env)
@@ -654,7 +656,7 @@ func (b *Bootstrap) executePluginHookGracefully(plugins []*Plugin, name string) 
 }
 
 // Executes a plugin hook
-func (b *Bootstrap) executePluginHook(plugins []*Plugin, name string) {
+func (b *Bootstrap) executePluginHook(plugins []*agent.Plugin, name string) {
 	for _, p := range plugins {
 		env, _ := p.ConfigurationToEnvironment()
 		b.executeHook("plugin "+p.Label()+" "+name, b.pluginHookPath(p, name), true, env)
@@ -662,7 +664,7 @@ func (b *Bootstrap) executePluginHook(plugins []*Plugin, name string) {
 }
 
 // If a plugin hook exists with this name
-func (b *Bootstrap) pluginHookExists(plugins []*Plugin, name string) bool {
+func (b *Bootstrap) pluginHookExists(plugins []*agent.Plugin, name string) bool {
 	for _, p := range plugins {
 		if fileExists(b.pluginHookPath(p, name)) {
 			return true
@@ -808,7 +810,7 @@ func (b *Bootstrap) Start() error {
 	//
 	//////////////////////////////////////////////////////////////
 
-	var plugins []*Plugin
+	var plugins []*agent.Plugin
 
 	if b.Plugins != "" {
 		headerf("Setting up plugins")
@@ -818,7 +820,7 @@ func (b *Bootstrap) Start() error {
 			exitf("Can't checkout plugins without a `plugins-path`")
 		}
 
-		plugins, err = CreatePluginsFromJSON(b.Plugins)
+		plugins, err = agent.CreatePluginsFromJSON(b.Plugins)
 		if err != nil {
 			exitf("Failed to parse plugin definition (%s)", err)
 		}
