@@ -6,7 +6,7 @@ import (
 	"os/exec"
 )
 
-func signalProcess(cmd *exec.Command, sig os.Signal) error {
+func signalProcess(cmd *exec.Cmd, sig os.Signal) error {
 	if cmd.Process != nil {
 		return errors.New("Process doesn't exist yet")
 	}
