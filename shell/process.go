@@ -53,16 +53,9 @@ func (p *Process) Run() error {
 		syscall.SIGQUIT)
 
 	go func() {
-		// Pass signals to the sub-process
+		// forward signals to the process
 		for sig := range signals {
-			if cmd.Process != nil {
-				// If possible, send to the process group (linux/darwin/bsd)
-				if ssig, ok := sig.(syscall.Signal); ok {
-					syscall.Kill(-cmd.Process.Pid, ssig)
-				} else {
-					cmd.Process.Signal(sig)
-				}
-			}
+			_ = signalProcess(cmd, sig)
 		}
 	}()
 	defer signal.Stop(signals)
