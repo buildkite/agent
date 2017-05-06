@@ -1,4 +1,4 @@
-package shell
+package bootstrap
 
 import (
 	"errors"
@@ -9,20 +9,28 @@ import (
 	"os/exec"
 	"os/signal"
 	"syscall"
+
+	"github.com/buildkite/agent/process"
+	"github.com/buildkite/agent/shell"
 )
 
-type Process struct {
+// process is a simpler version of process.Process specifically for the bootstrap
+// to use to create sub-processes
+type subprocess struct {
 	// The command to run in the process
-	Command *Command
+	Command *shell.Command
 
-	// Additonal config for the process
-	Config *Config
+	// Where the STDOUT + STDERR of a command will be written to
+	Writer io.Writer
+
+	// Whether or not the command should be run in a PTY
+	PTY bool
 
 	// The exit status of the process
 	exitStatus int
 }
 
-func (p *Process) Run() error {
+func (p *subprocess) Run() error {
 	// Windows has a hard time finding files that are located in folders
 	// that you've added dynmically to PATH, so we'll use `AbsolutePath`
 	// method (that looks for files in PATH) and use the path from that
@@ -63,16 +71,15 @@ func (p *Process) Run() error {
 	}()
 	defer signal.Stop(signals)
 
-	if p.Config.PTY {
-		// Start our process in a PTY
-		pty, err := ptyStart(cmd)
+	if p.PTY {
+		pty, err := process.StartPTY(cmd)
 		if err != nil {
-			return fmt.Errorf("Failed to start PTY (%s)", err)
+			return fmt.Errorf("Failed to start PTY (%v)", err)
 		}
 
 		// Copy the pty to our buffer. This will block until it EOF's
 		// or something breaks.
-		_, err = io.Copy(p.Config.Writer, pty)
+		_, err = io.Copy(p.Writer, pty)
 		if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 			// We can safely ignore this error, because it's just
 			// the PTY telling us that it closed successfully.
@@ -81,8 +88,8 @@ func (p *Process) Run() error {
 			err = nil
 		}
 	} else {
-		cmd.Stdout = p.Config.Writer
-		cmd.Stderr = p.Config.Writer
+		cmd.Stdout = p.Writer
+		cmd.Stderr = p.Writer
 		cmd.Stdin = nil
 
 		err := cmd.Start()
@@ -111,6 +118,6 @@ func (p *Process) Run() error {
 	return nil
 }
 
-func (p *Process) ExitStatus() int {
+func (p *subprocess) ExitStatus() int {
 	return p.exitStatus
 }

@@ -330,11 +330,14 @@ func (b *Bootstrap) newCommand(command string, args ...string) *shell.Command {
 
 // Run a command without showing a prompt or the output to the user
 func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
-	cmd := b.newCommand(command, args...)
-
 	var buffer bytes.Buffer
-	_, err := shell.Run(cmd, &shell.Config{Writer: &buffer})
 
+	p := subprocess{
+		Command: b.newCommand(command, args...),
+		Writer:  &buffer,
+	}
+
+	err := p.Run()
 	return strings.TrimSpace(buffer.String()), err
 }
 
@@ -344,10 +347,13 @@ func (b *Bootstrap) runCommandGracefully(command string, args ...string) int {
 
 	promptf("%s", cmd)
 
-	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout})
-	checkShellError(err, cmd)
+	p := subprocess{
+		Command: cmd,
+		Writer:  os.Stdout,
+	}
 
-	return process.ExitStatus()
+	checkShellError(p.Run(), cmd)
+	return p.ExitStatus()
 }
 
 // Runs a script on the file system
@@ -369,10 +375,14 @@ func (b *Bootstrap) runScript(command string) int {
 		cmd = b.newCommand("/bin/bash", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
 	}
 
-	process, err := shell.Run(cmd, &shell.Config{Writer: os.Stdout, PTY: b.RunInPty})
-	checkShellError(err, cmd)
+	p := subprocess{
+		Command: cmd,
+		Writer:  os.Stdout,
+		PTY:     b.RunInPty,
+	}
 
-	return process.ExitStatus()
+	checkShellError(p.Run(), cmd)
+	return p.ExitStatus()
 }
 
 // Run a command, and if it fails, exit the bootstrap
