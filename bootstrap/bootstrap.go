@@ -773,7 +773,7 @@ func (b *Bootstrap) Start() error {
 	var err error
 
 	// Create an empty env for us to keep track of our env changes in
-	b.env, _ = shell.EnvironmentFromSlice(os.Environ())
+	b.env = shell.EnvironmentFromSlice(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if b.BinPath != "" {

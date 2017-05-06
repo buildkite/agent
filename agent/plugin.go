@@ -198,7 +198,7 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 			for i := range vv {
 				env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
 			}
-		case []interface {}:
+		case []interface{}:
 			for i := range vv {
 				switch vvv := vv[i].(type) {
 				case json.Number:
@@ -219,7 +219,7 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 	// Sort them into a consistent order
 	sort.Strings(env)
 
-	return shell.EnvironmentFromSlice(env)
+	return shell.EnvironmentFromSlice(env), nil
 }
 
 // Pretty name for the plugin
