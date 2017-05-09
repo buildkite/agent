@@ -10,7 +10,7 @@ type AnnotationsService struct {
 
 // Annotation represents a Buildkite Agent API Annotation
 type Annotation struct {
-	Body    string `json:"body"`
+	Body    string `json:"body,omitempty"`
 	Context string `json:"context,omitempty"`
 	Style   string `json:"style,omitempty"`
 }

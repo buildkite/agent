@@ -107,13 +107,6 @@ var AnnotateCommand = cli.Command{
 			if err != nil {
 				logger.Fatal("Failed to read from STDIN: %s", err)
 			}
-		} else {
-			logger.Fatal("No annotation data supplied")
-		}
-
-		// Make sure the file actually has something in it
-		if len(body) == 0 {
-			logger.Fatal("The supplied annotation body is empty")
 		}
 
 		// Create the API client
