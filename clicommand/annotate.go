@@ -147,7 +147,7 @@ var AnnotateCommand = cli.Command{
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
 
 		// Show a fatal error if we gave up trying to create the annotation
 		if err != nil {
