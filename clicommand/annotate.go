@@ -31,15 +31,19 @@ Description:
 
    Annotations can be written in either Markdown or HTML.
 
-   You can update an existing annotation's style by calling the annotate command
-   again without an annotation body.
+   You can update an existing annotation's body by running the annotate command
+   again and provide the same context as the one you want to update. Or if you
+   leave context blank, it will use the default context.
+
+   You can also just update the style of an existing annotation by omitting the
+   body and just providing a new style value.
 
 Example:
 
    $ buildkite-agent annotate "All tests passed! :rocket:"
    $ cat annotation.md | buildkite-agent annotate --style "warning"
    $ buildkite-agent annotate --style "success" --context "junit"
-   $ ./script/dynamic_annotation_generator | buildkite-agent annotate --style "success'`
+   $ ./script/dynamic_annotation_generator | buildkite-agent annotate --style "success"`
 
 type AnnotateConfig struct {
 	Body             string `cli:"arg:0" label:"annotation body"`
