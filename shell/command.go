@@ -1,10 +1,13 @@
 package shell
 
 import (
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/mattn/go-shellwords"
 )
 
 type Command struct {
@@ -44,7 +47,7 @@ func (c *Command) AbsolutePath() (string, error) {
 	if c.Env != nil && c.Env.Get("PATH") != "" {
 		envPath = c.Env.Get("PATH")
 	} else {
-		envPath = os.GetEnv("PATH")
+		envPath = os.Getenv("PATH")
 	}
 
 	// Use our custom lookPath that takes a specific path
