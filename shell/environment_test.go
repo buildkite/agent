@@ -7,7 +7,7 @@ import (
 )
 
 func TestEnvironmentExists(t *testing.T) {
-	env, _ := EnvironmentFromSlice([]string{})
+	env := EnvironmentFromSlice([]string{})
 
 	env.Set("FOO", "bar")
 	env.Set("EMPTY", "")
@@ -18,7 +18,7 @@ func TestEnvironmentExists(t *testing.T) {
 }
 
 func TestEnvironmentSet(t *testing.T) {
-	env, _ := EnvironmentFromSlice([]string{})
+	env := EnvironmentFromSlice([]string{})
 
 	env.Set("    THIS_IS_THE_BEST   \n\n", "\"IT SURE IS\"\n\n")
 	assert.Equal(t, env.Get("THIS_IS_THE_BEST"), "IT SURE IS")
@@ -37,7 +37,7 @@ func TestEnvironmentSet(t *testing.T) {
 }
 
 func TestEnvironmentRemove(t *testing.T) {
-	env, _ := EnvironmentFromSlice([]string{"FOO=bar"})
+	env := EnvironmentFromSlice([]string{"FOO=bar"})
 
 	assert.Equal(t, env.Get("FOO"), "bar")
 	assert.Equal(t, env.Remove("FOO"), "bar")
@@ -45,8 +45,8 @@ func TestEnvironmentRemove(t *testing.T) {
 }
 
 func TestEnvironmentMerge(t *testing.T) {
-	env1, _ := EnvironmentFromSlice([]string{"FOO=bar"})
-	env2, _ := EnvironmentFromSlice([]string{"BAR=foo"})
+	env1 := EnvironmentFromSlice([]string{"FOO=bar"})
+	env2 := EnvironmentFromSlice([]string{"BAR=foo"})
 
 	env3 := env1.Merge(env2)
 
@@ -54,7 +54,7 @@ func TestEnvironmentMerge(t *testing.T) {
 }
 
 func TestEnvironmentCopy(t *testing.T) {
-	env1, _ := EnvironmentFromSlice([]string{"FOO=bar"})
+	env1 := EnvironmentFromSlice([]string{"FOO=bar"})
 	env2 := env1.Copy()
 
 	assert.Equal(t, env2.ToSlice(), []string{"FOO=bar"})
@@ -65,7 +65,7 @@ func TestEnvironmentCopy(t *testing.T) {
 }
 
 func TestEnvironmentToSlice(t *testing.T) {
-	env, _ := EnvironmentFromSlice([]string{"\n\nTHIS_IS_GREAT=\"this is the \n best thing\"      "})
+	env := EnvironmentFromSlice([]string{"\n\nTHIS_IS_GREAT=\"this is the \n best thing\"      "})
 
 	assert.Equal(t, env.ToSlice(), []string{"THIS_IS_GREAT=this is the \n best thing"})
 }

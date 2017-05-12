@@ -13,7 +13,7 @@ type Environment struct {
 }
 
 // Creates a new environment from a string slice of KEY=VALUE
-func EnvironmentFromSlice(s []string) (*Environment, error) {
+func EnvironmentFromSlice(s []string) *Environment {
 	env := &Environment{env: make(map[string]string)}
 
 	for _, l := range s {
@@ -23,7 +23,7 @@ func EnvironmentFromSlice(s []string) (*Environment, error) {
 		}
 	}
 
-	return env, nil
+	return env
 }
 
 // Creates a new environment from a file with format KEY=VALUE\n
@@ -33,7 +33,7 @@ func EnvironmentFromFile(path string) (*Environment, error) {
 		return nil, err
 	}
 
-	return EnvironmentFromSlice(strings.Split(string(body), "\n"))
+	return EnvironmentFromSlice(strings.Split(string(body), "\n")), nil
 }
 
 // Returns a key from the environment

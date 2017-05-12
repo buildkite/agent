@@ -3,7 +3,7 @@ package clicommand
 import (
 	"runtime"
 
-	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/urfave/cli"
@@ -228,7 +228,7 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Configure the bootstraper
-		bootstrap := &agent.Bootstrap{
+		bootstrap := &bootstrap.Bootstrap{
 			Command:                      cfg.Command,
 			JobID:                        cfg.JobID,
 			Repository:                   cfg.Repository,
