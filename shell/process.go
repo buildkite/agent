@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -53,10 +54,10 @@ func (p *Process) Run() error {
 		syscall.SIGQUIT)
 
 	go func() {
-		// Pass signals to the sub-process
+		// forward signals to the process
 		for sig := range signals {
-			if cmd.Process != nil {
-				cmd.Process.Signal(sig)
+			if err = signalProcess(cmd, sig); err != nil {
+				log.Println("Error passing signal to child process", err)
 			}
 		}
 	}()
