@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/logger"
-	"gopkg.in/vmihailenco/msgpack.v2"
 	"github.com/google/go-querystring/query"
+	"gopkg.in/vmihailenco/msgpack.v2"
 )
 
 const (
@@ -50,6 +50,7 @@ type Client struct {
 	Artifacts   *ArtifactsService
 	Pipelines   *PipelinesService
 	Heartbeats  *HeartbeatsService
+	Annotations *AnnotationsService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -71,6 +72,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Artifacts = &ArtifactsService{c}
 	c.Pipelines = &PipelinesService{c}
 	c.Heartbeats = &HeartbeatsService{c}
+	c.Annotations = &AnnotationsService{c}
 
 	return c
 }
