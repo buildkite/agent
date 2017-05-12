@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -55,7 +56,9 @@ func (p *Process) Run() error {
 	go func() {
 		// forward signals to the process
 		for sig := range signals {
-			_ = signalProcess(cmd, sig)
+			if err = signalProcess(cmd, sig); err != nil {
+				log.Println("Error passing signal to child process", err)
+			}
 		}
 	}()
 	defer signal.Stop(signals)
