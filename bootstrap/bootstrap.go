@@ -18,8 +18,8 @@ import (
 	"github.com/buildkite/agent/shell/windows"
 	"github.com/nightlyone/lockfile"
 
-	shlex "github.com/flynn-archive/go-shlex"
-	homedir "github.com/mitchellh/go-homedir"
+	"github.com/flynn-archive/go-shlex"
+	"github.com/mitchellh/go-homedir"
 )
 
 type Bootstrap struct {
