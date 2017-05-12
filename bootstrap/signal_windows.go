@@ -1,4 +1,4 @@
-package shell
+package bootstrap
 
 import (
 	"errors"
