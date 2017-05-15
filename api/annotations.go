@@ -13,6 +13,7 @@ type Annotation struct {
 	Body    string `json:"body,omitempty"`
 	Context string `json:"context,omitempty"`
 	Style   string `json:"style,omitempty"`
+	Append  bool   `json:"append,omitempty"`
 }
 
 // Annotates a build in the Buildkite UI

@@ -49,6 +49,7 @@ type AnnotateConfig struct {
 	Body             string `cli:"arg:0" label:"annotation body"`
 	Style            string `cli:"style"`
 	Context          string `cli:"context"`
+	Append           bool   `cli:"append"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
@@ -71,6 +72,11 @@ var AnnotateCommand = cli.Command{
 			Name:   "style",
 			Usage:  "The style of the annotation (`success`, `info`, `warning` or `error`)",
 			EnvVar: "BUILDKITE_ANNOTATION_STYLE",
+		},
+		cli.BoolFlag{
+			Name:   "append",
+			Usage:  "Append to the body of an existing annotation",
+			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
 		},
 		cli.StringFlag{
 			Name:   "job",
@@ -128,6 +134,7 @@ var AnnotateCommand = cli.Command{
 			Body:    body,
 			Style:   cfg.Style,
 			Context: cfg.Context,
+			Append:  cfg.Append,
 		}
 
 		// Retry the annotation a few times before giving up
