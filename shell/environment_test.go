@@ -65,7 +65,15 @@ func TestEnvironmentCopy(t *testing.T) {
 }
 
 func TestEnvironmentToSlice(t *testing.T) {
-	env := EnvironmentFromSlice([]string{"\n\nTHIS_IS_GREAT=\"this is the \n best thing\"      "})
+	env := EnvironmentFromSlice([]string{"", "", "THIS_IS_GREAT=\"this is the ", " best thing\"      "})
+	assert.Equal(t, []string{"THIS_IS_GREAT=this is the \n best thing"}, env.ToSlice())
 
-	assert.Equal(t, env.ToSlice(), []string{"THIS_IS_GREAT=this is the \n best thing"})
+	env = EnvironmentFromSlice([]string{"THIS_IS_GREAT=first", "AND_I_HAVE=multiple", "lines"})
+	assert.Equal(t, []string{"THIS_IS_GREAT=first", "AND_I_HAVE=multiple\nlines"}, env.ToSlice())
+
+	env = EnvironmentFromSlice([]string{"THIS_IS_GREAT=first", "with a new line", "LOL=true"})
+	assert.Equal(t, []string{"THIS_IS_GREAT=first\nwith a new line", "LOL=true"}, env.ToSlice())
+
+	env = EnvironmentFromSlice([]string{"FOO=totes", "BLAH=", " NO_STARTING_WITH_SPACE=lol", "OR_A_SPACE_AFTER_THE_KEY =lollies", "1234=can't start with numbers", "_START_A_NEW_ENV=totes", "yes it's great"})
+	assert.Equal(t, []string{"THIS_IS_GREAT=first\nwith a new line", "LOL=true"}, env.ToSlice())
 }

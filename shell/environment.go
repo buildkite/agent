@@ -3,6 +3,7 @@ package shell
 import (
 	"fmt"
 	"io/ioutil"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -12,15 +13,44 @@ type Environment struct {
 	env map[string]string
 }
 
+var EnvironmentVariableLineRegex = regexp.MustCompile("\\A([a-zA-Z]+[a-zA-Z0-9_]*)=(.+)\\z")
+
 // Creates a new environment from a string slice of KEY=VALUE
 func EnvironmentFromSlice(s []string) *Environment {
 	env := &Environment{env: make(map[string]string)}
 
+	var currentKeyName string
+	var currentValueSlice []string
+
 	for _, l := range s {
-		parts := strings.SplitN(l, "=", 2)
-		if len(parts) == 2 {
-			env.Set(parts[0], parts[1])
+		//parts := strings.SplitN(l, "=", 2)
+
+		matches := EnvironmentVariableLineRegex.FindStringSubmatch(l)
+		if len(matches) == 3 {
+
+			if currentKeyName != "" && len(currentValueSlice) > 0 {
+				env.Set(currentKeyName, strings.Join(currentValueSlice, "\n"))
+				currentValueSlice = nil
+			}
+
+			currentKeyName = matches[1]
+			currentValueSlice = append(currentValueSlice, matches[2])
+		} else {
+			if currentKeyName != "" {
+				currentValueSlice = append(currentValueSlice, l)
+			}
 		}
+
+		//if len(parts) == 2 {
+		//	env.Set(parts[0], parts[1])
+		//}
+	}
+
+	fmt.Println(currentKeyName)
+	fmt.Println(currentValueSlice)
+
+	if currentKeyName != "" && len(currentValueSlice) > 0 {
+		env.Set(currentKeyName, strings.Join(currentValueSlice, "\n"))
 	}
 
 	return env
