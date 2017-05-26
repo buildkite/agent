@@ -529,12 +529,20 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 				"SET BUILDKITE_LAST_HOOK_EXIT_STATUS=!ERRORLEVEL!\n" +
 				"SET > \"" + tempEnvAfterFile.Name() + "\"\n" +
 				"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
-		} else {
+		} else if runtime.GOOS == "darwin" {
+			// OSX doesn't support the `--null` option on `env`
 			hookScript = "#!/bin/bash\n" +
 				"env > \"" + tempEnvBeforeFile.Name() + "\"\n" +
 				". \"" + absolutePathToHook + "\"\n" +
 				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
 				"env > \"" + tempEnvAfterFile.Name() + "\"\n" +
+				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
+		} else {
+			hookScript = "#!/bin/bash\n" +
+				"env --null > \"" + tempEnvBeforeFile.Name() + "\"\n" +
+				". \"" + absolutePathToHook + "\"\n" +
+				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
+				"env --null > \"" + tempEnvAfterFile.Name() + "\"\n" +
 				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
 		}
 
