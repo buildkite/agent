@@ -531,10 +531,10 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 				"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
 		} else {
 			hookScript = "#!/bin/bash\n" +
-				"env > \"" + tempEnvBeforeFile.Name() + "\"\n" +
+				"export -p > \"" + tempEnvBeforeFile.Name() + "\"\n" +
 				". \"" + absolutePathToHook + "\"\n" +
 				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
-				"env > \"" + tempEnvAfterFile.Name() + "\"\n" +
+				"export -p > \"" + tempEnvAfterFile.Name() + "\"\n" +
 				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
 		}
 
@@ -578,16 +578,21 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 		// it
 		b.env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%s", hookExitStatus))
 
+
 		// Compare the ENV current env with the after shots, then
 		// modify the running env map with the changes.
-		beforeEnv, err := shell.EnvironmentFromFile(tempEnvBeforeFile.Name())
+		beforeEnvContents, err := ioutil.ReadFile(tempEnvBeforeFile.Name())
 		if err != nil {
-			exitf("Failed to parse \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
+			exitf("Failed to read \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
+		} else {
+			beforeEnv := shell.EnvironmentFromExport(beforeEnvContents)
 		}
 
-		afterEnv, err := shell.EnvironmentFromFile(tempEnvAfterFile.Name())
+		afterEnvContents, err := ioutil.ReadFile(tempEnvAfterFile.Name())
 		if err != nil {
-			exitf("Failed to parse \"%s\" (%s)", tempEnvAfterFile.Name(), err)
+			exitf("Failed to read \"%s\" (%s)", tempEnvAfterFile.Name(), err)
+		} else {
+			afterEnv := shell.EnvironmentFromExport(AfterEnvContents)
 		}
 
 		// Remove the BUILDKITE_LAST_HOOK_EXIT_STATUS from the after
