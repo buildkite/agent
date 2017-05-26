@@ -53,16 +53,19 @@ func TestEnvironmentCopy(t *testing.T) {
 }
 
 func TestEnvironmentFromExport(t *testing.T) {
-	env := EnvironmentFromExport(`declare USER="keithpitt"
-declare VAR1="boom\nboom\nshake\nthe\nroom"
-declare VAR2="hello
+	env := EnvironmentFromExport(`declare -x USER="keithpitt"
+declare -x VAR1="boom\nboom\nshake\nthe\nroom"
+declare -x VAR2="hello
 friends"
-declare VAR3="hello
+declare -x VAR3="hello
 friends
 OMG=foo
 test"
-declare SOMETHING="0"
-declare _="/usr/local/bin/watch"`)
+declare -x SOMETHING="0"
+declare -x VAR4="ends with a space "
+declare -x VAR5="ends with
+another space "
+declare -x _="/usr/local/bin/watch"`)
 
 	assert.Equal(t, []string{
 		"SOMETHING=0",
@@ -70,8 +73,23 @@ declare _="/usr/local/bin/watch"`)
 		"VAR1=boom\\nboom\\nshake\\nthe\\nroom",
 		"VAR2=hello\nfriends",
 		"VAR3=hello\nfriends\nOMG=foo\ntest",
+		"VAR4=ends with a space ",
+		"VAR5=ends with\nanother space ",
 		"_=/usr/local/bin/watch",
 	}, env.ToSlice())
+
+	env = EnvironmentFromExport(`declare -x USER="keithpitt"
+declare -x PROMPT="%(?..%B%F{red}✗ exit %?%f%b
+)
+ \$(directory_name)\$(git_dirty)\$(need_push)\$(author)› "
+declare -x ANOTHER="true"`)
+
+	assert.Equal(t, []string{
+		"ANOTHER=true",
+		"PROMPT=%(?..%B%F{red}✗ exit %?%f%b\n)\n \\$(directory_name)\\$(git_dirty)\\$(need_push)\\$(author)› ",
+		"USER=keithpitt",
+	}, env.ToSlice())
+
 
 	env = EnvironmentFromExport(`SESSIONNAME=Console
 SystemDrive=C:

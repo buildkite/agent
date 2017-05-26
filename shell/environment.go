@@ -1,7 +1,6 @@
 package shell
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"regexp"
@@ -25,24 +24,24 @@ func EnvironmentFromSlice(s []string) *Environment {
 	return env
 }
 
-var PosixExportLineRegex = regexp.MustCompile("\\Adeclare ([a-zA-Z_]+[a-zA-Z0-9_]*)=\"(.+)?\\z")
+var PosixExportLineRegex = regexp.MustCompile("\\Adeclare \\-x ([a-zA-Z_]+[a-zA-Z0-9_]*)=\"(.+)?\\z")
 
 // Creates a new environment from a shell export of environment variables. On
 // *nix it looks like this:
 //
 //     $ export -p
-//     declare USER="keithpitt"
-//     declare VAR1="boom\\nboom\\nshake\\nthe\\nroom"
-//     declare VAR2="hello
+//     declare -x USER="keithpitt"
+//     declare -x VAR1="boom\\nboom\\nshake\\nthe\\nroom"
+//     declare -x VAR2="hello
 //     friends"
-//     declare VAR3="hello
+//     declare -x VAR3="hello
 //     friends
 //     OMG=foo
 //     test"
-//     declare VAR4="great
+//     declare -x VAR4="great
 //     typeset -x TOTES=''
 //     lollies"
-//     declare XPC_FLAGS="0x0"
+//     declare -x XPC_FLAGS="0x0"
 //
 // And on Windowws...
 //
@@ -180,7 +179,7 @@ func (e *Environment) Copy() *Environment {
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		s = append(s, fmt.Sprintf("%v=%v", k, v))
+		s = append(s, k + "=" + v)
 	}
 
 	// Ensure they are in a consistent order (helpful for tests)
