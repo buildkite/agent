@@ -53,6 +53,7 @@ func TestEnvironmentCopy(t *testing.T) {
 }
 
 func TestEnvironmentFromExport(t *testing.T) {
+	// Handles new lines
 	env := EnvironmentFromExport(`declare -x USER="keithpitt"
 declare -x VAR1="boom\nboom\nshake\nthe\nroom"
 declare -x VAR2="hello
@@ -66,7 +67,6 @@ declare -x VAR4="ends with a space "
 declare -x VAR5="ends with
 another space "
 declare -x _="/usr/local/bin/watch"`)
-
 	assert.Equal(t, []string{
 		"SOMETHING=0",
 		"USER=keithpitt",
@@ -78,18 +78,35 @@ declare -x _="/usr/local/bin/watch"`)
 		"_=/usr/local/bin/watch",
 	}, env.ToSlice())
 
-	env = EnvironmentFromExport(`declare -x USER="keithpitt"
-declare -x PROMPT="%(?..%B%F{red}✗ exit %?%f%b
-)
- \$(directory_name)\$(git_dirty)\$(need_push)\$(author)› "
-declare -x ANOTHER="true"`)
+	// Escapes stuff
+	env = EnvironmentFromExport(`declare -x DOLLARS="i love \$money"
+declare -x WITH_NEW_LINE="i have a \\n new line"
+declare -x CARRIAGE_RETURN="i have a \\r carriage"
+declare -x TOTES="with a \" quote"`)
 
-	assert.Equal(t, []string{
-		"ANOTHER=true",
-		"PROMPT=%(?..%B%F{red}✗ exit %?%f%b\n)\n \\$(directory_name)\\$(git_dirty)\\$(need_push)\\$(author)› ",
-		"USER=keithpitt",
-	}, env.ToSlice())
+	assert.Equal(t, env.Get("DOLLARS"), "i love $money")
+	assert.Equal(t, env.Get("WITH_NEW_LINE"), `i have a \n new line`)
+	assert.Equal(t, env.Get("CARRIAGE_RETURN"), `i have a \r carriage`)
+	assert.Equal(t, env.Get("TOTES"), `with a " quote`)
 
+	// Handles JSON
+	env = EnvironmentFromExport(`declare -x FOO="{
+  \"key\": \"test\",
+  \"hello\": [
+    1,
+    2,
+    3
+  ]
+}"`)
+
+	assert.Equal(t, env.Get("FOO"), `{
+  "key": "test",
+  "hello": [
+    1,
+    2,
+    3
+  ]
+}`)
 
 	env = EnvironmentFromExport(`SESSIONNAME=Console
 SystemDrive=C:

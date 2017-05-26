@@ -53,6 +53,21 @@ var PosixExportLineRegex = regexp.MustCompile("\\Adeclare \\-x ([a-zA-Z_]+[a-zA-
 //     TMP=C:\Users\IEUser\AppData\Local\Temp
 //     USERDOMAIN=IE11WIN10
 //
+
+func unquoteShell(value string) string {
+	// Turn things like \\n back into \n
+	value = strings.Replace(value, `\\`, `\`, -1)
+
+	// Shells escape $ cause of environment variable interpolation
+	value = strings.Replace(value, `\$`, `$`, -1)
+
+	// They also escape double quotes when showing a value within double
+	// quotes, i.e. "this is a \" quote string"
+	value = strings.Replace(value, `\"`, `"`, -1)
+
+	return value
+}
+
 func EnvironmentFromExport(body string) *Environment {
 	// Create the environment that we'll load values into
 	env := &Environment{env: make(map[string]string)}
@@ -82,7 +97,7 @@ func EnvironmentFromExport(body string) *Environment {
 				// add it to the environment and clear the
 				// buffers
 				if currentKeyName != "" && len(currentValueSlice) > 0 {
-					env.Set(currentKeyName, strings.Trim(strings.Join(currentValueSlice, "\n"), "\""))
+					env.Set(currentKeyName, unquoteShell(strings.Trim(strings.Join(currentValueSlice, "\n"), "\"")))
 					currentValueSlice = nil
 				}
 
@@ -97,7 +112,7 @@ func EnvironmentFromExport(body string) *Environment {
 
 		// Check if there's one last environment varible in the buffer that we need to add
 		if currentKeyName != "" && len(currentValueSlice) > 0 {
-			env.Set(currentKeyName, strings.Trim(strings.Join(currentValueSlice, "\n"), "\""))
+			env.Set(currentKeyName, unquoteShell(strings.Trim(strings.Join(currentValueSlice, "\n"), "\"")))
 		}
 
 		// Return our parsed environment
