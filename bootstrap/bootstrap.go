@@ -578,6 +578,8 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 		// it
 		b.env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%s", hookExitStatus))
 
+		var beforeEnv *shell.Environment
+		var afterEnv *shell.Environment
 
 		// Compare the ENV current env with the after shots, then
 		// modify the running env map with the changes.
@@ -585,14 +587,14 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 		if err != nil {
 			exitf("Failed to read \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
 		} else {
-			beforeEnv := shell.EnvironmentFromExport(beforeEnvContents)
+			beforeEnv = shell.EnvironmentFromExport(string(beforeEnvContents))
 		}
 
 		afterEnvContents, err := ioutil.ReadFile(tempEnvAfterFile.Name())
 		if err != nil {
 			exitf("Failed to read \"%s\" (%s)", tempEnvAfterFile.Name(), err)
 		} else {
-			afterEnv := shell.EnvironmentFromExport(AfterEnvContents)
+			afterEnv = shell.EnvironmentFromExport(string(afterEnvContents))
 		}
 
 		// Remove the BUILDKITE_LAST_HOOK_EXIT_STATUS from the after
