@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 )
@@ -13,47 +12,128 @@ type Environment struct {
 	env map[string]string
 }
 
-var EnvironmentVariableLineRegex = regexp.MustCompile("\\A([a-zA-Z]+[a-zA-Z0-9_]*)=(.+)\\z")
+var EnvironmentVariableLineRegex = regexp.MustCompile("\\A([a-zA-Z]+[a-zA-Z0-9_]*)=(.+)?\\z")
 
-// Creates a new environment from a string slice of KEY=VALUE
+// Creates a new environment from a string slice of "KEY=VALUE" strings
 func EnvironmentFromSlice(s []string) *Environment {
 	env := &Environment{env: make(map[string]string)}
 
-	var currentKeyName string
-	var currentValueSlice []string
-
 	for _, l := range s {
-		//parts := strings.SplitN(l, "=", 2)
-
-		matches := EnvironmentVariableLineRegex.FindStringSubmatch(l)
-		if len(matches) == 3 {
-
-			if currentKeyName != "" && len(currentValueSlice) > 0 {
-				env.Set(currentKeyName, strings.Join(currentValueSlice, "\n"))
-				currentValueSlice = nil
-			}
-
-			currentKeyName = matches[1]
-			currentValueSlice = append(currentValueSlice, matches[2])
-		} else {
-			if currentKeyName != "" {
-				currentValueSlice = append(currentValueSlice, l)
-			}
+		parts := strings.SplitN(l, "=", 2)
+		if len(parts) == 2 {
+			env.Set(parts[0], parts[1])
 		}
-
-		//if len(parts) == 2 {
-		//	env.Set(parts[0], parts[1])
-		//}
-	}
-
-	fmt.Println(currentKeyName)
-	fmt.Println(currentValueSlice)
-
-	if currentKeyName != "" && len(currentValueSlice) > 0 {
-		env.Set(currentKeyName, strings.Join(currentValueSlice, "\n"))
 	}
 
 	return env
+}
+
+// Creates a new environment from a string with format KEY=VALUE\n or
+// KEY=VALUE\0. Parsing environment variables from a string is a little tough.
+// For example...
+//
+//     $ export VAR1="boom\nboom\nshake\nthe\nroom"
+//
+//     $ echo $VAR1
+//     boom
+//     boom
+//     shake
+//     the
+//     room
+//
+//     $ env
+//     ...
+//     VAR1=boom\nboom\nshake\nthe\nroom
+//     _=/usr/bin/env
+//
+// A multi-line variable works as expected. The variable is flattened and new
+// lines are escaped...however...
+//
+//    $ export VAR2="hello [I hit enter here]
+//    dquote> friends"
+//
+//    $ env
+//    ...
+//    VAR2=hello
+//    friends
+//    _=/usr/bin/env
+//
+// New lines that aren't already escaped appear as 2 sepearte lines when you
+// run `env`. This makes it tricky to parse, since `env` joins environment
+// variables together with a new line, but doesnt' do anything smart if there
+// are new lines within an environment variable.
+//
+// On Linux, you can run `env --null` which splits each environment varibale
+// with a null character, making it easy to split by, but OSX doesn't support
+// that.
+//
+// To solve this, we first try and split by \0 by checking if the last
+// character is a null byte. If that's the case, it's an easy parse. If it doesn't,
+// then we'll need to do a parse using a split on new lines.
+//
+// The way we solve the new line issue is by looping over each line and
+// checking to see if it "looks" like an environment varible. If it does, we
+// set it and move on. If it doesn't, we concat that value to the previous
+// environment variable.
+//
+// The only issue with this appraoch, is that if you have an environment
+// variable like this:
+//
+//    $ export VAR3="hello
+//    dquote> friends
+//    dquote> OMG=foo
+//    dquote> test"
+//
+//    $ echo $VAR3
+//    hello
+//    friends
+//    OMG=foo
+//    test
+//
+// It will think OMG=foo is an environment variable. That's an acceptable
+// caveat for now.
+func EnvironmentFromString(str string) (*Environment) {
+	// Determine if the string is being seperated by a null byte (such as
+	// when you run `env  --null` on Linux)
+	if strings.HasSuffix(str, `\0`) {
+		return EnvironmentFromSlice(strings.Split(str, `\0`))
+	} else {
+		env := &Environment{env: make(map[string]string)}
+
+		var currentKeyName string
+		var currentValueSlice []string
+
+		// Loop through each of the lines
+		for _, line := range strings.Split(str, `\n`) {
+			// Run a regular expression to see if the current line
+			// "looks" like an environment varible definition.
+			matches := EnvironmentVariableLineRegex.FindStringSubmatch(line)
+
+			if len(matches) == 3 {
+				// If we've already got a key in the buffer,
+				// add it to the environment and clear the
+				// buffers
+				if currentKeyName != "" && len(currentValueSlice) > 0 {
+					env.Set(currentKeyName, strings.Join(currentValueSlice, `\n`))
+					currentValueSlice = nil
+				}
+
+				currentKeyName = matches[1]
+				currentValueSlice = []string{matches[2]}
+			} else {
+				if currentKeyName != "" {
+					currentValueSlice = append(currentValueSlice, line)
+				}
+			}
+		}
+
+		// Check if there's one last environment varible in the buffer that we need to add
+		if currentKeyName != "" && len(currentValueSlice) > 0 {
+			env.Set(currentKeyName, strings.Join(currentValueSlice, `\n`))
+		}
+
+		return env
+	}
 }
 
 // Creates a new environment from a file with format KEY=VALUE\n
@@ -63,7 +143,7 @@ func EnvironmentFromFile(path string) (*Environment, error) {
 		return nil, err
 	}
 
-	return EnvironmentFromSlice(strings.Split(string(body), "\n")), nil
+	return EnvironmentFromString(string(body)), nil
 }
 
 // Returns a key from the environment
@@ -80,29 +160,6 @@ func (e *Environment) Exists(key string) bool {
 
 // Sets a key in the environment
 func (e *Environment) Set(key string, value string) string {
-	// Trim the values
-	key = strings.TrimSpace(key)
-	value = strings.TrimSpace(value)
-
-	// Check if we've got quoted values
-	if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
-		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
-		// Pull the quotes off the edges
-		value = strings.Trim(value, "\"'")
-
-		// Expand quotes
-		value = strings.Replace(value, "\\\"", "\"", -1)
-
-		// Expand newlines
-		value = strings.Replace(value, "\\n", "\n", -1)
-	}
-
-	// Environment variable keys are case-insensitive on Windows, so we'll
-	// just convert them all to uppercase.
-	if runtime.GOOS == "windows" {
-		key = strings.ToUpper(key)
-	}
-
 	e.env[key] = value
 
 	return value
