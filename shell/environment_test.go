@@ -21,19 +21,7 @@ func TestEnvironmentSet(t *testing.T) {
 	env := EnvironmentFromSlice([]string{})
 
 	env.Set("    THIS_IS_THE_BEST   \n\n", "\"IT SURE IS\"\n\n")
-	assert.Equal(t, env.Get("THIS_IS_THE_BEST"), "IT SURE IS")
-
-	env.Set("NEW_LINES_STAY_IN_SINGLE_QUOTES", "  'indeed \n it\n does\n'  ")
-	assert.Equal(t, env.Get("NEW_LINES_STAY_IN_SINGLE_QUOTES"), "indeed \n it\n does\n")
-
-	env.Set("NEW_LINES_STAY_IN_DOUBLE_QUOTES", "  \"indeed \n it\n does\n\"      ")
-	assert.Equal(t, env.Get("NEW_LINES_STAY_IN_DOUBLE_QUOTES"), "indeed \n it\n does\n")
-
-	env.Set("REMOVES_WHITESPACE_FROM_NO_QUOTES", "\n       \n  new line party\n  \n  ")
-	assert.Equal(t, env.Get("REMOVES_WHITESPACE_FROM_NO_QUOTES"), "new line party")
-
-	env.Set("DOESNT_AFFECT_QUOTES_INSIDE", `oh "hello" there`)
-	assert.Equal(t, env.Get("DOESNT_AFFECT_QUOTES_INSIDE"), `oh "hello" there`)
+	assert.Equal(t, env.Get("    THIS_IS_THE_BEST   \n\n"), "\"IT SURE IS\"\n\n")
 }
 
 func TestEnvironmentRemove(t *testing.T) {
@@ -57,15 +45,88 @@ func TestEnvironmentCopy(t *testing.T) {
 	env1 := EnvironmentFromSlice([]string{"FOO=bar"})
 	env2 := env1.Copy()
 
-	assert.Equal(t, env2.ToSlice(), []string{"FOO=bar"})
+	assert.Equal(t, []string{"FOO=bar"}, env2.ToSlice())
 
 	env1.Set("FOO", "not-bar-anymore")
 
-	assert.Equal(t, env2.ToSlice(), []string{"FOO=bar"})
+	assert.Equal(t, []string{"FOO=bar"}, env2.ToSlice())
+}
+
+func TestEnvironmentFromExport(t *testing.T) {
+	// Handles new lines
+	env := EnvironmentFromExport(`declare -x USER="keithpitt"
+declare -x VAR1="boom\nboom\nshake\nthe\nroom"
+declare -x VAR2="hello
+friends"
+declare -x VAR3="hello
+friends
+OMG=foo
+test"
+declare -x SOMETHING="0"
+declare -x VAR4="ends with a space "
+declare -x VAR5="ends with
+another space "
+declare -x _="/usr/local/bin/watch"`)
+	assert.Equal(t, []string{
+		"SOMETHING=0",
+		"USER=keithpitt",
+		"VAR1=boom\\nboom\\nshake\\nthe\\nroom",
+		"VAR2=hello\nfriends",
+		"VAR3=hello\nfriends\nOMG=foo\ntest",
+		"VAR4=ends with a space ",
+		"VAR5=ends with\nanother space ",
+		"_=/usr/local/bin/watch",
+	}, env.ToSlice())
+
+	// Escapes stuff
+	env = EnvironmentFromExport(`declare -x DOLLARS="i love \$money"
+declare -x WITH_NEW_LINE="i have a \\n new line"
+declare -x CARRIAGE_RETURN="i have a \\r carriage"
+declare -x TOTES="with a \" quote"`)
+
+	assert.Equal(t, env.Get("DOLLARS"), "i love $money")
+	assert.Equal(t, env.Get("WITH_NEW_LINE"), `i have a \n new line`)
+	assert.Equal(t, env.Get("CARRIAGE_RETURN"), `i have a \r carriage`)
+	assert.Equal(t, env.Get("TOTES"), `with a " quote`)
+
+	// Handles JSON
+	env = EnvironmentFromExport(`declare -x FOO="{
+  \"key\": \"test\",
+  \"hello\": [
+    1,
+    2,
+    3
+  ]
+}"`)
+
+	assert.Equal(t, env.Get("FOO"), `{
+  "key": "test",
+  "hello": [
+    1,
+    2,
+    3
+  ]
+}`)
+
+	env = EnvironmentFromExport(`SESSIONNAME=Console
+SystemDrive=C:
+SystemRoot=C:\Windows
+TEMP=C:\Users\IEUser\AppData\Local\Temp
+TMP=C:\Users\IEUser\AppData\Local\Temp
+USERDOMAIN=IE11WIN10`)
+
+	assert.Equal(t, []string{
+		"SESSIONNAME=Console",
+		"SystemDrive=C:",
+		"SystemRoot=C:\\Windows",
+		"TEMP=C:\\Users\\IEUser\\AppData\\Local\\Temp",
+		"TMP=C:\\Users\\IEUser\\AppData\\Local\\Temp",
+		"USERDOMAIN=IE11WIN10",
+	}, env.ToSlice())
 }
 
 func TestEnvironmentToSlice(t *testing.T) {
-	env := EnvironmentFromSlice([]string{"\n\nTHIS_IS_GREAT=\"this is the \n best thing\"      "})
+	env := EnvironmentFromSlice([]string{"THIS_IS_GREAT=totes", "ZOMG=greatness"})
 
-	assert.Equal(t, env.ToSlice(), []string{"THIS_IS_GREAT=this is the \n best thing"})
+	assert.Equal(t, []string{"THIS_IS_GREAT=totes", "ZOMG=greatness"}, env.ToSlice())
 }

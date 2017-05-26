@@ -1,11 +1,9 @@
 package shell
 
 import (
-	"fmt"
-	"io/ioutil"
-	"runtime"
 	"sort"
 	"strings"
+	"regexp"
 )
 
 type Environment struct {
@@ -26,14 +24,104 @@ func EnvironmentFromSlice(s []string) *Environment {
 	return env
 }
 
-// Creates a new environment from a file with format KEY=VALUE\n
-func EnvironmentFromFile(path string) (*Environment, error) {
-	body, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, err
+var PosixExportLineRegex = regexp.MustCompile("\\Adeclare \\-x ([a-zA-Z_]+[a-zA-Z0-9_]*)=\"(.+)?\\z")
+
+// Creates a new environment from a shell export of environment variables. On
+// *nix it looks like this:
+//
+//     $ export -p
+//     declare -x USER="keithpitt"
+//     declare -x VAR1="boom\\nboom\\nshake\\nthe\\nroom"
+//     declare -x VAR2="hello
+//     friends"
+//     declare -x VAR3="hello
+//     friends
+//     OMG=foo
+//     test"
+//     declare -x VAR4="great
+//     typeset -x TOTES=''
+//     lollies"
+//     declare -x XPC_FLAGS="0x0"
+//
+// And on Windowws...
+//
+//     $ SET
+//     SESSIONNAME=Console
+//     SystemDrive=C:
+//     SystemRoot=C:\Windows
+//     TEMP=C:\Users\IEUser\AppData\Local\Temp
+//     TMP=C:\Users\IEUser\AppData\Local\Temp
+//     USERDOMAIN=IE11WIN10
+//
+
+func unquoteShell(value string) string {
+	// Turn things like \\n back into \n
+	value = strings.Replace(value, `\\`, `\`, -1)
+
+	// Shells escape $ cause of environment variable interpolation
+	value = strings.Replace(value, `\$`, `$`, -1)
+
+	// They also escape double quotes when showing a value within double
+	// quotes, i.e. "this is a \" quote string"
+	value = strings.Replace(value, `\"`, `"`, -1)
+
+	return value
+}
+
+func EnvironmentFromExport(body string) *Environment {
+	// Create the environment that we'll load values into
+	env := &Environment{env: make(map[string]string)}
+
+	// Split up the export into lines
+	lines := strings.Split(body, "\n")
+
+	// No lines! An empty environment it is@
+	if len(lines) == 0 {
+		return env
 	}
 
-	return EnvironmentFromSlice(strings.Split(string(body), "\n")), nil
+	// Determine if we're either parsing a Windows or *nix style export
+	if PosixExportLineRegex.MatchString(lines[0]) {
+		var currentKeyName string
+		var currentValueSlice []string
+
+		// Loop through each of the lines
+		for _, line := range lines {
+			// Use our regular expression to see if this looks like
+			// an export line
+			matches := PosixExportLineRegex.FindStringSubmatch(line)
+
+			// If we've got a match, then we can put out the key
+			if len(matches) == 3 {
+				// If we've already got a key in the buffer,
+				// add it to the environment and clear the
+				// buffers
+				if currentKeyName != "" && len(currentValueSlice) > 0 {
+					env.Set(currentKeyName, unquoteShell(strings.Trim(strings.Join(currentValueSlice, "\n"), "\"")))
+					currentValueSlice = nil
+				}
+
+				currentKeyName = matches[1]
+				currentValueSlice = []string{matches[2]}
+			} else {
+				if currentKeyName != "" {
+					currentValueSlice = append(currentValueSlice, line)
+				}
+			}
+		}
+
+		// Check if there's one last environment varible in the buffer that we need to add
+		if currentKeyName != "" && len(currentValueSlice) > 0 {
+			env.Set(currentKeyName, unquoteShell(strings.Trim(strings.Join(currentValueSlice, "\n"), "\"")))
+		}
+
+		// Return our parsed environment
+		return env
+	} else {
+		// Windows exports are easy since they can just be handled by
+		// out built-in EnvironmentFromSlice gear
+		return EnvironmentFromSlice(lines)
+	}
 }
 
 // Returns a key from the environment
@@ -50,29 +138,6 @@ func (e *Environment) Exists(key string) bool {
 
 // Sets a key in the environment
 func (e *Environment) Set(key string, value string) string {
-	// Trim the values
-	key = strings.TrimSpace(key)
-	value = strings.TrimSpace(value)
-
-	// Check if we've got quoted values
-	if (strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`)) ||
-		(strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'")) {
-		// Pull the quotes off the edges
-		value = strings.Trim(value, "\"'")
-
-		// Expand quotes
-		value = strings.Replace(value, "\\\"", "\"", -1)
-
-		// Expand newlines
-		value = strings.Replace(value, "\\n", "\n", -1)
-	}
-
-	// Environment variable keys are case-insensitive on Windows, so we'll
-	// just convert them all to uppercase.
-	if runtime.GOOS == "windows" {
-		key = strings.ToUpper(key)
-	}
-
 	e.env[key] = value
 
 	return value
@@ -129,7 +194,7 @@ func (e *Environment) Copy() *Environment {
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		s = append(s, fmt.Sprintf("%v=%v", k, v))
+		s = append(s, k + "=" + v)
 	}
 
 	// Ensure they are in a consistent order (helpful for tests)
