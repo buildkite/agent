@@ -84,10 +84,29 @@ declare -x WITH_NEW_LINE="i have a \\n new line"
 declare -x CARRIAGE_RETURN="i have a \\r carriage"
 declare -x TOTES="with a \" quote"`)
 
-	assert.Equal(t, env.Get("DOLLARS"), "i love $money")
-	assert.Equal(t, env.Get("WITH_NEW_LINE"), `i have a \n new line`)
-	assert.Equal(t, env.Get("CARRIAGE_RETURN"), `i have a \r carriage`)
-	assert.Equal(t, env.Get("TOTES"), `with a " quote`)
+	assert.Equal(t, "i love $money", env.Get("DOLLARS"))
+	assert.Equal(t, `i have a \n new line`, env.Get("WITH_NEW_LINE"))
+	assert.Equal(t, `i have a \r carriage`, env.Get("CARRIAGE_RETURN"))
+	assert.Equal(t, `with a " quote`, env.Get("TOTES"))
+
+	// Disregards new lines at the start and end of the export
+	env = EnvironmentFromExport(`
+
+
+
+declare -x DOLLARS="i love \$money"
+declare -x WITH_NEW_LINE="i have a \\n new line"
+declare -x CARRIAGE_RETURN="i have a \\r carriage"
+declare -x TOTES="with a \" quote"
+
+
+
+`)
+
+	assert.Equal(t, "i love $money", env.Get("DOLLARS"))
+	assert.Equal(t, `i have a \n new line`, env.Get("WITH_NEW_LINE"))
+	assert.Equal(t, `i have a \r carriage`, env.Get("CARRIAGE_RETURN"))
+	assert.Equal(t, `with a " quote`, env.Get("TOTES"))
 
 	// Handles JSON
 	env = EnvironmentFromExport(`declare -x FOO="{
@@ -108,12 +127,34 @@ declare -x TOTES="with a \" quote"`)
   ]
 }`)
 
+	// Works with Windows output
 	env = EnvironmentFromExport(`SESSIONNAME=Console
 SystemDrive=C:
 SystemRoot=C:\Windows
 TEMP=C:\Users\IEUser\AppData\Local\Temp
 TMP=C:\Users\IEUser\AppData\Local\Temp
 USERDOMAIN=IE11WIN10`)
+
+	assert.Equal(t, []string{
+		"SESSIONNAME=Console",
+		"SystemDrive=C:",
+		"SystemRoot=C:\\Windows",
+		"TEMP=C:\\Users\\IEUser\\AppData\\Local\\Temp",
+		"TMP=C:\\Users\\IEUser\\AppData\\Local\\Temp",
+		"USERDOMAIN=IE11WIN10",
+	}, env.ToSlice())
+
+	// Works with Windows output that has spaces at the start and end
+	env = EnvironmentFromExport(`
+
+SESSIONNAME=Console
+SystemDrive=C:
+SystemRoot=C:\Windows
+TEMP=C:\Users\IEUser\AppData\Local\Temp
+TMP=C:\Users\IEUser\AppData\Local\Temp
+USERDOMAIN=IE11WIN10
+
+`)
 
 	assert.Equal(t, []string{
 		"SESSIONNAME=Console",
