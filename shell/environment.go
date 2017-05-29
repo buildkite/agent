@@ -72,6 +72,9 @@ func EnvironmentFromExport(body string) *Environment {
 	// Create the environment that we'll load values into
 	env := &Environment{env: make(map[string]string)}
 
+	// Remove any white space at the start and the end of the dump
+	body = strings.TrimSpace(body)
+
 	// Split up the export into lines
 	lines := strings.Split(body, "\n")
 
