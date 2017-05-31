@@ -1,9 +1,9 @@
 package shell
 
 import (
+	"regexp"
 	"sort"
 	"strings"
-	"regexp"
 )
 
 type Environment struct {
@@ -24,7 +24,8 @@ func EnvironmentFromSlice(s []string) *Environment {
 	return env
 }
 
-var PosixExportLineRegex = regexp.MustCompile("\\Adeclare \\-x ([a-zA-Z_]+[a-zA-Z0-9_]*)=\"(.+)?\\z")
+var PosixExportLineRegex = regexp.MustCompile("\\Adeclare \\-x ([a-zA-Z_]+[a-zA-Z0-9_]*)(=\")?(.+)?\\z")
+var EndsWithUnescapedQuoteRegex = regexp.MustCompile("([^\\\\]\"\\z|\\A\"\\z)")
 
 // Creates a new environment from a shell export of environment variables. On
 // *nix it looks like this:
@@ -85,37 +86,73 @@ func EnvironmentFromExport(body string) *Environment {
 
 	// Determine if we're either parsing a Windows or *nix style export
 	if PosixExportLineRegex.MatchString(lines[0]) {
-		var currentKeyName string
-		var currentValueSlice []string
+		var openKeyName string
+		var openKeyValue []string
 
-		// Loop through each of the lines
 		for _, line := range lines {
-			// Use our regular expression to see if this looks like
-			// an export line
-			matches := PosixExportLineRegex.FindStringSubmatch(line)
+			// Is this line part of a previouly un-closed
+			// environment variable?
+			if openKeyName != "" {
+				// Add the current line to the open variable
+				openKeyValue = append(openKeyValue, line)
 
-			// If we've got a match, then we can put out the key
-			if len(matches) == 3 {
-				// If we've already got a key in the buffer,
-				// add it to the environment and clear the
-				// buffers
-				if currentKeyName != "" && len(currentValueSlice) > 0 {
-					env.Set(currentKeyName, unquoteShell(strings.Trim(strings.Join(currentValueSlice, "\n"), "\"")))
-					currentValueSlice = nil
+				// If it ends with an unescaped quote `"`, then
+				// that's the end of the variable!
+				if EndsWithUnescapedQuoteRegex.MatchString(line) {
+					// Join all the lines together
+					joinedLines := strings.Join(openKeyValue, "\n")
+
+					// Remove the `"` at the end
+					multiLineValueWithQuoteRemoved := strings.TrimSuffix(joinedLines, `"`)
+
+					// Set the single line env var
+					env.Set(openKeyName, unquoteShell(multiLineValueWithQuoteRemoved))
+
+					// Set the variables that track an open environment variable
+					openKeyName = ""
+					openKeyValue = nil
 				}
 
-				currentKeyName = matches[1]
-				currentValueSlice = []string{matches[2]}
-			} else {
-				if currentKeyName != "" {
-					currentValueSlice = append(currentValueSlice, line)
-				}
+				// We've finished working on this line, so we
+				// can just got the next one
+				continue
 			}
-		}
 
-		// Check if there's one last environment varible in the buffer that we need to add
-		if currentKeyName != "" && len(currentValueSlice) > 0 {
-			env.Set(currentKeyName, unquoteShell(strings.Trim(strings.Join(currentValueSlice, "\n"), "\"")))
+			// Trim the `declare -x ` off the start of the line
+			line = strings.TrimPrefix(line, "declare -x ")
+
+			// We now have a line that can either be one of these:
+			//
+			//     1. `FOO="bar"`
+			//     2. `FOO="open quote for new lines`
+			//     3. `FOO`
+			//
+			parts := strings.SplitN(line, "=\"", 2)
+			if len(parts) == 2 {
+				// If the value ends with an unescaped quote,
+				// then we know it's a single line environment
+				// variable (see example 1)
+				if EndsWithUnescapedQuoteRegex.MatchString(parts[1]) {
+					// Remove the `"` at the end
+					singleLineValueWithQuoteRemoved := strings.TrimSuffix(parts[1], `"`)
+
+					// Set the single line env var
+					env.Set(parts[0], unquoteShell(singleLineValueWithQuoteRemoved))
+				} else {
+					// We're in an example 2 situation,
+					// where we need to keep keep the
+					// environment variable open until we
+					// encounter a line that ends with an
+					// unescaped quote
+					openKeyName = parts[0]
+					openKeyValue = []string{parts[1]}
+				}
+			} else {
+				// Since there wasn't an `=` sign, we assume
+				// it's just an environment variable without a
+				// value (see example 3)
+				env.Set(parts[0], "")
+			}
 		}
 
 		// Return our parsed environment
@@ -197,7 +234,7 @@ func (e *Environment) Copy() *Environment {
 func (e *Environment) ToSlice() []string {
 	s := []string{}
 	for k, v := range e.env {
-		s = append(s, k + "=" + v)
+		s = append(s, k+"="+v)
 	}
 
 	// Ensure they are in a consistent order (helpful for tests)
