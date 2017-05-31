@@ -1133,19 +1133,22 @@ func (b *Bootstrap) Start() error {
 			exitf("No command has been defined. Please go to \"Pipeline Settings\" and configure your build step's \"Command\"")
 		}
 
-		pathToCommand, err := filepath.Abs(filepath.Join(b.currentWorkingDirectory(), strings.Replace(b.Command, "\n", "", -1)))
+		scriptFileName := strings.Replace(b.Command, "\n", "", -1)
+		pathToCommand, err := filepath.Abs(filepath.Join(b.currentWorkingDirectory(), scriptFileName))
 		commandIsScript := err == nil && fileExists(pathToCommand)
 
 		// If the command isn't a script, then it's something we need
 		// to eval. But before we even try running it, we should double
 		// check that the agent is allowed to eval commands.
 		if !commandIsScript && !b.CommandEval {
+			commentf("No such file: \"%s\"", scriptFileName)
 			exitf("This agent is not allowed to evaluate console commands. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
 		// Also make sure that the script we've resolved is definitely within this
 		// repository checkout and isn't elsewhere on the system.
 		if commandIsScript && !b.CommandEval && !strings.HasPrefix(pathToCommand, b.currentWorkingDirectory()+string(os.PathSeparator)) {
+			commentf("No such file: \"%s\"", scriptFileName)
 			exitf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 		}
 
