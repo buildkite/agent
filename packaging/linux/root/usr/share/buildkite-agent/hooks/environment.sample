@@ -4,8 +4,14 @@
 # to set up secrets, data, etc. Anything exported in hooks will be available
 # to the build script.
 #
-# For example:
+# Examples:
 #
+### Set an environment variable
 # export SECRET_VAR=token
+#
+### Export inline_image function for bash scripts, to embed images in logs
+# function inline_image { printf '\033]1338;url='"$1"';alt='"$2"'\a\n'; }
+# export -f inline_image
+#
 
 set -e
