@@ -15,9 +15,7 @@ import (
 
 type AgentPool struct {
 	APIClient          *api.Client
-	Token              string
 	Token              TokenReader
-	TokenScript        string
 	ConfigFilePath     string
 	Name               string
 	Priority           string
@@ -33,19 +31,8 @@ func (r *AgentPool) Start() error {
 	// Show the welcome banner and config options used
 	r.ShowBanner()
 
-	var token TokenReader = StringToken(r.Token)
-	var err error
-
-	// Support lazily reading agent token from a script / executable
-	if r.TokenScript != "" {
-		token, err = ScriptTokenFromString(r.TokenScript)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Create the agent registration API Client
-	r.APIClient = APIClient{Endpoint: r.Endpoint, Token: token}.Create()
+	r.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Token}.Create()
 
 	// Create the agent template. We use pass this template to the register
 	// call, at which point we get back a real agent.

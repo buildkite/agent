@@ -276,8 +276,6 @@ var AgentStartCommand = cli.Command{
 		// Setup the agent
 		pool := agent.AgentPool{
 			Name:            cfg.Name,
-			Token:           cfg.Token,
-			TokenScript:     cfg.TokenScript,
 			Priority:        cfg.Priority,
 			Tags:            cfg.Tags,
 			TagsFromEC2:     cfg.TagsFromEC2,
@@ -297,6 +295,17 @@ var AgentStartCommand = cli.Command{
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
 			},
+		}
+
+		pool.Token = agent.StringToken(cfg.Token)
+		var err error
+
+		// Support lazily reading agent token from a script / executable
+		if cfg.TokenScript != "" {
+			pool.Token, err = agent.ScriptTokenFromString(cfg.TokenScript)
+			if err != nil {
+				logger.Fatal("%s", err)
+			}
 		}
 
 		// Store the loaded config file path on the pool so we can
