@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"golang.org/x/net/http2"
 	"github.com/buildkite/agent/api"
+	"golang.org/x/net/http2"
 )
 
 var debug = false
@@ -37,7 +37,7 @@ func (a APIClient) Create() *api.Client {
 
 	// Create the transport used when making the Buildkite Agent API calls
 	transport := &api.AuthenticatedTransport{
-		Token: a.Token,
+		Token:     a.Token,
 		Transport: httpTransport,
 	}
 

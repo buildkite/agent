@@ -109,10 +109,10 @@ func (ls *LogStreamer) Process(output string) error {
 
 			// Create the chunk and append it to our list
 			chunk := LogStreamerChunk{
-				Data:  partialChunk,
-				Order: ls.order,
+				Data:   partialChunk,
+				Order:  ls.order,
 				Offset: ls.bytes,
-				Size: bytes - ls.bytes,
+				Size:   bytes - ls.bytes,
 			}
 
 			ls.queue <- &chunk

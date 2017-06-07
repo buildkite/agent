@@ -2,10 +2,10 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
-	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/experiments"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/logger"
 	"github.com/oleiade/reflections"
+	"github.com/urfave/cli"
 )
 
 const (

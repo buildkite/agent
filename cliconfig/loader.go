@@ -10,8 +10,8 @@ import (
 
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/utils"
-	"github.com/urfave/cli"
 	"github.com/oleiade/reflections"
+	"github.com/urfave/cli"
 )
 
 type Loader struct {

@@ -204,7 +204,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 
 	env, err = pluginEnvFromConfig(t, `{ "config-key": 42 }`)
 	assert.Nil(t, err)
-	assert.Equal(t, []string{ "BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONFIG_KEY=42" }, env.ToSlice())
+	assert.Equal(t, []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONFIG_KEY=42"}, env.ToSlice())
 
 	env, err = pluginEnvFromConfig(t, `{ "container": "app", "some-other-setting": "else right here" }`)
 	assert.Nil(t, err)
@@ -215,7 +215,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 
 	env, err = pluginEnvFromConfig(t, `{ "and _ with a    - number": 12 }`)
 	assert.Nil(t, err)
-	assert.Equal(t, []string{ "BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"}, env.ToSlice())
+	assert.Equal(t, []string{"BUILDKITE_PLUGIN_DOCKER_COMPOSE_AND_WITH_A_NUMBER=12"}, env.ToSlice())
 
 	env, err = pluginEnvFromConfig(t, `{ "array-key": [ "array-val-1", "array-val-2" ] }`)
 	assert.Nil(t, err)

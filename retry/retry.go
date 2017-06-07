@@ -3,8 +3,8 @@ package retry
 import (
 	"errors"
 	"fmt"
-	"time"
 	"math/rand"
+	"time"
 )
 
 type Stats struct {
@@ -72,8 +72,8 @@ func Do(callback func(*Stats) error, config *Config) error {
 		// Preconfigure the interval that will be used (so that we have
 		// access to it in the callback)
 		stats.Interval = config.Interval
-		if(config.Jitter) {
-			stats.Interval = stats.Interval + (time.Duration(1000 * random.Float32()) * time.Millisecond)
+		if config.Jitter {
+			stats.Interval = stats.Interval + (time.Duration(1000*random.Float32()) * time.Millisecond)
 		}
 
 		// Attempt the callback

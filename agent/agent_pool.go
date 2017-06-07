@@ -14,16 +14,16 @@ import (
 )
 
 type AgentPool struct {
-	APIClient       *api.Client
-	Token           string
-	ConfigFilePath  string
-	Name            string
-	Priority        string
-	Tags            []string
-	TagsFromEC2     bool
-	TagsFromEC2Tags bool
-	TagsFromGCP     bool
-	Endpoint        string
+	APIClient          *api.Client
+	Token              string
+	ConfigFilePath     string
+	Name               string
+	Priority           string
+	Tags               []string
+	TagsFromEC2        bool
+	TagsFromEC2Tags    bool
+	TagsFromGCP        bool
+	Endpoint           string
 	AgentConfiguration *AgentConfiguration
 }
 
