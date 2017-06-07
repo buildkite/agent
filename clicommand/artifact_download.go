@@ -83,7 +83,7 @@ var ArtifactDownloadCommand = cli.Command{
 		downloader := agent.ArtifactDownloader{
 			APIClient: agent.APIClient{
 				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
+				Token:    agent.StringToken(cfg.AgentAccessToken),
 			}.Create(),
 			Query:       cfg.Query,
 			Destination: cfg.Destination,

@@ -263,10 +263,21 @@ var AgentStartCommand = cli.Command{
 			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
 		}
 
+		// Make sure either a Token or a TokenScript is provided
+		if cfg.Token == "" && cfg.TokenScript == "" {
+			logger.Fatal("Must provide either `token` or `token-script`")
+		}
+
+		// Only allow one of Token and TokenScript
+		if cfg.Token != "" && cfg.TokenScript != "" {
+			logger.Fatal("Can't provide both `token` and `token-script`")
+		}
+
 		// Setup the agent
 		pool := agent.AgentPool{
-			Token:           cfg.Token,
 			Name:            cfg.Name,
+			Token:           cfg.Token,
+			TokenScript:     cfg.TokenScript,
 			Priority:        cfg.Priority,
 			Tags:            cfg.Tags,
 			TagsFromEC2:     cfg.TagsFromEC2,

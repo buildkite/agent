@@ -167,7 +167,7 @@ var PipelineUploadCommand = cli.Command{
 		// Create the API client
 		client := agent.APIClient{
 			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
+			Token:    agent.StringToken(cfg.AgentAccessToken),
 		}.Create()
 
 		// Generate a UUID that will identifiy this pipeline change. We
