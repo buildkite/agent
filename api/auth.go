@@ -9,11 +9,15 @@ type canceler interface {
 	CancelRequest(*http.Request)
 }
 
+type tokenReader interface {
+	Read() (string, error)
+}
+
 // Transport manages injection of the API token
 type AuthenticatedTransport struct {
 	// The Token used for authentication. This can either the be
 	// organizations registration token, or the agents access token.
-	Token string
+	Token tokenReader
 
 	// Transport is the underlying HTTP transport to use when making
 	// requests. It will default to http.DefaultTransport if nil.
@@ -22,12 +26,12 @@ type AuthenticatedTransport struct {
 
 // RoundTrip invoked each time a request is made
 func (t AuthenticatedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if t.Token == "" {
-		return nil, fmt.Errorf("Invalid token, empty string supplied")
+	token, err := t.Token.Read()
+	if err != nil {
+		return nil, err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Token %s", t.Token))
-
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", token))
 	return t.transport().RoundTrip(req)
 }
 

@@ -80,7 +80,7 @@ var ArtifactUploadCommand = cli.Command{
 		uploader := agent.ArtifactUploader{
 			APIClient: agent.APIClient{
 				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
+				Token:    agent.StringToken(cfg.AgentAccessToken),
 			}.Create(),
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,

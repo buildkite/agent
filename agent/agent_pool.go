@@ -15,7 +15,7 @@ import (
 
 type AgentPool struct {
 	APIClient          *api.Client
-	Token              string
+	Token              TokenReader
 	ConfigFilePath     string
 	Name               string
 	Priority           string

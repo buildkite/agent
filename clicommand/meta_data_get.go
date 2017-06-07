@@ -72,7 +72,7 @@ var MetaDataGetCommand = cli.Command{
 		// Create the API client
 		client := agent.APIClient{
 			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
+			Token:    agent.StringToken(cfg.AgentAccessToken),
 		}.Create()
 
 		// Find the meta data value

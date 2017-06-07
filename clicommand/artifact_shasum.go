@@ -85,7 +85,7 @@ var ArtifactShasumCommand = cli.Command{
 		searcher := agent.ArtifactSearcher{
 			APIClient: agent.APIClient{
 				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
+				Token:    agent.StringToken(cfg.AgentAccessToken),
 			}.Create(),
 			BuildID: cfg.Build,
 		}

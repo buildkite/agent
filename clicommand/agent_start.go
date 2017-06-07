@@ -30,7 +30,8 @@ Example:
 
 type AgentStartConfig struct {
 	Config                       string   `cli:"config"`
-	Token                        string   `cli:"token" validate:"required"`
+	Token                        string   `cli:"token"`
+	TokenScript                  string   `cli:"token-script"`
 	Name                         string   `cli:"name"`
 	Priority                     string   `cli:"priority"`
 	DisconnectAfterJob           bool     `cli:"disconnect-after-job"`
@@ -101,6 +102,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Your account agent token",
 			EnvVar: "BUILDKITE_AGENT_TOKEN",
+		},
+		cli.StringFlag{
+			Name:   "token-script",
+			Value:  "",
+			Usage:  "Path to a script that will return an agent token",
+			EnvVar: "BUILDKITE_AGENT_TOKEN_SCRIPT",
 		},
 		cli.StringFlag{
 			Name:   "name",
@@ -256,9 +263,18 @@ var AgentStartCommand = cli.Command{
 			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
 		}
 
+		// Make sure either a Token or a TokenScript is provided
+		if cfg.Token == "" && cfg.TokenScript == "" {
+			logger.Fatal("Must provide either `token` or `token-script`")
+		}
+
+		// Only allow one of Token and TokenScript
+		if cfg.Token != "" && cfg.TokenScript != "" {
+			logger.Fatal("Can't provide both `token` and `token-script`")
+		}
+
 		// Setup the agent
 		pool := agent.AgentPool{
-			Token:           cfg.Token,
 			Name:            cfg.Name,
 			Priority:        cfg.Priority,
 			Tags:            cfg.Tags,
@@ -279,6 +295,17 @@ var AgentStartCommand = cli.Command{
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
 			},
+		}
+
+		pool.Token = agent.StringToken(cfg.Token)
+		var err error
+
+		// Support lazily reading agent token from a script / executable
+		if cfg.TokenScript != "" {
+			pool.Token, err = agent.ScriptTokenFromString(cfg.TokenScript)
+			if err != nil {
+				logger.Fatal("%s", err)
+			}
 		}
 
 		// Store the loaded config file path on the pool so we can
