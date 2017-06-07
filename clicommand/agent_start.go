@@ -54,10 +54,10 @@ type AgentStartConfig struct {
 	DebugHTTP                    bool     `cli:"debug-http"`
 	Experiments                  []string `cli:"experiment"`
 	/* Deprecated */
-	MetaData                     []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
-	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
-	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
-	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
+	MetaData        []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
+	MetaDataEC2     bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
+	MetaDataEC2Tags bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
+	MetaDataGCP     bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
 }
 
 func DefaultConfigFilePaths() (paths []string) {
@@ -132,18 +132,18 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_TAGS",
 		},
 		cli.BoolFlag{
-			Name:  "tags-from-ec2",
-			Usage: "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
+			Name:   "tags-from-ec2",
+			Usage:  "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
 		},
 		cli.BoolFlag{
-			Name:  "tags-from-ec2-tags",
-			Usage: "Include the host's EC2 tags as tags",
+			Name:   "tags-from-ec2-tags",
+			Usage:  "Include the host's EC2 tags as tags",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
 		cli.BoolFlag{
-			Name:  "tags-from-gcp",
-			Usage: "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+			Name:   "tags-from-gcp",
+			Usage:  "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
 		},
 		cli.StringFlag{
@@ -210,17 +210,17 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_META_DATA",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-ec2",
+			Name:   "meta-data-ec2",
 			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-ec2-tags",
+			Name:   "meta-data-ec2-tags",
 			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
 		cli.BoolFlag{
-			Name:  "meta-data-gcp",
+			Name:   "meta-data-gcp",
 			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
 		},
