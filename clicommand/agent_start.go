@@ -30,7 +30,8 @@ Example:
 
 type AgentStartConfig struct {
 	Config                       string   `cli:"config"`
-	Token                        string   `cli:"token" validate:"required"`
+	Token                        string   `cli:"token"`
+	TokenScript                  string   `cli:"token-script"`
 	Name                         string   `cli:"name"`
 	Priority                     string   `cli:"priority"`
 	DisconnectAfterJob           bool     `cli:"disconnect-after-job"`
@@ -101,6 +102,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Your account agent token",
 			EnvVar: "BUILDKITE_AGENT_TOKEN",
+		},
+		cli.StringFlag{
+			Name:   "token-script",
+			Value:  "",
+			Usage:  "Path to a script that will return an agent token",
+			EnvVar: "BUILDKITE_AGENT_TOKEN_SCRIPT",
 		},
 		cli.StringFlag{
 			Name:   "name",

@@ -50,7 +50,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner = &r
 
 	// Our own APIClient using the endpoint and the agents access token
-	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
+	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: StringToken(r.Agent.AccessToken)}.Create()
 
 	// // Create our header times struct
 	runner.headerTimesStreamer = &HeaderTimesStreamer{UploadCallback: r.onUploadHeaderTime}

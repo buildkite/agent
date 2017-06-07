@@ -15,7 +15,7 @@ var debug = false
 
 type APIClient struct {
 	Endpoint string
-	Token    string
+	Token    TokenReader
 }
 
 func APIClientEnableHTTPDebug() {

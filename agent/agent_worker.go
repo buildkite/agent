@@ -53,7 +53,7 @@ func (a AgentWorker) Create() AgentWorker {
 		endpoint = a.Endpoint
 	}
 
-	a.APIClient = APIClient{Endpoint: endpoint, Token: a.Agent.AccessToken}.Create()
+	a.APIClient = APIClient{Endpoint: endpoint, Token: StringToken(a.Agent.AccessToken)}.Create()
 
 	return a
 }
@@ -249,7 +249,7 @@ func (a *AgentWorker) Ping() {
 		// Before switching to the new one, do a ping test to make sure it's
 		// valid. If it is, switch and carry on, otherwise ignore the switch
 		// for now.
-		newAPIClient := APIClient{Endpoint: ping.Endpoint, Token: a.Agent.AccessToken}.Create()
+		newAPIClient := APIClient{Endpoint: ping.Endpoint, Token: StringToken(a.Agent.AccessToken)}.Create()
 		newPing, _, err := newAPIClient.Pings.Get()
 		if err != nil {
 			logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
