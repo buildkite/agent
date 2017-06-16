@@ -22,6 +22,9 @@ lock_file="${lock_dir}/${name}"
 log="/var/log/${name}.log"
 stderr_log="/var/log/${name}.err"
 
+[ -r /etc/default/${name} ] && . /etc/default/${name}
+[ -r /etc/sysconfig/${name} ] && . /etc/sysconfig/${name}
+
 get_pid() {
     cat "$pid_file"
 }
