@@ -94,6 +94,11 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	}
 
 	Perms := s3.ACL(permission)
+	options := s3.Options{}
+	contentEncoding := u.contentEncoding(artifact)
+	if contentEncoding != "" {
+		options.ContentEncoding = contentEncoding
+	}
 
 	logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
 	data, err := ioutil.ReadFile(artifact.AbsolutePath)
@@ -102,7 +107,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	}
 
 	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
-	err = u.Bucket.Put(u.artifactPath(artifact), data, u.mimeType(artifact), Perms, s3.Options{})
+	err = u.Bucket.Put(u.artifactPath(artifact), data, u.mimeType(artifact), Perms, options)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%s)", u.artifactPath(artifact), err.Error()))
 	}
@@ -139,4 +144,9 @@ func (u *S3Uploader) mimeType(a *api.Artifact) string {
 	} else {
 		return "binary/octet-stream"
 	}
+}
+
+func (u *S3Uploader) contentEncoding(a *api.Artifact) string {
+	extension := filepath.Ext(a.Path)
+	return mime.EncodingByExtension(extension)
 }

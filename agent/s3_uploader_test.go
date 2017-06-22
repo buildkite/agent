@@ -21,3 +21,11 @@ func TestS3UploaderBucketName(t *testing.T) {
 	s3Uploader.Destination = "s3://starts-with-an-s"
 	assert.Equal(t, s3Uploader.BucketName(), "starts-with-an-s")
 }
+
+func TestS3UploaderArtifactContentType(t *testing.T) {
+	s3Uploader := S3Uploader{Destination: "s3://my-bucket-name/foo/bar"}
+	assert.Equal(t, s3Uploader.BucketName(), "my-bucket-name")
+
+	s3Uploader.Destination = "s3://starts-with-an-s"
+	assert.Equal(t, s3Uploader.BucketName(), "starts-with-an-s")
+}
