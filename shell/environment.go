@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"runtime"
 )
 
 type Environment struct {
@@ -67,6 +68,39 @@ func unquoteShell(value string) string {
 	value = strings.Replace(value, `\"`, `"`, -1)
 
 	return value
+}
+
+// Environment variables on Windows are case-insensitive. When you run `SET`
+// within a Windows command prompt, you'll see variables like this:
+//
+//     ...
+//     Path=C:\Program Files (x86)\Parallels\Parallels Tools\Applications;...
+//     PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 94 Stepping 3, GenuineIntel
+//     SystemDrive=C:
+//     SystemRoot=C:\Windows
+//     ...
+//
+// There's a mix of both CamelCase and UPPERCASE, but the can all be accessed
+// regardless of the case you use. So PATH is the same as Path, PAth, pATH,
+// etc.
+//
+// os.Environ() in Golang returns key/values in the original casing, so it
+// returns a slice like this:
+//
+//     { "Path=...", "PROCESSOR_IDENTIFIER=...", "SystemRoot=..." }
+//
+// Users of shell.Environment shouldn't need to care about this.
+// env.Get("PATH") should "just work" on Windows. This means on Windows
+// machines, we'll normalise all the keys that go in/out of this API.
+//
+// Unix systems _are_ case sensitive when it comes to ENV, so we'll just leave
+// that alone.
+func normalizeKeyName(key string) string {
+	if runtime.GOOS == "windows" {
+		return strings.ToUpper(key)
+	} else {
+		return key
+	}
 }
 
 func EnvironmentFromExport(body string) *Environment {
@@ -166,19 +200,19 @@ func EnvironmentFromExport(body string) *Environment {
 
 // Returns a key from the environment
 func (e *Environment) Get(key string) string {
-	return e.env[key]
+	return e.env[normalizeKeyName(key)]
 }
 
 // Returns true/false depending on whether or not the key exists in the env
 func (e *Environment) Exists(key string) bool {
-	_, ok := e.env[key]
+	_, ok := e.env[normalizeKeyName(key)]
 
 	return ok
 }
 
 // Sets a key in the environment
 func (e *Environment) Set(key string, value string) string {
-	e.env[key] = value
+	e.env[normalizeKeyName(key)] = value
 
 	return value
 }
@@ -186,7 +220,7 @@ func (e *Environment) Set(key string, value string) string {
 // Remove a key from the Environment and return it's value
 func (e *Environment) Remove(key string) string {
 	value := e.Get(key)
-	delete(e.env, key)
+	delete(e.env, normalizeKeyName(key))
 	return value
 }
 
