@@ -18,17 +18,19 @@ var MetaDataGetHelpDescription = `Usage:
 
 Description:
 
-   Get data from a builds key/value store.
+   Get data from a builds key/value store for a particular scope, either build, branch or pipeline.
 
 Example:
 
-   $ buildkite-agent meta-data get "foo"`
+   $ buildkite-agent meta-data get "foo"
+   $ buildkite-agent meta-data get "foo" --scope pipeline`
 
 type MetaDataGetConfig struct {
 	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Default          string `cli:"default"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Scope            string `cli:"scope"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
@@ -50,6 +52,12 @@ var MetaDataGetCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the meta-data be retrieved from",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "What scope should the meta-data be read from, either build (default), branch or pipeline",
+			EnvVar: "BUILDKITE_METADATA_SCOPE",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -80,7 +88,7 @@ var MetaDataGetCommand = cli.Command{
 		var err error
 		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			metaData, resp, err = client.MetaData.Get(cfg.Job, cfg.Key)
+			metaData, resp, err = client.MetaData.Get(cfg.Job, cfg.Key, cfg.Scope)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				s.Break()
@@ -102,7 +110,8 @@ var MetaDataGetCommand = cli.Command{
 			// We also use `IsSet` instead of `cfg.Default != ""`
 			// to allow people to use a default of a blank string.
 			if resp.StatusCode == 404 && c.IsSet("default") {
-				logger.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
+				logger.Warn("No meta-data value exists with key `%s` in scope `%s`, returning the supplied default \"%s\"",
+					cfg.Key, cfg.Scope, cfg.Default)
 
 				fmt.Print(cfg.Default)
 				return

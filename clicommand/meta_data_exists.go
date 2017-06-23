@@ -30,6 +30,7 @@ type MetaDataExistsConfig struct {
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
+	Scope            string `cli:"scope"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -45,6 +46,12 @@ var MetaDataExistsCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the meta-data be checked for",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "What scope should the meta-data be read from, either build (default), branch or pipeline",
+			EnvVar: "BUILDKITE_METADATA_SCOPE",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -75,7 +82,7 @@ var MetaDataExistsCommand = cli.Command{
 		var exists *api.MetaDataExists
 		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			exists, resp, err = client.MetaData.Exists(cfg.Job, cfg.Key)
+			exists, resp, err = client.MetaData.Exists(cfg.Job, cfg.Key, cfg.Scope)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}

@@ -19,7 +19,8 @@ var MetaDataSetHelpDescription = `Usage:
 
 Description:
 
-   Set arbitrary data on a build using a basic key/value store.
+   Set arbitrary key/value data scoped to the current build, branch or pipeline. If scope is omitted
+   then the default scope of the current build is used.
 
    You can supply the value as an argument to the command, or pipe in a file or
    script output.
@@ -27,6 +28,7 @@ Description:
 Example:
 
    $ buildkite-agent meta-data set "foo" "bar"
+   $ buildkite-agent meta-data set "foo" "bar" --scope pipeline
    $ buildkite-agent meta-data set "foo" < ./tmp/meta-data-value
    $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
 
@@ -34,6 +36,7 @@ type MetaDataSetConfig struct {
 	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Value            string `cli:"arg:1" label:"meta-data value"`
 	Job              string `cli:"job" validate:"required"`
+	Scope            string `cli:"scope" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
@@ -51,6 +54,12 @@ var MetaDataSetCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the meta-data be set on",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "scope",
+			Value:  "build",
+			Usage:  "What scope should the meta-data be set to, either build (default), branch or pipeline",
+			EnvVar: "BUILDKITE_METADATA_SCOPE",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -91,6 +100,7 @@ var MetaDataSetCommand = cli.Command{
 		metaData := &api.MetaData{
 			Key:   cfg.Key,
 			Value: cfg.Value,
+			Scope: cfg.Scope,
 		}
 
 		// Set the meta data

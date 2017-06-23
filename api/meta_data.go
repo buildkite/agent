@@ -10,10 +10,14 @@ type MetaDataService struct {
 	client *Client
 }
 
+// DefaultMetadataScope is the default scope used for metadata
+const DefaultMetadataScope = "build"
+
 // MetaData represents a Buildkite Agent API MetaData
 type MetaData struct {
 	Key   string `json:"key,omitempty"`
 	Value string `json:"value,omitempty"`
+	Scope string `json:"scope,omitempty"`
 }
 
 // MetaDataExists represents a Buildkite Agent API MetaData Exists check
@@ -35,9 +39,9 @@ func (ps *MetaDataService) Set(jobId string, metaData *MetaData) (*Response, err
 }
 
 // Gets the meta data value
-func (ps *MetaDataService) Get(jobId string, key string) (*MetaData, *Response, error) {
+func (ps *MetaDataService) Get(jobId string, key string, scope string) (*MetaData, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/get", jobId)
-	m := &MetaData{Key: key}
+	m := &MetaData{Key: key, Scope: scope}
 
 	req, err := ps.client.NewRequest("POST", u, m)
 	if err != nil {
@@ -53,9 +57,9 @@ func (ps *MetaDataService) Get(jobId string, key string) (*MetaData, *Response, 
 }
 
 // Returns true if the meta data key has been set, false if it hasn't.
-func (ps *MetaDataService) Exists(jobId string, key string) (*MetaDataExists, *Response, error) {
+func (ps *MetaDataService) Exists(jobId string, key string, scope string) (*MetaDataExists, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/exists", jobId)
-	m := &MetaData{Key: key}
+	m := &MetaData{Key: key, Scope: scope}
 
 	req, err := ps.client.NewRequest("POST", u, m)
 	if err != nil {
