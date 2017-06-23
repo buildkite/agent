@@ -14,17 +14,18 @@ import (
 )
 
 type AgentPool struct {
-	APIClient          *api.Client
-	Token              string
-	ConfigFilePath     string
-	Name               string
-	Priority           string
-	Tags               []string
-	TagsFromEC2        bool
-	TagsFromEC2Tags    bool
-	TagsFromGCP        bool
-	Endpoint           string
-	AgentConfiguration *AgentConfiguration
+	APIClient             *api.Client
+	Token                 string
+	ConfigFilePath        string
+	Name                  string
+	Priority              string
+	Tags                  []string
+	TagsFromEC2           bool
+	TagsFromEC2Tags       bool
+	TagsFromGCP           bool
+	WaitForEC2TagsTimeout time.Duration
+	Endpoint              string
+	AgentConfiguration    *AgentConfiguration
 }
 
 func (r *AgentPool) Start() error {
@@ -139,12 +140,12 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	// Attempt to add the EC2 tags
 	if r.TagsFromEC2Tags {
 		logger.Info("Fetching EC2 tags...")
-
-		// same as above
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
+			} else if len(tags) == 0 {
+				logger.Warn("Tags were empty")
 			} else {
 				logger.Info("Successfully fetched EC2 tags")
 				for tag, value := range tags {
@@ -152,9 +153,8 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 				}
 				s.Break()
 			}
-
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+		}, &retry.Config{Maximum: 5, Interval: r.WaitForEC2TagsTimeout / 5, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
