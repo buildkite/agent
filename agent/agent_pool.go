@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -142,10 +143,11 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		logger.Info("Fetching EC2 tags...")
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
+			if err == nil && len(tags) == 0 {
+				err = errors.New("No EC2 tags were found yet")
+			}
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
-			} else if len(tags) == 0 {
-				logger.Warn("Tags were empty")
 			} else {
 				logger.Info("Successfully fetched EC2 tags")
 				for tag, value := range tags {
