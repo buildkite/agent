@@ -1,3 +1,13 @@
+// +build !windows
+
+// This file (along with it's Windows counterpart) have been taken from:
+//
+// https://github.com/golang/go/blob/master/src/os/exec/lp.go
+//
+// Their implemenations are exactly the same, however in this version - the
+// paths to search in (along with file extensions to look at) can be
+// customized.
+
 package shell
 
 import (
@@ -18,7 +28,9 @@ func findExecutable(file string) error {
 	return os.ErrPermission
 }
 
-func lookPath(file string, path string) (string, error) {
+// Note that `fileExtensions` are ignored in the *nix implementation of `lookPath`
+// (they're used in the Windows version however!)
+func lookPath(file string, path string, fileExtensions string) (string, error) {
 	if strings.Contains(file, "/") {
 		err := findExecutable(file)
 		if err == nil {
