@@ -143,6 +143,8 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		logger.Info("Fetching EC2 tags...")
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
+			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
+			// to be applied to instances. This error will cause retries.
 			if err == nil && len(tags) == 0 {
 				err = errors.New("No EC2 tags were found yet")
 			}
