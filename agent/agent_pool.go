@@ -146,7 +146,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
 			// to be applied to instances. This error will cause retries.
 			if err == nil && len(tags) == 0 {
-				err = errors.New("No EC2 tags were found yet")
+				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
