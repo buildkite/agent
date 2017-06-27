@@ -3,25 +3,20 @@ package agent
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
 type EC2Tags struct {
-	sess *session.Session
 }
 
 func (e EC2Tags) Get() (map[string]string, error) {
-	if e.sess == nil {
-		sess, err := session.NewSession()
-		if err != nil {
-			return nil, err
-		}
-		e.sess = sess
+	sess, err := awsSession()
+	if err != nil {
+		return nil, err
 	}
 
 	tags := make(map[string]string)
-	ec2metadataClient := ec2metadata.New(e.sess)
+	ec2metadataClient := ec2metadata.New(sess)
 
 	// Grab the current instances id
 	instanceId, err := ec2metadataClient.GetMetadata("instance-id")
@@ -29,7 +24,7 @@ func (e EC2Tags) Get() (map[string]string, error) {
 		return tags, err
 	}
 
-	svc := ec2.New(e.sess)
+	svc := ec2.New(sess)
 
 	// Describe the tags of the current instance
 	resp, err := svc.DescribeTags(&ec2.DescribeTagsInput{
