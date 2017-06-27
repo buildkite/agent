@@ -578,6 +578,6 @@ var types = []string{
 }
 
 var encodings = map[string]string{
-	"gzip": "gzip",
-	"gz": "gzip",
+	".gzip": "gzip",
+	".gz":   "gzip",
 }
