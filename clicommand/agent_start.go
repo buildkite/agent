@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
@@ -43,6 +44,7 @@ type AgentStartConfig struct {
 	TagsFromEC2                  bool     `cli:"tags-from-ec2"`
 	TagsFromEC2Tags              bool     `cli:"tags-from-ec2-tags"`
 	TagsFromGCP                  bool     `cli:"tags-from-gcp"`
+	WaitForEC2TagsTimeout        string   `cli:"wait-for-ec2-tags-timeout"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	NoColor                      bool     `cli:"no-color"`
@@ -145,6 +147,12 @@ var AgentStartCommand = cli.Command{
 			Name:   "tags-from-gcp",
 			Usage:  "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
+		},
+		cli.DurationFlag{
+			Name:   "wait-for-ec2-tags-timeout",
+			Usage:  "The amount of time to wait for tags from EC2 before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_TAGS_TIMEOUT",
+			Value:  time.Second * 10,
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
@@ -256,16 +264,26 @@ var AgentStartCommand = cli.Command{
 			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
 		}
 
+		var ec2TagTimeout time.Duration
+		if t := cfg.WaitForEC2TagsTimeout; t != "" {
+			var err error
+			ec2TagTimeout, err = time.ParseDuration(t)
+			if err != nil {
+				logger.Fatal("Failed to parse ec2 tag timeout: %v", err)
+			}
+		}
+
 		// Setup the agent
 		pool := agent.AgentPool{
-			Token:           cfg.Token,
-			Name:            cfg.Name,
-			Priority:        cfg.Priority,
-			Tags:            cfg.Tags,
-			TagsFromEC2:     cfg.TagsFromEC2,
-			TagsFromEC2Tags: cfg.TagsFromEC2Tags,
-			TagsFromGCP:     cfg.TagsFromGCP,
-			Endpoint:        cfg.Endpoint,
+			Token:                 cfg.Token,
+			Name:                  cfg.Name,
+			Priority:              cfg.Priority,
+			Tags:                  cfg.Tags,
+			TagsFromEC2:           cfg.TagsFromEC2,
+			TagsFromEC2Tags:       cfg.TagsFromEC2Tags,
+			TagsFromGCP:           cfg.TagsFromGCP,
+			WaitForEC2TagsTimeout: ec2TagTimeout,
+			Endpoint:              cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,

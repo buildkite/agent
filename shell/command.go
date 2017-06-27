@@ -42,16 +42,20 @@ func (c *Command) AbsolutePath() (string, error) {
 	}
 
 	var envPath string
+	var fileExtensions string // For searching .exe, .bat, etc on Windows
 
-	// Use the command environment's PATH if possible, or the global one
-	if c.Env != nil && c.Env.Get("PATH") != "" {
-		envPath = c.Env.Get("PATH")
-	} else {
+	// Default to the operation system's PATH if a custom environment
+	// hasn't been provided
+	if c.Env == nil {
 		envPath = os.Getenv("PATH")
+		fileExtensions = os.Getenv("PATHEXT")
+	} else {
+		envPath = c.Env.Get("PATH")
+		fileExtensions = c.Env.Get("PATHEXT")
 	}
 
 	// Use our custom lookPath that takes a specific path
-	absolutePath, err := lookPath(c.Command, envPath)
+	absolutePath, err := lookPath(c.Command, envPath, fileExtensions)
 
 	if err != nil {
 		return "", err
