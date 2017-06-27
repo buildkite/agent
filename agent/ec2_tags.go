@@ -8,11 +8,20 @@ import (
 )
 
 type EC2Tags struct {
+	sess *session.Session
 }
 
 func (e EC2Tags) Get() (map[string]string, error) {
+	if e.sess == nil {
+		sess, err := session.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		e.sess = sess
+	}
+
 	tags := make(map[string]string)
-	ec2metadataClient := ec2metadata.New(nil)
+	ec2metadataClient := ec2metadata.New(e.sess)
 
 	// Grab the current instances id
 	instanceId, err := ec2metadataClient.GetMetadata("instance-id")
@@ -20,10 +29,7 @@ func (e EC2Tags) Get() (map[string]string, error) {
 		return tags, err
 	}
 
-	// Create an ec2 client (note the lack of credentials, we pass nothing
-	// so it looks at the current systems credentials or the instance role)
-	sess := session.Must(session.NewSession())
-	svc := ec2.New(sess)
+	svc := ec2.New(e.sess)
 
 	// Describe the tags of the current instance
 	resp, err := svc.DescribeTags(&ec2.DescribeTagsInput{

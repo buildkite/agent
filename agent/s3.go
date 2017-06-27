@@ -85,10 +85,13 @@ func newS3Client(bucket string) (*s3.S3, error) {
 		return nil, err
 	}
 
-	sess := session.Must(session.NewSession(&aws.Config{
+	sess, err := session.NewSession(&aws.Config{
 		Credentials: awsS3Credentials(),
 		Region:      aws.String(region),
-	}))
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
 
