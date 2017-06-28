@@ -8,8 +8,13 @@ type EC2MetaData struct {
 }
 
 func (e EC2MetaData) Get() (map[string]string, error) {
+	sess, err := awsSession()
+	if err != nil {
+		return nil, err
+	}
+
 	metaData := make(map[string]string)
-	ec2metadataClient := ec2metadata.New(nil)
+	ec2metadataClient := ec2metadata.New(sess)
 
 	instanceId, err := ec2metadataClient.GetMetadata("instance-id")
 	if err != nil {
