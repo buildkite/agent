@@ -135,6 +135,13 @@ func (r *JobRunner) Kill() error {
 		r.cancelled = true
 
 		if r.process != nil {
+			// send the user a nice message in the build output to tell them what has happened
+			if r.logStreamer != nil {
+				r.logStreamer.Process(fmt.Sprintf(
+					"\033[33m⚠️ Buildkite Warning: %s\033[0m\n^^^ +++",
+					"The agent has been forcefully shutdown, all process will be terminated",
+				))
+			}
 			r.process.Kill()
 		} else {
 			logger.Error("No process to kill")
