@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -27,6 +28,9 @@ type AgentPool struct {
 	WaitForEC2TagsTimeout time.Duration
 	Endpoint              string
 	AgentConfiguration    *AgentConfiguration
+
+	interruptCount int
+	signalLock     sync.Mutex
 }
 
 func (r *AgentPool) Start() error {
@@ -75,12 +79,21 @@ func (r *AgentPool) Start() error {
 
 	// Start a signalwatcher so we can monitor signals and handle shutdowns
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
+		r.signalLock.Lock()
+		defer r.signalLock.Unlock()
+
 		if sig == signalwatcher.QUIT {
 			logger.Debug("Received signal `%s`", sig.String())
 			worker.Stop(false)
 		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
-			logger.Debug("Received signal `%s`", sig.String())
-			worker.Stop(true)
+			if r.interruptCount == 0 {
+				r.interruptCount++
+				logger.Debug("Received initial signal `%s`", sig.String())
+				worker.Stop(true)
+			} else {
+				logger.Debug("Received subsequent signal `%s`", sig.String())
+				worker.Stop(false)
+			}
 		} else {
 			logger.Debug("Ignoring signal `%s`", sig.String())
 		}

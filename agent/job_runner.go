@@ -43,6 +43,9 @@ type JobRunner struct {
 
 	// Used to wait on various routines that we spin up
 	routineWaitGroup sync.WaitGroup
+
+	// A lock to protect concurrent calls to kill
+	killLock sync.Mutex
 }
 
 // Initializes the job runner
@@ -130,6 +133,9 @@ func (r *JobRunner) Run() error {
 }
 
 func (r *JobRunner) Kill() error {
+	r.killLock.Lock()
+	defer r.killLock.Unlock()
+
 	if !r.cancelled {
 		logger.Info("Canceling job %s", r.Job.ID)
 		r.cancelled = true
