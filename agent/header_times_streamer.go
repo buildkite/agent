@@ -73,16 +73,18 @@ func (h *HeaderTimesStreamer) Scan(line string) {
 	h.scanWaitGroup.Add(1)
 	defer h.scanWaitGroup.Done()
 
-	logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+	if h.LineIsHeader(line) {
+		logger.Debug("[HeaderTimesStreamer] Found header %q", line)
 
-	// Aquire a lock on the times and then add the current time to
-	// our times slice.
-	h.timesMutex.Lock()
-	h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
-	h.timesMutex.Unlock()
+		// Aquire a lock on the times and then add the current time to
+		// our times slice.
+		h.timesMutex.Lock()
+		h.times = append(h.times, time.Now().UTC().Format(time.RFC3339Nano))
+		h.timesMutex.Unlock()
 
-	// Add the time to the wait group
-	h.uploadWaitGroup.Add(1)
+		// Add the time to the wait group
+		h.uploadWaitGroup.Add(1)
+	}
 }
 
 func (h *HeaderTimesStreamer) Upload() {
