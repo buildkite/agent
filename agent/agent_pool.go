@@ -86,12 +86,13 @@ func (r *AgentPool) Start() error {
 			logger.Debug("Received signal `%s`", sig.String())
 			worker.Stop(false)
 		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
+			logger.Debug("Received signal `%s`", sig.String())
 			if r.interruptCount == 0 {
 				r.interruptCount++
-				logger.Debug("Received initial signal `%s`", sig.String())
+				logger.Info("Received CTRL-C, send again to forcefully kill the agent")
 				worker.Stop(true)
 			} else {
-				logger.Debug("Received subsequent signal `%s`", sig.String())
+				logger.Info("Forcefully stopping running jobs and stopping the agent")
 				worker.Stop(false)
 			}
 		} else {
