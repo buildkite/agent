@@ -24,6 +24,7 @@ import (
 type Process struct {
 	Pid        int
 	PTY        bool
+	Timestamp  bool
 	Script     string
 	Env        []string
 	ExitStatus string
@@ -46,6 +47,8 @@ type Process struct {
 	running int32
 }
 
+var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
+
 func (p *Process) Start() error {
 	c, err := shell.CommandFromString(p.Script)
 	if err != nil {
@@ -61,17 +64,16 @@ func (p *Process) Start() error {
 	currentEnv := os.Environ()
 	p.command.Env = append(currentEnv, p.Env...)
 
-	return &p
-}
-
-var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
-
-func (p *Process) Start() error {
 	var waitGroup sync.WaitGroup
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
-	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
+	var multiWriter io.Writer
+	if p.Timestamp {
+		multiWriter = io.MultiWriter(lineWriterPipe)
+	} else {
+		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
+	}
 
 	logger.Info("Starting to run: %s", c.String())
 
