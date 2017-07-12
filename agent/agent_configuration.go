@@ -10,6 +10,7 @@ type AgentConfiguration struct {
 	SSHFingerprintVerification bool
 	CommandEval                bool
 	RunInPty                   bool
+	TimestampLines             bool
 	DisconnectAfterJob         bool
 	DisconnectAfterJobTimeout  int
 }
