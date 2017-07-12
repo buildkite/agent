@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## Unreleased
 
 ### Added
 - Added a new option --timestamp-lines option to buildkite-agent start that will insert RFC3339 UTC timestamps at the beginning of each log line. The timestamps are not applied to header lines.
@@ -14,18 +14,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 - Migrate the aging goamz library to the latest aws-sdk
 
-## [3.0-beta.28] - 2017-06-23
+## 3.0-beta.28 - 2017-06-23
 ### Added
 - 🐞 The agent will now poll the AWS EC2 Tags API until it finds some tags to apply before continuing. In some cases, the agent will start and connect to Buildkite before the tags are available. The timeout for this polling can be configured with --wait-for-ec2-tags-timeout (which defaults to 10 seconds) #492
 
 ### Fixed
 - 🐛 Fixed 2 Windows bugs that caused all jobs that ran through our built-in buildkite-agent bootstrap command to fail #496
 
-## [2.6.4] - 2017-06-16
+## 2.6.4 - 2017-06-16
 ### Added
 - 🚀 The buildkite-agent upstart configuration will now source /etc/default/buildkite-agent before starting the agent process. This gives you an opportunity to configure the agent outside of the standard buildkite-agent.conf file
 
-## [3.0-beta.27] - 2017-05-31
+## 3.0-beta.27 - 2017-05-31
 ### Added
 - Allow pipeline uploads when no-command-eval is true
 
@@ -34,53 +34,53 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Apt server misconfigured - `Packages` reports wrong sizes/hashes
 - Rewrote `export -p` parser to support multiple line env vars
 
-## [3.0-beta.26] - 2017-05-29
+## 3.0-beta.26 - 2017-05-29
 ### Fixed
 - 🤦‍♂️ We accidentally skipped a beta version, there's no v3.0-beta.25! Doh!
 - 🐛 Fixed an issue where some environment variables exported from environment hooks would have new lines appended to the end
 
-## [3.0-beta.24] - 2017-05-26
+## 3.0-beta.24 - 2017-05-26
 ### Added
 - 🚀 Added an --append option to buildkite-agent annotate that allows you to append to the body of an existing annotation
 
 ### Fixed
 - 🐛 Fixed an issue where exporting multi-line environment variables from a hook would truncate everything but the first line
 
-## [3.0-beta.23] - 2017-05-10
+## 3.0-beta.23 - 2017-05-10
 ### Added
 - 🚀 New command buildkite-agent annotate that gives you the power to annotate a build page with information from your pipelines. This feature is currently experimental and the CLI command API may change before an official 3.0 release
 
-## [2.6.3] - 2017-05-04
+## 2.6.3 - 2017-05-04
 ### Added
 - Added support for local and global pre-exit hooks (#466)
 
-## [3.0-beta.22] - 2017-05-04
+## 3.0-beta.22 - 2017-05-04
 ### Added
 - Renames --meta-data to --tags (#435). --meta-data will be removed in v4, and v3 versions will now show a deprecation warning.
 - Fixes multiple signals not being passed to job processes (#454)
 - Adds binaries for OpenBSD (#463) and DragonflyBSD (#462)
 - Adds support for local and global pre-exit hooks (#465)
 
-## [2.6.2] - 2017-05-02
+## 2.6.2 - 2017-05-02
 ### Fixed
 - Backport #381 to stable: Retries for fetching EC2 metadata and tags. #461
 
 ### Added
 - Add OpenBSD builds
 
-## [2.6.1] - 2017-04-13
+## 2.6.1 - 2017-04-13
 ### Removed
 - Reverted #451 as it introduced a regression. Will re-think this fix and push it out again in another release after we do some more testing
 
-## [3.0-beta.21] - 2017-04-13
+## 3.0-beta.21 - 2017-04-13
 ### Removed
 - Reverts the changes made in #448 as it seemed to introduce a regression. We'll rethink this change and push it out in another release.
 
-## [2.6.0] - 2017-04-13
+## 2.6.0 - 2017-04-13
 ### Fixed
 - Use /bin/sh rather than /bin/bash when executing commands. This allows use in environments that don't have bash, such as Alpine Linux.
 
-## [3.0-beta.20] - 2017-04-13
+## 3.0-beta.20 - 2017-04-13
 ### Added
 - Add plugin support for HTTP repositories with .git extensions [#447]
 - Run the global environment hook before checking out plugins [#445]
@@ -88,21 +88,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 - Use /bin/sh rather than /bin/bash when executing commands. This allows use in environments that don't have bash, such as Alpine Linux. (#448)
 
-## [3.0-beta.19] - 2017-03-29
+## 3.0-beta.19 - 2017-03-29
 ### Added
 - `buildkite-agent start --disconnect-after-job` will run the agent, and automatically disconnect after running it's first job. This has sometimes been referred to as "one shot" mode and is useful when you spin up an environment per-job and want the agent to automatically disconnect once it's finished it's job
 - `buildkite-agent start --disconnect-after-job-timeout` is the time in seconds the agent will wait for that first job to be assigned. The default value is 120 seconds (2 minutes). If a job isn't assigned to the agent after this time, it will automatically disconnect and the agent process will stop.
 
-## [3.0-beta.18] - 2017-03-27
+## 3.0-beta.18 - 2017-03-27
 ### Fixed
 - Fixes a bug where log output would get sometimes get corrupted #441
 
 
-## [2.5.1] - 2017-03-27
+## 2.5.1 - 2017-03-27
 ### Fixed
 - Fixes a bug where log output would get sometimes get corrupted #441
 
-## [3.0-beta.17] - 2017-03-23
+## 3.0-beta.17 - 2017-03-23
 ### Added
 - You can now specify a custom artifact upload destination with BUILDKITE_ARTIFACT_UPLOAD_DESTINATION #421
 - git clean is now performed before and after the git checkout operation #418
@@ -115,7 +115,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - buildkite-agent meta-data get now supports --default flag that allows you to return a default value instead of an error if the remote key doesn't exist #440
 
-## [2.4.1] - 2017-03-20
+## 2.4.1 - 2017-03-20
 ### Fixed
 - 🐞 Fixed a bug where ^^^ +++ would be prefixed with a timestamp when ---timestamp-lines was enabled #438
 
@@ -128,26 +128,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Switch to govendor for dependency tracking [#432]
 - Backport Google Cloud Platform meta-data to 2.3 stable agent [#431]
 
-## [3.0-beta.16] - 2016-12-04
+## 3.0-beta.16 - 2016-12-04
 ### Fixed
 - "No command eval" mode now makes sure commands are inside the working directory 🔐
 - Scripts which are already executable won't be chmoded 🔏
 
-## [2.3.2] - 2016-11-28
+## 2.3.2 - 2016-11-28
 ### Fixed
 - 🐝 Fixed an edge case that causes the agent to panic and exit if more lines are read a process after it's finished
 
-## [2.3.1] - 2016-11-17
+## 2.3.1 - 2016-11-17
 ### Fixed
 - More resilient init.d script (#406)
 - Only lock if locks are used by the system
 - More explicit su with --shell option
 
-## [3.0-beta.15] - 2016-11-16
+## 3.0-beta.15 - 2016-11-16
 ### Changed
 - The agent now receives it's "job status interval" from the Agent API (the number of seconds between checking if it's current job has been remotely canceled)
 
-## [3.0-beta.14] - 2016-11-11
+## 3.0-beta.14 - 2016-11-11
 ### Fixed
 - Fixed a race condition where the agent would pick up another job to run even though it had been told to gracefully stop (PR #403 by @grosskur)
 - Fixed path to ssh-keygen for Windows (PR #401 by @bendrucker)
@@ -156,22 +156,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - Fixed a race condition where the agent would pick up another job to run even though it had been told to gracefully stop (PR #403 by @grosskur)
 
-## [3.0-beta.13] - 2016-10-21
+## 3.0-beta.13 - 2016-10-21
 ### Added
 - Refactored how environment variables are interpolated in the agent
 - The buildkite-agent pipeline upload command now looks for .yaml files as well
 - Support for the steps.json file has been removed
 
-## [3.0-beta.12] - 2016-10-14
+## 3.0-beta.12 - 2016-10-14
 ### Added
 - Updated buildkite-agent bootstrap for Windows so that commands won't keep running if one of them fail (similar to Bash's set -e) behaviour #392 (thanks @essen)
 
-## [3.0-beta.11] - 2016-10-04
+## 3.0-beta.11 - 2016-10-04
 ### Added
 - AWS EC2 meta-data tagging is now more resilient and will retry on failure (#381)
 - Substring expansion works for variables in pipeline uploads, like ${BUILDKITE_COMMIT:0:7} will return the first seven characters of the commit SHA (#387)
 
-## [3.0-beta.10] - 2016-09-21
+## 3.0-beta.10 - 2016-09-21
 ### Added
 - The buildkite-agent binary is now built with Golang 1.7 giving us support for macOS Sierra
 - The agent now talks HTTP2 making calls to the Agent API that little bit faster
@@ -191,19 +191,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   We've had to remove support for changing the process title when an agent starts running a job. This feature has only ever been available to users running 64-bit ubuntu, and required us to have a dependency on libc. We'd like to bring this feature back in the future in a way that doesn't have us relying on libc
 - The agent will now use Golangs internal DNS resolver instead of the one on your system. This probably won't effect you in any real way, unless you've setup some funky DNS settings for agent.buildkite.com
 
-## [3.0-beta.9] - 2016-08-18
+## 3.0-beta.9 - 2016-08-18
 ### Added
 - Allow fetching meta-data from Google Cloud metadata #369 (Thanks so much @grosskur)
 
-## [2.1.17] - 2016-08-11
+## 2.1.17 - 2016-08-11
 ### Fixed
 - Fix some compatibility with older Git versions 🕸
 
-## [3.0-beta.8] - 2016-08-09
+## 3.0-beta.8 - 2016-08-09
 ### Fixed
 - Make bootstrap actually use the global command hook if it exists #365
 
-## [3.0-beta.7] - 2016-08-05
+## 3.0-beta.7 - 2016-08-05
 ### Added
 - Support plugin array configs f989cde
 - Include bootstrap in the help output 7524ffb
@@ -212,15 +212,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed a bug where we weren't stripping ANSI colours in build log headers 6611675
 - Fix Content-Type for Google Cloud Storage API calls #361 (comment)
 
-## [2.1.16] - 2016-08-04
+## 2.1.16 - 2016-08-04
 ### Fixed
 - 🔍 SSH key scanning backwards compatibility with older openssh tools
 
-## [2.1.15] - 2016-07-28
+## 2.1.15 - 2016-07-28
 ### Fixed
 - 🔍 SSH key scanning fix after it got a little broken in 2.1.14, sorry!
 
-## [2.1.14] - 2016-07-26
+## 2.1.14 - 2016-07-26
 ### Added
 - 🔍 SSH key scanning should be more resilient, whether or not you hash your known hosts file
 - 🏅 Commands executed by the Bootstrap script correctly preserve positional arguments and handle interpolation better
@@ -229,7 +229,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - 📢 Docker Compose will now be a little more verbose when the Agent is in Debug mode
 - 📑 $BUILDKITE_DOCKER_COMPOSE_FILE now accepts multiple files separated by a colon (:), like $PATH
 
-## [3.0-beta.6] - 2016-06-24
+## 3.0-beta.6 - 2016-06-24
 ### Fixed
 - Fixes to the bootstrap when using relative paths #228
 - Fixed hook paths on Windows #331
@@ -237,7 +237,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed issues surrounding long command definitions #334
 - Fixed default bootstrap-command command for Windows #344
 
-## [3.0-beta.5] - 2016-06-16
+## 3.0-beta.5 - 2016-06-16
 
 ## [3.0-beta.3- 2016-06-01
 ### Added
@@ -248,25 +248,25 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - Fixed environment variable sanitisation #333
 
-## [2.1.13] - 2016-05-30
+## 2.1.13 - 2016-05-30
 ### Added
 - BUILDKITE_GIT_CLONE_FLAGS (#326) giving you the ability customise how the agent clones your repository onto your build machines. You can use this to customise the "depth" of your repository if you want faster clones `BUILDKITE_GIT_CLONE_FLAGS="-v --depth 1"`
 - Allow metadata value to be read from STDIN (#327). This allows you to set meta-data from files easier `cat meta-data.txt | buildkite-agent meta-data set "foo"`
 
-## [3.0-beta.2] - 2016-05-23
+## 3.0-beta.2 - 2016-05-23
 ### Fixed
 - Improved error logging when failing to capture the exit status for a job (#325)
 
-## [2.1.12] - 2016-05-23
+## 2.1.12 - 2016-05-23
 ### Fixed
 - Improved error logging when failing to capture the exit status for a job (#325)
 
-## [2.1.11] - 2016-05-17
+## 2.1.11 - 2016-05-17
 ### Added
 - A new --meta-data-ec2 command line flag and config option for populating agent meta-data from EC2 information (#320)
 - Binaries are now published to download.buildkite.com (#318)
 
-## [3.0-beta.1] - 2016-05-16
+## 3.0-beta.1 - 2016-05-16
 ### Added
 - New version number: v3.0-beta.1. There will be no 2.2 (the previous beta release)
 - Outputs the build directory in the build log (#317)
@@ -275,16 +275,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - A new --meta-data-ec2 command line flag and config option for populating agent meta-data from EC2 information (#314)
 - Binaries are now published to download.buildkite.com (#318)
 
-## [2.2-beta.4] - 2016-05-10
+## 2.2-beta.4 - 2016-05-10
 ### Fixed
 - Amazon Linux & CentOS 6 packages now start and shutdown the agent gracefully (#306) - thanks @jnewbigin
 - Build headers now work even if ANSI escape codes are applied (#279)
 
-## [2.1.10]- 2016-05-09
+## 2.1.10- 2016-05-09
 ### Fixed
 - Amazon Linux & CentOS 6 packages now start and shutdown the agent gracefully (#290 #305) - thanks @jnewbigin
 
-## [2.1.9] - 2016-05-06
+## 2.1.9 - 2016-05-06
 ### Added
 - Docker Compose 1.7.x support, including docker network removal during cleanup (#300)
 - Docker Compose builds now specify --pull, so base images will always attempted to be pulled (#300)
@@ -296,15 +296,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES undefined errors in bootstrap.sh have been fixed (#283)
 - Build headers now work even if ANSI escape codes are applied
 
-## [2.2-beta.3] - 2016-03-18
+## 2.2-beta.3 - 2016-03-18
 ### Addeed
 - Git clean brokenness has been fixed in the Go-based bootstrap (#278)
 
-## [2.1.8]- 2016-03-18
+## 2.1.8- 2016-03-18
 ### Added
 - BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES (#274) which allows you to keep the docker-compose volumes once a job has been run
 
-## [2.2-beta.2] - 2016-03-17
+## 2.2-beta.2 - 2016-03-17
 ### Added
 - Environment variable substitution in pipeline files (#246)
 - Google Cloud Storage for artifacts (#207)
@@ -320,7 +320,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added Buildkite's bin dir to the end, not the start, of $PATH (#267)
 - Ensured that multiple commands separated by newlines fail as soon as a command fails (#272)
 
-## [2.1.7]- 2016-03-17
+## 2.1.7- 2016-03-17
 ### Added
 - Added support for BUILDKITE_S3_ACCESS_URL (#247) allowing you set your own host for build artifact links. This means you can set up your own proxy/web host that sits in front of your private S3 artifact bucket, and click directly through to them from Buildkite.
 - Added support for BUILDKITE_GIT_CLEAN_FLAGS (#271) allowing you to ensure all builds have completely clean checkouts using an environment hook with export BUILDKITE_GIT_CLEAN_FLAGS=-fqdx
@@ -334,15 +334,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added Buildkite's bin dir to the end, not the start, of $PATH (#268)
 - Ensured that multiple commands separated by newlines fail as soon as a command fails (#273)
 
-## [2.1.6.1] - 2016-03-09
+## 2.1.6.1 - 2016-03-09
 ### Fixed
 - The agent is now statically linked to glibc, which means support for Debian 7 and friends (#255)
 
-## [2.1.6] - 2016-03-03
+## 2.1.6 - 2016-03-03
 ### Fixed
 - git fetch --tags doesn't fetch branches in old git (#250)
 
-## [2.1.5] 2016-02-26
+## 2.1.5 2016-02-26
 ### Fixed
 - Use TrimPrefix instead of TrimLeft (#203)
 - Update launchd templates to use .buildkite-agent dir (#212)
@@ -351,30 +351,30 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Bootstrap script fetch logic tweaks (#243)
 - Avoid upstart on Amazon Linux (#244)
 
-## [2.2-beta.1] 2015-10-20
+## 2.2-beta.1 2015-10-20
 ### Changed
 - Added some tests to the S3Downloader
 
-## [2.1.4] - 2015-10-16
+## 2.1.4 - 2015-10-16
 ### Fixed
 - yum.buildkite.com now shows all previous versions of the agent
 
-## [2.1.3] - 2015-10-16
+## 2.1.3 - 2015-10-16
 ### Fixed
 - Fixed problem with bootstrap.sh not resetting git checkouts correctly
 
-## [2.1.2] - 2015-10-16
+## 2.1.2 - 2015-10-16
 ### Fixed
 - Removed unused functions from the bootstrap.sh file that was causing garbage output in builds
 - FreeBSD 386 machines are now supported
 
-## [2.1.1] - 2015-10-15
+## 2.1.1 - 2015-10-15
 ### Fixed
 - Fixed issue with starting the bootstrap.sh file on linux systems fork/exec error
 
 ## [2.1] - 2015-10-15
 
-## [2.1-beta.3] - 2015-10-01
+## 2.1-beta.3 - 2015-10-01
 ### Changed
 - Added support for FreeBSD - see instructions here: https://gist.github.com/keithpitt/61acb5700f75b078f199
 - Only fetch the required branch + commit when running a build
@@ -387,35 +387,35 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed header time and artifact race conditions
 - OS information is now correctly collected on Windows
 
-## [2.1-beta.2] - 2015-08-04
+## 2.1-beta.2 - 2015-08-04
 ### Fixed
 - Optimised artifact state updating
 - Dump artifact upload responses when --debug-http is used
 
-## [2.1-beta.1] - 2015-07-30
+## 2.1-beta.1 - 2015-07-30
 ### Fixed
 - Debian packages now include the debian_version property 📦
 - Artifacts are uploaded faster! We've optimised our Agent API payloads to have a smaller footprint meaning you can uploading more artifacts faster! 🚗💨
 - You can now download artifacts from private S3 buckets using buildkite-artifact download ☁️
 - The agent will now change it's process title on linux/amd64 machines to report it's current status: `buildkite-agent v2.1 (my-agent-name) [job a4f-a4fa4-af4a34f-af4]`
 
-## [2.1-beta] - 2015-07-3
+## 2.1-beta - 2015-07-3
 
-## [2.0.4] - 2015-07-2
+## 2.0.4 - 2015-07-2
 ### Fixed
 - Changed the format that --version returns buildkite-agent version 2.0.4, build 456 🔍
 
 ### Added
 - Added post-artifact global and local hooks 🎣
 
-## [2.0.3.761] - 2015-07-21
+## 2.0.3.761 - 2015-07-21
 ### Fixed
 - Debian package for ARM processors
 - Include the build number in the --version call
 
-## [2.0.3] - 2015-07-21
+## 2.0.3 - 2015-07-21
 
-## [2.0.1] - 2015-07-17
+## 2.0.1 - 2015-07-17
 
 ## [2.0] - 2015-07-14
 ### Added
