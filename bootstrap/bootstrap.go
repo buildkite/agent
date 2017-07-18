@@ -1007,7 +1007,12 @@ func (b *Bootstrap) Start() error {
 			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 		} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 			commentf("Fetch and checkout pull request head")
+
 			b.runCommand("git", "fetch", "-v", "origin", "refs/pull/"+b.PullRequest+"/head")
+
+			gitFetchHead, _ := b.runCommandSilentlyAndCaptureOutput("git", "rev-parse", "FETCH_HEAD")
+			commentf("FETCH_HEAD is now %s", strings.TrimSpace(gitFetchHead))
+
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
 			// If the commit is "HEAD" then we can't do a commit-specific fetch and will
