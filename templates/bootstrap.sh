@@ -289,6 +289,7 @@ else
   # https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
   elif [[ "$BUILDKITE_PULL_REQUEST" != "false" ]] && [[ "$BUILDKITE_PROJECT_PROVIDER" == *"github"* ]]; then
     buildkite-run git fetch -v origin "refs/pull/$BUILDKITE_PULL_REQUEST/head"
+    buildkite-comment "FETCH_HEAD is now $(git rev-parse FETCH_HEAD)"
     buildkite-run git checkout -f "$BUILDKITE_COMMIT"
 
   # If the commit is "HEAD" then we can't do a commit-specific fetch and will
