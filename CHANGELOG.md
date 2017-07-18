@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Added a new option --timestamp-lines option to buildkite-agent start that will insert RFC3339 UTC timestamps at the beginning of each log line. The timestamps are not applied to header lines.
 - Ctrl-c twice will force kill the agent [\#499](https://github.com/buildkite/agent/pull/499) ([lox](https://github.com/lox))
 - Set the content encoding on artifacts uploaded to s3 [#494] (thanks @airhorns)
+- Output fetched commit sha during git fetch for pull request [#505]
 
 ### Changed
 - Migrate the aging goamz library to the latest aws-sdk
