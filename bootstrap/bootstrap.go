@@ -604,7 +604,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 		diff := afterEnv.Diff(beforeEnv)
 		if diff.Length() > 0 {
 			headerf("Applying environment changes")
-			for envDiffKey, _ := range diff.ToMap() {
+			for envDiffKey := range diff.ToMap() {
 				commentf("%s changed", envDiffKey)
 			}
 			b.env = b.env.Merge(diff)
@@ -774,6 +774,26 @@ func (b *Bootstrap) gitClean() {
 
 		b.runCommand("git", gitCleanSubmoduleArguments...)
 	}
+}
+
+func (b *Bootstrap) gitEnumerateSubmoduleURLs() ([]string, error) {
+	urls := []string{}
+
+	gitSubmoduleOutput, err := b.runCommandSilentlyAndCaptureOutput(
+		"git", "submodule", "foreach", "--recursive", "git", "remote", "get-url", "origin")
+	if err != nil {
+		return nil, err
+	}
+
+	// splits into "Entering" "'vendor/blah'" "git@github.com:blah/.."
+	for idx, val := range strings.Fields(gitSubmoduleOutput) {
+		// every third element
+		if idx%3 == 2 {
+			urls = append(urls, val)
+		}
+	}
+
+	return urls, nil
 }
 
 func (b *Bootstrap) Start() error {
@@ -1035,6 +1055,15 @@ func (b *Bootstrap) Start() error {
 		}
 
 		if b.GitSubmodules {
+			// submodules might need their fingerprints verified too
+			if b.SSHFingerprintVerification {
+				commentf("Checking to see if submodule urls need to be added to known_hosts")
+				submoduleRepos, _ := b.gitEnumerateSubmoduleURLs()
+				for _, repository := range submoduleRepos {
+					b.addRepositoryHostToSSHKnownHosts(repository)
+				}
+			}
+
 			// `submodule sync` will ensure the .git/config
 			// matches the .gitmodules file.  The command
 			// is only available in git version 1.8.1, so
