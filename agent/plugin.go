@@ -192,6 +192,8 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 		switch vv := v.(type) {
 		case string:
 			env = append(env, fmt.Sprintf("%s=%s", name, vv))
+		case bool:
+			env = append(env, fmt.Sprintf("%s=%t", name, vv))
 		case json.Number:
 			env = append(env, fmt.Sprintf("%s=%s", name, vv.String()))
 		case []string:

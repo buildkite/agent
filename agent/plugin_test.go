@@ -220,8 +220,8 @@ func TestConfigurationToEnvironment(t *testing.T) {
 	env, err = pluginEnvFromConfig(t, `{ "bool-true-key": true, "bool-false-key": false }`)
 	assert.Nil(t, err)
 	assert.Equal(t, []string{
-		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_BOOL_TRUE_KEY=true",
-		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_BOOL_FALSE_KEY=false"},
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_BOOL_FALSE_KEY=false",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_BOOL_TRUE_KEY=true"},
 		env.ToSlice())
 	
 	env, err = pluginEnvFromConfig(t, `{ "array-key": [ "array-val-1", "array-val-2" ] }`)
