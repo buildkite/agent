@@ -9,6 +9,8 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
+const fallbackRegion = "us-east-1"
+
 var awsSess *session.Session
 
 // The aws sdk relies on being given a region, which is a breaking change for us
@@ -16,16 +18,18 @@ var awsSess *session.Session
 // but also the local isntance metadata if available
 func awsRegion() (string, error) {
 	if r := os.Getenv("AWS_REGION"); r != "" {
+		logger.Debug("Found region `%s` from AWS_REGION", r)
 		return r, nil
 	}
 
 	if r := os.Getenv("AWS_DEFAULT_REGION"); r != "" {
+		logger.Debug("Found region `%s` from AWS_DEFAULT_REGION", r)
 		return r, nil
 	}
 
 	// The metadata service seems to want a session
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("us-east-1"),
+		Region: aws.String(fallbackRegion),
 	})
 	if err != nil {
 		return "", err
@@ -33,11 +37,11 @@ func awsRegion() (string, error) {
 
 	meta := ec2metadata.New(sess)
 	if meta.Available() {
-		region, err := meta.Region()
+		r, err := meta.Region()
 		if err == nil {
-			logger.Debug("Detected AWS region %s", region)
+			logger.Debug("Found region `%s` from ec2 metadata", r)
 		}
-		return region, err
+		return r, err
 	}
 
 	return "", aws.ErrMissingRegion

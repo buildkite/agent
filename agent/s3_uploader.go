@@ -15,6 +15,12 @@ import (
 	"github.com/buildkite/agent/mime"
 )
 
+const (
+	envS3AccessURL = "BUILDKITE_S3_ACCESS_URL"
+	envS3ACL       = "BUILDKITE_S3_ACL"
+	envAWSS3ACL    = "AWS_S3_ACL"
+)
+
 type S3Uploader struct {
 	// The destination which includes the S3 bucket name and the path.
 	// e.g s3://my-bucket-name/foo/bar
@@ -44,12 +50,11 @@ func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 func (u *S3Uploader) URL(artifact *api.Artifact) string {
 	baseUrl := "https://" + u.BucketName() + ".s3.amazonaws.com"
 
-	if os.Getenv("BUILDKITE_S3_ACCESS_URL") != "" {
-		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
+	if os.Getenv(envS3AccessURL) != "" {
+		baseUrl = os.Getenv(envS3AccessURL)
 	}
 
 	url, _ := url.Parse(baseUrl)
-
 	url.Path += u.artifactPath(artifact)
 
 	return url.String()
@@ -57,10 +62,10 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 
 func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	permission := "public-read"
-	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
-	} else if os.Getenv("AWS_S3_ACL") != "" {
-		permission = os.Getenv("AWS_S3_ACL")
+	if os.Getenv(envS3ACL) != "" {
+		permission = os.Getenv(envS3ACL)
+	} else if os.Getenv(envAWSS3ACL) != "" {
+		permission = os.Getenv(envAWSS3ACL)
 	}
 
 	// The dirtiest validation method ever...
@@ -78,7 +83,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return err
 	}
-  
+
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploaderWithClient(s3Client)
 
@@ -89,20 +94,20 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 		return fmt.Errorf("failed to open file %q (%v)", artifact.AbsolutePath, err)
 	}
 
-  var contentEncoding *string
-  
-  // Detect content encoding and send it for the file
+	var contentEncoding *string
+
+	// Detect content encoding and send it for the file
 	if ce := u.contentEncoding(artifact); ce != "" {
-    contentEncoding = aws.String(ce)
+		contentEncoding = aws.String(ce)
 	}
-  
+
 	// Upload the file to S3.
 	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:          aws.String(u.BucketName()),
 		Key:             aws.String(u.artifactPath(artifact)),
 		ContentType:     aws.String(u.mimeType(artifact)),
-    ContentEncoding: contentEncoding,
+		ContentEncoding: contentEncoding,
 		ACL:             aws.String(permission),
 		Body:            f,
 	})
