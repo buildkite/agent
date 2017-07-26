@@ -116,23 +116,36 @@ func awsS3RegionFromEnv() (region string, err error) {
 	return "", fmt.Errorf("Unknown AWS S3 Region %q", regionName)
 }
 
+func awsLogger(args ...interface{}) {
+	if message, ok := args[0].(string); ok {
+		logger.Debug(strings.TrimPrefix(message, "DEBUG: "))
+	}
+}
+
 func newS3Client(bucket string) (*s3.S3, error) {
-	// Generate the AWS config used by the S3 client
 	region, err := awsS3RegionFromEnv()
 	if err != nil {
 		return nil, err
 	}
 
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: awsS3Credentials(),
-		Region:      aws.String(region),
-	})
+	config := aws.NewConfig().
+		WithRegion(region).
+		WithLogger(aws.LoggerFunc(awsLogger)).
+		WithLogLevel(aws.LogDebugWithRequestRetries | aws.LogDebugWithRequestErrors).
+		WithCredentialsChainVerboseErrors(true).
+		WithCredentials(credentials.NewChainCredentials(
+			[]credentials.Provider{
+				&credentialsProvider{},
+				&credentials.EnvProvider{},
+				&ec2rolecreds.EC2RoleProvider{},
+			}))
+
+	sess, err := session.NewSession(config)
 	if err != nil {
 		return nil, err
 	}
 
 	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
-
 	s3client := s3.New(sess)
 
 	// Test the authentication by trying to list the first 0 objects in the bucket.
