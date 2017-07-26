@@ -56,20 +56,44 @@ func (e *credentialsProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
-func awsS3Credentials() *credentials.Credentials {
-	return credentials.NewChainCredentials(
-		[]credentials.Provider{
-			&credentialsProvider{},
-			&credentials.EnvProvider{},
-			&ec2rolecreds.EC2RoleProvider{},
-		})
+func awsRegionFromS3Bucket(bucket string) (string, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(fallbackRegion),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, fallbackRegion)
 }
 
 func awsS3RegionFromEnv() (region string, err error) {
-	regionName := "us-east-1"
-	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
-		regionName = os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
-	} else {
+	var regionName string
+
+	// check if we got an explicit s3 default region first
+	if r := os.Getenv(envS3DefaultRegion); r != "" {
+		regionName = r
+		logger.Debug("Found s3 bucket region `%s` from %s", regionName, envS3DefaultRegion)
+	}
+
+	// next try and infer it from the artifact upload destination
+	if regionName == "" {
+		if dest := os.Getenv(envArtifactUploadDestination); dest != "" {
+			u, err := url.Parse(dest)
+			if err != nil {
+				return "", fmt.Errorf("Failed to parse %s: %v", envArtifactUploadDestination, err)
+			}
+
+			r, err := awsRegionFromS3Bucket(u.Host)
+			if err == nil {
+				logger.Debug("Found region `%s` from bucket in %s", r, envArtifactUploadDestination)
+				regionName = r
+			}
+		}
+	}
+
+	// finally, try and read it from generic aws env or metadata
+	if regionName == "" {
 		var err error
 		regionName, err = awsRegion()
 		if err != nil {
