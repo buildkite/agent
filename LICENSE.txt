@@ -37,8 +37,8 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 - aws-sdk-go, Apache 2.0
   https://github.com/aws/aws-sdk-go/blob/master/LICENSE.txt
 
-- candiedyaml, Apache 2.0
-  https://github.com/cloudfoundry-incubator/candiedyaml/blob/master/LICENSE
+- go-yaml/yaml, Apache 2.0
+  https://github.com/go-yaml/yaml/blob/v2/LICENSE
 
 - cli, MIT
   https://github.com/urfave/cli/blob/master/LICENSE
