@@ -1,9 +1,10 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -11,7 +12,15 @@ import (
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/buildkite/agent/logger"
+)
+
+const (
+	envS3AccessKeyID             = "BUILDKITE_S3_ACCESS_KEY_ID"
+	envS3SecretAccessKey         = "BUILDKITE_S3_SECRET_ACCESS_KEY"
+	envS3DefaultRegion           = "BUILDKITE_S3_DEFAULT_REGION"
+	envArtifactUploadDestination = "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"
 )
 
 type credentialsProvider struct {
@@ -21,21 +30,22 @@ type credentialsProvider struct {
 func (e *credentialsProvider) Retrieve() (creds credentials.Value, err error) {
 	e.retrieved = false
 
-	creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
-	if creds.AccessKeyID == "" {
-		creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY")
+	if v := os.Getenv(envS3AccessKeyID); v != "" {
+		logger.Debug("Found s3 access key id from " + envS3AccessKeyID)
+		creds.AccessKeyID = v
 	}
 
-	creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_ACCESS_KEY")
-	if creds.SecretAccessKey == "" {
-		creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_KEY")
+	if v := os.Getenv(envS3SecretAccessKey); v != "" {
+		logger.Debug("Found s3 secret access key from " + envS3SecretAccessKey)
+		creds.SecretAccessKey = v
 	}
 
 	if creds.AccessKeyID == "" {
-		err = errors.New("BUILDKITE_S3_ACCESS_KEY_ID or BUILDKITE_S3_ACCESS_KEY not found in environment")
+		err = fmt.Errorf("%s not found in environment", envS3AccessKeyID)
 	}
+
 	if creds.SecretAccessKey == "" {
-		err = errors.New("BUILDKITE_S3_SECRET_ACCESS_KEY or BUILDKITE_S3_SECRET_KEY not found in environment")
+		err = fmt.Errorf("%s not found in environment", envS3SecretAccessKey)
 	}
 
 	e.retrieved = true
@@ -108,7 +118,8 @@ func newS3Client(bucket string) (*s3.S3, error) {
 	})
 	if err != nil {
 		if err == credentials.ErrNoValidProvidersFoundInChain {
-			return nil, fmt.Errorf("Could not find a valid authentication strategy to connect to S3. Try setting BUILDKITE_S3_ACCESS_KEY and BUILDKITE_S3_SECRET_KEY")
+			return nil, fmt.Errorf("Could not find a valid authentication strategy to connect to S3. Try setting %s and %s",
+				envS3AccessKeyID, envS3SecretAccessKey)
 		}
 		return nil, fmt.Errorf("Failed to authenticate to bucket `%s` in region `%s` (%s)", bucket, region, err.Error())
 	}
