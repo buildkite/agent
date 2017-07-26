@@ -1066,9 +1066,13 @@ func (b *Bootstrap) Start() error {
 			// submodules might need their fingerprints verified too
 			if b.SSHFingerprintVerification {
 				commentf("Checking to see if submodule urls need to be added to known_hosts")
-				submoduleRepos, _ := b.gitEnumerateSubmoduleURLs()
-				for _, repository := range submoduleRepos {
-					b.addRepositoryHostToSSHKnownHosts(repository)
+				submoduleRepos, err := b.gitEnumerateSubmoduleURLs()
+				if err != nil {
+					warningf("Failed to enumerate git submodules: %v", err)
+				} else {
+					for _, repository := range submoduleRepos {
+						b.addRepositoryHostToSSHKnownHosts(repository)
+					}
 				}
 			}
 
