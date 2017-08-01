@@ -351,6 +351,33 @@ func (b *Bootstrap) runCommand(command string, args ...string) {
 	}
 }
 
+// Given a repostory, it will add the host to the set of SSH known_hosts on the machine
+func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
+	// Try and parse the repository URL
+	url, err := newGittableURL(repository)
+	if err != nil {
+		warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
+		return
+	}
+
+	knownHosts, err := findKnownHosts()
+	if err != nil {
+		warningf("Failed to find SSH known_hosts file: %v", err)
+		return
+	}
+	defer knownHosts.Unlock()
+
+	// Clean up the SSH host and remove any key identifiers. See:
+	// git@github.com-custom-identifier:foo/bar.git
+	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
+	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
+	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
+
+	if err = knownHosts.Add(host); err != nil {
+		warningf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
+	}
+}
+
 // Executes a hook and applies any environment changes. The tricky thing with
 // hooks is that they can modify the ENV of a bootstrap. And it's impossible to
 // grab the ENV of a child process before it finishes, so we've got an awesome
@@ -663,33 +690,6 @@ func (b *Bootstrap) gitEnumerateSubmoduleURLs() ([]string, error) {
 	}
 
 	return urls, nil
-}
-
-// Given a repostory, it will add the host to the set of SSH known_hosts on the machine
-func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
-	// Try and parse the repository URL
-	url, err := newGittableURL(repository)
-	if err != nil {
-		warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
-		return
-	}
-
-	knownHosts, err := findKnownHosts()
-	if err != nil {
-		warningf("Failed to find SSH known_hosts file: %v", err)
-		return
-	}
-	defer knownHosts.Unlock()
-
-	// Clean up the SSH host and remove any key identifiers. See:
-	// git@github.com-custom-identifier:foo/bar.git
-	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
-	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
-	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
-
-	if err = knownHosts.Add(host); err != nil {
-		warningf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
-	}
 }
 
 func (b *Bootstrap) Start() error {
