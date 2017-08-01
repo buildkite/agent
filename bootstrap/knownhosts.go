@@ -58,13 +58,13 @@ func (kh *knownHosts) Add(host string) error {
 	}
 	defer f.Close()
 
-	sshKeygen, err := findSSHKeygen()
+	sshToolsDir, err := findSSHToolsDir()
 	if err != nil {
 		return err
 	}
 
 	// Grab the generated keys for the repo host
-	keygenOutput, err := exec.Command(sshKeygen, "-f", kh.Path, "-F", host).Output()
+	keygenOutput, err := exec.Command(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host).Output()
 	if err != nil {
 		warningf("Could not perform `ssh-keygen` (%s)", err)
 		return err
@@ -77,7 +77,7 @@ func (kh *knownHosts) Add(host string) error {
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := exec.Command(sshKeygen, host).Output()
+	keyscanOutput, err := exec.Command(filepath.Join(sshToolsDir, "ssh-keyscan"), host).Output()
 	if err != nil {
 		warningf("Could not perform `ssh-keyscan` (%s)", err)
 		return err
@@ -92,7 +92,7 @@ func (kh *knownHosts) Add(host string) error {
 	return nil
 }
 
-func findSSHKeygen() (string, error) {
+func findSSHToolsDir() (string, error) {
 	// On Windows, ssh-keygen isn't on the $PATH by default, but we know we can find it
 	// relative to where git for windows is installed, so try that
 	if runtime.GOOS == "windows" {
@@ -104,13 +104,18 @@ func findSSHKeygen() (string, error) {
 
 			for _, segments := range sshToolRelativePaths {
 				segments = append([]string{string(gitExecPathOutput)}, segments...)
-				file := filepath.Join(filepath.Join(segments...), "ssh-keygen.exe")
-				if _, err := os.Stat(file); err == nil {
-					return file, nil
+				dir := filepath.Join(segments...)
+				if _, err := os.Stat(filepath.Join(dir, "ssh-keygen.exe")); err == nil {
+					return dir, nil
 				}
 			}
 		}
 	}
 
-	return exec.LookPath("ssh-keygen")
+	keygen, err := exec.LookPath("ssh-keygen")
+	if err != nil {
+		return "", fmt.Errorf("Failed to find path for ssh-keygen: %v", err)
+	}
+
+	return filepath.Dir(keygen), nil
 }
