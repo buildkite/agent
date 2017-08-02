@@ -115,9 +115,6 @@ function buildkite-hook {
   HOOK_SCRIPT_PATH="$2"
 
   if [[ -e "$HOOK_SCRIPT_PATH" ]]; then
-    # Make sure the script path is executable
-    chmod +x "$HOOK_SCRIPT_PATH"
-
     # Print to the screen we're going to run the hook
     echo "~~~ Running $HOOK_LABEL hook"
     buildkite-prompt "$HOOK_SCRIPT_PATH"
