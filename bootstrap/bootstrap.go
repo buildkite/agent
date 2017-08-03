@@ -1022,9 +1022,19 @@ func (b *Bootstrap) Start() error {
 		// Git clean prior to checkout
 		b.gitClean()
 
+		// If they've provided their own optimized fetch
+		if fileExists(b.globalHookPath("fetch")) {
+			b.executeGlobalHook("fetch")
+			b.runCommand("git", "checkout", "-f", b.Commit)
+
+		// If a plugin has provided it's own optimized fetch
+		} else if b.pluginHookExists(plugins, "fetch") {
+			b.executePluginHook(plugins, "fetch")
+			b.runCommand("git", "checkout", "-f", b.Commit)
+
 		// If a refspec is provided then use it instead.
 		// i.e. `refs/not/a/head`
-		if b.RefSpec != "" {
+		} else if b.RefSpec != "" {
 			commentf("Fetch and checkout custom refspec")
 			b.runCommand("git", "fetch", "-v", "origin", b.RefSpec)
 			b.runCommand("git", "checkout", "-f", b.Commit)
