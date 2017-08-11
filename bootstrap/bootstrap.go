@@ -698,6 +698,7 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 	artifactUploadDestinationChanged := false
 	gitCloneFlagsChanged := false
 	gitCleanFlagsChanged := false
+	refSpecChanged := false
 
 	if b.env.Exists("BUILDKITE_ARTIFACT_PATHS") {
 		envArifactPaths := b.env.Get("BUILDKITE_ARTIFACT_PATHS")
@@ -735,7 +736,16 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if artifactPathsChanged || artifactUploadDestinationChanged || gitCleanFlagsChanged || gitCloneFlagsChanged {
+	if b.env.Exists("BUILDKITE_REFSPEC") {
+		refSpec := b.env.Get("BUILDKITE_REFSPEC")
+
+		if refSpec != b.RefSpec {
+			b.RefSpec = refSpec
+			refSpecChanged = true
+		}
+	}
+
+	if artifactPathsChanged || artifactUploadDestinationChanged || gitCleanFlagsChanged || gitCloneFlagsChanged || refSpecChanged {
 		headerf("Bootstrap configuration has changed")
 
 		if artifactPathsChanged {
@@ -752,6 +762,10 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 
 		if gitCloneFlagsChanged {
 			commentf("BUILDKITE_GIT_CLONE_FLAGS has been changed to \"%s\"", b.GitCloneFlags)
+		}
+
+		if refSpecChanged {
+			commentf("BUILDKITE_REFSPEC has been changed to \"%s\"", b.RefSpec)
 		}
 	}
 }
