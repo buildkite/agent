@@ -749,23 +749,23 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		headerf("Bootstrap configuration has changed")
 
 		if artifactPathsChanged {
-			commentf("BUILDKITE_ARTIFACT_PATHS has been changed to \"%s\"", b.AutomaticArtifactUploadPaths)
+			commentf("BUILDKITE_ARTIFACT_PATHS is now \"%s\"", b.AutomaticArtifactUploadPaths)
 		}
 
 		if artifactUploadDestinationChanged {
-			commentf("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION has been changed to \"%s\"", b.ArtifactUploadDestination)
+			commentf("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION is now \"%s\"", b.ArtifactUploadDestination)
 		}
 
 		if gitCleanFlagsChanged {
-			commentf("BUILDKITE_GIT_CLEAN_FLAGS has been changed to \"%s\"", b.GitCleanFlags)
+			commentf("BUILDKITE_GIT_CLEAN_FLAGS is now \"%s\"", b.GitCleanFlags)
 		}
 
 		if gitCloneFlagsChanged {
-			commentf("BUILDKITE_GIT_CLONE_FLAGS has been changed to \"%s\"", b.GitCloneFlags)
+			commentf("BUILDKITE_GIT_CLONE_FLAGS is now \"%s\"", b.GitCloneFlags)
 		}
 
 		if refSpecChanged {
-			commentf("BUILDKITE_REFSPEC has been changed to \"%s\"", b.RefSpec)
+			commentf("BUILDKITE_REFSPEC is now \"%s\"", b.RefSpec)
 		}
 	}
 }
@@ -1039,8 +1039,25 @@ func (b *Bootstrap) Start() error {
 		// If a refspec is provided then use it instead.
 		// i.e. `refs/not/a/head`
 		if b.RefSpec != "" {
+			// Convert RefSpec's like this:
+			//
+			//     "+refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*"
+			//
+			// Into...
+			//
+			//     "+refs/heads/*:refs/remotes/origin/*" "+refs/tags/*:refs/tags/*"
+			//
+			// Into multiple arguments for `git fetch`
+			refSpecTargets, err := shlex.Split(b.RefSpec)
+			if err != nil {
+				exitf("There was an error trying to split `%s` into arguments (%s)", b.RefSpec, err)
+			}
+
 			commentf("Fetch and checkout custom refspec")
-			b.runCommand("git", "fetch", "-v", "origin", b.RefSpec)
+
+			refSpecArguments := append([]string{"fetch", "-v", "origin"}, refSpecTargets...)
+			b.runCommand("git", refSpecArguments...)
+
 			b.runCommand("git", "checkout", "-f", b.Commit)
 
 			// GitHub has a special ref which lets us fetch a pull request head, whether
