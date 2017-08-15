@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/buildkite/agent/env"
 	"github.com/mattn/go-shellwords"
 )
 
@@ -18,7 +19,7 @@ type Command struct {
 	Args []string
 
 	// The environment to use for the command
-	Env *Environment
+	Env *env.Environment
 
 	// The directory to run the command from
 	Dir string

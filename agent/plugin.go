@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/buildkite/agent/shell"
+	"github.com/buildkite/agent/env"
 )
 
 type Plugin struct {
@@ -177,8 +177,8 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 }
 
 // Converts the plugin configuration values to environment variables
-func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
-	env := []string{}
+func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
+	envSlice := []string{}
 
 	toDashRegex := regexp.MustCompile(`-|\s+`)
 	removeWhitespaceRegex := regexp.MustCompile(`\s+`)
@@ -191,22 +191,22 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 
 		switch vv := v.(type) {
 		case string:
-			env = append(env, fmt.Sprintf("%s=%s", name, vv))
+			envSlice = append(envSlice, fmt.Sprintf("%s=%s", name, vv))
 		case bool:
-			env = append(env, fmt.Sprintf("%s=%t", name, vv))
+			envSlice = append(envSlice, fmt.Sprintf("%s=%t", name, vv))
 		case json.Number:
-			env = append(env, fmt.Sprintf("%s=%s", name, vv.String()))
+			envSlice = append(envSlice, fmt.Sprintf("%s=%s", name, vv.String()))
 		case []string:
 			for i := range vv {
-				env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
+				envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
 			}
 		case []interface{}:
 			for i := range vv {
 				switch vvv := vv[i].(type) {
 				case json.Number:
-					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv.String()))
+					envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vvv.String()))
 				case string:
-					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv))
+					envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vvv))
 				default:
 					fmt.Printf("Unknown type %T %v", vvv, vvv)
 					// unknown type
@@ -219,9 +219,9 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 	}
 
 	// Sort them into a consistent order
-	sort.Strings(env)
+	sort.Strings(envSlice)
 
-	return shell.EnvironmentFromSlice(env), nil
+	return env.FromSlice(envSlice), nil
 }
 
 // Pretty name for the plugin
