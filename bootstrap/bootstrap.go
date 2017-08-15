@@ -16,10 +16,8 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/shell"
 	"github.com/buildkite/agent/shell/windows"
-	"github.com/nightlyone/lockfile"
 
 	"github.com/flynn-archive/go-shlex"
-	"github.com/mitchellh/go-homedir"
 )
 
 type Bootstrap struct {
@@ -250,47 +248,6 @@ func checkShellError(err error, cmd *shell.Command) {
 	}
 }
 
-// Aquires a lock on the directory
-func acquireLock(path string, seconds int) (*lockfile.Lockfile, error) {
-	absolutePathToLock, err := filepath.Abs(path)
-	if err != nil {
-		exitf("Failed to find absolute path to lock \"%s\" (%s)", path, err)
-	}
-
-	lock, err := lockfile.New(absolutePathToLock)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
-	}
-
-	// Aquire the lock. Keep trying the lock until we get it
-	attempts := 0
-	for true {
-		err := lock.TryLock()
-		if err != nil {
-			if te, ok := err.(interface {
-				Temporary() bool
-			}); ok && te.Temporary() {
-				// Keep track of how many times we tried to get the lock
-				attempts += 1
-				if attempts > seconds {
-					return nil, fmt.Errorf("Gave up trying to aquire a lock on \"%s\" (%s)", absolutePathToLock, err)
-				}
-
-				// Try again in a second
-				commentf("Could not aquire lock on \"%s\" (%s)", absolutePathToLock, err)
-				commentf("Trying again in 1 second...")
-				time.Sleep(1 * time.Second)
-			} else {
-				return nil, err
-			}
-		} else {
-			break
-		}
-	}
-
-	return &lock, nil
-}
-
 // Returns the current working directory. Returns the current processes working
 // directory if one has not been set directly.
 func (b *Bootstrap) currentWorkingDirectory() string {
@@ -394,8 +351,7 @@ func (b *Bootstrap) runCommand(command string, args ...string) {
 	}
 }
 
-// Given a repostory, it will add the host to the set of SSH known_hosts on the
-// machine
+// Given a repostory, it will add the host to the set of SSH known_hosts on the machine
 func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	// Try and parse the repository URL
 	url, err := newGittableURL(repository)
@@ -404,29 +360,12 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 		return
 	}
 
-	userHomePath, err := homedir.Dir()
+	knownHosts, err := findKnownHosts()
 	if err != nil {
-		warningf("Could not find the current users home directory (%s)", err)
+		warningf("Failed to find SSH known_hosts file: %v", err)
 		return
 	}
-
-	// Construct paths to the known_hosts file
-	sshDirectory := filepath.Join(userHomePath, ".ssh")
-	knownHostPath := filepath.Join(sshDirectory, "known_hosts")
-
-	// Ensure a directory exists and known_host file exist
-	if !fileExists(knownHostPath) {
-		os.MkdirAll(sshDirectory, 0755)
-		ioutil.WriteFile(knownHostPath, []byte(""), 0644)
-	}
-
-	// Create a lock on the known_host file so other agents don't try and
-	// change it at the same time
-	knownHostLock, err := acquireLock(filepath.Join(sshDirectory, "known_hosts.lock"), 30)
-	if err != nil {
-		exitf("%s", err)
-	}
-	defer knownHostLock.Unlock()
+	defer knownHosts.Unlock()
 
 	// Clean up the SSH host and remove any key identifiers. See:
 	// git@github.com-custom-identifier:foo/bar.git
@@ -434,63 +373,12 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
 	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
 
-	// Try and open the existing hostfile in (append_only) mode
-	f, err := os.OpenFile(knownHostPath, os.O_APPEND|os.O_WRONLY, 0644)
-	if err != nil {
-		warningf("Could not open \"%s\" for reading (%s)", knownHostPath, err)
-		return
-	}
-	defer f.Close()
-
-	// Figure out where the ssh tools exist. On Windows, it isn't on the
-	// $PATH by default, but we know where to find it.
-	sshToolBinaryPath := ""
-	if runtime.GOOS == "windows" {
-		gitExecPathOutput, _ := b.runCommandSilentlyAndCaptureOutput("git", "--exec-path")
-		if gitExecPathOutput != "" {
-			sshToolRelativePaths := [][]string{}
-			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})
-			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "bin"})
-
-			for _, segments := range sshToolRelativePaths {
-				segments = append([]string{gitExecPathOutput}, segments...)
-				directory := filepath.Join(segments...)
-				if _, err := os.Stat(filepath.Join(directory, "ssh-keygen.exe")); err == nil {
-					sshToolBinaryPath = directory
-					break
-				}
-			}
-		}
-	}
-
-	// Grab the generated keys for the repo host
-	keygenOutput, err := b.runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolBinaryPath, "ssh-keygen"), "-f", knownHostPath, "-F", host)
-	if err != nil {
-		warningf("Could not performn `ssh-keygen` (%s)", err)
-		return
-	}
-
-	// If the keygen output already contains the host, we can skip!
-	if strings.Contains(keygenOutput, host) {
-		commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, knownHostPath)
-	} else {
-		// Scan the key and then write it to the known_host file
-		keyscanOutput, err := b.runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolBinaryPath, "ssh-keyscan"), host)
-		if err != nil {
-			warningf("Could not perform `ssh-keyscan` (%s)", err)
-			return
-		}
-
-		if _, err = f.WriteString(keyscanOutput + "\n"); err != nil {
-			warningf("Could not write to \"%s\" (%s)", knownHostPath, err)
-			return
-		}
-
-		commentf("Added \"%s\" to the list of known hosts at \"%s\"", host, knownHostPath)
+	if err = knownHosts.Add(host); err != nil {
+		warningf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
 	}
 }
 
-// Executes a hook and applyes any environment changes. The tricky thing with
+// Executes a hook and applies any environment changes. The tricky thing with
 // hooks is that they can modify the ENV of a bootstrap. And it's impossible to
 // grab the ENV of a child process before it finishes, so we've got an awesome
 // ugly hack to get around this.  We essentially have a bash script that writes
@@ -907,7 +795,7 @@ func (b *Bootstrap) Start() error {
 				// check it out (we create the file outside of
 				// the plugin directory so git clone doesn't
 				// have a cry about the directory not being empty)
-				pluginCheckoutHook, err := acquireLock(filepath.Join(b.PluginsPath, id+".lock"), 300) // Wait 5 minutes
+				pluginCheckoutHook, err := acquireLockWithTimeout(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
 				if err != nil {
 					exitf("%s", err)
 				}
