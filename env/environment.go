@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// Environment is a map of environment variables
+// Environment is a map of environment variables, with the keys normalized
+// for case-insensitive operating systems
 type Environment struct {
 	env map[string]string
 }
@@ -127,7 +128,7 @@ func (e *Environment) ToMap() map[string]string {
 //
 //     { "Path=...", "PROCESSOR_IDENTIFIER=...", "SystemRoot=..." }
 //
-// Users of shell.Environment shouldn't need to care about this.
+// Users of env.Environment shouldn't need to care about this.
 // env.Get("PATH") should "just work" on Windows. This means on Windows
 // machines, we'll normalise all the keys that go in/out of this API.
 //
