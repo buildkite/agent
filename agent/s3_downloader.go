@@ -11,7 +11,7 @@ import (
 )
 
 type S3Downloader struct {
-	// The name of the bucket
+	// The S3 bucket name and the path, e.g s3://my-bucket-name/foo/bar
 	Bucket string
 
 	// The root directory of the download
@@ -30,13 +30,13 @@ type S3Downloader struct {
 
 func (d S3Downloader) Start() error {
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(d.Bucket)
+	s3Client, err := newS3Client(d.BucketName())
 	if err != nil {
 		return err
 	}
 
 	req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{
-		Bucket: aws.String(d.Bucket),
+		Bucket: aws.String(d.BucketName()),
 		Key:    aws.String(d.BucketFileLocation()),
 	})
 
