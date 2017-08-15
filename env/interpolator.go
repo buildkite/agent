@@ -1,4 +1,4 @@
-package envvar
+package env
 
 import (
 	"fmt"
@@ -185,7 +185,7 @@ func extractKeyAndOptionFromVariable(variable string) (key string, option string
 		optionsIndicies := firstNonEnvironmentVariableCharacterRegex.FindStringIndex(trimmed)
 		if len(optionsIndicies) > 0 {
 			key = trimmed[0:optionsIndicies[0]]
-			option = trimmed[optionsIndicies[0]:len(trimmed)]
+			option = trimmed[optionsIndicies[0]:]
 		} else {
 			key = trimmed
 		}

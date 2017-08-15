@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/buildkite/agent/envvar"
+	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/logger"
 	"github.com/ghodss/yaml"
 )
@@ -205,7 +205,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 
 	// If it is a string interpolate it (yay finally we're doing what we came for)
 	case reflect.String:
-		interpolated, err := envvar.Interpolate(original.Interface().(string))
+		interpolated, err := env.Interpolate(original.Interface().(string))
 		if err != nil {
 			return err
 		}
