@@ -8,8 +8,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
+	"github.com/buildkite/agent/shell"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
 )
@@ -64,20 +66,20 @@ func (kh *knownHosts) Add(host string) error {
 	}
 
 	// Grab the generated keys for the repo host
-	keygenOutput, err := exec.Command(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host).Output()
+	keygenOutput, err := runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host)
 	if err != nil {
 		warningf("Could not perform `ssh-keygen` (%s)", err)
 		return err
 	}
 
 	// If the keygen output already contains the host, we can skip!
-	if bytes.Contains(keygenOutput, []byte(host)) {
+	if strings.Contains(keygenOutput, host) {
 		commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
 		return nil
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := exec.Command(filepath.Join(sshToolsDir, "ssh-keyscan"), host).Output()
+	keyscanOutput, err := runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keyscan"), host)
 	if err != nil {
 		warningf("Could not perform `ssh-keyscan` (%s)", err)
 		return err
@@ -96,14 +98,14 @@ func findSSHToolsDir() (string, error) {
 	// On Windows, ssh-keygen isn't on the $PATH by default, but we know we can find it
 	// relative to where git for windows is installed, so try that
 	if runtime.GOOS == "windows" {
-		gitExecPathOutput, _ := exec.Command("git", "--exec-path").Output()
+		gitExecPathOutput, _ := runCommandSilentlyAndCaptureOutput("git", "--exec-path")
 		if len(gitExecPathOutput) > 0 {
 			sshToolRelativePaths := [][]string{}
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "bin"})
 
 			for _, segments := range sshToolRelativePaths {
-				segments = append([]string{string(gitExecPathOutput)}, segments...)
+				segments = append([]string{gitExecPathOutput}, segments...)
 				dir := filepath.Join(segments...)
 				if _, err := os.Stat(filepath.Join(dir, "ssh-keygen.exe")); err == nil {
 					return dir, nil
@@ -118,4 +120,17 @@ func findSSHToolsDir() (string, error) {
 	}
 
 	return filepath.Dir(keygen), nil
+}
+
+// This will be removed shortly
+func runCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
+	var buffer bytes.Buffer
+
+	p := subprocess{
+		Command: &shell.Command{Command: command, Args: args},
+		Writer:  &buffer,
+	}
+
+	err := p.Run()
+	return strings.TrimSpace(buffer.String()), err
 }
