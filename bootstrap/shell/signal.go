@@ -1,6 +1,6 @@
 // +build !windows
 
-package bootstrap
+package shell
 
 import (
 	"errors"

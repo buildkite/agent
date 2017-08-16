@@ -1,11 +1,11 @@
 package bootstrap
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/shell"
-	"github.com/buildkite/agent/shell/windows"
+	"github.com/buildkite/agent/process"
 
 	"github.com/flynn-archive/go-shlex"
 )
@@ -102,11 +102,8 @@ type Bootstrap struct {
 	// Whether or not to automatically authorize SSH key hosts
 	SSHFingerprintVerification bool
 
-	// The running environment for the bootstrap file as each task runs
-	environ *env.Environment
-
-	// Current working directory that shell commands get executed in
-	wd string
+	// Shell is the shell environment for the bootstrap
+	shell *shell.Shell
 }
 
 // Prints a line of output
@@ -165,9 +162,8 @@ func fileExists(filename string) bool {
 func normalizeScriptFileName(filename string) string {
 	if runtime.GOOS == "windows" {
 		return filename + ".bat"
-	} else {
-		return filename
 	}
+	return filename
 }
 
 // Makes sure a file is executable
@@ -190,41 +186,6 @@ func dirForAgentName(agentName string) string {
 	return badCharsPattern.ReplaceAllString(agentName, "-")
 }
 
-var tempFileNumber int
-
-// Creates a temporary file. Implementation has been copied from
-func createTempFile(filename string) *os.File {
-	extension := filepath.Ext(filename)
-	basename := strings.TrimSuffix(filename, extension)
-
-	// Create the file
-	tempFile, err := ioutil.TempFile("", basename+"-")
-	if err != nil {
-		exitf("Failed to create temporary file \"%s\" (%s)", filename, err)
-	}
-
-	// Do we need to rename the file?
-	if extension != "" {
-		// Close the currently open tempfile
-		tempFile.Close()
-
-		// Rename it
-		newTempFileName := tempFile.Name() + extension
-		err = os.Rename(tempFile.Name(), newTempFileName)
-		if err != nil {
-			exitf("Failed to rename \"%s\" to \"%s\" (%s)", tempFile.Name(), newTempFileName, err)
-		}
-
-		// Open it again
-		tempFile, err = os.OpenFile(newTempFileName, os.O_RDWR|os.O_EXCL, 0600)
-		if err != nil {
-			exitf("Failed to open temporary file \"%s\" (%s)", newTempFileName, err)
-		}
-	}
-
-	return tempFile
-}
-
 var hasSchemePattern = regexp.MustCompile("^[^:]+://")
 var scpLikeUrlPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
 
@@ -242,82 +203,57 @@ func newGittableURL(ref string) (*url.URL, error) {
 }
 
 // If a error exists, it will exit the bootstrap with an error
-func checkShellError(err error, cmd *shell.Command) {
+func checkShellError(err error, cmd *exec.Cmd) {
 	if err != nil {
-		exitf("There was an error running `%s` (%s)", cmd, err)
+		exitf("There was an error running `%s` (%s)",
+			process.FormatCommand(cmd.Path, cmd.Args), err)
 	}
 }
 
 // Returns the current working directory. Returns the current processes working
 // directory if one has not been set directly.
 func (b *Bootstrap) currentWorkingDirectory() string {
-	if b.wd == "" {
-		wd, err := os.Getwd()
-		if err != nil {
-			exitf("Failed to find current working directory (%s)", err)
-		}
-
-		return wd
-	}
-
-	return b.wd
+	return b.shell.CurrentWorkingDirectory()
 }
 
 // Changes the working directory of the bootstrap file
 func (b *Bootstrap) changeWorkingDirectory(path string) {
 	commentf("Changing working directory to \"%s\"", path)
 
-	// If the path isn't absolute, prefix it with the current working
-	// directory.
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(b.currentWorkingDirectory(), path)
-	}
-
-	if fileExists(path) {
-		b.wd = path
-	} else {
+	if err := b.shell.ChangeWorkingDirectory(path); err != nil {
 		exitf("Failed to change working: directory does not exist")
 	}
 }
 
-// Creates a shell command ready for running
-func (b *Bootstrap) newCommand(command string, args ...string) *shell.Command {
-	return &shell.Command{Command: command, Args: args, Env: b.environ, Dir: b.currentWorkingDirectory()}
-}
-
 // Run a command without showing a prompt or the output to the user
 func (b *Bootstrap) runCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
-	var buffer bytes.Buffer
-
-	p := subprocess{
-		Command: b.newCommand(command, args...),
-		Writer:  &buffer,
+	p, err := b.shell.Subprocess(command, args...)
+	if err != nil {
+		return "", err
 	}
 
-	err := p.Run()
-	return strings.TrimSpace(buffer.String()), err
+	return p.RunAndOutput()
 }
 
 // Run a command and return it's exit status
 func (b *Bootstrap) runCommandGracefully(command string, args ...string) int {
-	cmd := b.newCommand(command, args...)
-
-	promptf("%s", cmd)
-
-	p := subprocess{
-		Command: cmd,
-		Writer:  os.Stdout,
+	p, err := b.shell.Subprocess(command, args...)
+	if err != nil {
+		exitf("%v", err)
 	}
 
-	checkShellError(p.Run(), cmd)
+	promptf("%s", p)
+	checkShellError(p.Run(os.Stdout), p.Command)
 	return p.ExitStatus()
 }
 
 // Runs a script on the file system
 func (b *Bootstrap) runScript(command string) int {
-	var cmd *shell.Command
+	var p *shell.Subprocess
+	var err error
+
 	if runtime.GOOS == "windows" {
-		cmd = b.newCommand(command)
+		p, err = b.shell.Subprocess(command)
 	} else {
 		// If you run a script on Linux that doesn't have the
 		// #!/bin/bash thingy at the top, it will fail to run with a
@@ -329,16 +265,15 @@ func (b *Bootstrap) runScript(command string) int {
 		// We also need to make sure the script we pass has quotes
 		// around it, otherwise `/bin/bash -c run script with space.sh`
 		// fails.
-		cmd = b.newCommand("/bin/bash", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
+		p, err = b.shell.Subprocess("/bin/bash", "-c", `"`+strings.Replace(command, `"`, `\"`, -1)+`"`)
 	}
 
-	p := subprocess{
-		Command: cmd,
-		Writer:  os.Stdout,
-		PTY:     b.RunInPty,
+	if err != nil {
+		exitf("%v", err)
 	}
 
-	checkShellError(p.Run(), cmd)
+	p.PTY = b.RunInPty
+	checkShellError(p.Run(os.Stdout), p.Command)
 	return p.ExitStatus()
 }
 
@@ -360,7 +295,7 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 		return
 	}
 
-	knownHosts, err := findKnownHosts()
+	knownHosts, err := findKnownHosts(b.shell)
 	if err != nil {
 		warningf("Failed to find SSH known_hosts file: %v", err)
 		return
@@ -389,17 +324,26 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 	// Check if the hook exists
 	if fileExists(hookPath) {
 		// Create a temporary file that we'll put the hook runner code in
-		tempHookRunnerFile := createTempFile(normalizeScriptFileName("buildkite-agent-bootstrap-hook-runner"))
+		tempHookRunnerFile, err := shell.TempFileWithExtension(normalizeScriptFileName("buildkite-agent-bootstrap-hook-runner"))
+		if err != nil {
+			exitf("%v", err)
+		}
 
 		// Ensure the hook script is executable
 		addExecutePermissiontoFile(tempHookRunnerFile.Name())
 
 		// We'll pump the ENV before the hook into this temp file
-		tempEnvBeforeFile := createTempFile("buildkite-agent-bootstrap-hook-env-before")
+		tempEnvBeforeFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-before")
+		if err != nil {
+			exitf("%v", err)
+		}
 		tempEnvBeforeFile.Close()
 
 		// We'll then pump the ENV _after_ the hook into this temp file
-		tempEnvAfterFile := createTempFile("buildkite-agent-bootstrap-hook-env-after")
+		tempEnvAfterFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-after")
+		if err != nil {
+			exitf("%v", err)
+		}
 		tempEnvAfterFile.Close()
 
 		absolutePathToHook, err := filepath.Abs(hookPath)
@@ -443,18 +387,18 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 		commentf("Executing \"%s\"", hookPath)
 
 		// Create a copy of the current env
-		previousEnviron := b.environ.Copy()
+		previousEnviron := b.shell.Env.Copy()
 
 		// If we have a custom ENV we want to apply
 		if environ != nil {
-			b.environ = b.environ.Merge(environ)
+			b.shell.Env = b.shell.Env.Merge(environ)
 		}
 
 		// Run the hook
 		hookExitStatus := b.runScript(tempHookRunnerFile.Name())
 
 		// Restore the previous env
-		b.environ = previousEnviron
+		b.shell.Env = previousEnviron
 
 		// Exit from the bootstrapper if the hook exited
 		if exitOnError && hookExitStatus != 0 {
@@ -464,7 +408,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 
 		// Save the hook exit status so other hooks can get access to
 		// it
-		b.environ.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", hookExitStatus))
+		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", hookExitStatus))
 
 		var beforeEnv *env.Environment
 		var afterEnv *env.Environment
@@ -495,7 +439,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 			for envDiffKey := range diff.ToMap() {
 				commentf("%s changed", envDiffKey)
 			}
-			b.environ = b.environ.Merge(diff)
+			b.shell.Env = b.shell.Env.Merge(diff)
 		}
 
 		// Apply any config changes that may have occured
@@ -588,8 +532,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 	gitCleanFlagsChanged := false
 	refSpecChanged := false
 
-	if b.environ.Exists("BUILDKITE_ARTIFACT_PATHS") {
-		envArifactPaths := b.environ.Get("BUILDKITE_ARTIFACT_PATHS")
+	if b.shell.Env.Exists("BUILDKITE_ARTIFACT_PATHS") {
+		envArifactPaths := b.shell.Env.Get("BUILDKITE_ARTIFACT_PATHS")
 
 		if envArifactPaths != b.AutomaticArtifactUploadPaths {
 			b.AutomaticArtifactUploadPaths = envArifactPaths
@@ -597,8 +541,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.environ.Exists("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION") {
-		envUploadDestination := b.environ.Get("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION")
+	if b.shell.Env.Exists("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION") {
+		envUploadDestination := b.shell.Env.Get("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION")
 
 		if envUploadDestination != b.ArtifactUploadDestination {
 			b.ArtifactUploadDestination = envUploadDestination
@@ -606,8 +550,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.environ.Exists("BUILDKITE_GIT_CLONE_FLAGS") {
-		envGitCloneFlags := b.environ.Get("BUILDKITE_GIT_CLONE_FLAGS")
+	if b.shell.Env.Exists("BUILDKITE_GIT_CLONE_FLAGS") {
+		envGitCloneFlags := b.shell.Env.Get("BUILDKITE_GIT_CLONE_FLAGS")
 
 		if envGitCloneFlags != b.GitCloneFlags {
 			b.GitCloneFlags = envGitCloneFlags
@@ -615,8 +559,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.environ.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
-		envGitCleanFlags := b.environ.Get("BUILDKITE_GIT_CLEAN_FLAGS")
+	if b.shell.Env.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
+		envGitCleanFlags := b.shell.Env.Get("BUILDKITE_GIT_CLEAN_FLAGS")
 
 		if envGitCleanFlags != b.GitCleanFlags {
 			b.GitCleanFlags = envGitCleanFlags
@@ -624,8 +568,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.environ.Exists("BUILDKITE_REFSPEC") {
-		refSpec := b.environ.Get("BUILDKITE_REFSPEC")
+	if b.shell.Env.Exists("BUILDKITE_REFSPEC") {
+		refSpec := b.shell.Env.Get("BUILDKITE_REFSPEC")
 
 		if refSpec != b.RefSpec {
 			b.RefSpec = refSpec
@@ -710,18 +654,18 @@ func (b *Bootstrap) Start() error {
 	var err error
 
 	// Create an empty env for us to keep track of our env changes in
-	b.environ = env.FromSlice(os.Environ())
+	b.shell.Env = env.FromSlice(os.Environ())
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if b.BinPath != "" {
-		b.environ.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), b.environ.Get("PATH")))
+		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), b.shell.Env.Get("PATH")))
 	}
 
-	b.environ.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
 	if b.Debug {
 		headerf("Build environment variables")
-		for _, e := range b.environ.ToSlice() {
+		for _, e := range b.shell.Env.ToSlice() {
 			if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
 				printf("%s", strings.Replace(e, "\n", "\\n", -1))
 			}
@@ -729,7 +673,7 @@ func (b *Bootstrap) Start() error {
 	}
 
 	// Disable any interactive Git/SSH prompting
-	b.environ.Set("GIT_TERMINAL_PROMPT", "0")
+	b.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
 	//////////////////////////////////////////////////////////////
 	//
@@ -869,24 +813,24 @@ func (b *Bootstrap) Start() error {
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		headerf("Cleaning pipeline checkout")
-		commentf("Removing %s", b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		commentf("Removing %s", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 
-		err := os.RemoveAll(b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		err := os.RemoveAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		if err != nil {
-			exitf("Failed to remove \"%s\" (%s)", b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+			exitf("Failed to remove \"%s\" (%s)", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
 		}
 	}
 
 	headerf("Preparing build directory")
 
 	// Create the build directory
-	if !fileExists(b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
-		commentf("Creating \"%s\"", b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		os.MkdirAll(b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+	if !fileExists(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
+		commentf("Creating \"%s\"", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		os.MkdirAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
 	}
 
 	// Change to the new build checkout path
-	b.changeWorkingDirectory(b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+	b.changeWorkingDirectory(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
 
 	// Run a custom `checkout` hook if it's present
 	if fileExists(b.globalHookPath("checkout")) {
@@ -1013,7 +957,7 @@ func (b *Bootstrap) Start() error {
 		// Git clean after checkout
 		b.gitClean()
 
-		if b.environ.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
+		if b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
 			warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
 		} else {
 			// Grab author and commit information and send
@@ -1036,7 +980,7 @@ func (b *Bootstrap) Start() error {
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
-	previousCheckoutPath := b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	previousCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run the `post-checkout` global hook
 	b.executeGlobalHook("post-checkout")
@@ -1048,7 +992,7 @@ func (b *Bootstrap) Start() error {
 	b.executePluginHook(plugins, "post-checkout")
 
 	// Capture the new checkout path so we can see if it's changed.
-	newCheckoutPath := b.environ.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	newCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// If the working directory has been changed by a hook, log and switch to it
 	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
@@ -1141,7 +1085,7 @@ func (b *Bootstrap) Start() error {
 				for _, k := range strings.Split(b.Command, "\n") {
 					if k != "" {
 						buildScriptContents = buildScriptContents +
-							fmt.Sprintf("ECHO %s\n", windows.BatchEscape("\033[90m>\033[0m "+k)) +
+							fmt.Sprintf("ECHO %s\n", shell.BatchEscape("\033[90m>\033[0m "+k)) +
 							k + "\n" +
 							"if %errorlevel% neq 0 exit /b %errorlevel%\n"
 					}
@@ -1191,7 +1135,7 @@ func (b *Bootstrap) Start() error {
 	}
 
 	// Save the command exit status to the env so hooks + plugins can access it
-	b.environ.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", commandExitStatus))
+	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", commandExitStatus))
 
 	// Run the `post-command` global hook
 	b.executeGlobalHook("post-command")
