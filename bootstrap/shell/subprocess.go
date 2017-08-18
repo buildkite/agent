@@ -13,7 +13,6 @@ import (
 	"syscall"
 
 	"github.com/buildkite/agent/process"
-	"github.com/kr/pty"
 )
 
 // Subprocess is a simpler version of process.Process specifically for the bootstrap
@@ -49,7 +48,7 @@ func (p *Subprocess) Run(w io.Writer) error {
 	defer signal.Stop(signals)
 
 	if p.PTY {
-		pty, err := pty.Start(p.Command)
+		pty, err := process.StartPTY(p.Command)
 		if err != nil {
 			return fmt.Errorf("Failed to start PTY (%v)", err)
 		}
