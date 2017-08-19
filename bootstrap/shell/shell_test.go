@@ -1,4 +1,4 @@
-package bootstrap
+package shell
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestAcquiringLock(t *testing.T) {
+func TestLockFile(t *testing.T) {
 	dir, err := ioutil.TempDir("", "example")
 	if err != nil {
 		t.Fatal(err)
@@ -21,7 +21,9 @@ func TestAcquiringLock(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	if _, err = acquireLock(ctx, filepath.Join(dir, "my.lock")); err != nil {
+	sh := Shell{}
+
+	if _, err = sh.LockFile(ctx, filepath.Join(dir, "my.lock")); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -33,6 +35,7 @@ func TestAcquiringLockWithTimeout(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	sh := Shell{}
 	lockPath := filepath.Join(dir, "my.lock")
 
 	// acquire a lock in another process
@@ -53,7 +56,7 @@ func TestAcquiringLockWithTimeout(t *testing.T) {
 	defer cmd.Process.Kill()
 
 	// acquire lock
-	_, err = acquireLockWithTimeout(lockPath, time.Microsecond*5)
+	_, err = sh.LockFileWithTimeout(lockPath, time.Microsecond*5)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Expected DeadlineExceeded error, got %v", err)
 	}
@@ -72,9 +75,10 @@ func TestAcquiringLockHelperProcess(*testing.T) {
 	}
 
 	fileName := os.Args[len(os.Args)-1]
+	sh := Shell{}
 
 	log.Printf("Locking %s", fileName)
-	if _, err := acquireLock(context.Background(), fileName); err != nil {
+	if _, err := sh.LockFile(context.Background(), fileName); err != nil {
 		os.Exit(1)
 	}
 
