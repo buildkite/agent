@@ -659,10 +659,9 @@ func (b *Bootstrap) PluginPhase(ctx BootstrapPhaseContext) error {
 					return err
 				}
 
-				// Try and lock this paticular plugin while we
-				// check it out (we create the file outside of
-				// the plugin directory so git clone doesn't
-				// have a cry about the directory not being empty)
+				// Try and lock this particular plugin while we check it out (we create
+				// the file outside of the plugin directory so git clone doesn't have
+				// a cry about the directory not being empty)
 				pluginCheckoutHook, err := b.shell.LockFileWithTimeout(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
 				if err != nil {
 					return err

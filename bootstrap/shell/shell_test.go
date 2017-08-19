@@ -21,7 +21,9 @@ func TestLockFile(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sh := Shell{}
+	sh := Shell{
+		output: ioutil.Discard,
+	}
 
 	if _, err = sh.LockFile(ctx, filepath.Join(dir, "my.lock")); err != nil {
 		t.Fatal(err)
@@ -35,7 +37,9 @@ func TestAcquiringLockWithTimeout(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	sh := Shell{}
+	sh := Shell{
+		output: ioutil.Discard,
+	}
 	lockPath := filepath.Join(dir, "my.lock")
 
 	// acquire a lock in another process
