@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"fmt"
 	"io/ioutil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -144,31 +143,8 @@ func dirForAgentName(agentName string) string {
 	return badCharsPattern.ReplaceAllString(agentName, "-")
 }
 
-var hasSchemePattern = regexp.MustCompile("^[^:]+://")
-var scpLikeUrlPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
-
-func newGittableURL(ref string) (*url.URL, error) {
-	if !hasSchemePattern.MatchString(ref) && scpLikeUrlPattern.MatchString(ref) {
-		matched := scpLikeUrlPattern.FindStringSubmatch(ref)
-		user := matched[1]
-		host := matched[2]
-		path := matched[3]
-
-		ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
-	}
-
-	return url.Parse(ref)
-}
-
 // Given a repostory, it will add the host to the set of SSH known_hosts on the machine
 func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
-	// Try and parse the repository URL
-	url, err := newGittableURL(repository)
-	if err != nil {
-		b.shell.Warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
-		return
-	}
-
 	knownHosts, err := findKnownHosts(b.shell)
 	if err != nil {
 		b.shell.Warningf("Failed to find SSH known_hosts file: %v", err)
@@ -176,158 +152,27 @@ func (b *Bootstrap) addRepositoryHostToSSHKnownHosts(repository string) {
 	}
 	defer knownHosts.Unlock()
 
-	// Clean up the SSH host and remove any key identifiers. See:
-	// git@github.com-custom-identifier:foo/bar.git
-	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
-	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
-	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
-
-	if err = knownHosts.Add(host); err != nil {
-		b.shell.Warningf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
+	if err = knownHosts.AddFromRepository(repository); err != nil {
+		b.shell.Warningf("%v", err)
 	}
 }
 
-// Executes a hook and applies any environment changes. The tricky thing with
-// hooks is that they can modify the ENV of a bootstrap. And it's impossible to
-// grab the ENV of a child process before it finishes, so we've got an awesome
-// ugly hack to get around this.  We essentially have a bash script that writes
-// the ENV to a file, runs the hook, then writes the ENV back to another file.
-// Once all that has finished, we compare the files, and apply what ever
-// changes to our running env. Cool huh?
 func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, environ *env.Environment) error {
-	// Check if the hook exists
-	if fileExists(hookPath) {
-		// Create a temporary file that we'll put the hook runner code in
-		tempHookRunnerFile, err := shell.TempFileWithExtension(normalizeScriptFileName("buildkite-agent-bootstrap-hook-runner"))
-		if err != nil {
-			return err
-		}
-
-		// Ensure the hook script is executable
-		if err := addExecutePermissiontoFile(tempHookRunnerFile.Name()); err != nil {
-			return err
-		}
-
-		// We'll pump the ENV before the hook into this temp file
-		tempEnvBeforeFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-before")
-		if err != nil {
-			return err
-		}
-		tempEnvBeforeFile.Close()
-
-		// We'll then pump the ENV _after_ the hook into this temp file
-		tempEnvAfterFile, err := shell.TempFileWithExtension("buildkite-agent-bootstrap-hook-env-after")
-		if err != nil {
-			return err
-		}
-		tempEnvAfterFile.Close()
-
-		absolutePathToHook, err := filepath.Abs(hookPath)
-		if err != nil {
-			return fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", hookPath, err)
-		}
-
-		// Create the hook runner code
-		var hookScript string
-		if runtime.GOOS == "windows" {
-			hookScript = "@echo off\n" +
-				"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
-				"SET > \"" + tempEnvBeforeFile.Name() + "\"\n" +
-				"CALL \"" + absolutePathToHook + "\"\n" +
-				"SET BUILDKITE_LAST_HOOK_EXIT_STATUS=!ERRORLEVEL!\n" +
-				"SET > \"" + tempEnvAfterFile.Name() + "\"\n" +
-				"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
-		} else {
-			hookScript = "#!/bin/bash\n" +
-				"export -p > \"" + tempEnvBeforeFile.Name() + "\"\n" +
-				". \"" + absolutePathToHook + "\"\n" +
-				"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
-				"export -p > \"" + tempEnvAfterFile.Name() + "\"\n" +
-				"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
-		}
-
-		// Write the hook script to the runner then close the file so
-		// we can run it
-		tempHookRunnerFile.WriteString(hookScript)
-		tempHookRunnerFile.Close()
-
-		if b.Debug {
-			b.shell.Headerf("Preparing %s hook", name)
-			b.shell.Commentf("A hook runner was written to \"%s\" with the following:", tempHookRunnerFile.Name())
-			b.shell.Printf("%s", hookScript)
-		}
-
-		// Print to the screen we're going to run the hook
-		b.shell.Headerf("Running %s hook", name)
-		b.shell.Commentf("Executing \"%s\"", hookPath)
-
-		// Create a copy of the current env
-		previousEnviron := b.shell.Env.Copy()
-
-		// If we have a custom ENV we want to apply
-		if environ != nil {
-			b.shell.Env = b.shell.Env.Merge(environ)
-		}
-
-		// Run the hook
-		hookErr := b.shell.RunScript(tempHookRunnerFile.Name())
-
-		// Restore the previous env
-		b.shell.Env = previousEnviron
-
-		// Exit from the bootstrapper if the hook exited
-		if exitOnError && hookErr != nil {
-			// return fmt.Errorf("The %s hook exited with a status of %d", name, hookExitStatus)
-			return err
-		}
-
-		// Save the hook exit status so other hooks can get access to it
-		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(hookErr)))
-
-		var beforeEnv *env.Environment
-		var afterEnv *env.Environment
-
-		// Compare the ENV current env with the after shots, then
-		// modify the running env map with the changes.
-		beforeEnvContents, err := ioutil.ReadFile(tempEnvBeforeFile.Name())
-		if err != nil {
-			return fmt.Errorf("Failed to read \"%s\" (%s)", tempEnvBeforeFile.Name(), err)
-		} else {
-			beforeEnv = env.FromExport(string(beforeEnvContents))
-		}
-
-		afterEnvContents, err := ioutil.ReadFile(tempEnvAfterFile.Name())
-		if err != nil {
-			return fmt.Errorf("Failed to read \"%s\" (%s)", tempEnvAfterFile.Name(), err)
-		} else {
-			afterEnv = env.FromExport(string(afterEnvContents))
-		}
-
-		// Remove the BUILDKITE_LAST_HOOK_EXIT_STATUS from the after
-		// env (since we don't care about it)
-		afterEnv.Remove("BUILDKITE_LAST_HOOK_EXIT_STATUS")
-
-		diff := afterEnv.Diff(beforeEnv)
-		if diff.Length() > 0 {
-			b.shell.Headerf("Applying environment changes")
-			for envDiffKey := range diff.ToMap() {
-				b.shell.Commentf("%s changed", envDiffKey)
-			}
-			b.shell.Env = b.shell.Env.Merge(diff)
-		}
-
-		// Apply any config changes that may have occured
-		b.applyEnvironmentConfigChanges()
-
-		return hookErr
+	hook := Hook{
+		Name:        name,
+		Path:        hookPath,
+		ExitOnError: exitOnError,
+		Env:         b.shell.Env.Copy().Merge(environ),
+		Shell:       b.shell,
+		Debug:       b.Debug,
 	}
-
-	if b.Debug {
-		b.shell.Headerf("Running %s hook", name)
-		b.shell.Commentf("Skipping, no hook script found at \"%s\"", hookPath)
+	diff, err := hook.Execute()
+	if err != nil {
+		b.shell.Errorf("The %s hook exited with a status of %d", name, shell.GetExitCode(err))
+		return err
 	}
-
-	return nil
+	b.applyHookEnvironmentChanges(diff)
+	return err
 }
 
 // Returns the absolute path to a global hook
@@ -412,17 +257,25 @@ func (b *Bootstrap) pluginHookExists(plugins []*agent.Plugin, name string) bool 
 	return false
 }
 
-// Checks to see if the bootstrap configuration has changed at runtime, and
-// applies them if they've changed
-func (b *Bootstrap) applyEnvironmentConfigChanges() {
+// applyEnvironmentConfigChanges applies any changed environment (from hooks) to
+// the bootstrap config
+func (b *Bootstrap) applyHookEnvironmentChanges(changes *env.Environment) {
+	if changes.Length() > 0 {
+		b.shell.Headerf("Applying environment changes")
+		for envKey := range changes.ToMap() {
+			b.shell.Commentf("%s changed", envKey)
+		}
+		b.shell.Env = b.shell.Env.Merge(changes)
+	}
+
 	artifactPathsChanged := false
 	artifactUploadDestinationChanged := false
 	gitCloneFlagsChanged := false
 	gitCleanFlagsChanged := false
 	refSpecChanged := false
 
-	if b.shell.Env.Exists("BUILDKITE_ARTIFACT_PATHS") {
-		envArifactPaths := b.shell.Env.Get("BUILDKITE_ARTIFACT_PATHS")
+	if changes.Exists("BUILDKITE_ARTIFACT_PATHS") {
+		envArifactPaths := changes.Get("BUILDKITE_ARTIFACT_PATHS")
 
 		if envArifactPaths != b.AutomaticArtifactUploadPaths {
 			b.AutomaticArtifactUploadPaths = envArifactPaths
@@ -430,8 +283,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.shell.Env.Exists("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION") {
-		envUploadDestination := b.shell.Env.Get("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION")
+	if changes.Exists("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION") {
+		envUploadDestination := changes.Get("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION")
 
 		if envUploadDestination != b.ArtifactUploadDestination {
 			b.ArtifactUploadDestination = envUploadDestination
@@ -439,8 +292,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.shell.Env.Exists("BUILDKITE_GIT_CLONE_FLAGS") {
-		envGitCloneFlags := b.shell.Env.Get("BUILDKITE_GIT_CLONE_FLAGS")
+	if changes.Exists("BUILDKITE_GIT_CLONE_FLAGS") {
+		envGitCloneFlags := changes.Get("BUILDKITE_GIT_CLONE_FLAGS")
 
 		if envGitCloneFlags != b.GitCloneFlags {
 			b.GitCloneFlags = envGitCloneFlags
@@ -448,8 +301,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.shell.Env.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
-		envGitCleanFlags := b.shell.Env.Get("BUILDKITE_GIT_CLEAN_FLAGS")
+	if changes.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
+		envGitCleanFlags := changes.Get("BUILDKITE_GIT_CLEAN_FLAGS")
 
 		if envGitCleanFlags != b.GitCleanFlags {
 			b.GitCleanFlags = envGitCleanFlags
@@ -457,8 +310,8 @@ func (b *Bootstrap) applyEnvironmentConfigChanges() {
 		}
 	}
 
-	if b.shell.Env.Exists("BUILDKITE_REFSPEC") {
-		refSpec := b.shell.Env.Get("BUILDKITE_REFSPEC")
+	if changes.Exists("BUILDKITE_REFSPEC") {
+		refSpec := changes.Get("BUILDKITE_REFSPEC")
 
 		if refSpec != b.RefSpec {
 			b.RefSpec = refSpec

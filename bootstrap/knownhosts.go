@@ -3,9 +3,11 @@ package bootstrap
 import (
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -17,11 +19,11 @@ import (
 
 type knownHosts struct {
 	*lockfile.Lockfile
-	sh   *shell.Shell
-	Path string
+	shell *shell.Shell
+	Path  string
 }
 
-func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
+func findKnownHosts(shell *shell.Shell) (*knownHosts, error) {
 	userHomePath, err := homedir.Dir()
 	if err != nil {
 		return nil, fmt.Errorf("Could not find the current users home directory (%s)", err)
@@ -41,12 +43,12 @@ func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 
 	// Create a lock on the known_host file so other agents don't try and
 	// change it at the same time
-	knownHostLock, err := sh.LockFileWithTimeout(lockFile, time.Second*30)
+	knownHostLock, err := shell.LockFileWithTimeout(lockFile, time.Second*30)
 	if err != nil {
 		return nil, fmt.Errorf("Could not acquire a lock on `%s`: %v", lockFile, err)
 	}
 
-	return &knownHosts{knownHostLock, sh, knownHostPath}, nil
+	return &knownHosts{knownHostLock, shell, knownHostPath}, nil
 }
 
 func (kh *knownHosts) Add(host string) error {
@@ -57,25 +59,25 @@ func (kh *knownHosts) Add(host string) error {
 	}
 	defer f.Close()
 
-	sshToolsDir, err := findSSHToolsDir(kh.sh)
+	sshToolsDir, err := findSSHToolsDir(kh.shell)
 	if err != nil {
 		return err
 	}
 
 	// Grab the generated keys for the repo host
-	keygenOutput, err := kh.sh.RunCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host)
+	keygenOutput, err := kh.shell.RunCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host)
 	if err != nil {
 		return fmt.Errorf("Could not perform `ssh-keygen` (%s)", err)
 	}
 
 	// If the keygen output already contains the host, we can skip!
 	if strings.Contains(keygenOutput, host) {
-		kh.sh.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
+		kh.shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
 		return nil
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := kh.sh.RunCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keyscan"), host)
+	keyscanOutput, err := kh.shell.RunCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keyscan"), host)
 	if err != nil {
 		return fmt.Errorf("Could not perform `ssh-keyscan` (%s)", err)
 	}
@@ -84,7 +86,45 @@ func (kh *knownHosts) Add(host string) error {
 		return fmt.Errorf("Could not write to \"%s\" (%s)", kh.Path, err)
 	}
 
-	kh.sh.Commentf("Added \"%s\" to the list of known hosts at \"%s\"", host, kh.Path)
+	kh.shell.Commentf("Added \"%s\" to the list of known hosts at \"%s\"", host, kh.Path)
+	return nil
+}
+
+var hasSchemePattern = regexp.MustCompile("^[^:]+://")
+var scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
+
+func newGittableURL(ref string) (*url.URL, error) {
+	if !hasSchemePattern.MatchString(ref) && scpLikeURLPattern.MatchString(ref) {
+		matched := scpLikeURLPattern.FindStringSubmatch(ref)
+		user := matched[1]
+		host := matched[2]
+		path := matched[3]
+
+		ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+	}
+
+	return url.Parse(ref)
+}
+
+// AddFromRepository takes a git repo url, extracts the host and adds it
+func (kh *knownHosts) AddFromRepository(repository string) error {
+	// Try and parse the repository URL
+	url, err := newGittableURL(repository)
+	if err != nil {
+		kh.shell.Warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
+		return err
+	}
+
+	// Clean up the SSH host and remove any key identifiers. See:
+	// git@github.com-custom-identifier:foo/bar.git
+	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
+	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
+	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
+
+	if err = kh.Add(host); err != nil {
+		return fmt.Errorf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
+	}
+
 	return nil
 }
 
