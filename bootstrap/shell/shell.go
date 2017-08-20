@@ -153,7 +153,7 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	return filepath.Abs(absolutePath)
 }
 
-// RunCommandSilentlyAndCaptureOutput runs a command without showing a prompt or the output to the user
+// RunCommandSilentlyAndCaptureOuput runs a command without showing a prompt or the output to the user
 // and returns the output as a string
 func (s *Shell) RunCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
 	var b bytes.Buffer
@@ -176,39 +176,27 @@ func (s *Shell) RunCommand(command string, args ...string) error {
 		return err
 	}
 
-	cmdStr := process.FormatCommand(command, args)
-	s.Promptf("%s", cmdStr)
-
 	return s.executeCommand(cmd, s.output, s.PTY, false)
 }
 
-// RunScript executes a script, like RunCommand, but the target is an interpreted script
+// RunScript executes a script in a Shell, but the target is an interpreted script
 // so it has extra checks applied to make sure it's executable. It also doesn't take arguments
 func (s *Shell) RunScript(path string) error {
-	var cmd *exec.Cmd
-	var err error
-
 	if runtime.GOOS == "windows" {
-		cmd, err = s.buildCommand(path)
-	} else {
-		// If you run a script on Linux that doesn't have the
-		// #!/bin/bash thingy at the top, it will fail to run with a
-		// "exec format error" error. You can solve it by adding the
-		// #!/bin/bash line to the top of the file, but that's
-		// annoying, and people generally forget it, so we'll make it
-		// easy on them and add it for them here.
-		//
-		// We also need to make sure the script we pass has quotes
-		// around it, otherwise `/bin/bash -c run script with space.sh`
-		// fails.
-		cmd, err = s.buildCommand("/bin/bash", "-c", `"`+strings.Replace(path, `"`, `\"`, -1)+`"`)
-	}
-	if err != nil {
-		s.Errorf("Error building command: %v", err)
-		return err
+		return s.RunCommand(path)
 	}
 
-	return s.executeCommand(cmd, s.output, s.PTY, false)
+	// If you run a script on Linux that doesn't have the
+	// #!/bin/bash thingy at the top, it will fail to run with a
+	// "exec format error" error. You can solve it by adding the
+	// #!/bin/bash line to the top of the file, but that's
+	// annoying, and people generally forget it, so we'll make it
+	// easy on them and add it for them here.
+	//
+	// We also need to make sure the script we pass has quotes
+	// around it, otherwise `/bin/bash -c run script with space.sh`
+	// fails.
+	return s.RunCommand("/bin/bash", "-c", fmt.Sprintf("%q", path))
 }
 
 // buildCommand returns an exec.Cmd that runs in the context of the shell
