@@ -38,9 +38,6 @@ type Shell struct {
 
 	// Current working directory that shell commands get executed in
 	wd string
-
-	// Funcs to call when the shell exits
-	exitHandlers []func(err error)
 }
 
 // New returns a new Shell
@@ -90,22 +87,6 @@ func (s *Shell) Promptf(format string, v ...interface{}) {
 		fmt.Fprintf(s.output, "\033[90m>\033[0m %s\n", fmt.Sprintf(format, v...))
 	} else {
 		fmt.Fprintf(s.output, "\033[90m$\033[0m %s\n", fmt.Sprintf(format, v...))
-	}
-}
-
-// Fatalf shows the error text and terminates the shell
-func (s *Shell) Fatalf(format string, v ...interface{}) {
-	s.Errorf(format, v...)
-	s.Exit(nil)
-}
-
-func (s *Shell) AddExitHandler(f func(err error)) {
-	s.exitHandlers = append(s.exitHandlers, f)
-}
-
-func (s *Shell) Exit(err error) {
-	for _, f := range s.exitHandlers {
-		f(err)
 	}
 }
 

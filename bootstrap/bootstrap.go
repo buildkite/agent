@@ -103,6 +103,39 @@ type Bootstrap struct {
 	shell *shell.Shell
 }
 
+type PhaseContext struct {
+	Plugins []*agent.Plugin
+}
+
+func (b *Bootstrap) Start() {
+	var err error
+	b.shell, err = shell.New()
+	if err != nil {
+		b.shell.Errorf("Error creating shell: %v", err)
+		os.Exit(1)
+	}
+
+	var ctx PhaseContext
+
+	var phases = []func(ctx PhaseContext) error{
+		b.SetupPhase,
+		b.EnvironmentPhase,
+		b.PluginPhase,
+		b.CheckoutPhase,
+		b.CommandPhase,
+		b.PreExitPhase,
+	}
+
+	for _, phase := range phases {
+		if err = phase(ctx); err != nil {
+			if b.Debug {
+				b.shell.Commentf("Firing exit handler with %v", err)
+			}
+			os.Exit(shell.GetExitCode(err))
+		}
+	}
+}
+
 // Returns whether or not a file exists on the filesystem. We consider any
 // error returned by os.Stat to indicate that the file doesn't exist. We could
 // be speciifc and use os.IsNotExist(err), but most other errors also indicate
@@ -162,7 +195,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, exitOnError bool, 
 		Name:        name,
 		Path:        hookPath,
 		ExitOnError: exitOnError,
-		Env:         b.shell.Env.Copy().Merge(environ),
+		Env:         b.shell.Env.Merge(environ),
 		Shell:       b.shell,
 		Debug:       b.Debug,
 	}
@@ -260,13 +293,15 @@ func (b *Bootstrap) pluginHookExists(plugins []*agent.Plugin, name string) bool 
 // applyEnvironmentConfigChanges applies any changed environment (from hooks) to
 // the bootstrap config
 func (b *Bootstrap) applyHookEnvironmentChanges(changes *env.Environment) {
-	if changes.Length() > 0 {
-		b.shell.Headerf("Applying environment changes")
-		for envKey := range changes.ToMap() {
-			b.shell.Commentf("%s changed", envKey)
-		}
-		b.shell.Env = b.shell.Env.Merge(changes)
+	if changes == nil {
+		return
 	}
+
+	b.shell.Headerf("Applying environment changes")
+	for envKey := range changes.ToMap() {
+		b.shell.Commentf("%s changed", envKey)
+	}
+	b.shell.Env = b.shell.Env.Merge(changes)
 
 	artifactPathsChanged := false
 	artifactUploadDestinationChanged := false
@@ -398,48 +433,8 @@ func (b *Bootstrap) gitEnumerateSubmoduleURLs() ([]string, error) {
 	return urls, nil
 }
 
-type BootstrapPhaseContext struct {
-	Plugins []*agent.Plugin
-}
-
-func (b *Bootstrap) Start() error {
-	var err error
-
-	b.shell, err = shell.New()
-	if err != nil {
-		return err
-	}
-
-	b.shell.AddExitHandler(func(err error) {
-		if b.Debug {
-			b.shell.Commentf("Firing exit handler with %v", err)
-		}
-		os.Exit(shell.GetExitCode(err))
-	})
-
-	var ctx BootstrapPhaseContext
-
-	var phases = []func(ctx BootstrapPhaseContext) error{
-		b.SetupPhase,
-		b.EnvironmentPhase,
-		b.PluginPhase,
-		b.CheckoutPhase,
-		b.CommandPhase,
-		b.PreExitPhase,
-	}
-
-	for _, phase := range phases {
-		if err = phase(ctx); err != nil {
-			b.shell.Exit(err)
-			return err
-		}
-	}
-
-	return nil
-}
-
 // SetupPhase prepares the Buildkite environment environment
-func (b *Bootstrap) SetupPhase(ctx BootstrapPhaseContext) error {
+func (b *Bootstrap) SetupPhase(ctx PhaseContext) error {
 	// Create an empty env for us to keep track of our env changes in
 	b.shell.Env = env.FromSlice(os.Environ())
 
@@ -467,9 +462,7 @@ func (b *Bootstrap) SetupPhase(ctx BootstrapPhaseContext) error {
 
 // EnvironmentPhase is a place for people to set up environment variables that
 // might be needed for their build scripts, such as secret tokens and other information.
-func (b *Bootstrap) EnvironmentPhase(ctx BootstrapPhaseContext) error {
-	// The global environment hook
-	//
+func (b *Bootstrap) EnvironmentPhase(ctx PhaseContext) error {
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
@@ -478,7 +471,7 @@ func (b *Bootstrap) EnvironmentPhase(ctx BootstrapPhaseContext) error {
 
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
 // checked out and made available to later phases
-func (b *Bootstrap) PluginPhase(ctx BootstrapPhaseContext) error {
+func (b *Bootstrap) PluginPhase(ctx PhaseContext) error {
 	if b.Plugins != "" {
 		b.shell.Headerf("Setting up plugins")
 
@@ -587,7 +580,7 @@ func (b *Bootstrap) PluginPhase(ctx BootstrapPhaseContext) error {
 
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
-func (b *Bootstrap) CheckoutPhase(ctx BootstrapPhaseContext) error {
+func (b *Bootstrap) CheckoutPhase(ctx PhaseContext) error {
 	if err := b.executeGlobalHook("pre-checkout"); err != nil {
 		return err
 	}
@@ -829,7 +822,7 @@ func (b *Bootstrap) CheckoutPhase(ctx BootstrapPhaseContext) error {
 }
 
 // CommandPhase determines how to run the build, and then runs it
-func (b *Bootstrap) CommandPhase(ctx BootstrapPhaseContext) error {
+func (b *Bootstrap) CommandPhase(ctx PhaseContext) error {
 	if err := b.executeGlobalHook("pre-command"); err != nil {
 		return err
 	}
@@ -982,7 +975,7 @@ func (b *Bootstrap) CommandPhase(ctx BootstrapPhaseContext) error {
 	return commandExitError
 }
 
-func (b *Bootstrap) ArtifactPhase(ctx BootstrapPhaseContext) error {
+func (b *Bootstrap) ArtifactPhase(ctx PhaseContext) error {
 	if b.AutomaticArtifactUploadPaths != "" {
 		// Run the `pre-artifact` global hook
 		if err := b.executeGlobalHook("pre-artifact"); err != nil {
@@ -1024,7 +1017,7 @@ func (b *Bootstrap) ArtifactPhase(ctx BootstrapPhaseContext) error {
 	return nil
 }
 
-func (b *Bootstrap) PreExitPhase(ctx BootstrapPhaseContext) error {
+func (b *Bootstrap) PreExitPhase(ctx PhaseContext) error {
 	// Run the `pre-exit` global hook
 	if err := b.executeGlobalHook("pre-exit"); err != nil {
 		return err
