@@ -1,7 +1,6 @@
 package shell
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,8 +9,6 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"syscall"
 	"time"
 
@@ -20,14 +17,14 @@ import (
 	"github.com/nightlyone/lockfile"
 )
 
-var DefaultOutput io.Writer = os.Stdout
-
 // Shell represents a virtual shell, handles logging, executing commands and
 // provides hooks for capturing output and exit conditions.
 //
 // Provides a lowest-common denominator abstraction over macOS, Linux and Windows
 type Shell struct {
-	// The running environment for the bootstrap file as each task runs
+	Logger
+
+	// The running environment for the shell
 	Env *env.Environment
 
 	// Whether the shell is a PTY
@@ -48,46 +45,10 @@ func New() (*Shell, error) {
 	}
 
 	return &Shell{
+		Logger: shell.Stderr,
 		Env:    env.FromSlice(os.Environ()),
 		wd:     wd,
-		output: DefaultOutput,
 	}, nil
-}
-
-// Printf prints a line of output
-func (s *Shell) Printf(format string, v ...interface{}) {
-	fmt.Fprintf(s.output, "%s\n", fmt.Sprintf(format, v...))
-}
-
-// Headerf prints a Buildkite formatted header
-func (s *Shell) Headerf(format string, v ...interface{}) {
-	fmt.Fprintf(s.output, "~~~ %s\n", fmt.Sprintf(format, v...))
-}
-
-// Commentf prints a comment line, e.g `# my comment goes here`
-func (s *Shell) Commentf(format string, v ...interface{}) {
-	fmt.Fprintf(s.output, "\033[90m# %s\033[0m\n", fmt.Sprintf(format, v...))
-}
-
-// Errorf shows a Buildkite formatted error expands the previous group
-func (s *Shell) Errorf(format string, v ...interface{}) {
-	s.Printf("\033[31m🚨 Error: %s\033[0m", fmt.Sprintf(format, v...))
-	s.Printf("^^^ +++")
-}
-
-// Warningf shows a buildkite boostrap warning
-func (s *Shell) Warningf(format string, v ...interface{}) {
-	s.Printf("\033[33m⚠️ Warning: %s\033[0m", fmt.Sprintf(format, v...))
-	s.Printf("^^^ +++")
-}
-
-// Promptf prints a shell prompt
-func (s *Shell) Promptf(format string, v ...interface{}) {
-	if runtime.GOOS == "windows" {
-		fmt.Fprintf(s.output, "\033[90m>\033[0m %s\n", fmt.Sprintf(format, v...))
-	} else {
-		fmt.Fprintf(s.output, "\033[90m$\033[0m %s\n", fmt.Sprintf(format, v...))
-	}
 }
 
 // Getwd returns the current working directory of the shell
