@@ -158,11 +158,11 @@ function buildkite-local-hook {
 }
 
 function buildkite-git-clean {
-  BUILDKITE_GIT_CLEAN_FLAGS=${BUILDKITE_GIT_CLEAN_FLAGS:--fdq}
-  buildkite-run git clean "$BUILDKITE_GIT_CLEAN_FLAGS"
+  BUILDKITE_GIT_CLEAN_FLAGS=(${BUILDKITE_GIT_CLEAN_FLAGS:--fdq})
+  buildkite-run git clean "${BUILDKITE_GIT_CLEAN_FLAGS[@]}"
 
   if [[ -z "${BUILDKITE_DISABLE_GIT_SUBMODULES:-}" ]]; then
-    buildkite-run git submodule foreach --recursive git clean "$BUILDKITE_GIT_CLEAN_FLAGS"
+    buildkite-run git submodule foreach --recursive git clean "${BUILDKITE_GIT_CLEAN_FLAGS[@]}"
   fi
 }
 
@@ -270,8 +270,8 @@ else
   if [[ -d ".git" ]]; then
     buildkite-run git remote set-url origin "$BUILDKITE_REPO"
   else
-    BUILDKITE_GIT_CLONE_FLAGS=${BUILDKITE_GIT_CLONE_FLAGS:--v}
-    buildkite-run git clone "$BUILDKITE_GIT_CLONE_FLAGS" -- "$BUILDKITE_REPO" .
+    BUILDKITE_GIT_CLONE_FLAGS=(${BUILDKITE_GIT_CLONE_FLAGS:--v})
+    buildkite-run git clone "${BUILDKITE_GIT_CLONE_FLAGS[@]}" -- "$BUILDKITE_REPO" .
   fi
 
   # Git clean prior to checkout
