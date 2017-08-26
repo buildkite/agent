@@ -1,6 +1,7 @@
-package bootstrap
+package shell
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -8,20 +9,17 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/buildkite/agent/process"
-	"github.com/buildkite/agent/shell"
 )
 
-// process is a simpler version of process.Process specifically for the bootstrap
+// Subprocess is a simpler version of process.Process specifically for the bootstrap
 // to use to create sub-processes
-type subprocess struct {
+type Subprocess struct {
 	// The command to run in the process
-	Command *shell.Command
-
-	// Where the STDOUT + STDERR of a command will be written to
-	Writer io.Writer
+	Command *exec.Cmd
 
 	// Whether or not the command should be run in a PTY
 	PTY bool
@@ -30,30 +28,8 @@ type subprocess struct {
 	exitStatus int
 }
 
-func (p *subprocess) Run() error {
-	// Windows has a hard time finding files that are located in folders
-	// that you've added dynmically to PATH, so we'll use `AbsolutePath`
-	// method (that looks for files in PATH) and use the path from that
-	// instead.
-	absolutePathToCommand, err := p.Command.AbsolutePath()
-	if err != nil {
-		return err
-	}
-
-	// fmt.Printf("The command dir is: %s\n", p.Command.Dir)
-	// fmt.Printf("The absolute path to the command is: %s\n", absolutePathToCommand)
-	// fmt.Printf("The arguments are: %s\n", p.Command.Args)
-
-	cmd := exec.Command(absolutePathToCommand, p.Command.Args...)
-
-	if p.Command.Env != nil {
-		cmd.Env = p.Command.Env.ToSlice()
-	}
-
-	if p.Command.Dir != "" {
-		cmd.Dir = p.Command.Dir
-	}
-
+// Run runs the command in a new process and writes all output to the provided Writer
+func (p *Subprocess) Run(w io.Writer) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
@@ -64,7 +40,7 @@ func (p *subprocess) Run() error {
 	go func() {
 		// forward signals to the process
 		for sig := range signals {
-			if err = signalProcess(cmd, sig); err != nil {
+			if err := signalProcess(p.Command, sig); err != nil {
 				log.Println("Error passing signal to child process", err)
 			}
 		}
@@ -72,14 +48,14 @@ func (p *subprocess) Run() error {
 	defer signal.Stop(signals)
 
 	if p.PTY {
-		pty, err := process.StartPTY(cmd)
+		pty, err := process.StartPTY(p.Command)
 		if err != nil {
 			return fmt.Errorf("Failed to start PTY (%v)", err)
 		}
 
 		// Copy the pty to our buffer. This will block until it EOF's
 		// or something breaks.
-		_, err = io.Copy(p.Writer, pty)
+		_, err = io.Copy(w, pty)
 		if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 			// We can safely ignore this error, because it's just
 			// the PTY telling us that it closed successfully.
@@ -88,18 +64,18 @@ func (p *subprocess) Run() error {
 			err = nil
 		}
 	} else {
-		cmd.Stdout = p.Writer
-		cmd.Stderr = p.Writer
-		cmd.Stdin = nil
+		p.Command.Stdout = w
+		p.Command.Stderr = w
+		p.Command.Stdin = nil
 
-		err := cmd.Start()
+		err := p.Command.Start()
 		if err != nil {
 			return err
 		}
 	}
 
 	// Wait for the command to finish
-	waitResult := cmd.Wait()
+	waitResult := p.Command.Wait()
 
 	// Get the exit status
 	// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
@@ -108,7 +84,7 @@ func (p *subprocess) Run() error {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				p.exitStatus = s.ExitStatus()
 			} else {
-				return errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				return errors.New("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus")
 			}
 		}
 	} else {
@@ -118,6 +94,23 @@ func (p *subprocess) Run() error {
 	return nil
 }
 
-func (p *subprocess) ExitStatus() int {
+// RunAndOutput runs the command in a new process and returns all output as a string
+func (p *Subprocess) RunAndOutput() (string, error) {
+	var buffer bytes.Buffer
+
+	if err := p.Run(&buffer); err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(buffer.String()), nil
+}
+
+// ExitStatus returns the integer exitcode from the last run
+func (p *Subprocess) ExitStatus() int {
 	return p.exitStatus
+}
+
+// String returns a human-friendly string of the command and arguments
+func (p *Subprocess) String() string {
+	return process.FormatCommand(p.Command.Path, p.Command.Args)
 }
