@@ -15,169 +15,6 @@ import (
 	"github.com/buildkite/agent/env"
 )
 
-// Config provides the configuration for the Bootstrap
-type Config struct {
-	// The command to run
-	Command string
-
-	// The ID of the job being run
-	JobID string
-
-	// If the bootstrap is in debug mode
-	Debug bool
-
-	// The repository that needs to be cloned
-	Repository string
-
-	// The commit being built
-	Commit string
-
-	// The branch of the commit
-	Branch string
-
-	// The tag of the job commit
-	Tag string
-
-	// Optional refspec to override git fetch
-	RefSpec string
-
-	// Plugin definition for the job
-	Plugins string
-
-	// Should git submodules be checked out
-	GitSubmodules bool
-
-	// If the commit was part of a pull request, this will container the PR number
-	PullRequest string
-
-	// The provider of the the pipeline
-	PipelineProvider string
-
-	// Slug of the current organization
-	OrganizationSlug string
-
-	// Slug of the current pipeline
-	PipelineSlug string
-
-	// Name of the agent running the bootstrap
-	AgentName string
-
-	// Should the bootstrap remove an existing checkout before running the job
-	CleanCheckout bool
-
-	// Flags to pass to "git clone" command
-	GitCloneFlags string
-
-	// Flags to pass to "git clean" command
-	GitCleanFlags string
-
-	// Whether or not to run the hooks/commands in a PTY
-	RunInPty bool
-
-	// Are aribtary commands allowed to be executed
-	CommandEval bool
-
-	// Path where the builds will be run
-	BuildPath string
-
-	// Path to the buildkite-agent binary
-	BinPath string
-
-	// Path to the global hooks
-	HooksPath string
-
-	// Path to the plugins directory
-	PluginsPath string
-
-	// Paths to automatically upload as artifacts when the build finishes
-	AutomaticArtifactUploadPaths string
-
-	// A custom destination to upload artifacts to (i.e. s3://...)
-	ArtifactUploadDestination string
-
-	// Whether or not to automatically authorize SSH key hosts
-	SSHFingerprintVerification bool
-}
-
-// ApplyEnvironmentChanges applies any config that has changed in the environment
-// to the config and prints feedback to the shell
-func (c Config) ApplyEnvironmentChanges(sh *shell.Shell, changes *env.Environment) {
-	artifactPathsChanged := false
-	artifactUploadDestinationChanged := false
-	gitCloneFlagsChanged := false
-	gitCleanFlagsChanged := false
-	refSpecChanged := false
-
-	if changes.Exists("BUILDKITE_ARTIFACT_PATHS") {
-		envArifactPaths := changes.Get("BUILDKITE_ARTIFACT_PATHS")
-
-		if envArifactPaths != c.AutomaticArtifactUploadPaths {
-			c.AutomaticArtifactUploadPaths = envArifactPaths
-			artifactPathsChanged = true
-		}
-	}
-
-	if changes.Exists("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION") {
-		envUploadDestination := changes.Get("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION")
-
-		if envUploadDestination != c.ArtifactUploadDestination {
-			c.ArtifactUploadDestination = envUploadDestination
-			artifactUploadDestinationChanged = true
-		}
-	}
-
-	if changes.Exists("BUILDKITE_GIT_CLONE_FLAGS") {
-		envGitCloneFlags := changes.Get("BUILDKITE_GIT_CLONE_FLAGS")
-
-		if envGitCloneFlags != c.GitCloneFlags {
-			c.GitCloneFlags = envGitCloneFlags
-			gitCloneFlagsChanged = true
-		}
-	}
-
-	if changes.Exists("BUILDKITE_GIT_CLEAN_FLAGS") {
-		envGitCleanFlags := changes.Get("BUILDKITE_GIT_CLEAN_FLAGS")
-
-		if envGitCleanFlags != c.GitCleanFlags {
-			c.GitCleanFlags = envGitCleanFlags
-			gitCleanFlagsChanged = true
-		}
-	}
-
-	if changes.Exists("BUILDKITE_REFSPEC") {
-		refSpec := changes.Get("BUILDKITE_REFSPEC")
-
-		if refSpec != c.RefSpec {
-			c.RefSpec = refSpec
-			refSpecChanged = true
-		}
-	}
-
-	if artifactPathsChanged || artifactUploadDestinationChanged || gitCleanFlagsChanged || gitCloneFlagsChanged || refSpecChanged {
-		sh.Headerf("Bootstrap configuration has changed")
-
-		if artifactPathsChanged {
-			sh.Commentf("BUILDKITE_ARTIFACT_PATHS is now \"%s\"", c.AutomaticArtifactUploadPaths)
-		}
-
-		if artifactUploadDestinationChanged {
-			sh.Commentf("BUILDKITE_ARTIFACT_UPLOAD_DESTINATION is now \"%s\"", c.ArtifactUploadDestination)
-		}
-
-		if gitCleanFlagsChanged {
-			sh.Commentf("BUILDKITE_GIT_CLEAN_FLAGS is now \"%s\"", c.GitCleanFlags)
-		}
-
-		if gitCloneFlagsChanged {
-			sh.Commentf("BUILDKITE_GIT_CLONE_FLAGS is now \"%s\"", c.GitCloneFlags)
-		}
-
-		if refSpecChanged {
-			sh.Commentf("BUILDKITE_REFSPEC is now \"%s\"", c.RefSpec)
-		}
-	}
-}
-
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
 // as a sub-process of the buildkite-agent and finishes at the conclusion of a job.
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
@@ -304,22 +141,42 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 		return err
 	}
 
+	// Finally, apply changes to the current shell and config
+	b.applyEnvironmentChanges(changes)
+	return nil
+}
+
+func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
 	b.shell.Headerf("Applying environment changes")
-	if changes == nil {
+	b.shell.Env = b.shell.Env.Merge(environ)
+
+	if environ == nil {
 		b.shell.Printf("No changes to apply")
-		return nil
+		return
 	}
 
 	// Apply the changed environment to the config
-	b.Config.ApplyEnvironmentChanges(b.shell, changes)
+	changes := b.Config.ReadFromEnvironment(environ)
 
-	// Print them out
-	for envKey := range changes.ToMap() {
-		b.shell.Commentf("%s changed", envKey)
+	if len(changes) > 0 {
+		b.shell.Headerf("Bootstrap configuration has changed")
 	}
 
-	b.shell.Env = b.shell.Env.Merge(changes)
-	return nil
+	// Print out the env vars that changed
+	for _, envKey := range changes {
+		switch envKey {
+		case `BUILDKITE_ARTIFACT_PATHS`:
+			b.shell.Commentf("%s is now %q", envKey, b.Config.AutomaticArtifactUploadPaths)
+		case `BUILDKITE_ARTIFACT_UPLOAD_DESTINATION`:
+			b.shell.Commentf("%s is now %q", envKey, b.Config.ArtifactUploadDestination)
+		case `BUILDKITE_GIT_CLEAN_FLAGS`:
+			b.shell.Commentf("%s is now %q", envKey, b.Config.GitCleanFlags)
+		case `BUILDKITE_GIT_CLONE_FLAGS`:
+			b.shell.Commentf("%s is now %q", envKey, b.Config.GitCloneFlags)
+		case `BUILDKITE_REFSPEC`:
+			b.shell.Commentf("%s is now %q", envKey, b.Config.RefSpec)
+		}
+	}
 }
 
 // Returns the absolute path to a global hook
