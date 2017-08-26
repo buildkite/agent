@@ -23,7 +23,7 @@ type knownHosts struct {
 	Path  string
 }
 
-func findKnownHosts(shell *shell.Shell) (*knownHosts, error) {
+func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 	userHomePath, err := homedir.Dir()
 	if err != nil {
 		return nil, fmt.Errorf("Could not find the current users home directory (%s)", err)
@@ -43,12 +43,12 @@ func findKnownHosts(shell *shell.Shell) (*knownHosts, error) {
 
 	// Create a lock on the known_host file so other agents don't try and
 	// change it at the same time
-	knownHostLock, err := shell.LockFileWithTimeout(lockFile, time.Second*30)
+	knownHostLock, err := shell.LockFileWithTimeout(sh, lockFile, time.Second*30)
 	if err != nil {
 		return nil, fmt.Errorf("Could not acquire a lock on `%s`: %v", lockFile, err)
 	}
 
-	return &knownHosts{knownHostLock, shell, knownHostPath}, nil
+	return &knownHosts{knownHostLock, sh, knownHostPath}, nil
 }
 
 func (kh *knownHosts) Add(host string) error {
@@ -65,7 +65,8 @@ func (kh *knownHosts) Add(host string) error {
 	}
 
 	// Grab the generated keys for the repo host
-	keygenOutput, err := kh.shell.RunCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host)
+	keygenOutput, err := kh.shell.RunAndCapture("%s -f %q -F %q",
+		filepath.Join(sshToolsDir, "ssh-keygen"), kh.Path, host)
 	if err != nil {
 		return fmt.Errorf("Could not perform `ssh-keygen` (%s)", err)
 	}
@@ -77,7 +78,8 @@ func (kh *knownHosts) Add(host string) error {
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := kh.shell.RunCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keyscan"), host)
+	keyscanOutput, err := kh.shell.RunAndCapture("%s %q",
+		filepath.Join(sshToolsDir, "ssh-keyscan"), host)
 	if err != nil {
 		return fmt.Errorf("Could not perform `ssh-keyscan` (%s)", err)
 	}
@@ -132,7 +134,7 @@ func findSSHToolsDir(sh *shell.Shell) (string, error) {
 	// On Windows, ssh-keygen isn't on the $PATH by default, but we know we can find it
 	// relative to where git for windows is installed, so try that
 	if runtime.GOOS == "windows" {
-		gitExecPathOutput, _ := sh.RunCommandSilentlyAndCaptureOutput("git", "--exec-path")
+		gitExecPathOutput, _ := sh.RunAndCapture("git --exec-path")
 		if len(gitExecPathOutput) > 0 {
 			sshToolRelativePaths := [][]string{}
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})

@@ -3,6 +3,7 @@ package shell
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"runtime"
 )
@@ -28,9 +29,14 @@ type Logger interface {
 	Promptf(format string, v ...interface{})
 }
 
-// Stdout is a Logger that writes to Stdout
-var Stdout = &WriterLogger{
-	Writer: os.Stdout,
+// StderrLogger is a Logger that writes to Stdout
+var StderrLogger = &WriterLogger{
+	Writer: os.Stderr,
+}
+
+// DiscardLogger discards all log messages
+var DiscardLogger = &WriterLogger{
+	Writer: ioutil.Discard,
 }
 
 // WriterLogger provides a logger that writes to an io.Writer
@@ -51,13 +57,13 @@ func (wl *WriterLogger) Commentf(format string, v ...interface{}) {
 }
 
 func (wl *WriterLogger) Errorf(format string, v ...interface{}) {
-	s.Printf("\033[31m🚨 Error: %s\033[0m", fmt.Sprintf(format, v...))
-	s.Printf("^^^ +++")
+	wl.Printf("\033[31m🚨 Error: %s\033[0m", fmt.Sprintf(format, v...))
+	wl.Printf("^^^ +++")
 }
 
 func (wl *WriterLogger) Warningf(format string, v ...interface{}) {
-	s.Printf("\033[33m⚠️ Warning: %s\033[0m", fmt.Sprintf(format, v...))
-	s.Printf("^^^ +++")
+	wl.Printf("\033[33m⚠️ Warning: %s\033[0m", fmt.Sprintf(format, v...))
+	wl.Printf("^^^ +++")
 }
 
 func (wl *WriterLogger) Promptf(format string, v ...interface{}) {

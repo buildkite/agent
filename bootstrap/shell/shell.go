@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -9,12 +10,12 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
-	"time"
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
-	"github.com/nightlyone/lockfile"
+	shellwords "github.com/mattn/go-shellwords"
 )
 
 // Shell represents a virtual shell, handles logging, executing commands and
@@ -30,11 +31,11 @@ type Shell struct {
 	// Whether the shell is a PTY
 	PTY bool
 
-	// The output of the shell
-	output io.Writer
-
 	// Current working directory that shell commands get executed in
 	wd string
+
+	// The context for the shell
+	ctx context.Context
 }
 
 // New returns a new Shell
@@ -45,9 +46,10 @@ func New() (*Shell, error) {
 	}
 
 	return &Shell{
-		Logger: shell.Stderr,
+		Logger: StderrLogger,
 		Env:    env.FromSlice(os.Environ()),
 		wd:     wd,
+		ctx:    context.Background(),
 	}, nil
 }
 
@@ -95,50 +97,42 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	return filepath.Abs(absolutePath)
 }
 
-// RunCommandSilentlyAndCaptureOuput runs a command without showing a prompt or the output to the user
-// and returns the output as a string
-func (s *Shell) RunCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
-	var b bytes.Buffer
-
-	cmd, err := s.buildCommand(command, args...)
-	if err != nil {
-		return "", err
-	}
-
-	execErr := s.executeCommand(cmd, &b, s.PTY, true)
-	output := strings.TrimSpace(b.String())
-
-	return output, execErr
-}
-
-// RunCommand runs a command, write to the logger and return an error if it fails
-func (s *Shell) RunCommand(command string, args ...string) error {
-	cmd, err := s.buildCommand(command, args...)
+// Run runs a command, write to the logger and return an error if it fails
+func (s *Shell) Run(command string, args ...interface{}) error {
+	words, err := shellwords.Parse(fmt.Sprintf(command, args...))
 	if err != nil {
 		return err
 	}
 
-	return s.executeCommand(cmd, s.output, s.PTY, false)
-}
-
-// RunScript executes a script in a Shell, but the target is an interpreted script
-// so it has extra checks applied to make sure it's executable. It also doesn't take arguments
-func (s *Shell) RunScript(path string) error {
-	if runtime.GOOS == "windows" {
-		return s.RunCommand(path)
+	cmd, err := s.buildCommand(words[0], words[1:]...)
+	if err != nil {
+		s.Errorf("Error building command: %v", err)
+		return err
 	}
 
-	// If you run a script on Linux that doesn't have the
-	// #!/bin/bash thingy at the top, it will fail to run with a
-	// "exec format error" error. You can solve it by adding the
-	// #!/bin/bash line to the top of the file, but that's
-	// annoying, and people generally forget it, so we'll make it
-	// easy on them and add it for them here.
-	//
-	// We also need to make sure the script we pass has quotes
-	// around it, otherwise `/bin/bash -c run script with space.sh`
-	// fails.
-	return s.RunCommand("/bin/bash", "-c", fmt.Sprintf("%q", path))
+	return s.executeCommand(cmd, os.Stderr, false)
+}
+
+// RunAndCapture runs a command and captures the output, nothing else is logged
+func (s *Shell) RunAndCapture(command string, args ...interface{}) (string, error) {
+	words, err := shellwords.Parse(fmt.Sprintf(command, args...))
+	if err != nil {
+		return "", err
+	}
+
+	cmd, err := s.buildCommand(words[0], words[1:]...)
+	if err != nil {
+		return "", err
+	}
+
+	var b bytes.Buffer
+
+	err = s.executeCommand(cmd, &b, true)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(b.String()), nil
 }
 
 // buildCommand returns an exec.Cmd that runs in the context of the shell
@@ -156,7 +150,7 @@ func (s *Shell) buildCommand(command string, args ...string) (*exec.Cmd, error) 
 	return cmd, nil
 }
 
-func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, pty bool, silent bool) error {
+func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
@@ -182,11 +176,11 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, pty bool, silent bool
 	}()
 
 	cmdStr := process.FormatCommand(cmd.Path, cmd.Args)
-	if !silent {
+	if silent {
 		s.Promptf("%s", cmdStr)
 	}
 
-	if pty {
+	if s.PTY {
 		pty, err := process.StartPTY(cmd)
 		if err != nil {
 			return handleError("Error starting PTY: ", err)
@@ -232,55 +226,4 @@ func GetExitCode(err error) int {
 		}
 	}
 	return 1
-}
-
-var (
-	lockRetryDuration = time.Second
-)
-
-func (s *Shell) LockFile(ctx context.Context, path string) (*lockfile.Lockfile, error) {
-	absolutePathToLock, err := filepath.Abs(path)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
-	}
-
-	lock, err := lockfile.New(absolutePathToLock)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
-	}
-
-	for {
-		// Keep trying the lock until we get it
-		if err := lock.TryLock(); err != nil {
-			if te, ok := err.(interface {
-				Temporary() bool
-			}); ok && te.Temporary() {
-				s.Commentf("Could not aquire lock on \"%s\" (%s)", absolutePathToLock, err)
-				s.Commentf("Trying again in %s...", lockRetryDuration)
-				time.Sleep(lockRetryDuration)
-			} else {
-				return nil, err
-			}
-		} else {
-			break
-		}
-
-		// Check if we've timed out
-		for {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
-		}
-	}
-
-	return &lock, err
-}
-
-func (s *Shell) LockFileWithTimeout(path string, timeout time.Duration) (*lockfile.Lockfile, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	return s.LockFile(ctx, path)
 }
