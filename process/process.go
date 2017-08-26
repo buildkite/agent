@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/shell"
+	"github.com/mattn/go-shellwords"
 )
 
 type Process struct {
@@ -50,12 +50,12 @@ type Process struct {
 var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
 
 func (p *Process) Start() error {
-	c, err := shell.CommandFromString(p.Script)
+	args, err := shellwords.Parse(p.Script)
 	if err != nil {
 		return err
 	}
 
-	p.command = exec.Command(c.Command, c.Args...)
+	p.command = exec.Command(args[0], args[1:]...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -75,7 +75,7 @@ func (p *Process) Start() error {
 		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
 	}
 
-	logger.Info("Starting to run: %s", c.String())
+	logger.Info("Starting to run: %s", FormatCommand(args[0], args[1:]))
 
 	// Toggle between running in a pty
 	if p.PTY {

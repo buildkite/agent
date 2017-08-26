@@ -1,31 +1,32 @@
 package bootstrap
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/shell"
+	"github.com/buildkite/agent/bootstrap/shell"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/nightlyone/lockfile"
 )
 
 type knownHosts struct {
 	*lockfile.Lockfile
-	Path string
+	shell *shell.Shell
+	Path  string
 }
 
-func findKnownHosts() (*knownHosts, error) {
+func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 	userHomePath, err := homedir.Dir()
 	if err != nil {
-		warningf("Could not find the current users home directory (%s)", err)
-		return nil, err
+		return nil, fmt.Errorf("Could not find the current users home directory (%s)", err)
 	}
 
 	// Construct paths to the known_hosts file
@@ -42,63 +43,98 @@ func findKnownHosts() (*knownHosts, error) {
 
 	// Create a lock on the known_host file so other agents don't try and
 	// change it at the same time
-	knownHostLock, err := acquireLockWithTimeout(lockFile, time.Second*30)
+	knownHostLock, err := shell.LockFileWithTimeout(sh, lockFile, time.Second*30)
 	if err != nil {
-		warningf("Could not acquire a lock on `%s`: %v", lockFile, err)
-		return nil, err
+		return nil, fmt.Errorf("Could not acquire a lock on `%s`: %v", lockFile, err)
 	}
 
-	return &knownHosts{knownHostLock, knownHostPath}, nil
+	return &knownHosts{knownHostLock, sh, knownHostPath}, nil
 }
 
 func (kh *knownHosts) Add(host string) error {
 	// Try and open the existing hostfile in (append_only) mode
 	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		warningf("Could not open \"%s\" for reading (%s)", kh.Path, err)
-		return err
+		return fmt.Errorf("Could not open \"%s\" for reading (%v)", kh.Path, err)
 	}
 	defer f.Close()
 
-	sshToolsDir, err := findSSHToolsDir()
+	sshToolsDir, err := findSSHToolsDir(kh.shell)
 	if err != nil {
 		return err
 	}
 
 	// Grab the generated keys for the repo host
-	keygenOutput, err := runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host)
+	keygenOutput, err := kh.shell.RunAndCapture("%s -f %q -F %q",
+		filepath.Join(sshToolsDir, "ssh-keygen"), kh.Path, host)
 	if err != nil {
-		warningf("Could not perform `ssh-keygen` (%s)", err)
-		return err
+		return fmt.Errorf("Could not perform `ssh-keygen` (%s)", err)
 	}
 
 	// If the keygen output already contains the host, we can skip!
 	if strings.Contains(keygenOutput, host) {
-		commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
+		kh.shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
 		return nil
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := runCommandSilentlyAndCaptureOutput(filepath.Join(sshToolsDir, "ssh-keyscan"), host)
+	keyscanOutput, err := kh.shell.RunAndCapture("%s %q",
+		filepath.Join(sshToolsDir, "ssh-keyscan"), host)
 	if err != nil {
-		warningf("Could not perform `ssh-keyscan` (%s)", err)
-		return err
+		return fmt.Errorf("Could not perform `ssh-keyscan` (%s)", err)
 	}
 
 	if _, err = fmt.Fprintf(f, "%s\n", keyscanOutput); err != nil {
-		warningf("Could not write to \"%s\" (%s)", kh.Path, err)
-		return err
+		return fmt.Errorf("Could not write to \"%s\" (%s)", kh.Path, err)
 	}
 
-	commentf("Added \"%s\" to the list of known hosts at \"%s\"", host, kh.Path)
+	kh.shell.Commentf("Added \"%s\" to the list of known hosts at \"%s\"", host, kh.Path)
 	return nil
 }
 
-func findSSHToolsDir() (string, error) {
+var hasSchemePattern = regexp.MustCompile("^[^:]+://")
+var scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
+
+func newGittableURL(ref string) (*url.URL, error) {
+	if !hasSchemePattern.MatchString(ref) && scpLikeURLPattern.MatchString(ref) {
+		matched := scpLikeURLPattern.FindStringSubmatch(ref)
+		user := matched[1]
+		host := matched[2]
+		path := matched[3]
+
+		ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+	}
+
+	return url.Parse(ref)
+}
+
+// AddFromRepository takes a git repo url, extracts the host and adds it
+func (kh *knownHosts) AddFromRepository(repository string) error {
+	// Try and parse the repository URL
+	url, err := newGittableURL(repository)
+	if err != nil {
+		kh.shell.Warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
+		return err
+	}
+
+	// Clean up the SSH host and remove any key identifiers. See:
+	// git@github.com-custom-identifier:foo/bar.git
+	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
+	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
+	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
+
+	if err = kh.Add(host); err != nil {
+		return fmt.Errorf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
+	}
+
+	return nil
+}
+
+func findSSHToolsDir(sh *shell.Shell) (string, error) {
 	// On Windows, ssh-keygen isn't on the $PATH by default, but we know we can find it
 	// relative to where git for windows is installed, so try that
 	if runtime.GOOS == "windows" {
-		gitExecPathOutput, _ := runCommandSilentlyAndCaptureOutput("git", "--exec-path")
+		gitExecPathOutput, _ := sh.RunAndCapture("git --exec-path")
 		if len(gitExecPathOutput) > 0 {
 			sshToolRelativePaths := [][]string{}
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})
@@ -120,17 +156,4 @@ func findSSHToolsDir() (string, error) {
 	}
 
 	return filepath.Dir(keygen), nil
-}
-
-// This will be removed shortly
-func runCommandSilentlyAndCaptureOutput(command string, args ...string) (string, error) {
-	var buffer bytes.Buffer
-
-	p := subprocess{
-		Command: &shell.Command{Command: command, Args: args},
-		Writer:  &buffer,
-	}
-
-	err := p.Run()
-	return strings.TrimSpace(buffer.String()), err
 }
