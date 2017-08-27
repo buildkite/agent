@@ -32,12 +32,12 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   buildkite-agent meta-data set github_release_type "prerelease"
   buildkite-agent meta-data set github_release_version $AGENT_VERSION
 
-  github-release "v$AGENT_VERSION" releases/* --prerelease
+  github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)" --prerelease
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   buildkite-agent meta-data set github_release_type "stable"
   buildkite-agent meta-data set github_release_version $AGENT_VERSION
 
-  github-release "v$AGENT_VERSION" releases/*
+  github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)"
 fi

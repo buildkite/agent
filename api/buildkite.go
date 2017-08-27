@@ -17,6 +17,7 @@ import (
 
 	"github.com/buildkite/agent/logger"
 	"github.com/google/go-querystring/query"
+	"gopkg.in/vmihailenco/msgpack.v2"
 )
 
 const (
@@ -49,6 +50,7 @@ type Client struct {
 	Artifacts   *ArtifactsService
 	Pipelines   *PipelinesService
 	Heartbeats  *HeartbeatsService
+	Annotations *AnnotationsService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -70,6 +72,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Artifacts = &ArtifactsService{c}
 	c.Pipelines = &PipelinesService{c}
 	c.Heartbeats = &HeartbeatsService{c}
+	c.Annotations = &AnnotationsService{c}
 
 	return c
 }
@@ -99,6 +102,33 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
+	}
+
+	return req, nil
+}
+
+// NewRequestWithMessagePack behaves the same as NewRequest expect it encodes
+// the body with MessagePack instead of JSON.
+func (c *Client) NewRequestWithMessagePack(method, urlStr string, body interface{}) (*http.Request, error) {
+	u := joinURL(c.BaseURL.String(), urlStr)
+
+	buf := new(bytes.Buffer)
+	if body != nil {
+		err := msgpack.NewEncoder(buf).Encode(body)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	req, err := http.NewRequest(method, u, buf)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("User-Agent", c.UserAgent)
+
+	if body != nil {
+		req.Header.Add("Content-Type", "application/msgpack")
 	}
 
 	return req, nil
@@ -190,7 +220,11 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 		if w, ok := v.(io.Writer); ok {
 			io.Copy(w, resp.Body)
 		} else {
-			err = json.NewDecoder(resp.Body).Decode(v)
+			if strings.Contains(req.Header.Get("Content-Type"), "application/msgpack") {
+				err = msgpack.NewDecoder(resp.Body).Decode(v)
+			} else {
+				err = json.NewDecoder(resp.Body).Decode(v)
+			}
 		}
 	}
 
@@ -200,7 +234,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 // ErrorResponse provides a message.
 type ErrorResponse struct {
 	Response *http.Response // HTTP response that caused this error
-	Message  string         `json:"message"` // error message
+	Message  string         `json:"message" msgpack:"message"` // error message
 }
 
 func (r *ErrorResponse) Error() string {
@@ -223,7 +257,11 @@ func checkResponse(r *http.Response) error {
 	errorResponse := &ErrorResponse{Response: r}
 	data, err := ioutil.ReadAll(r.Body)
 	if err == nil && data != nil {
-		json.Unmarshal(data, errorResponse)
+		if strings.Contains(r.Header.Get("Content-Type"), "application/msgpack") {
+			msgpack.Unmarshal(data, errorResponse)
+		} else {
+			json.Unmarshal(data, errorResponse)
+		}
 	}
 
 	return errorResponse

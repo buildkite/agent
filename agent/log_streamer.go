@@ -46,6 +46,12 @@ type LogStreamerChunk struct {
 
 	// The sequence number of this chunk
 	Order int
+
+	// The byte offset of this chunk
+	Offset int
+
+	// The byte size of this chunk
+	Size int
 }
 
 // Creates a new instance of the log streamer
@@ -103,8 +109,10 @@ func (ls *LogStreamer) Process(output string) error {
 
 			// Create the chunk and append it to our list
 			chunk := LogStreamerChunk{
-				Data:  partialChunk,
-				Order: ls.order,
+				Data:   partialChunk,
+				Order:  ls.order,
+				Offset: ls.bytes,
+				Size:   bytes - ls.bytes,
 			}
 
 			ls.queue <- &chunk

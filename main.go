@@ -6,7 +6,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/clicommand"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 var AppHelpTemplate = `Usage:
@@ -23,15 +23,15 @@ Use "{{.Name}} <command> --help" for more information about a command.
 
 var SubcommandHelpTemplate = `Usage:
 
-  {{.Name}} {{if .Flags}}<command>{{end}} [arguments...]
+  {{.Name}} {{if .VisibleFlags}}<command>{{end}} [arguments...]
 
 Available commands are:
 
    {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
-   {{end}}{{if .Flags}}
+   {{end}}{{if .VisibleFlags}}
 Options:
 
-   {{range .Flags}}{{.}}
+   {{range .VisibleFlags}}{{.}}
    {{end}}{{end}}
 `
 
@@ -39,7 +39,7 @@ var CommandHelpTemplate = `{{.Description}}
 
 Options:
 
-   {{range .Flags}}{{.}}
+   {{range .VisibleFlags}}{{.}}
    {{end}}
 `
 
@@ -58,6 +58,7 @@ func main() {
 	app.Version = agent.Version()
 	app.Commands = []cli.Command{
 		clicommand.AgentStartCommand,
+		clicommand.AnnotateCommand,
 		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",

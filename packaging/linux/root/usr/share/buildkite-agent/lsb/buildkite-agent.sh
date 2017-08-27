@@ -15,10 +15,15 @@
 user="buildkite-agent"
 cmd="/usr/bin/buildkite-agent start"
 
-name=`basename $0`
-pid_file="/var/run/$name.pid"
-log="/var/log/$name.log"
-stderr_log="/var/log/$name.err"
+name=$(basename "$(readlink -f "$0")")
+pid_file="/var/run/${name}.pid"
+lock_dir="/var/lock/subsys"
+lock_file="${lock_dir}/${name}"
+log="/var/log/${name}.log"
+stderr_log="/var/log/${name}.err"
+
+[ -r /etc/default/${name} ] && . /etc/default/${name}
+[ -r /etc/sysconfig/${name} ] && . /etc/sysconfig/${name}
 
 get_pid() {
     cat "$pid_file"
@@ -34,11 +39,14 @@ case "$1" in
         echo "Already started"
     else
         echo "Starting $name"
-        sudo -u "$user" $cmd >>"$log" 2>&1 &
+        su --login --shell /bin/sh "$user" --command "exec $cmd" >>"$log" 2>&1 &
         echo $! > "$pid_file"
         if ! is_running; then
             echo "Unable to start, see $log"
             exit 1
+        fi
+        if [ -d "$lock_dir" ]; then
+            touch "$lock_file"
         fi
     fi
     ;;
@@ -64,6 +72,9 @@ case "$1" in
             echo "Stopped"
             if [ -f "$pid_file" ]; then
                 rm "$pid_file"
+            fi
+            if [ -f "$lock_file" ]; then
+                rm -f "$lock_file"
             fi
         fi
     else

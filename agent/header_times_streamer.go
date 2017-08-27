@@ -10,6 +10,7 @@ import (
 )
 
 var HeaderRegex = regexp.MustCompile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
+var ANSIColorRegex = regexp.MustCompile(`\x1b\[([;\d]+)?[mK]`)
 
 type HeaderTimesStreamer struct {
 	// The callback that will be called when a header time is ready for
@@ -72,9 +73,9 @@ func (h *HeaderTimesStreamer) Scan(line string) {
 	h.scanWaitGroup.Add(1)
 	defer h.scanWaitGroup.Done()
 
-	// To avoid running the regex over every single line, we'll first do a
-	// length check. Hopefully there are no heeaders over 500 characters!
-	if len(line) < 500 && HeaderRegex.MatchString(line) {
+	if h.LineIsHeader(line) {
+		logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+
 		// Aquire a lock on the times and then add the current time to
 		// our times slice.
 		h.timesMutex.Lock()
@@ -133,4 +134,18 @@ func (h *HeaderTimesStreamer) Stop() {
 	h.streamingMutex.Lock()
 	h.streaming = false
 	h.streamingMutex.Unlock()
+}
+
+func (h *HeaderTimesStreamer) LinePreProcessor(line string) string {
+	// Make sure all ANSI colors are removed from the string before we
+	// check to see if it's a header (sometimes a color escape sequence may
+	// be the first thing on the line, which will cause the regex to ignore
+	// it)
+	return ANSIColorRegex.ReplaceAllString(line, "")
+}
+
+func (h *HeaderTimesStreamer) LineIsHeader(line string) bool {
+	// To avoid running the regex over every single line, we'll first do a
+	// length check. Hopefully there are no heeaders over 500 characters!
+	return len(line) < 500 && HeaderRegex.MatchString(line)
 }

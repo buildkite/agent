@@ -43,6 +43,9 @@ type JobRunner struct {
 
 	// Used to wait on various routines that we spin up
 	routineWaitGroup sync.WaitGroup
+
+	// A lock to protect concurrent calls to kill
+	killLock sync.Mutex
 }
 
 // Initializes the job runner
@@ -61,11 +64,14 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
-		Script:        r.AgentConfiguration.BootstrapScript,
-		Env:           r.createEnvironment(),
-		PTY:           r.AgentConfiguration.RunInPty,
-		StartCallback: r.onProcessStartCallback,
-		LineCallback:  runner.headerTimesStreamer.Scan,
+		Script:             r.AgentConfiguration.BootstrapScript,
+		Env:                r.createEnvironment(),
+		PTY:                r.AgentConfiguration.RunInPty,
+		Timestamp:          r.AgentConfiguration.TimestampLines,
+		StartCallback:      r.onProcessStartCallback,
+		LineCallback:       runner.headerTimesStreamer.Scan,
+		LinePreProcessor:   runner.headerTimesStreamer.LinePreProcessor,
+		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
 	}
 
 	return
@@ -130,6 +136,9 @@ func (r *JobRunner) Run() error {
 }
 
 func (r *JobRunner) Kill() error {
+	r.killLock.Lock()
+	defer r.killLock.Unlock()
+
 	if !r.cancelled {
 		logger.Info("Canceling job %s", r.Job.ID)
 		r.cancelled = true
@@ -172,6 +181,8 @@ func (r *JobRunner) createEnvironment() []string {
 	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHFingerprintVerification)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
+	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.AgentConfiguration.GitCleanFlags
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
@@ -203,7 +214,7 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
 }
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
@@ -269,14 +280,14 @@ func (r *JobRunner) onProcessStartCallback() {
 			jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
 			if err != nil {
 				// We don't really care if it fails, we'll just
-				// try again in a second anyway
+				// try again soon anyway
 				logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
 			} else if jobState.State == "canceling" || jobState.State == "canceled" {
 				r.Kill()
 			}
 
-			// Check for cancellations every few seconds
-			time.Sleep(3 * time.Second)
+			// Check for cancellations
+			time.Sleep(time.Duration(r.Agent.JobStatusInterval) * time.Second)
 		}
 
 		// Mark this routine as done in the wait group
@@ -294,7 +305,7 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
 // Call when a chunk is ready for upload. It retry the chunk upload with an
@@ -304,11 +315,13 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 		_, err := r.APIClient.Chunks.Upload(r.Job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
+			Offset:   chunk.Offset,
+			Size:     chunk.Size,
 		})
 		if err != nil {
 			logger.Warn("%s (%s)", err, s)
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }

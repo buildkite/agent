@@ -1,6 +1,6 @@
 #!/bin/bash
 
 # The `post-checkout` hook will run after the bootstrap script has checked out
-# your projects source code.
+# your pipelines source code.
 
 set -e

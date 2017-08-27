@@ -18,17 +18,17 @@ COMPONENT="main"
 
 # Some validations
 if [ -z "$GPG_SIGNING_KEY" ]; then
-  echo "Error: Missing ENV variable $GPG_SIGNING_KEY"
+  echo "Error: Missing ENV variable GPG_SIGNING_KEY"
   exit 1
 fi
 
 if [ -z "$GPG_PASSPHRASE_PASSWORD" ]; then
-  echo "Error: Missing ENV variable $GPG_PASSPHRASE_PASSWORD"
+  echo "Error: Missing ENV variable GPG_PASSPHRASE_PASSWORD"
   exit 1
 fi
 
 if [ -z "$GPG_PASSPHRASE_PATH" ]; then
-  echo "Error: Missing ENV variable $GPG_PASSPHRASE_PATH"
+  echo "Error: Missing ENV variable GPG_PASSPHRASE_PATH"
   exit 1
 fi
 
@@ -57,7 +57,7 @@ GPG_PASSPHRASE=`openssl aes-256-cbc -k "$GPG_PASSPHRASE_PASSWORD" -in "$GPG_PASS
 bundle exec deb-s3 upload \
   --preserve-versions \
   --sign $GPG_SIGNING_KEY \
-  --gpg-options "\-\-passphrase $GPG_PASSPHRASE" \
+  --gpg-options "\-\-digest-algo SHA512 \-\-passphrase $GPG_PASSPHRASE" \
   --bucket $DEB_S3_BUCKET \
   --codename $CODENAME \
   --component $COMPONENT \

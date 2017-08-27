@@ -1,6 +1,6 @@
 package api
 
-import "code.google.com/p/go-uuid/uuid"
+import "github.com/pborman/uuid"
 
 func NewUUID() string {
 	return uuid.New()

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 type Process struct {
 	Pid        int
 	PTY        bool
+	Timestamp  bool
 	Script     string
 	Env        []string
 	ExitStatus string
@@ -35,13 +37,17 @@ type Process struct {
 	StartCallback func()
 
 	// For every line in the process output, this callback will be called
-	// with the contents of the line
-	LineCallback func(string)
+	// with the contents of the line if its filter returns true.
+	LineCallback       func(string)
+	LinePreProcessor   func(string) string
+	LineCallbackFilter func(string) bool
 
 	// Running is stored as an int32 so we can use atomic operations to
 	// set/get it (it's accessed by multiple goroutines)
 	running int32
 }
+
+var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
 
 func (p *Process) Start() error {
 	c, err := shell.CommandFromString(p.Script)
@@ -62,7 +68,12 @@ func (p *Process) Start() error {
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
-	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
+	var multiWriter io.Writer
+	if p.Timestamp {
+		multiWriter = io.MultiWriter(lineWriterPipe)
+	} else {
+		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
+	}
 
 	logger.Info("Starting to run: %s", c.String())
 
@@ -127,6 +138,7 @@ func (p *Process) Start() error {
 		reader := bufio.NewReader(lineReaderPipe)
 
 		var appending []byte
+		var lineCallbackWaitGroup sync.WaitGroup
 
 		for {
 			line, isPrefix, err := reader.ReadLine()
@@ -145,7 +157,12 @@ func (p *Process) Start() error {
 			// has ended.
 			if isPrefix && appending == nil {
 				logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
-				appending = line
+				// bufio.ReadLine returns a slice which is only valid until the next invocation
+				// since it points to its own internal buffer array. To accumulate the entire
+				// result we make a copy of the first prefix, and insure there is spare capacity
+				// for future appends to minimize the need for resizing on append.
+				appending = make([]byte, len(line), (cap(line))*2)
+				copy(appending, line)
 
 				continue
 			}
@@ -166,11 +183,45 @@ func (p *Process) Start() error {
 				}
 			}
 
-			go p.LineCallback(string(line))
+			// If we're timestamping this main thread will take
+			// the hit of running the regex so we can build up
+			// the timestamped buffer without breaking headers,
+			// otherwise we let the goroutines take the perf hit.
+
+			checkedForCallback := false
+			lineHasCallback := false
+			lineString := p.LinePreProcessor(string(line))
+
+			// Create the prefixed buffer
+			if p.Timestamp {
+				lineHasCallback = p.LineCallbackFilter(lineString)
+				checkedForCallback = true
+				if lineHasCallback || headerExpansionRegex.MatchString(lineString) {
+					// Don't timestamp special lines (e.g. header)
+					p.buffer.WriteString(fmt.Sprintf("%s\n", line))
+				} else {
+					currentTime := time.Now().UTC().Format(time.RFC3339)
+					p.buffer.WriteString(fmt.Sprintf("[%s] %s\n", currentTime, line))
+				}
+			}
+
+			if lineHasCallback || !checkedForCallback {
+				lineCallbackWaitGroup.Add(1)
+				go func(line string) {
+					defer lineCallbackWaitGroup.Done()
+					if (checkedForCallback && lineHasCallback) || p.LineCallbackFilter(lineString) {
+						p.LineCallback(line)
+					}
+				}(lineString)
+			}
 		}
 
-		logger.Debug("[LineScanner] Finished")
+		// We need to make sure all the line callbacks have finish before
+		// finish up the process
+		logger.Debug("[LineScanner] Waiting for callbacks to finish")
+		lineCallbackWaitGroup.Wait()
 
+		logger.Debug("[LineScanner] Finished")
 		waitGroup.Done()
 	}()
 
@@ -316,6 +367,8 @@ func getExitStatus(waitResult error) string {
 			} else {
 				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
+		} else {
+			logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
 		}
 	} else {
 		exitStatus = 0

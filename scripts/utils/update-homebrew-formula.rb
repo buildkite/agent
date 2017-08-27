@@ -7,23 +7,23 @@
 #   stable do
 #     version "..."
 #     url     "..."
-#     sha1    "..."
+#     sha256  "..."
 #   end
 #
 #   devel do
 #     version "..."
 #     url     "..."
-#     sha1    "..."
+#     sha256  "..."
 #   end
 
-release, version, url, sha1 = ARGV
+release, version, url, sha256 = ARGV
 
 print $stdin.read.sub(%r{
   (
     #{release} \s+ do      .*?
       version \s+ ").*?("  .*?
       url     \s+ ").*?("  .*?
-      sha1    \s+ ").*?("  .*?
+      sha256  \s+ ").*?("  .*?
     end
   )
-}xm, "\\1#{version}\\2#{url}\\3#{sha1}\\4")
+}xm, "\\1#{version}\\2#{url}\\3#{sha256}\\4")

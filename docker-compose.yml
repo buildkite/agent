@@ -1,12 +1,11 @@
-agent:
-  build: .
-  volumes:
-    - ./:/go/src/github.com/buildkite/agent
-    - /usr/bin/buildkite-agent:/usr/bin/buildkite-agent
-  environment:
-    - BUILDKITE_AGENT_ACCESS_TOKEN
-    - BUILDKITE_JOB_ID
-    - BUILDKITE_BUILD_ID
-    - BUILDKITE_BUILD_NUMBER
-    - GITHUB_RELEASE_ACCESS_TOKEN
-    - DOCKER_HUB_TRIGGER_TOKEN
+version: '2'
+
+services:
+  agent:
+    image: golang:1.8
+    working_dir: /go/src/github.com/buildkite/agent
+    volumes:
+      - ./:/go/src/github.com/buildkite/agent
+    environment:
+      BUILDKITE_BUILD_NUMBER:
+

@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -14,15 +16,21 @@ import (
 )
 
 type AgentPool struct {
-	APIClient          *api.Client
-	Token              string
-	ConfigFilePath     string
-	Name               string
-	Priority           string
-	MetaData           []string
-	MetaDataEC2Tags    bool
-	Endpoint           string
-	AgentConfiguration *AgentConfiguration
+	APIClient             *api.Client
+	Token                 string
+	ConfigFilePath        string
+	Name                  string
+	Priority              string
+	Tags                  []string
+	TagsFromEC2           bool
+	TagsFromEC2Tags       bool
+	TagsFromGCP           bool
+	WaitForEC2TagsTimeout time.Duration
+	Endpoint              string
+	AgentConfiguration    *AgentConfiguration
+
+	interruptCount int
+	signalLock     sync.Mutex
 }
 
 func (r *AgentPool) Start() error {
@@ -44,12 +52,13 @@ func (r *AgentPool) Start() error {
 		logger.Fatal("%s", err)
 	}
 
-	logger.Info("Successfully registered agent \"%s\" with meta-data %s", registered.Name, registered.MetaData)
+	logger.Info("Successfully registered agent \"%s\" with tags %s", registered.Name, registered.Tags)
 
 	logger.Debug("Ping interval: %ds", registered.PingInterval)
+	logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
 	logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
 
-	// Now that we have a registereted agent, we can connect it to the API,
+	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
 	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint}.Create()
 
@@ -60,16 +69,32 @@ func (r *AgentPool) Start() error {
 
 	logger.Info("Agent successfully connected")
 	logger.Info("You can press Ctrl-C to stop the agent")
-	logger.Info("Waiting for work...")
+
+	if r.AgentConfiguration.DisconnectAfterJob {
+		logger.Info("Waiting for job to be assigned...")
+		logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
+	} else {
+		logger.Info("Waiting for work...")
+	}
 
 	// Start a signalwatcher so we can monitor signals and handle shutdowns
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
+		r.signalLock.Lock()
+		defer r.signalLock.Unlock()
+
 		if sig == signalwatcher.QUIT {
 			logger.Debug("Received signal `%s`", sig.String())
 			worker.Stop(false)
 		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
 			logger.Debug("Received signal `%s`", sig.String())
-			worker.Stop(true)
+			if r.interruptCount == 0 {
+				r.interruptCount++
+				logger.Info("Received CTRL-C, send again to forcefully kill the agent")
+				worker.Stop(true)
+			} else {
+				logger.Info("Forcefully stopping running jobs and stopping the agent")
+				worker.Stop(false)
+			}
 		} else {
 			logger.Debug("Ignoring signal `%s`", sig.String())
 		}
@@ -94,7 +119,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	agent := &api.Agent{
 		Name:              r.Name,
 		Priority:          r.Priority,
-		MetaData:          r.MetaData,
+		Tags:              r.Tags,
 		ScriptEvalEnabled: r.AgentConfiguration.CommandEval,
 		Version:           Version(),
 		Build:             BuildVersion(),
@@ -103,14 +128,67 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	}
 
 	// Attempt to add the EC2 tags
-	if r.MetaDataEC2Tags {
-		tags, err := EC2Tags{}.Get()
+	if r.TagsFromEC2 {
+		logger.Info("Fetching EC2 meta-data...")
+
+		err := retry.Do(func(s *retry.Stats) error {
+			tags, err := EC2MetaData{}.Get()
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			} else {
+				logger.Info("Successfully fetched EC2 meta-data")
+				for tag, value := range tags {
+					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
+				}
+				s.Break()
+			}
+
+			return err
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+		}
+	}
+
+	// Attempt to add the EC2 tags
+	if r.TagsFromEC2Tags {
+		logger.Info("Fetching EC2 tags...")
+		err := retry.Do(func(s *retry.Stats) error {
+			tags, err := EC2Tags{}.Get()
+			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
+			// to be applied to instances. This error will cause retries.
+			if err == nil && len(tags) == 0 {
+				err = errors.New("EC2 tags are empty")
+			}
+			if err != nil {
+				logger.Warn("%s (%s)", err, s)
+			} else {
+				logger.Info("Successfully fetched EC2 tags")
+				for tag, value := range tags {
+					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
+				}
+				s.Break()
+			}
+			return err
+		}, &retry.Config{Maximum: 5, Interval: r.WaitForEC2TagsTimeout / 5, Jitter: true})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			logger.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
+		}
+	}
+
+	// Attempt to add the Google Cloud meta-data
+	if r.TagsFromGCP {
+		tags, err := GCPMetaData{}.Get()
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to find EC2 Tags: %s", err.Error()))
+			logger.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
-				agent.MetaData = append(agent.MetaData, fmt.Sprintf("%s=%s", tag, value))
+				agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
 			}
 		}
 	}
@@ -154,7 +232,8 @@ func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 		return err
 	}
 
-	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
+	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 10 * time.Second})
 
 	return registered, err
 }
@@ -202,5 +281,9 @@ func (r *AgentPool) ShowBanner() {
 
 	if !r.AgentConfiguration.RunInPty {
 		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
+	}
+
+	if r.AgentConfiguration.DisconnectAfterJob {
+		logger.Debug("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 }

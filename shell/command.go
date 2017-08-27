@@ -2,14 +2,13 @@ package shell
 
 import (
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"unicode/utf8"
 
-	"github.com/buildkite/agent/vendor/src/github.com/mattn/go-shellwords"
+	"github.com/buildkite/agent/env"
+	"github.com/mattn/go-shellwords"
 )
 
 type Command struct {
@@ -20,7 +19,7 @@ type Command struct {
 	Args []string
 
 	// The environment to use for the command
-	Env *Environment
+	Env *env.Environment
 
 	// The directory to run the command from
 	Dir string
@@ -36,8 +35,6 @@ func CommandFromString(str string) (*Command, error) {
 	return &Command{Command: args[0], Args: args[1:]}, nil
 }
 
-var envPathLock sync.Mutex
-
 // The absolute path to this commands executable
 func (c *Command) AbsolutePath() (string, error) {
 	// Is the path already absolute?
@@ -45,45 +42,30 @@ func (c *Command) AbsolutePath() (string, error) {
 		return c.Command, nil
 	}
 
-	var absolutePath string
-	var err error
+	var envPath string
+	var fileExtensions string // For searching .exe, .bat, etc on Windows
 
-	if c.Env != nil && c.Env.Get("PATH") != "" {
-		// This is a little hacky and ugly. Golangs `LookPath` will
-		// look in a PATH env for an executable, which is exactly what
-		// we want, however it only looks in the current env's PATH,
-		// and it can't be customized.
-		//
-		// Since we can't change it, we'll just hack override the
-		// current PATH temporarly as we figure it out. We have to wrap
-		// it in a lock so other processes don't try and change the
-		// PATH at the same time.
-		envPathLock.Lock()
-		defer envPathLock.Unlock()
-
-		// Change the PATH
-		previousEnvPath := os.Getenv("PATH")
-		os.Setenv("PATH", c.Env.Get("PATH"))
-
-		// Now we can look up the path
-		absolutePath, err = exec.LookPath(c.Command)
-
-		// Restore the previous PATH
-		os.Setenv("PATH", previousEnvPath)
+	// Default to the operation system's PATH if a custom environment
+	// hasn't been provided
+	if c.Env == nil {
+		envPath = os.Getenv("PATH")
+		fileExtensions = os.Getenv("PATHEXT")
 	} else {
-		// Since no custom PATH is set, we can just default to the
-		// regular behaviour.
-		absolutePath, err = exec.LookPath(c.Command)
+		envPath = c.Env.Get("PATH")
+		fileExtensions = c.Env.Get("PATHEXT")
 	}
+
+	// Use our custom lookPath that takes a specific path
+	absolutePath, err := lookPath(c.Command, envPath, fileExtensions)
 
 	if err != nil {
 		return "", err
-	} else {
-		// Since the path returned by LookPath is relative to the
-		// current working directory, we need to get the absolute
-		// version of that.
-		return filepath.Abs(absolutePath)
 	}
+
+	// Since the path returned by LookPath is relative to the
+	// current working directory, we need to get the absolute
+	// version of that.
+	return filepath.Abs(absolutePath)
 }
 
 func (c *Command) String() string {

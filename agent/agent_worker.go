@@ -31,6 +31,9 @@ type AgentWorker struct {
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
 
+	// Tracking the auto disconnect timer
+	disconnectTimeoutTimer *time.Timer
+
 	// Stop controls
 	stop      chan struct{}
 	stopping  bool
@@ -81,10 +84,35 @@ func (a *AgentWorker) Start() error {
 	a.ticker = time.NewTicker(pingInterval)
 	a.stop = make(chan struct{})
 
+	// Setup a timer to automatically disconnect if no job has started
+	if a.AgentConfiguration.DisconnectAfterJob {
+		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.AgentConfiguration.DisconnectAfterJobTimeout))
+		go func() {
+			<-a.disconnectTimeoutTimer.C
+			logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+
+			// Just double check that the agent isn't running a
+			// job. The timer is stopped just after this is
+			// assigned, but there's a potential race condition
+			// where in between accepting the job, and creating the
+			// `jobRunner`, the timer pops.
+			if a.jobRunner == nil && !a.stopping {
+				logger.Debug("[DisconnectionTimer] The agent isn't running a job, going to signal a stop")
+				a.Stop(true)
+			} else {
+				logger.Debug("[DisconnectionTimer] Agent is running a job, going to just ignore and let it finish it's work")
+			}
+		}()
+
+		logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+	}
+
 	// Continue this loop until the the ticker is stopped, and we received
 	// a message on the stop channel.
 	for {
-		a.Ping()
+		if !a.stopping {
+			a.Ping()
+		}
 
 		select {
 		case <-a.ticker.C:
@@ -124,14 +152,14 @@ func (a *AgentWorker) Stop(graceful bool) {
 	} else {
 		// If there's a job running, kill it, then disconnect
 		if a.jobRunner != nil {
-			logger.Info("Forefully stopping agent. The current job will be canceled before disconnecting...")
+			logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
 
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
 			a.jobRunner.Kill()
 		} else {
-			logger.Info("Forefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+			logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 		}
 	}
 
@@ -167,7 +195,7 @@ func (a *AgentWorker) Connect() error {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
 // Performs a heatbeat
@@ -182,7 +210,7 @@ func (a *AgentWorker) Heartbeat() error {
 			logger.Warn("%s (%s)", err, s)
 		}
 		return err
-	}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 5, Interval: 5 * time.Second})
 
 	if err != nil {
 		return err
@@ -202,6 +230,17 @@ func (a *AgentWorker) Ping() {
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		logger.Warn("Failed to ping: %s", err)
+
+		// When the ping fails, we wan't to reset our disconnection
+		// timer. It wouldnt' be very nice if we just killed the agent
+		// because Buildkite was having some connection issues.
+		if a.disconnectTimeoutTimer != nil {
+			jobTimeoutSeconds := time.Second * time.Duration(a.AgentConfiguration.DisconnectAfterJobTimeout)
+			a.disconnectTimeoutTimer.Reset(jobTimeoutSeconds)
+
+			logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+		}
+
 		return
 	}
 
@@ -263,7 +302,7 @@ func (a *AgentWorker) Ping() {
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 1 * time.Second})
+	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
@@ -279,6 +318,12 @@ func (a *AgentWorker) Ping() {
 		Job:                accepted,
 	}.Create()
 
+	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
+	if a.disconnectTimeoutTimer != nil {
+		logger.Debug("[DisconnectionTimer] A job was assigned and accepted, stopping timer...")
+		a.disconnectTimeoutTimer.Stop()
+	}
+
 	// Was there an error creating the job runner?
 	if err != nil {
 		logger.Error("Failed to initialize job: %s", err)
@@ -292,6 +337,18 @@ func (a *AgentWorker) Ping() {
 
 	// No more job, no more runner.
 	a.jobRunner = nil
+
+	if a.AgentConfiguration.DisconnectAfterJob {
+		logger.Info("Job finished. Disconnecting...")
+
+		// We can just kill this timer now as well
+		if a.disconnectTimeoutTimer != nil {
+			a.disconnectTimeoutTimer.Stop()
+		}
+
+		// Tell the agent to finish up
+		a.Stop(true)
+	}
 }
 
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying

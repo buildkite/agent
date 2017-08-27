@@ -52,62 +52,37 @@ BK_IS_UBUNTU_14_10=$?
 
 # Check if systemd exists
 command -v systemctl > /dev/null
-BK_SYSTEMD_EXITS=$?
+BK_SYSTEMD_EXISTS=$?
+
+# Check if upstart exists
+command -v initctl > /dev/null
+BK_UPSTART_EXISTS=$?
+
+# Check if upstart is version 0.6.5 as seen on Amazon linux, RHEL6 & CentOS-6
+BK_UPSTART_TOO_OLD=0
+if [ $BK_UPSTART_EXISTS -eq 0 ]; then
+  BK_UPSTART_VERSION="$(initctl --version | awk 'BEGIN{FS="[ ()]"} NR==1{print $4}')"
+  if [ "$BK_UPSTART_VERSION" = "0.6.5" ]; then
+    BK_UPSTART_TOO_OLD=1
+  fi
+fi
 
 # Install the relevant system process
-if [ $BK_SYSTEMD_EXITS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
-  if [ ! -f /lib/systemd/system/buildkite-agent.service ]; then
-    cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
-  fi
+if [ $BK_SYSTEMD_EXISTS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
+  cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
+  cp /usr/share/buildkite-agent/systemd/buildkite-agent@.service /lib/systemd/system/buildkite-agent@.service
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
-elif command -v initctl > /dev/null; then
+elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
   if [ ! -f /etc/init/buildkite-agent.conf ]; then
-    # If the system has the old .env file, install the old upstart script, and
-    # let them know they should upgrade. Because the upstart script is no
-    # longer considered a `config` file in the debian package, when you upgrade
-    # the agent, it rm's it from /etc/init, boo. So we need to put it back.
-    if [ -f /etc/buildkite-agent/buildkite-agent.env ]; then
-      echo "======================= IMPORTANT UPGRADE NOTICE =========================="
-      echo ""
-      echo "Hey!"
-      echo ""
-      echo "Sorry to be a pain, but we've deprecated use of the"
-      echo "/etc/buildkite-agent/buildkite-agent.env ENV file as a way of configuring the agent."
-      echo "It's had some issues and the approach wasn't very cross platform."
-      echo ""
-      echo "We've switched to using a proper config file that you can find here:"
-      echo ""
-      echo "/etc/buildkite-agent/buildkite-agent.cfg"
-      echo ""
-      echo "Everything should continue to work as is (we'll still use the .env file for now)."
-      echo "To upgrade, all you need to do is edit the new config file and copy across the settings"
-      echo "your .env file, then run:"
-      echo ""
-      echo "sudo service buildkite-agent stop"
-      echo "sudo rm /etc/buildkite-agent/buildkite-agent.env"
-      echo "sudo cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf"
-      echo "sudo service buildkite-agent start"
-      echo ""
-      echo "Then next time you upgrade, you won't see this annoying message :)"
-      echo ""
-      echo "If you have any questions, feel free to email me at: keith@buildkite.com"
-      echo ""
-      echo "~ Keith"
-      echo ""
-      echo "=========================================================================="
-      echo ""
-
-      cp /usr/share/buildkite-agent/upstart/buildkite-agent-using-env.conf /etc/init/buildkite-agent.conf
-    else
-      cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf
-    fi
+    cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf
   fi
 
   START_COMMAND="sudo service buildkite-agent start"
 elif [ -d /etc/init.d ]; then
   if [ ! -f /etc/init.d/buildkite-agent ]; then
     cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
+    command -v chkconfig > /dev/null && chkconfig --add buildkite-agent
   fi
 
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"

@@ -30,6 +30,10 @@ elif [ "$BUILD_ARCH" == "386" ]; then
   ARCH="i386"
 elif [ "$BUILD_ARCH" == "arm" ]; then
   ARCH="arm"
+elif [ "$BUILD_ARCH" == "armhf" ]; then
+  ARCH="armhf"
+elif [ "$BUILD_ARCH" == "arm64" ]; then
+  ARCH="arm64"
 else
   echo "Unknown architecture: $BUILD_ARCH"
   exit 1
@@ -72,7 +76,6 @@ bundle exec fpm -s "dir" \
   -v "$VERSION" \
   --iteration "$REVISION" \
   "./$BUILD_BINARY_PATH=/usr/bin/buildkite-agent" \
-  "templates/bootstrap.sh=/usr/share/buildkite-agent/bootstrap.sh" \
   "packaging/linux/root/=/"
 
 echo ""

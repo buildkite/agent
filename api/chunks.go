@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"fmt"
-	"mime/multipart"
 )
 
 // ChunksService handles communication with the chunk related methods of the
@@ -17,47 +16,31 @@ type ChunksService struct {
 type Chunk struct {
 	Data     string
 	Sequence int
+	Offset   int
+	Size     int
 }
 
-// Uploads the chunk to the Buildkite Agent API. This request doesn't use JSON,
-// but a multi-part HTTP form upload
+// Uploads the chunk to the Buildkite Agent API. This request sends the
+// compressed log directly as a request body.
 func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
+	// Create a compressed buffer of the log content
 	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	// Gzip the chunk data
-	var b bytes.Buffer
-	gz := gzip.NewWriter(&b)
-	if _, err := gz.Write([]byte(chunk.Data)); err != nil {
-		return nil, err
-	}
-	if err := gz.Flush(); err != nil {
-		return nil, err
-	}
-	if err := gz.Close(); err != nil {
+	gzipper := gzip.NewWriter(body)
+	gzipper.Write([]byte(chunk.Data))
+	if err := gzipper.Close(); err != nil {
 		return nil, err
 	}
 
-	// Write the chunk to the form
-	part, _ := writer.CreateFormFile("chunk", "chunk.gz")
-	part.Write(b.Bytes())
-
-	// Write the sequence value to the form
-	writer.WriteField("sequence", fmt.Sprintf("%d", chunk.Sequence))
-
-	// Close the writer because we don't need to add any more values to it
-	err := writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	u := fmt.Sprintf("jobs/%s/chunks", jobId)
+	// Pass most params as query
+	u := fmt.Sprintf("jobs/%s/chunks?sequence=%d&offset=%d&size=%d", jobId, chunk.Sequence, chunk.Offset, chunk.Size)
 	req, err := cs.client.NewFormRequest("POST", u, body)
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Add("Content-Type", writer.FormDataContentType())
+	// Mark the request as a direct compressed log chunk
+	req.Header.Add("Content-Type", "text/plain")
+	req.Header.Add("Content-Encoding", "gzip")
 
 	return cs.client.Do(req, nil)
 }

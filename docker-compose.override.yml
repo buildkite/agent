@@ -1,0 +1,10 @@
+version: '2'
+
+services:
+  agent:
+    build: .
+    working_dir: /go/src/github.com/buildkite/agent
+    volumes:
+      - ./:/go/src/github.com/buildkite/agent
+    environment:
+      BUILDKITE_BUILD_NUMBER:

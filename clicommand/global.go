@@ -2,9 +2,10 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
-	"github.com/codegangsta/cli"
 	"github.com/oleiade/reflections"
+	"github.com/urfave/cli"
 )
 
 const (
@@ -43,6 +44,13 @@ var NoColorFlag = cli.BoolFlag{
 	EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 }
 
+var ExperimentsFlag = cli.StringSliceFlag{
+	Name:   "experiment",
+	Value:  &cli.StringSlice{},
+	Usage:  "Enable experimental features within the buildkite-agent",
+	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
+}
+
 func HandleGlobalFlags(cfg interface{}) {
 	// Enable debugging if a Debug option is present
 	debug, err := reflections.GetField(cfg, "Debug")
@@ -60,5 +68,16 @@ func HandleGlobalFlags(cfg interface{}) {
 	noColor, err := reflections.GetField(cfg, "NoColor")
 	if noColor == true && err == nil {
 		logger.SetColors(false)
+	}
+
+	// Enable experiments
+	experimentNames, err := reflections.GetField(cfg, "Experiments")
+	if err == nil {
+		experimentNamesSlice, ok := experimentNames.([]string)
+		if ok {
+			for _, name := range experimentNamesSlice {
+				experiments.Enable(name)
+			}
+		}
 	}
 }

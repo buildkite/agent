@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/utils"
-	"github.com/codegangsta/cli"
 	"github.com/oleiade/reflections"
+	"github.com/urfave/cli"
 )
 
 type Loader struct {
@@ -27,7 +28,7 @@ type Loader struct {
 	File *File
 }
 
-var CLISpecialNameRegex = regexp.MustCompile(`(arg):(\d+)`)
+var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
 func Load(c *cli.Context, cfg interface{}) error {
@@ -100,10 +101,39 @@ func (l *Loader) Load() error {
 			}
 		}
 
+		// Check for field rename deprecations
+		renamedToFieldName, _ := reflections.GetFieldTag(l.Config, fieldName, "deprecated-and-renamed-to")
+		if renamedToFieldName != "" {
+			// If the deprecated field's value isn't empty, then we
+			// log a message, and set the proper config for them.
+			if !l.fieldValueIsEmpty(fieldName) {
+				renamedFieldCliName, _ := reflections.GetFieldTag(l.Config, renamedToFieldName, "cli")
+				if renamedFieldCliName != "" {
+					logger.Warn("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName)
+				}
+
+				value, _ := reflections.GetField(l.Config, fieldName)
+
+				// Error if they specify the deprecated version and the new version
+				if !l.fieldValueIsEmpty(renamedToFieldName) {
+					renamedFieldValue, _ := reflections.GetField(l.Config, renamedToFieldName)
+					return fmt.Errorf("Can't set config option `%s=%v` because `%s=%v` has already been set", cliName, value, renamedFieldCliName, renamedFieldValue)
+				}
+
+				// Set the proper config based on the deprecated value
+				if value != nil {
+					err := reflections.SetField(l.Config, renamedToFieldName, value)
+					if err != nil {
+						return fmt.Errorf("Could not set value `%s` to field `%s` (%s)", value, renamedToFieldName, err)
+					}
+				}
+			}
+		}
+
 		// Check for field deprecation
 		deprecationError, _ := reflections.GetFieldTag(l.Config, fieldName, "deprecated")
 		if deprecationError != "" {
-			// If the deprecated field's value isn't emtpy, then we
+			// If the deprecated field's value isn't empty, then we
 			// return the deprecation error message.
 			if !l.fieldValueIsEmpty(fieldName) {
 				return fmt.Errorf(deprecationError)
@@ -147,22 +177,31 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 
 	var value interface{}
 
-	// See the if the cli option is using the special format i.e. (arg:1)
-	special := CLISpecialNameRegex.FindStringSubmatch(cliName)
-	if len(special) == 3 {
-		// Should this cli option be loaded from the CLI arguments?
-		if special[1] == "arg" {
-			// Convert the arg position to an integer
-			i, err := strconv.Atoi(special[2])
-			if err != nil {
-				return fmt.Errorf("Failed to convert string to int: %s", err)
-			}
+	// See the if the cli option is using the arg format i.e. (arg:1)
+	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
+	if len(argMatch) > 0 {
+		argNum := argMatch[1]
 
-			// Only set the value if the args are long enough for
-			// the position to exist.
-			if len(l.CLI.Args()) > i {
-				// Get the value from the args
-				value = l.CLI.Args()[i]
+		// Convert the arg position to an integer
+		argIndex, err := strconv.Atoi(argNum)
+		if err != nil {
+			return fmt.Errorf("Failed to convert string to int: %s", err)
+		}
+
+		// Only set the value if the args are long enough for
+		// the position to exist.
+		if len(l.CLI.Args()) > argIndex {
+			value = l.CLI.Args()[argIndex]
+		}
+
+		// Otherwise see if we can pull it from an environment variable
+		// (and fail gracefuly if we can't)
+		if value == nil {
+			envName, err := reflections.GetFieldTag(l.Config, fieldName, "env")
+			if err == nil {
+				if envValue, envSet := os.LookupEnv(envName); envSet {
+					value = envValue
+				}
 			}
 		}
 	} else {
@@ -180,6 +219,8 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 					value = strings.Split(configFileValue, ",")
 				} else if fieldKind == reflect.Bool {
 					value, _ = strconv.ParseBool(configFileValue)
+				} else if fieldKind == reflect.Int {
+					value, _ = strconv.Atoi(configFileValue)
 				} else {
 					return fmt.Errorf("Unable to convert string to type %s", fieldKind)
 				}
@@ -195,6 +236,8 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 				value = l.CLI.StringSlice(cliName)
 			} else if fieldKind == reflect.Bool {
 				value = l.CLI.Bool(cliName)
+			} else if fieldKind == reflect.Int {
+				value = l.CLI.Int(cliName)
 			} else {
 				return fmt.Errorf("Unable to handle type: %s", fieldKind)
 			}

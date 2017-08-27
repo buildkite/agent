@@ -4,7 +4,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 var DownloadHelpDescription = `Usage:
@@ -53,7 +53,7 @@ var ArtifactDownloadCommand = cli.Command{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
-			Usage: "Scope the search to a paticular step by using either it's name of job ID",
+			Usage: "Scope the search to a paticular step by using either it's name or job ID",
 		},
 		cli.StringFlag{
 			Name:   "build",

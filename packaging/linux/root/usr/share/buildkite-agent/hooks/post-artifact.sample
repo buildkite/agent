@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# The `post-artifact` hook will run just after artifacts are uploaded
+
+set -e

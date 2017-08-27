@@ -3,10 +3,10 @@ package clicommand
 import (
 	"runtime"
 
-	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
-	"github.com/codegangsta/cli"
+	"github.com/urfave/cli"
 )
 
 var BootstrapHelpDescription = `Usage:
@@ -21,26 +21,30 @@ Description:
 Example:
 
    $ eval $(curl -s -H "Authorization: Bearer xxx" \
-     "https://api.buildkite.com/v1/organizations/[org]/projects/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
+     "https://api.buildkite.com/v2/organizations/[org]/pipelines/[proj]/builds/[build]/jobs/[job]/env.txt" | sed 's/^/export /')
    $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
-	Command                      string `cli:"command" validate:"required"`
+	Command                      string `cli:"command"`
 	JobID                        string `cli:"job" validate:"required"`
 	Repository                   string `cli:"repository" validate:"required"`
 	Commit                       string `cli:"commit" validate:"required"`
 	Branch                       string `cli:"branch" validate:"required"`
 	Tag                          string `cli:"tag"`
+	RefSpec                      string `cli:"refspec"`
 	Plugins                      string `cli:"plugins"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
 	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
 	AgentName                    string `cli:"agent" validate:"required"`
-	ProjectSlug                  string `cli:"project" validate:"required"`
-	ProjectProvider              string `cli:"project-provider" validate:"required"`
+	OrganizationSlug             string `cli:"organization" validate:"required"`
+	PipelineSlug                 string `cli:"pipeline" validate:"required"`
+	PipelineProvider             string `cli:"pipeline-provider" validate:"required"`
 	AutomaticArtifactUploadPaths string `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string `cli:"artifact-upload-destination"`
 	CleanCheckout                bool   `cli:"clean-checkout"`
+	GitCloneFlags                string `cli:"git-clone-flags"`
+	GitCleanFlags                string `cli:"git-clean-flags"`
 	BinPath                      string `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
@@ -92,6 +96,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TAG",
 		},
 		cli.StringFlag{
+			Name:   "refspec",
+			Value:  "",
+			Usage:  "Optional refspec to override git fetch",
+			EnvVar: "BUILDKITE_REFSPEC",
+		},
+		cli.StringFlag{
 			Name:   "plugins",
 			Value:  "",
 			Usage:  "The plugins for the job",
@@ -110,16 +120,22 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_NAME",
 		},
 		cli.StringFlag{
-			Name:   "project",
+			Name:   "organization",
 			Value:  "",
-			Usage:  "The slug of the project that the job is a part of",
-			EnvVar: "BUILDKITE_PROJECT_SLUG",
+			Usage:  "The slug of the organization that the job is a part of",
+			EnvVar: "BUILDKITE_ORGANIZATION_SLUG",
 		},
 		cli.StringFlag{
-			Name:   "project-provider",
+			Name:   "pipeline",
+			Value:  "",
+			Usage:  "The slug of the pipeline that the job is a part of",
+			EnvVar: "BUILDKITE_PIPELINE_SLUG",
+		},
+		cli.StringFlag{
+			Name:   "pipeline-provider",
 			Value:  "",
 			Usage:  "The id of the SCM provider that the repository is hosted on",
-			EnvVar: "BUILDKITE_PROJECT_PROVIDER",
+			EnvVar: "BUILDKITE_PIPELINE_PROVIDER",
 		},
 		cli.StringFlag{
 			Name:   "artifact-upload-paths",
@@ -137,6 +153,18 @@ var BootstrapCommand = cli.Command{
 			Name:   "clean-checkout",
 			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-flags",
+			Value:  "-v",
+			Usage:  "Flags to pass to \"git clone\" command",
+			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-clean-flags",
+			Value:  "-fxdq",
+			Usage:  "Flags to pass to \"git clean\" command",
+			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -200,19 +228,23 @@ var BootstrapCommand = cli.Command{
 		}
 
 		// Configure the bootstraper
-		bootstrap := &agent.Bootstrap{
+		bootstrap := &bootstrap.Bootstrap{
 			Command:                      cfg.Command,
 			JobID:                        cfg.JobID,
 			Repository:                   cfg.Repository,
 			Commit:                       cfg.Commit,
 			Branch:                       cfg.Branch,
 			Tag:                          cfg.Tag,
+			RefSpec:                      cfg.RefSpec,
 			Plugins:                      cfg.Plugins,
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
+			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCleanFlags:                cfg.GitCleanFlags,
 			AgentName:                    cfg.AgentName,
-			ProjectProvider:              cfg.ProjectProvider,
-			ProjectSlug:                  cfg.ProjectSlug,
+			PipelineProvider:             cfg.PipelineProvider,
+			PipelineSlug:                 cfg.PipelineSlug,
+			OrganizationSlug:             cfg.OrganizationSlug,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			CleanCheckout:                cfg.CleanCheckout,

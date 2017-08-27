@@ -44,7 +44,6 @@ if [[ "$BINARY_PATH" == *"windows"* ]]; then
   cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent.exe
 
   info "Copying templates"
-  cp $TEMPLATE_DIRECTORY/bootstrap.bat $TMP_RELEASE_DIRECTORY
   cp $PACKAGING_DIRECTORY/github/windows/buildkite-agent.cfg $TMP_RELEASE_DIRECTORY
 
   info "Zipping up the files"
@@ -56,9 +55,6 @@ else
   info "Copying binary"
   cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent
   chmod +x $TMP_RELEASE_DIRECTORY/buildkite-agent
-
-  info "Copying bootstrap"
-  cp $TEMPLATE_DIRECTORY/bootstrap.sh $TMP_RELEASE_DIRECTORY
 
   info "Copying config"
   cp $PACKAGING_DIRECTORY/github/linux/buildkite-agent.cfg $TMP_RELEASE_DIRECTORY

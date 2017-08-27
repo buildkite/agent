@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/buildkite/agent/shell"
+	"github.com/buildkite/agent/env"
 )
 
 type Plugin struct {
@@ -56,9 +56,13 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 
 // Given a JSON structure, convert it to an array of plugins
 func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
+	// Use more versatile number decoding
+	decoder := json.NewDecoder(strings.NewReader(j))
+	decoder.UseNumber()
+
 	// Parse the JSON
 	var f interface{}
-	err := json.Unmarshal([]byte(j), &f)
+	err := decoder.Decode(&f)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +118,8 @@ func (p *Plugin) Name() string {
 		name = strings.ToLower(name)
 		name = regexp.MustCompile(`\s+`).ReplaceAllString(name, " ")
 		name = regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(name, "-")
+		name = strings.Replace(name, "-buildkite-plugin-git", "", -1)
+		name = strings.Replace(name, "-buildkite-plugin", "", -1)
 
 		return name
 	} else {
@@ -171,8 +177,8 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 }
 
 // Converts the plugin configuration values to environment variables
-func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
-	env := []string{}
+func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
+	envSlice := []string{}
 
 	toDashRegex := regexp.MustCompile(`-|\s+`)
 	removeWhitespaceRegex := regexp.MustCompile(`\s+`)
@@ -185,18 +191,37 @@ func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
 
 		switch vv := v.(type) {
 		case string:
-			env = append(env, fmt.Sprintf("%s=%s", name, vv))
-		case int:
-			env = append(env, fmt.Sprintf("%s=%d", name, vv))
+			envSlice = append(envSlice, fmt.Sprintf("%s=%s", name, vv))
+		case bool:
+			envSlice = append(envSlice, fmt.Sprintf("%s=%t", name, vv))
+		case json.Number:
+			envSlice = append(envSlice, fmt.Sprintf("%s=%s", name, vv.String()))
+		case []string:
+			for i := range vv {
+				envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
+			}
+		case []interface{}:
+			for i := range vv {
+				switch vvv := vv[i].(type) {
+				case json.Number:
+					envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vvv.String()))
+				case string:
+					envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vvv))
+				default:
+					fmt.Printf("Unknown type %T %v", vvv, vvv)
+					// unknown type
+				}
+			}
 		default:
+			fmt.Printf("Unknown type %T %v", vv, vv)
 			// unknown type
 		}
 	}
 
 	// Sort them into a consistent order
-	sort.Strings(env)
+	sort.Strings(envSlice)
 
-	return shell.EnvironmentFromSlice(env)
+	return env.FromSlice(envSlice), nil
 }
 
 // Pretty name for the plugin
