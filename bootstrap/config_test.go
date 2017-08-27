@@ -12,6 +12,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	config := &Config{
 		AutomaticArtifactUploadPaths: "llamas/",
 		GitCloneFlags:                "--prune",
+		GitCleanFlags:                "-v",
 		AgentName:                    "myAgent",
 	}
 
@@ -42,5 +43,10 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	if expected := "-f"; config.GitCloneFlags != expected {
 		t.Fatalf("Expected GitCloneFlags to be %v, got %v",
 			expected, config.GitCloneFlags)
+	}
+
+	if expected := "-v"; config.GitCleanFlags != expected {
+		t.Fatalf("Expected GitCleanFlags to be %v, got %v",
+			expected, config.GitCleanFlags)
 	}
 }

@@ -60,6 +60,7 @@ func (b *Bootstrap) Start() {
 		b.PluginPhase,
 		b.CheckoutPhase,
 		b.CommandPhase,
+		b.ArtifactPhase,
 	}
 
 	for _, phase := range phases {
@@ -873,7 +874,7 @@ func (b *Bootstrap) ArtifactPhase() error {
 
 		// Run the artifact upload command
 		b.shell.Headerf("Uploading artifacts")
-		if err := b.shell.Run("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination); err != nil {
+		if err := b.shell.Run("buildkite-agent artifact upload %q %q", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination); err != nil {
 			return err
 		}
 

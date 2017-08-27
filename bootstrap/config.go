@@ -105,7 +105,7 @@ func (c *Config) ReadFromEnvironment(environ *env.Environment) []string {
 		value := v.Field(i)
 
 		// Find struct fields with env tag
-		if tag := field.Tag.Get("env"); tag != "" {
+		if tag := field.Tag.Get("env"); tag != "" && environ.Exists(tag) {
 			envValue := environ.Get(tag)
 
 			// We only care if the value has changed
