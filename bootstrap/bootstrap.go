@@ -104,7 +104,11 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script := newHookScript(hookPath)
+	script, err := newHookScript(hookPath)
+	if err != nil {
+		b.shell.Errorf("Error creating hook script: %v", err)
+		return err
+	}
 	defer script.Close()
 
 	if b.Debug {
@@ -279,6 +283,23 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 	if err = knownHosts.AddFromRepository(repository); err != nil {
 		sh.Warningf("%v", err)
 	}
+}
+
+// Makes sure a file is executable
+func addExecutePermissiontoFile(filename string) error {
+	s, err := os.Stat(filename)
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
+	}
+
+	if s.Mode()&0100 == 0 {
+		err = os.Chmod(filename, s.Mode()|0100)
+		if err != nil {
+			return fmt.Errorf("Failed to mark \"%s\" as executable (%s)", filename, err)
+		}
+	}
+
+	return nil
 }
 
 // setUp is run before all the phases run. It's responsible for initializing the
@@ -582,7 +603,7 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if err := b.shell.Run("buildkite-agent meta-data exists buildkite:git:commit"); err != nil {
+	if _, err := b.shell.RunAndCapture("buildkite-agent meta-data exists buildkite:git:commit"); err == nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
 		gitCommitOutput, _ := b.shell.RunAndCapture("git show HEAD -s --format=fuller --no-color")
@@ -768,6 +789,11 @@ func (b *Bootstrap) DefaultCommandPhase() error {
 		if err != nil {
 			return fmt.Errorf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
 		}
+	}
+
+	// Make script executable
+	if err = addExecutePermissiontoFile(buildScriptPath); err != nil {
+		return err
 	}
 
 	// Show we're running the script

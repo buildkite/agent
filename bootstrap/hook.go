@@ -28,13 +28,11 @@ type hookRunner struct {
 	afterEnvFile  *os.File
 }
 
-func newHookScript(hookPath string) *hookRunner {
-	return &hookRunner{
+func newHookScript(hookPath string) (*hookRunner, error) {
+	var h = &hookRunner{
 		hookPath: hookPath,
 	}
-}
 
-func (h *hookRunner) Run() error {
 	var err error
 
 	// Create a temporary file that we'll put the hook runner code in
@@ -42,7 +40,7 @@ func (h *hookRunner) Run() error {
 		`buildkite-agent-bootstrap-hook-runner`,
 	))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// We'll pump the ENV before the hook into this temp file
@@ -50,7 +48,7 @@ func (h *hookRunner) Run() error {
 		`buildkite-agent-bootstrap-hook-env-before`,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	h.beforeEnvFile.Close()
 
@@ -59,13 +57,13 @@ func (h *hookRunner) Run() error {
 		`buildkite-agent-bootstrap-hook-env-after`,
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	h.afterEnvFile.Close()
 
 	absolutePathToHook, err := filepath.Abs(h.hookPath)
 	if err != nil {
-		return fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", h.hookPath, err)
+		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", h.hookPath, err)
 	}
 
 	// Create the hook runner code
@@ -91,7 +89,12 @@ func (h *hookRunner) Run() error {
 	h.scriptFile.WriteString(script)
 	h.scriptFile.Close()
 
-	return nil
+	// Make script executable
+	if err = addExecutePermissiontoFile(h.scriptFile.Name()); err != nil {
+		return h, err
+	}
+
+	return h, nil
 }
 
 func (h *hookRunner) Path() string {
