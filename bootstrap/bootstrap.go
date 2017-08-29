@@ -487,7 +487,12 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 			return err
 		}
 	} else {
-		if err := b.shell.Run("git clone %s -- %q .", b.GitCloneFlags, b.Repository); err != nil {
+		safeCloneFlags, err := shell.QuoteArguments(b.GitCloneFlags)
+		if err != nil {
+			return err
+		}
+
+		if err = b.shell.Run("git clone %s -- %q .", safeCloneFlags, b.Repository); err != nil {
 			return err
 		}
 	}
@@ -501,7 +506,12 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 	// i.e. `refs/not/a/head`
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
-		if err := b.shell.Run("git fetch -v --prune origin %s", b.RefSpec); err != nil {
+		safeRefSpec, err := shell.QuoteArguments(b.RefSpec)
+		if err != nil {
+			return nil
+		}
+
+		if err := b.shell.Run("git fetch -v --prune origin %s", safeRefSpec); err != nil {
 			return err
 		}
 
@@ -515,7 +525,10 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 	} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 		b.shell.Commentf("Fetch and checkout pull request head")
-		if err := b.shell.Run("git fetch -v origin 'refs/pull/%s/head'", b.PullRequest); err != nil {
+
+		// This is interpolated in two phases to ensure that line splitting attacks can't be used
+		ref := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+		if err := b.shell.Run("git fetch -v origin %q", ref); err != nil {
 			return err
 		}
 
@@ -577,7 +590,7 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 		// if the call fails, continue the bootstrap
 		// script, and show an informative error.
 		if err := b.shell.Run("git submodule sync --recursive"); err != nil {
-			gitVersionOutput, _ := b.shell.RunAndCapture("git", "--version")
+			gitVersionOutput, _ := b.shell.RunAndCapture("git --version")
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 

@@ -211,6 +211,20 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 	return nil
 }
 
+// Quote takes a line of commands and uses shell word splitting on them and then
+// quotes anything with spaces or special characters. This is used or making things
+// like sets of flags safe to literally include in commands
+func QuoteArguments(line string) (string, error) {
+	words, err := shellwords.Parse(line)
+	if err != nil {
+		return "", err
+	}
+	for idx, word := range words {
+		words[idx] = fmt.Sprintf("%q", word)
+	}
+	return strings.Join(words, " "), nil
+}
+
 // GetExitCode extracts an exit code from an error where the platform supports it,
 // otherwise returns 0 for no error and 1 for an error
 func GetExitCode(err error) int {
