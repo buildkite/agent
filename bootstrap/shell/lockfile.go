@@ -1,4 +1,4 @@
-package bootstrap
+package shell
 
 import (
 	"context"
@@ -13,7 +13,13 @@ var (
 	lockRetryDuration = time.Second
 )
 
-func acquireLock(ctx context.Context, path string) (*lockfile.Lockfile, error) {
+// LockFile provides a helper for cross-platform file locking
+func LockFile(sh *Shell, path string) (*lockfile.Lockfile, error) {
+	return LockFileWithContext(sh.ctx, sh, path)
+}
+
+// LockFileWithContext provides a helper for cross-platform file locking with a specific context.Context
+func LockFileWithContext(ctx context.Context, sh *Shell, path string) (*lockfile.Lockfile, error) {
 	absolutePathToLock, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
@@ -30,8 +36,8 @@ func acquireLock(ctx context.Context, path string) (*lockfile.Lockfile, error) {
 			if te, ok := err.(interface {
 				Temporary() bool
 			}); ok && te.Temporary() {
-				commentf("Could not aquire lock on \"%s\" (%s)", absolutePathToLock, err)
-				commentf("Trying again in %s...", lockRetryDuration)
+				sh.Commentf("Could not aquire lock on \"%s\" (%s)", absolutePathToLock, err)
+				sh.Commentf("Trying again in %s...", lockRetryDuration)
 				time.Sleep(lockRetryDuration)
 			} else {
 				return nil, err
@@ -53,9 +59,10 @@ func acquireLock(ctx context.Context, path string) (*lockfile.Lockfile, error) {
 	return &lock, err
 }
 
-func acquireLockWithTimeout(path string, timeout time.Duration) (*lockfile.Lockfile, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+// LockFileWithTimeout provides a helper for cross-platform file locking with a timeout
+func LockFileWithTimeout(sh *Shell, path string, timeout time.Duration) (*lockfile.Lockfile, error) {
+	ctx, cancel := context.WithTimeout(sh.ctx, timeout)
 	defer cancel()
 
-	return acquireLock(ctx, path)
+	return LockFileWithContext(ctx, sh, path)
 }

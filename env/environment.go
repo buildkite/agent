@@ -73,6 +73,10 @@ func (e *Environment) Diff(other *Environment) *Environment {
 func (e *Environment) Merge(other *Environment) *Environment {
 	c := e.Copy()
 
+	if other == nil {
+		return c
+	}
+
 	for k, v := range other.ToMap() {
 		c.Set(k, v)
 	}
