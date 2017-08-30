@@ -6,7 +6,12 @@ import (
 	"github.com/buildkite/agent/env"
 )
 
-// Config provides the configuration for the Bootstrap
+// Config provides the configuration for the Bootstrap. Some of the keys are
+// read from the environment after hooks are run, so we use struct tags to provide
+// that mapping along with some reflection. It's a little bit magical but it's
+// less work to maintain in the long run.
+//
+// To add a new config option that is mapped from an env, add an struct tag and it's done
 type Config struct {
 	// The command to run
 	Command string
@@ -90,10 +95,10 @@ type Config struct {
 	SSHFingerprintVerification bool
 }
 
-// ReadFromEnvironment reads configuration from the Environment, returns env keys
-// that caused change in the config
-func (c *Config) ReadFromEnvironment(environ *env.Environment) []string {
-	changed := []string{}
+// ReadFromEnvironment reads configuration from the Environment, returns a map
+// of the env keys that changed and the new values
+func (c *Config) ReadFromEnvironment(environ *env.Environment) map[string]string {
+	changed := map[string]string{}
 
 	// Use reflection for the type and values
 	t := reflect.TypeOf(*c)
@@ -106,12 +111,12 @@ func (c *Config) ReadFromEnvironment(environ *env.Environment) []string {
 
 		// Find struct fields with env tag
 		if tag := field.Tag.Get("env"); tag != "" && environ.Exists(tag) {
-			envValue := environ.Get(tag)
+			newValue := environ.Get(tag)
 
 			// We only care if the value has changed
-			if envValue != value.String() {
-				value.SetString(envValue)
-				changed = append(changed, tag)
+			if newValue != value.String() {
+				value.SetString(newValue)
+				changed[tag] = newValue
 			}
 		}
 	}

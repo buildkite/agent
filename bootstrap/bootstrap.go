@@ -32,6 +32,7 @@ type Bootstrap struct {
 
 // Start runs the bootstrap and exits when finished
 func (b *Bootstrap) Start() {
+	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
 		b.shell, err = shell.New()
@@ -168,19 +169,8 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
 	}
 
 	// Print out the env vars that changed
-	for _, envKey := range changes {
-		switch envKey {
-		case `BUILDKITE_ARTIFACT_PATHS`:
-			b.shell.Commentf("%s is now %q", envKey, b.Config.AutomaticArtifactUploadPaths)
-		case `BUILDKITE_ARTIFACT_UPLOAD_DESTINATION`:
-			b.shell.Commentf("%s is now %q", envKey, b.Config.ArtifactUploadDestination)
-		case `BUILDKITE_GIT_CLEAN_FLAGS`:
-			b.shell.Commentf("%s is now %q", envKey, b.Config.GitCleanFlags)
-		case `BUILDKITE_GIT_CLONE_FLAGS`:
-			b.shell.Commentf("%s is now %q", envKey, b.Config.GitCloneFlags)
-		case `BUILDKITE_REFSPEC`:
-			b.shell.Commentf("%s is now %q", envKey, b.Config.RefSpec)
-		}
+	for k, v := range changes {
+		b.shell.Commentf("%s is now %q", k, v)
 	}
 }
 
@@ -338,6 +328,7 @@ func (b *Bootstrap) setUp() error {
 	return nil
 }
 
+// tearDown is called before the bootstrap exits, even on error
 func (b *Bootstrap) tearDown() error {
 	if err := b.executeGlobalHook("pre-exit"); err != nil {
 		return err
@@ -474,7 +465,95 @@ func (b *Bootstrap) PluginPhase() error {
 	return nil
 }
 
-func (b *Bootstrap) DefaultCheckoutPhase() error {
+// CheckoutPhase creates the build directory and makes sure we're running the
+// build at the right commit.
+func (b *Bootstrap) CheckoutPhase() error {
+	if err := b.executeGlobalHook("pre-checkout"); err != nil {
+		return err
+	}
+
+	if err := b.executeLocalHook("pre-checkout"); err != nil {
+		return err
+	}
+
+	if err := b.executePluginHook(b.plugins, "pre-checkout"); err != nil {
+		return err
+	}
+
+	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
+	if b.CleanCheckout {
+		b.shell.Headerf("Cleaning pipeline checkout")
+		b.shell.Commentf("Removing %s", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+
+		if err := os.RemoveAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
+			return fmt.Errorf("Failed to remove \"%s\" (%s)", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+		}
+	}
+
+	b.shell.Headerf("Preparing build directory")
+
+	// Create the build directory
+	if !fileExists(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
+		b.shell.Commentf("Creating \"%s\"", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		os.MkdirAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+	}
+
+	// Change to the new build checkout path
+	if err := b.shell.Chdir(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
+		return err
+	}
+
+	// Run a custom `checkout` hook if it's present
+	if fileExists(b.globalHookPath("checkout")) {
+		if err := b.executeGlobalHook("checkout"); err != nil {
+			return err
+		}
+	} else if b.pluginHookExists(b.plugins, "checkout") {
+		if err := b.executePluginHook(b.plugins, "checkout"); err != nil {
+			return err
+		}
+	} else {
+		// Otherwise run the default
+		if err := b.defaultCheckoutPhase(); err != nil {
+			return err
+		}
+	}
+
+	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
+	// one of the post-checkout hooks changed it.
+	previousCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	// Run post-checkout hooks
+	if err := b.executeGlobalHook("post-checkout"); err != nil {
+		return err
+	}
+
+	if err := b.executeLocalHook("post-checkout"); err != nil {
+		return err
+	}
+
+	if err := b.executePluginHook(b.plugins, "post-checkout"); err != nil {
+		return err
+	}
+
+	// Capture the new checkout path so we can see if it's changed.
+	newCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	// If the working directory has been changed by a hook, log and switch to it
+	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
+		b.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
+
+		if err := b.shell.Chdir(newCheckoutPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
+// hook exists. It performs the default checkout on the Repository provided in the config
+func (b *Bootstrap) defaultCheckoutPhase() error {
 	if b.SSHFingerprintVerification {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
@@ -487,6 +566,7 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 			return err
 		}
 	} else {
+		// Prevent malicious commands stuffed into clone flags
 		safeCloneFlags, err := shell.QuoteArguments(b.GitCloneFlags)
 		if err != nil {
 			return err
@@ -634,92 +714,59 @@ func (b *Bootstrap) DefaultCheckoutPhase() error {
 	return nil
 }
 
-// CheckoutPhase creates the build directory and makes sure we're running the
-// build at the right commit.
-func (b *Bootstrap) CheckoutPhase() error {
-	if err := b.executeGlobalHook("pre-checkout"); err != nil {
+// CommandPhase determines how to run the build, and then runs it
+func (b *Bootstrap) CommandPhase() error {
+	if err := b.executeGlobalHook("pre-command"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook("pre-checkout"); err != nil {
+	if err := b.executeLocalHook("pre-command"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "pre-checkout"); err != nil {
+	if err := b.executePluginHook(b.plugins, "pre-command"); err != nil {
 		return err
 	}
 
-	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
-	if b.CleanCheckout {
-		b.shell.Headerf("Cleaning pipeline checkout")
-		b.shell.Commentf("Removing %s", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+	var commandExitError error
 
-		if err := os.RemoveAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
-			return fmt.Errorf("Failed to remove \"%s\" (%s)", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
-		}
-	}
-
-	b.shell.Headerf("Preparing build directory")
-
-	// Create the build directory
-	if !fileExists(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
-		b.shell.Commentf("Creating \"%s\"", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		os.MkdirAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
-	}
-
-	// Change to the new build checkout path
-	if err := b.shell.Chdir(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
-		return err
-	}
-
-	// Run a custom `checkout` hook if it's present
-	if fileExists(b.globalHookPath("checkout")) {
-		if err := b.executeGlobalHook("checkout"); err != nil {
-			return err
-		}
-	} else if b.pluginHookExists(b.plugins, "checkout") {
-		if err := b.executePluginHook(b.plugins, "checkout"); err != nil {
-			return err
-		}
+	// Run a custom `command` hook if it's present
+	if fileExists(b.globalHookPath("command")) {
+		commandExitError = b.executeGlobalHook("command")
+	} else if fileExists(b.localHookPath("command")) {
+		commandExitError = b.executeGlobalHook("command")
+	} else if b.pluginHookExists(b.plugins, "command") {
+		commandExitError = b.executePluginHook(b.plugins, "command")
 	} else {
-		if err := b.DefaultCheckoutPhase(); err != nil {
-			return err
-		}
+		commandExitError = b.defaultCommandPhase()
 	}
 
-	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
-	// one of the post-checkout hooks changed it.
-	previousCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	// Expand the command header if it fails
+	if commandExitError != nil {
+		b.shell.Printf("^^^ +++")
+	}
 
-	// Run post-checkout hooks
-	if err := b.executeGlobalHook("post-checkout"); err != nil {
+	// Save the command exit status to the env so hooks + plugins can access it
+	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
+
+	// Run post-command hooks
+	if err := b.executeGlobalHook("post-command"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook("post-checkout"); err != nil {
+	if err := b.executeLocalHook("post-command"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "post-checkout"); err != nil {
+	if err := b.executePluginHook(b.plugins, "post-command"); err != nil {
 		return err
 	}
 
-	// Capture the new checkout path so we can see if it's changed.
-	newCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-
-	// If the working directory has been changed by a hook, log and switch to it
-	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
-		b.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
-
-		if err := b.shell.Chdir(newCheckoutPath); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return commandExitError
 }
 
-func (b *Bootstrap) DefaultCommandPhase() error {
+// defaultCommandPhase is executed if there is no global or plugin command hook
+func (b *Bootstrap) defaultCommandPhase() error {
 	// Make sure we actually have a command to run
 	if b.Command == "" {
 		return fmt.Errorf("No command has been defined. Please go to \"Pipeline Settings\" and configure your build step's \"Command\"")
@@ -817,57 +864,6 @@ func (b *Bootstrap) DefaultCommandPhase() error {
 	}
 
 	return b.executeScript(buildScriptPath)
-}
-
-// CommandPhase determines how to run the build, and then runs it
-func (b *Bootstrap) CommandPhase() error {
-	if err := b.executeGlobalHook("pre-command"); err != nil {
-		return err
-	}
-
-	if err := b.executeLocalHook("pre-command"); err != nil {
-		return err
-	}
-
-	if err := b.executePluginHook(b.plugins, "pre-command"); err != nil {
-		return err
-	}
-
-	var commandExitError error
-
-	// Run a custom `command` hook if it's present
-	if fileExists(b.globalHookPath("command")) {
-		commandExitError = b.executeGlobalHook("command")
-	} else if fileExists(b.localHookPath("command")) {
-		commandExitError = b.executeGlobalHook("command")
-	} else if b.pluginHookExists(b.plugins, "command") {
-		commandExitError = b.executePluginHook(b.plugins, "command")
-	} else {
-		commandExitError = b.DefaultCommandPhase()
-	}
-
-	// Expand the command header if it fails
-	if commandExitError != nil {
-		b.shell.Printf("^^^ +++")
-	}
-
-	// Save the command exit status to the env so hooks + plugins can access it
-	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
-
-	// Run post-command hooks
-	if err := b.executeGlobalHook("post-command"); err != nil {
-		return err
-	}
-
-	if err := b.executeLocalHook("post-command"); err != nil {
-		return err
-	}
-
-	if err := b.executePluginHook(b.plugins, "post-command"); err != nil {
-		return err
-	}
-
-	return commandExitError
 }
 
 func (b *Bootstrap) ArtifactPhase() error {

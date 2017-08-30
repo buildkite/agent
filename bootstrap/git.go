@@ -7,8 +7,14 @@ import (
 )
 
 func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
+	// Prevent malicious commands stuffed into clean flags
+	safeCleanFlags, err := shell.QuoteArguments(gitCleanFlags)
+	if err != nil {
+		return err
+	}
+
 	// Clean up the repository
-	if err := sh.Run("git clean %s", gitCleanFlags); err != nil {
+	if err := sh.Run("git clean %s", safeCleanFlags); err != nil {
 		return err
 	}
 
