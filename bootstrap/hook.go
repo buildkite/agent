@@ -14,22 +14,25 @@ import (
 // Hooks get "sourced" into the bootstrap in the sense that they get the
 // environment set for them and then we capture any extra environment variables
 // that are exported in the script.
-//
+
 // The tricky thing is that it's impossible to grab the ENV of a child process
 // before it finishes, so we've got an awesome (ugly) hack to get around this.
 // We write the ENV to file, run the hook and then write the ENV back to another file.
 // Then we can use the diff of the two to figure out what changes to make to the
 // bootstrap. Horrible, but effective.
 
-type hookRunner struct {
+// hookScriptWrapper wraps a hook script with env collection and then provides
+// a way to get the difference between the environment before the hook is run and
+// after it
+type hookScriptWrapper struct {
 	hookPath      string
 	scriptFile    *os.File
 	beforeEnvFile *os.File
 	afterEnvFile  *os.File
 }
 
-func newHookScript(hookPath string) (*hookRunner, error) {
-	var h = &hookRunner{
+func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
+	var h = &hookScriptWrapper{
 		hookPath: hookPath,
 	}
 
@@ -97,18 +100,20 @@ func newHookScript(hookPath string) (*hookRunner, error) {
 	return h, nil
 }
 
-func (h *hookRunner) Path() string {
+// Path returns the path to the wrapper script, this is the one that should be executed
+func (h *hookScriptWrapper) Path() string {
 	return h.scriptFile.Name()
 }
 
-func (h *hookRunner) Close() {
+// Close cleans up the wrapper script and the environment files
+func (h *hookScriptWrapper) Close() {
 	os.Remove(h.scriptFile.Name())
 	os.Remove(h.beforeEnvFile.Name())
 	os.Remove(h.afterEnvFile.Name())
 }
 
-// Environment returns and environment variables exported during the hook run
-func (h *hookRunner) Environment() (*env.Environment, error) {
+// ChangedEnvironment returns and environment variables exported during the hook run
+func (h *hookScriptWrapper) ChangedEnvironment() (*env.Environment, error) {
 	beforeEnvContents, err := ioutil.ReadFile(h.beforeEnvFile.Name())
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read \"%s\" (%s)", h.beforeEnvFile.Name(), err)

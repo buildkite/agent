@@ -106,7 +106,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script, err := newHookScript(hookPath)
+	script, err := newHookScriptWrapper(hookPath)
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)
 		return err
@@ -141,7 +141,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", "0")
 
 	// Get changed environent
-	changes, err := script.Environment()
+	changes, err := script.ChangedEnvironment()
 	if err != nil {
 		b.shell.Errorf("Failed to get environment: %v", err)
 		return err
