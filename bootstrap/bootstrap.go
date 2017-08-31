@@ -433,11 +433,6 @@ func (b *Bootstrap) PluginPhase() error {
 			// Switch to the version if we need to
 			if p.Version != "" {
 				b.shell.Commentf("Checking out `%s`", p.Version)
-
-				if err = b.shell.Run("git clone -v -- %q .", repo); err != nil {
-					return err
-				}
-
 				if err = b.shell.Run("git checkout -f %q", p.Version); err != nil {
 					return err
 				}
