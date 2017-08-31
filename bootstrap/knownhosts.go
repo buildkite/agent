@@ -51,17 +51,47 @@ func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 	return &knownHosts{knownHostLock, sh, knownHostPath}, nil
 }
 
+func (kh *knownHosts) Contains(host string) (bool, error) {
+	sshToolsDir, err := findSSHToolsDir(kh.shell)
+	if err != nil {
+		return err
+	}
+
+	// Grab the generated keys for the repo host
+	keygenOutput, err := kh.shell.RunAndCapture("%s -f %q -F %q",
+		filepath.Join(sshToolsDir, "ssh-keygen"), kh.Path, host)
+
+	// Returns an error and no output if host isn't in there
+	if err != nil && keygenOutput == "" {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("Could not perform `ssh-keygen` (%s)", err)
+	}
+
+	return strings.Contains(keygenOutput, host), nil
+}
+
 func (kh *knownHosts) Add(host string) error {
 	// Try and open the existing hostfile in (append_only) mode
 	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("Could not open \"%s\" for reading (%v)", kh.Path, err)
+		return fmt.Errorf("Could not open \"%s\" for appending (%v)", kh.Path, err)
 	}
 	defer f.Close()
 
 	sshToolsDir, err := findSSHToolsDir(kh.shell)
 	if err != nil {
 		return err
+	}
+
+	// If the keygen output already contains the host, we can skip!
+	contains, err := kh.Contains(host)
+	if err != nil {
+		return err
+	}
+	if contains {
+		kh.shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
+		return nil
 	}
 
 	// Grab the generated keys for the repo host
