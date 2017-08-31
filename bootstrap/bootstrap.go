@@ -40,6 +40,9 @@ func (b *Bootstrap) Start() {
 			fmt.Printf("Error creating shell: %v", err)
 			os.Exit(1)
 		}
+
+		// Apply PTY settings
+		b.shell.PTY = b.Config.RunInPty
 	}
 
 	// Initialize the environment
