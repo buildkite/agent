@@ -175,7 +175,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 		}
 	}()
 
-	cmdStr := process.FormatCommand(cmd.Path, cmd.Args)
+	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
 	if silent {
 		s.Promptf("%s", cmdStr)
 	}
