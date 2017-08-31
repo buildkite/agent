@@ -54,7 +54,7 @@ func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 func (kh *knownHosts) Contains(host string) (bool, error) {
 	sshToolsDir, err := findSSHToolsDir(kh.shell)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// Grab the generated keys for the repo host
