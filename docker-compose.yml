@@ -1,11 +1,10 @@
-version: '2'
+version: '2.1'
 
 services:
   agent:
-    image: golang:1.8
+    build: .
     working_dir: /go/src/github.com/buildkite/agent
     volumes:
       - ./:/go/src/github.com/buildkite/agent
     environment:
       BUILDKITE_BUILD_NUMBER:
-
