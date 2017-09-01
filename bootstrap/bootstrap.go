@@ -69,6 +69,7 @@ func (b *Bootstrap) Start() {
 
 	for _, phase := range phases {
 		if err := phase(); err != nil {
+			b.shell.Errorf("Phase failed with %v", err)
 			if b.Debug {
 				b.shell.Commentf("Firing exit handler with %v", err)
 			}

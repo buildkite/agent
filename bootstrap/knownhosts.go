@@ -94,19 +94,6 @@ func (kh *knownHosts) Add(host string) error {
 		return nil
 	}
 
-	// Grab the generated keys for the repo host
-	keygenOutput, err := kh.shell.RunAndCapture("%s -f %q -F %q",
-		filepath.Join(sshToolsDir, "ssh-keygen"), kh.Path, host)
-	if err != nil {
-		return fmt.Errorf("Could not perform `ssh-keygen` (%s)", err)
-	}
-
-	// If the keygen output already contains the host, we can skip!
-	if strings.Contains(keygenOutput, host) {
-		kh.shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
-		return nil
-	}
-
 	// Scan the key and then write it to the known_host file
 	keyscanOutput, err := kh.shell.RunAndCapture("%s %q",
 		filepath.Join(sshToolsDir, "ssh-keyscan"), host)
