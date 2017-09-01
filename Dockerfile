@@ -1,8 +1,5 @@
 FROM golang:1.8
-
 WORKDIR /go/src/github.com/buildkite/agent
 COPY . .
-
-RUN go build -o buildkite-agent *.go
-
-ENTRYPOINT ["./buildkite-agent"]
+RUN go build -i -o /go/bin/buildkite-agent github.com/buildkite/agent
+CMD ["buildkite-agent", "start"]

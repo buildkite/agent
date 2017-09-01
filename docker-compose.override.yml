@@ -1,10 +1,16 @@
-version: '2'
+version: '2.1'
 
 services:
   agent:
-    build: .
-    working_dir: /go/src/github.com/buildkite/agent
-    volumes:
-      - ./:/go/src/github.com/buildkite/agent
+    command: "buildkite-agent start --endpoint http://agent.buildkite.dev/v3"
     environment:
-      BUILDKITE_BUILD_NUMBER:
+      BUILDKITE_AGENT_TAGS: queue=default
+      BUILDKITE_AGENT_TOKEN: test
+      BUILDKITE_BUILD_PATH: /buildkite
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  default:
+    external:
+      name: buildkite_default
