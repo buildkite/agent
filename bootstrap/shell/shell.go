@@ -25,6 +25,9 @@ import (
 type Shell struct {
 	Logger
 
+	// Output is where the stderr/stdout of the shell goes
+	Output io.Writer
+
 	// The running environment for the shell
 	Env *env.Environment
 
@@ -47,6 +50,7 @@ func New() (*Shell, error) {
 
 	return &Shell{
 		Logger: StderrLogger,
+		Output: os.Stdout,
 		Env:    env.FromSlice(os.Environ()),
 		wd:     wd,
 		ctx:    context.Background(),
@@ -110,7 +114,7 @@ func (s *Shell) Run(command string, args ...interface{}) error {
 		return err
 	}
 
-	return s.executeCommand(cmd, os.Stderr, false)
+	return s.executeCommand(cmd, s.Output, false)
 }
 
 // RunAndCapture runs a command and captures the output, nothing else is logged

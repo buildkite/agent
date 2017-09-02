@@ -28,17 +28,24 @@ type Bootstrap struct {
 
 	// Plugins are the plugins that are created in the PluginPhase
 	plugins []*agent.Plugin
+
+	// Exit function is called at the end of start, defaults to os.Exit
+	exitFunc func(code int)
 }
 
 // Start runs the bootstrap and exits when finished
 func (b *Bootstrap) Start() {
+	if b.exitFunc == nil {
+		b.exitFunc = os.Exit
+	}
+
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
 		b.shell, err = shell.New()
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
-			os.Exit(1)
+			b.exitFunc(1)
 		}
 
 		// Apply PTY settings
@@ -48,13 +55,16 @@ func (b *Bootstrap) Start() {
 	// Initialize the environment
 	if err := b.setUp(); err != nil {
 		b.shell.Errorf("Error setting up bootstrap: %v", err)
-		os.Exit(1)
+		b.exitFunc(1)
 	}
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
 		if err := b.tearDown(); err != nil {
 			b.shell.Errorf("Error tearing down bootstrap %v", err)
+			b.exitFunc(shell.GetExitCode(err))
+		} else {
+			b.exitFunc(0)
 		}
 	}()
 
@@ -72,7 +82,7 @@ func (b *Bootstrap) Start() {
 			if b.Debug {
 				b.shell.Commentf("Firing exit handler with %v", err)
 			}
-			os.Exit(shell.GetExitCode(err))
+			b.exitFunc(shell.GetExitCode(err))
 		}
 	}
 }
