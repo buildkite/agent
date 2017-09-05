@@ -87,6 +87,18 @@
 			"revisionTime": "2017-09-17T09:16:51Z"
 		},
 		{
+			"checksumSHA1": "5xzgVm4v/J7VXwtip+KDu96be18=",
+			"path": "github.com/mattn/go-zglob",
+			"revision": "95345c4e1c0ebc9d16a3284177f09360f4d20fab",
+			"revisionTime": "2017-01-24T11:57:57Z"
+		},
+		{
+			"checksumSHA1": "xcAVbwtk3z9gi2Eig6DYgAiMzSc=",
+			"path": "github.com/mattn/go-zglob/fastwalk",
+			"revision": "95345c4e1c0ebc9d16a3284177f09360f4d20fab",
+			"revisionTime": "2017-01-24T11:57:57Z"
+		},
+		{
 			"checksumSHA1": "R8z+BOS81hOWgcqymuVWHNta/yc=",
 			"path": "github.com/oleiade/reflections",
 			"revision": "0e86b3c98b2ff33e30c85cfe97d9a63d439fe7eb",
