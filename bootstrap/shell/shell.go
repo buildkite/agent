@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
 	shellwords "github.com/mattn/go-shellwords"
+	"github.com/pkg/errors"
 )
 
 // Shell represents a virtual shell, handles logging, executing commands and
@@ -42,7 +43,7 @@ type Shell struct {
 func New() (*Shell, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("Failed to find current working directory: %v", err)
+		return nil, errors.Wrapf(err, "Failed to find current working directory: %v")
 	}
 
 	return &Shell{
@@ -159,18 +160,13 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 		syscall.SIGQUIT)
 	defer signal.Stop(signals)
 
-	var handleError = func(prefix string, err error) error {
-		if !silent {
-			s.Errorf("%s%v", prefix, err)
-		}
-		return err
-	}
-
 	go func() {
 		// forward signals to the process
 		for sig := range signals {
 			if err := signalProcess(cmd, sig); err != nil {
-				_ = handleError("Error passing signal to child process: ", err)
+				if !silent {
+					s.Errorf("Error passing signal to child process: %v", err)
+				}
 			}
 		}
 	}()
@@ -183,7 +179,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 	if s.PTY {
 		pty, err := process.StartPTY(cmd)
 		if err != nil {
-			return handleError("Error starting PTY: ", err)
+			return fmt.Errorf("Error starting PTY: %v", err)
 		}
 
 		// Copy the pty to our buffer. This will block until it EOF's
@@ -200,12 +196,12 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 		cmd.Stdin = nil
 
 		if err := cmd.Start(); err != nil {
-			return handleError(fmt.Sprintf("Error starting `%s`: ", cmdStr), err)
+			return errors.Wrapf(err, "Error starting `%s`: %v", cmdStr)
 		}
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return handleError(fmt.Sprintf("Error running `%s`: ", cmdStr), err)
+		return errors.Wrapf(err, "Error running `%s`: %v", cmdStr)
 	}
 
 	return nil
@@ -228,14 +224,12 @@ func QuoteArguments(line string) (string, error) {
 // GetExitCode extracts an exit code from an error where the platform supports it,
 // otherwise returns 0 for no error and 1 for an error
 func GetExitCode(err error) int {
-	if err == nil {
-		return 0
-	}
-	if exiterr, ok := err.(*exec.ExitError); ok {
+	switch cause := errors.Cause(err).(type) {
+	case *exec.ExitError:
 		// The program has exited with an exit code != 0
 		// There is no platform independent way to retrieve
 		// the exit code, but the following will work on Unix/macOS
-		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+		if status, ok := cause.Sys().(syscall.WaitStatus); ok {
 			return status.ExitStatus()
 		}
 	}
