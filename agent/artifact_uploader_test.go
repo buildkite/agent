@@ -65,7 +65,7 @@ func TestCollect(t *testing.T) {
 	a = findArtifact(artifacts, "Smile.gif")
 	assert.NotNil(t, a)
 	gifPath := filepath.Join(root, "test/fixtures/artifacts/gifs/Smile.gif")
-	assert.Equal(t, a.Path, gifPath[1:len(gifPath)])
+	assert.Equal(t, a.Path, gifPath[1:])
 	assert.Equal(t, a.AbsolutePath, filepath.Join(root, "test/fixtures/artifacts/gifs/Smile.gif"))
 	assert.Equal(t, a.GlobPath, filepath.Join(root, "test/fixtures/artifacts/**/*.gif"))
 	assert.Equal(t, int(a.FileSize), 2038453)

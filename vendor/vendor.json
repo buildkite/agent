@@ -261,6 +261,18 @@
 			"revisionTime": "2017-02-20T02:22:20Z"
 		},
 		{
+			"checksumSHA1": "5xzgVm4v/J7VXwtip+KDu96be18=",
+			"path": "github.com/mattn/go-zglob",
+			"revision": "95345c4e1c0ebc9d16a3284177f09360f4d20fab",
+			"revisionTime": "2017-01-24T11:57:57Z"
+		},
+		{
+			"checksumSHA1": "xcAVbwtk3z9gi2Eig6DYgAiMzSc=",
+			"path": "github.com/mattn/go-zglob/fastwalk",
+			"revision": "95345c4e1c0ebc9d16a3284177f09360f4d20fab",
+			"revisionTime": "2017-01-24T11:57:57Z"
+		},
+		{
 			"checksumSHA1": "V/quM7+em2ByJbWBLOsEwnY3j/Q=",
 			"path": "github.com/mitchellh/go-homedir",
 			"revision": "b8bc1bf767474819792c23f32d8286a45736f1c6",
