@@ -70,10 +70,6 @@ func (b *Bootstrap) Start() {
 
 	for _, phase := range phases {
 		if err := phase(); err != nil {
-			b.shell.Errorf("Phase failed with %v", err)
-			if b.Debug {
-				b.shell.Commentf("Firing exit handler with %v", err)
-			}
 			b.shell.Errorf("%v", err)
 			os.Exit(shell.GetExitCode(err))
 		}
@@ -363,7 +359,7 @@ func (b *Bootstrap) PluginPhase() error {
 	}
 
 	if b.Debug {
-		b.shell.Printf("Plugin JSON is %s", b.Plugins)
+		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
 	}
 
 	// Check if we can run plugins (disabled via --no-plugins)
