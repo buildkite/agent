@@ -73,6 +73,9 @@ type Config struct {
 	// Are aribtary commands allowed to be executed
 	CommandEval bool
 
+	// Are plugins enabled?
+	PluginsEnabled bool
+
 	// Path where the builds will be run
 	BuildPath string
 

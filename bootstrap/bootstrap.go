@@ -363,6 +363,15 @@ func (b *Bootstrap) PluginPhase() error {
 		return fmt.Errorf("Can't checkout plugins without a `plugins-path`")
 	}
 
+	if b.Debug {
+		b.shell.Printf("Plugin JSON is %s", b.Plugins)
+	}
+
+	// Check if we can run plugins (disabled via --no-plugins)
+	if b.Plugins != "" && !b.Config.PluginsEnabled {
+		return fmt.Errorf("This agent is isn't allowed to run plugins. To allow this, re-run this agent without the `--no-plugins` option.")
+	}
+
 	var err error
 	b.plugins, err = agent.CreatePluginsFromJSON(b.Plugins)
 	if err != nil {

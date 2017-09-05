@@ -50,6 +50,7 @@ type AgentStartConfig struct {
 	NoColor                      bool     `cli:"no-color"`
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
 	NoCommandEval                bool     `cli:"no-command-eval"`
+	NoPlugins                    bool     `cli:"no-plugins"`
 	NoPTY                        bool     `cli:"no-pty"`
 	TimestampLines               bool     `cli:"timestamp-lines"`
 	Endpoint                     string   `cli:"endpoint" validate:"required"`
@@ -211,6 +212,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to run arbitrary console commands",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
+		cli.BoolFlag{
+			Name:   "no-plugins",
+			Usage:  "Don't allow this agent to load plugins",
+			EnvVar: "BUILDKITE_NO_PLUGINS",
+		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -299,6 +305,7 @@ var AgentStartCommand = cli.Command{
 				GitCleanFlags:              cfg.GitCleanFlags,
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
 				CommandEval:                !cfg.NoCommandEval,
+				PluginsEnabled:             !cfg.NoPlugins,
 				RunInPty:                   !cfg.NoPTY,
 				TimestampLines:             cfg.TimestampLines,
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
