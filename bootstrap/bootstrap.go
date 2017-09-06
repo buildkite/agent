@@ -93,7 +93,7 @@ func (b *Bootstrap) executeScript(path string) error {
 	// We also need to make sure the script we pass has quotes
 	// around it, otherwise `/bin/bash -c run script with space.sh`
 	// fails.
-	return b.shell.Run("/bin/bash -c %q", path)
+	return b.shell.Run("/bin/bash", "-c", path)
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -434,14 +434,14 @@ func (b *Bootstrap) PluginPhase() error {
 			}
 
 			// Plugin clones shouldn't use custom GitCloneFlags
-			if err = b.shell.Run("git clone -v -- %q .", repo); err != nil {
+			if err = b.shell.Run("git", "clone", "-v", "--", repo, "."); err != nil {
 				return err
 			}
 
 			// Switch to the version if we need to
 			if p.Version != "" {
 				b.shell.Commentf("Checking out `%s`", p.Version)
-				if err = b.shell.Run("git checkout -f %q", p.Version); err != nil {
+				if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
 					return err
 				}
 			}
@@ -557,21 +557,15 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
-	// Do we need to do a git checkout?
+	// Do we need to do a git clone?
 	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
 	if fileExists(existingGitDir) {
 		// Update the the origin of the repository so we can gracefully handle repository renames
-		if err := b.shell.Run("git remote set-url origin %q", b.Repository); err != nil {
+		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
 			return err
 		}
 	} else {
-		// Prevent malicious commands stuffed into clone flags
-		safeCloneFlags, err := shell.QuoteArguments(b.GitCloneFlags)
-		if err != nil {
-			return err
-		}
-
-		if err = b.shell.Run("git clone %s -- %q .", safeCloneFlags, b.Repository); err != nil {
+		if err := gitClone(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
 			return err
 		}
 	}
@@ -585,16 +579,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// i.e. `refs/not/a/head`
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
-		safeRefSpec, err := shell.QuoteArguments(b.RefSpec)
-		if err != nil {
-			return nil
-		}
-
-		if err := b.shell.Run("git fetch -v --prune origin %s", safeRefSpec); err != nil {
+		if err := gitFetch(b.shell, "-v --prune", "origin", b.RefSpec); err != nil {
 			return err
 		}
 
-		if err := b.shell.Run("git checkout -f %q", b.Commit); err != nil {
+		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
 			return err
 		}
 
@@ -604,17 +593,16 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 	} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
 		b.shell.Commentf("Fetch and checkout pull request head")
+		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 
-		// This is interpolated in two phases to ensure that line splitting attacks can't be used
-		ref := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
-		if err := b.shell.Run("git fetch -v origin %q", ref); err != nil {
+		if err := gitFetch(b.shell, "-v", "origin", refspec); err != nil {
 			return err
 		}
 
-		gitFetchHead, _ := b.shell.RunAndCapture("git rev-parse FETCH_HEAD")
+		gitFetchHead, _ := b.shell.RunAndCapture("git", "rev-parse", "FETCH_HEAD")
 		b.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
-		if err := b.shell.Run("git checkout -f %q", b.Commit); err != nil {
+		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
 			return err
 		}
 
@@ -622,10 +610,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// need to fetch the remote head and checkout the fetched head explicitly.
 	} else if b.Commit == "HEAD" {
 		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := b.shell.Run("git fetch -v --prune origin %q", b.Branch); err != nil {
+		if err := gitFetch(b.shell, "-v --prune", "origin", b.Branch); err != nil {
 			return err
 		}
-		if err := b.shell.Run("git checkout -f FETCH_HEAD"); err != nil {
+
+		if err := b.shell.Run("git", "checkout", "-f", "FETCH_HEAD"); err != nil {
 			return err
 		}
 
@@ -634,17 +623,17 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// and tags, hoping that the commit is included.
 	} else {
 		b.shell.Commentf("Fetch and checkout commit")
-		if err := b.shell.Run("git fetch -v origin %q", b.Commit); err != nil {
+		if err := gitFetch(b.shell, "-v", "origin", b.Commit); err != nil {
 			// By default `git fetch origin` will only fetch tags which are
 			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 			// fetch all tags in addition to the default refspec, but pre 1.9.0 it
 			// excludes the default refspec.
-			gitFetchRefspec, _ := b.shell.RunAndCapture("git config remote.origin.fetch")
-			if err := b.shell.Run("git fetch -v --prune origin %q %q", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
+			gitFetchRefspec, _ := b.shell.RunAndCapture("git", "config", "remote.origin.fetch")
+			if err := gitFetch(b.shell, "-v --prune", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
 				return err
 			}
 		}
-		if err := b.shell.Run("git checkout -f %q", b.Commit); err != nil {
+		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
 			return err
 		}
 	}
@@ -668,15 +657,15 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// is only available in git version 1.8.1, so
 		// if the call fails, continue the bootstrap
 		// script, and show an informative error.
-		if err := b.shell.Run("git submodule sync --recursive"); err != nil {
-			gitVersionOutput, _ := b.shell.RunAndCapture("git --version")
+		if err := b.shell.Run("git", "submodule", "sync", "--recursive"); err != nil {
+			gitVersionOutput, _ := b.shell.RunAndCapture("git", "--version")
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 
-		if err := b.shell.Run("git submodule update --init --recursive --force"); err != nil {
+		if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
 			return err
 		}
-		if err := b.shell.Run("git submodule foreach --recursive git reset --hard"); err != nil {
+		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"); err != nil {
 			return err
 		}
 	}
@@ -696,16 +685,16 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if _, err := b.shell.RunAndCapture("buildkite-agent meta-data exists buildkite:git:commit"); err == nil {
+	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err == nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
-		gitCommitOutput, _ := b.shell.RunAndCapture("git show HEAD -s --format=fuller --no-color")
-		gitBranchOutput, _ := b.shell.RunAndCapture("git branch --contains HEAD --no-color")
+		gitCommitOutput, _ := b.shell.RunAndCapture("git", "show", "HEAD", "-s", "--format=fuller", "--no-color")
+		gitBranchOutput, _ := b.shell.RunAndCapture("git", "branch", "--contains", "HEAD", "--no-color")
 
-		if err = b.shell.Run("buildkite-agent meta-data set buildkite:git:commit %q", gitCommitOutput); err != nil {
+		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput); err != nil {
 			return err
 		}
-		if err = b.shell.Run("buildkite-agent meta-data set buildkite:git:branch %q", gitBranchOutput); err != nil {
+		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput); err != nil {
 			return err
 		}
 	}
@@ -882,7 +871,7 @@ func (b *Bootstrap) ArtifactPhase() error {
 
 		// Run the artifact upload command
 		b.shell.Headerf("Uploading artifacts")
-		if err := b.shell.Run("buildkite-agent artifact upload %q %q", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination); err != nil {
+		if err := b.shell.Run("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination); err != nil {
 			return err
 		}
 

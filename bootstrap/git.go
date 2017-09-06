@@ -4,25 +4,71 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/bootstrap/shell"
+	shellwords "github.com/mattn/go-shellwords"
 )
 
-func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
-	// Prevent malicious commands stuffed into clean flags
-	safeCleanFlags, err := shell.QuoteArguments(gitCleanFlags)
+func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
+	individualCloneFlags, err := shellwords.Parse(gitCloneFlags)
 	if err != nil {
 		return err
 	}
 
-	// Clean up the repository
-	if err := sh.Run("git clean %s", safeCleanFlags); err != nil {
+	commandArgs := []string{"clone"}
+	commandArgs = append(commandArgs, individualCloneFlags...)
+	commandArgs = append(commandArgs, "--", repository, ".")
+
+	if err = sh.Run("git", commandArgs...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
+	individualCleanFlags, err := shellwords.Parse(gitCleanFlags)
+	if err != nil {
+		return err
+	}
+
+	commandArgs := []string{"clean"}
+	commandArgs = append(commandArgs, individualCleanFlags...)
+
+	if err = sh.Run("git", commandArgs...); err != nil {
 		return err
 	}
 
 	// Also clean up submodules if we can
 	if gitSubmodules {
-		if err := sh.Run("git submodule foreach --recursive git clean %s", gitCleanFlags); err != nil {
+		commandArgs = append([]string{"submodule", "foreach", "--recursive"}, commandArgs...)
+
+		if err = sh.Run("git", commandArgs...); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...string) error {
+	individualFetchFlags, err := shellwords.Parse(gitFetchFlags)
+	if err != nil {
+		return err
+	}
+
+	commandArgs := []string{"fetch"}
+	commandArgs = append(commandArgs, individualFetchFlags...)
+	commandArgs = append(commandArgs, repository)
+
+	for _, r := range refSpec {
+		individualRefSpecs, err := shellwords.Parse(r)
+		if err != nil {
+			return err
+		}
+		commandArgs = append(commandArgs, individualRefSpecs...)
+	}
+
+	if err = sh.Run("git", commandArgs...); err != nil {
+		return err
 	}
 
 	return nil
@@ -38,7 +84,8 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	// git@github.com:buildkite/frontend.git
 	// Entering 'vendor/frontend/vendor/emojis'
 	// git@github.com:buildkite/emojis.git
-	output, err := sh.RunAndCapture("git submodule foreach --recursive git remote get-url origin")
+	output, err := sh.RunAndCapture(
+		"git", "submodule", "foreach", "--recursive", "git", "remote get-url", "origin")
 	if err != nil {
 		return nil, err
 	}
