@@ -7,4 +7,6 @@ services:
     volumes:
       - ./:/go/src/github.com/buildkite/agent
     environment:
-      BUILDKITE_BUILD_NUMBER:
+      - BUILDKITE_BUILD_NUMBER
+      - "BUILDKITE_AGENT_TAGS=queue=default"
+      - "BUILDKITE_BUILD_PATH=/buildkite"
