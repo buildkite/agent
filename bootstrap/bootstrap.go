@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/pkg/errors"
 )
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
@@ -69,10 +70,7 @@ func (b *Bootstrap) Start() {
 
 	for _, phase := range phases {
 		if err := phase(); err != nil {
-			b.shell.Errorf("Phase failed with %v", err)
-			if b.Debug {
-				b.shell.Commentf("Firing exit handler with %v", err)
-			}
+			b.shell.Errorf("%v", err)
 			os.Exit(shell.GetExitCode(err))
 		}
 	}
@@ -136,19 +134,20 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 	b.shell.Commentf("Executing \"%s\"", script.Path())
 
 	// Run the wrapper script
-	if err := b.executeScript(script.Path()); err != nil {
-		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(err)))
-		b.shell.Errorf("The %s hook exited with an error: %v", name, err)
-		return err
-	}
+	err = b.executeScript(script.Path())
 
-	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", "0")
+	// Store the last hook exit code for subsequent steps
+	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS",
+		fmt.Sprintf("%d", shell.GetExitCode(err)))
+
+	if err != nil {
+		return errors.Wrapf(err, "The %s hook exited with an error", name)
+	}
 
 	// Get changed environent
 	changes, err := script.ChangedEnvironment()
 	if err != nil {
-		b.shell.Errorf("Failed to get environment: %v", err)
-		return err
+		return errors.Wrapf(err, "Failed to get environment")
 	}
 
 	// Finally, apply changes to the current shell and config
@@ -325,11 +324,7 @@ func (b *Bootstrap) setUp() error {
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
-	if err := b.executeGlobalHook("environment"); err != nil {
-		return nil
-	}
-
-	return nil
+	return b.executeGlobalHook("environment")
 }
 
 // tearDown is called before the bootstrap exits, even on error
@@ -363,10 +358,19 @@ func (b *Bootstrap) PluginPhase() error {
 		return fmt.Errorf("Can't checkout plugins without a `plugins-path`")
 	}
 
+	if b.Debug {
+		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
+	}
+
+	// Check if we can run plugins (disabled via --no-plugins)
+	if b.Plugins != "" && !b.Config.PluginsEnabled {
+		return fmt.Errorf("This agent isn't allowed to run plugins. To allow this, re-run this agent without the `--no-plugins` option.")
+	}
+
 	var err error
 	b.plugins, err = agent.CreatePluginsFromJSON(b.Plugins)
 	if err != nil {
-		return fmt.Errorf("Failed to parse plugin definition (%s)", err)
+		return errors.Wrap(err, "Failed to parse plugin definition")
 	}
 
 	for _, p := range b.plugins {
@@ -457,11 +461,7 @@ func (b *Bootstrap) PluginPhase() error {
 	}
 
 	// Now we can run plugin environment hooks too
-	if err := b.executePluginHook(b.plugins, "environment"); err != nil {
-		return err
-	}
-
-	return nil
+	return b.executePluginHook(b.plugins, "environment")
 }
 
 // CheckoutPhase creates the build directory and makes sure we're running the
@@ -847,7 +847,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		// Write the build script to disk
 		err := ioutil.WriteFile(buildScriptPath, []byte(buildScriptContents), 0644)
 		if err != nil {
-			return fmt.Errorf("Failed to write to \"%s\" (%s)", buildScriptPath, err)
+			return errors.Wrapf(err, "Failed to write to \"%s\"", buildScriptPath)
 		}
 	}
 

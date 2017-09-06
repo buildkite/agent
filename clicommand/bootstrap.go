@@ -50,6 +50,7 @@ type BootstrapConfig struct {
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool   `cli:"command-eval"`
+	PluginsEnabled               bool   `cli:"plugins-enabled"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
 }
@@ -196,6 +197,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
 		cli.BoolTFlag{
+			Name:   "plugins-enabled",
+			Usage:  "Allow plugins to be run",
+			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
+		},
+		cli.BoolTFlag{
 			Name:   "ssh-fingerprint-verification",
 			Usage:  "Automatically verify SSH fingerprints",
 			EnvVar: "BUILDKITE_SSH_FINGERPRINT_VERIFICATION",
@@ -256,6 +262,7 @@ var BootstrapCommand = cli.Command{
 				Debug:                        cfg.Debug,
 				RunInPty:                     runInPty,
 				CommandEval:                  cfg.CommandEval,
+				PluginsEnabled:               cfg.PluginsEnabled,
 				SSHFingerprintVerification:   cfg.SSHFingerprintVerification,
 			},
 		}

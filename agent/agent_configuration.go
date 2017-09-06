@@ -9,6 +9,7 @@ type AgentConfiguration struct {
 	GitCleanFlags              string
 	SSHFingerprintVerification bool
 	CommandEval                bool
+	PluginsEnabled             bool
 	RunInPty                   bool
 	TimestampLines             bool
 	DisconnectAfterJob         bool
