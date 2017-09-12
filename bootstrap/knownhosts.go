@@ -58,8 +58,8 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 	}
 
 	// Grab the generated keys for the repo host
-	keygenOutput, err := kh.shell.RunAndCapture("%s -f %q -F %q",
-		filepath.Join(sshToolsDir, "ssh-keygen"), kh.Path, host)
+	keygenOutput, err := kh.shell.RunAndCapture(
+		filepath.Join(sshToolsDir, "ssh-keygen"), "-f", kh.Path, "-F", host)
 
 	// Returns an error and no output if host isn't in there
 	if err != nil && keygenOutput == "" {
@@ -95,8 +95,7 @@ func (kh *knownHosts) Add(host string) error {
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := kh.shell.RunAndCapture("%s %q",
-		filepath.Join(sshToolsDir, "ssh-keyscan"), host)
+	keyscanOutput, err := kh.shell.RunAndCapture(filepath.Join(sshToolsDir, "ssh-keyscan"), host)
 	if err != nil {
 		return fmt.Errorf("Could not perform `ssh-keyscan` (%s)", err)
 	}
@@ -151,7 +150,7 @@ func findSSHToolsDir(sh *shell.Shell) (string, error) {
 	// On Windows, ssh-keygen isn't on the $PATH by default, but we know we can find it
 	// relative to where git for windows is installed, so try that
 	if runtime.GOOS == "windows" {
-		gitExecPathOutput, _ := sh.RunAndCapture("git --exec-path")
+		gitExecPathOutput, _ := sh.RunAndCapture("git", "--exec-path")
 		if len(gitExecPathOutput) > 0 {
 			sshToolRelativePaths := [][]string{}
 			sshToolRelativePaths = append(sshToolRelativePaths, []string{"..", "..", "..", "usr", "bin"})

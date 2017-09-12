@@ -15,7 +15,6 @@ import (
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
-	shellwords "github.com/mattn/go-shellwords"
 	"github.com/pkg/errors"
 )
 
@@ -99,13 +98,8 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 }
 
 // Run runs a command, write to the logger and return an error if it fails
-func (s *Shell) Run(command string, args ...interface{}) error {
-	words, err := shellwords.Parse(fmt.Sprintf(command, args...))
-	if err != nil {
-		return err
-	}
-
-	cmd, err := s.buildCommand(words[0], words[1:]...)
+func (s *Shell) Run(name string, arg ...string) error {
+	cmd, err := s.buildCommand(name, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -115,13 +109,8 @@ func (s *Shell) Run(command string, args ...interface{}) error {
 }
 
 // RunAndCapture runs a command and captures the output, nothing else is logged
-func (s *Shell) RunAndCapture(command string, args ...interface{}) (string, error) {
-	words, err := shellwords.Parse(fmt.Sprintf(command, args...))
-	if err != nil {
-		return "", err
-	}
-
-	cmd, err := s.buildCommand(words[0], words[1:]...)
+func (s *Shell) RunAndCapture(name string, arg ...string) (string, error) {
+	cmd, err := s.buildCommand(name, arg...)
 	if err != nil {
 		return "", err
 	}
@@ -137,14 +126,14 @@ func (s *Shell) RunAndCapture(command string, args ...interface{}) (string, erro
 }
 
 // buildCommand returns an exec.Cmd that runs in the context of the shell
-func (s *Shell) buildCommand(command string, args ...string) (*exec.Cmd, error) {
+func (s *Shell) buildCommand(name string, arg ...string) (*exec.Cmd, error) {
 	// Always use absolute path as Windows has a hard time finding executables in it's path
-	absPath, err := s.AbsolutePath(command)
+	absPath, err := s.AbsolutePath(name)
 	if err != nil {
 		return nil, err
 	}
 
-	cmd := exec.Command(absPath, args...)
+	cmd := exec.Command(absPath, arg...)
 	cmd.Env = s.Env.ToSlice()
 	cmd.Dir = s.wd
 
@@ -205,20 +194,6 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 	}
 
 	return nil
-}
-
-// Quote takes a line of commands and uses shell word splitting on them and then
-// quotes anything with spaces or special characters. This is used or making things
-// like sets of flags safe to literally include in commands
-func QuoteArguments(line string) (string, error) {
-	words, err := shellwords.Parse(line)
-	if err != nil {
-		return "", err
-	}
-	for idx, word := range words {
-		words[idx] = fmt.Sprintf("%q", word)
-	}
-	return strings.Join(words, " "), nil
 }
 
 // GetExitCode extracts an exit code from an error where the platform supports it,
