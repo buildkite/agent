@@ -255,6 +255,18 @@
 			"revisionTime": "2016-07-16T20:46:20Z"
 		},
 		{
+			"checksumSHA1": "leNI8/D2MDzBPXBR3qD/tIIUTU8=",
+			"path": "github.com/lox/bintest",
+			"revision": "018439011838f241c35e027bddafdb3608fb3ee3",
+			"revisionTime": "2017-09-15T00:01:56Z"
+		},
+		{
+			"checksumSHA1": "WHU4IAbJvuWyS5sIZvNvEqVXKUI=",
+			"path": "github.com/lox/bintest/proxy",
+			"revision": "018439011838f241c35e027bddafdb3608fb3ee3",
+			"revisionTime": "2017-09-15T00:01:56Z"
+		},
+		{
 			"checksumSHA1": "COqeZiiECcnjWBik95gPTsJf0fg=",
 			"path": "github.com/mattn/go-shellwords",
 			"revision": "005a0944d84452842197c2108bd9168ced206f78",
