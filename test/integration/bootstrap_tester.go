@@ -25,21 +25,22 @@ type BootstrapTester struct {
 	PathDir  string
 	BuildDir string
 	HooksDir string
-	Repo     *GitRepository
+	Repo     *gitRepository
 
-	output string
-	mocks  []*bintest.Mock
+	// mocks that are referenced internally
+	hookMock, agentMock *bintest.Mock
+
+	hasCheckoutHook bool
+	output          string
+	mocks           []*bintest.Mock
 }
 
-func NewBootstrapTester(name string, args ...string) (*BootstrapTester, error) {
-	if !filepath.IsAbs(name) {
-		var err error
-		name, err = filepath.Abs(name)
-		if err != nil {
-			return nil, err
-		}
-	}
+func bootstrapPath() string {
+	_, filename, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(filename), "..", "..", "templates/bootstrap.sh")
+}
 
+func NewBootstrapTester() (*BootstrapTester, error) {
 	homeDir, err := ioutil.TempDir("", "home")
 	if err != nil {
 		return nil, err
@@ -60,65 +61,95 @@ func NewBootstrapTester(name string, args ...string) (*BootstrapTester, error) {
 		return nil, err
 	}
 
+	repo, err := createTestGitRespository()
+	if err != nil {
+		return nil, err
+	}
+
 	bt := &BootstrapTester{
-		Name: name,
-		Args: args,
+		Name: bootstrapPath(),
+		Repo: repo,
 		Env: []string{
 			"HOME=" + homeDir,
 			"PATH=" + pathDir,
-			"BUILDKITE_AGENT_DEBUG=true",
 			"BUILDKITE_BIN_PATH=" + pathDir,
 			"BUILDKITE_BUILD_PATH=" + buildDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
+			`BUILDKITE_REPO=` + repo.Path,
+			`BUILDKITE_AGENT_DEBUG=true`,
+			`BUILDKITE_AGENT_NAME=test-agent`,
+			`BUILDKITE_PROJECT_SLUG=test-project`,
+			`BUILDKITE_PULL_REQUEST=`,
+			`BUILDKITE_PROJECT_PROVIDER=git`,
+			`BUILDKITE_COMMIT=HEAD`,
+			`BUILDKITE_BRANCH=master`,
+			`BUILDKITE_COMMAND_EVAL=true`,
+			`BUILDKITE_ARTIFACT_PATHS=`,
+			`BUILDKITE_COMMAND=true`,
+			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
 		},
 		PathDir:  pathDir,
 		BuildDir: buildDir,
 		HooksDir: hooksDir,
 	}
 
-	if err = bt.linkCommonCommands(); err != nil {
+	if err = bt.LinkPosixCommands(); err != nil {
 		return nil, err
 	}
+
+	// Bake in some always used mocks
+
+	agent, err := bt.Mock("buildkite-agent")
+	if err != nil {
+		return nil, err
+	}
+
+	bt.agentMock = agent
+
+	hook, err := bt.Mock("buildkite-agent-hooks")
+	if err != nil {
+		return nil, err
+	}
+
+	bt.hookMock = hook
 
 	return bt, nil
 }
 
-func NewBootstrapTesterWithGitRepository(name string, args ...string) (*BootstrapTester, error) {
-	bt, err := NewBootstrapTester(name, args...)
-	if err != nil {
-		return nil, err
-	}
-	repo, err := NewGitRepository()
-	if err != nil {
-		return nil, err
-	}
-	if err = repo.Commit("Initial Commit", "test.txt", "This is a test"); err != nil {
-		return nil, err
-	}
-	bt.Repo = repo
-	return bt, nil
+// The agent has a series of metadata commands for handling internal buildkite metadata
+// this mocks them out entirely
+func expectBuildkiteAgentCheckoutMetadataCommands(agent *bintest.Mock) {
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(1)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
+		AndExitWith(0)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:branch", bintest.MatchAny()).
+		AndExitWith(0)
 }
 
-func (b *BootstrapTester) Link(src, name string) error {
-	// Lookup the absolute path if it doesn't exist
-	if !filepath.IsAbs(src) {
+// LinkLocalCommand creates a symlink for commands into the tester PATH
+func (b *BootstrapTester) LinkLocalCommand(name string) error {
+	if !filepath.IsAbs(name) {
 		var err error
-		src, err = exec.LookPath(src)
+		name, err = exec.LookPath(name)
 		if err != nil {
 			return err
 		}
 	}
-	// log.Printf("Linking %s to %s", src, filepath.Join(b.PathDir, name))
-	return os.Symlink(src, filepath.Join(b.PathDir, name))
+	return os.Symlink(name, filepath.Join(b.PathDir, filepath.Base(name)))
 }
 
-func (b *BootstrapTester) linkCommonCommands() error {
+// Link common posix commands, these aren't worth mocking
+func (b *BootstrapTester) LinkPosixCommands() error {
 	if runtime.GOOS != "windows" {
 		for _, bin := range []string{
 			"ls", "tr", "mkdir", "cp", "sed", "basename", "uname", "chmod",
-			"touch", "env", "grep", "sort", "cat",
+			"touch", "env", "grep", "sort", "cat", "true",
 		} {
-			if err := b.Link(bin, bin); err != nil {
+			if err := b.LinkLocalCommand(bin); err != nil {
 				return err
 			}
 		}
@@ -126,42 +157,85 @@ func (b *BootstrapTester) linkCommonCommands() error {
 	return nil
 }
 
-func (b *BootstrapTester) Mock(name string, t *testing.T) *bintest.Mock {
+// Mock creates a mock for a binary using bintest
+func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 	mock, err := bintest.NewMock(name)
 	if err != nil {
-		t.Fatal(err)
+		return mock, err
 	}
 
 	b.mocks = append(b.mocks, mock)
 
 	// move the mock into our path
 	if err := os.Rename(mock.Path, filepath.Join(b.PathDir, name)); err != nil {
-		t.Fatal(err)
+		return mock, err
 	}
 
 	mock.Path = filepath.Join(b.PathDir, name)
+	return mock, err
+}
+
+func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
+	mock, err := b.Mock(name)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return mock
 }
 
-func (b *BootstrapTester) Hook(name string, t *testing.T) *bintest.Mock {
-	if runtime.GOOS == "windows" {
-		t.Skip("Hook mocks not supported on windows yet")
-		return nil
+// writeHookScript generates a buildkite-agent hook script that calls a mock binary
+func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
+	// TODO: support windows tests
+	hookScript := filepath.Join(dir, name)
+	body := "#!/bin/sh\n" + strings.Join(append([]string{m.Path}, args...), " ")
+
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
 	}
 
-	mock := b.Mock(name, t)
-	hookScript := filepath.Join(b.HooksDir, name)
-	body := "#!/bin/sh\n" + mock.Path
+	return hookScript, ioutil.WriteFile(hookScript, []byte(body), 0600)
+}
 
-	if err := ioutil.WriteFile(hookScript, []byte(body), 0600); err != nil {
+func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
+	hooksDir := filepath.Join(b.Repo.Path, ".buildkite", "hooks")
+
+	if err := os.MkdirAll(hooksDir, 0700); err != nil {
 		panic(err)
 	}
 
-	log.Printf("Writing to %s: %s", hookScript, body)
-	return mock
+	hookPath, err := b.writeHookScript(b.hookMock, name, hooksDir, "local", name)
+	if err != nil {
+		panic(err)
+	}
+
+	if err = b.Repo.Add(hookPath); err != nil {
+		panic(err)
+	}
+	if err = b.Repo.Commit("Added local hook file %s", name); err != nil {
+		panic(err)
+	}
+
+	return b.hookMock.Expect("local", name)
+}
+
+func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
+	_, err := b.writeHookScript(b.hookMock, name, b.HooksDir, "global", name)
+	if err != nil {
+		panic(err)
+	}
+
+	if name == "checkout" {
+		b.hasCheckoutHook = true
+	}
+
+	return b.hookMock.Expect("global", name)
 }
 
 func (b *BootstrapTester) Run(env ...string) error {
+	if !b.hasCheckoutHook {
+		expectBuildkiteAgentCheckoutMetadataCommands(b.agentMock)
+	}
+
 	log.Printf("Executing %s %v %#v", b.Name, b.Args, env)
 
 	buf := &bytes.Buffer{}
