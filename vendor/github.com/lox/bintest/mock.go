@@ -7,17 +7,21 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
-	"testing"
 
 	"github.com/lox/bintest/proxy"
 )
 
 const (
-	infinite = -1
+	InfiniteTimes = -1
 )
+
+// TestingT is an interface for *testing.T
+type TestingT interface {
+	Logf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
+}
 
 // Mock provides a wrapper around a Proxy for testing
 type Mock struct {
@@ -40,8 +44,6 @@ type Mock struct {
 
 	// A command to passthrough execution to
 	passthroughPath string
-
-	t *testing.T
 }
 
 // Mock returns a new Mock instance, or fails if the bintest fails to compile
@@ -74,10 +76,10 @@ func (m *Mock) invoke(call *proxy.Call) {
 		Env:  call.Env,
 	}
 
-	expected := m.findExpectedCall(call.Args...)
-	if expected == nil {
+	expected, err := m.findMatchingExpectation(call.Args...)
+	if err != nil {
 		m.invocations = append(m.invocations, invocation)
-		fmt.Fprintf(call.Stderr, "\033[31m🚨 Unexpected call: %s %s\033[0m", m.Name, formatStrings(call.Args))
+		fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m", err)
 		call.Exit(1)
 		return
 	}
@@ -135,24 +137,45 @@ func (m *Mock) Expect(args ...interface{}) *Expectation {
 	m.Lock()
 	defer m.Unlock()
 	ex := &Expectation{
-		parent:      m,
-		arguments:   Arguments(args),
-		writeStderr: &bytes.Buffer{},
-		writeStdout: &bytes.Buffer{},
+		parent:        m,
+		arguments:     Arguments(args),
+		writeStderr:   &bytes.Buffer{},
+		writeStdout:   &bytes.Buffer{},
+		expectedCalls: 1,
 	}
 	m.expected = append(m.expected, ex)
 	return ex
 }
 
-func (m *Mock) findExpectedCall(args ...string) *Expectation {
-	for _, call := range m.expected {
-		if call.expectedCalls == infinite || call.expectedCalls >= 0 {
-			if match, _ := call.arguments.Match(args...); match {
-				return call
-			}
+func (m *Mock) findMatchingExpectation(args ...string) (*Expectation, error) {
+	var possibleMatches = []*Expectation{}
+
+	// log.Printf("Trying to match call [%s %s]", m.Name, formatStrings(args))
+	for _, expectation := range m.expected {
+		expectation.RLock()
+		defer expectation.RUnlock()
+		// log.Printf("Comparing to [%s]", expectation.String())
+		if match, _ := expectation.arguments.Match(args...); match {
+			// log.Printf("Matched args")
+			possibleMatches = append(possibleMatches, expectation)
 		}
 	}
-	return nil
+
+	// log.Printf("Found %d possible matches for [%s %s]", len(possibleMatches), m.Name, formatStrings(args))
+
+	for _, expectation := range possibleMatches {
+		if expectation.expectedCalls == InfiniteTimes || expectation.totalCalls < expectation.expectedCalls {
+			// log.Printf("Matched %v", expectation)
+			return expectation, nil
+		}
+	}
+
+	if len(possibleMatches) > 0 {
+		return nil, fmt.Errorf("Call count didn't match possible expectations for [%s %s]", m.Name, formatStrings(args))
+	}
+
+	// log.Printf("No match found")
+	return nil, fmt.Errorf("No matching expectation found for [%s %s]", m.Name, formatStrings(args))
 }
 
 // ExpectAll is a shortcut for adding lots of expectations
@@ -163,7 +186,7 @@ func (m *Mock) ExpectAll(argSlices [][]interface{}) {
 }
 
 // Check that all assertions are met and that there aren't invocations that don't match expectations
-func (m *Mock) Check(t *testing.T) bool {
+func (m *Mock) Check(t TestingT) bool {
 	m.Lock()
 	defer m.Unlock()
 
@@ -175,7 +198,7 @@ func (m *Mock) Check(t *testing.T) bool {
 
 	// first check that everything we expect
 	for _, expected := range m.expected {
-		if !m.wasCalled(expected.arguments) {
+		if expected.expectedCalls > 0 && !m.wasCalled(expected.arguments) {
 			t.Logf("Expected %s %s to be called", m.Name,
 				expected.arguments.String(),
 			)
@@ -216,7 +239,7 @@ func (m *Mock) wasCalled(args Arguments) bool {
 	return false
 }
 
-func (m *Mock) CheckAndClose(t *testing.T) error {
+func (m *Mock) CheckAndClose(t TestingT) error {
 	if err := m.proxy.Close(); err != nil {
 		return err
 	}
@@ -232,7 +255,7 @@ func (m *Mock) Close() error {
 
 // Expectation is used for setting expectations
 type Expectation struct {
-	sync.Mutex
+	sync.RWMutex
 
 	parent *Mock
 
@@ -253,6 +276,21 @@ type Expectation struct {
 
 	// Buffers to copy to stdout and stderr
 	writeStdout, writeStderr *bytes.Buffer
+}
+
+func (e *Expectation) Times(expected int) *Expectation {
+	e.Lock()
+	defer e.Unlock()
+	e.expectedCalls = expected
+	return e
+}
+
+func (e *Expectation) Once() *Expectation {
+	return e.Times(1)
+}
+
+func (e *Expectation) NotCalled() *Expectation {
+	return e.Times(0)
 }
 
 func (e *Expectation) AndExitWith(code int) *Expectation {
@@ -276,14 +314,8 @@ func (e *Expectation) AndWriteToStderr(s string) *Expectation {
 	return e
 }
 
-func ArgumentsFromStrings(s []string) Arguments {
-	args := make([]interface{}, len(s))
-
-	for idx, v := range s {
-		args[idx] = v
-	}
-
-	return args
+func (e *Expectation) String() string {
+	return fmt.Sprintf("%s %s", e.parent.Name, e.arguments.String())
 }
 
 // Invocation is a call to the binary
@@ -291,87 +323,4 @@ type Invocation struct {
 	Args        []string
 	Env         []string
 	Expectation *Expectation
-}
-
-type Arguments []interface{}
-
-func (a Arguments) Match(x ...string) (bool, string) {
-	for i, expected := range a {
-		var formatFail = func(formatter string, args ...interface{}) string {
-			return fmt.Sprintf("Argument #%d doesn't match: %s",
-				i, fmt.Sprintf(formatter, args...))
-		}
-
-		if len(x) <= i {
-			return false, formatFail("Expected %q, but missing an argument", expected)
-		}
-
-		var actual = x[i]
-
-		if matcher, ok := expected.(Matcher); ok {
-			if match, message := matcher.Match(actual); !match {
-				return false, formatFail(message)
-			}
-		} else if s, ok := expected.(string); ok && s != actual {
-			return false, formatFail("Expected %q, got %q", expected, actual)
-		}
-	}
-	if len(x) > len(a) {
-		return false, fmt.Sprintf(
-			"Argument #%d doesn't match: Unexpected extra argument", len(a))
-	}
-
-	return true, ""
-}
-
-func (a Arguments) String() string {
-	return formatInterfaces(a)
-}
-
-type Matcher interface {
-	fmt.Stringer
-	Match(s string) (bool, string)
-}
-
-type MatcherFunc struct {
-	f   func(s string) (bool, string)
-	str string
-}
-
-func (mf MatcherFunc) Match(s string) (bool, string) {
-	return mf.f(s)
-}
-
-func (mf MatcherFunc) String() string {
-	return mf.str
-}
-
-func MatchAny() Matcher {
-	return MatcherFunc{
-		f:   func(s string) (bool, string) { return true, "" },
-		str: "*",
-	}
-}
-
-func formatStrings(a []string) string {
-	var s = make([]string, len(a))
-	for idx := range a {
-		s[idx] = fmt.Sprintf("%q", a[idx])
-	}
-	return strings.Join(s, " ")
-}
-
-func formatInterfaces(a []interface{}) string {
-	var s = make([]string, len(a))
-	for idx := range a {
-		switch t := a[idx].(type) {
-		case string:
-			s[idx] = fmt.Sprintf("%q", t)
-		case fmt.Stringer:
-			s[idx] = fmt.Sprintf("%s", t.String())
-		default:
-			s[idx] = fmt.Sprintf("%v", t)
-		}
-	}
-	return strings.Join(s, " ")
 }
