@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -104,6 +105,16 @@ type Call struct {
 	// proxy      *Proxy
 	exitCodeCh chan int
 	doneCh     chan struct{}
+}
+
+func (c *Call) GetEnv(key string) string {
+	for _, e := range c.Env {
+		pair := strings.Split(e, "=")
+		if strings.ToUpper(key) == strings.ToUpper(pair[0]) {
+			return pair[1]
+		}
+	}
+	return ""
 }
 
 // Exit finishes the call and the proxied binary returns the exit code

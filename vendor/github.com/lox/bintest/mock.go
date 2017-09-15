@@ -89,20 +89,24 @@ func (m *Mock) invoke(call *proxy.Call) {
 
 	invocation.Expectation = expected
 
-	if m.passthroughPath == "" {
+	if m.passthroughPath != "" {
+		call.Exit(m.invokePassthrough(m.passthroughPath, call))
+	} else if expected.passthroughPath != "" {
+		call.Exit(m.invokePassthrough(expected.passthroughPath, call))
+	} else if expected.callFunc != nil {
+		expected.callFunc(call)
+	} else {
 		_, _ = io.Copy(call.Stdout, expected.writeStdout)
 		_, _ = io.Copy(call.Stderr, expected.writeStderr)
 		call.Exit(expected.exitCode)
-	} else {
-		call.Exit(m.invokePassthrough(call))
 	}
 
 	expected.totalCalls++
 	m.invocations = append(m.invocations, invocation)
 }
 
-func (m *Mock) invokePassthrough(call *proxy.Call) int {
-	cmd := exec.Command(m.passthroughPath, call.Args...)
+func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
+	cmd := exec.Command(path, call.Args...)
 	cmd.Env = call.Env
 	cmd.Stdout = call.Stdout
 	cmd.Stderr = call.Stderr
@@ -266,7 +270,10 @@ type Expectation struct {
 	exitCode int
 
 	// The command to execute and return the results of
-	proxyTo string
+	passthroughPath string
+
+	// The function to call when executed
+	callFunc func(*proxy.Call)
 
 	// Amount of times this call has been called
 	totalCalls int
@@ -311,6 +318,20 @@ func (e *Expectation) AndWriteToStderr(s string) *Expectation {
 	e.Lock()
 	defer e.Unlock()
 	e.writeStderr.WriteString(s)
+	return e
+}
+
+func (e *Expectation) AndPassthroughToLocalCommand(path string) *Expectation {
+	e.Lock()
+	defer e.Unlock()
+	e.passthroughPath = path
+	return e
+}
+
+func (e *Expectation) AndCallFunc(f func(*proxy.Call)) *Expectation {
+	e.Lock()
+	defer e.Unlock()
+	e.callFunc = f
 	return e
 }
 

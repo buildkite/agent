@@ -2,13 +2,12 @@ package integration
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -26,13 +25,10 @@ type BootstrapTester struct {
 	BuildDir string
 	HooksDir string
 	Repo     *gitRepository
+	Output   string
 
-	// mocks that are referenced internally
-	hookMock, agentMock *bintest.Mock
-
-	hasCheckoutHook bool
-	output          string
-	mocks           []*bintest.Mock
+	hookMock *bintest.Mock
+	mocks    []*bintest.Mock
 }
 
 func bootstrapPath() string {
@@ -93,41 +89,18 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		HooksDir: hooksDir,
 	}
 
-	if err = bt.LinkPosixCommands(); err != nil {
+	if err = bt.LinkCommonCommands(); err != nil {
 		return nil, err
 	}
 
-	// Bake in some always used mocks
-
-	agent, err := bt.Mock("buildkite-agent")
-	if err != nil {
-		return nil, err
-	}
-
-	bt.agentMock = agent
-
+	// Create a mock used for hook assertions
 	hook, err := bt.Mock("buildkite-agent-hooks")
 	if err != nil {
 		return nil, err
 	}
-
 	bt.hookMock = hook
 
 	return bt, nil
-}
-
-// The agent has a series of metadata commands for handling internal buildkite metadata
-// this mocks them out entirely
-func expectBuildkiteAgentCheckoutMetadataCommands(agent *bintest.Mock) {
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(1)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:branch", bintest.MatchAny()).
-		AndExitWith(0)
 }
 
 // LinkLocalCommand creates a symlink for commands into the tester PATH
@@ -142,12 +115,12 @@ func (b *BootstrapTester) LinkLocalCommand(name string) error {
 	return os.Symlink(name, filepath.Join(b.PathDir, filepath.Base(name)))
 }
 
-// Link common posix commands, these aren't worth mocking
-func (b *BootstrapTester) LinkPosixCommands() error {
+// Link common commands from system path, these can be mocked as needed
+func (b *BootstrapTester) LinkCommonCommands() error {
 	if runtime.GOOS != "windows" {
 		for _, bin := range []string{
 			"ls", "tr", "mkdir", "cp", "sed", "basename", "uname", "chmod",
-			"touch", "env", "grep", "sort", "cat", "true",
+			"touch", "env", "grep", "sort", "cat", "true", "git", "ssh-keygen", "ssh-keyscan",
 		} {
 			if err := b.LinkLocalCommand(bin); err != nil {
 				return err
@@ -175,6 +148,7 @@ func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 	return mock, err
 }
 
+// MustMock will fail the test if creating the mock fails
 func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	mock, err := b.Mock(name)
 	if err != nil {
@@ -196,6 +170,8 @@ func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir stri
 	return hookScript, ioutil.WriteFile(hookScript, []byte(body), 0600)
 }
 
+// ExpectLocalHook creates a mock object and a script in the git repository's buildkite hooks dir
+// that proxies to the mock. This lets you set up expectations on a local  hook
 func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
 	hooksDir := filepath.Join(b.Repo.Path, ".buildkite", "hooks")
 
@@ -218,55 +194,60 @@ func (b *BootstrapTester) ExpectLocalHook(name string) *bintest.Expectation {
 	return b.hookMock.Expect("local", name)
 }
 
+// ExpectGlobalHook creates a mock object and a script in the global buildkite hooks dir
+// that proxies to the mock. This lets you set up expectations on a global hook
 func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 	_, err := b.writeHookScript(b.hookMock, name, b.HooksDir, "global", name)
 	if err != nil {
 		panic(err)
 	}
 
-	if name == "checkout" {
-		b.hasCheckoutHook = true
-	}
-
 	return b.hookMock.Expect("global", name)
 }
 
+// Run the bootstrap and return any errors
 func (b *BootstrapTester) Run(env ...string) error {
-	if !b.hasCheckoutHook {
-		expectBuildkiteAgentCheckoutMetadataCommands(b.agentMock)
-	}
-
-	log.Printf("Executing %s %v %#v", b.Name, b.Args, env)
-
 	buf := &bytes.Buffer{}
-
 	cmd := exec.Command(b.Name, b.Args...)
 	cmd.Stdout = io.MultiWriter(buf, os.Stdout)
 	cmd.Stderr = io.MultiWriter(buf, os.Stderr)
 	cmd.Env = append(b.Env, env...)
 
-	b.output = buf.String()
-	return cmd.Run()
+	err := cmd.Run()
+	b.Output = buf.String()
+	return err
 }
 
-func (b *BootstrapTester) AssertOutputContains(t *testing.T, substr string) bool {
-	return strings.Contains(b.output, substr)
-}
-
-func (b *BootstrapTester) CheckMocksAndClose(t *testing.T) error {
-	var checkFailed bool
+func (b *BootstrapTester) CheckMocks(t *testing.T) {
 	for _, mock := range b.mocks {
-		if !mock.Check(t) {
-			checkFailed = true
+		if mock.Check(t) {
+			t.Logf("Mock %s passed checks", mock.Name)
 		}
 	}
-	closeErr := b.Close()
-	if checkFailed {
-		return errors.New("Some mocks failed checks")
-	}
-	return closeErr
 }
 
+func (b *BootstrapTester) CheckoutDir() string {
+	return filepath.Join(b.BuildDir, "test-agent", "test-project")
+}
+
+func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
+	re := regexp.MustCompile(key + "=(.+)\n")
+	matches := re.FindStringSubmatch(b.Output)
+	if len(matches) == 0 {
+		return "", false
+	}
+	return matches[1], true
+}
+
+// Run the bootstrap and then check the mocks
+func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
+	if err := b.Run(env...); err != nil {
+		t.Fatal(err)
+	}
+	b.CheckMocks(t)
+}
+
+// Close the tester, delete all the directories and mocks
 func (b *BootstrapTester) Close() error {
 	for _, mock := range b.mocks {
 		if err := mock.Close(); err != nil {
