@@ -75,18 +75,6 @@
 			"revisionTime": "2016-07-16T20:46:20Z"
 		},
 		{
-			"checksumSHA1": "Bb+Q9iqyD8oYJeS19LGTKeAtbFc=",
-			"path": "github.com/lox/bintest",
-			"revision": "189a050e1d261b47a4fd9f4317d52b7c2cac0949",
-			"revisionTime": "2017-09-17T09:16:51Z"
-		},
-		{
-			"checksumSHA1": "xeWwJP2Pz4eJdD0r5f/X8v7bq7U=",
-			"path": "github.com/lox/bintest/proxy",
-			"revision": "189a050e1d261b47a4fd9f4317d52b7c2cac0949",
-			"revisionTime": "2017-09-17T09:16:51Z"
-		},
-		{
 			"checksumSHA1": "R8z+BOS81hOWgcqymuVWHNta/yc=",
 			"path": "github.com/oleiade/reflections",
 			"revision": "0e86b3c98b2ff33e30c85cfe97d9a63d439fe7eb",
