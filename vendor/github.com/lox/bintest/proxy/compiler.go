@@ -23,6 +23,11 @@ func compile(dest string, src string, vars []string) error {
 		for idx, val := range vars {
 			vars[idx] = "-X " + val
 		}
+
+		if Debug {
+			vars = append(vars, "-X main.debug=true")
+		}
+
 		args = append(args, strings.Join(vars, " "))
 	}
 

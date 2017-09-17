@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -71,6 +72,8 @@ func (m *Mock) invoke(call *proxy.Call) {
 	m.Lock()
 	defer m.Unlock()
 
+	debugf("Handling invocation for %s %s", m.Name, call.Args)
+
 	var invocation = Invocation{
 		Args: call.Args,
 		Env:  call.Env,
@@ -79,7 +82,7 @@ func (m *Mock) invoke(call *proxy.Call) {
 	expected, err := m.findMatchingExpectation(call.Args...)
 	if err != nil {
 		m.invocations = append(m.invocations, invocation)
-		fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m", err)
+		fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m\n", err)
 		call.Exit(1)
 		return
 	}
@@ -106,6 +109,7 @@ func (m *Mock) invoke(call *proxy.Call) {
 }
 
 func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
+	debugf("Passing through to %s %v", path, call.Args)
 	cmd := exec.Command(path, call.Args...)
 	cmd.Env = call.Env
 	cmd.Stdout = call.Stdout
@@ -115,6 +119,7 @@ func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
 
 	var waitStatus syscall.WaitStatus
 	if err := cmd.Run(); err != nil {
+		debugf("Exited with error: %v", err)
 		if exitError, ok := err.(*exec.ExitError); ok {
 			waitStatus = exitError.Sys().(syscall.WaitStatus)
 			return waitStatus.ExitStatus()
@@ -123,6 +128,7 @@ func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
 		}
 	}
 
+	debugf("Exited with 0")
 	return 0
 }
 
@@ -254,6 +260,7 @@ func (m *Mock) CheckAndClose(t TestingT) error {
 }
 
 func (m *Mock) Close() error {
+	debugf("Closing mock")
 	return m.proxy.Close()
 }
 
@@ -344,4 +351,14 @@ type Invocation struct {
 	Args        []string
 	Env         []string
 	Expectation *Expectation
+}
+
+var (
+	Debug bool
+)
+
+func debugf(pattern string, args ...interface{}) {
+	if Debug {
+		log.Printf("[mock] "+pattern, args...)
+	}
 }
