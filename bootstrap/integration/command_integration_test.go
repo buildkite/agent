@@ -30,7 +30,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 
-	if err = tester.Run("BUILDKITE_COMMAND=false"); err == nil {
+	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatal("Expected the bootstrap to fail")
 	} else {
 		t.Logf("Failed as expected with %v", err)

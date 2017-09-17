@@ -51,11 +51,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	if err = tester.Run(env...); err != nil {
-		t.Fatal(err)
-	}
-
-	tester.CheckMocks(t)
+	tester.RunAndCheck(t, env...)
 }
 
 func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
@@ -85,11 +81,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	if err = tester.Run(env...); err != nil {
-		t.Fatal(err)
-	}
-
-	tester.CheckMocks(t)
+	tester.RunAndCheck(t, env...)
 }
 
 func TestRunningFailingCommandWithDocker(t *testing.T) {
@@ -120,7 +112,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 
 	expectCommandHooks("1", t, tester)
 
-	if err = tester.Run(env...); err == nil {
+	if err = tester.Run(t, env...); err == nil {
 		t.Fatal("Expected bootstrap to fail")
 	}
 
@@ -155,11 +147,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	if err = tester.Run(env...); err != nil {
-		t.Fatal(err)
-	}
-
-	tester.CheckMocks(t)
+	tester.RunAndCheck(t, env...)
 }
 
 func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
@@ -193,7 +181,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 
 	expectCommandHooks("1", t, tester)
 
-	if err = tester.Run(env...); err == nil {
+	if err = tester.Run(t, env...); err == nil {
 		t.Fatal("Expected bootstrap to fail")
 	}
 
@@ -229,11 +217,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	if err = tester.Run(env...); err != nil {
-		t.Fatal(err)
-	}
-
-	tester.CheckMocks(t)
+	tester.RunAndCheck(t, env...)
 }
 
 func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
@@ -254,9 +238,5 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	dockerCompose.IgnoreUnexpectedInvocations()
 	dockerCompose.Expect("-f", "docker-compose.yml", "-p", "buildkite1111111111111111", "--verbose", "build", "--pull").Once()
 
-	if err = tester.Run(env...); err != nil {
-		t.Fatal(err)
-	}
-
-	tester.CheckMocks(t)
+	tester.RunAndCheck(t, env...)
 }

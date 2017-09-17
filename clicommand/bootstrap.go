@@ -205,7 +205,7 @@ var BootstrapCommand = cli.Command{
 		cli.BoolTFlag{
 			Name:   "ssh-fingerprint-verification",
 			Usage:  "Automatically verify SSH fingerprints",
-			EnvVar: "BUILDKITE_SSH_FINGERPRINT_VERIFICATION",
+			EnvVar: "BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION",
 		},
 		cli.BoolTFlag{
 			Name:   "git-submodules",

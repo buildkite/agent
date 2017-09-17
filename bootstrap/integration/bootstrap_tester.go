@@ -1,10 +1,10 @@
 package integration
 
 import (
+	"bufio"
 	"bytes"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,26 +15,6 @@ import (
 
 	"github.com/lox/bintest"
 )
-
-var agentBinary string
-
-func init() {
-	_, filename, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-
-	log.Printf("Compiling buildkite-agent for tests")
-	cmd := exec.Command("go", "build", "-o", "buildkite-agent", "main.go")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = projectRoot
-
-	err := cmd.Run()
-	if err != nil {
-		panic(err)
-	}
-
-	agentBinary = filepath.Join(projectRoot, "buildkite-agent")
-}
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
 type BootstrapTester struct {
@@ -225,11 +205,13 @@ func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 }
 
 // Run the bootstrap and return any errors
-func (b *BootstrapTester) Run(env ...string) error {
-	buf := &bytes.Buffer{}
+func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
+	w := newTestLogWriter(t)
+
 	cmd := exec.Command(b.Name, b.Args...)
-	cmd.Stdout = io.MultiWriter(buf, os.Stdout)
-	cmd.Stderr = io.MultiWriter(buf, os.Stderr)
+	buf := &bytes.Buffer{}
+	cmd.Stdout = io.MultiWriter(buf, w)
+	cmd.Stderr = io.MultiWriter(buf, w)
 	cmd.Env = append(b.Env, env...)
 
 	err := cmd.Run()
@@ -260,7 +242,7 @@ func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
 
 // Run the bootstrap and then check the mocks
 func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
-	if err := b.Run(env...); err != nil {
+	if err := b.Run(t, env...); err != nil {
 		t.Fatal(err)
 	}
 	b.CheckMocks(t)
@@ -291,4 +273,28 @@ func (b *BootstrapTester) Close() error {
 		return err
 	}
 	return nil
+}
+
+type testLogWriter struct {
+	io.Writer
+}
+
+func newTestLogWriter(t *testing.T) *testLogWriter {
+	r, w := io.Pipe()
+	in := bufio.NewScanner(r)
+
+	go func() {
+		for in.Scan() {
+			t.Logf("%s", in.Text())
+		}
+
+		if err := in.Err(); err != nil {
+			t.Errorf("Error with log writer: %v", err)
+			r.CloseWithError(err)
+		} else {
+			r.Close()
+		}
+	}()
+
+	return &testLogWriter{w}
 }

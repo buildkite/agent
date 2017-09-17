@@ -80,8 +80,14 @@ func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
 
+	git := tester.MustMock(t, "git")
+	git.IgnoreUnexpectedInvocations().PassthroughToLocalCommand()
+
+	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
+		AndExitWith(0)
+
 	env := []string{
-		`BUILDKITE_REPO_SSH_HOST=github.com`,
+		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
 		`BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION=true`,
 	}
 
@@ -105,15 +111,11 @@ func TestCheckingOutWithoutSSHFingerprintVerification(t *testing.T) {
 		AndExitWith(0)
 
 	env := []string{
-		`BUILDKITE_REPO_SSH_HOST=github.com`,
+		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
 		`BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION=false`,
 	}
 
 	tester.RunAndCheck(t, env...)
-
-	if !strings.Contains(tester.Output, `Skipping auto SSH fingerprint verification`) {
-		t.Fatalf("Expected output")
-	}
 }
 
 func TestCleaningAnExistingCheckout(t *testing.T) {

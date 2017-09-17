@@ -137,7 +137,7 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	if err = tester.Run("BUILDKITE_COMMAND=false"); err == nil {
+	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatal("Expected the bootstrap to fail")
 	} else {
 		t.Logf("Failed as expected with %v", err)
@@ -204,7 +204,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 					AndExitWith(0)
 			}
 
-			if err = tester.Run("BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
+			if err = tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
 				t.Fatal("Expected the bootstrap to fail")
 			}
 

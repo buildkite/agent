@@ -62,7 +62,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 		Expect("artifact", "upload", "llamas.txt").
 		AndExitWith(0)
 
-	err = tester.Run("BUILDKITE_ARTIFACT_PATHS=llamas.txt", "BUILDKITE_COMMAND=my-command")
+	err = tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt", "BUILDKITE_COMMAND=my-command")
 	if err == nil {
 		t.Fatalf("Expected command to fail")
 	} else {
