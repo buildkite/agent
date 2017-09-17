@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -39,6 +40,9 @@ type Mock struct {
 	// The executions expected of the binary
 	expected []*Expectation
 
+	// Whether to ignore unexpected calls
+	ignoreUnexpected bool
+
 	// The related proxy
 	proxy *proxy.Proxy
 
@@ -71,6 +75,8 @@ func (m *Mock) invoke(call *proxy.Call) {
 	m.Lock()
 	defer m.Unlock()
 
+	debugf("Handling invocation for %s %s", m.Name, call.Args)
+
 	var invocation = Invocation{
 		Args: call.Args,
 		Env:  call.Env,
@@ -79,8 +85,12 @@ func (m *Mock) invoke(call *proxy.Call) {
 	expected, err := m.findMatchingExpectation(call.Args...)
 	if err != nil {
 		m.invocations = append(m.invocations, invocation)
-		fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m", err)
-		call.Exit(1)
+		if m.ignoreUnexpected {
+			call.Exit(0)
+		} else {
+			fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m\n", err)
+			call.Exit(1)
+		}
 		return
 	}
 
@@ -106,6 +116,7 @@ func (m *Mock) invoke(call *proxy.Call) {
 }
 
 func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
+	debugf("Passing through to %s %v", path, call.Args)
 	cmd := exec.Command(path, call.Args...)
 	cmd.Env = call.Env
 	cmd.Stdout = call.Stdout
@@ -115,6 +126,7 @@ func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
 
 	var waitStatus syscall.WaitStatus
 	if err := cmd.Run(); err != nil {
+		debugf("Exited with error: %v", err)
 		if exitError, ok := err.(*exec.ExitError); ok {
 			waitStatus = exitError.Sys().(syscall.WaitStatus)
 			return waitStatus.ExitStatus()
@@ -123,9 +135,13 @@ func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
 		}
 	}
 
+	debugf("Exited with 0")
 	return 0
 }
 
+// PassthroughToLocalCommand executes the mock name as a local command (looked up in PATH) and then passes
+// the result as the result of the mock. Useful for assertions that commands happen, but where
+// you want the command to actually be executed.
 func (m *Mock) PassthroughToLocalCommand() *Mock {
 	path, err := exec.LookPath(m.Name)
 	if err != nil {
@@ -133,6 +149,11 @@ func (m *Mock) PassthroughToLocalCommand() *Mock {
 	}
 
 	m.passthroughPath = path
+	return m
+}
+
+func (m *Mock) IgnoreUnexpectedInvocations() *Mock {
+	m.ignoreUnexpected = true
 	return m
 }
 
@@ -217,18 +238,20 @@ func (m *Mock) Check(t TestingT) bool {
 	}
 
 	// next check if we have invocations without expectations
-	for _, invocation := range m.invocations {
-		if invocation.Expectation == nil {
-			t.Logf("Unexpected call to %s %s",
-				m.Name, formatStrings(invocation.Args))
-			unexpectedInvocations++
+	if !m.ignoreUnexpected {
+		for _, invocation := range m.invocations {
+			if invocation.Expectation == nil {
+				t.Logf("Unexpected call to %s %s",
+					m.Name, formatStrings(invocation.Args))
+				unexpectedInvocations++
+			}
 		}
-	}
 
-	if unexpectedInvocations > 0 {
-		t.Errorf("More invocations than expected (%d vs %d)",
-			unexpectedInvocations,
-			len(m.invocations))
+		if unexpectedInvocations > 0 {
+			t.Errorf("More invocations than expected (%d vs %d)",
+				unexpectedInvocations,
+				len(m.invocations))
+		}
 	}
 
 	return unexpectedInvocations == 0 && failedExpectations == 0
@@ -254,6 +277,7 @@ func (m *Mock) CheckAndClose(t TestingT) error {
 }
 
 func (m *Mock) Close() error {
+	debugf("Closing mock")
 	return m.proxy.Close()
 }
 
@@ -344,4 +368,14 @@ type Invocation struct {
 	Args        []string
 	Env         []string
 	Expectation *Expectation
+}
+
+var (
+	Debug bool
+)
+
+func debugf(pattern string, args ...interface{}) {
+	if Debug {
+		log.Printf("[mock] "+pattern, args...)
+	}
 }
