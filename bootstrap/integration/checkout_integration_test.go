@@ -18,8 +18,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	defer tester.Close()
 
 	env := []string{
-		"BUILDKITE_GIT_CLONE_FLAGS=-vv",
-		"BUILDKITE_GIT_CLEAN_FLAGS=-fd",
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 	}
 
 	// Actually execute git commands, but with expectations
@@ -29,24 +29,20 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"clone", "-vv", "--", tester.Repo.Path, "."},
-		{"clean", "-fd"},
-		{"submodule", "foreach", "--recursive", "git", "clean", "-fd"},
-		{"fetch", "-v", "origin", "master"},
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"submodule", "update", "--init", "--recursive", "--force"},
 		{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
-		{"clean", "-fd"},
-		{"submodule", "foreach", "--recursive", "git", "clean", "-fd"},
+		{"clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git", "remote", "get-url", "origin"},
 		{"show", "HEAD", "-s", "--format=fuller", "--no-color"},
 		{"branch", "--contains", "HEAD", "--no-color"},
 	})
-
-	// required by debug mode
-	git.Expect("--version").
-		AndWriteToStdout(`git version 2.13.3`).
-		AndExitWith(0)
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
@@ -127,9 +123,6 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 	}
 	defer tester.Close()
 
-	// The checkout dir shouldn't be removed first
-	tester.MustMock(t, "rm").Expect("-rf", tester.CheckoutDir()).NotCalled()
-
 	// Create an existing checkout
 	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
 	if err != nil {
@@ -139,6 +132,12 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write failed with %s", out)
 	}
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	t.Logf("Wrote %s", filepath.Join(tester.CheckoutDir(), "test.txt"))
 	tester.RunAndCheck(t)
@@ -156,6 +155,15 @@ func TestForcingACleanCheckout(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.MustMock(t, "rm").Expect("-rf", tester.CheckoutDir())
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
 	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
+
+	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
+		t.Fatalf("Should have removed checkout dir")
+	}
 }

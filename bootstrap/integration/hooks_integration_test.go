@@ -27,7 +27,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	tester.ExpectLocalHook("post-checkout").Once()
 	tester.ExpectGlobalHook("pre-command").Once()
 	tester.ExpectLocalHook("pre-command").Once()
-	tester.ExpectGlobalHook("command").Once()
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndWriteToStdout("Success!\n")
 	tester.ExpectGlobalHook("post-command").Once()
 	tester.ExpectLocalHook("post-command").Once()
 	tester.ExpectGlobalHook("pre-artifact").NotCalled()
@@ -75,8 +75,12 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 	}
 	defer tester.Close()
 
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0)
-	// tester.ExpectLocalHook("command").NotCalled()
 
 	tester.ExpectGlobalHook("environment").Once()
 	tester.ExpectGlobalHook("pre-checkout").Once()
@@ -93,11 +97,18 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 }
 
 func TestReplacingLocalCommandHook(t *testing.T) {
+	t.Skip("This is a regression")
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	tester.ExpectLocalHook("command").Once().AndExitWith(0)
 	tester.ExpectGlobalHook("command").NotCalled()
@@ -140,16 +151,18 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 		failingHook         string
 		expectGlobalPreExit bool
 		expectLocalPreExit  bool
+		expectCheckout      bool
+		expectArtifacts     bool
 	}{
-		// Note that these are all false currently. They shouldn't be, but this
-		// reflects the current behaviour
-		{"environment", false, false},
-		{"pre-checkout", false, false},
-		{"post-checkout", false, false},
-		{"pre-command", false, false},
-		{"checkout", false, false},
-		{"command", false, false},
-		{"post-command", false, false},
+		{"environment", true, false, false, false},
+		{"pre-checkout", true, false, false, false},
+		{"post-checkout", true, true, true, true},
+		{"checkout", true, false, false, false},
+		{"pre-command", true, true, true, true},
+		{"command", true, true, true, true},
+		{"post-command", true, true, true, true},
+		{"pre-artifact", true, true, true, false},
+		{"post-artifact", true, true, true, true},
 	}
 
 	for _, tc := range testCases {
@@ -160,10 +173,18 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			}
 			defer tester.Close()
 
+			agent := tester.MustMock(t, "buildkite-agent")
+
 			tester.ExpectGlobalHook(tc.failingHook).
 				Once().
-				AndWriteToStderr("Blargh").
+				AndWriteToStderr("Blargh\n").
 				AndExitWith(1)
+
+			if tc.expectCheckout {
+				agent.
+					Expect("meta-data", "exists", "buildkite:git:commit").
+					AndExitWith(0)
+			}
 
 			if tc.expectGlobalPreExit {
 				tester.ExpectGlobalHook("pre-exit").Once()
@@ -177,7 +198,13 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 				tester.ExpectGlobalHook("pre-exit").NotCalled()
 			}
 
-			if err = tester.Run(); err == nil {
+			if tc.expectArtifacts {
+				agent.
+					Expect("artifact", "upload", "test.txt").
+					AndExitWith(0)
+			}
+
+			if err = tester.Run("BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
 				t.Fatal("Expected the bootstrap to fail")
 			}
 

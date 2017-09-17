@@ -13,6 +13,12 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	}
 	defer tester.Close()
 
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
 	preExitFunc := func(c *proxy.Call) {
 		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
 		if cmdExitStatus != "1" {

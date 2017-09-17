@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,26 @@ import (
 
 	"github.com/lox/bintest"
 )
+
+var agentBinary string
+
+func init() {
+	_, filename, _, _ := runtime.Caller(0)
+	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
+
+	log.Printf("Compiling buildkite-agent for tests")
+	cmd := exec.Command("go", "build", "-o", "buildkite-agent", "main.go")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Dir = projectRoot
+
+	err := cmd.Run()
+	if err != nil {
+		panic(err)
+	}
+
+	agentBinary = filepath.Join(projectRoot, "buildkite-agent")
+}
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
 type BootstrapTester struct {
@@ -29,11 +50,6 @@ type BootstrapTester struct {
 
 	hookMock *bintest.Mock
 	mocks    []*bintest.Mock
-}
-
-func bootstrapPath() string {
-	_, filename, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(filename), "..", "..", "templates/bootstrap.sh")
 }
 
 func NewBootstrapTester() (*BootstrapTester, error) {
@@ -63,7 +79,8 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	}
 
 	bt := &BootstrapTester{
-		Name: bootstrapPath(),
+		Name: agentBinary,
+		Args: []string{"bootstrap"},
 		Repo: repo,
 		Env: []string{
 			"HOME=" + homeDir,
@@ -74,15 +91,17 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			`BUILDKITE_REPO=` + repo.Path,
 			`BUILDKITE_AGENT_DEBUG=true`,
 			`BUILDKITE_AGENT_NAME=test-agent`,
-			`BUILDKITE_PROJECT_SLUG=test-project`,
+			`BUILDKITE_ORGANIZATION_SLUG=test`,
+			`BUILDKITE_PIPELINE_SLUG=test-project`,
 			`BUILDKITE_PULL_REQUEST=`,
-			`BUILDKITE_PROJECT_PROVIDER=git`,
+			`BUILDKITE_PIPELINE_PROVIDER=git`,
 			`BUILDKITE_COMMIT=HEAD`,
 			`BUILDKITE_BRANCH=master`,
 			`BUILDKITE_COMMAND_EVAL=true`,
 			`BUILDKITE_ARTIFACT_PATHS=`,
 			`BUILDKITE_COMMAND=true`,
 			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
+			`BUILDKITE_AGENT_ACCESS_TOKEN=test`,
 		},
 		PathDir:  pathDir,
 		BuildDir: buildDir,
