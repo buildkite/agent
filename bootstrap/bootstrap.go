@@ -351,6 +351,8 @@ func (b *Bootstrap) setUp() error {
 
 // tearDown is called before the bootstrap exits, even on error
 func (b *Bootstrap) tearDown() error {
+	b.shell.Headerf("Tearing down bootstrap")
+
 	if err := b.executeGlobalHook("pre-exit"); err != nil {
 		return err
 	}
@@ -540,6 +542,9 @@ func (b *Bootstrap) CheckoutPhase() error {
 		}
 	}
 
+	// After this point, artifacts will be uploaded on failure
+	b.hasCheckout = true
+
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
 	previousCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
@@ -707,7 +712,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err == nil {
+	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
 		gitCommitOutput, _ := b.shell.RunAndCapture("git", "show", "HEAD", "-s", "--format=fuller", "--no-color")
@@ -756,7 +761,8 @@ func (b *Bootstrap) CommandPhase() error {
 		b.shell.Printf("^^^ +++")
 	}
 
-	// Save the command exit status to the env so hooks + plugins can access it
+	// Save the command exit status to the env so hooks + plugins can access it. If there is no error
+	// this will be zero. It's used to set the exit code later, so it's important
 	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
 
 	// Run post-command hooks
@@ -772,7 +778,7 @@ func (b *Bootstrap) CommandPhase() error {
 		return err
 	}
 
-	return commandExitError
+	return nil
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
@@ -876,39 +882,55 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	return b.executeScript(buildScriptPath)
 }
 
-func (b *Bootstrap) ArtifactPhase() error {
-	if b.AutomaticArtifactUploadPaths != "" {
-		// Run pre-artifact hooks
-		if err := b.executeGlobalHook("pre-artifact"); err != nil {
-			return err
-		}
+func (b *Bootstrap) uploadArtifacts() error {
+	if !b.hasCheckout {
+		b.shell.Commentf("Skipping artifact upload, no checkout")
+		return nil
+	}
 
-		if err := b.executeLocalHook("pre-artifact"); err != nil {
-			return err
-		}
+	if b.AutomaticArtifactUploadPaths == "" {
+		b.shell.Commentf("Skipping artifact upload, no artifact upload path set")
+		return nil
+	}
 
-		if err := b.executePluginHook(b.plugins, "pre-artifact"); err != nil {
-			return err
-		}
+	// Run pre-artifact hooks
+	if err := b.executeGlobalHook("pre-artifact"); err != nil {
+		return err
+	}
 
-		// Run the artifact upload command
-		b.shell.Headerf("Uploading artifacts")
-		if err := b.shell.Run("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination); err != nil {
-			return err
-		}
+	if err := b.executeLocalHook("pre-artifact"); err != nil {
+		return err
+	}
 
-		// Run post-artifact hooks
-		if err := b.executeGlobalHook("post-artifact"); err != nil {
-			return err
-		}
+	if err := b.executePluginHook(b.plugins, "pre-artifact"); err != nil {
+		return err
+	}
 
-		if err := b.executeLocalHook("post-artifact"); err != nil {
-			return err
-		}
+	// Run the artifact upload command
+	b.shell.Headerf("Uploading artifacts")
+	args := []string{"artifact", "upload", b.AutomaticArtifactUploadPaths}
 
-		if err := b.executePluginHook(b.plugins, "post-artifact"); err != nil {
-			return err
-		}
+	// If blank, the upload destination is buildkite
+	if b.ArtifactUploadDestination != "" {
+		b.shell.Commentf("Using default artifact upload destination")
+		args = append(args, b.ArtifactUploadDestination)
+	}
+
+	if err := b.shell.Run("buildkite-agent", args...); err != nil {
+		return err
+	}
+
+	// Run post-artifact hooks
+	if err := b.executeGlobalHook("post-artifact"); err != nil {
+		return err
+	}
+
+	if err := b.executeLocalHook("post-artifact"); err != nil {
+		return err
+	}
+
+	if err := b.executePluginHook(b.plugins, "post-artifact"); err != nil {
+		return err
 	}
 
 	return nil
