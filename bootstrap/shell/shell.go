@@ -31,6 +31,9 @@ type Shell struct {
 	// Whether the shell is a PTY
 	PTY bool
 
+	// Where stdout/error is written, defaults to os.Stdout
+	Writer io.Writer
+
 	// Current working directory that shell commands get executed in
 	wd string
 
@@ -48,6 +51,7 @@ func New() (*Shell, error) {
 	return &Shell{
 		Logger: StderrLogger,
 		Env:    env.FromSlice(os.Environ()),
+		Writer: os.Stdout,
 		wd:     wd,
 		ctx:    context.Background(),
 	}, nil
@@ -105,7 +109,7 @@ func (s *Shell) Run(name string, arg ...string) error {
 		return err
 	}
 
-	return s.executeCommand(cmd, os.Stderr, false)
+	return s.executeCommand(cmd, s.Writer, false)
 }
 
 // RunAndCapture runs a command and captures the output, nothing else is logged
@@ -185,12 +189,12 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 		cmd.Stdin = nil
 
 		if err := cmd.Start(); err != nil {
-			return errors.Wrapf(err, "Error starting `%s`: %v", cmdStr)
+			return errors.Wrapf(err, "Error starting `%s`", cmdStr)
 		}
 	}
 
 	if err := cmd.Wait(); err != nil {
-		return errors.Wrapf(err, "Error running `%s`: %v", cmdStr)
+		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 
 	return nil
@@ -199,6 +203,9 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 // GetExitCode extracts an exit code from an error where the platform supports it,
 // otherwise returns 0 for no error and 1 for an error
 func GetExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
 	switch cause := errors.Cause(err).(type) {
 	case *exec.ExitError:
 		// The program has exited with an exit code != 0
