@@ -176,12 +176,14 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 }
 
 func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
-	b.shell.Headerf("Applying environment changes")
-	b.shell.Env = b.shell.Env.Merge(environ)
-
+	// Be defensive, but this should never be nil
 	if environ == nil {
-		b.shell.Printf("No changes to apply")
 		return
+	}
+
+	if environ.Length() > 0 {
+		b.shell.Headerf("Applying environment changes")
+		b.shell.Env = b.shell.Env.Merge(environ)
 	}
 
 	// Apply the changed environment to the config
