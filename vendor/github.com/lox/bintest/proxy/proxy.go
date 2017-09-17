@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,7 @@ type Proxy struct {
 	server *server
 }
 
-// New returns a new instance of a Proxy with a compiled binary
+// New returns a new instance of a Proxy with a compiled binary and a started server
 func New(path string) (*Proxy, error) {
 	var tempDir string
 
@@ -55,14 +56,9 @@ func New(path string) (*Proxy, error) {
 		return nil, err
 	}
 
-	err = compileClient(path, []string{
+	return p, compileClient(path, []string{
 		"main.server=" + p.server.Listener.Addr().String(),
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return p, nil
 }
 
 func (p *Proxy) newCall(args []string, env []string, dir string) *Call {
@@ -127,4 +123,14 @@ func (c *Call) Exit(code int) {
 
 	// wait for the client to get it
 	<-c.doneCh
+}
+
+var (
+	Debug bool
+)
+
+func debugf(pattern string, args ...interface{}) {
+	if Debug {
+		log.Printf(pattern, args...)
+	}
 }

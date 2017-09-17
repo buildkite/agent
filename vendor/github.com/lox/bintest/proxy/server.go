@@ -70,7 +70,7 @@ func (s *server) serveInitialCall(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// log.Printf("[http] START %s", r.URL.Path)
+	debugf("[http] START %s", r.URL.Path)
 
 	if r.URL.Path == "/" {
 		s.serveInitialCall(w, r)
@@ -90,7 +90,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ch.ServeHTTP(w, r)
-	// log.Printf("[http] END %s", r.URL.Path)
+	debugf("[http] END %s", r.URL.Path)
 }
 
 func startServer(p *Proxy) (*server, error) {
@@ -120,21 +120,29 @@ type callHandler struct {
 func (ch *callHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch path.Base(r.URL.Path) {
 	case "stdout":
+		debugf("[call] Starting copy of stdout")
 		copyPipeWithFlush(w, ch.stdout)
+		debugf("[call] Finished copy of stdout")
 
 	case "stderr":
+		debugf("[call] Starting copy of stderr")
 		copyPipeWithFlush(w, ch.stderr)
+		debugf("[call] Finished copy of stderr")
 
 	case "stdin":
+		debugf("[call] Starting copy of stdin")
 		_, _ = io.Copy(ch.stdin, r.Body)
 		r.Body.Close()
 		ch.stdin.Close()
+		debugf("[call] Finished copy of stdin")
 
 	case "exitcode":
+		debugf("[call] Waiting for exitcode")
 		exitCode := <-ch.call.exitCodeCh
 		w.Header().Add("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(&exitCode)
 		w.(http.Flusher).Flush()
+		debugf("[call] Sending exit code")
 		ch.call.doneCh <- struct{}{}
 
 	default:
