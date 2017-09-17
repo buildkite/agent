@@ -40,6 +40,9 @@ type Mock struct {
 	// The executions expected of the binary
 	expected []*Expectation
 
+	// Whether to ignore unexpected calls
+	ignoreUnexpected bool
+
 	// The related proxy
 	proxy *proxy.Proxy
 
@@ -82,8 +85,12 @@ func (m *Mock) invoke(call *proxy.Call) {
 	expected, err := m.findMatchingExpectation(call.Args...)
 	if err != nil {
 		m.invocations = append(m.invocations, invocation)
-		fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m\n", err)
-		call.Exit(1)
+		if m.ignoreUnexpected {
+			call.Exit(0)
+		} else {
+			fmt.Fprintf(call.Stderr, "\033[31m🚨 Error: %v\033[0m\n", err)
+			call.Exit(1)
+		}
 		return
 	}
 
@@ -132,6 +139,9 @@ func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
 	return 0
 }
 
+// PassthroughToLocalCommand executes the mock name as a local command (looked up in PATH) and then passes
+// the result as the result of the mock. Useful for assertions that commands happen, but where
+// you want the command to actually be executed.
 func (m *Mock) PassthroughToLocalCommand() *Mock {
 	path, err := exec.LookPath(m.Name)
 	if err != nil {
@@ -139,6 +149,11 @@ func (m *Mock) PassthroughToLocalCommand() *Mock {
 	}
 
 	m.passthroughPath = path
+	return m
+}
+
+func (m *Mock) IgnoreUnexpectedInvocations() *Mock {
+	m.ignoreUnexpected = true
 	return m
 }
 
@@ -223,18 +238,20 @@ func (m *Mock) Check(t TestingT) bool {
 	}
 
 	// next check if we have invocations without expectations
-	for _, invocation := range m.invocations {
-		if invocation.Expectation == nil {
-			t.Logf("Unexpected call to %s %s",
-				m.Name, formatStrings(invocation.Args))
-			unexpectedInvocations++
+	if !m.ignoreUnexpected {
+		for _, invocation := range m.invocations {
+			if invocation.Expectation == nil {
+				t.Logf("Unexpected call to %s %s",
+					m.Name, formatStrings(invocation.Args))
+				unexpectedInvocations++
+			}
 		}
-	}
 
-	if unexpectedInvocations > 0 {
-		t.Errorf("More invocations than expected (%d vs %d)",
-			unexpectedInvocations,
-			len(m.invocations))
+		if unexpectedInvocations > 0 {
+			t.Errorf("More invocations than expected (%d vs %d)",
+				unexpectedInvocations,
+				len(m.invocations))
+		}
 	}
 
 	return unexpectedInvocations == 0 && failedExpectations == 0
