@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,35 +30,38 @@ type Bootstrap struct {
 
 	// Plugins are the plugins that are created in the PluginPhase
 	plugins []*agent.Plugin
+
+	// Tracks whether there is a checkout to upload in the teardown
+	hasCheckout bool
 }
 
-// Start runs the bootstrap and exits when finished
-func (b *Bootstrap) Start() {
+// Start runs the bootstrap and returns the exit code
+func (b *Bootstrap) Start() int {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
 		b.shell, err = shell.New()
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
-			os.Exit(1)
+			return 1
 		}
 
 		// Apply PTY settings
 		b.shell.PTY = b.Config.RunInPty
 	}
 
-	// Initialize the environment
-	if err := b.setUp(); err != nil {
-		b.shell.Errorf("Error setting up bootstrap: %v", err)
-		os.Exit(1)
-	}
-
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
 		if err := b.tearDown(); err != nil {
-			b.shell.Errorf("Error tearing down bootstrap %v", err)
+			b.shell.Errorf("Error tearing down bootstrap: %v", err)
 		}
 	}()
+
+	// Initialize the environment, a failure here will still call the tearDown
+	if err := b.setUp(); err != nil {
+		b.shell.Errorf("Error setting up bootstrap: %v", err)
+		return 1
+	}
 
 	// These are the "Phases of bootstrap execution". They are designed to be
 	// run independently at some later stage (think buildkite-agent bootstrap checkout)
@@ -65,15 +69,31 @@ func (b *Bootstrap) Start() {
 		b.PluginPhase,
 		b.CheckoutPhase,
 		b.CommandPhase,
-		b.ArtifactPhase,
 	}
 
+	var phaseError error
+
 	for _, phase := range phases {
-		if err := phase(); err != nil {
-			b.shell.Errorf("%v", err)
-			os.Exit(shell.GetExitCode(err))
+		if phaseError = phase(); phaseError != nil {
+			break
 		}
 	}
+
+	if err := b.uploadArtifacts(); err != nil {
+		b.shell.Errorf("%v", err)
+		return shell.GetExitCode(err)
+	}
+
+	// Phase errors are where something of ours broke that merits an big red error
+	// this won't include command failures, as we view that as more in the user space
+	if phaseError != nil {
+		b.shell.Errorf("%v", phaseError)
+		return shell.GetExitCode(phaseError)
+	}
+
+	// Use the exit code from the command phase
+	exitStatus, _ := strconv.Atoi(b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`))
+	return exitStatus
 }
 
 // executeScript executes a script in a Shell, but the target is an interpreted script
