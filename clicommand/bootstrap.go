@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/buildkite/agent/bootstrap"
@@ -267,7 +268,7 @@ var BootstrapCommand = cli.Command{
 			},
 		}
 
-		// Start the bootstraper
-		bootstrap.Start()
+		// Run the bootstrap and exit with whatever it returns
+		os.Exit(bootstrap.Start())
 	},
 }
