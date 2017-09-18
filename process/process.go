@@ -75,8 +75,6 @@ func (p *Process) Start() error {
 		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
 	}
 
-	logger.Info("Starting to run: %s", FormatCommand(args[0], args[1:]))
-
 	// Toggle between running in a pty
 	if p.PTY {
 		pty, err := StartPTY(p.command)

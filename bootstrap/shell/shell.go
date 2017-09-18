@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -102,8 +103,10 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 }
 
 // Run runs a command, write to the logger and return an error if it fails
-func (s *Shell) Run(name string, arg ...string) error {
-	cmd, err := s.buildCommand(name, arg...)
+func (s *Shell) Run(command string, args ...string) error {
+	s.Promptf("%s", process.FormatCommand(command, args))
+
+	cmd, err := s.buildCommand(command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -127,6 +130,27 @@ func (s *Shell) RunAndCapture(name string, arg ...string) (string, error) {
 	}
 
 	return strings.TrimSpace(b.String()), nil
+}
+
+// RunScript is like Run, but the target is an interpreted script which has
+// some extra checks to ensure it gets to the correct interpreter
+func (s *Shell) RunScript(path string) error {
+	if runtime.GOOS == "windows" {
+		return s.Run(path)
+	}
+
+	// If you run a script on Linux that doesn't have the
+	// #!/bin/bash shebang at the top, it will fail to run with a
+	// "exec format error" error.
+
+	// You can solve it by adding the
+	// #!/bin/bash line to the top of the file, but that's
+	// annoying, and people generally forget it, so we'll make it
+	// easy on them and add it for them here.
+
+	// We also need to make sure the script we pass has quotes
+	// around it, otherwise `/bin/bash -c run script with space.sh` fails.
+	return s.Run("/bin/bash", "-c", path)
 }
 
 // buildCommand returns an exec.Cmd that runs in the context of the shell
@@ -165,9 +189,6 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 	}()
 
 	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
-	if !silent {
-		s.Promptf("%s", cmdStr)
-	}
 
 	if s.PTY {
 		pty, err := process.StartPTY(cmd)

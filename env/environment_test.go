@@ -24,6 +24,21 @@ func TestEnvironmentSet(t *testing.T) {
 	assert.Equal(t, env.Get("    THIS_IS_THE_BEST   \n\n"), "\"IT SURE IS\"\n\n")
 }
 
+func TestEnvironmentGetBool(t *testing.T) {
+	env := FromSlice([]string{
+		"LLAMAS_ENABLED=1",
+		"ALPACAS_ENABLED=false",
+		"PLATYPUS_ENABLED=",
+		"BUNYIP_ENABLED=off",
+	})
+
+	assert.True(t, env.GetBool(`LLAMAS_ENABLED`, false))
+	assert.False(t, env.GetBool(`ALPACAS_ENABLED`, true))
+	assert.False(t, env.GetBool(`PLATYPUS_ENABLED`, false))
+	assert.True(t, env.GetBool(`PLATYPUS_ENABLED`, true))
+	assert.False(t, env.GetBool(`BUNYIP_ENABLED`, true))
+}
+
 func TestEnvironmentRemove(t *testing.T) {
 	env := FromSlice([]string{"FOO=bar"})
 

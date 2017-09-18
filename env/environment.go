@@ -31,6 +31,18 @@ func (e Environment) Get(key string) string {
 	return e.env[normalizeKeyName(key)]
 }
 
+// Get a boolean value from environment, with a default for empty. Supports true|false, on|off, 1|0
+func (e Environment) GetBool(key string, defaultValue bool) bool {
+	switch strings.ToLower(e.Get(key)) {
+	case "on", "1", "enabled", "true":
+		return true
+	case "off", "0", "disabled", "false":
+		return false
+	default:
+		return defaultValue
+	}
+}
+
 // Exists returns true/false depending on whether or not the key exists in the env
 func (e *Environment) Exists(key string) bool {
 	_, ok := e.env[normalizeKeyName(key)]

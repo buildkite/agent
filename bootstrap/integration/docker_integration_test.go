@@ -6,33 +6,18 @@ import (
 	"github.com/lox/bintest/proxy"
 )
 
-func expectCommandHooks(exitStatus string, t *testing.T, tester *BootstrapTester) {
-	tester.ExpectGlobalHook("pre-command").Once()
-	tester.ExpectLocalHook("pre-command").Once()
-	tester.ExpectGlobalHook("post-command").Once()
-	tester.ExpectLocalHook("post-command").Once()
-
-	preExitFunc := func(c *proxy.Call) {
-		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
-		t.Logf("Exit status is %s", cmdExitStatus)
-		if cmdExitStatus != exitStatus {
-			t.Errorf("Expected an exit status of %s, got %v", exitStatus, cmdExitStatus)
-		}
-		c.Exit(0)
-	}
-
-	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
-	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
-}
-
 func TestRunningCommandWithDocker(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER=llamas",
@@ -55,13 +40,17 @@ func TestRunningCommandWithDocker(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER=llamas",
@@ -85,13 +74,17 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 }
 
 func TestRunningFailingCommandWithDocker(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER=llamas",
@@ -120,13 +113,17 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerCompose(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER_COMPOSE_CONTAINER=llamas",
@@ -137,7 +134,6 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
-		{"--version"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", "./buildkite-script-" + jobId},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "kill"},
@@ -151,13 +147,17 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 }
 
 func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER_COMPOSE_CONTAINER=llamas",
@@ -168,7 +168,6 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
-		{"--version"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "kill"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "rm", "--force", "--all", "-v"},
@@ -189,13 +188,17 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER_COMPOSE_CONTAINER=llamas",
@@ -207,7 +210,6 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
-		{"--version"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "run", "llamas", "./buildkite-script-" + jobId},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "kill"},
@@ -221,13 +223,17 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 }
 
 func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
-	t.Skipf("Docker support not yet implemented")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
 
 	env := []string{
 		"BUILDKITE_DOCKER_COMPOSE_CONTAINER=llamas",
@@ -239,4 +245,23 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	dockerCompose.Expect("-f", "docker-compose.yml", "-p", "buildkite1111111111111111", "--verbose", "build", "--pull").Once()
 
 	tester.RunAndCheck(t, env...)
+}
+
+func expectCommandHooks(exitStatus string, t *testing.T, tester *BootstrapTester) {
+	tester.ExpectGlobalHook("pre-command").Once()
+	tester.ExpectLocalHook("pre-command").Once()
+	tester.ExpectGlobalHook("post-command").Once()
+	tester.ExpectLocalHook("post-command").Once()
+
+	preExitFunc := func(c *proxy.Call) {
+		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
+		t.Logf("Exit status is %s", cmdExitStatus)
+		if cmdExitStatus != exitStatus {
+			t.Errorf("Expected an exit status of %s, got %v", exitStatus, cmdExitStatus)
+		}
+		c.Exit(0)
+	}
+
+	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
+	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 }

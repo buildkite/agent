@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lox/bintest"
@@ -209,7 +210,7 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 	w := newTestLogWriter(t)
 
 	cmd := exec.Command(b.Name, b.Args...)
-	buf := &bytes.Buffer{}
+	buf := &buffer{}
 	cmd.Stdout = io.MultiWriter(buf, w)
 	cmd.Stderr = io.MultiWriter(buf, w)
 	cmd.Env = append(b.Env, env...)
@@ -277,15 +278,19 @@ func (b *BootstrapTester) Close() error {
 
 type testLogWriter struct {
 	io.Writer
+	sync.Mutex
 }
 
 func newTestLogWriter(t *testing.T) *testLogWriter {
 	r, w := io.Pipe()
 	in := bufio.NewScanner(r)
+	lw := &testLogWriter{Writer: w}
 
 	go func() {
 		for in.Scan() {
+			lw.Lock()
 			t.Logf("%s", in.Text())
+			lw.Unlock()
 		}
 
 		if err := in.Err(); err != nil {
@@ -296,5 +301,28 @@ func newTestLogWriter(t *testing.T) *testLogWriter {
 		}
 	}()
 
-	return &testLogWriter{w}
+	return lw
+}
+
+type buffer struct {
+	b bytes.Buffer
+	m sync.Mutex
+}
+
+func (b *buffer) Read(p []byte) (n int, err error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.Read(p)
+}
+
+func (b *buffer) Write(p []byte) (n int, err error) {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *buffer) String() string {
+	b.m.Lock()
+	defer b.m.Unlock()
+	return b.b.String()
 }

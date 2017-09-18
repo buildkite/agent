@@ -96,26 +96,6 @@ func (b *Bootstrap) Start() int {
 	return exitStatus
 }
 
-// executeScript executes a script in a Shell, but the target is an interpreted script
-// so it has extra checks applied to make sure it's executable.
-func (b *Bootstrap) executeScript(path string) error {
-	if runtime.GOOS == "windows" {
-		return b.shell.Run(path)
-	}
-
-	// If you run a script on Linux that doesn't have the
-	// #!/bin/bash thingy at the top, it will fail to run with a
-	// "exec format error" error. You can solve it by adding the
-	// #!/bin/bash line to the top of the file, but that's
-	// annoying, and people generally forget it, so we'll make it
-	// easy on them and add it for them here.
-	//
-	// We also need to make sure the script we pass has quotes
-	// around it, otherwise `/bin/bash -c run script with space.sh`
-	// fails.
-	return b.shell.Run("/bin/bash", "-c", path)
-}
-
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Environment) error {
 	b.shell.Headerf("Running %s hook", name)
@@ -154,7 +134,11 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 	b.shell.Commentf("Executing \"%s\"", script.Path())
 
 	// Run the wrapper script
-	err = b.executeScript(script.Path())
+	if err := b.shell.RunScript(script.Path()); err != nil {
+		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(err)))
+		b.shell.Errorf("The %s hook exited with an error: %v", name, err)
+		return err
+	}
 
 	// Store the last hook exit code for subsequent steps
 	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS",
@@ -377,6 +361,11 @@ func (b *Bootstrap) tearDown() error {
 
 	if err := b.executePluginHook(b.plugins, "pre-exit"); err != nil {
 		return err
+	}
+
+	// Support deprecated BUILDKITE_DOCKER* env vars
+	if hasDeprecatedDockerIntegration(b.shell) {
+		return tearDownDeprecatedDockerIntegration(b.shell)
 	}
 
 	return nil
@@ -893,7 +882,15 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		b.shell.Promptf("%s", promptDisplay)
 	}
 
-	return b.executeScript(buildScriptPath)
+	// Support deprecated BUILDKITE_DOCKER* env vars
+	if hasDeprecatedDockerIntegration(b.shell) {
+		if b.Debug {
+			b.shell.Commentf("Detected deprecated docker environment variables")
+		}
+		return runDeprecatedDockerIntegration(b.shell, buildScriptPath)
+	}
+
+	return b.shell.RunScript(buildScriptPath)
 }
 
 func (b *Bootstrap) uploadArtifacts() error {
