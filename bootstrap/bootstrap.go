@@ -529,17 +529,17 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	// Run a custom `checkout` hook if it's present
-	if fileExists(b.globalHookPath("checkout")) {
-		if err := b.executeGlobalHook("checkout"); err != nil {
-			return err
-		}
-	} else if b.pluginHookExists(b.plugins, "checkout") {
+	// There can only be one checkout hook, either plugin or global, in that order
+	switch {
+	case b.pluginHookExists(b.plugins, "checkout"):
 		if err := b.executePluginHook(b.plugins, "checkout"); err != nil {
 			return err
 		}
-	} else {
-		// Otherwise run the default
+	case fileExists(b.globalHookPath("checkout")):
+		if err := b.executeGlobalHook("checkout"); err != nil {
+			return err
+		}
+	default:
 		if err := b.defaultCheckoutPhase(); err != nil {
 			return err
 		}
@@ -748,14 +748,16 @@ func (b *Bootstrap) CommandPhase() error {
 
 	var commandExitError error
 
-	// Run a custom `command` hook if it's present
-	if fileExists(b.globalHookPath("command")) {
-		commandExitError = b.executeGlobalHook("command")
-	} else if fileExists(b.localHookPath("command")) {
-		commandExitError = b.executeGlobalHook("command")
-	} else if b.pluginHookExists(b.plugins, "command") {
+	// There can only be one command hook, so we check them in order
+	// of plugin, local
+	switch {
+	case b.pluginHookExists(b.plugins, "command"):
 		commandExitError = b.executePluginHook(b.plugins, "command")
-	} else {
+	case fileExists(b.localHookPath("command")):
+		commandExitError = b.executeLocalHook("command")
+	case fileExists(b.globalHookPath("command")):
+		commandExitError = b.executeGlobalHook("command")
+	default:
 		commandExitError = b.defaultCommandPhase()
 	}
 

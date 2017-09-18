@@ -37,8 +37,6 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 }
 
 func TestArtifactsUploadAfterCommandFails(t *testing.T) {
-	t.Skip("This needs to be fixed")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -73,8 +71,6 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 }
 
 func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
-	t.Skipf("This should work, but currently doesn't")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -99,5 +95,9 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 		Expect("artifact", "upload", "llamas.txt").
 		AndExitWith(0)
 
-	tester.RunAndCheck(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt")
+	if err := tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt"); err == nil {
+		t.Fatal("Expected bootstrap to fail")
+	}
+
+	tester.CheckMocks(t)
 }
