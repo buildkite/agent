@@ -50,10 +50,14 @@ func (u *GSUploader) Setup(destination string, debugHTTP bool) error {
 }
 
 func (u *GSUploader) URL(artifact *api.Artifact) string {
-	// If not publicly accessible, GET on this URL results in 403.
+	host := "storage.googleapis.com"
+	if os.Getenv("BUILDKITE_GCS_ACCESS_HOST") != "" {
+		host = os.Getenv("BUILDKITE_GCS_ACCESS_HOST")
+	}
+
 	var artifactURL = &url.URL{
 		Scheme: "https",
-		Host:   "storage.googleapis.com",
+		Host:   host,
 		Path:   u.BucketName() + "/" + u.artifactPath(artifact),
 	}
 	return artifactURL.String()
