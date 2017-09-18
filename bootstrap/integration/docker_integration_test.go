@@ -3,13 +3,10 @@ package integration
 import (
 	"testing"
 
-	"github.com/lox/bintest"
 	"github.com/lox/bintest/proxy"
 )
 
 func TestRunningCommandWithDocker(t *testing.T) {
-	bintest.Debug = true
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
