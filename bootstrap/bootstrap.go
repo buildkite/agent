@@ -176,26 +176,42 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 }
 
 func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
-	// Be defensive, but this should never be nil
+	// `environ` shouldn't ever be `nil`, but we'll just be cautious and guard against it.
 	if environ == nil {
 		return
 	}
 
+	// Do we even have any environment variables to change?
 	if environ.Length() > 0 {
+		// First, let see any of the environment variables are supposed
+		// to change the bootstrap configuration at run time.
+		bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)
+
 		b.shell.Headerf("Applying environment changes")
+
+		// Print out the env vars that changed. As we go through each
+		// one, we'll determine if it was a special "bootstrap"
+		// environment variable that has changed the bootstrap
+		// configuration at runtime.
+		//
+		// If it's "special", we'll show the value it was changed to -
+		// otherwise we'll hide it. Since we don't know if an
+		// environment variable contains sensitive information (i.e.
+		// THIRD_PARTY_API_KEY) we'll just not show any values for
+		// anything not controlled by us.
+		for k, v := range environ.ToMap() {
+			_, ok := bootstrapConfigEnvChanges[k]
+			if ok {
+				b.shell.Commentf("%s is now %q", k, v)
+			} else {
+				b.shell.Commentf("%s changed", k)
+			}
+		}
+
+		// Now that we've finished telling the user what's changed,
+		// let's mutate the current shell environment to include all
+		// the new values.
 		b.shell.Env = b.shell.Env.Merge(environ)
-	}
-
-	// Apply the changed environment to the config
-	changes := b.Config.ReadFromEnvironment(environ)
-
-	if len(changes) > 0 {
-		b.shell.Headerf("Bootstrap configuration has changed")
-	}
-
-	// Print out the env vars that changed
-	for k, v := range changes {
-		b.shell.Commentf("%s is now %q", k, v)
 	}
 }
 
@@ -351,8 +367,6 @@ func (b *Bootstrap) setUp() error {
 
 // tearDown is called before the bootstrap exits, even on error
 func (b *Bootstrap) tearDown() error {
-	b.shell.Headerf("Tearing down bootstrap")
-
 	if err := b.executeGlobalHook("pre-exit"); err != nil {
 		return err
 	}
