@@ -45,7 +45,7 @@ type Shell struct {
 func New() (*Shell, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to find current working directory: %v")
+		return nil, errors.Wrapf(err, "Failed to find current working directory")
 	}
 
 	return &Shell{
