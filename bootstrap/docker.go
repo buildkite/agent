@@ -19,7 +19,7 @@ var dockerEnv = []string{
 	`BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES`,
 }
 
-func hasDockerEnvironment(sh *shell.Shell) bool {
+func hasDeprecatedDockerIntegration(sh *shell.Shell) bool {
 	for _, k := range dockerEnv {
 		if sh.Env.Exists(k) {
 			return true
@@ -28,7 +28,7 @@ func hasDockerEnvironment(sh *shell.Shell) bool {
 	return false
 }
 
-func runDockerIntegration(sh *shell.Shell, scriptPath string) error {
+func runDeprecatedDockerIntegration(sh *shell.Shell, scriptPath string) error {
 	var warnNotSet = func(k1, k2 string) {
 		sh.Warningf("%s is set, but without %s, which it requires. You should be able to safely remove this from your pipeline.", k1, k2)
 	}
@@ -69,7 +69,7 @@ func runDockerIntegration(sh *shell.Shell, scriptPath string) error {
 	return sh.RunScript(scriptPath)
 }
 
-func tearDownDockerIntegration(sh *shell.Shell) error {
+func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
 	if container := sh.Env.Get(`DOCKER_CONTAINER`); container != "" {
 		sh.Printf("~~~ Cleaning up Docker containers")
 

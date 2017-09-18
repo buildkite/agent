@@ -364,8 +364,8 @@ func (b *Bootstrap) tearDown() error {
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDockerEnvironment(b.shell) {
-		return tearDownDockerIntegration(b.shell)
+	if hasDeprecatedDockerIntegration(b.shell) {
+		return tearDownDeprecatedDockerIntegration(b.shell)
 	}
 
 	return nil
@@ -883,11 +883,11 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
-	if hasDockerEnvironment(b.shell) {
+	if hasDeprecatedDockerIntegration(b.shell) {
 		if b.Debug {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		return runDockerIntegration(b.shell, buildScriptPath)
+		return runDeprecatedDockerIntegration(b.shell, buildScriptPath)
 	}
 
 	return b.shell.RunScript(buildScriptPath)
