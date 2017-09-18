@@ -104,6 +104,8 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 
 // Run runs a command, write to the logger and return an error if it fails
 func (s *Shell) Run(command string, args ...string) error {
+	s.Promptf("%s", process.FormatCommand(command, args))
+
 	cmd, err := s.buildCommand(command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
@@ -186,13 +188,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 		}
 	}()
 
-	// juggle types to interface{}
-	printableArgs := make([]interface{}, len(cmd.Args[1:]))
-	for idx, arg := range cmd.Args[1:] {
-		printableArgs[idx] = arg
-	}
-
-	cmdStr := process.FormatCommand(cmd.Path, printableArgs)
+	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
 
 	if s.PTY {
 		pty, err := process.StartPTY(cmd)
