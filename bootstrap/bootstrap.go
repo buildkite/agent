@@ -84,7 +84,7 @@ func (b *Bootstrap) Start() int {
 		return shell.GetExitCode(err)
 	}
 
-	// Phase errors are where something of ours broke that merits an big red error
+	// Phase errors are where something of ours broke that merits a big red error
 	// this won't include command failures, as we view that as more in the user space
 	if phaseError != nil {
 		b.shell.Errorf("%v", phaseError)
