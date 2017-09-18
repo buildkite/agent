@@ -1,12 +1,13 @@
 package process
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
 
 // FormatCommand formats a command amd arguments for human reading
-func FormatCommand(command string, args []string) string {
+func FormatCommand(command string, args []interface{}) string {
 	var truncate = func(s string, i int) string {
 		if len(s) < i {
 			return s
@@ -21,11 +22,13 @@ func FormatCommand(command string, args []string) string {
 
 	s := []string{command}
 	for _, a := range args {
-		if strings.Contains(a, "\n") || strings.Contains(a, " ") {
-			aa := strings.Replace(strings.Replace(a, "\n", "", -1), "\"", "\\", -1)
+		sv := fmt.Sprintf("%s", a)
+
+		if strings.Contains(sv, "\n") || strings.Contains(sv, " ") {
+			aa := strings.Replace(strings.Replace(sv, "\n", "", -1), "\"", "\\", -1)
 			s = append(s, "\""+truncate(aa, 40)+"\"")
 		} else {
-			s = append(s, a)
+			s = append(s, sv)
 		}
 	}
 
