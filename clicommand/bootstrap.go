@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/buildkite/agent/bootstrap"
@@ -204,7 +205,7 @@ var BootstrapCommand = cli.Command{
 		cli.BoolTFlag{
 			Name:   "ssh-fingerprint-verification",
 			Usage:  "Automatically verify SSH fingerprints",
-			EnvVar: "BUILDKITE_SSH_FINGERPRINT_VERIFICATION",
+			EnvVar: "BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION",
 		},
 		cli.BoolTFlag{
 			Name:   "git-submodules",
@@ -267,7 +268,7 @@ var BootstrapCommand = cli.Command{
 			},
 		}
 
-		// Start the bootstraper
-		bootstrap.Start()
+		// Run the bootstrap and exit with whatever it returns
+		os.Exit(bootstrap.Start())
 	},
 }

@@ -29,9 +29,10 @@ type Logger interface {
 	Promptf(format string, v ...interface{})
 }
 
-// StderrLogger is a Logger that writes to Stdout
+// StderrLogger is a Logger that writes to Stderr
 var StderrLogger = &WriterLogger{
 	Writer: os.Stderr,
+	Ansi:   true,
 }
 
 // DiscardLogger discards all log messages
@@ -42,6 +43,7 @@ var DiscardLogger = &WriterLogger{
 // WriterLogger provides a logger that writes to an io.Writer
 type WriterLogger struct {
 	Writer io.Writer
+	Ansi   bool
 }
 
 func (wl *WriterLogger) Printf(format string, v ...interface{}) {
@@ -53,23 +55,43 @@ func (wl *WriterLogger) Headerf(format string, v ...interface{}) {
 }
 
 func (wl *WriterLogger) Commentf(format string, v ...interface{}) {
-	fmt.Fprintf(wl.Writer, "\033[90m# %s\033[0m\n", fmt.Sprintf(format, v...))
+	if wl.Ansi {
+		wl.Printf(ansiColor("# %s", "90"), fmt.Sprintf(format, v...))
+	} else {
+		wl.Printf("# %s", fmt.Sprintf(format, v...))
+	}
 }
 
 func (wl *WriterLogger) Errorf(format string, v ...interface{}) {
-	wl.Printf("\033[31m🚨 Error: %s\033[0m", fmt.Sprintf(format, v...))
+	if wl.Ansi {
+		wl.Printf(ansiColor("🚨 Error: %s", "31"), fmt.Sprintf(format, v...))
+	} else {
+		wl.Printf("🚨 Error: %s", fmt.Sprintf(format, v...))
+	}
 	wl.Printf("^^^ +++")
 }
 
 func (wl *WriterLogger) Warningf(format string, v ...interface{}) {
-	wl.Printf("\033[33m⚠️ Warning: %s\033[0m", fmt.Sprintf(format, v...))
+	if wl.Ansi {
+		wl.Printf(ansiColor("⚠️ Warning: %s", "33"), fmt.Sprintf(format, v...))
+	} else {
+		wl.Printf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
+	}
 	wl.Printf("^^^ +++")
 }
 
 func (wl *WriterLogger) Promptf(format string, v ...interface{}) {
+	prompt := "$"
 	if runtime.GOOS == "windows" {
-		fmt.Fprintf(wl.Writer, "\033[90m>\033[0m %s\n", fmt.Sprintf(format, v...))
-	} else {
-		fmt.Fprintf(wl.Writer, "\033[90m$\033[0m %s\n", fmt.Sprintf(format, v...))
+		prompt = ">"
 	}
+	if wl.Ansi {
+		wl.Printf(ansiColor(prompt, "90")+" %s", fmt.Sprintf(format, v...))
+	} else {
+		wl.Printf(prompt+" %s", fmt.Sprintf(format, v...))
+	}
+}
+
+func ansiColor(s, attributes string) string {
+	return fmt.Sprintf("\033[%sm%s\033[0m", attributes, s)
 }

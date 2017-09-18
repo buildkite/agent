@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,35 +30,38 @@ type Bootstrap struct {
 
 	// Plugins are the plugins that are created in the PluginPhase
 	plugins []*agent.Plugin
+
+	// Tracks whether there is a checkout to upload in the teardown
+	hasCheckout bool
 }
 
-// Start runs the bootstrap and exits when finished
-func (b *Bootstrap) Start() {
+// Start runs the bootstrap and returns the exit code
+func (b *Bootstrap) Start() int {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
 		b.shell, err = shell.New()
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
-			os.Exit(1)
+			return 1
 		}
 
 		// Apply PTY settings
 		b.shell.PTY = b.Config.RunInPty
 	}
 
-	// Initialize the environment
-	if err := b.setUp(); err != nil {
-		b.shell.Errorf("Error setting up bootstrap: %v", err)
-		os.Exit(1)
-	}
-
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
 		if err := b.tearDown(); err != nil {
-			b.shell.Errorf("Error tearing down bootstrap %v", err)
+			b.shell.Errorf("Error tearing down bootstrap: %v", err)
 		}
 	}()
+
+	// Initialize the environment, a failure here will still call the tearDown
+	if err := b.setUp(); err != nil {
+		b.shell.Errorf("Error setting up bootstrap: %v", err)
+		return 1
+	}
 
 	// These are the "Phases of bootstrap execution". They are designed to be
 	// run independently at some later stage (think buildkite-agent bootstrap checkout)
@@ -65,15 +69,31 @@ func (b *Bootstrap) Start() {
 		b.PluginPhase,
 		b.CheckoutPhase,
 		b.CommandPhase,
-		b.ArtifactPhase,
 	}
 
+	var phaseError error
+
 	for _, phase := range phases {
-		if err := phase(); err != nil {
-			b.shell.Errorf("%v", err)
-			os.Exit(shell.GetExitCode(err))
+		if phaseError = phase(); phaseError != nil {
+			break
 		}
 	}
+
+	if err := b.uploadArtifacts(); err != nil {
+		b.shell.Errorf("%v", err)
+		return shell.GetExitCode(err)
+	}
+
+	// Phase errors are where something of ours broke that merits a big red error
+	// this won't include command failures, as we view that as more in the user space
+	if phaseError != nil {
+		b.shell.Errorf("%v", phaseError)
+		return shell.GetExitCode(phaseError)
+	}
+
+	// Use the exit code from the command phase
+	exitStatus, _ := strconv.Atoi(b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`))
+	return exitStatus
 }
 
 // executeScript executes a script in a Shell, but the target is an interpreted script
@@ -156,24 +176,42 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 }
 
 func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
-	b.shell.Headerf("Applying environment changes")
-	b.shell.Env = b.shell.Env.Merge(environ)
-
+	// `environ` shouldn't ever be `nil`, but we'll just be cautious and guard against it.
 	if environ == nil {
-		b.shell.Printf("No changes to apply")
 		return
 	}
 
-	// Apply the changed environment to the config
-	changes := b.Config.ReadFromEnvironment(environ)
+	// Do we even have any environment variables to change?
+	if environ.Length() > 0 {
+		// First, let see any of the environment variables are supposed
+		// to change the bootstrap configuration at run time.
+		bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)
 
-	if len(changes) > 0 {
-		b.shell.Headerf("Bootstrap configuration has changed")
-	}
+		b.shell.Headerf("Applying environment changes")
 
-	// Print out the env vars that changed
-	for k, v := range changes {
-		b.shell.Commentf("%s is now %q", k, v)
+		// Print out the env vars that changed. As we go through each
+		// one, we'll determine if it was a special "bootstrap"
+		// environment variable that has changed the bootstrap
+		// configuration at runtime.
+		//
+		// If it's "special", we'll show the value it was changed to -
+		// otherwise we'll hide it. Since we don't know if an
+		// environment variable contains sensitive information (i.e.
+		// THIRD_PARTY_API_KEY) we'll just not show any values for
+		// anything not controlled by us.
+		for k, v := range environ.ToMap() {
+			_, ok := bootstrapConfigEnvChanges[k]
+			if ok {
+				b.shell.Commentf("%s is now %q", k, v)
+			} else {
+				b.shell.Commentf("%s changed", k)
+			}
+		}
+
+		// Now that we've finished telling the user what's changed,
+		// let's mutate the current shell environment to include all
+		// the new values.
+		b.shell.Env = b.shell.Env.Merge(environ)
 	}
 }
 
@@ -518,6 +556,9 @@ func (b *Bootstrap) CheckoutPhase() error {
 		}
 	}
 
+	// After this point, artifacts will be uploaded on failure
+	b.hasCheckout = true
+
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
 	previousCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
@@ -685,7 +726,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err == nil {
+	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
 		gitCommitOutput, _ := b.shell.RunAndCapture("git", "show", "HEAD", "-s", "--format=fuller", "--no-color")
@@ -734,7 +775,8 @@ func (b *Bootstrap) CommandPhase() error {
 		b.shell.Printf("^^^ +++")
 	}
 
-	// Save the command exit status to the env so hooks + plugins can access it
+	// Save the command exit status to the env so hooks + plugins can access it. If there is no error
+	// this will be zero. It's used to set the exit code later, so it's important
 	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
 
 	// Run post-command hooks
@@ -750,7 +792,7 @@ func (b *Bootstrap) CommandPhase() error {
 		return err
 	}
 
-	return commandExitError
+	return nil
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
@@ -854,39 +896,55 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	return b.executeScript(buildScriptPath)
 }
 
-func (b *Bootstrap) ArtifactPhase() error {
-	if b.AutomaticArtifactUploadPaths != "" {
-		// Run pre-artifact hooks
-		if err := b.executeGlobalHook("pre-artifact"); err != nil {
-			return err
-		}
+func (b *Bootstrap) uploadArtifacts() error {
+	if !b.hasCheckout {
+		b.shell.Commentf("Skipping artifact upload, no checkout")
+		return nil
+	}
 
-		if err := b.executeLocalHook("pre-artifact"); err != nil {
-			return err
-		}
+	if b.AutomaticArtifactUploadPaths == "" {
+		b.shell.Commentf("Skipping artifact upload, no artifact upload path set")
+		return nil
+	}
 
-		if err := b.executePluginHook(b.plugins, "pre-artifact"); err != nil {
-			return err
-		}
+	// Run pre-artifact hooks
+	if err := b.executeGlobalHook("pre-artifact"); err != nil {
+		return err
+	}
 
-		// Run the artifact upload command
-		b.shell.Headerf("Uploading artifacts")
-		if err := b.shell.Run("buildkite-agent", "artifact", "upload", b.AutomaticArtifactUploadPaths, b.ArtifactUploadDestination); err != nil {
-			return err
-		}
+	if err := b.executeLocalHook("pre-artifact"); err != nil {
+		return err
+	}
 
-		// Run post-artifact hooks
-		if err := b.executeGlobalHook("post-artifact"); err != nil {
-			return err
-		}
+	if err := b.executePluginHook(b.plugins, "pre-artifact"); err != nil {
+		return err
+	}
 
-		if err := b.executeLocalHook("post-artifact"); err != nil {
-			return err
-		}
+	// Run the artifact upload command
+	b.shell.Headerf("Uploading artifacts")
+	args := []string{"artifact", "upload", b.AutomaticArtifactUploadPaths}
 
-		if err := b.executePluginHook(b.plugins, "post-artifact"); err != nil {
-			return err
-		}
+	// If blank, the upload destination is buildkite
+	if b.ArtifactUploadDestination != "" {
+		b.shell.Commentf("Using default artifact upload destination")
+		args = append(args, b.ArtifactUploadDestination)
+	}
+
+	if err := b.shell.Run("buildkite-agent", args...); err != nil {
+		return err
+	}
+
+	// Run post-artifact hooks
+	if err := b.executeGlobalHook("post-artifact"); err != nil {
+		return err
+	}
+
+	if err := b.executeLocalHook("post-artifact"); err != nil {
+		return err
+	}
+
+	if err := b.executePluginHook(b.plugins, "post-artifact"); err != nil {
+		return err
 	}
 
 	return nil

@@ -39,7 +39,7 @@ func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
 
 	// Also clean up submodules if we can
 	if gitSubmodules {
-		commandArgs = append([]string{"submodule", "foreach", "--recursive"}, commandArgs...)
+		commandArgs = append([]string{"submodule", "foreach", "--recursive", "git"}, commandArgs...)
 
 		if err = sh.Run("git", commandArgs...); err != nil {
 			return err
@@ -85,7 +85,7 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	// Entering 'vendor/frontend/vendor/emojis'
 	// git@github.com:buildkite/emojis.git
 	output, err := sh.RunAndCapture(
-		"git", "submodule", "foreach", "--recursive", "git", "remote get-url", "origin")
+		"git", "submodule", "foreach", "--recursive", "git", "remote", "get-url", "origin")
 	if err != nil {
 		return nil, err
 	}
