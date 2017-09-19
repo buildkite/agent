@@ -97,8 +97,6 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 }
 
 func TestReplacingLocalCommandHook(t *testing.T) {
-	t.Skip("This is a regression")
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
