@@ -2,12 +2,12 @@ package bootstrap
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/pkg/errors"
 )
 
 var dockerEnv = []string{
@@ -42,8 +42,6 @@ func runDeprecatedDockerIntegration(sh *shell.Shell, scriptPath string) error {
 	// this gives us ./scriptPath, which is needed for executing from wd
 	relativePathToDot := "." + string(os.PathSeparator) + relativePath
 
-	log.Printf("Using %s", relativePathToDot)
-
 	switch {
 	case sh.Env.Exists(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`):
 		sh.Warningf("BUILDKITE_DOCKER_COMPOSE_CONTAINER is set, which is deprecated in Agent v3 and will be removed in v4. Consider using the :docker: docker-compose plugin instead at https://github.com/buildkite-plugins/docker-compose-buildkite-plugin.")
@@ -66,7 +64,7 @@ func runDeprecatedDockerIntegration(sh *shell.Shell, scriptPath string) error {
 		warnNotSet(`BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES`, `BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
 	}
 
-	return sh.RunScript(scriptPath)
+	return errors.New("Failed to find any docker env")
 }
 
 func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {

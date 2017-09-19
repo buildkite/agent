@@ -19,15 +19,16 @@ import (
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
 type BootstrapTester struct {
-	Name     string
-	Args     []string
-	Env      []string
-	HomeDir  string
-	PathDir  string
-	BuildDir string
-	HooksDir string
-	Repo     *gitRepository
-	Output   string
+	Name       string
+	Args       []string
+	Env        []string
+	HomeDir    string
+	PathDir    string
+	BuildDir   string
+	HooksDir   string
+	PluginsDir string
+	Repo       *gitRepository
+	Output     string
 
 	hookMock *bintest.Mock
 	mocks    []*bintest.Mock
@@ -54,6 +55,11 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, err
 	}
 
+	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	if err != nil {
+		return nil, err
+	}
+
 	repo, err := createTestGitRespository()
 	if err != nil {
 		return nil, err
@@ -69,6 +75,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			"BUILDKITE_BIN_PATH=" + pathDir,
 			"BUILDKITE_BUILD_PATH=" + buildDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
+			"BUILDKITE_PLUGINS_PATH=" + pluginsDir,
 			`BUILDKITE_REPO=` + repo.Path,
 			`BUILDKITE_AGENT_DEBUG=true`,
 			`BUILDKITE_AGENT_NAME=test-agent`,
@@ -84,9 +91,10 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
 			`BUILDKITE_AGENT_ACCESS_TOKEN=test`,
 		},
-		PathDir:  pathDir,
-		BuildDir: buildDir,
-		HooksDir: hooksDir,
+		PathDir:    pathDir,
+		BuildDir:   buildDir,
+		HooksDir:   hooksDir,
+		PluginsDir: pluginsDir,
 	}
 
 	if err = bt.LinkCommonCommands(); err != nil {
@@ -157,6 +165,16 @@ func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	return mock
 }
 
+// HasMock returns true if a mock has been created by that name
+func (b *BootstrapTester) HasMock(name string) bool {
+	for _, m := range b.mocks {
+		if m.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
 func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
 	// TODO: support windows tests
@@ -208,6 +226,15 @@ func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 // Run the bootstrap and return any errors
 func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 	w := newTestLogWriter(t)
+
+	// Mock out the meta-data calls to the agent after checkout
+	if !b.HasMock("buildkite-agent") {
+		agent := b.MustMock(t, "buildkite-agent")
+		agent.
+			Expect("meta-data", "exists", "buildkite:git:commit").
+			Optionally().
+			AndExitWith(0)
+	}
 
 	cmd := exec.Command(b.Name, b.Args...)
 	buf := &buffer{}
@@ -271,6 +298,9 @@ func (b *BootstrapTester) Close() error {
 		return err
 	}
 	if err := os.RemoveAll(b.PathDir); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(b.PluginsDir); err != nil {
 		return err
 	}
 	return nil

@@ -2,10 +2,53 @@ package integration
 
 import (
 	"fmt"
+	"io/ioutil"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/lox/bintest"
 	"github.com/lox/bintest/proxy"
 )
+
+func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Not implemented for windows yet")
+	}
+
+	var script = []string{
+		"#!/bin/bash",
+		"export LLAMAS_ROCK=absolutely",
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		if err := bintest.ExpectEnv(t, i.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *proxy.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		}
+		c.Exit(0)
+	})
+
+	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+}
 
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	tester, err := NewBootstrapTester()
@@ -13,11 +56,6 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tester.Close()
-
-	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(0)
 
 	tester.ExpectGlobalHook("environment").Once()
 	tester.ExpectLocalHook("environment").NotCalled()
@@ -75,11 +113,6 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 	}
 	defer tester.Close()
 
-	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(0)
-
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0)
 
 	tester.ExpectGlobalHook("environment").Once()
@@ -102,11 +135,6 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tester.Close()
-
-	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(0)
 
 	tester.ExpectLocalHook("command").Once().AndExitWith(0)
 	tester.ExpectGlobalHook("command").NotCalled()
@@ -181,6 +209,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			if tc.expectCheckout {
 				agent.
 					Expect("meta-data", "exists", "buildkite:git:commit").
+					Once().
 					AndExitWith(0)
 			}
 

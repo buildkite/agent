@@ -97,7 +97,7 @@ func (b *Bootstrap) Start() int {
 }
 
 // executeHook runs a hook script with the hookRunner
-func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Environment) error {
+func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.Environment) error {
 	b.shell.Headerf("Running %s hook", name)
 	if !fileExists(hookPath) {
 		if b.Debug {
@@ -120,21 +120,10 @@ func (b *Bootstrap) executeHook(name string, hookPath string, environ *env.Envir
 		b.shell.Printf("%s", hookPath)
 	}
 
-	// Create a copy of the current env
-	previousEnviron := b.shell.Env.Copy()
-
-	// Apply any new environment
-	b.shell.Env = b.shell.Env.Merge(environ)
-
-	// Restore the previous env later
-	defer func() {
-		b.shell.Env = previousEnviron
-	}()
-
 	b.shell.Commentf("Executing \"%s\"", script.Path())
 
 	// Run the wrapper script
-	if err := b.shell.RunScript(script.Path()); err != nil {
+	if err := b.shell.RunScript(script.Path(), extraEnviron); err != nil {
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(err)))
 		b.shell.Errorf("The %s hook exited with an error: %v", name, err)
 		return err
@@ -892,7 +881,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, buildScriptPath)
 	}
 
-	return b.shell.RunScript(buildScriptPath)
+	return b.shell.RunScript(buildScriptPath, nil)
 }
 
 func (b *Bootstrap) uploadArtifacts() error {
