@@ -27,7 +27,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 
 	sh := newTestShell(t)
 
-	if err := sh.RunScript(wrapper.Path()); err != nil {
+	if err := sh.RunScript(wrapper.Path(), nil); err != nil {
 		t.Fatal(err)
 	}
 
