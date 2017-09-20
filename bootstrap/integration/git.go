@@ -88,3 +88,7 @@ func (gr *gitRepository) ExecuteAll(argsSlice [][]string) error {
 	}
 	return nil
 }
+
+func (gr *gitRepository) RevParse(rev string) (string, error) {
+	return gr.Execute("rev-parse", rev)
+}

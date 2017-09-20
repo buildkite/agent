@@ -133,12 +133,9 @@ func (s *Shell) RunAndCapture(name string, arg ...string) (string, error) {
 }
 
 // RunScript is like Run, but the target is an interpreted script which has
-// some extra checks to ensure it gets to the correct interpreter
-func (s *Shell) RunScript(path string) error {
-	if runtime.GOOS == "windows" {
-		return s.Run(path)
-	}
-
+// some extra checks to ensure it gets to the correct interpreter. It also supports
+// passing in extra environment just for that script
+func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	// If you run a script on Linux that doesn't have the
 	// #!/bin/bash shebang at the top, it will fail to run with a
 	// "exec format error" error.
@@ -150,7 +147,32 @@ func (s *Shell) RunScript(path string) error {
 
 	// We also need to make sure the script we pass has quotes
 	// around it, otherwise `/bin/bash -c run script with space.sh` fails.
-	return s.Run("/bin/bash", "-c", path)
+
+	var command string
+	var args []string
+
+	if runtime.GOOS == "windows" {
+		command = path
+		args = []string{}
+	} else {
+		command = "/bin/bash"
+		args = []string{"-c", path}
+	}
+
+	s.Promptf("%s", process.FormatCommand(command, args))
+
+	cmd, err := s.buildCommand(command, args...)
+	if err != nil {
+		s.Errorf("Error building command: %v", err)
+		return err
+	}
+
+	// Combine the two slices of env, let the latter overwrite the former
+	currentEnv := env.FromSlice(cmd.Env)
+	customEnv := currentEnv.Merge(extra)
+	cmd.Env = customEnv.ToSlice()
+
+	return s.executeCommand(cmd, s.Writer, false)
 }
 
 // buildCommand returns an exec.Cmd that runs in the context of the shell
