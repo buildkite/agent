@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -33,6 +34,23 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	unmarshaled, err := unmarshal(p.Pipeline, format)
 	if err != nil {
 		return nil, err
+	}
+
+	// convert to a map if we can to check for env
+	if unmarshaledMap, ok := unmarshaled.(map[string]interface{}); ok {
+		if envMap, ok := unmarshaledMap["env"].(map[string]interface{}); ok {
+			for k, v := range envMap {
+				switch tv := v.(type) {
+				case string:
+					interpolated, err := env.Interpolate(tv)
+					if err != nil {
+						return nil, err
+					}
+					os.Setenv(k, interpolated)
+					envMap[k] = interpolated
+				}
+			}
+		}
 	}
 
 	// Recursivly go through the entire pipeline and perform environment

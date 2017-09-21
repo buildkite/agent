@@ -88,3 +88,46 @@ steps:
 	assert.NotNil(t, err)
 	assert.Equal(t, `Failed to parse JSON: unexpected end of JSON input`, fmt.Sprintf("%s", err))
 }
+
+func TestPipelineParserInterpolatesEnvBlockFirst(t *testing.T) {
+	var pipeline = `{
+		"env": {
+			"TEAM1": "England",
+			"TEAM2": "Australia",
+			"HEADLINE": "${TEAM1} smashes ${TEAM2} to win the ashes in ${YEAR_FROM_SHELL}!!"
+		},
+		"steps": [{
+			"command": "echo ${HEADLINE}"
+		}]
+	}`
+
+	var decoded struct {
+		Env   map[string]string `json:"env"`
+		Steps []struct {
+			Command string `json:"command"`
+		} `json:"steps"`
+	}
+
+	os.Setenv("YEAR_FROM_SHELL", "1912")
+
+	result, err := PipelineParser{Pipeline: []byte(pipeline)}.Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = decodeIntoStruct(&decoded, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, `England smashes Australia to win the ashes in 1912!!`, decoded.Env["HEADLINE"])
+	assert.Equal(t, `England smashes Australia to win the ashes in 1912!!`, decoded.Steps[0].Command)
+}
+
+func decodeIntoStruct(into interface{}, from interface{}) error {
+	b, err := json.Marshal(from)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, into)
+}
