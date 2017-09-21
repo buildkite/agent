@@ -40,12 +40,14 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	if unmarshaledMap, ok := unmarshaled.(map[string]interface{}); ok {
 		if envMap, ok := unmarshaledMap["env"].(map[string]interface{}); ok {
 			for k, v := range envMap {
+				// switch on type to support non string values as env values
 				switch tv := v.(type) {
 				case string:
 					interpolated, err := env.Interpolate(tv)
 					if err != nil {
 						return nil, err
 					}
+					// push the interpolated value into env and back into the struct
 					os.Setenv(k, interpolated)
 					envMap[k] = interpolated
 				}
