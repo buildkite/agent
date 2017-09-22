@@ -121,7 +121,7 @@ func TestPipelineParserInterpolatesEnvBlockFirst(t *testing.T) {
 	}
 
 	assert.Equal(t, `England smashes Australia to win the ashes in 1912!!`, decoded.Env["HEADLINE"])
-	assert.Equal(t, `England smashes Australia to win the ashes in 1912!!`, decoded.Steps[0].Command)
+	assert.Equal(t, `echo England smashes Australia to win the ashes in 1912!!`, decoded.Steps[0].Command)
 }
 
 func decodeIntoStruct(into interface{}, from interface{}) error {
