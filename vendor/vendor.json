@@ -15,30 +15,6 @@
 			"revisionTime": "2017-02-17T01:53:35Z"
 		},
 		{
-			"checksumSHA1": "jf7K+UTQNIzRdlG5F4zX/8b++/E=",
-			"path": "github.com/AdRoll/goamz/aws",
-			"revision": "75f08be23845d6d5896a422be85b6aa45d2e6c5f",
-			"revisionTime": "2016-12-16T13:23:19Z"
-		},
-		{
-			"checksumSHA1": "N3Fn7lwxgudBupyPOlDmHTcjTn4=",
-			"path": "github.com/AdRoll/goamz/ec2",
-			"revision": "75f08be23845d6d5896a422be85b6aa45d2e6c5f",
-			"revisionTime": "2016-12-16T13:23:19Z"
-		},
-		{
-			"checksumSHA1": "ey9ddXTW9dncjJz/COKpeYm+sgg=",
-			"path": "github.com/AdRoll/goamz/s3",
-			"revision": "75f08be23845d6d5896a422be85b6aa45d2e6c5f",
-			"revisionTime": "2016-12-16T13:23:19Z"
-		},
-		{
-			"checksumSHA1": "F62bZIniaNtlrXnsP0dO5vY30Ts=",
-			"path": "github.com/andrew-d/go-termutil",
-			"revision": "009166a695a2f516c749a26b4ac1f183d89aa336",
-			"revisionTime": "2015-07-26T20:59:30Z"
-		},
-		{
 			"checksumSHA1": "bplZOqTp6JAbkn25zHEPIob25WI=",
 			"path": "github.com/codegangsta/cli",
 			"revision": "2526b57c56f30b50466c96c4133b1a4ad0f0191f",
@@ -73,6 +49,18 @@
 			"path": "github.com/kr/pty",
 			"revision": "ce7fa45920dc37a92de8377972e52bc55ffa8d57",
 			"revisionTime": "2016-07-16T20:46:20Z"
+		},
+		{
+			"checksumSHA1": "B5UHOnn0vs+dhd5XEomM0/+3j8k=",
+			"path": "github.com/lox/bintest",
+			"revision": "67b6a20adb653219474b963c4519202ee12beecf",
+			"revisionTime": "2017-09-22T06:36:27Z"
+		},
+		{
+			"checksumSHA1": "2rruuNOMEmtMVEinz1LRxAdet+8=",
+			"path": "github.com/lox/bintest/proxy",
+			"revision": "67b6a20adb653219474b963c4519202ee12beecf",
+			"revisionTime": "2017-09-22T06:36:27Z"
 		},
 		{
 			"checksumSHA1": "R8z+BOS81hOWgcqymuVWHNta/yc=",
