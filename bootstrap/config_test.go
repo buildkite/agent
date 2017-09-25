@@ -8,6 +8,8 @@ import (
 )
 
 func TestEnvVarsAreMappedToConfig(t *testing.T) {
+	t.Parallel()
+
 	config := &Config{
 		AutomaticArtifactUploadPaths: "llamas/",
 		GitCloneFlags:                "--prune",

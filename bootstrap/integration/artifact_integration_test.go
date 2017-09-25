@@ -9,6 +9,8 @@ import (
 )
 
 func TestArtifactsUploadAfterCommand(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +39,8 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 }
 
 func TestArtifactsUploadAfterCommandFails(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -71,6 +75,8 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 }
 
 func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)

@@ -13,6 +13,8 @@ import (
 )
 
 func TestRunningPlugins(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
