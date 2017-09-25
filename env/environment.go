@@ -31,12 +31,12 @@ func FromSlice(s []string) *Environment {
 }
 
 // Get returns a key from the environment
-func (e Environment) Get(key string) string {
+func (e *Environment) Get(key string) string {
 	return e.env[normalizeKeyName(key)]
 }
 
 // Get a boolean value from environment, with a default for empty. Supports true|false, on|off, 1|0
-func (e Environment) GetBool(key string, defaultValue bool) bool {
+func (e *Environment) GetBool(key string, defaultValue bool) bool {
 	switch strings.ToLower(e.Get(key)) {
 	case "on", "1", "enabled", "true":
 		return true
