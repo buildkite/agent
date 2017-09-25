@@ -13,6 +13,8 @@ import (
 )
 
 func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +53,8 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 }
 
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +83,8 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 }
 
 func TestReplacingCheckoutHook(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -107,6 +113,8 @@ func TestReplacingCheckoutHook(t *testing.T) {
 }
 
 func TestReplacingGlobalCommandHook(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -130,6 +138,8 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 }
 
 func TestReplacingLocalCommandHook(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -154,6 +164,8 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 }
 
 func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -173,6 +185,8 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 }
 
 func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
+	t.Parallel()
+
 	var testCases = []struct {
 		failingHook         string
 		expectGlobalPreExit bool
@@ -193,6 +207,8 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.failingHook, func(t *testing.T) {
+			t.Parallel()
+
 			tester, err := NewBootstrapTester()
 			if err != nil {
 				t.Fatal(err)

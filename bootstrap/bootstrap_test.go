@@ -16,6 +16,8 @@ var agentNameTests = []struct {
 }
 
 func TestDirForAgentName(t *testing.T) {
+	t.Parallel()
+
 	for _, test := range agentNameTests {
 		assert.Equal(t, test.expected, dirForAgentName(test.agentName))
 	}

@@ -12,6 +12,10 @@ type Environment struct {
 	env map[string]string
 }
 
+func New() *Environment {
+	return &Environment{env: map[string]string{}}
+}
+
 // FromSlice creates a new environment from a string slice of KEY=VALUE
 func FromSlice(s []string) *Environment {
 	env := &Environment{env: make(map[string]string, len(s))}

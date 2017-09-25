@@ -11,6 +11,8 @@ import (
 )
 
 func TestCheckingOutLocalGitProject(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +62,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 }
 
 func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -95,6 +99,8 @@ func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
 }
 
 func TestCheckingOutWithoutSSHFingerprintVerification(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -119,6 +125,8 @@ func TestCheckingOutWithoutSSHFingerprintVerification(t *testing.T) {
 }
 
 func TestCleaningAnExistingCheckout(t *testing.T) {
+	t.Parallel()
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)

@@ -17,6 +17,8 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Skipf("Not tested on windows yet")
 	}
 
+	t.Parallel()
+
 	wrapper := newTestHookWrapper(t, []string{
 		"#!/bin/bash",
 		"export LLAMAS=rock",

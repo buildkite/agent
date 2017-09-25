@@ -7,6 +7,8 @@ import (
 )
 
 func TestGSUploaderBucketPath(t *testing.T) {
+	t.Parallel()
+
 	gsUploader := GSUploader{Destination: "gs://my-bucket-name/foo/bar"}
 	assert.Equal(t, gsUploader.BucketPath(), "foo/bar")
 
@@ -15,6 +17,8 @@ func TestGSUploaderBucketPath(t *testing.T) {
 }
 
 func TestGSUploaderBucketName(t *testing.T) {
+	t.Parallel()
+
 	gsUploader := GSUploader{Destination: "gs://my-bucket-name/foo/bar"}
 	assert.Equal(t, gsUploader.BucketName(), "my-bucket-name")
 

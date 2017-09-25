@@ -7,6 +7,8 @@ import (
 )
 
 func TestEnvironmentExists(t *testing.T) {
+	t.Parallel()
+
 	env := FromSlice([]string{})
 
 	env.Set("FOO", "bar")
@@ -18,6 +20,8 @@ func TestEnvironmentExists(t *testing.T) {
 }
 
 func TestEnvironmentSet(t *testing.T) {
+	t.Parallel()
+
 	env := FromSlice([]string{})
 
 	env.Set("    THIS_IS_THE_BEST   \n\n", "\"IT SURE IS\"\n\n")
@@ -25,6 +29,8 @@ func TestEnvironmentSet(t *testing.T) {
 }
 
 func TestEnvironmentGetBool(t *testing.T) {
+	t.Parallel()
+
 	env := FromSlice([]string{
 		"LLAMAS_ENABLED=1",
 		"ALPACAS_ENABLED=false",
@@ -48,6 +54,8 @@ func TestEnvironmentRemove(t *testing.T) {
 }
 
 func TestEnvironmentMerge(t *testing.T) {
+	t.Parallel()
+
 	env1 := FromSlice([]string{"FOO=bar"})
 	env2 := FromSlice([]string{"BAR=foo"})
 
@@ -57,6 +65,8 @@ func TestEnvironmentMerge(t *testing.T) {
 }
 
 func TestEnvironmentCopy(t *testing.T) {
+	t.Parallel()
+
 	env1 := FromSlice([]string{"FOO=bar"})
 	env2 := env1.Copy()
 
@@ -68,6 +78,8 @@ func TestEnvironmentCopy(t *testing.T) {
 }
 
 func TestEnvironmentToSlice(t *testing.T) {
+	t.Parallel()
+
 	env := FromSlice([]string{"THIS_IS_GREAT=totes", "ZOMG=greatness"})
 
 	assert.Equal(t, []string{"THIS_IS_GREAT=totes", "ZOMG=greatness"}, env.ToSlice())

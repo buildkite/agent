@@ -22,6 +22,8 @@ func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
 }
 
 func TestCollect(t *testing.T) {
+	t.Parallel()
+
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)

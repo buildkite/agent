@@ -99,6 +99,8 @@ func TestSubstringExpansion(t *testing.T) {
 }
 
 func TestPipelineParser(t *testing.T) {
+	t.Parallel()
+
 	var result string
 	var err error
 

@@ -10,6 +10,8 @@ import (
 )
 
 func TestCreatePluginsFromJSON(t *testing.T) {
+	t.Parallel()
+
 	var plugins []*Plugin
 	var err error
 
@@ -53,6 +55,8 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 }
 
 func TestPluginName(t *testing.T) {
+	t.Parallel()
+
 	var plugin *Plugin
 
 	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin.git"}
@@ -84,6 +88,8 @@ func TestPluginName(t *testing.T) {
 }
 
 func TestIdentifier(t *testing.T) {
+	t.Parallel()
+
 	var plugin *Plugin
 	var id string
 	var err error
@@ -110,6 +116,8 @@ func TestIdentifier(t *testing.T) {
 }
 
 func TestRepositoryAndSubdirectory(t *testing.T) {
+	t.Parallel()
+
 	var plugin *Plugin
 	var repo string
 	var sub string
@@ -199,6 +207,8 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 }
 
 func TestConfigurationToEnvironment(t *testing.T) {
+	t.Parallel()
+
 	var envMap *env.Environment
 	var err error
 

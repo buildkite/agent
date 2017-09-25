@@ -7,6 +7,8 @@ import (
 )
 
 func TestFindingSSHTools(t *testing.T) {
+	t.Parallel()
+
 	sh, err := shell.New()
 	if err != nil {
 		t.Fatal(err)
