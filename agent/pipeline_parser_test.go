@@ -89,7 +89,7 @@ steps:
 	assert.Equal(t, `Failed to parse JSON: unexpected end of JSON input`, fmt.Sprintf("%s", err))
 }
 
-func TestPipelineParserInterpolatesEnvBlockFirst(t *testing.T) {
+func TestPipelineParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	var pipeline = `{
 		"env": {
 			"TEAM1": "England",
@@ -108,9 +108,9 @@ func TestPipelineParserInterpolatesEnvBlockFirst(t *testing.T) {
 		} `json:"steps"`
 	}
 
-	os.Setenv("YEAR_FROM_SHELL", "1912")
+	environ := env.FromSlice([]string{`YEAR_FROM_SHELL=1912`})
 
-	result, err := PipelineParser{Pipeline: []byte(pipeline)}.Parse()
+	result, err := PipelineParser{Pipeline: []byte(pipeline), Env: environ}.Parse()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,6 +120,7 @@ func TestPipelineParserInterpolatesEnvBlockFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	assert.Equal(t, `England`, decoded.Env["TEAM1"])
 	assert.Equal(t, `England smashes Australia to win the ashes in 1912!!`, decoded.Env["HEADLINE"])
 	assert.Equal(t, `echo England smashes Australia to win the ashes in 1912!!`, decoded.Steps[0].Command)
 }
