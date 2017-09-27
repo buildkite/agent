@@ -13,11 +13,16 @@ import (
 )
 
 type PipelineParser struct {
+	Env      *env.Environment
 	Filename string
 	Pipeline []byte
 }
 
 func (p PipelineParser) Parse() (pipeline interface{}, err error) {
+	if p.Env == nil {
+		p.Env = env.New()
+	}
+
 	// First try and figure out the format from the filename
 	format, err := inferFormat(p.Pipeline, p.Filename)
 	if err != nil {
@@ -32,7 +37,7 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 
 	// Recursivly go through the entire pipeline and perform environment
 	// variable interpolation on strings
-	interpolated, err := interpolate(unmarshaled)
+	interpolated, err := p.interpolate(unmarshaled)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +103,7 @@ func unmarshal(pipeline []byte, format string) (interface{}, error) {
 
 // interpolate function inspired from: https://gist.github.com/hvoecking/10772475
 
-func interpolate(obj interface{}) (interface{}, error) {
+func (p PipelineParser) interpolate(obj interface{}) (interface{}, error) {
 	// Make sure there's something actually to interpolate
 	if obj == nil {
 		return nil, nil
@@ -110,7 +115,7 @@ func interpolate(obj interface{}) (interface{}, error) {
 	// Make a copy that we'll add the new values to
 	copy := reflect.New(original.Type()).Elem()
 
-	err := interpolateRecursive(copy, original)
+	err := p.interpolateRecursive(copy, original)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +124,7 @@ func interpolate(obj interface{}) (interface{}, error) {
 	return copy.Interface(), nil
 }
 
-func interpolateRecursive(copy, original reflect.Value) error {
+func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error {
 	switch original.Kind() {
 	// If it is a pointer we need to unwrap and call once again
 	case reflect.Ptr:
@@ -137,7 +142,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 		copy.Set(reflect.New(originalValue.Type()))
 
 		// Unwrap the newly created pointer
-		err := interpolateRecursive(copy.Elem(), originalValue)
+		err := p.interpolateRecursive(copy.Elem(), originalValue)
 		if err != nil {
 			return err
 		}
@@ -159,7 +164,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 		// points to, so we have to call Elem() to unwrap it
 		copyValue := reflect.New(originalValue.Type()).Elem()
 
-		err := interpolateRecursive(copyValue, originalValue)
+		err := p.interpolateRecursive(copyValue, originalValue)
 		if err != nil {
 			return err
 		}
@@ -169,7 +174,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 	// If it is a struct we interpolate each field
 	case reflect.Struct:
 		for i := 0; i < original.NumField(); i += 1 {
-			err := interpolateRecursive(copy.Field(i), original.Field(i))
+			err := p.interpolateRecursive(copy.Field(i), original.Field(i))
 			if err != nil {
 				return err
 			}
@@ -180,7 +185,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 		copy.Set(reflect.MakeSlice(original.Type(), original.Len(), original.Cap()))
 
 		for i := 0; i < original.Len(); i += 1 {
-			err := interpolateRecursive(copy.Index(i), original.Index(i))
+			err := p.interpolateRecursive(copy.Index(i), original.Index(i))
 			if err != nil {
 				return err
 			}
@@ -195,7 +200,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 
 			// New gives us a pointer, but again we want the value
 			copyValue := reflect.New(originalValue.Type()).Elem()
-			err := interpolateRecursive(copyValue, originalValue)
+			err := p.interpolateRecursive(copyValue, originalValue)
 			if err != nil {
 				return err
 			}
@@ -205,7 +210,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 
 	// If it is a string interpolate it (yay finally we're doing what we came for)
 	case reflect.String:
-		interpolated, err := env.Interpolate(original.Interface().(string))
+		interpolated, err := p.Env.Interpolate(original.Interface().(string))
 		if err != nil {
 			return err
 		}

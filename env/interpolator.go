@@ -2,7 +2,6 @@ package env
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,148 +9,155 @@ import (
 
 var variablesWithBracketsRegex = regexp.MustCompile(`([\\\$]?\$\{([^}]+?)})`)
 var variablesWithNoBracketsRegex = regexp.MustCompile(`([\\\$]?\$[a-zA-Z0-9_]+)`)
-
 var substringRegexp = regexp.MustCompile(`\A\s*:\s*(\-?\s*\d+)(?:\s*:\s*(\-?\s*\d+))?\s*\z`)
 
-func Interpolate(str string) (interpolated string, err error) {
-	// Do a parse and handle ENV variables with the ${} syntax, i.e. ${FOO}
-	interpolated = variablesWithBracketsRegex.ReplaceAllStringFunc(str, func(v string) string {
-		if err == nil {
-			key, option := extractKeyAndOptionFromVariable(v)
+// Interpolate takes a string and interpolates shell-like variable expansions in the provided string
+func (e Environment) Interpolate(str string) (string, error) {
+	var err error
 
-			// Just return the key by itself if it was escaped
-			if isPrefixedWithEscapeSequence(v) {
-				v = key
+	// Do a parse and handle ENV variables with the ${} syntax, i.e. ${FOO}
+	interpolated := variablesWithBracketsRegex.ReplaceAllStringFunc(str, func(v string) string {
+		// if there has been an error previously, skip interpolation
+		if err != nil {
+			return v
+		}
+		key, option := extractKeyAndOptionFromVariable(v)
+
+		// Just return the key by itself if it was escaped
+		if isPrefixedWithEscapeSequence(v) {
+			return key
+		}
+
+		err = isValidPosixEnvironmentVariable(v)
+		if err != nil {
+			return v
+		}
+
+		vv := e.Get(key)
+		isEnvironmentVariableSet := e.Exists(key)
+
+		switch {
+		case substringRegexp.MatchString(option):
+			// Substring Expansion -- select a substring of a variable with:
+			//
+			// ${parameter:offset}
+			// ${parameter:offset:length}
+			//
+			// In the first form select a substring of $parameter starting from
+			// 0-indexed offset until the end of $parameter. If offset is
+			// negative then it is an offset from the end of $parameter instead.
+			//
+			// In the second form, length is the number of characters from offset
+			// to select. If negeative, length is instead an offset from the end
+			// of $parameter.
+			//
+			match := substringRegexp.FindStringSubmatch(option)
+			lenvv := int64(len(vv))
+
+			offset, parseErr := strconv.ParseInt(match[1], 10, 0)
+			if err != nil {
+				err = parseErr
+				return v
+			}
+
+			// Negative offsets = from end
+			if offset < 0 {
+				offset = lenvv - (-offset)
+			}
+
+			// Still negative = too far from end? Truncate to start.
+			if offset < 0 {
+				offset = 0
+			}
+
+			// Beyond end? Truncate to end.
+			if offset > lenvv {
+				offset = lenvv
+			}
+
+			// Length?
+			if len(match) < 3 || match[2] == "" {
+				vv = vv[offset:lenvv]
 			} else {
-				err = isValidPosixEnvironmentVariable(v)
+				length, parseErr := strconv.ParseInt(match[2], 10, 0)
 				if err != nil {
+					err = parseErr
 					return v
 				}
 
-				vv, isEnvironmentVariableSet := os.LookupEnv(key)
+				if length >= 0 {
+					// Positive length = from offset
+					length = offset + length
 
-				switch {
-				case substringRegexp.MatchString(option):
-					// Substring Expansion -- select a substring of a variable with:
-					//
-					// ${parameter:offset}
-					// ${parameter:offset:length}
-					//
-					// In the first form select a substring of $parameter starting from
-					// 0-indexed offset until the end of $parameter. If offset is
-					// negative then it is an offset from the end of $parameter instead.
-					//
-					// In the second form, length is the number of characters from offset
-					// to select. If negeative, length is instead an offset from the end
-					// of $parameter.
-					//
-					match := substringRegexp.FindStringSubmatch(option)
-					lenvv := int64(len(vv))
-
-					offset, err := strconv.ParseInt(match[1], 10, 0)
-					if err != nil {
-						fmt.Println(err)
-						return v
+					// Too far? Truncate to end.
+					if length > lenvv {
+						length = lenvv
 					}
+				} else {
+					// Negative length = from end
+					length = lenvv - (-length)
 
-					// Negative offsets = from end
-					if offset < 0 {
-						offset = lenvv - (-offset)
+					// Too far? Truncate to offset.
+					if length < offset {
+						length = offset
 					}
-
-					// Still negative = too far from end? Truncate to start.
-					if offset < 0 {
-						offset = 0
-					}
-
-					// Beyond end? Truncate to end.
-					if offset > lenvv {
-						offset = lenvv
-					}
-
-					// Length?
-					if len(match) < 3 || match[2] == "" {
-						vv = vv[offset:lenvv]
-					} else {
-						length, err := strconv.ParseInt(match[2], 10, 0)
-						if err != nil {
-							return v
-						}
-
-						if length >= 0 {
-							// Positive length = from offset
-							length = offset + length
-
-							// Too far? Truncate to end.
-							if length > lenvv {
-								length = lenvv
-							}
-						} else {
-							// Negative length = from end
-							length = lenvv - (-length)
-
-							// Too far? Truncate to offset.
-							if length < offset {
-								length = offset
-							}
-						}
-
-						vv = vv[offset:length]
-					}
-
-				case strings.HasPrefix(option, "?"):
-					if vv == "" {
-						errorMessage := option[1:]
-						if errorMessage == "" {
-							errorMessage = "not set"
-						}
-						err = fmt.Errorf("$%s: %s", key, errorMessage)
-					}
-
-				case strings.HasPrefix(option, ":-"):
-					if vv == "" {
-						vv = option[2:]
-					}
-
-				case strings.HasPrefix(option, "-"):
-					if !isEnvironmentVariableSet {
-						vv = option[1:]
-					}
-
-				case option != "":
-					err = fmt.Errorf("Invalid option `%s` for environment variable `%s`", option, key)
 				}
 
-				v = vv
+				vv = vv[offset:length]
 			}
+
+		case strings.HasPrefix(option, "?"):
+			if vv == "" {
+				errorMessage := option[1:]
+				if errorMessage == "" {
+					errorMessage = "not set"
+				}
+				err = fmt.Errorf("$%s: %s", key, errorMessage)
+			}
+
+		case strings.HasPrefix(option, ":-"):
+			if vv == "" {
+				vv = option[2:]
+			}
+
+		case strings.HasPrefix(option, "-"):
+			if !isEnvironmentVariableSet {
+				vv = option[1:]
+			}
+
+		case option != "":
+			err = fmt.Errorf("Invalid option `%s` for environment variable `%s`", option, key)
 		}
 
-		return v
+		return vv
 	})
+	if err != nil {
+		return str, err
+	}
 
 	// Another parse but this time target ENV variables without the {}
 	// surrounding it, i.e. $FOO. These ones are super simple to replace.
 	interpolated = variablesWithNoBracketsRegex.ReplaceAllStringFunc(interpolated, func(v string) string {
-		if err == nil {
-			key, _ := extractKeyAndOptionFromVariable(v)
+		// if there has been an error previously, skip interpolation
+		if err != nil {
+			return v
+		}
+		key, _ := extractKeyAndOptionFromVariable(v)
 
-			// Just return the key by itself if it was escaped
-			if isPrefixedWithEscapeSequence(v) {
-				v = key
-			} else {
-				err = isValidPosixEnvironmentVariable(v)
-				if err != nil {
-					return v
-				}
-
-				v = os.Getenv(key)
-			}
+		// Just return the key by itself if it was escaped
+		if isPrefixedWithEscapeSequence(v) {
+			return key
 		}
 
-		return v
+		err = isValidPosixEnvironmentVariable(v)
+		if err != nil {
+			return v
+		}
+
+		return e.Get(key)
 	})
 
-	return
+	return interpolated, err
 }
 
 func isPrefixedWithEscapeSequence(variable string) bool {
