@@ -159,3 +159,90 @@ func TestForcingACleanCheckout(t *testing.T) {
 	tester.MustMock(t, "rm").Expect("-rf", tester.CheckoutDir())
 	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
 }
+
+func TestCheckoutOnARepositoryWithoutAGitFolder(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// Create an existing checkout
+	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
+	if err != nil {
+		t.Fatalf("Clone failed with %s", out)
+	}
+
+	if err = os.RemoveAll(filepath.Join(tester.CheckoutDir(), ".git")); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
+	tester.RunAndCheck(t)
+}
+
+func TestCheckoutOnABrokenRepository(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// Create an existing checkout
+	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
+	if err != nil {
+		t.Fatalf("Clone failed with %s", out)
+	}
+
+	t.Logf("Checkout is in %s", tester.CheckoutDir())
+
+	corruptGitRepository(t, tester.CheckoutDir())
+
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
+	tester.RunAndCheck(t)
+}
+
+func corruptGitRepository(t *testing.T, repoPath string) {
+	err := filepath.Walk(filepath.Join(repoPath, ".git", "objects"), func(path string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			if err := os.Chmod(path, 0644); err != nil {
+				t.Fatal(err)
+			}
+			b, err := ioutil.ReadFile(path)
+			if err != nil {
+				t.Log(err)
+				return nil
+			}
+			corrupted := make([]byte, len(b))
+			xorBytes(corrupted, b, []byte("llamas are pretty awesome"))
+			if err = ioutil.WriteFile(path, corrupted, 0700); err != nil {
+				t.Log(err)
+				return nil
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func xorBytes(dst, a, b []byte) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return n
+}
