@@ -150,6 +150,10 @@ function buildkite-global-hook {
 }
 
 function buildkite-local-hook {
+  if [[ -e ".buildkite/hooks/$1" ]] && [[ "${BUILDKITE_NO_LOCAL_HOOKS:-}" == "true" ]]; then
+    buildkite-error "Attempted to run .buildkite/hooks/$1, but BUILDKITE_NO_LOCAL_HOOKS is enabled"
+  fi
+
   buildkite-hook "local $1" ".buildkite/hooks/$1"
   buildkite-hook-exit-on-error
 }
@@ -376,6 +380,10 @@ buildkite-local-hook "pre-command"
 
 # If the user has specificed a local `command` hook
 if [[ -e ".buildkite/hooks/command" ]]; then
+  if [[ "${BUILDKITE_NO_LOCAL_HOOKS:-}" == "true" ]]; then
+    buildkite-error "Attempted to run .buildkite/hooks/command, but BUILDKITE_NO_LOCAL_HOOKS is enabled"
+  fi
+
   # Manually run the hook to avoid it from exiting on failure
   buildkite-hook "local command" ".buildkite/hooks/command"
 
