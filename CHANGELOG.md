@@ -6,7 +6,51 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## [v3.0-beta.32](https://github.com/buildkite/agent/tree/v3.0-beta.32) (2017-09-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.31...v3.0-beta.32)
+
+### Added
+
+- Add --no-plugins option to agent [\#540](https://github.com/buildkite/agent/pull/540) (@lox)
+- Support docker environment vars from v2 [\#545](https://github.com/buildkite/agent/pull/545) (@lox)
+
+### Changed
+
+- Refactored bootstrap to be more testable / maintainable [\#514](https://github.com/buildkite/agent/pull/514)  [\#530](https://github.com/buildkite/agent/pull/530) [\#536](https://github.com/buildkite/agent/pull/536) [\#522](https://github.com/buildkite/agent/pull/522) (@lox)
+- Add BUILDKITE\_GCS\_ACCESS\_HOST for GCS Host choice [\#532](https://github.com/buildkite/agent/pull/532) (@jules2689)
+- Prefer plugin, local, global and then default for hooks [\#549](https://github.com/buildkite/agent/pull/549) (@lox)
+- Integration tests for v3 [\#548](https://github.com/buildkite/agent/pull/548) (@lox)
+- Add docker integration tests [\#547](https://github.com/buildkite/agent/pull/547) (@lox)
+- Use latest golang 1.9 [\#541](https://github.com/buildkite/agent/pull/541) (@lox)
+- Faster globbing with go-zglob [\#539](https://github.com/buildkite/agent/pull/539) (@lox)
+- Consolidate Environment into env package  (@lox)
+
+### Fixed
+- Fix bug where ssh-keygen error causes agent to block [\#521](https://github.com/buildkite/agent/pull/521) (@lox)
+- Pre-exit hook always fires now
+
+## [v3.0-beta.31](https://github.com/buildkite/agent/tree/v3.0-beta.31) (2017-08-14)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.30...v3.0-beta.31)
+
+### Fixed
+- Support paths in BUILDKITE\_ARTIFACT\_UPLOAD\_DESTINATION [\#519](https://github.com/buildkite/agent/pull/519) (@lox)
+
+## [v3.0-beta.30](https://github.com/buildkite/agent/tree/v3.0-beta.30) (2017-08-11)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.29...v3.0-beta.30)
+
+### Fixed
+- Agent is prompted to verify remote server authenticity when cloning submodule from unkown host [\#503](https://github.com/buildkite/agent/issues/503)
+- Windows agent cannot find git executable \(Environment variable/Path issue?\) [\#487](https://github.com/buildkite/agent/issues/487)
+- ssh-keyscan doesn't work for submodules on a different host [\#411](https://github.com/buildkite/agent/issues/411)
+- Fix boolean plugin config parsing [\#508](https://github.com/buildkite/agent/pull/508) (@toolmantim)
+
+### Changed
+- Stop making hook files executable [\#515](https://github.com/buildkite/agent/pull/515) (@yeungda-rea)
+- Switch to yaml.v2 as the YAML parser [\#511](https://github.com/buildkite/agent/pull/511) (@keithpitt)
+- Add submodule remotes to known\_hosts [\#509](https://github.com/buildkite/agent/pull/509) (@lox)
+
 ## 3.0-beta.29 - 2017-07-18
+
 ### Added
 - Added a `--timestamp-lines` option to `buildkite-agent start` that will insert RFC3339 UTC timestamps at the beginning of each log line. The timestamps are not applied to header lines. [#501] (@lox)
 - Ctrl-c twice will force kill the agent [#499] (@lox)
