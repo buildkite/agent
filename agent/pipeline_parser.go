@@ -35,6 +35,16 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 		return nil, err
 	}
 
+	// Preprocess any env that are defined in the top level block and place them into env for
+	// later interpolation. We do this a few times so that you can reference env vars in other env vars
+	if unmarshaledMap, ok := unmarshaled.(map[string]interface{}); ok {
+		if envMap, ok := unmarshaledMap["env"].(map[string]interface{}); ok {
+			if err = p.interpolateEnvBlock(envMap); err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	// Recursivly go through the entire pipeline and perform environment
 	// variable interpolation on strings
 	interpolated, err := p.interpolate(unmarshaled)
@@ -43,6 +53,28 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	}
 
 	return interpolated, nil
+}
+
+func (p PipelineParser) interpolateEnvBlock(envMap map[string]interface{}) error {
+	// do a first pass without interpolation
+	for k, v := range envMap {
+		switch tv := v.(type) {
+		case string, int, bool:
+			p.Env.Set(k, fmt.Sprintf("%v", tv))
+		}
+	}
+	// next do a pass of interpolation and read the results
+	for k, v := range envMap {
+		switch tv := v.(type) {
+		case string:
+			interpolated, err := p.Env.Interpolate(tv)
+			if err != nil {
+				return err
+			}
+			p.Env.Set(k, interpolated)
+		}
+	}
+	return nil
 }
 
 func inferFormat(pipeline []byte, filename string) (string, error) {
