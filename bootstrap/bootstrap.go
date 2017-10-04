@@ -28,8 +28,8 @@ type Bootstrap struct {
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
 
-	// Plugins are the plugins that are created in the PluginPhase
-	plugins []*agent.Plugin
+	// Plugins are checkout out in the PluginPhase
+	plugins []*pluginCheckout
 
 	// Tracks whether there is a checkout to upload in the teardown
 	hasCheckout bool
@@ -208,52 +208,6 @@ func (b *Bootstrap) executeLocalHook(name string) error {
 	return b.executeHook("local "+name, b.localHookPath(name), nil)
 }
 
-// Returns the absolute path to a plugin hook
-func (b *Bootstrap) pluginHookPath(plugin *agent.Plugin, name string) (string, error) {
-	id, err := plugin.Identifier()
-	if err != nil {
-		return "", err
-	}
-
-	dir, err := plugin.RepositorySubdirectory()
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(b.PluginsPath, id, dir, "hooks", normalizeScriptFileName(name)), nil
-}
-
-// Executes a plugin hook
-func (b *Bootstrap) executePluginHook(plugins []*agent.Plugin, name string) error {
-	for _, p := range plugins {
-		path, err := b.pluginHookPath(p, name)
-		if err != nil {
-			return err
-		}
-
-		env, _ := p.ConfigurationToEnvironment()
-		if err := b.executeHook("plugin "+p.Label()+" "+name, path, env); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// If a plugin hook exists with this name
-func (b *Bootstrap) pluginHookExists(plugins []*agent.Plugin, name string) bool {
-	for _, p := range plugins {
-		path, err := b.pluginHookPath(p, name)
-		if err != nil {
-			return false
-		}
-		if fileExists(path) {
-			return true
-		}
-	}
-
-	return false
-}
-
 // Returns whether or not a file exists on the filesystem. We consider any
 // error returned by os.Stat to indicate that the file doesn't exist. We could
 // be speciifc and use os.IsNotExist(err), but most other errors also indicate
@@ -348,7 +302,7 @@ func (b *Bootstrap) tearDown() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "pre-exit"); err != nil {
+	if err := b.executePluginHook("pre-exit"); err != nil {
 		return err
 	}
 
@@ -383,101 +337,135 @@ func (b *Bootstrap) PluginPhase() error {
 		return fmt.Errorf("This agent isn't allowed to run plugins. To allow this, re-run this agent without the `--no-plugins` option.")
 	}
 
-	var err error
-	b.plugins, err = agent.CreatePluginsFromJSON(b.Plugins)
+	plugins, err := agent.CreatePluginsFromJSON(b.Plugins)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse plugin definition")
 	}
 
+	b.plugins = make([]*pluginCheckout, len(plugins))
+
+	for idx, p := range plugins {
+		checkout, err := b.checkoutPlugin(p)
+		if err != nil {
+			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
+
+		}
+		b.plugins[idx] = checkout
+	}
+
+	// Now we can run plugin environment hooks too
+	return b.executePluginHook("environment")
+}
+
+// Executes a named hook on all plugins that have it
+func (b *Bootstrap) executePluginHook(name string) error {
 	for _, p := range b.plugins {
-		// Get the identifer for the plugin
-		id, err := p.Identifier()
+		path, err := p.HookPath(name)
 		if err != nil {
 			return err
 		}
 
-		// Create a path to the plugin
-		directory := filepath.Join(b.PluginsPath, id)
-		pluginGitDirectory := filepath.Join(directory, ".git")
+		env, _ := p.ConfigurationToEnvironment()
+		if err := b.executeHook("plugin "+p.Label()+" "+name, path, env); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-		// Has it already been checked out?
-		if !fileExists(pluginGitDirectory) {
-			// Make the directory
-			err = os.MkdirAll(directory, 0777)
-			if err != nil {
-				return err
-			}
+// If any plugin has a hook by this name
+func (b *Bootstrap) pluginHookExists(name string) bool {
+	for _, p := range b.plugins {
+		if p.HasHook(name) {
+			return true
+		}
+	}
+	return false
+}
 
-			// Try and lock this particular plugin while we check it out (we create
-			// the file outside of the plugin directory so git clone doesn't have
-			// a cry about the directory not being empty)
-			pluginCheckoutHook, err := shell.LockFileWithTimeout(b.shell, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
-			if err != nil {
-				return err
-			}
+// Checkout a given plugin to the plugins directory and return that directory
+func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
+	// Get the identifer for the plugin
+	id, err := p.Identifier()
+	if err != nil {
+		return nil, err
+	}
 
-			// Once we've got the lock, we need to make sure another process didn't already
-			// checkout the plugin
-			if fileExists(pluginGitDirectory) {
-				pluginCheckoutHook.Unlock()
-				b.shell.Commentf("Plugin \"%s\" found", p.Label())
-				continue
-			}
+	// Create a path to the plugin
+	directory := filepath.Join(b.PluginsPath, id)
+	pluginGitDirectory := filepath.Join(directory, ".git")
+	checkout := &pluginCheckout{Plugin: p, Path: directory}
 
-			repo, err := p.Repository()
-			if err != nil {
-				return err
-			}
+	// Has it already been checked out?
+	if fileExists(pluginGitDirectory) {
+		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
+		return checkout, nil
+	}
 
-			b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
+	// Make the directory
+	err = os.MkdirAll(directory, 0777)
+	if err != nil {
+		return nil, err
+	}
 
-			if b.Debug {
-				b.shell.Commentf("Checking if \"%s\" is a local repository", repo)
-			}
+	// Try and lock this particular plugin while we check it out (we create
+	// the file outside of the plugin directory so git clone doesn't have
+	// a cry about the directory not being empty)
+	pluginCheckoutHook, err := shell.LockFileWithTimeout(b.shell, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	if err != nil {
+		return nil, err
+	}
+	defer pluginCheckoutHook.Unlock()
 
-			// Switch to the plugin directory
-			previousWd := b.shell.Getwd()
-			if err = b.shell.Chdir(directory); err != nil {
-				return err
-			}
+	// Once we've got the lock, we need to make sure another process didn't already
+	// checkout the plugin
+	if fileExists(pluginGitDirectory) {
+		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
+		return checkout, nil
+	}
 
-			b.shell.Commentf("Switching to the plugin directory")
+	repo, err := p.Repository()
+	if err != nil {
+		return nil, err
+	}
 
-			// If it's not a local repo, and we can perform
-			// SSH fingerprint verification, do so.
-			if !fileExists(repo) && b.SSHFingerprintVerification {
-				addRepositoryHostToSSHKnownHosts(b.shell, repo)
-			}
+	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
 
-			// Plugin clones shouldn't use custom GitCloneFlags
-			if err = b.shell.Run("git", "clone", "-v", "--", repo, "."); err != nil {
-				return err
-			}
+	if b.Debug {
+		b.shell.Commentf("Checking if \"%s\" is a local repository", repo)
+	}
 
-			// Switch to the version if we need to
-			if p.Version != "" {
-				b.shell.Commentf("Checking out `%s`", p.Version)
-				if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
-					return err
-				}
-			}
+	// Switch to the plugin directory
+	previousWd := b.shell.Getwd()
+	if err = b.shell.Chdir(directory); err != nil {
+		return nil, err
+	}
 
-			// Switch back to the previous working directory
-			if err = b.shell.Chdir(previousWd); err != nil {
-				return err
-			}
+	// Switch back to the previous working directory
+	defer b.shell.Chdir(previousWd)
 
-			// Now that we've succefully checked out the
-			// plugin, we can remove the lock we have on
-			// it.
-			pluginCheckoutHook.Unlock()
-		} else {
-			b.shell.Commentf("Plugin \"%s\" found", p.Label())
+	b.shell.Commentf("Switching to the plugin directory")
+
+	// If it's not a local repo, and we can perform
+	// SSH fingerprint verification, do so.
+	if !fileExists(repo) && b.SSHFingerprintVerification {
+		addRepositoryHostToSSHKnownHosts(b.shell, repo)
+	}
+
+	// Plugin clones shouldn't use custom GitCloneFlags
+	if err = b.shell.Run("git", "clone", "-v", "--", repo, "."); err != nil {
+		return nil, err
+	}
+
+	// Switch to the version if we need to
+	if p.Version != "" {
+		b.shell.Commentf("Checking out `%s`", p.Version)
+		if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
+			return nil, err
 		}
 	}
 
-	// Now we can run plugin environment hooks too
-	return b.executePluginHook(b.plugins, "environment")
+	return checkout, nil
 }
 
 // CheckoutPhase creates the build directory and makes sure we're running the
@@ -491,7 +479,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "pre-checkout"); err != nil {
+	if err := b.executePluginHook("pre-checkout"); err != nil {
 		return err
 	}
 
@@ -520,8 +508,8 @@ func (b *Bootstrap) CheckoutPhase() error {
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
-	case b.pluginHookExists(b.plugins, "checkout"):
-		if err := b.executePluginHook(b.plugins, "checkout"); err != nil {
+	case b.pluginHookExists("checkout"):
+		if err := b.executePluginHook("checkout"); err != nil {
 			return err
 		}
 	case fileExists(b.globalHookPath("checkout")):
@@ -550,7 +538,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "post-checkout"); err != nil {
+	if err := b.executePluginHook("post-checkout"); err != nil {
 		return err
 	}
 
@@ -731,17 +719,16 @@ func (b *Bootstrap) CommandPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "pre-command"); err != nil {
+	if err := b.executePluginHook("pre-command"); err != nil {
 		return err
 	}
 
 	var commandExitError error
 
-	// There can only be one command hook, so we check them in order
-	// of plugin, local
+	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
-	case b.pluginHookExists(b.plugins, "command"):
-		commandExitError = b.executePluginHook(b.plugins, "command")
+	case b.pluginHookExists("command"):
+		commandExitError = b.executePluginHook("command")
 	case fileExists(b.localHookPath("command")):
 		commandExitError = b.executeLocalHook("command")
 	case fileExists(b.globalHookPath("command")):
@@ -768,7 +755,7 @@ func (b *Bootstrap) CommandPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "post-command"); err != nil {
+	if err := b.executePluginHook("post-command"); err != nil {
 		return err
 	}
 
@@ -904,7 +891,7 @@ func (b *Bootstrap) uploadArtifacts() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "pre-artifact"); err != nil {
+	if err := b.executePluginHook("pre-artifact"); err != nil {
 		return err
 	}
 
@@ -931,9 +918,26 @@ func (b *Bootstrap) uploadArtifacts() error {
 		return err
 	}
 
-	if err := b.executePluginHook(b.plugins, "post-artifact"); err != nil {
+	if err := b.executePluginHook("post-artifact"); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+type pluginCheckout struct {
+	*agent.Plugin
+	Path string
+}
+
+func (p *pluginCheckout) HasHook(name string) bool {
+	path, err := p.HookPath(name)
+	if err != nil {
+		return false
+	}
+	return fileExists(path)
+}
+
+func (p *pluginCheckout) HookPath(name string) (string, error) {
+	return filepath.Join(p.Path, "hooks", normalizeScriptFileName(name)), nil
 }
