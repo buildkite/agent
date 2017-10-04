@@ -46,8 +46,8 @@ func (b *Bootstrap) Start() int {
 			return 1
 		}
 
-		// Apply PTY settings
 		b.shell.PTY = b.Config.RunInPty
+		b.shell.Debug = b.Config.Debug
 	}
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
