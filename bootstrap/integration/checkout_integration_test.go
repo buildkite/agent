@@ -42,8 +42,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "remote", "get-url", "origin"},
-		{"show", "HEAD", "-s", "--format=fuller", "--no-color"},
-		{"branch", "--contains", "HEAD", "--no-color"},
+		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		{"--no-pager", "branch", "--contains", "HEAD", "--no-color"},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -59,6 +59,33 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		AndExitWith(0)
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(1)
+
+	agent.
+		Expect("meta-data", "set", "buildkite:git:commit",
+			bintest.MatchPattern(`^commit`)).
+		AndExitWith(0)
+
+	agent.
+		Expect("meta-data", "set", "buildkite:git:branch",
+			bintest.MatchPattern(`^\* \(HEAD detached at FETCH_HEAD\)`)).
+		AndExitWith(0)
+
+	tester.RunAndCheck(t)
 }
 
 func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {

@@ -46,8 +46,8 @@ func (b *Bootstrap) Start() int {
 			return 1
 		}
 
-		// Apply PTY settings
 		b.shell.PTY = b.Config.RunInPty
+		b.shell.Debug = b.Config.Debug
 	}
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
@@ -695,8 +695,15 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
-		gitCommitOutput, _ := b.shell.RunAndCapture("git", "show", "HEAD", "-s", "--format=fuller", "--no-color")
-		gitBranchOutput, _ := b.shell.RunAndCapture("git", "branch", "--contains", "HEAD", "--no-color")
+		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color")
+		if err != nil {
+			return err
+		}
+
+		gitBranchOutput, err := b.shell.RunAndCapture("git", "--no-pager", "branch", "--contains", "HEAD", "--no-color")
+		if err != nil {
+			return err
+		}
 
 		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput); err != nil {
 			return err

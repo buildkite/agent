@@ -35,6 +35,9 @@ type Shell struct {
 	// Where stdout/error is written, defaults to os.Stdout
 	Writer io.Writer
 
+	// Whether to run the shell in debug mode
+	Debug bool
+
 	// Current working directory that shell commands get executed in
 	wd string
 
@@ -103,28 +106,39 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 }
 
 // Run runs a command, write to the logger and return an error if it fails
-func (s *Shell) Run(command string, args ...string) error {
-	s.Promptf("%s", process.FormatCommand(command, args))
+func (s *Shell) Run(command string, arg ...string) error {
+	s.Promptf("%s", process.FormatCommand(command, arg))
 
-	cmd, err := s.buildCommand(command, args...)
+	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	return s.executeCommand(cmd, s.Writer, false)
+	return s.executeCommand(cmd, s.Writer, executeFlags{
+		Silent: false,
+		PTY:    s.PTY,
+	})
 }
 
-// RunAndCapture runs a command and captures the output, nothing else is logged
-func (s *Shell) RunAndCapture(name string, arg ...string) (string, error) {
-	cmd, err := s.buildCommand(name, arg...)
+// RunAndCapture runs a command and captures the output, nothing else is logged. A PTY is not used
+// even if one is enabled for the shell. Will write the command and the output to logger if Debug is enabled
+func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
+	if s.Debug {
+		s.Promptf("%s", process.FormatCommand(command, arg))
+	}
+
+	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		return "", err
 	}
 
 	var b bytes.Buffer
 
-	err = s.executeCommand(cmd, &b, true)
+	err = s.executeCommand(cmd, &b, executeFlags{
+		Silent: !s.Debug,
+		PTY:    false,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -172,7 +186,10 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	customEnv := currentEnv.Merge(extra)
 	cmd.Env = customEnv.ToSlice()
 
-	return s.executeCommand(cmd, s.Writer, false)
+	return s.executeCommand(cmd, s.Writer, executeFlags{
+		Silent: false,
+		PTY:    s.PTY,
+	})
 }
 
 // buildCommand returns an exec.Cmd that runs in the context of the shell
@@ -190,7 +207,15 @@ func (s *Shell) buildCommand(name string, arg ...string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
+type executeFlags struct {
+	// Don't log output of commands to the shell output stream
+	Silent bool
+
+	// Run the command in a PTY
+	PTY bool
+}
+
+func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) error {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
@@ -203,7 +228,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 		// forward signals to the process
 		for sig := range signals {
 			if err := signalProcess(cmd, sig); err != nil {
-				if !silent {
+				if !flags.Silent {
 					s.Errorf("Error passing signal to child process: %v", err)
 				}
 			}
@@ -212,7 +237,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, silent bool) error {
 
 	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
 
-	if s.PTY {
+	if flags.PTY {
 		pty, err := process.StartPTY(cmd)
 		if err != nil {
 			return fmt.Errorf("Error starting PTY: %v", err)
