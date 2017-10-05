@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## [v3.0-beta.33](https://github.com/buildkite/agent/tree/v3.0-beta.33) (2017-10-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.32...v3.0-beta.33)
+
+### Added
+
+- Interpolate env block before rest of pipeline.yml [\#552](https://github.com/buildkite/agent/pull/552) (@lox)
+
+### Fixed
+
+- Build hanging after git checkout [\#558](https://github.com/buildkite/agent/issues/558)
+
 ## [v3.0-beta.32](https://github.com/buildkite/agent/tree/v3.0-beta.32) (2017-09-25)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.31...v3.0-beta.32)
 
