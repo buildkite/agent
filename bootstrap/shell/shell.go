@@ -143,6 +143,10 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 		return "", err
 	}
 
+	if s.Debug {
+		s.Printf("%s", b.String())
+	}
+
 	return strings.TrimSpace(b.String()), nil
 }
 
@@ -262,6 +266,10 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 	}
 
 	if err := cmd.Wait(); err != nil {
+		if s.Debug {
+			s.Printf("Exited with error: %v", err)
+		}
+
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 
