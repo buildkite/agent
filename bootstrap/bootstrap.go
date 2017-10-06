@@ -236,7 +236,6 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 		sh.Warningf("Failed to find SSH known_hosts file: %v", err)
 		return
 	}
-	defer knownHosts.Unlock()
 
 	if err = knownHosts.AddFromRepository(repository); err != nil {
 		sh.Warningf("%v", err)
