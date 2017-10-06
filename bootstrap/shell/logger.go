@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"runtime"
+	"testing"
 )
 
 // Logger represents a logger that outputs to a buildkite shell.
@@ -94,4 +95,36 @@ func (wl *WriterLogger) Promptf(format string, v ...interface{}) {
 
 func ansiColor(s, attributes string) string {
 	return fmt.Sprintf("\033[%sm%s\033[0m", attributes, s)
+}
+
+type TestingLogger struct {
+	*testing.T
+}
+
+func (tl TestingLogger) Printf(format string, v ...interface{}) {
+	tl.Logf(format, v...)
+}
+
+func (tl TestingLogger) Headerf(format string, v ...interface{}) {
+	tl.Logf("~~~ "+format, v...)
+}
+
+func (tl TestingLogger) Commentf(format string, v ...interface{}) {
+	tl.Logf("# %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) Errorf(format string, v ...interface{}) {
+	tl.Logf("🚨 Error: %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) Warningf(format string, v ...interface{}) {
+	tl.Logf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) Promptf(format string, v ...interface{}) {
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+	tl.Logf(prompt+" %s", fmt.Sprintf(format, v...))
 }
