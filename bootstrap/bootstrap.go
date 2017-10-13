@@ -238,7 +238,8 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 	}
 
 	if err = knownHosts.AddFromRepository(repository); err != nil {
-		sh.Warningf("%v", err)
+		sh.Warningf("Error adding to known_hosts: %v", err)
+		return
 	}
 }
 

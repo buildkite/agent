@@ -13,8 +13,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrHostAlreadyAddedToKnownHosts = errors.New("Host already added to known_hosts")
-
 type knownHosts struct {
 	Shell *shell.Shell
 	Path  string
@@ -66,7 +64,8 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 func (kh *knownHosts) Add(host string) error {
 	// If the keygen output already contains the host, we can skip!
 	if contains, _ := kh.Contains(host); contains {
-		return ErrHostAlreadyAddedToKnownHosts
+		kh.Shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
+		return nil
 	}
 
 	// Scan the key and then write it to the known_host file
