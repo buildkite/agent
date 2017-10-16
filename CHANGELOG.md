@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## [v2.6.6](https://github.com/buildkite/agent/releases/tag/v2.6.6) [Full Changelog](https://github.com/buildkite/agent/compare/v2.6.5...v2.6.6)
+
+### Fixed
+
+- Backported new globbing library to fix "too many open files" during globbing [\#539](https://github.com/buildkite/agent/pull/539) (@sj26 & @lox)
+
 ## [v3.0-beta.33](https://github.com/buildkite/agent/tree/v3.0-beta.33) (2017-10-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.32...v3.0-beta.33)
 
