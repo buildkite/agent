@@ -6,7 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
-## [v2.6.6](https://github.com/buildkite/agent/releases/tag/v2.6.6) (2017-10-09) [Full Changelog](https://github.com/buildkite/agent/compare/v2.6.5...v2.6.6)
+## [v2.6.6](https://github.com/buildkite/agent/releases/tag/v2.6.6) (2017-10-09)
+[Full Changelog](https://github.com/buildkite/agent/compare/v2.6.5...v2.6.6)
 
 ### Fixed
 
