@@ -9,6 +9,9 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
+// If you change header parsing here make sure to change it in the
+// buildkite.com frontend logic, too
+
 var HeaderRegex = regexp.MustCompile("^(?:---|\\+\\+\\+|~~~)\\s(.+)?$")
 var ANSIColorRegex = regexp.MustCompile(`\x1b\[([;\d]+)?[mK]`)
 

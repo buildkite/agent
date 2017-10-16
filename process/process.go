@@ -47,6 +47,9 @@ type Process struct {
 	running int32
 }
 
+// If you change header parsing here make sure to change it in the
+// buildkite.com frontend logic, too
+
 var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
 
 func (p *Process) Start() error {
