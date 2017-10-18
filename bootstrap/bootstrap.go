@@ -98,13 +98,14 @@ func (b *Bootstrap) Start() int {
 
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.Environment) error {
-	b.shell.Headerf("Running %s hook", name)
 	if !fileExists(hookPath) {
 		if b.Debug {
-			b.shell.Commentf("Skipping, no hook script found at \"%s\"", hookPath)
+			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", name, hookPath)
 		}
 		return nil
 	}
+
+	b.shell.Headerf("Running %s hook", name)
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
@@ -159,8 +160,6 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
 		// First, let see any of the environment variables are supposed
 		// to change the bootstrap configuration at run time.
 		bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)
-
-		b.shell.Headerf("Applying environment changes")
 
 		// Print out the env vars that changed. As we go through each
 		// one, we'll determine if it was a special "bootstrap"
