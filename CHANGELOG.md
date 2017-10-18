@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 
 - Fix segfault when using custom artifact bucket and EC2 instance role credentials [\#563](https://github.com/buildkite/agent/pull/563) (@sj26)
+- Fix ssh keyscan of hosts with custom ports [\#565](https://github.com/buildkite/agent/pull/565) (@sj26)
 
 ## [v2.6.6](https://github.com/buildkite/agent/releases/tag/v2.6.6) (2017-10-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v2.6.5...v2.6.6)
