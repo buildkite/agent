@@ -7,7 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -46,15 +46,6 @@ func (e *credentialsProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
-func awsS3Credentials() *credentials.Credentials {
-	return credentials.NewChainCredentials(
-		[]credentials.Provider{
-			&credentialsProvider{},
-			&credentials.EnvProvider{},
-			&ec2rolecreds.EC2RoleProvider{},
-		})
-}
-
 func awsS3RegionFromEnv() (region string, err error) {
 	regionName := "us-east-1"
 	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
@@ -82,17 +73,33 @@ func awsS3RegionFromEnv() (region string, err error) {
 	return "", fmt.Errorf("Unknown AWS S3 Region %q", regionName)
 }
 
+func awsS3Session(region string) (*session.Session, error) {
+	// Chicken and egg... but this is kinda how they do it in the sdk
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, err
+	}
+
+	sess.Config.Region = aws.String(region)
+
+	sess.Config.Credentials = credentials.NewChainCredentials(
+		[]credentials.Provider{
+			&credentialsProvider{},
+			&credentials.EnvProvider{},
+			// EC2 and ECS meta-data providers
+			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
+		})
+
+	return sess, nil
+}
+
 func newS3Client(bucket string) (*s3.S3, error) {
-	// Generate the AWS config used by the S3 client
 	region, err := awsS3RegionFromEnv()
 	if err != nil {
 		return nil, err
 	}
 
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: awsS3Credentials(),
-		Region:      aws.String(region),
-	})
+	sess, err := awsS3Session(region)
 	if err != nil {
 		return nil, err
 	}
