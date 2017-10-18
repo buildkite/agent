@@ -124,6 +124,14 @@ func newGittableURL(ref string) (*url.URL, error) {
 	return url.Parse(ref)
 }
 
+// Clean up the SSH host and remove any key identifiers. See:
+// git@github.com-custom-identifier:foo/bar.git
+// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
+var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
+func repoSSHKeySwitcherStrip(host string) (string) {
+	return repoSSHKeySwitcherRegex.ReplaceAllString(host, "")
+}
+
 // AddFromRepository takes a git repo url, extracts the host and adds it
 func (kh *knownHosts) AddFromRepository(repository string) error {
 	// Try and parse the repository URL
@@ -133,11 +141,7 @@ func (kh *knownHosts) AddFromRepository(repository string) error {
 		return err
 	}
 
-	// Clean up the SSH host and remove any key identifiers. See:
-	// git@github.com-custom-identifier:foo/bar.git
-	// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
-	var repoSSHKeySwitcherRegex = regexp.MustCompile(`-[a-z0-9\-]+$`)
-	host := repoSSHKeySwitcherRegex.ReplaceAllString(url.Host, "")
+	host := repoSSHKeySwitcherStrip(url.Hostname())
 
 	if err = kh.Add(host); err != nil {
 		return fmt.Errorf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
