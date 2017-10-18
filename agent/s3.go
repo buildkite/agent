@@ -7,8 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -87,9 +86,8 @@ func awsS3Session(region string) (*session.Session, error) {
 		[]credentials.Provider{
 			&credentialsProvider{},
 			&credentials.EnvProvider{},
-			&ec2rolecreds.EC2RoleProvider{
-				Client: ec2metadata.New(sess),
-			},
+			// EC2 and ECS meta-data providers
+			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
 		})
 
 	return sess, nil
