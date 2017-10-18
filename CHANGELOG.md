@@ -4,7 +4,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## Unreleased (master)
+
+### Fixed
+
+- Fix segfault when using custom artifact bucket and EC2 instance role credentials [\#563](https://github.com/buildkite/agent/pull/563) (@sj26)
 
 ## [v2.6.6](https://github.com/buildkite/agent/releases/tag/v2.6.6) (2017-10-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v2.6.5...v2.6.6)
