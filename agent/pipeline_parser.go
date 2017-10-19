@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -20,7 +21,7 @@ type PipelineParser struct {
 
 func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	if p.Env == nil {
-		p.Env = env.New()
+		p.Env = env.FromSlice(os.Environ())
 	}
 
 	// First try and figure out the format from the filename
