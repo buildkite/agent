@@ -3,6 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/buildkite/agent/env"
@@ -131,4 +132,40 @@ func decodeIntoStruct(into interface{}, from interface{}) error {
 		return err
 	}
 	return json.Unmarshal(b, into)
+}
+
+func TestPipelineParserLoadsSystemEnvironment(t *testing.T) {
+	var pipeline = `{
+		"steps": [{
+			"command": "echo ${LLAMAS_ROCK?}"
+		}]
+	}`
+
+	var decoded struct {
+		Steps []struct {
+			Command string `json:"command"`
+		} `json:"steps"`
+	}
+
+	_, err := PipelineParser{Pipeline: []byte(pipeline)}.Parse()
+	if err == nil {
+		t.Fatalf("Expected $LLAMAS_ROCK: not set")
+	}
+
+	os.Setenv("LLAMAS_ROCK", "absolutely")
+	defer os.Unsetenv("LLAMAS_ROCK")
+
+	result2, err := PipelineParser{Pipeline: []byte(pipeline)}.Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = decodeIntoStruct(&decoded, result2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if decoded.Steps[0].Command != "echo absolutely" {
+		t.Fatalf("Unexpected: %q", decoded.Steps[0].Command)
+	}
 }
