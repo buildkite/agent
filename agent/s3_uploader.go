@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"runtime"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -28,7 +29,7 @@ type S3Uploader struct {
 }
 
 func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
-	u.Destination = destination
+	u.Destination = strings.TrimSpace(destination)
 	u.DebugHTTP = debugHTTP
 
 	// Initialize the s3 client, and authenticate it
@@ -111,7 +112,11 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath(), artifact.Path}
+	artifactPath := artifact.Path
+	if runtime.GOOS == "windows" {
+	    artifactPath = strings.Replace(artifactPath, "\\", "/", -1)
+	}
+	parts := []string{u.BucketPath(), artifactPath}
 
 	return strings.Join(parts, "/")
 }
