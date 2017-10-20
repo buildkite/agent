@@ -58,9 +58,9 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	permission := "public-read"
 	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
+		permission = strings.TrimSpace(os.Getenv("BUILDKITE_S3_ACL"))
 	} else if os.Getenv("AWS_S3_ACL") != "" {
-		permission = os.Getenv("AWS_S3_ACL")
+		permission = strings.TrimSpace(os.Getenv("AWS_S3_ACL"))
 	}
 
 	// The dirtiest validation method ever...
