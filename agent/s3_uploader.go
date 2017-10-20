@@ -45,7 +45,7 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 	baseUrl := "https://" + u.BucketName() + ".s3.amazonaws.com"
 
 	if os.Getenv("BUILDKITE_S3_ACCESS_URL") != "" {
-		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
+		baseUrl = strings.TrimSpace(os.Getenv("BUILDKITE_S3_ACCESS_URL"))
 	}
 
 	url, _ := url.Parse(baseUrl)
