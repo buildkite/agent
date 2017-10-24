@@ -62,6 +62,17 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 }
 
 func (kh *knownHosts) Add(host string) error {
+	// Use a lockfile to prevent parallel processes stepping on each other
+	lock, err := shell.LockFile(kh.Shell, kh.Path+".lock")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := lock.Unlock(); err != nil {
+			kh.Shell.Warningf("Failed to release known_hosts file lock: %#v", err)
+		}
+	}()
+
 	// If the keygen output already contains the host, we can skip!
 	if contains, _ := kh.Contains(host); contains {
 		kh.Shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
