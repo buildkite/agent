@@ -97,10 +97,6 @@ func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.MustMock(t, "ssh-keygen").
-		Expect("-f", bintest.MatchAny(), "-F", "github.com").
-		AndExitWith(0)
-
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
 		AndExitWith(0)
