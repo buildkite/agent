@@ -55,14 +55,23 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 	defer file.Close()
 
 	normalized := knownhosts.Normalize(host)
+
+	// There don't appear to be any libraries to parse known_hosts that don't also want to
+	// validate the IP's and host keys. Shelling out to ssh-keygen doesn't support custom ports
+	// so I guess we'll do it ourselves.
+	//
+	// known_host format is:
+	// github.com,192.30.253.x ssh-rsa AAAAB3NzaC1yc2E
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		fields := strings.Split(scanner.Text(), " ")
 		if len(fields) != 3 {
 			continue
 		}
-		if fields[0] == normalized {
-			return true, nil
+		for _, addr := range strings.Split(fields[0], ",") {
+			if addr == normalized {
+				return true, nil
+			}
 		}
 	}
 
