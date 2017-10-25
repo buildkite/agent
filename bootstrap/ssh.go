@@ -5,23 +5,22 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/buildkite/agent/bootstrap/shell"
 )
-
-func sshKeygen(sh *shell.Shell, knownHostsfile, host string) (string, error) {
-	toolsDir, err := findPathToSSHTools(sh)
-	if err != nil {
-		return "", err
-	}
-	return sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keygen"), "-f", knownHostsfile, "-F", host)
-}
 
 func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 	toolsDir, err := findPathToSSHTools(sh)
 	if err != nil {
 		return "", err
 	}
+
+	parts := strings.Split(host, ":")
+	if len(parts) == 2 {
+		return sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), "-p", parts[1], parts[0])
+	}
+
 	return sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), host)
 }
 

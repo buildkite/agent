@@ -1,16 +1,16 @@
 package bootstrap
 
 import (
+	"bufio"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/buildkite/agent/bootstrap/shell"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type knownHosts struct {
@@ -48,17 +48,25 @@ func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 }
 
 func (kh *knownHosts) Contains(host string) (bool, error) {
-	// Grab the generated keys for the repo host
-	keygenOutput, err := sshKeygen(kh.Shell, kh.Path, host)
-
-	// Returns an error and no output if host isn't in there
-	if err != nil && keygenOutput == "" {
-		return false, nil
-	} else if err != nil {
+	file, err := os.Open(kh.Path)
+	if err != nil {
 		return false, err
 	}
+	defer file.Close()
 
-	return strings.Contains(keygenOutput, host), nil
+	normalized := knownhosts.Normalize(host)
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fields := strings.Split(scanner.Text(), " ")
+		if len(fields) != 3 {
+			continue
+		}
+		if fields[0] == normalized {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 func (kh *knownHosts) Add(host string) error {
@@ -99,43 +107,18 @@ func (kh *knownHosts) Add(host string) error {
 	return nil
 }
 
-var hasSchemePattern = regexp.MustCompile("^[^:]+://")
-var scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
-
-func newGittableURL(ref string) (*url.URL, error) {
-	if !hasSchemePattern.MatchString(ref) && scpLikeURLPattern.MatchString(ref) {
-		matched := scpLikeURLPattern.FindStringSubmatch(ref)
-		user := matched[1]
-		host := matched[2]
-		path := matched[3]
-
-		ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
-	}
-
-	return url.Parse(ref)
-}
-
-// Clean up the SSH host and remove any key identifiers. See:
-// git@github.com-custom-identifier:foo/bar.git
-// https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
-var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
-func stripAliasesFromGitHost(host string) (string) {
-	return gitHostAliasRegexp.ReplaceAllString(host, "")
-}
-
 // AddFromRepository takes a git repo url, extracts the host and adds it
 func (kh *knownHosts) AddFromRepository(repository string) error {
-	// Try and parse the repository URL
-	url, err := newGittableURL(repository)
+	u, err := ParseGittableURL(repository)
 	if err != nil {
 		kh.Shell.Warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
 		return err
 	}
 
-	host := stripAliasesFromGitHost(url.Hostname())
+	host := stripAliasesFromGitHost(u.Host)
 
 	if err = kh.Add(host); err != nil {
-		return fmt.Errorf("Failed to add `%s` to known_hosts file `%s`: %v'", host, url, err)
+		return errors.Wrapf(err, "Failed to add `%s` to known_hosts file `%s`", host, u)
 	}
 
 	return nil
