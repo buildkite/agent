@@ -17,7 +17,7 @@ func TestFindingSSHTools(t *testing.T) {
 	sh.Debug = true
 	sh.Logger = shell.TestingLogger{t}
 
-	d, err := findPathToSSHToolsOnWindows(sh)
+	d, err := findPathToSSHTools(sh)
 	if err != nil {
 		t.Fatal(err)
 	}

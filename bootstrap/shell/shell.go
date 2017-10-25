@@ -135,16 +135,18 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 
 	var b bytes.Buffer
 
+	defer func() {
+		if s.Debug {
+			s.Printf("%s", b.String())
+		}
+	}()
+
 	err = s.executeCommand(cmd, &b, executeFlags{
 		Silent: !s.Debug,
 		PTY:    false,
 	})
 	if err != nil {
 		return "", err
-	}
-
-	if s.Debug {
-		s.Printf("%s", b.String())
 	}
 
 	return strings.TrimSpace(b.String()), nil
