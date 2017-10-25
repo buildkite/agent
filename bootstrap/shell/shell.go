@@ -32,7 +32,7 @@ type Shell struct {
 	// Whether the shell is a PTY
 	PTY bool
 
-	// Where stdout/error is written, defaults to os.Stdout
+	// Where stdout is written, defaults to os.Stdout
 	Writer io.Writer
 
 	// Whether to run the shell in debug mode
@@ -121,7 +121,7 @@ func (s *Shell) Run(command string, arg ...string) error {
 	})
 }
 
-// RunAndCapture runs a command and captures the output, nothing else is logged. A PTY is not used
+// RunAndCapture runs a command and captures the stdout, nothing else is logged. A PTY is not used
 // even if one is enabled for the shell. Will write the command and the output to logger if Debug is enabled
 func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	if s.Debug {
@@ -134,12 +134,6 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	}
 
 	var b bytes.Buffer
-
-	defer func() {
-		if s.Debug {
-			s.Printf("%s", b.String())
-		}
-	}()
 
 	err = s.executeCommand(cmd, &b, executeFlags{
 		Silent: !s.Debug,
@@ -259,8 +253,17 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 		}
 	} else {
 		cmd.Stdout = w
-		cmd.Stderr = w
+		cmd.Stderr = nil
 		cmd.Stdin = nil
+
+		if s.Debug {
+			streamer := NewLoggerStreamer(s.Logger)
+			defer streamer.Close()
+
+			// write the stdout to the writer and stream both stdout and stderr to the logger
+			cmd.Stdout = io.MultiWriter(w, streamer)
+			cmd.Stderr = streamer
+		}
 
 		if err := cmd.Start(); err != nil {
 			return errors.Wrapf(err, "Error starting `%s`", cmdStr)
