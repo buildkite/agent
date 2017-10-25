@@ -21,7 +21,17 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 		return sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), "-p", parts[1], parts[0])
 	}
 
-	return sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), host)
+	out, err := sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), host)
+	if err != nil {
+		return out, err
+	}
+
+	// older versions of ssh-keyscan would exit 0 but not return anything
+	if strings.TrimSpace(out) == "" {
+		return "", fmt.Errorf("No keys returned for %q", host)
+	}
+
+	return out, err
 }
 
 // On Windows, there are many horrible different versions of the ssh tools. Our preference is the one bundled with
