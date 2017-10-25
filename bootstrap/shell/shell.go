@@ -257,12 +257,15 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 		cmd.Stdin = nil
 
 		if s.Debug {
-			streamer := NewLoggerStreamer(s.Logger)
-			defer streamer.Close()
+			stdOutStreamer := NewLoggerStreamer(s.Logger)
+			defer stdOutStreamer.Close()
+
+			stdErrStreamer := NewLoggerStreamer(s.Logger)
+			defer stdErrStreamer.Close()
 
 			// write the stdout to the writer and stream both stdout and stderr to the logger
-			cmd.Stdout = io.MultiWriter(w, streamer)
-			cmd.Stderr = streamer
+			cmd.Stdout = io.MultiWriter(stdOutStreamer, w)
+			cmd.Stderr = stdErrStreamer
 		}
 
 		if err := cmd.Start(); err != nil {
