@@ -1,15 +1,20 @@
 package shell
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"regexp"
 	"runtime"
+	"testing"
 )
 
 // Logger represents a logger that outputs to a buildkite shell.
 type Logger interface {
+	io.Writer
+
 	// Printf prints a line of output
 	Printf(format string, v ...interface{})
 
@@ -46,12 +51,19 @@ type WriterLogger struct {
 	Ansi   bool
 }
 
+func (wl *WriterLogger) Write(b []byte) (int, error) {
+	wl.Printf("%s", b)
+	return len(b), nil
+}
+
 func (wl *WriterLogger) Printf(format string, v ...interface{}) {
-	fmt.Fprintf(wl.Writer, "%s\n", fmt.Sprintf(format, v...))
+	fmt.Fprintf(wl.Writer, "%s", fmt.Sprintf(format, v...))
+	fmt.Fprintln(wl.Writer)
 }
 
 func (wl *WriterLogger) Headerf(format string, v ...interface{}) {
-	fmt.Fprintf(wl.Writer, "~~~ %s\n", fmt.Sprintf(format, v...))
+	fmt.Fprintf(wl.Writer, "~~~ %s", fmt.Sprintf(format, v...))
+	fmt.Fprintln(wl.Writer)
 }
 
 func (wl *WriterLogger) Commentf(format string, v ...interface{}) {
@@ -94,4 +106,94 @@ func (wl *WriterLogger) Promptf(format string, v ...interface{}) {
 
 func ansiColor(s, attributes string) string {
 	return fmt.Sprintf("\033[%sm%s\033[0m", attributes, s)
+}
+
+type TestingLogger struct {
+	*testing.T
+}
+
+func (tl TestingLogger) Write(b []byte) (int, error) {
+	tl.Logf("%s", b)
+	return len(b), nil
+}
+
+func (tl TestingLogger) Printf(format string, v ...interface{}) {
+	tl.Logf(format, v...)
+}
+
+func (tl TestingLogger) Headerf(format string, v ...interface{}) {
+	tl.Logf("~~~ "+format, v...)
+}
+
+func (tl TestingLogger) Commentf(format string, v ...interface{}) {
+	tl.Logf("# %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) Errorf(format string, v ...interface{}) {
+	tl.Logf("🚨 Error: %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) Warningf(format string, v ...interface{}) {
+	tl.Logf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
+}
+
+func (tl TestingLogger) Promptf(format string, v ...interface{}) {
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+	tl.Logf(prompt+" %s", fmt.Sprintf(format, v...))
+}
+
+type LoggerStreamer struct {
+	Logger  Logger
+	Prefix  string
+	started bool
+	buf     *bytes.Buffer
+	offset  int
+}
+
+var lineRegexp = regexp.MustCompile(`(?m:^(.*)\r?\n)`)
+
+func NewLoggerStreamer(logger Logger) *LoggerStreamer {
+	return &LoggerStreamer{
+		Logger: logger,
+		buf:    bytes.NewBuffer([]byte("")),
+	}
+}
+
+func (l *LoggerStreamer) Write(p []byte) (n int, err error) {
+	if bytes.ContainsRune(p, '\n') {
+		l.started = true
+	}
+
+	if n, err = l.buf.Write(p); err != nil {
+		return
+	}
+
+	err = l.Output()
+	return
+}
+
+func (l *LoggerStreamer) Close() error {
+	if remaining := l.buf.String()[l.offset:]; len(remaining) > 0 {
+		l.Logger.Printf("%s%s", l.Prefix, remaining)
+	}
+	l.buf = bytes.NewBuffer([]byte(""))
+	return nil
+}
+
+func (l *LoggerStreamer) Output() error {
+	if !l.started {
+		return nil
+	}
+
+	matches := lineRegexp.FindAllStringSubmatch(l.buf.String()[l.offset:], -1)
+
+	for _, match := range matches {
+		l.Logger.Printf("%s%s", l.Prefix, match[1])
+		l.offset += len(match[0])
+	}
+
+	return nil
 }

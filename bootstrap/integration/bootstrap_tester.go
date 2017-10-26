@@ -128,7 +128,7 @@ func (b *BootstrapTester) LinkCommonCommands() error {
 	if runtime.GOOS != "windows" {
 		for _, bin := range []string{
 			"ls", "tr", "mkdir", "cp", "sed", "basename", "uname", "chmod",
-			"touch", "env", "grep", "sort", "cat", "true", "git", "ssh-keygen", "ssh-keyscan",
+			"touch", "env", "grep", "sort", "cat", "true", "git", "ssh-keyscan",
 		} {
 			if err := b.LinkLocalCommand(bin); err != nil {
 				return err

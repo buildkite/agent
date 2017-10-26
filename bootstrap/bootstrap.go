@@ -231,15 +231,19 @@ func dirForAgentName(agentName string) string {
 
 // Given a repostory, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
+	if fileExists(repository) {
+		return
+	}
+
 	knownHosts, err := findKnownHosts(sh)
 	if err != nil {
 		sh.Warningf("Failed to find SSH known_hosts file: %v", err)
 		return
 	}
-	defer knownHosts.Unlock()
 
 	if err = knownHosts.AddFromRepository(repository); err != nil {
-		sh.Warningf("%v", err)
+		sh.Warningf("Error adding to known_hosts: %v", err)
+		return
 	}
 }
 
@@ -445,9 +449,7 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 
 	b.shell.Commentf("Switching to the plugin directory")
 
-	// If it's not a local repo, and we can perform
-	// SSH fingerprint verification, do so.
-	if !fileExists(repo) && b.SSHFingerprintVerification {
+	if b.SSHFingerprintVerification {
 		addRepositoryHostToSSHKnownHosts(b.shell, repo)
 	}
 
