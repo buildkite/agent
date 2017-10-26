@@ -60,8 +60,18 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 	// validate the IP's and host keys. Shelling out to ssh-keygen doesn't support custom ports
 	// so I guess we'll do it ourselves.
 	//
-	// known_host format is:
-	// github.com,192.30.253.x ssh-rsa AAAAB3NzaC1yc2E
+	// known_host format is defined at https://man.openbsd.org/sshd#SSH_KNOWN_HOSTS_FILE_FORMAT
+	// A basic example is:
+	// # Comments allowed at start of line
+	// closenet,...,192.0.2.53 1024 37 159...93 closenet.example.net
+	// cvs.example.net,192.0.2.10 ssh-rsa AAAA1234.....=
+	// # A hashed hostname
+	// |1|JfKTdBh7rNbXkVAQCRp4OQoPfmI=|USECr3SWf1JUPsms5AqfD5QfxkM= ssh-rsa
+	// AAAA1234.....=
+	// # A revoked key
+	// @revoked * ssh-rsa AAAAB5W...
+	// # A CA key, accepted for any host in *.mydomain.com or *.mydomain.org
+	// @cert-authority *.mydomain.org,*.mydomain.com ssh-rsa AAAAB5W...
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		fields := strings.Split(scanner.Text(), " ")
