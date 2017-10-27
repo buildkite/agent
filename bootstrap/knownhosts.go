@@ -134,6 +134,11 @@ func (kh *knownHosts) AddFromRepository(repository string) error {
 		return err
 	}
 
+	// File uri's don't need a host added
+	if u.Host == "" || u.Scheme == "file" {
+		return nil
+	}
+
 	host := stripAliasesFromGitHost(u.Host)
 
 	if err = kh.Add(host); err != nil {

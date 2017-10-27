@@ -1,35 +1,41 @@
 package bootstrap
 
 import (
-	"os"
 	"testing"
 )
 
 func TestParsingGittableRepository(t *testing.T) {
 	t.Parallel()
 
-	wd, _ := os.Getwd()
-
 	var testCases = []struct {
-		Ref      string
-		Expected string
-		IsErr    bool
+		Ref    string
+		String string
+		Host   string
 	}{
-		{wd, wd, false},
-		{"git@github.com:buildkite/agent.git", "ssh://git@github.com/buildkite/agent.git", false},
-		{"git@github.com-alias1:buildkite/agent.git", "ssh://git@github.com-alias1/buildkite/agent.git", false},
-		{"ssh://git@scm.xxx:7999/yyy/zzz.git", "ssh://git@scm.xxx:7999/yyy/zzz.git", false},
-		{"ssh://root@git.host.de:4019/var/cache/git/project.git", "ssh://root@git.host.de:4019/var/cache/git/project.git", false},
+		// files
+		{"/home/vagrant/repo", "file:///home/vagrant/repo", ""},
+		{"C:\\Users\\vagrant\\repo", "file:///C:/Users/vagrant/repo", ""},
+		{"file:///C:/Users/vagrant/repo", "file:///C:/Users/vagrant/repo", ""},
+
+		// ssh
+		{"git@github.com:buildkite/agent.git", "ssh://git@github.com/buildkite/agent.git", "github.com"},
+		{"git@github.com-alias1:buildkite/agent.git", "ssh://git@github.com-alias1/buildkite/agent.git", "github.com-alias1"},
+		{"ssh://git@scm.xxx:7999/yyy/zzz.git", "ssh://git@scm.xxx:7999/yyy/zzz.git", "scm.xxx:7999"},
+		{"ssh://root@git.host.de:4019/var/cache/git/project.git", "ssh://root@git.host.de:4019/var/cache/git/project.git", "git.host.de:4019"},
 	}
 
 	for _, tc := range testCases {
+		t.Logf("Parsing %s", tc.Ref)
 		u, err := ParseGittableURL(tc.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		actual := u.String()
-		if tc.Expected != actual {
-			t.Fatalf("Expected %q, got %q", tc.Expected, actual)
+		t.Logf("%#v", u)
+		if tc.Host != u.Host {
+			t.Fatalf("Expected host %q, got %q", tc.Host, u.Host)
+		}
+		if tc.String != u.String() {
+			t.Fatalf("Expected %q, got %q", tc.String, u.String())
 		}
 	}
 }

@@ -345,15 +345,15 @@ func (b *Bootstrap) PluginPhase() error {
 		return errors.Wrap(err, "Failed to parse plugin definition")
 	}
 
-	b.plugins = make([]*pluginCheckout, len(plugins))
+	b.plugins = []*pluginCheckout{}
 
-	for idx, p := range plugins {
+	for _, p := range plugins {
 		checkout, err := b.checkoutPlugin(p)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
 
 		}
-		b.plugins[idx] = checkout
+		b.plugins = append(b.plugins, checkout)
 	}
 
 	// Now we can run plugin environment hooks too
@@ -434,10 +434,6 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 
 	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
 
-	if b.Debug {
-		b.shell.Commentf("Checking if \"%s\" is a local repository", repo)
-	}
-
 	// Switch to the plugin directory
 	previousWd := b.shell.Getwd()
 	if err = b.shell.Chdir(directory); err != nil {
@@ -473,10 +469,6 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase() error {
 	if err := b.executeGlobalHook("pre-checkout"); err != nil {
-		return err
-	}
-
-	if err := b.executeLocalHook("pre-checkout"); err != nil {
 		return err
 	}
 

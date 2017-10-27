@@ -1,10 +1,9 @@
 package bootstrap
 
 import (
-	"io"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"reflect"
 	"runtime"
 	"testing"
 
@@ -13,18 +12,27 @@ import (
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skipf("Not tested on windows yet")
-	}
-
 	t.Parallel()
 
-	wrapper := newTestHookWrapper(t, []string{
-		"#!/bin/bash",
-		"export LLAMAS=rock",
-		"export Alpacas=\"are ok\"",
-		"echo hello world",
-	})
+	var script []string
+
+	if runtime.GOOS != "windows" {
+		script = []string{
+			"#!/bin/bash",
+			"export LLAMAS=rock",
+			"export Alpacas=\"are ok\"",
+			"echo hello world",
+		}
+	} else {
+		script = []string{
+			"@echo off",
+			"set LLAMAS=rock",
+			"set Alpacas=are ok",
+			"echo hello world",
+		}
+	}
+
+	wrapper := newTestHookWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
 	sh := newTestShell(t)
@@ -38,8 +46,16 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(afterEnv, env.FromSlice([]string{"LLAMAS=rock", "Alpacas=are ok"})) {
-		t.Fatalf("Unexpected env in %#v", afterEnv)
+	if afterEnv.Length() != 3 {
+		t.Fatalf("Expected 3 env vars, got %d: %#v", afterEnv.Length(), afterEnv)
+	}
+
+	if actual := afterEnv.Get("LLAMAS"); actual != "rock" {
+		t.Fatalf("Expected %q, got %q", "rock", actual)
+	}
+
+	if actual := afterEnv.Get("Alpacas"); actual != "are ok" {
+		t.Fatalf("Expected %q, got %q", "are ok", actual)
 	}
 }
 
@@ -57,13 +73,18 @@ func newTestShell(t *testing.T) *shell.Shell {
 }
 
 func newTestHookWrapper(t *testing.T, script []string) *hookScriptWrapper {
-	hookFile, err := ioutil.TempFile("", "hookwrapper")
+	hookName := "hookwrapper"
+	if runtime.GOOS == "windows" {
+		hookName += ".bat"
+	}
+
+	hookFile, err := shell.TempFileWithExtension(hookName)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, line := range script {
-		if _, err = io.WriteString(hookFile, line+"\n"); err != nil {
+		if _, err = fmt.Fprintln(hookFile, line); err != nil {
 			t.Fatal(err)
 		}
 	}
