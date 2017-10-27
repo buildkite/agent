@@ -3,6 +3,7 @@ package integration
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -97,6 +98,17 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		PluginsDir: pluginsDir,
 	}
 
+	if runtime.GOOS == "windows" {
+		bt.Env = append(bt.Env,
+			"SystemRoot="+os.Getenv("SystemRoot"),
+			"WINDIR="+os.Getenv("WINDIR"),
+			"COMSPEC="+os.Getenv("COMSPEC"),
+			"PATHEXT="+os.Getenv("PATHEXT"),
+			"TMP="+os.Getenv("TMP"),
+			"TEMP="+os.Getenv("TEMP"),
+		)
+	}
+
 	if err = bt.LinkCommonCommands(); err != nil {
 		return nil, err
 	}
@@ -113,6 +125,9 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 
 // LinkLocalCommand creates a symlink for commands into the tester PATH
 func (b *BootstrapTester) LinkLocalCommand(name string) error {
+	if runtime.GOOS == "windows" && !strings.HasSuffix(name, ".exe") {
+		name += ".exe"
+	}
 	if !filepath.IsAbs(name) {
 		var err error
 		name, err = exec.LookPath(name)
@@ -120,19 +135,23 @@ func (b *BootstrapTester) LinkLocalCommand(name string) error {
 			return err
 		}
 	}
+	// Good grief windows, symlinks for executables are a shitshow, writing batch works
+	if runtime.GOOS == "windows" {
+		batchPath := strings.TrimSuffix(filepath.Join(b.PathDir, filepath.Base(name)), ".exe") + ".bat"
+		return ioutil.WriteFile(batchPath, []byte(fmt.Sprintf("@\"%s\" %%*", name)), 0777)
+	}
+
 	return os.Symlink(name, filepath.Join(b.PathDir, filepath.Base(name)))
 }
 
 // Link common commands from system path, these can be mocked as needed
 func (b *BootstrapTester) LinkCommonCommands() error {
-	if runtime.GOOS != "windows" {
-		for _, bin := range []string{
-			"ls", "tr", "mkdir", "cp", "sed", "basename", "uname", "chmod",
-			"touch", "env", "grep", "sort", "cat", "true", "git", "ssh-keyscan",
-		} {
-			if err := b.LinkLocalCommand(bin); err != nil {
-				return err
-			}
+	for _, bin := range []string{
+		"ls", "tr", "mkdir", "cp", "sed", "basename", "uname", "chmod",
+		"touch", "env", "grep", "sort", "cat", "true", "false", "git", "ssh-keyscan",
+	} {
+		if err := b.LinkLocalCommand(bin); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -148,7 +167,7 @@ func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 	b.mocks = append(b.mocks, mock)
 
 	// move the mock into our path
-	if err := os.Rename(mock.Path, filepath.Join(b.PathDir, name)); err != nil {
+	if err := os.Rename(mock.Path, filepath.Join(b.PathDir, filepath.Base(mock.Path))); err != nil {
 		return mock, err
 	}
 
@@ -168,7 +187,7 @@ func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
 // HasMock returns true if a mock has been created by that name
 func (b *BootstrapTester) HasMock(name string) bool {
 	for _, m := range b.mocks {
-		if m.Name == name {
+		if strings.TrimSuffix(m.Name, filepath.Ext(m.Name)) == name {
 			return true
 		}
 	}
@@ -177,9 +196,15 @@ func (b *BootstrapTester) HasMock(name string) bool {
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
 func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
-	// TODO: support windows tests
 	hookScript := filepath.Join(dir, name)
-	body := "#!/bin/sh\n" + strings.Join(append([]string{m.Path}, args...), " ")
+	body := ""
+
+	if runtime.GOOS == "windows" {
+		body = fmt.Sprintf("@\"%s\" %s", m.Path, strings.Join(args, " "))
+		hookScript += ".bat"
+	} else {
+		body = "#!/bin/sh\n" + strings.Join(append([]string{m.Path}, args...), " ")
+	}
 
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", err
@@ -236,13 +261,18 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 			AndExitWith(0)
 	}
 
-	cmd := exec.Command(b.Name, b.Args...)
+	path, err := exec.LookPath(b.Name)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(path, b.Args...)
 	buf := &buffer{}
 	cmd.Stdout = io.MultiWriter(buf, w)
 	cmd.Stderr = io.MultiWriter(buf, w)
 	cmd.Env = append(b.Env, env...)
 
-	err := cmd.Run()
+	err = cmd.Run()
 	b.Output = buf.String()
 	return err
 }

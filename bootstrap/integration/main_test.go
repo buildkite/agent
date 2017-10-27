@@ -19,6 +19,10 @@ func compileBootstrap(dir string) string {
 	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
 	binPath := filepath.Join(dir, "buildkite-agent")
 
+	if runtime.GOOS == "windows" {
+		binPath += ".exe"
+	}
+
 	cmd := exec.Command("go", "build", "-o", binPath, "main.go")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
