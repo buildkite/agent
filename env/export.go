@@ -42,6 +42,9 @@ func FromExport(body string) *Environment {
 	// Remove any white space at the start and the end of the export string
 	body = strings.TrimSpace(body)
 
+	// Normalize \r\n to just \n
+	body = strings.Replace(body, "\r\n", "\n", -1)
+
 	// Split up the export into lines
 	lines := strings.Split(body, "\n")
 
