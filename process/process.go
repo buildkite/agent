@@ -12,6 +12,8 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -262,7 +264,12 @@ func (p *Process) Output() string {
 
 func (p *Process) Kill() error {
 	// Send a sigterm
-	err := p.signal(syscall.SIGTERM)
+	var err error
+	if runtime.GOOS == "windows" {
+		err = exec.Command("CMD", "/C", "TASKKILL", "/F", "/PID", strconv.Itoa(p.Pid)).Run()
+	} else {
+		err = p.signal(syscall.SIGTERM)
+	}
 	if err != nil {
 		return err
 	}
