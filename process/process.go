@@ -263,11 +263,13 @@ func (p *Process) Output() string {
 }
 
 func (p *Process) Kill() error {
-	// Send a sigterm
 	var err error
 	if runtime.GOOS == "windows" {
+		// Sending Interrupt on Windows is not implemented.
+		// https://golang.org/src/os/exec.go?s=3842:3884#L110
 		err = exec.Command("CMD", "/C", "TASKKILL", "/F", "/PID", strconv.Itoa(p.Pid)).Run()
 	} else {
+		// Send a sigterm
 		err = p.signal(syscall.SIGTERM)
 	}
 	if err != nil {
