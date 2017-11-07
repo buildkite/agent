@@ -218,6 +218,11 @@ fi
 
 echo "~~~ Preparing build folder"
 
+if [[ -d "$BUILDKITE_BUILD_CHECKOUT_PATH" ]] && ! git --git-dir="$BUILDKITE_BUILD_CHECKOUT_PATH/.git" rev-parse &>/dev/null; then
+  echo "~~~ Removing corrupted previous build folder"
+  rm -rf "$BUILDKITE_BUILD_CHECKOUT_PATH"
+fi
+
 buildkite-run mkdir -p "$BUILDKITE_BUILD_CHECKOUT_PATH"
 buildkite-run cd "$BUILDKITE_BUILD_CHECKOUT_PATH"
 
