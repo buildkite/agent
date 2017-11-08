@@ -31,13 +31,16 @@ func FromSlice(s []string) *Environment {
 }
 
 // Get returns a key from the environment
-func (e *Environment) Get(key string) string {
-	return e.env[normalizeKeyName(key)]
+func (e *Environment) Get(key string) (string, bool) {
+	v, ok := e.env[normalizeKeyName(key)]
+	return v, ok
 }
 
 // Get a boolean value from environment, with a default for empty. Supports true|false, on|off, 1|0
 func (e *Environment) GetBool(key string, defaultValue bool) bool {
-	switch strings.ToLower(e.Get(key)) {
+	v, _ := e.Get(key)
+
+	switch strings.ToLower(v) {
 	case "on", "1", "enabled", "true":
 		return true
 	case "off", "0", "disabled", "false":
@@ -62,8 +65,10 @@ func (e *Environment) Set(key string, value string) string {
 
 // Remove a key from the Environment and return it's value
 func (e *Environment) Remove(key string) string {
-	value := e.Get(key)
-	delete(e.env, normalizeKeyName(key))
+	value, ok := e.Get(key)
+	if ok {
+		delete(e.env, normalizeKeyName(key))
+	}
 	return value
 }
 
@@ -77,7 +82,7 @@ func (e *Environment) Diff(other *Environment) *Environment {
 	diff := &Environment{env: make(map[string]string)}
 
 	for k, v := range e.env {
-		if other.Get(k) != v {
+		if other, _ := other.Get(k); other != v {
 			diff.Set(k, v)
 		}
 	}

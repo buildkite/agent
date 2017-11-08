@@ -25,7 +25,10 @@ func TestEnvironmentSet(t *testing.T) {
 	env := FromSlice([]string{})
 
 	env.Set("    THIS_IS_THE_BEST   \n\n", "\"IT SURE IS\"\n\n")
-	assert.Equal(t, env.Get("    THIS_IS_THE_BEST   \n\n"), "\"IT SURE IS\"\n\n")
+
+	v, ok := env.Get("    THIS_IS_THE_BEST   \n\n")
+	assert.Equal(t, v, "\"IT SURE IS\"\n\n")
+	assert.True(t, ok)
 }
 
 func TestEnvironmentGetBool(t *testing.T) {
@@ -48,9 +51,15 @@ func TestEnvironmentGetBool(t *testing.T) {
 func TestEnvironmentRemove(t *testing.T) {
 	env := FromSlice([]string{"FOO=bar"})
 
-	assert.Equal(t, env.Get("FOO"), "bar")
+	v, ok := env.Get("FOO")
+	assert.Equal(t, v, "bar")
+	assert.True(t, ok)
+
 	assert.Equal(t, env.Remove("FOO"), "bar")
-	assert.Equal(t, env.Get(""), "")
+
+	v, ok = env.Get("FOO")
+	assert.Equal(t, v, "")
+	assert.False(t, ok)
 }
 
 func TestEnvironmentMerge(t *testing.T) {
