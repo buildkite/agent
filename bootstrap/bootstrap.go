@@ -484,13 +484,24 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
+	var removeCheckoutDir = func() error {
+		b.shell.Commentf("Removing %s", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		if err := os.RemoveAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
+			return fmt.Errorf("Failed to remove \"%s\" (%s)", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+		}
+		return nil
+	}
+
+	var createCheckoutDir = func() error {
+		b.shell.Commentf("Creating \"%s\"", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
+		return os.MkdirAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+	}
+
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		b.shell.Headerf("Cleaning pipeline checkout")
-		b.shell.Commentf("Removing %s", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-
-		if err := os.RemoveAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
-			return fmt.Errorf("Failed to remove \"%s\" (%s)", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+		if err := removeCheckoutDir(); err != nil {
+			return err
 		}
 	}
 
@@ -498,13 +509,25 @@ func (b *Bootstrap) CheckoutPhase() error {
 
 	// Create the build directory
 	if !fileExists(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
-		b.shell.Commentf("Creating \"%s\"", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		os.MkdirAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+		if err := createCheckoutDir(); err != nil {
+			return err
+		}
 	}
 
 	// Change to the new build checkout path
 	if err := b.shell.Chdir(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
 		return err
+	}
+
+	// Check if the checkout is working, sometimes we get broken git checkouts if there was a previous failure
+	if _, err := gitRevParse(b.shell); err != nil {
+		b.shell.Commentf("Previous checkout seems to be an invalid git repository, deleting and re-creating")
+		if err := removeCheckoutDir(); err != nil {
+			return err
+		}
+		if err := createCheckoutDir(); err != nil {
+			return err
+		}
 	}
 
 	// There can only be one checkout hook, either plugin or global, in that order
