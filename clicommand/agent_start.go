@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -36,7 +37,7 @@ type AgentStartConfig struct {
 	Priority                     string   `cli:"priority"`
 	DisconnectAfterJob           bool     `cli:"disconnect-after-job"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout"`
-	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath" validate:"required"`
+	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
@@ -170,7 +171,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
-			Value:  "buildkite-agent bootstrap",
+			Value:  "",
 			Usage:  "Path to the bootstrap script",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
@@ -269,6 +270,11 @@ var AgentStartCommand = cli.Command{
 		// yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
+		}
+
+		// Set a useful default for the bootstrap script
+		if cfg.BootstrapScript == "" {
+			cfg.BootstrapScript = fmt.Sprintf("%q bootstrap", os.Args[0])
 		}
 
 		// Make sure the DisconnectAfterJobTimeout value is correct
