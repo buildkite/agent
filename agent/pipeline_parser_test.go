@@ -90,6 +90,34 @@ steps:
 	assert.Equal(t, `Failed to parse JSON: unexpected end of JSON input`, fmt.Sprintf("%s", err))
 }
 
+func TestPipelineParserInterpolatesKeysAsWellAsValues(t *testing.T) {
+	var pipeline = `{
+		"env": {
+			"${FROM_ENV}TEST1": "MyTest",
+			"TEST2": "${FROM_ENV}"
+		}
+	}`
+
+	var decoded struct {
+		Env map[string]string `json:"env"`
+	}
+
+	environ := env.FromSlice([]string{`FROM_ENV=llamas`})
+
+	result, err := PipelineParser{Pipeline: []byte(pipeline), Env: environ}.Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = decodeIntoStruct(&decoded, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t, `MyTest`, decoded.Env["llamasTEST1"])
+	assert.Equal(t, `llamas`, decoded.Env["TEST2"])
+}
+
 func TestPipelineParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	var pipeline = `{
 		"env": {

@@ -240,7 +240,16 @@ func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error
 				return err
 			}
 
-			copy.SetMapIndex(key, copyValue)
+			// Also interpolate the key if it's a string
+			if key.Kind() == reflect.String {
+				interpolatedKey, err := interpolate.Interpolate(p.Env, key.Interface().(string))
+				if err != nil {
+					return err
+				}
+				copy.SetMapIndex(reflect.ValueOf(interpolatedKey), copyValue)
+			} else {
+				copy.SetMapIndex(key, copyValue)
+			}
 		}
 
 	// If it is a string interpolate it (yay finally we're doing what we came for)
