@@ -83,6 +83,7 @@ func (m *Mock) invoke(call *proxy.Call) {
 	var invocation = Invocation{
 		Args: call.Args,
 		Env:  call.Env,
+		Dir:  call.Dir,
 	}
 
 	// Before we execute any invocations, run the before funcs
@@ -283,6 +284,7 @@ func (m *Mock) Close() error {
 type Invocation struct {
 	Args        []string
 	Env         []string
+	Dir         string
 	Expectation *Expectation
 }
 
