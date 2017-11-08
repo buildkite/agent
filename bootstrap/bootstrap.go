@@ -542,6 +542,11 @@ func (b *Bootstrap) CheckoutPhase() error {
 		}
 	default:
 		if err := b.defaultCheckoutPhase(); err != nil {
+			// Just to be certain, if we aren't in debug mode, let's nuke the checkout directory
+			// so that a partial checkout doesn't poison future builds
+			if !b.Debug {
+				_ = removeCheckoutDir()
+			}
 			return err
 		}
 	}
