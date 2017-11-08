@@ -68,13 +68,13 @@ func runDeprecatedDockerIntegration(sh *shell.Shell, scriptPath string) error {
 }
 
 func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
-	if container := sh.Env.Get(`DOCKER_CONTAINER`); container != "" {
+	if container, ok := sh.Env.Get(`DOCKER_CONTAINER`); ok {
 		sh.Printf("~~~ Cleaning up Docker containers")
 
 		if err := sh.Run("docker", "rm", "-f", "-v", container); err != nil {
 			return err
 		}
-	} else if projectName := sh.Env.Get(`COMPOSE_PROJ_NAME`); projectName != "" {
+	} else if projectName, ok := sh.Env.Get(`COMPOSE_PROJ_NAME`); ok {
 		sh.Printf("~~~ Cleaning up Docker containers")
 
 		// Friendly kill
@@ -95,10 +95,11 @@ func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
 // runDockerCommand executes a script inside a docker container that is built as needed
 // Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L439
 func runDockerCommand(sh *shell.Shell, scriptPath string) error {
-	dockerContainer := fmt.Sprintf("buildkite_%s_container", sh.Env.Get(`BUILDKITE_JOB_ID`))
-	dockerImage := fmt.Sprintf("buildkite_%s_image", sh.Env.Get(`BUILDKITE_JOB_ID`))
+	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
+	dockerContainer := fmt.Sprintf("buildkite_%s_container", jobId)
+	dockerImage := fmt.Sprintf("buildkite_%s_image", jobId)
 
-	dockerFile := sh.Env.Get(`BUILDKITE_DOCKER_FILE`)
+	dockerFile, _ := sh.Env.Get(`BUILDKITE_DOCKER_FILE`)
 	if dockerFile == "" {
 		dockerFile = "Dockerfile"
 	}
@@ -122,11 +123,12 @@ func runDockerCommand(sh *shell.Shell, scriptPath string) error {
 // runDockerComposeCommand executes a script with docker-compose
 // Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L462
 func runDockerComposeCommand(sh *shell.Shell, scriptPath string) error {
-	composeContainer := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
+	composeContainer, _ := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
+	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
 
 	// Compose strips dashes and underscores, so we'll remove them
 	// to match the docker container names
-	projectName := strings.Replace(fmt.Sprintf("buildkite%s", sh.Env.Get(`BUILDKITE_JOB_ID`)), "-", "", -1)
+	projectName := strings.Replace(fmt.Sprintf("buildkite%s", jobId), "-", "", -1)
 
 	sh.Env.Set(`COMPOSE_PROJ_NAME`, projectName)
 	sh.Headerf(":docker: Building Docker images")
@@ -148,7 +150,7 @@ func runDockerComposeCommand(sh *shell.Shell, scriptPath string) error {
 func runDockerCompose(sh *shell.Shell, projectName string, commandArgs ...string) error {
 	args := []string{}
 
-	composeFile := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_FILE`)
+	composeFile, _ := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_FILE`)
 	if composeFile == "" {
 		composeFile = "docker-compose.yml"
 	}

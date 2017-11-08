@@ -92,8 +92,9 @@ func (b *Bootstrap) Start() int {
 	}
 
 	// Use the exit code from the command phase
-	exitStatus, _ := strconv.Atoi(b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`))
-	return exitStatus
+	exitStatus, _ := b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`)
+	exitStatusInt, _ := strconv.Atoi(exitStatus)
+	return exitStatusInt
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -272,7 +273,8 @@ func (b *Bootstrap) setUp() error {
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if b.BinPath != "" {
-		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), b.shell.Env.Get("PATH")))
+		path, _ := b.shell.Env.Get("PATH")
+		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), path))
 	}
 
 	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
@@ -484,17 +486,19 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
+	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
 	var removeCheckoutDir = func() error {
-		b.shell.Commentf("Removing %s", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		if err := os.RemoveAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
-			return fmt.Errorf("Failed to remove \"%s\" (%s)", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), err)
+		b.shell.Commentf("Removing %s", checkoutPath)
+		if err := os.RemoveAll(checkoutPath); err != nil {
+			return fmt.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
 		}
 		return nil
 	}
 
 	var createCheckoutDir = func() error {
-		b.shell.Commentf("Creating \"%s\"", b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"))
-		return os.MkdirAll(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"), 0777)
+		b.shell.Commentf("Creating \"%s\"", checkoutPath)
+		return os.MkdirAll(checkoutPath, 0777)
 	}
 
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
@@ -508,14 +512,14 @@ func (b *Bootstrap) CheckoutPhase() error {
 	b.shell.Headerf("Preparing build directory")
 
 	// Create the build directory
-	if !fileExists(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")) {
+	if !fileExists(checkoutPath) {
 		if err := createCheckoutDir(); err != nil {
 			return err
 		}
 	}
 
 	// Change to the new build checkout path
-	if err := b.shell.Chdir(b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")); err != nil {
+	if err := b.shell.Chdir(checkoutPath); err != nil {
 		return err
 	}
 
@@ -556,7 +560,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
-	previousCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	previousCheckoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run post-checkout hooks
 	if err := b.executeGlobalHook("post-checkout"); err != nil {
@@ -572,7 +576,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 	}
 
 	// Capture the new checkout path so we can see if it's changed.
-	newCheckoutPath := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	newCheckoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// If the working directory has been changed by a hook, log and switch to it
 	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
@@ -711,7 +715,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		return err
 	}
 
-	if b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN") == "" {
+	if _, hasToken := b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
 		b.shell.Warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
 		return nil
 	}
