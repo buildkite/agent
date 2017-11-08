@@ -15,6 +15,12 @@
 			"revisionTime": "2017-02-17T01:53:35Z"
 		},
 		{
+			"checksumSHA1": "fmX02MaNcpetPq33vKO09KmZ64A=",
+			"path": "github.com/buildkite/interpolate",
+			"revision": "90db4cdaceb18147784c48c2350fbd53fb69881b",
+			"revisionTime": "2017-11-08T04:00:46Z"
+		},
+		{
 			"checksumSHA1": "bplZOqTp6JAbkn25zHEPIob25WI=",
 			"path": "github.com/codegangsta/cli",
 			"revision": "2526b57c56f30b50466c96c4133b1a4ad0f0191f",
