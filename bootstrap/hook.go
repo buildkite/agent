@@ -111,7 +111,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	h.scriptFile.Close()
 
 	// Make script executable
-	if err = addExecutePermissiontoFile(h.scriptFile.Name()); err != nil {
+	if err = addExecutePermissionToFile(h.scriptFile.Name()); err != nil {
 		return h, err
 	}
 
