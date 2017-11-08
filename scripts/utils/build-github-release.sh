@@ -56,6 +56,9 @@ else
   cp $BINARY_PATH $TMP_RELEASE_DIRECTORY/buildkite-agent
   chmod +x $TMP_RELEASE_DIRECTORY/buildkite-agent
 
+  info "Copying bootstrap"
+  cp $PACKAGING_DIRECTORY/linux/root/usr/share/buildkite-agent/bootstrap.sh $TMP_RELEASE_DIRECTORY
+
   info "Copying config"
   cp $PACKAGING_DIRECTORY/github/linux/buildkite-agent.cfg $TMP_RELEASE_DIRECTORY
 
