@@ -139,24 +139,24 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 
 	// Get changed environent
-	changes, err := script.ChangedEnvironment()
+	changes, err := script.Changes()
 	if err != nil {
 		return errors.Wrapf(err, "Failed to get environment")
 	}
 
 	// Finally, apply changes to the current shell and config
-	b.applyEnvironmentChanges(changes)
+	b.applyEnvironmentChanges(changes.Env, changes.Dir)
 	return nil
 }
 
-func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment) {
-	// `environ` shouldn't ever be `nil`, but we'll just be cautious and guard against it.
-	if environ == nil {
-		return
+func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string) {
+	if dir != "" {
+		b.shell.Commentf("Applying working directory change: %s", dir)
+		_ = b.shell.Chdir(dir)
 	}
 
 	// Do we even have any environment variables to change?
-	if environ.Length() > 0 {
+	if environ != nil && environ.Length() > 0 {
 		// First, let see any of the environment variables are supposed
 		// to change the bootstrap configuration at run time.
 		bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)

@@ -105,6 +105,7 @@ func startServer(p *Proxy) (*server, error) {
 		handlers: map[int64]callHandler{},
 	}
 
+	debugf("Starting server on %s", l.Addr().String())
 	go http.Serve(l, s)
 	return s, nil
 }

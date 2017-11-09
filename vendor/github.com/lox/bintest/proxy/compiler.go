@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 //go:generate go-bindata -pkg proxy data/
@@ -31,11 +32,14 @@ func compile(dest string, src string, vars []string) error {
 		args = append(args, strings.Join(vars, " "))
 	}
 
+	t := time.Now()
+
 	output, err := exec.Command("go", append(args, src)...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Compile of %s failed: %s", src, output)
 	}
 
+	debugf("Compile %#v finished in %s", args, time.Now().Sub(t))
 	return nil
 }
 

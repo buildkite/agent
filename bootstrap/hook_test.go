@@ -4,6 +4,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"testing"
@@ -33,13 +34,58 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	afterEnv, err := wrapper.ChangedEnvironment()
+	changes, err := wrapper.Changes()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(afterEnv, env.FromSlice([]string{"LLAMAS=rock", "Alpacas=are ok"})) {
-		t.Fatalf("Unexpected env in %#v", afterEnv)
+	if !reflect.DeepEqual(changes.Env, env.FromSlice([]string{"LLAMAS=rock", "Alpacas=are ok"})) {
+		t.Fatalf("Unexpected env in %#v", changes.Env)
+	}
+}
+
+func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skipf("Not tested on windows yet")
+	}
+
+	t.Parallel()
+
+	tempDir, err := ioutil.TempDir("", "hookwrapperdir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	wrapper := newTestHookWrapper(t, []string{
+		"#!/bin/bash",
+		"mkdir mysubdir",
+		"cd mysubdir",
+		"echo hello world",
+	})
+	defer os.Remove(wrapper.Path())
+
+	sh := newTestShell(t)
+	if err := sh.Chdir(tempDir); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := sh.RunScript(wrapper.Path(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	changes, err := wrapper.Changes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected, err := filepath.EvalSymlinks(filepath.Join(tempDir, "mysubdir"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if changes.Dir != expected {
+		t.Fatalf("Expected working dir of %q, got %q", expected, changes.Dir)
 	}
 }
 

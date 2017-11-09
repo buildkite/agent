@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,6 +43,10 @@ func New(path string) (*Proxy, error) {
 			return nil, fmt.Errorf("Error creating temp dir: %v", err)
 		}
 		path = filepath.Join(tempDir, path)
+	}
+
+	if runtime.GOOS == "windows" && !strings.HasSuffix(path, ".exe") {
+		path += ".exe"
 	}
 
 	p := &Proxy{

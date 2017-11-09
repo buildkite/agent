@@ -11,6 +11,11 @@ import (
 	"github.com/buildkite/agent/env"
 )
 
+const (
+	hookExitStatusEnv = `BUILDKITE_HOOK_EXIT_STATUS`
+	hookWorkingDirEnv = `BUILDKITE_HOOK_WORKING_DIR`
+)
+
 // Hooks get "sourced" into the bootstrap in the sense that they get the
 // environment set for them and then we capture any extra environment variables
 // that are exported in the script.
@@ -29,6 +34,12 @@ type hookScriptWrapper struct {
 	scriptFile    *os.File
 	beforeEnvFile *os.File
 	afterEnvFile  *os.File
+	beforeWd      string
+}
+
+type hookScriptChanges struct {
+	Env *env.Environment
+	Dir string
 }
 
 func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
@@ -69,6 +80,11 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", h.hookPath, err)
 	}
 
+	h.beforeWd, err = os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
 	// Create the hook runner code
 	var script string
 	if runtime.GOOS == "windows" {
@@ -76,16 +92,18 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
 			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
 			"CALL \"" + absolutePathToHook + "\"\n" +
-			"SET BUILDKITE_LAST_HOOK_EXIT_STATUS=!ERRORLEVEL!\n" +
+			"SET " + hookExitStatusEnv + "=!ERRORLEVEL!\n" +
+			"SET " + hookWorkingDirEnv + "=%CD%\n" +
 			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
-			"EXIT %BUILDKITE_LAST_HOOK_EXIT_STATUS%"
+			"EXIT %" + hookExitStatusEnv + "%"
 	} else {
 		script = "#!/bin/bash\n" +
 			"export -p > \"" + h.beforeEnvFile.Name() + "\"\n" +
 			". \"" + absolutePathToHook + "\"\n" +
-			"BUILDKITE_LAST_HOOK_EXIT_STATUS=$?\n" +
+			"export " + hookExitStatusEnv + "=$?\n" +
+			"export " + hookWorkingDirEnv + "=$PWD\n" +
 			"export -p > \"" + h.afterEnvFile.Name() + "\"\n" +
-			"exit $BUILDKITE_LAST_HOOK_EXIT_STATUS"
+			"exit $" + hookExitStatusEnv
 	}
 
 	// Write the hook script to the runner then close the file so we can run it
@@ -112,20 +130,25 @@ func (h *hookScriptWrapper) Close() {
 	os.Remove(h.afterEnvFile.Name())
 }
 
-// ChangedEnvironment returns and environment variables exported during the hook run
-func (h *hookScriptWrapper) ChangedEnvironment() (*env.Environment, error) {
+// Changes returns the changes in the environment and working dir after the hook script runs
+func (h *hookScriptWrapper) Changes() (hookScriptChanges, error) {
 	beforeEnvContents, err := ioutil.ReadFile(h.beforeEnvFile.Name())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read \"%s\" (%s)", h.beforeEnvFile.Name(), err)
+		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", h.beforeEnvFile.Name(), err)
 	}
 
 	afterEnvContents, err := ioutil.ReadFile(h.afterEnvFile.Name())
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read \"%s\" (%s)", h.afterEnvFile.Name(), err)
+		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", h.afterEnvFile.Name(), err)
 	}
 
 	beforeEnv := env.FromExport(string(beforeEnvContents))
 	afterEnv := env.FromExport(string(afterEnvContents))
+	diff := afterEnv.Diff(beforeEnv)
+	wd := diff.Get(hookWorkingDirEnv)
 
-	return afterEnv.Diff(beforeEnv), nil
+	diff.Remove(hookExitStatusEnv)
+	diff.Remove(hookWorkingDirEnv)
+
+	return hookScriptChanges{Env: diff, Dir: wd}, nil
 }
