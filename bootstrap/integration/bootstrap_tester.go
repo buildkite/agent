@@ -256,7 +256,7 @@ func (b *BootstrapTester) CheckMocks(t *testing.T) {
 }
 
 func (b *BootstrapTester) CheckoutDir() string {
-	return filepath.Join(b.BuildDir, "test-agent", "test-project")
+	return filepath.Join(b.BuildDir, "test-agent", "test", "test-project")
 }
 
 func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {

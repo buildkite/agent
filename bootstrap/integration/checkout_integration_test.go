@@ -31,6 +31,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
+		{"rev-parse"},
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
@@ -199,4 +200,29 @@ func TestForcingACleanCheckout(t *testing.T) {
 	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
 		t.Fatalf("Should have removed checkout dir")
 	}
+}
+
+func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// Create an existing checkout
+	out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, tester.CheckoutDir())
+	if err != nil {
+		t.Fatalf("Clone failed with %s", out)
+	}
+
+	if err = os.RemoveAll(filepath.Join(tester.CheckoutDir(), ".git", "refs")); err != nil {
+		t.Fatal(err)
+	}
+
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
+	tester.RunAndCheck(t)
 }

@@ -106,6 +106,10 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	return urls, nil
 }
 
+func gitRevParse(sh *shell.Shell) (string, error) {
+	return sh.RunAndCapture("git", "rev-parse")
+}
+
 var (
 	hasSchemePattern  = regexp.MustCompile("^[^:]+://")
 	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
