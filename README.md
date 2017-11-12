@@ -6,7 +6,7 @@ The buildkite-agent is a small, reliable, and cross-platform build runner that m
 
 Full documentation is available at [buildkite.com/docs/agent](https://buildkite.com/docs/agent)
 
-```
+```bash
 $ buildkite-agent --help
 Usage:
 
@@ -32,17 +32,19 @@ The agents page on Buildkite has personalised instructions for installing the ag
 
 To start an agent all you need is your agent token, which you can find on your Agents page within Buildkite.
 
-```
-$ buildkite-agent start --token
+```bash
+buildkite-agent start --token
 ```
 
 ## Development
 
+These instructions assume you are running a recent macOS, but could easily be adapted to Linux and Windows.
+
 ### With Docker
 
 ```bash
-$ docker-compose run agent bash
-root@d854f845511a:/go/src/github.com/buildkite/agent# go run *.go start --token xxx --debug
+docker-compose run agent bash
+root@d854f845511a:/go/src/github.com/buildkite/agent# go run main.go start --token xxx --debug
 ```
 
 ### Without Docker
@@ -52,12 +54,12 @@ root@d854f845511a:/go/src/github.com/buildkite/agent# go run *.go start --token 
 brew install go
 
 # Setup your GOPATH
-export GOPATH="$HOME/Code/go"
-export PATH="$HOME/Code/go/bin:$PATH"
+export GOPATH="$HOME/go"
+export PATH="$HOME/go/bin:$PATH"
 
 # Checkout the code
 go get github.com/buildkite/agent
-cd "$GOPATH/src/github.com/buildkite/agent"
+cd "$HOME/go/src/github.com/buildkite/agent"
 ```
 
 To test the commands locally:
@@ -66,36 +68,29 @@ To test the commands locally:
 go run main.go start --debug --token "abc123"
 ```
 
-### Dependency management
+### Testing Windows via Vagrant and VMWare Fusion
 
-We're using [govendor](https://github.com/kardianos/govendor) to manage our Go depenencies. Install it with:
+This requires either Virtualbox (free) or VMWare Fusion (paid) + Vagrant VMWare Fusion plugin (paid).
 
-```bash
-go get github.com/kardianos/govendor
-```
-
-If you introduce a new package, just add the import to your source file and run:
+It assumes that you have Docker for Mac or similar installed. Based on [StefanScherer/windows-docker-machine](https://github.com/StefanScherer/windows-docker-machine).
 
 ```bash
-govendor fetch +missing
+brew cask install vmware-fusion vagrant
+vagrant plugin install vagrant-vmware-fusion
+vagrant up --provider vmware_fusion
+eval $(docker-machine env windows-2016)
+docker-compose -f docker-compose.windows.yml run agent cmd
+C:\gopath\src\github.com\buildkite\agent> go run main.go start --token xxx --debug
 ```
-
-Or explicitly fetch it with a version using:
-
-```bash
-govendor fetch github.com/buildkite/go-buildkite@v2.0.0
-```
-
-Check out the [govendor repo](https://github.com/kardianos/govendor) and [dev guide](https://github.com/kardianos/govendor/blob/master/doc/dev-guide.md) for more docs.
 
 ## Contributing
 
 1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+1. Create your feature branch (`git checkout -b my-new-feature`)
+1. Commit your changes (`git commit -am 'Add some feature'`)
+1. Push to the branch (`git push origin my-new-feature`)
+1. Create new Pull Request
 
 ## Copyright
 
-Copyright (c) 2014-2016 Keith Pitt, Buildkite Pty Ltd. See LICENSE for details.
+Copyright (c) 2014-2017 Buildkite Pty Ltd. See [LICENSE](./LICENSE.txt) for details.
