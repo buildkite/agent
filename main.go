@@ -78,6 +78,13 @@ func main() {
 			},
 		},
 		{
+			Name:  "secret",
+			Usage: "Retrieve securely stored secrets",
+			Subcommands: []cli.Command{
+				clicommand.SecretGetCommand,
+			},
+		},
+		{
 			Name:  "pipeline",
 			Usage: "Make changes to the pipeline of the currently running build",
 			Subcommands: []cli.Command{
