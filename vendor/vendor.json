@@ -87,6 +87,12 @@
 			"revisionTime": "2017-01-30T11:31:45Z"
 		},
 		{
+			"checksumSHA1": "NJXzp9B6k1R3G4QrrWm/3wF9kc8=",
+			"path": "github.com/urfave/cli",
+			"revision": "44cb242eeb4d76cc813fdc69ba5c4b224677e799",
+			"revisionTime": "2017-11-04T02:35:40Z"
+		},
+		{
 			"checksumSHA1": "MlEHIE/60sB86Lmf0MPTIXHzKzE=",
 			"path": "golang.org/x/crypto/curve25519",
 			"revision": "81e90905daefcd6fd217b62423c0908922eadb30",
