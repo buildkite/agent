@@ -1,0 +1,18 @@
+version: '2.1'
+
+services:
+  agent:
+    build:
+      dockerfile: Dockerfile-windows
+      context: .
+    working_dir: C:/gopath/src/github.com/buildkite/agent
+    # volumes:
+    #   - ./:C:/gopath/src/github.com/buildkite/agent
+    environment:
+      BUILDKITE_BUILD_NUMBER:
+
+
+networks:
+  default:
+    external:
+      name: nat
