@@ -91,8 +91,8 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 		return executable, nil
 	}
 
-	var envPath = s.Env.Get("PATH")
-	var fileExtensions = s.Env.Get("PATHEXT") // For searching .exe, .bat, etc on Windows
+	envPath, _ := s.Env.Get("PATH")
+	fileExtensions, _ := s.Env.Get("PATHEXT") // For searching .exe, .bat, etc on Windows
 
 	// Use our custom lookPath that takes a specific path
 	absolutePath, err := lookPath(executable, envPath, fileExtensions)

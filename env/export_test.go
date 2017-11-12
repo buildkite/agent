@@ -41,10 +41,10 @@ declare -x WITH_NEW_LINE="i have a \\n new line"
 declare -x CARRIAGE_RETURN="i have a \\r carriage"
 declare -x TOTES="with a \" quote"`)
 
-	assert.Equal(t, "i love $money", env.Get("DOLLARS"))
-	assert.Equal(t, `i have a \n new line`, env.Get("WITH_NEW_LINE"))
-	assert.Equal(t, `i have a \r carriage`, env.Get("CARRIAGE_RETURN"))
-	assert.Equal(t, `with a " quote`, env.Get("TOTES"))
+	assertEqualEnv(t, "DOLLARS", "i love $money", env)
+	assertEqualEnv(t, "WITH_NEW_LINE", `i have a \n new line`, env)
+	assertEqualEnv(t, "CARRIAGE_RETURN", `i have a \r carriage`, env)
+	assertEqualEnv(t, "TOTES", `with a " quote`, env)
 
 	// Handles environment variables with no "=" in them
 	env = FromExport(`declare -x THING_TOTES
@@ -64,15 +64,15 @@ declare -x PATH="/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbi
 declare -x PWD="/"
 `)
 
-	assert.Equal(t, "en_US.UTF-8", env.Get("LANG"))
-	assert.Equal(t, `buildkite-agent`, env.Get("LOGNAME"))
-	assert.Equal(t, `this is my value`, env.Get("SOME_VALUE"))
-	assert.Equal(t, ``, env.Get("OLDPWD"))
-	assert.Equal(t, "this is my value across\nnew\nlines", env.Get("SOME_OTHER_VALUE"))
-	assert.Equal(t, ``, env.Get("OLDPWD2"))
-	assert.Equal(t, "the next line is a string\ndeclare -x WITH_A_STRING=\"I'm a string!!\n", env.Get("GONNA_TRICK_YOU"))
-	assert.Equal(t, `/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, env.Get("PATH"))
-	assert.Equal(t, `/`, env.Get("PWD"))
+	assertEqualEnv(t, "LANG", "en_US.UTF-8", env)
+	assertEqualEnv(t, "LOGNAME", `buildkite-agent`, env)
+	assertEqualEnv(t, "SOME_VALUE", `this is my value`, env)
+	assertEqualEnv(t, "OLDPWD", ``, env)
+	assertEqualEnv(t, "SOME_OTHER_VALUE", "this is my value across\nnew\nlines", env)
+	assertEqualEnv(t, "OLDPWD2", ``, env)
+	assertEqualEnv(t, "GONNA_TRICK_YOU", "the next line is a string\ndeclare -x WITH_A_STRING=\"I'm a string!!\n", env)
+	assertEqualEnv(t, "PATH", `/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, env)
+	assertEqualEnv(t, "PWD", `/`, env)
 
 	// Disregards new lines at the start and end of the export
 	env = FromExport(`
@@ -88,10 +88,10 @@ declare -x TOTES="with a \" quote"
 
 `)
 
-	assert.Equal(t, "i love $money", env.Get("DOLLARS"))
-	assert.Equal(t, `i have a \n new line`, env.Get("WITH_NEW_LINE"))
-	assert.Equal(t, `i have a \r carriage`, env.Get("CARRIAGE_RETURN"))
-	assert.Equal(t, `with a " quote`, env.Get("TOTES"))
+	assertEqualEnv(t, "DOLLARS", "i love $money", env)
+	assertEqualEnv(t, "WITH_NEW_LINE", `i have a \n new line`, env)
+	assertEqualEnv(t, "CARRIAGE_RETURN", `i have a \r carriage`, env)
+	assertEqualEnv(t, "TOTES", `with a " quote`, env)
 
 	// Handles JSON
 	env = FromExport(`declare -x FOO="{
@@ -103,14 +103,14 @@ declare -x TOTES="with a \" quote"
   ]
 }"`)
 
-	assert.Equal(t, env.Get("FOO"), `{
+	assertEqualEnv(t, "FOO", `{
   "key": "test",
   "hello": [
     1,
     2,
     3
   ]
-}`)
+}`, env)
 
 	// Works with Windows output
 	env = FromExport(`SESSIONNAME=Console
@@ -149,4 +149,9 @@ USERDOMAIN=IE11WIN10
 		"TMP=C:\\Users\\IEUser\\AppData\\Local\\Temp",
 		"USERDOMAIN=IE11WIN10",
 	}, env.ToSlice())
+}
+
+func assertEqualEnv(t *testing.T, key string, expected string, env *Environment) {
+	v, _ := env.Get(key)
+	assert.Equal(t, expected, v)
 }

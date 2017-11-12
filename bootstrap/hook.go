@@ -111,7 +111,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	h.scriptFile.Close()
 
 	// Make script executable
-	if err = addExecutePermissiontoFile(h.scriptFile.Name()); err != nil {
+	if err = addExecutePermissionToFile(h.scriptFile.Name()); err != nil {
 		return h, err
 	}
 
@@ -145,7 +145,7 @@ func (h *hookScriptWrapper) Changes() (hookScriptChanges, error) {
 	beforeEnv := env.FromExport(string(beforeEnvContents))
 	afterEnv := env.FromExport(string(afterEnvContents))
 	diff := afterEnv.Diff(beforeEnv)
-	wd := diff.Get(hookWorkingDirEnv)
+	wd, _ := diff.Get(hookWorkingDirEnv)
 
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)

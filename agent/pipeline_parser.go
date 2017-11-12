@@ -10,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/interpolate"
 	"github.com/ghodss/yaml"
 )
 
@@ -64,11 +65,12 @@ func (p PipelineParser) interpolateEnvBlock(envMap map[string]interface{}) error
 			p.Env.Set(k, fmt.Sprintf("%v", tv))
 		}
 	}
+
 	// next do a pass of interpolation and read the results
 	for k, v := range envMap {
 		switch tv := v.(type) {
 		case string:
-			interpolated, err := p.Env.Interpolate(tv)
+			interpolated, err := interpolate.Interpolate(p.Env, tv)
 			if err != nil {
 				return err
 			}
@@ -238,12 +240,21 @@ func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error
 				return err
 			}
 
-			copy.SetMapIndex(key, copyValue)
+			// Also interpolate the key if it's a string
+			if key.Kind() == reflect.String {
+				interpolatedKey, err := interpolate.Interpolate(p.Env, key.Interface().(string))
+				if err != nil {
+					return err
+				}
+				copy.SetMapIndex(reflect.ValueOf(interpolatedKey), copyValue)
+			} else {
+				copy.SetMapIndex(key, copyValue)
+			}
 		}
 
 	// If it is a string interpolate it (yay finally we're doing what we came for)
 	case reflect.String:
-		interpolated, err := p.Env.Interpolate(original.Interface().(string))
+		interpolated, err := interpolate.Interpolate(p.Env, original.Interface().(string))
 		if err != nil {
 			return err
 		}
