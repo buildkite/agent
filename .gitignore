@@ -10,3 +10,4 @@
 /.agent.conf
 /.agent.*.conf
 /.buildkite-agent.cfg
+/.vagrant
