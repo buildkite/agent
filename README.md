@@ -83,6 +83,26 @@ docker-compose -f docker-compose.windows.yml run agent cmd
 C:\gopath\src\github.com\buildkite\agent> go run main.go start --token xxx --debug
 ```
 
+### Dependency management
+
+We're using [govendor](https://github.com/kardianos/govendor) to manage our Go dependencies. Install it with:
+
+```bash
+go get github.com/kardianos/govendor
+```
+
+If you introduce a new package, just add the import to your source file and run:
+
+```bash
+govendor fetch +missing
+```
+
+Or explicitly fetch it with a version using:
+
+```bash
+govendor fetch github.com/buildkite/go-buildkite@v2.0.0
+```
+
 ## Contributing
 
 1. Fork it
