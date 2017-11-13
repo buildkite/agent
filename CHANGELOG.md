@@ -4,12 +4,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## Unreleased (master)
+## [v3.0-beta.35](https://github.com/buildkite/agent/tree/v3.0-beta.35) (2017-11-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.34...v3.0-beta.35)
+
+### Added
+
+- Support nested interpolated variables [\#578](https://github.com/buildkite/agent/pull/578) (@lox)
+- Check for corrupt git repository before checkout [\#574](https://github.com/buildkite/agent/pull/574) (@lox)
 
 ### Fixed
 
+- Fix bug where non-truthy bool arguments failed silently [\#582](https://github.com/buildkite/agent/pull/582) (@lox)
+- Pass working directory changes between hooks [\#577](https://github.com/buildkite/agent/pull/577) (@lox)
+- Kill cancelled tasks with taskkill on windows [\#575](https://github.com/buildkite/agent/pull/575) (@adill)
+- Support hashed hosts in ssh known_hosts [\#579](https://github.com/buildkite/agent/pull/579) (@lox)
+
+## [v3.0-beta.34](https://github.com/buildkite/agent/tree/v3.0-beta.34) (2017-10-19)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.33...v3.0-beta.34)
+
+### Fixed
+
+- Fix bug where pipeline upload doesn't get environment passed correctly [\#567](https://github.com/buildkite/agent/pull/567) (@lox)
+- Only show "Running hook" if one exists [\#566](https://github.com/buildkite/agent/pull/566) (@lox)
 - Fix segfault when using custom artifact bucket and EC2 instance role credentials [\#563](https://github.com/buildkite/agent/pull/563) (@sj26)
 - Fix ssh keyscan of hosts with custom ports [\#565](https://github.com/buildkite/agent/pull/565) (@sj26)
+
+## [v2.6.7](https://github.com/buildkite/agent/releases/tag/v2.6.7) (2017-11-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v2.6.6...v2.6.7)
+
+### Added
+
+- Check for corrupt git repository before checkout [\#556](https://github.com/buildkite/agent/pull/556) (@lox)
+
+### Fixed
+
+- Kill cancelled tasks with taskkill on windows [\#571](https://github.com/buildkite/agent/pull/571) (@adill)
 
 ## [v2.6.6](https://github.com/buildkite/agent/releases/tag/v2.6.6) (2017-10-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v2.6.5...v2.6.6)
