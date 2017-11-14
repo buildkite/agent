@@ -82,8 +82,15 @@ func (p *Parser) parseExpression(stop ...rune) (Expression, error) {
 			continue
 		}
 
-		// If we run into a dollar sign, it's an expansion
-		if c == '$' {
+		// Ignore bash shell expansions
+		if strings.HasPrefix(p.input[p.pos:], `$(`) {
+			p.pos += 2
+			expr = append(expr, ExpressionItem{Text: `$(`})
+			continue
+		}
+
+		// If we run into a dollar sign and it's not the last char, it's an expansion
+		if c == '$' && p.pos < (len(p.input)-1) {
 			expansion, err := p.parseExpansion()
 			if err != nil {
 				return nil, err
@@ -92,12 +99,15 @@ func (p *Parser) parseExpression(stop ...rune) (Expression, error) {
 			continue
 		}
 
-		// Otherwise, we can scan as much as we can into text
+		// nibble a character, otherwise if it's a \ or a $ we can loop
+		c = p.nextRune()
+
+		// Scan as much as we can into text
 		text := p.scanUntil(func(r rune) bool {
 			return (r == '$' || r == '\\' || strings.ContainsRune(stopStr, r))
 		})
 
-		expr = append(expr, ExpressionItem{Text: text})
+		expr = append(expr, ExpressionItem{Text: string(c) + text})
 	}
 
 	return expr, nil
@@ -260,7 +270,7 @@ func (p *Parser) scanUntil(f func(rune) bool) string {
 	start := p.pos
 	for int(p.pos) < len(p.input) {
 		c, size := utf8.DecodeRuneInString(p.input[p.pos:])
-		if f(c) {
+		if c == utf8.RuneError || f(c) {
 			break
 		}
 		p.pos += size
@@ -270,7 +280,7 @@ func (p *Parser) scanUntil(f func(rune) bool) string {
 
 func (p *Parser) scanIdentifier() (string, error) {
 	if c := p.peekRune(); !unicode.IsLetter(c) {
-		return "", errors.New("Expected identifier to start with a letter")
+		return "", fmt.Errorf("Expected identifier to start with a letter, got %c", c)
 	}
 	var notIdentifierChar = func(r rune) bool {
 		return (!unicode.IsLetter(r) && !unicode.IsNumber(r) && r != '_')
