@@ -1,3 +1,6 @@
+env:
+  DRY_RUN: true # set to true to disable publishing releases
+
 steps:
   - name: ":hammer:"
     command: "scripts/tests.sh"
