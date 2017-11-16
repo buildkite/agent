@@ -112,12 +112,10 @@ steps:
 
   - wait
 
-  - block: ":shipit: Experimental release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
-
   - name: ":shipit: experimental"
     trigger: agent-release-experimental
     branches: "master show-version-in-block-steps"
-    async: true
+    async: false
     build:
       message: "Experimental release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
       commit: "${BUILDKITE_COMMIT}"
