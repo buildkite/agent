@@ -1,7 +1,7 @@
 steps:
   - block: ":shipit: Stable ${AGENT_VERSION}"
 
-  - name: ":s3: publish binaries"
+  - name: ":s3:"
     command: "scripts/publish-to-s3.sh"
     env:
       CODENAME: "stable"
@@ -16,7 +16,7 @@ steps:
     agents:
       queue: "deploy"
 
-  - name: ":debian: publish stable"
+  - name: ":debian:"
     command: "scripts/publish-debian-package.sh"
     env:
       CODENAME: "stable"
@@ -25,7 +25,7 @@ steps:
 
   - wait
 
-  - name: ":whale: :rocket:"
+  - name: ":whale:"
     trigger: docker-buildkite-agent
     async: true
     build:
