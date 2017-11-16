@@ -1,0 +1,73 @@
+steps:
+  - wait
+
+  - name: ":debian: build"
+    command: "scripts/build-debian-packages.sh"
+    artifact_paths: "deb/**/*"
+    agents:
+      queue: "deploy"
+
+  - name: ":github: :hammer:"
+    command: "scripts/build-github-release.sh"
+    artifact_paths: "releases/**/*"
+    plugins:
+      docker-compose#v1.5.0:
+        config: docker-compose.release.yml
+        run: github-release
+
+  - wait
+
+  - block: ":shipit: ${AGENT_VERSION} to Unstable"
+
+  - name: ":s3:"
+    command: "scripts/publish-to-s3.sh"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - name: ":octocat: :rocket:"
+    command: "scripts/github-release.sh"
+    agents:
+      queue: "deploy"
+
+  - name: ":redhat:"
+    command: "scripts/rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - name: ":debian:"
+    command: "scripts/publish-debian-package.sh"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  - name: ":whale:"
+    trigger: docker-buildkite-agent
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
+      env:
+        CODENAME: "stable"
+
+  - wait
+
+  - name: ":beer:"
+    command: "scripts/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  - name: ":pipeline:"
+    command: "scripts/upload-release-pipeline.sh stable"
+    branches: "master show-version-in-block-steps"

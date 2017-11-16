@@ -107,62 +107,17 @@ steps:
 
   - wait
 
-  - name: ":mag:"
-    command: "scripts/extract-agent-version-metadata.sh"
-
-  - wait
-
   - name: ":spiral_note_pad:"
     command: "scripts/check-changelog.sh"
 
   - wait
 
-  - name: ":debian: build"
-    command: "scripts/build-debian-packages.sh"
-    artifact_paths: "deb/**/*"
-    branches: "master"
-    agents:
-      queue: "deploy"
-
-  - name: ":github: :hammer:"
-    command: "scripts/build-github-release.sh"
-    artifact_paths: "releases/**/*"
-    branches: "master"
-    plugins:
-      docker-compose#v1.5.0:
-        config: docker-compose.release.yml
-        run: github-release
-
-  - wait
-
-  ## ---------------------------------------
-  ## Publish to experimental
-
-  - name: ":s3: experimental"
-    command: "scripts/publish-to-s3.sh"
-    branches: "master"
-    env:
-      CODENAME: "experimental"
-    agents:
-      queue: "deploy"
-
-  - name: ":redhat: experimental"
-    command: "scripts/rpm-package.sh"
-    branches: "master"
-    artifact_paths: "rpm/**/*"
-    env:
-      CODENAME: "experimental"
-    agents:
-      queue: "deploy"
-
-  - name: ":debian: experimental"
-    command: "scripts/publish-debian-package.sh"
-    branches: "master"
-    env:
-      CODENAME: "experimental"
-    agents:
-      queue: "deploy"
-
-  - name: ":pipeline:"
-    command: "scripts/upload-release-pipeline.sh unstable"
+  - name: ":shipit: experimental"
+    trigger: agent-release-experimental
     branches: "master show-version-in-block-steps"
+    async: true
+    build:
+      message: "Experimental release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
+
