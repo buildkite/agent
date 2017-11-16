@@ -130,8 +130,8 @@ steps:
 
   - name: ":shipit: experimental"
     trigger: agent-release-experimental
-    branches: "master show-version-in-block-steps"
     async: false
+    branches: "master show-version-in-block-steps"
     build:
       message: "Experimental release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
       commit: "${BUILDKITE_COMMIT}"
