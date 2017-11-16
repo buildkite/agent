@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-
 echo '+++ Extracting agent version source code'
 
 export AGENT_VERSION; AGENT_VERSION=$(awk -F\" '/var baseVersion string = "/ {print $2}' agent/version.go)

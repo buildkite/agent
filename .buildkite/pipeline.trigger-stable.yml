@@ -1,0 +1,16 @@
+steps:
+  - name: ":shipit:"
+    trigger: agent-release-stable
+    async: false
+    branches: "master show-version-in-block-steps"
+    build:
+      message: "Stable release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
+      meta_data:
+        agent-artifacts-build: "${BUILDKITE_BUILD_ID}"
+        agent-version: "${AGENT_VERSION}"
+        agent-version-build: "${BUILD_VERSION}"
+        agent-version-full:  "${FULL_AGENT_VERSION}"
+      env:
+        DRY_RUN: "${DRY_RUN:-false}"
