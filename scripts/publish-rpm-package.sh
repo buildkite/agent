@@ -19,8 +19,7 @@ echo '--- Getting agent version from build meta data'
 export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
 export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
-export ARTIFACTS_BUILD=$(buildkite-agent meta-data get \
-  "agent-artifacts-build" --default value "$BUILDKITE_BUILD_ID")
+export ARTIFACTS_BUILD=$(buildkite-agent meta-data get "agent-artifacts-build")
 
 YUM_PATH=/yum.buildkite.com
 

@@ -131,7 +131,7 @@ steps:
 
   - wait
 
-  - name: ":shipit: experimental ${AGENT_VERSION}"
+  - name: ":shipit: edge ${AGENT_VERSION}"
     trigger: agent-release-experimental
     async: false
     branches: "master show-version-in-block-steps"
@@ -148,13 +148,40 @@ steps:
         DRY_RUN: "${DRY_RUN:-false}"
 
   - wait
+  - block: ":shipit: beta ${AGENT_VERSION}"
 
-  - name: ":pipeline:"
-    command: "scripts/upload-pipeline.sh .buildkite/pipeline.trigger-unstable.yml"
+  - name: ":rocket:"
+    trigger: agent-release-unstable
+    async: false
+    branches: "master show-version-in-block-steps"
+    build:
+      message: "Unstable release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
+      meta_data:
+        agent-artifacts-build: "${BUILDKITE_BUILD_ID}"
+        agent-version: "${AGENT_VERSION}"
+        agent-version-build: "${BUILD_VERSION}"
+        agent-version-full:  "${FULL_AGENT_VERSION}"
+      env:
+        DRY_RUN: "${DRY_RUN:-false}"
 
   - wait
+  - block: ":shipit: stable ${AGENT_VERSION}"
 
-  - name: ":pipeline:"
-    command: "scripts/upload-pipeline-if-stable.sh .buildkite/pipeline.trigger-stable.yml"
-
+  - name: ":rocket:"
+    trigger: agent-release-stable
+    async: false
+    branches: "master show-version-in-block-steps"
+    build:
+      message: "Stable release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
+      meta_data:
+        agent-artifacts-build: "${BUILDKITE_BUILD_ID}"
+        agent-version: "${AGENT_VERSION}"
+        agent-version-build: "${BUILD_VERSION}"
+        agent-version-full:  "${FULL_AGENT_VERSION}"
+      env:
+        DRY_RUN: "${DRY_RUN:-false}"
 

@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e
 
-artifacts_build=$(buildkite-agent meta-data get \
-  "agent-artifacts-build" --default value "$BUILDKITE_BUILD_ID")
+artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build" )
 
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
