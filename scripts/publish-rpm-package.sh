@@ -11,6 +11,8 @@ echo '--- Getting agent version from build meta data'
 export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
 export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
+export ARTIFACTS_BUILD=$(buildkite-agent meta-data get \
+  "agent-artifacts-build" --default value "$BUILDKITE_BUILD_ID")
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
@@ -24,7 +26,7 @@ function build() {
   BINARY_FILENAME="pkg/buildkite-agent-$1-$2"
 
   # Download the built binary artifact
-  buildkite-agent artifact download $BINARY_FILENAME .
+  buildkite-agent artifact download --build "$ARTIFACTS_BUILD" $BINARY_FILENAME .
 
   # Make sure it's got execute permissions so we can extract the version out of it
   chmod +x $BINARY_FILENAME
@@ -58,9 +60,9 @@ build "linux" "amd64"
 build "linux" "386"
 
 # Move the files to the right places
-publish "x86_64"
-publish "i386"
+#publish "x86_64"
+#publish "i386"
 
 # Sync back our changes to S3
-echo "--- Syncing local $YUM_PATH changes back to s3://$RPM_S3_BUCKET"
-aws --region us-east-1 s3 sync "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --acl "public-read" --no-guess-mime-type --exclude "lost+found"
+#echo "--- Syncing local $YUM_PATH changes back to s3://$RPM_S3_BUCKET"
+#aws --region us-east-1 s3 sync "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --acl "public-read" --no-guess-mime-type --exclude "lost+found"

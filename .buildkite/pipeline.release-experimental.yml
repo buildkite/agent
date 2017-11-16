@@ -7,7 +7,7 @@ steps:
       queue: "deploy"
 
   - name: ":redhat: publish rpms"
-    command: "scripts/rpm-package.sh"
+    command: "scripts/publish-rpm-package.sh"
     artifact_paths: "rpm/**/*"
     env:
       CODENAME: "experimental"
@@ -25,6 +25,7 @@ steps:
 
   - name: ":whale: docker"
     trigger: docker-buildkite-agent
+    branch: master
     async: true
     build:
       message: "Update Docker images"
