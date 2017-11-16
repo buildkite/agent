@@ -33,4 +33,3 @@ steps:
       branch: "master"
       env:
         CODENAME: "experimental"
-        DRY_RUN: "${DRY_RUN:-false}"
