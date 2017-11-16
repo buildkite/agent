@@ -110,6 +110,11 @@ steps:
 
   - wait
 
+  - name: ":mag:"
+    command: "scripts/extract-agent-version-metadata.sh"
+
+  - wait
+
   - name: ":spiral_note_pad:"
     command: "scripts/check-changelog.sh"
 
