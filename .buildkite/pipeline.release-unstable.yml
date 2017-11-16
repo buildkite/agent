@@ -47,3 +47,11 @@ steps:
       branch: "master"
       env:
         CODENAME: "unstable"
+
+  - wait
+
+  - name: ":beer:"
+    command: "scripts/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    agents:
+      queue: "deploy"
