@@ -3,9 +3,9 @@ set -euo pipefail
 
 echo '+++ Extracting agent version source code'
 
-AGENT_VERSION=$(awk -F\" '/var baseVersion string = "/ {print $2}' agent/version.go)
-BUILD_VERSION=$BUILDKITE_BUILD_NUMBER
-FULL_AGENT_VERSION="buildkite-agent version ${AGENT_VERSION}, build ${BUILD_VERSION}"
+export AGENT_VERSION=$(awk -F\" '/var baseVersion string = "/ {print $2}' agent/version.go)
+export BUILD_VERSION=$BUILDKITE_BUILD_NUMBER
+export FULL_AGENT_VERSION="buildkite-agent version ${AGENT_VERSION}, build ${BUILD_VERSION}"
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"

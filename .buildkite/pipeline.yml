@@ -122,6 +122,5 @@ steps:
       message: "Experimental release for ${AGENT_VERSION}, build ${BUILD_VERSION}"
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
-      env:
-        SOURCE_AGENT_BUILD_ID=${BUILDKITE_BUILD_ID}
-
+      meta_data:
+        source-build-id: "${BUILDKITE_BUILD_ID}"
