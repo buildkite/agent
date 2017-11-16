@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-agent_version=$(awk -F\" '/var baseVersion string = "/ {print $2}' agent/version.go)
-build_version=${BUILDKITE_BUILD_NUMBER:-1}
-full_agent_version="buildkite-agent version ${agent_version}, build ${build_version}"
+agent_version=$(buildkite-agent meta-data get "agent-version")
+build_version=$(buildkite-agent meta-data get "agent-version-build")
+full_agent_version=$(buildkite-agent meta-data get "agent-version-full")
 
 trigger_step() {
   local name="$1"
@@ -16,10 +16,10 @@ trigger_step() {
     branches: "master show-version-in-block-steps"
     build:
       message: "Release for ${agent_version}, build ${build_version}"
-      commit: "${BUILDKITE_COMMIT:-}"
-      branch: "${BUILDKITE_BRANCH:-}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
       meta_data:
-        agent-artifacts-build: "${BUILDKITE_BUILD_ID:-}"
+        agent-artifacts-build: "${BUILDKITE_BUILD_ID}"
         agent-version: "${agent_version}"
         agent-version-build: "${build_version}"
         agent-version-full:  "${full_agent_version}"
