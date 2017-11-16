@@ -148,6 +148,7 @@ steps:
         DRY_RUN: "${DRY_RUN:-false}"
 
   - wait
+  - wait
   - block: ":shipit: beta ${AGENT_VERSION}"
 
   - name: ":rocket:"
@@ -166,6 +167,7 @@ steps:
       env:
         DRY_RUN: "${DRY_RUN:-false}"
 
+  - wait
   - wait
   - block: ":shipit: stable ${AGENT_VERSION}"
 
