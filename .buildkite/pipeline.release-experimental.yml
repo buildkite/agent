@@ -1,54 +1,29 @@
 steps:
-  - wait
-
-  - name: ":debian: build"
-    command: "scripts/build-debian-packages.sh"
-    artifact_paths: "deb/**/*"
-    agents:
-      queue: "deploy"
-
-  - name: ":github: :hammer:"
-    command: "scripts/build-github-release.sh"
-    artifact_paths: "releases/**/*"
-    plugins:
-      docker-compose#v1.5.0:
-        config: docker-compose.release.yml
-        run: github-release
-
-  - wait
-
-  - block: ":shipit: ${AGENT_VERSION} to Unstable"
-
-  - name: ":s3:"
+  - name: ":s3: publish binaries"
     command: "scripts/publish-to-s3.sh"
     env:
-      CODENAME: "unstable"
+      CODENAME: "experimental"
     agents:
       queue: "deploy"
 
-  - name: ":octocat: :rocket:"
-    command: "scripts/github-release.sh"
-    agents:
-      queue: "deploy"
-
-  - name: ":redhat:"
+  - name: ":redhat: publish rpms"
     command: "scripts/rpm-package.sh"
     artifact_paths: "rpm/**/*"
     env:
-      CODENAME: "unstable"
+      CODENAME: "experimental"
     agents:
       queue: "deploy"
 
-  - name: ":debian:"
+  - name: ":debian: publish debs"
     command: "scripts/publish-debian-package.sh"
     env:
-      CODENAME: "unstable"
+      CODENAME: "experimental"
     agents:
       queue: "deploy"
 
   - wait
 
-  - name: ":whale:"
+  - name: ":whale: docker"
     trigger: docker-buildkite-agent
     async: true
     build:
@@ -56,18 +31,4 @@ steps:
       commit: "HEAD"
       branch: "master"
       env:
-        CODENAME: "stable"
-
-  - wait
-
-  - name: ":beer:"
-    command: "scripts/release-homebrew.sh"
-    artifact_paths: "pkg/*.rb;pkg/*.json"
-    agents:
-      queue: "deploy"
-
-  - wait
-
-  - name: ":pipeline:"
-    command: "scripts/upload-release-pipeline.sh stable"
-    branches: "master show-version-in-block-steps"
+        CODENAME: "experimental"

@@ -112,6 +112,22 @@ steps:
 
   - wait
 
+  - name: ":debian: build"
+    command: "scripts/build-debian-packages.sh"
+    artifact_paths: "deb/**/*"
+    agents:
+      queue: "deploy"
+
+  - name: ":github: :hammer:"
+    command: "scripts/build-github-release.sh"
+    artifact_paths: "releases/**/*"
+    plugins:
+      docker-compose#v1.5.0:
+        config: docker-compose.release.yml
+        run: github-release
+
+  - wait
+
   - name: ":shipit: experimental"
     trigger: agent-release-experimental
     branches: "master show-version-in-block-steps"
@@ -121,4 +137,4 @@ steps:
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
       meta_data:
-        source-build-id: "${BUILDKITE_BUILD_ID}"
+        agent-source-build-id: "${BUILDKITE_BUILD_ID}"
