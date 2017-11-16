@@ -137,4 +137,4 @@ steps:
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
       meta_data:
-        agent-source-build-id: "${BUILDKITE_BUILD_ID}"
+        agent-artifacts-build: "${BUILDKITE_BUILD_ID}"
