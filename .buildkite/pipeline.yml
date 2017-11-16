@@ -128,4 +128,4 @@ steps:
 
   - name: ":pipeline:"
     command: "scripts/upload-release-pipeline.sh"
-    branches: "master"
+    branches: "master show-version-in-block-steps"
