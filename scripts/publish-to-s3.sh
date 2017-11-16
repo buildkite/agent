@@ -4,8 +4,7 @@ set -eo pipefail
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
-artifacts_build=$(buildkite-agent meta-data get \
-  "agent-artifacts-build" --default value "$BUILDKITE_BUILD_ID")
+artifacts_build=$(buildkite-agent meta-data get  "agent-artifacts-build")
 
 if [[ "$CODENAME" == "experimental" ]]; then
   version="$version.$build"
