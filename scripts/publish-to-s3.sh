@@ -11,7 +11,7 @@ if [[ "$CODENAME" == "experimental" ]]; then
   version="$version.$build"
 fi
 
-echo "--- :package: Downloading built binaries"
+echo "--- :package: Downloading built binaries from build ${artifacts_build}"
 
 rm -rf pkg/*
 buildkite-agent artifact download --build "$artifacts_build" "pkg/buildkite-agent-*" .
