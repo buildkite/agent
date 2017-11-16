@@ -131,7 +131,7 @@ steps:
 
   - wait
 
-  - name: ":shipit: edge ${AGENT_VERSION}.${BUILD_VERSION}"
+  - name: ":rocket: edge ${AGENT_VERSION}.${BUILD_VERSION}"
     trigger: agent-release-experimental
     async: false
     branches: "master show-version-in-block-steps"
@@ -148,9 +148,9 @@ steps:
         DRY_RUN: "${DRY_RUN:-false}"
 
   - wait
-  - block: ":old_key: beta?"
+  - block: "beta?"
 
-  - name: ":rocket: ${AGENT_VERSION} beta"
+  - name: ":rocket: ${AGENT_VERSION}"
     trigger: agent-release-unstable
     async: false
     branches: "master show-version-in-block-steps"
@@ -167,9 +167,9 @@ steps:
         DRY_RUN: "${DRY_RUN:-false}"
 
   - wait
-  - block: ":old_key: stable?"
+  - block: "stable?"
 
-  - name: ":rocket: ${AGENT_VERSION} stable"
+  - name: ":rocket: ${AGENT_VERSION}"
     trigger: agent-release-stable
     async: false
     branches: "master show-version-in-block-steps"
