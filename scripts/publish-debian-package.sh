@@ -4,6 +4,14 @@ set -e
 artifacts_build=$(buildkite-agent meta-data get \
   "agent-artifacts-build" --default value "$BUILDKITE_BUILD_ID")
 
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    echo "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
+
 if [[ "$CODENAME" == "" ]]; then
   echo "Error: Missing \$CODENAME (stable or unstable)"
   exit 1
@@ -20,5 +28,5 @@ bundle
 # Loop over all the .deb files and publish them
 for file in deb/*.deb; do
   echo "+++ Publishing $file"
-  echo ./scripts/utils/publish-debian-package.sh "$file" "$CODENAME"
+  dry_run ./scripts/utils/publish-debian-package.sh "$file" "$CODENAME"
 done
