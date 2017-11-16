@@ -117,5 +117,14 @@ steps:
 
   - wait
 
+  - name: ":debian: build"
+    command: "scripts/build-debian-packages.sh"
+    artifact_paths: "deb/**/*"
+    branches: "master 2-1-stable"
+    agents:
+      queue: "deploy"
+
+  - wait
+
   - name: ":pipeline:"
     command: "scripts/upload-release-pipeline.sh"
