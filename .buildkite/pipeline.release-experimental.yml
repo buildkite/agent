@@ -25,7 +25,7 @@ steps:
 
   - name: ":whale: docker"
     trigger: docker-buildkite-agent
-    branch: master
+    branches: master
     async: true
     build:
       message: "Update Docker images"
