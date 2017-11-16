@@ -141,5 +141,8 @@ steps:
       branch: "${BUILDKITE_BRANCH}"
       meta_data:
         agent-artifacts-build: "${BUILDKITE_BUILD_ID}"
+        agent-version: "${AGENT_VERSION}"
+        agent-version-build: "${BUILD_VERSION}"
+        agent-version-full:  "${FULL_AGENT_VERSION}"
       env:
         DRY_RUN: "${DRY_RUN:-false}"

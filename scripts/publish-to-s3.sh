@@ -31,7 +31,7 @@ s3_base_url="s3://download.buildkite.com/agent/$CODENAME"
 for binary in *; do
   binary_s3_url="$s3_base_url/$version/$binary"
 
-  echo "Publishing $binary to $binary_s3_url"
+  echo "--- :s3: Publishing $binary to $binary_s3_url"
   dry_run aws s3 --region "us-east-1" cp --acl "public-read" "$binary" "$binary_s3_url"
 
   echo "Calculating SHA256"
