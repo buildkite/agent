@@ -1,25 +1,14 @@
 #!/bin/bash
-
 set -euo pipefail
 
-BIN_NAME="pkg/buildkite-agent-linux-amd64"
+agent_version=$(awk -F\" '/var baseVersion string = "/ {print $2}' agent/version.go)
+build_version=${BUILDKITE_BUILD_NUMBER:-1}
+full_agent_version="buildkite-agent version ${agent_version}, build ${build_version}"
 
-echo '--- Downloading built agent'
+echo "Full agent version: $full_agent_version"
+echo "Agent version: $agent_version"
+echo "Build version: $build_version"
 
-mkdir pkg
-buildkite-agent artifact download "${BIN_NAME}" pkg
-chmod +x "${BIN_NAME}"
-
-echo '+++ Extracting agent version from binary'
-
-FULL_AGENT_VERSION=$("${BIN_NAME}" --version)
-AGENT_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version //' | sed -E 's/\, build .+//')
-BUILD_VERSION=$(echo $FULL_AGENT_VERSION | sed 's/buildkite-agent version .*, build //')
-
-echo "Full agent version: $FULL_AGENT_VERSION"
-echo "Agent version: $AGENT_VERSION"
-echo "Build version: $BUILD_VERSION"
-
-buildkite-agent meta-data set "agent-version" "$AGENT_VERSION"
-buildkite-agent meta-data set "agent-version-full" "$FULL_AGENT_VERSION"
-buildkite-agent meta-data set "agent-version-build" "$BUILD_VERSION"
+buildkite-agent meta-data set "agent-version" "$agent_version"
+buildkite-agent meta-data set "agent-version-full" "$full_agent_version"
+buildkite-agent meta-data set "agent-version-build" "$build_version"
