@@ -36,18 +36,6 @@ block_step() {
 YAML
 }
 
-# TODO:
-
-# is_already_released_beta() {
-#   local version="$1"
-#   return 0
-# }
-
-# is_already_released_stable() {
-#   local version="$1"
-#   return 0
-# }
-
 echo "steps:"
 
 trigger_step \
@@ -57,13 +45,13 @@ trigger_step \
 block_step "beta?"
 
 trigger_step \
-  "beta ${agent_version}}" \
+  "beta ${agent_version}" \
   "agent-release-unstable"
 
 if [[ ! $agent_version =~ (beta|rc) ]] ; then
   block_step "stable?"
 
   trigger_step \
-    "stable ${agent_version}}" \
+    "stable ${agent_version}" \
     "agent-release-stable"
 fi
