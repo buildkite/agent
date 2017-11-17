@@ -115,11 +115,6 @@ steps:
 
   - wait
 
-  - name: ":spiral_note_pad:"
-    command: "scripts/check-changelog.sh"
-
-  - wait
-
   - name: ":debian: build"
     command: "scripts/build-debian-packages.sh"
     artifact_paths: "deb/**/*"

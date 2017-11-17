@@ -1,7 +1,8 @@
 steps:
   - wait
 
-  - block: ":shipit: ${AGENT_VERSION} to Unstable"
+  - name: ":spiral_note_pad:"
+    command: "scripts/check-releases.sh unstable"
 
   - name: ":s3:"
     command: "scripts/publish-to-s3.sh"
@@ -50,8 +51,3 @@ steps:
     agents:
       queue: "deploy"
 
-  - wait
-
-  - name: ":pipeline:"
-    command: "scripts/upload-release-pipeline.sh stable"
-    branches: "master show-version-in-block-steps"
