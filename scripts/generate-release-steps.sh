@@ -38,6 +38,13 @@ YAML
 
 echo "steps:"
 
+git fetch --tags
+
+## only allow a release if a release tag for it doesn't exist
+if ! git rev-parse -q --verify "refs/tags/v${agent_version}" >/dev/null; then
+  exit 0
+fi
+
 trigger_step \
   "edge ${agent_version}.${build_version}" \
   "agent-release-experimental"

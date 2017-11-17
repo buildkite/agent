@@ -1,5 +1,10 @@
 steps:
-  - block: ":shipit: Stable ${AGENT_VERSION}"
+  - wait
+
+  - name: ":spiral_note_pad:"
+    command: "scripts/check-changelog.sh"
+
+  - wait
 
   - name: ":s3:"
     command: "scripts/publish-to-s3.sh"

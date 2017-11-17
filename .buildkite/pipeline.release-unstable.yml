@@ -2,7 +2,9 @@ steps:
   - wait
 
   - name: ":spiral_note_pad:"
-    command: "scripts/check-releases.sh unstable"
+    command: "scripts/check-changelog.sh"
+
+  - wait
 
   - name: ":s3:"
     command: "scripts/publish-to-s3.sh"
