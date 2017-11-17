@@ -1,0 +1,37 @@
+steps:
+  - wait
+
+  - name: ":s3: publish binaries"
+    command: "scripts/publish-to-s3.sh"
+    env:
+      CODENAME: "experimental"
+    agents:
+      queue: "deploy"
+
+  - name: ":redhat: publish rpms"
+    command: "scripts/publish-rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    env:
+      CODENAME: "experimental"
+    agents:
+      queue: "deploy"
+
+  - name: ":debian: publish debs"
+    command: "scripts/publish-debian-package.sh"
+    env:
+      CODENAME: "experimental"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  - name: ":whale: docker"
+    trigger: docker-buildkite-agent
+    branches: master
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
+      env:
+        CODENAME: "experimental"

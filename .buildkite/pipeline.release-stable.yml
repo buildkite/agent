@@ -1,0 +1,41 @@
+steps:
+  - wait
+
+  - name: ":spiral_note_pad:"
+    command: "scripts/check-changelog.sh"
+
+  - wait
+
+  - name: ":s3:"
+    command: "scripts/publish-to-s3.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - name: ":redhat:"
+    command: "scripts/rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - name: ":debian:"
+    command: "scripts/publish-debian-package.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  - name: ":whale:"
+    trigger: docker-buildkite-agent
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
+      env:
+        CODENAME: "stable"
