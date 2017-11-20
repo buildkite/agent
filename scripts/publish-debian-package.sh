@@ -5,7 +5,7 @@ artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build" )
 
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
-    echo "$@"
+    "$@"
   else
     echo "[dry-run] $*"
   fi

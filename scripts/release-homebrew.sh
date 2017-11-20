@@ -85,8 +85,10 @@ echo "{
      }" > pkg/github_post_data.json
 
 
-echo "Posting JSON to Github Contents API"
-curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
-     -H "Content-Type: application/json" \
-     --data-binary "@pkg/github_post_data.json" \
-     --fail
+if [[ "${DRY_RUN:-}" == "false" ]]
+  echo "Posting JSON to Github Contents API"
+  curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
+      -H "Content-Type: application/json" \
+      --data-binary "@pkg/github_post_data.json" \
+      --fail
+fi

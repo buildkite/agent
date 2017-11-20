@@ -1,6 +1,14 @@
 #!/bin/bash
 set -e
 
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    echo "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
+
 if [[ "$GITHUB_RELEASE_ACCESS_TOKEN" == "" ]]; then
   echo "Error: Missing \$GITHUB_RELEASE_ACCESS_TOKEN"
   exit 1
@@ -32,12 +40,12 @@ if [[ "$AGENT_VERSION" == *"beta"* || "$AGENT_VERSION" == *"alpha"* ]]; then
   buildkite-agent meta-data set github_release_type "prerelease"
   buildkite-agent meta-data set github_release_version $AGENT_VERSION
 
-  github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)" --prerelease
+  dry_run github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)" --prerelease
 else
   echo "--- 🚀 $AGENT_VERSION"
 
   buildkite-agent meta-data set github_release_type "stable"
   buildkite-agent meta-data set github_release_version $AGENT_VERSION
 
-  github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)"
+  dry_run github-release "v$AGENT_VERSION" releases/* --commit "$(git rev-parse HEAD)"
 fi

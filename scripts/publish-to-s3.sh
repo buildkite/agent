@@ -2,6 +2,14 @@
 
 set -eo pipefail
 
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
+
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
 artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build")
@@ -9,14 +17,6 @@ artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build")
 if [[ "$CODENAME" == "experimental" ]]; then
   version="$version.$build"
 fi
-
-dry_run() {
-  if [[ "${DRY_RUN:-}" == "false" ]] ; then
-    echo "$@"
-  else
-    echo "[dry-run] $*"
-  fi
-}
 
 echo "--- :package: Downloading built binaries from build ${artifacts_build}"
 

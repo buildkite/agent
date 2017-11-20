@@ -3,7 +3,7 @@ set -euo pipefail
 
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
-    echo "$@"
+    "$@"
   else
     echo "[dry-run] $*"
   fi
