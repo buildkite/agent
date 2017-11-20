@@ -132,4 +132,4 @@ steps:
   - wait
 
   - name: ":pipeline:"
-    command: "scripts/generate-release-steps.sh | buildkite-agent pipeline upload"
+    command: "scripts/upload-release-steps.sh"
