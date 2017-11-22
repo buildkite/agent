@@ -2,11 +2,15 @@ package shell_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/lox/bintest/proxy"
@@ -19,11 +23,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 	defer sshKeygen.Close()
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	sh := newShellForTest(t)
 	sh.PTY = true
 
 	go func() {
@@ -49,13 +49,9 @@ func TestRun(t *testing.T) {
 	}
 	defer sshKeygen.Close()
 
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	out := &bytes.Buffer{}
 
+	sh := newShellForTest(t)
 	sh.PTY = false
 	sh.Writer = out
 	sh.Logger = &shell.WriterLogger{Writer: out, Ansi: false}
@@ -138,4 +134,80 @@ func TestWorkingDir(t *testing.T) {
 	if afterWd != currentWd {
 		t.Fatalf("Expected working dir to be the same as before shell commands ran")
 	}
+}
+
+func TestLockFileRetriesAndTimesOut(t *testing.T) {
+	dir, err := ioutil.TempDir("", "shelltest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	sh := newShellForTest(t)
+	sh.Logger = shell.TestingLogger{t}
+
+	lockPath := filepath.Join(dir, "my.lock")
+
+	// acquire a lock in another process
+	cmd, err := acquireLockInOtherProcess(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer cmd.Process.Kill()
+
+	// acquire lock
+	_, err = sh.LockFile(lockPath, time.Second*2)
+	if err != context.DeadlineExceeded {
+		t.Fatalf("Expected DeadlineExceeded error, got %v", err)
+	}
+}
+
+func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
+	cmd := exec.Command(os.Args[0], "-test.run=TestAcquiringLockHelperProcess", "--", lockfile)
+	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1"}
+
+	err := cmd.Start()
+	if err != nil {
+		return cmd, err
+	}
+
+	// wait for the above process to get a lock
+	for {
+		if _, err = os.Stat(lockfile); os.IsNotExist(err) {
+			time.Sleep(time.Millisecond * 10)
+			continue
+		}
+		break
+	}
+
+	return cmd, nil
+}
+
+// TestAcquiringLockHelperProcess isn't a real test. It's used as a helper process
+func TestAcquiringLockHelperProcess(t *testing.T) {
+	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
+		return
+	}
+
+	fileName := os.Args[len(os.Args)-1]
+	sh := newShellForTest(t)
+
+	log.Printf("Locking %s", fileName)
+	if _, err := sh.LockFile(fileName, time.Second*10); err != nil {
+		os.Exit(1)
+	}
+
+	log.Printf("Acquired lock %s", fileName)
+	c := make(chan struct{})
+	<-c
+}
+
+func newShellForTest(t *testing.T) *shell.Shell {
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh.Logger = shell.DiscardLogger
+	return sh
 }
