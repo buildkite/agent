@@ -13,10 +13,16 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
+	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
+)
+
+var (
+	lockRetryDuration = time.Second
 )
 
 // Shell represents a virtual shell, handles logging, executing commands and
@@ -61,6 +67,17 @@ func New() (*Shell, error) {
 	}, nil
 }
 
+// New returns a new Shell with provided context.Context
+func NewWithContext(ctx context.Context) (*Shell, error) {
+	sh, err := New()
+	if err != nil {
+		return nil, err
+	}
+
+	sh.ctx = ctx
+	return sh, nil
+}
+
 // Getwd returns the current working directory of the shell
 func (s *Shell) Getwd() string {
 	return s.wd
@@ -103,6 +120,47 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	// Since the path returned by LookPath is relative to the current working
 	// directory, we need to get the absolute version of that.
 	return filepath.Abs(absolutePath)
+}
+
+// LockFile is a pid-based lock for cross-process locking
+type LockFile interface {
+	Unlock() error
+}
+
+// Create a cross-process file-based lock based on pid files
+func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
+	absolutePathToLock, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
+	}
+
+	lock, err := lockfile.New(absolutePathToLock)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	defer cancel()
+
+	for {
+		// Keep trying the lock until we get it
+		if err := lock.TryLock(); err != nil {
+			s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
+			s.Commentf("Trying again in %s...", lockRetryDuration)
+			time.Sleep(lockRetryDuration)
+		} else {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			// No value ready, moving on
+		}
+	}
+
+	return &lock, err
 }
 
 // Run runs a command, write to the logger and return an error if it fails

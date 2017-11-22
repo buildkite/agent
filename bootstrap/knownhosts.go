@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/bootstrap/shell"
 	homedir "github.com/mitchellh/go-homedir"
@@ -90,7 +91,7 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 
 func (kh *knownHosts) Add(host string) error {
 	// Use a lockfile to prevent parallel processes stepping on each other
-	lock, err := shell.LockFile(kh.Shell, kh.Path+".lock")
+	lock, err := kh.Shell.LockFile(kh.Path+".lock", time.Second*30)
 	if err != nil {
 		return err
 	}

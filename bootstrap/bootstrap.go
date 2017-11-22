@@ -416,7 +416,7 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
-	pluginCheckoutHook, err := shell.LockFileWithTimeout(b.shell, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
 	if err != nil {
 		return nil, err
 	}
