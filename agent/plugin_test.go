@@ -191,13 +191,41 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	assert.Equal(t, sub, "docker-compose/beta")
 	assert.Nil(t, err)
 
-	plugin = &Plugin{Location: "/Users/keithpitt/Development/plugins.git/test-plugin"}
+	// Check that all the various git protocols are supported
+
+	plugin = &Plugin{Location: "ssh://user@myrepo.com:99/test-plugin"}
 	repo, err = plugin.Repository()
-	assert.Equal(t, repo, "/Users/keithpitt/Development/plugins.git")
+	assert.Equal(t, "ssh://user@myrepo.com:99", repo)
 	assert.Nil(t, err)
 	sub, err = plugin.RepositorySubdirectory()
-	assert.Equal(t, sub, "test-plugin")
+	assert.Equal(t, "test-plugin", sub)
 	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "https://user@myrepo.com:99/test-plugin"}
+	repo, err = plugin.Repository()
+	assert.Equal(t, "https://user@myrepo.com:99", repo)
+	assert.Nil(t, err)
+	sub, err = plugin.RepositorySubdirectory()
+	assert.Equal(t, "test-plugin", sub)
+	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "git://myrepo.com/test-plugin"}
+	repo, err = plugin.Repository()
+	assert.Equal(t, "git://myrepo.com", repo)
+	assert.Nil(t, err)
+	sub, err = plugin.RepositorySubdirectory()
+	assert.Equal(t, "test-plugin", sub)
+	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "/Some/Local/Path/plugins.git/test-plugin"}
+	repo, err = plugin.Repository()
+	assert.Equal(t, "/Some/Local/Path/plugins.git", repo)
+	assert.Nil(t, err)
+	sub, err = plugin.RepositorySubdirectory()
+	assert.Equal(t, "test-plugin", sub)
+	assert.Nil(t, err)
+
+	// Check the empty case
 
 	plugin = &Plugin{Location: ""}
 	repo, err = plugin.Repository()
