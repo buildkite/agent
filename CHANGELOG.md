@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+
+## [v3.0-beta.36](https://github.com/buildkite/agent/tree/v3.0-beta.36) (2017-11-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.35...v3.0-beta.36)
+
+### Added
+
+- Don't retry pipeline uploads on invalid pipelines [\#589](https://github.com/buildkite/agent/pull/589) (@DazWorrall)
+- A vagrant box for windows testing [\#583](https://github.com/buildkite/agent/pull/583) (@lox)
+- Binary is build with golang 1.9.2
+
+### Fixed
+
+- Fixed bug where malformed pipelines caused infinite loop [\#585](https://github.com/buildkite/agent/pull/585) (@lox)
+
+
 ## [v3.0-beta.35](https://github.com/buildkite/agent/tree/v3.0-beta.35) (2017-11-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.34...v3.0-beta.35)
 
