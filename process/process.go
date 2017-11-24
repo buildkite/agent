@@ -52,7 +52,7 @@ type Process struct {
 // If you change header parsing here make sure to change it in the
 // buildkite.com frontend logic, too
 
-var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
+var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
 
 func (p *Process) Start() error {
 	args, err := shellwords.Parse(p.Script)
