@@ -31,15 +31,8 @@ type Process struct {
 	Env        []string
 	ExitStatus string
 
-	buffer bytes.Buffer
-
-	command *exec.Cmd
-
-	// This callback is called when the process offically starts
-	StartCallback func()
-
 	// For every line in the process output, this callback will be called
-	// with the contents of the line if its filter returns true.
+	// with the contents of the line if its filter returns true
 	LineCallback       func(string)
 	LinePreProcessor   func(string) string
 	LineCallbackFilter func(string) bool
@@ -47,6 +40,24 @@ type Process struct {
 	// Running is stored as an int32 so we can use atomic operations to
 	// set/get it (it's accessed by multiple goroutines)
 	running int32
+
+	// The underlying command that is executed
+	command *exec.Cmd
+
+	// buffer is a used to buffer output when we are prefixing timestamps
+	buffer bytes.Buffer
+
+	// locker for data races on the buffer
+	bufferLock sync.Mutex
+
+	// conditions to block on, see See http://openmymind.net/Condition-Variables/
+	startedCond *sync.Cond
+}
+
+func NewProcess() *Process {
+	return &Process{
+		startedCond: &sync.Cond{L: &sync.Mutex{}},
+	}
 }
 
 // If you change header parsing here make sure to change it in the
@@ -54,7 +65,10 @@ type Process struct {
 
 var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)$")
 
+// Start the process and block until it finishes
 func (p *Process) Start() error {
+	p.startedCond.L.Lock()
+
 	args, err := shellwords.Parse(p.Script)
 	if err != nil {
 		return err
@@ -69,16 +83,9 @@ func (p *Process) Start() error {
 	currentEnv := os.Environ()
 	p.command.Env = append(currentEnv, p.Env...)
 
-	var waitGroup sync.WaitGroup
-
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
-	var multiWriter io.Writer
-	if p.Timestamp {
-		multiWriter = io.MultiWriter(lineWriterPipe)
-	} else {
-		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
-	}
+	var waitGroup sync.WaitGroup
 
 	// Toggle between running in a pty
 	if p.PTY {
@@ -98,7 +105,7 @@ func (p *Process) Start() error {
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
-			_, err = io.Copy(multiWriter, pty)
+			_, err = io.Copy(lineWriterPipe, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
@@ -116,8 +123,8 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
-		p.command.Stdout = multiWriter
-		p.command.Stderr = multiWriter
+		p.command.Stdout = lineWriterPipe
+		p.command.Stderr = lineWriterPipe
 		p.command.Stdin = nil
 
 		err := p.command.Start()
@@ -132,82 +139,44 @@ func (p *Process) Start() error {
 
 	logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
-	// Add the line callback routine to the waitGroup
+	// Notify other goroutines that are blocked on our Started condition.
+	p.startedCond.L.Unlock()
+	p.startedCond.Broadcast()
+
+	scanner := bufio.NewScanner(lineReaderPipe)
+
+	var lineCallbackWaitGroup sync.WaitGroup
 	waitGroup.Add(1)
 
 	go func() {
+		defer waitGroup.Done()
+
+		// We scan line by line so that we can run our various processors, currently this buffers the entire
+		// output in memory and then an asynchronous process reads it in chunks
 		logger.Debug("[LineScanner] Starting to read lines")
-
-		reader := bufio.NewReader(lineReaderPipe)
-
-		var appending []byte
-		var lineCallbackWaitGroup sync.WaitGroup
-
-		for {
-			line, isPrefix, err := reader.ReadLine()
-			if err != nil {
-				if err == io.EOF {
-					logger.Debug("[LineScanner] Encountered EOF")
-					break
-				}
-
-				logger.Error("[LineScanner] Failed to read: (%T: %v)", err, err)
-			}
-
-			// If isPrefix is true, that means we've got a really
-			// long line incoming, and we'll keep appending to it
-			// until isPrefix is false (which means the long line
-			// has ended.
-			if isPrefix && appending == nil {
-				logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
-				// bufio.ReadLine returns a slice which is only valid until the next invocation
-				// since it points to its own internal buffer array. To accumulate the entire
-				// result we make a copy of the first prefix, and insure there is spare capacity
-				// for future appends to minimize the need for resizing on append.
-				appending = make([]byte, len(line), (cap(line))*2)
-				copy(appending, line)
-
-				continue
-			}
-
-			// Should we be appending?
-			if appending != nil {
-				appending = append(appending, line...)
-
-				// No more isPrefix! Line is finished!
-				if !isPrefix {
-					logger.Debug("[LineScanner] Finished buffering long line")
-					line = appending
-
-					// Reset appending back to nil
-					appending = nil
-				} else {
-					continue
-				}
-			}
-
-			// If we're timestamping this main thread will take
-			// the hit of running the regex so we can build up
-			// the timestamped buffer without breaking headers,
-			// otherwise we let the goroutines take the perf hit.
-
+		for scanner.Scan() {
+			line := scanner.Text()
 			checkedForCallback := false
 			lineHasCallback := false
-			lineString := p.LinePreProcessor(string(line))
+			lineString := p.LinePreProcessor(line)
 
-			// Create the prefixed buffer
+			// Optionally prefix lines with timestamps
 			if p.Timestamp {
 				lineHasCallback = p.LineCallbackFilter(lineString)
 				checkedForCallback = true
+
 				if lineHasCallback || headerExpansionRegex.MatchString(lineString) {
 					// Don't timestamp special lines (e.g. header)
-					p.buffer.WriteString(fmt.Sprintf("%s\n", line))
+					p.writeOutputBuffer(fmt.Sprintf("%s\n", line))
 				} else {
 					currentTime := time.Now().UTC().Format(time.RFC3339)
-					p.buffer.WriteString(fmt.Sprintf("[%s] %s\n", currentTime, line))
+					p.writeOutputBuffer(fmt.Sprintf("[%s] %s\n", currentTime, line))
 				}
+			} else {
+				p.writeOutputBuffer(line + "\n")
 			}
 
+			// A callback is an async function that is triggered by a line
 			if lineHasCallback || !checkedForCallback {
 				lineCallbackWaitGroup.Add(1)
 				go func(line string) {
@@ -219,24 +188,19 @@ func (p *Process) Start() error {
 			}
 		}
 
-		// We need to make sure all the line callbacks have finish before
-		// finish up the process
-		logger.Debug("[LineScanner] Waiting for callbacks to finish")
-		lineCallbackWaitGroup.Wait()
-
-		logger.Debug("[LineScanner] Finished")
-		waitGroup.Done()
+		if err := scanner.Err(); err != nil {
+			logger.Debug("[LineScanner] Error from scanner: %v", err)
+		}
 	}()
 
-	// Call the StartCallback
-	go p.StartCallback()
+	logger.Debug("[LineScanner] Finished")
 
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
 	waitResult := p.command.Wait()
 
 	// Close the line writer pipe
-	lineWriterPipe.Close()
+	_ = lineWriterPipe.Close()
 
 	// The process is no longer running at this point
 	p.setRunning(false)
@@ -254,11 +218,19 @@ func (p *Process) Start() error {
 		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
-	// No error occurred so we can return nil
 	return nil
 }
 
+func (p *Process) writeOutputBuffer(s string) {
+	p.bufferLock.Lock()
+	defer p.bufferLock.Unlock()
+	_, _ = p.buffer.WriteString(s)
+}
+
 func (p *Process) Output() string {
+	p.bufferLock.Lock()
+	defer p.bufferLock.Unlock()
+	logger.Debug("[Process] Polling for output: (%d bytes)", p.buffer.Len())
 	return p.buffer.String()
 }
 
@@ -363,6 +335,16 @@ func (p *Process) setRunning(r bool) {
 	} else {
 		atomic.StoreInt32(&p.running, 0)
 	}
+}
+
+// Wait until the process is started, concurrency safe
+func (p *Process) WaitStarted() {
+	// This pattern is part of sync.Cond: lock, wait, lock
+	p.startedCond.L.Lock()
+	for !p.IsRunning() {
+		p.startedCond.Wait()
+	}
+	p.startedCond.L.Unlock()
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29

@@ -63,16 +63,15 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
 	// The process that will run the bootstrap script
-	runner.process = &process.Process{
-		Script:             r.AgentConfiguration.BootstrapScript,
-		Env:                r.createEnvironment(),
-		PTY:                r.AgentConfiguration.RunInPty,
-		Timestamp:          r.AgentConfiguration.TimestampLines,
-		StartCallback:      r.onProcessStartCallback,
-		LineCallback:       runner.headerTimesStreamer.Scan,
-		LinePreProcessor:   runner.headerTimesStreamer.LinePreProcessor,
-		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
-	}
+	process := process.NewProcess()
+	process.Script = r.AgentConfiguration.BootstrapScript
+	process.Env = r.createEnvironment()
+	process.PTY = r.AgentConfiguration.RunInPty
+	process.Timestamp = r.AgentConfiguration.TimestampLines
+	process.LineCallback = runner.headerTimesStreamer.Scan
+	process.LinePreProcessor = runner.headerTimesStreamer.LinePreProcessor
+	process.LineCallbackFilter = runner.headerTimesStreamer.LineIsHeader
+	runner.process = process
 
 	return
 }
@@ -98,13 +97,29 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
+	// Start polling once the process starts
+	go func() {
+		r.process.WaitStarted()
+		r.routineWaitGroup.Add(1)
+		defer r.routineWaitGroup.Done()
+		go r.pollLogStreamer()
+	}()
+
+	// Start watching the API for state changes once the process starts
+	go func() {
+		r.process.WaitStarted()
+		r.routineWaitGroup.Add(1)
+		defer r.routineWaitGroup.Done()
+		go r.pollJobStateChanges()
+	}()
+
 	// Start the process. This will block until it finishes.
 	if err := r.process.Start(); err != nil {
 		// Send the error as output
-		r.logStreamer.Process(fmt.Sprintf("%s", err))
+		_ = r.logStreamer.Process(fmt.Sprintf("%s", err))
 	} else {
 		// Add the final output to the streamer
-		r.logStreamer.Process(r.process.Output())
+		_ = r.logStreamer.Process(r.process.Output())
 	}
 
 	// Store the finished at time
@@ -116,7 +131,7 @@ func (r *JobRunner) Run() error {
 
 	// Stop the log streamer. This will block until all the chunks have
 	// been uploaded
-	r.logStreamer.Stop()
+	_ = r.logStreamer.Stop()
 
 	// Warn about failed chunks
 	if r.logStreamer.ChunksFailedCount > 0 {
@@ -124,7 +139,7 @@ func (r *JobRunner) Run() error {
 	}
 
 	// Finish the build in the Buildkite Agent API
-	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
+	_ = r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
 
 	// Wait for the routines that we spun up to finish
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
@@ -144,7 +159,7 @@ func (r *JobRunner) Kill() error {
 		r.cancelled = true
 
 		if r.process != nil {
-			r.process.Kill()
+			_ = r.process.Kill()
 		} else {
 			logger.Error("No process to kill")
 		}
@@ -249,53 +264,37 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 	}, &retry.Config{Forever: true, Interval: 1 * time.Second})
 }
 
-func (r *JobRunner) onProcessStartCallback() {
-	// Since we're spinning up 2 routines here, we might as well add them
-	// to the routine wait group here.
-	r.routineWaitGroup.Add(2)
+func (r *JobRunner) pollLogStreamer() {
+	for r.process.IsRunning() {
+		// Send the output of the process to the log streamer
+		// for processing
+		_ = r.logStreamer.Process(r.process.Output())
 
-	// Start a routine that will grab the output every few seconds and send
-	// it back to Buildkite
-	go func() {
-		for r.process.IsRunning() {
-			// Send the output of the process to the log streamer
-			// for processing
-			r.logStreamer.Process(r.process.Output())
+		// Check the output in another second
+		time.Sleep(1 * time.Second)
+	}
 
-			// Check the output in another second
-			time.Sleep(1 * time.Second)
+	logger.Debug("[JobRunner] Routine that processes the log has finished")
+}
+
+// Start a routine that will constantly ping Buildkite to see if the
+// job has been canceled or changed in state
+func (r *JobRunner) pollJobStateChanges() {
+	for r.process.IsRunning() {
+		// Re-get the job and check it's status to see if it's been cancelled
+		jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
+		if err != nil {
+			// We don't really care if it fails, we'll just try again soon anyway
+			logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
+		} else if jobState.State == "canceling" || jobState.State == "canceled" {
+			_ = r.Kill()
 		}
 
-		// Mark this routine as done in the wait group
-		r.routineWaitGroup.Done()
+		// Check for cancellations
+		time.Sleep(time.Duration(r.Agent.JobStatusInterval) * time.Second)
+	}
 
-		logger.Debug("[JobRunner] Routine that processes the log has finished")
-	}()
-
-	// Start a routine that will constantly ping Buildkite to see if the
-	// job has been canceled
-	go func() {
-		for r.process.IsRunning() {
-			// Re-get the job and check it's status to see if it's been
-			// cancelled
-			jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
-			if err != nil {
-				// We don't really care if it fails, we'll just
-				// try again soon anyway
-				logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
-			} else if jobState.State == "canceling" || jobState.State == "canceled" {
-				r.Kill()
-			}
-
-			// Check for cancellations
-			time.Sleep(time.Duration(r.Agent.JobStatusInterval) * time.Second)
-		}
-
-		// Mark this routine as done in the wait group
-		r.routineWaitGroup.Done()
-
-		logger.Debug("[JobRunner] Routine that refreshes the job has finished")
-	}()
+	logger.Debug("[JobRunner] Routine that refreshes the job has finished")
 }
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
