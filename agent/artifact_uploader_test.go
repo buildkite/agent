@@ -28,6 +28,7 @@ func TestCollect(t *testing.T) {
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
+	defer os.Chdir(wd)
 
 	paths := fmt.Sprintf("%s;%s", filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"), filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"))
 	uploader := ArtifactUploader{Paths: paths}
@@ -79,6 +80,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
+	defer os.Chdir(wd)
 
 	uploader := ArtifactUploader{Paths: strings.Join([]string{
 		filepath.Join("log", "*"),
