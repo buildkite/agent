@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/api"
@@ -27,6 +28,7 @@ func TestCollect(t *testing.T) {
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
 	os.Chdir(root)
+	defer os.Chdir(wd)
 
 	paths := fmt.Sprintf("%s;%s", filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"), filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"))
 	uploader := ArtifactUploader{Paths: paths}
@@ -72,4 +74,23 @@ func TestCollect(t *testing.T) {
 	assert.Equal(t, a.GlobPath, filepath.Join(root, "test/fixtures/artifacts/**/*.gif"))
 	assert.Equal(t, int(a.FileSize), 2038453)
 	assert.Equal(t, a.Sha1Sum, "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd")
+}
+
+func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := ArtifactUploader{Paths: strings.Join([]string{
+		filepath.Join("log", "*"),
+		filepath.Join("tmp", "capybara", "**", "*"),
+		filepath.Join("mkmf.log"),
+		filepath.Join("log", "mkmf.log"),
+	}, ";")}
+
+	artifacts, err := uploader.Collect()
+
+	assert.Nil(t, err)
+	assert.Equal(t, len(artifacts), 0)
 }
