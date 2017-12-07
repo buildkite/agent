@@ -1,0 +1,58 @@
+steps:
+  - wait
+  - command: "echo $DRY_RUN; echo $$DRY_RUN"
+
+  - wait
+
+  - name: ":spiral_note_pad:"
+    command: "scripts/check-changelog.sh"
+
+  - wait
+
+  - name: ":s3:"
+    command: "scripts/publish-to-s3.sh"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - name: ":octocat: :rocket:"
+    command: "scripts/github-release.sh"
+    agents:
+      queue: "deploy"
+
+  - name: ":redhat:"
+    command: "scripts/rpm-package.sh"
+    artifact_paths: "rpm/**/*"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - name: ":debian:"
+    command: "scripts/publish-debian-package.sh"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  - name: ":whale:"
+    trigger: docker-buildkite-agent
+    async: true
+    build:
+      message: "Update Docker images"
+      commit: "HEAD"
+      branch: "master"
+      env:
+        CODENAME: "stable"
+
+  - wait
+
+  - name: ":beer:"
+    command: "scripts/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    agents:
+      queue: "deploy"
+
