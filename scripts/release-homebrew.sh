@@ -85,7 +85,7 @@ echo "{
      }" > pkg/github_post_data.json
 
 
-if [[ "${DRY_RUN:-}" == "false" ]]
+if [[ "${DRY_RUN:-}" == "false" ]] ; then
   echo "Posting JSON to Github Contents API"
   curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
       -H "Content-Type: application/json" \

@@ -47,7 +47,7 @@ output_steps_yaml() {
     "beta ${agent_version}" \
     "agent-release-unstable"
 
-  if [[ ! $agent_version =~ (beta|rc) ]] ; then
+  if [[ ! "$agent_version" =~ (beta|rc) ]] ; then
     block_step "stable?"
 
     trigger_step \
