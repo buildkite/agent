@@ -11,7 +11,7 @@ trigger_step() {
   - name: ":rocket: ${name}"
     trigger: "${trigger_pipeline}"
     async: false
-    branches: "master show-version-in-block-steps"
+    branches: "master"
     build:
       message: "Release for ${agent_version}, build ${build_version}"
       commit: "${BUILDKITE_COMMIT}"
