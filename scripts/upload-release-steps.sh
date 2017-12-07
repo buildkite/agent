@@ -64,9 +64,9 @@ git fetch --tags
 
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
-# if git rev-parse -q --verify "refs/tags/v${agent_version}" >/dev/null; then
-#   echo "Tag refs/tags/v${agent_version} already exists"
-#   exit 0
-# fi
+if git rev-parse -q --verify "refs/tags/v${agent_version}" >/dev/null; then
+  echo "Tag refs/tags/v${agent_version} already exists"
+  exit 0
+fi
 
 output_steps_yaml | buildkite-agent pipeline upload
