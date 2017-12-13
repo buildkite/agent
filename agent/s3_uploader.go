@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -93,14 +92,17 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 
 	Perms := s3.ACL(permission)
 
-	logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
-	data, err := ioutil.ReadFile(artifact.AbsolutePath)
-	if err != nil {
-		return errors.New("Failed to read file " + artifact.AbsolutePath + " (" + err.Error() + ")")
-	}
-
 	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
-	err = u.Bucket.Put(u.artifactPath(artifact), data, u.mimeType(artifact), Perms, s3.Options{})
+	stat, err := os.Stat(artifact.AbsolutePath)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to stat file \"%s\" (%s)", u.artifactPath(artifact), err.Error()))
+	}
+	reader, err := os.Open(artifact.AbsolutePath)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Failed to open file \"%s\" (%s)", u.artifactPath(artifact), err.Error()))
+	}
+	defer reader.Close()
+	err = u.Bucket.PutReader(u.artifactPath(artifact), reader, stat.Size(), u.mimeType(artifact), Perms, s3.Options{})
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%s)", u.artifactPath(artifact), err.Error()))
 	}
