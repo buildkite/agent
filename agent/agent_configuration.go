@@ -5,6 +5,7 @@ type AgentConfiguration struct {
 	BuildPath                  string
 	HooksPath                  string
 	PluginsPath                string
+	Plugins                    []string
 	GitCloneFlags              string
 	GitCleanFlags              string
 	SSHFingerprintVerification bool

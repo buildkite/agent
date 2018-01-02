@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -185,14 +186,51 @@ func (r *JobRunner) createEnvironment() []string {
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.AgentConfiguration.GitCleanFlags
 
-	// Convert the env map into a slice (which is what the script gear
-	// needs)
+	// Override the plugin environment
+	var err error
+	env["BUILDKITE_PLUGIN"], err = r.createPluginEnvironment()
+	if err != nil {
+		logger.Debug("Error creating plugin environment: %v", err)
+	}
+
+	// Convert the env map into a slice (which is what the script gear needs)
 	envSlice := []string{}
 	for key, value := range env {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
 	return envSlice
+}
+
+func (r *JobRunner) createPluginEnvironment() (string, error) {
+	if len(r.AgentConfiguration.Plugins) == 0 {
+		return r.Job.Env["BUILDKITE_PLUGINS"], nil
+	}
+
+	var jobPlugins []*Plugin
+
+	// Read the plugins from the agent API, parsed from the pipeline yaml
+	if js, ok := r.Job.Env["BUILDKITE_PLUGINS"]; ok {
+		var err error
+		jobPlugins, err = CreatePluginsFromJSON(js)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Read plugins defined globally in the agent config
+	agentPlugins, err := CreatePluginsFromList(r.AgentConfiguration.Plugins)
+	if err != nil {
+		return "", err
+	}
+
+	// Merges the plugins and returns it as JSON
+	b, err := json.Marshal(MergePlugins(jobPlugins, agentPlugins))
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related

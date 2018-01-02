@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/logger"
 )
 
 type Plugin struct {
@@ -22,7 +23,7 @@ type Plugin struct {
 	// The clone method
 	Scheme string
 
-	// Any authentication attached to the repostiory
+	// Any authentication attached to the repository
 	Authentication string
 
 	// Configuration for the plugin
@@ -52,6 +53,71 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 	}
 
 	return plugin, nil
+}
+
+// ResolvePluginLocation takes a short plugin location like "docker-compose" and resolves
+// it to it's fully qualified http://github.com/buildkite-plugins/docker-compose#a34fa34. In future
+// this would be better suited to a server-side API to allow for more intelligence here
+func ResolvePluginLocation(location string) (string, error) {
+	var u *url.URL
+	var err error
+
+	if locationSchemeRegex.MatchString(location) {
+		u, err = url.Parse(location)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		parts := strings.Split(location, "/")
+		switch {
+		// domain.com/user/rep, missing scheme
+		case len(parts) >= 3:
+			location = "https://" + location
+		// username/repo
+		case len(parts) == 2:
+			location = "https://github.com/" + location
+		// repo
+		case len(parts) == 1:
+			location = "https://github.com/buildkite-plugins/" + location
+		}
+		u, err = url.Parse(location)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if u.Fragment == "" {
+		u.Fragment = "master"
+	}
+
+	if u.Scheme == "" {
+		u.Scheme = "https"
+	}
+
+	if u == nil {
+		return "", fmt.Errorf("Failed to resolve location %q", location)
+	}
+
+	return u.String(), nil
+}
+
+// CreatePluginsFromList takes a list of locations and
+// converts it to a slice of Plugins
+func CreatePluginsFromList(names []string) ([]*Plugin, error) {
+	plugins := []*Plugin{}
+	for _, part := range names {
+		resolved, err := ResolvePluginLocation(strings.TrimSpace(part))
+		if err != nil {
+			return nil, err
+		}
+		plugin, err := CreatePlugin(resolved, nil)
+		if err != nil {
+			return nil, err
+		}
+		plugins = append(plugins, plugin)
+	}
+
+	return plugins, nil
 }
 
 // Given a JSON structure, convert it to an array of plugins
@@ -105,6 +171,26 @@ func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
 	}
 
 	return plugins, nil
+}
+
+func MergePlugins(jobPlugins, agentPlugins []*Plugin) []*Plugin {
+	var result []*Plugin
+	var pluginMap map[string]struct{}
+
+	for _, plugin := range agentPlugins {
+		pluginMap[plugin.Location] = struct{}{}
+		result = append(result, plugin)
+	}
+
+	for _, plugin := range jobPlugins {
+		if _, exists := pluginMap[plugin.Location]; exists {
+			logger.Debug("Plugin %q exists in agent and job plugins, using agent version", plugin.Location)
+		} else {
+			result = append(result, plugin)
+		}
+	}
+
+	return result
 }
 
 // Returns the name of the plugin

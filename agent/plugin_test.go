@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"reflect"
+
 	"github.com/buildkite/agent/env"
 	"github.com/stretchr/testify/assert"
 )
@@ -52,6 +54,57 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 	assert.Equal(t, len(plugins), 0)
 	assert.NotNil(t, err)
 	assert.Equal(t, err.Error(), "Too many #'s in \"github.com/buildkite/plugins/ping#master#lololo\"")
+}
+
+func TestCreatePluginsFromList(t *testing.T) {
+	t.Parallel()
+
+	var testCases = []struct {
+		List     []string
+		Expected []*Plugin
+	}{
+		{
+			[]string{"docker-compose#a34fa34", "github.com/buildkite-plugins/ping"},
+			[]*Plugin{
+				&Plugin{Location: "github.com/buildkite-plugins/docker-compose", Version: "a34fa34", Scheme: "https"},
+				&Plugin{Location: "github.com/buildkite-plugins/ping", Version: "master", Scheme: "https"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		plugins, err := CreatePluginsFromList(tc.List)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(plugins, tc.Expected) {
+			t.Fatalf("Expected %#v, got %#v", tc.Expected, plugins)
+		}
+	}
+}
+
+func TestResolvePluginLocation(t *testing.T) {
+	t.Parallel()
+
+	var testCases = []struct {
+		Location string
+		Expected string
+	}{
+		{"buildkite-plugins/docker-compose#a34fa34", "https://github.com/buildkite-plugins/docker-compose#a34fa34"},
+		{"docker-compose#a34fa34", "https://github.com/buildkite-plugins/docker-compose#a34fa34"},
+		{"ping", "https://github.com/buildkite-plugins/ping#master"},
+		{"http://github.com/buildkite-plugins/docker-compose", "http://github.com/buildkite-plugins/docker-compose#master"},
+	}
+
+	for _, tc := range testCases {
+		l, err := ResolvePluginLocation(tc.Location)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.Expected != l {
+			t.Fatalf("Expected %#v, got %#v", tc.Expected, l)
+		}
+	}
 }
 
 func TestPluginName(t *testing.T) {

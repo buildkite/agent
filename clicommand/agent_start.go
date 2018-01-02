@@ -40,6 +40,7 @@ type AgentStartConfig struct {
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
+	Plugins                      []string `cli:"plugins"`
 	Tags                         []string `cli:"tags"`
 	TagsFromEC2                  bool     `cli:"tags-from-ec2"`
 	TagsFromEC2Tags              bool     `cli:"tags-from-ec2-tags"`
@@ -192,6 +193,12 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Directory where the plugins are saved to",
 			EnvVar: "BUILDKITE_PLUGINS_PATH",
 		},
+		cli.StringSliceFlag{
+			Name:   "plugins",
+			Value:  &cli.StringSlice{},
+			Usage:  "A comma-separated list of plugins to preload for all jobs on this agent (e.g s3-secrets#1.1.0)",
+			EnvVar: "BUILDKITE_PLUGINS",
+		},
 		cli.BoolFlag{
 			Name:   "timestamp-lines",
 			Usage:  "Prepend timestamps on each line of output.",
@@ -301,6 +308,7 @@ var AgentStartCommand = cli.Command{
 				BuildPath:                  cfg.BuildPath,
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
+				Plugins:                    cfg.Plugins,
 				GitCloneFlags:              cfg.GitCloneFlags,
 				GitCleanFlags:              cfg.GitCleanFlags,
 				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
