@@ -121,6 +121,12 @@ steps:
     agents:
       queue: "deploy"
 
+  - name: ":redhat: build"
+    command: "scripts/build-yum-packages.sh"
+    artifact_paths: "rpm/**/*"
+    agents:
+      queue: "deploy"
+
   - name: ":github: :hammer:"
     command: "scripts/build-github-release.sh"
     artifact_paths: "releases/**/*"
