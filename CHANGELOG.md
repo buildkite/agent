@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.38](https://github.com/buildkite/agent/tree/v3.0-beta.38) (2018-01-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.37...v3.0-beta.38)
+
+### Fixed
+
+- Fix bug where bootstrap with pty hangs on macOS [\#614](https://github.com/buildkite/agent/pull/614) (@lox)
+
 ## [v3.0-beta.37](https://github.com/buildkite/agent/tree/v3.0-beta.37) (2017-12-07)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.36...v3.0-beta.37)
 
