@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Generates and uploads pipeline steps for the experimental, beta and stable release
+# Generates and uploads pipeline steps for the edge, beta and stable release
 
 trigger_step() {
   local name="$1"
@@ -39,13 +39,13 @@ output_steps_yaml() {
 
   trigger_step \
     "edge ${agent_version}.${build_version}" \
-    "agent-release-experimental"
+    "agent-release-edge"
 
   block_step "beta?"
 
   trigger_step \
     "beta ${agent_version}" \
-    "agent-release-unstable"
+    "agent-release-beta"
 
   if [[ ! "$agent_version" =~ (beta|rc) ]] ; then
     block_step "stable?"
