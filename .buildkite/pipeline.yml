@@ -1,5 +1,5 @@
 env:
-  DRY_RUN: true # set to true to disable publishing releases
+  DRY_RUN: false # set to true to disable publishing releases
 
 steps:
   - name: ":hammer:"

@@ -1,8 +1,5 @@
 steps:
   - wait
-  - command: "echo $DRY_RUN; echo $$DRY_RUN"
-
-  - wait
 
   - name: ":spiral_note_pad:"
     command: "scripts/check-changelog.sh"
