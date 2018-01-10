@@ -6,7 +6,6 @@ echo '--- Getting agent version from build meta data'
 export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
 export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
-export ARTIFACTS_BUILD=$(buildkite-agent meta-data get "agent-artifacts-build")
 
 YUM_PATH=/yum.buildkite.com
 
@@ -20,7 +19,7 @@ function build() {
   BINARY_FILENAME="pkg/buildkite-agent-$1-$2"
 
   # Download the built binary artifact
-  buildkite-agent artifact download --build "$ARTIFACTS_BUILD" "$BINARY_FILENAME" .
+  buildkite-agent artifact download "$BINARY_FILENAME" .
 
   # Make sure it's got execute permissions so we can extract the version out of it
   chmod +x "$BINARY_FILENAME"
