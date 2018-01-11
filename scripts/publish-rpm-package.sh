@@ -29,7 +29,7 @@ function publish() {
 
 echo '--- Downloading built yum packages packages'
 rm -rf rpm
-mkdir -p deb
+mkdir -p rpm
 buildkite-agent artifact download --build "$artifacts_build" "rpm/*.rpm" rpm/
 
 echo '--- Installing dependencies'
