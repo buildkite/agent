@@ -42,9 +42,11 @@ DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELE
 FORMULA_FILE=./pkg/buildkite-agent.rb
 UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 
+ARTIFACTS_BUILD=$(buildkite-agent meta-data get "agent-artifacts-build")
+
 echo "--- :package: Calculating SHAs for releases/$BINARY_NAME"
 
-buildkite-agent artifact download "releases/$BINARY_NAME" .
+buildkite-agent artifact download  --build "$ARTIFACTS_BUILD" "releases/$BINARY_NAME" .
 
 RELEASE_SHA256=$(sha256sum "releases/$BINARY_NAME" | cut -d" " -f1)
 
