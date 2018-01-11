@@ -10,7 +10,6 @@ steps:
 
   - name: ":redhat: publish rpms"
     command: "scripts/publish-rpm-package.sh"
-    artifact_paths: "rpm/**/*"
     env:
       CODENAME: "experimental"
     agents:

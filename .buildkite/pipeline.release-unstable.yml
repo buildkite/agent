@@ -19,8 +19,7 @@ steps:
       queue: "deploy"
 
   - name: ":redhat:"
-    command: "scripts/rpm-package.sh"
-    artifact_paths: "rpm/**/*"
+    command: "scripts/publish-rpm-package.sh"
     env:
       CODENAME: "unstable"
     agents:
