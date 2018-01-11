@@ -26,9 +26,11 @@ echo "Build version: $BUILD_VERSION"
 
 echo '--- Downloading releases'
 
+artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build")
+
 rm -rf releases
 mkdir -p releases
-buildkite-agent artifact download "releases/*" .
+buildkite-agent artifact download --build "$artifacts_build" "releases/*" .
 
 echo "Version is $FULL_AGENT_VERSION"
 
