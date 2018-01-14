@@ -172,7 +172,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
-			Usage:  "Path to the bootstrap script",
+			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
 		},
 		cli.StringFlag{
