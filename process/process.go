@@ -31,8 +31,7 @@ type Process struct {
 	Env        []string
 	ExitStatus string
 
-	buffer bytes.Buffer
-
+	buffer  outputBuffer
 	command *exec.Cmd
 
 	// This callback is called when the process offically starts
@@ -405,4 +404,32 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	}
 
 	return nil
+}
+
+// outputBuffer is a goroutine safe bytes.Buffer
+type outputBuffer struct {
+	sync.RWMutex
+	buf bytes.Buffer
+}
+
+// Write appends the contents of p to the buffer, growing the buffer as needed. It returns
+// the number of bytes written.
+func (ob *outputBuffer) Write(p []byte) (n int, err error) {
+	ob.Lock()
+	defer ob.Unlock()
+	return ob.buf.Write(p)
+}
+
+// WriteString appends the contents of s to the buffer, growing the buffer as needed. It returns
+// the number of bytes written.
+func (ob *outputBuffer) WriteString(s string) (n int, err error) {
+	return ob.Write([]byte(s))
+}
+
+// String returns the contents of the unread portion of the buffer
+// as a string.  If the Buffer is a nil pointer, it returns "<nil>".
+func (ob *outputBuffer) String() string {
+	ob.RLock()
+	defer ob.RUnlock()
+	return ob.buf.String()
 }

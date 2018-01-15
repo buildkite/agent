@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,7 +32,7 @@ func TestProcessRunsAndCallsStartCallback(t *testing.T) {
 		},
 		LineCallback:       func(s string) {},
 		LinePreProcessor:   func(s string) string { return s },
-		LineCallbackFilter: func(s string) bool { return true },
+		LineCallbackFilter: func(s string) bool { return false },
 	}
 
 	if err := p.Start(); err != nil {
@@ -66,6 +68,7 @@ func TestProcessCallsLineCallbacksForEachOutputLine(t *testing.T) {
 			lines = append(lines, s)
 		},
 		LinePreProcessor: func(s string) string {
+			t.Logf("Preprocessing: %s", s)
 			lineNumber := atomic.AddInt32(&lineCounter, 1)
 			return fmt.Sprintf("#%d: chars %d", lineNumber, len(s))
 		},
@@ -93,22 +96,54 @@ func TestProcessCallsLineCallbacksForEachOutputLine(t *testing.T) {
 	}
 }
 
+func TestProcessPrependsLinesWithTimestamps(t *testing.T) {
+	p := process.Process{
+		Script:             os.Args[0],
+		Env:                []string{"TEST_MAIN=tester"},
+		StartCallback:      func() {},
+		LineCallback:       func(s string) {},
+		LinePreProcessor:   func(s string) string { return s },
+		LineCallbackFilter: func(s string) bool { return strings.HasPrefix(s, "+++") },
+		Timestamp:          true,
+	}
+
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(p.Output()), "\n")
+
+	if lines[0] != `+++ My header` {
+		t.Fatalf("Expected first line to be %q, got %q", `+++ My header`, lines[0])
+	}
+
+	tsRegex := regexp.MustCompile(`^\[.+?\]`)
+
+	for _, line := range lines[1:] {
+		if !tsRegex.MatchString(line) {
+			t.Fatalf("Line doesn't start with a timestamp: %s", line)
+		}
+	}
+}
+
 func TestProcessOutputIsSafeFromRaces(t *testing.T) {
+	var counter int32
+
 	p := process.Process{
 		Script:             os.Args[0],
 		Env:                []string{"TEST_MAIN=tester"},
 		LineCallback:       func(s string) {},
 		LinePreProcessor:   func(s string) string { return s },
-		LineCallbackFilter: func(s string) bool { return true },
+		LineCallbackFilter: func(s string) bool { return false },
 	}
 
 	// the job_runner has a for loop that calls IsRunning and Output, so this checks those are safe from races
 	p.StartCallback = func() {
 		for p.IsRunning() {
-			t.Logf("Output: %s", p.Output())
-			time.Sleep(time.Millisecond * 20)
+			_ = p.Output()
+			atomic.AddInt32(&counter, 1)
+			time.Sleep(time.Millisecond * 10)
 		}
-		t.Logf("Not running anymore")
 	}
 
 	if err := p.Start(); err != nil {
@@ -119,14 +154,20 @@ func TestProcessOutputIsSafeFromRaces(t *testing.T) {
 	if output != string(longTestOutput) {
 		t.Fatalf("Output was unexpected:\nWanted: %q\nGot:    %q\n", longTestOutput, output)
 	}
+
+	if counterVal := atomic.LoadInt32(&counter); counterVal < 10 {
+		t.Fatalf("Expected counter to be at least 10, got %d", counterVal)
+	}
 }
 
 // Invoked by `go test`, switch between helper and running tests based on env
 func TestMain(m *testing.M) {
 	switch os.Getenv("TEST_MAIN") {
 	case "tester":
-		fmt.Printf(longTestOutput)
-		time.Sleep(time.Millisecond * 50)
+		for _, line := range strings.Split(strings.TrimSuffix(longTestOutput, "\n"), "\n") {
+			fmt.Printf("%s\n", line)
+			time.Sleep(time.Millisecond * 20)
+		}
 		os.Exit(0)
 	default:
 		os.Exit(m.Run())
