@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +13,7 @@ import (
 
 func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
 	for _, a := range artifacts {
-		if path.Base(a.Path) == search {
+		if filepath.Base(a.Path) == search {
 			return a
 		}
 	}
@@ -30,50 +29,79 @@ func TestCollect(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	paths := fmt.Sprintf("%s;%s", filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"), filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"))
-	uploader := ArtifactUploader{Paths: paths}
+	volumeName := filepath.VolumeName(root)
+	rootWithoutVolume := strings.TrimPrefix(root, volumeName)
+
+	uploader := ArtifactUploader{
+		Paths: fmt.Sprintf("%s;%s",
+			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
+		),
+	}
 
 	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assert.Nil(t, err)
 	assert.Equal(t, len(artifacts), 4)
 
-	var a *api.Artifact
+	var testCases = []struct {
+		Name         string
+		Path         string
+		AbsolutePath string
+		GlobPath     string
+		FileSize     int
+		Sha1Sum      string
+	}{
+		{
+			"Mr Freeze.jpg",
+			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			362371,
+			"f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b",
+		},
+		{
+			"Commando.jpg",
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			113000,
+			"811d7cb0317582e22ebfeb929d601cdabea4b3c0",
+		},
+		{
+			"The Terminator.jpg",
+			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			47301,
+			"ed76566ede9cb6edc975fcadca429665aad8785a",
+		},
+		{
+			"Smile.gif",
+			filepath.Join(rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
+			2038453,
+			"bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
+		},
+	}
 
-	a = findArtifact(artifacts, "Mr Freeze.jpg")
-	assert.NotNil(t, a)
-	assert.Equal(t, a.Path, "test/fixtures/artifacts/Mr Freeze.jpg")
-	assert.Equal(t, a.AbsolutePath, filepath.Join(root, "test/fixtures/artifacts/Mr Freeze.jpg"))
-	assert.Equal(t, a.GlobPath, "test/fixtures/artifacts/**/*.jpg")
-	assert.Equal(t, int(a.FileSize), 362371)
-	assert.Equal(t, a.Sha1Sum, "f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b")
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			a := findArtifact(artifacts, tc.Name)
+			if a == nil {
+				t.Fatalf("Failed to find artifact %q", tc.Name)
+			}
 
-	a = findArtifact(artifacts, "Commando.jpg")
-	assert.NotNil(t, a)
-	assert.Equal(t, a.Path, "test/fixtures/artifacts/folder/Commando.jpg")
-	assert.Equal(t, a.AbsolutePath, filepath.Join(root, "test/fixtures/artifacts/folder/Commando.jpg"))
-	assert.Equal(t, a.GlobPath, "test/fixtures/artifacts/**/*.jpg")
-	assert.Equal(t, int(a.FileSize), 113000)
-	assert.Equal(t, a.Sha1Sum, "811d7cb0317582e22ebfeb929d601cdabea4b3c0")
-
-	a = findArtifact(artifacts, "The Terminator.jpg")
-	assert.NotNil(t, a)
-	assert.Equal(t, a.Path, "test/fixtures/artifacts/this is a folder with a space/The Terminator.jpg")
-	assert.Equal(t, a.AbsolutePath, filepath.Join(root, "test/fixtures/artifacts/this is a folder with a space/The Terminator.jpg"))
-	assert.Equal(t, a.GlobPath, "test/fixtures/artifacts/**/*.jpg")
-	assert.Equal(t, int(a.FileSize), 47301)
-	assert.Equal(t, a.Sha1Sum, "ed76566ede9cb6edc975fcadca429665aad8785a")
-
-	// Need to trim the first charcater because it's path doesn't contain
-	// the root, which in this case is /
-	a = findArtifact(artifacts, "Smile.gif")
-	assert.NotNil(t, a)
-	gifPath := filepath.Join(root, "test/fixtures/artifacts/gifs/Smile.gif")
-	assert.Equal(t, a.Path, gifPath[1:])
-	assert.Equal(t, a.AbsolutePath, filepath.Join(root, "test/fixtures/artifacts/gifs/Smile.gif"))
-	assert.Equal(t, a.GlobPath, filepath.Join(root, "test/fixtures/artifacts/**/*.gif"))
-	assert.Equal(t, int(a.FileSize), 2038453)
-	assert.Equal(t, a.Sha1Sum, "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd")
+			assert.Equal(t, tc.Path, a.Path)
+			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
+			assert.Equal(t, tc.GlobPath, a.GlobPath)
+			assert.Equal(t, tc.FileSize, int(a.FileSize))
+			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
+		})
+	}
 }
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
@@ -90,7 +118,31 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	}, ";")}
 
 	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	assert.Nil(t, err)
 	assert.Equal(t, len(artifacts), 0)
+}
+
+func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := ArtifactUploader{Paths: strings.Join([]string{
+		filepath.Join("dontmatchanything", "*"),
+		filepath.Join("dontmatchanything.zip"),
+		filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+	}, ";")}
+
+	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(artifacts) != 3 {
+		t.Fatalf("Expected to match 3 artifacts, found %d", len(artifacts))
+	}
 }
