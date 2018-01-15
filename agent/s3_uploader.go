@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"runtime"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -28,7 +29,7 @@ type S3Uploader struct {
 }
 
 func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
-	u.Destination = destination
+	u.Destination = strings.TrimSpace(destination)
 	u.DebugHTTP = debugHTTP
 
 	// Initialize the s3 client, and authenticate it
@@ -45,7 +46,7 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 	baseUrl := "https://" + u.BucketName() + ".s3.amazonaws.com"
 
 	if os.Getenv("BUILDKITE_S3_ACCESS_URL") != "" {
-		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
+		baseUrl = strings.TrimSpace(os.Getenv("BUILDKITE_S3_ACCESS_URL"))
 	}
 
 	url, _ := url.Parse(baseUrl)
@@ -58,9 +59,9 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	permission := "public-read"
 	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
+		permission = strings.TrimSpace(os.Getenv("BUILDKITE_S3_ACL"))
 	} else if os.Getenv("AWS_S3_ACL") != "" {
-		permission = os.Getenv("AWS_S3_ACL")
+		permission = strings.TrimSpace(os.Getenv("AWS_S3_ACL"))
 	}
 
 	// The dirtiest validation method ever...
@@ -111,7 +112,11 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath(), artifact.Path}
+	artifactPath := artifact.Path
+	if runtime.GOOS == "windows" {
+	    artifactPath = strings.Replace(artifactPath, "\\", "/", -1)
+	}
+	parts := []string{u.BucketPath(), artifactPath}
 
 	return strings.Join(parts, "/")
 }

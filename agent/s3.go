@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -21,14 +22,14 @@ type credentialsProvider struct {
 func (e *credentialsProvider) Retrieve() (creds credentials.Value, err error) {
 	e.retrieved = false
 
-	creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
+	creds.AccessKeyID = strings.TrimSpace(os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID"))
 	if creds.AccessKeyID == "" {
-		creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY")
+		creds.AccessKeyID = strings.TrimSpace(os.Getenv("BUILDKITE_S3_ACCESS_KEY"))
 	}
 
-	creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_ACCESS_KEY")
+	creds.SecretAccessKey = strings.TrimSpace(os.Getenv("BUILDKITE_S3_SECRET_ACCESS_KEY"))
 	if creds.SecretAccessKey == "" {
-		creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_KEY")
+		creds.SecretAccessKey = strings.TrimSpace(os.Getenv("BUILDKITE_S3_SECRET_KEY"))
 	}
 
 	if creds.AccessKeyID == "" {
@@ -49,7 +50,7 @@ func (e *credentialsProvider) IsExpired() bool {
 func awsS3RegionFromEnv() (region string, err error) {
 	regionName := "us-east-1"
 	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
-		regionName = os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
+		regionName = strings.TrimSpace(os.Getenv("BUILDKITE_S3_DEFAULT_REGION"))
 	} else {
 		var err error
 		regionName, err = awsRegion()
