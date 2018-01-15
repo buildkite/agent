@@ -14,7 +14,13 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/experiments"
+	"github.com/buildkite/agent/retry"
 	"github.com/pkg/errors"
+)
+
+const (
+	retryCheckoutOnFailure = `RetryCheckoutOnFailure`
 )
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
@@ -545,13 +551,33 @@ func (b *Bootstrap) CheckoutPhase() error {
 			return err
 		}
 	default:
-		if err := b.defaultCheckoutPhase(); err != nil {
-			// Just to be certain, if we aren't in debug mode, let's nuke the checkout directory
-			// so that a partial checkout doesn't poison future builds
-			if !b.Debug {
-				_ = removeCheckoutDir()
+		doCheckout := func() error {
+			err := b.defaultCheckoutPhase()
+			if err != nil {
+				// Just to be certain, if we aren't in debug mode, let's nuke the checkout directory
+				// so that a partial checkout doesn't poison future builds
+				if !b.Debug {
+					_ = removeCheckoutDir()
+				}
 			}
 			return err
+		}
+
+		if experiments.IsEnabled(retryCheckoutOnFailure) {
+			err := retry.Do(func(s *retry.Stats) error {
+				err := doCheckout()
+				if err != nil {
+					b.shell.Warningf("%s (%s)", err, s)
+				}
+				return err
+			}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+			if err != nil {
+				return err
+			}
+		} else {
+			if err := doCheckout(); err != nil {
+				return err
+			}
 		}
 	}
 
