@@ -292,3 +292,26 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 		})
 	}
 }
+
+func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	tester.Env = append(tester.Env, "BUILDKITE_NO_LOCAL_HOOKS=true")
+
+	tester.ExpectGlobalHook("pre-command").Once()
+	tester.ExpectLocalHook("pre-command").NotCalled()
+
+	if err = tester.Run(t, "BUILDKITE_COMMAND=true"); err == nil {
+		t.Fatal("Expected the bootstrap to fail due to local hook being called")
+	} else {
+		t.Logf("Failed as expected with %v", err)
+	}
+
+	tester.CheckMocks(t)
+}

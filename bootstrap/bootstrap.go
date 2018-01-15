@@ -94,6 +94,7 @@ func (b *Bootstrap) Start() int {
 	// Use the exit code from the command phase
 	exitStatus, _ := b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`)
 	exitStatusInt, _ := strconv.Atoi(exitStatus)
+
 	return exitStatusInt
 }
 
@@ -205,7 +206,14 @@ func (b *Bootstrap) localHookPath(name string) string {
 
 // Executes a local hook
 func (b *Bootstrap) executeLocalHook(name string) error {
-	return b.executeHook("local "+name, b.localHookPath(name), nil)
+	localHookPath := b.localHookPath(name)
+	noLocalHooks, _ := b.shell.Env.Get(`BUILDKITE_NO_LOCAL_HOOKS`)
+
+	// For high-security configs, we allow the disabling of local hooks. This is only exposed via env at this point
+	if noLocalHooks == "true" && fileExists(localHookPath) {
+		return fmt.Errorf("Attempted to run %s, but BUILDKITE_NO_LOCAL_HOOKS is enabled", localHookPath)
+	}
+	return b.executeHook("local "+name, localHookPath, nil)
 }
 
 // Returns whether or not a file exists on the filesystem. We consider any
@@ -475,10 +483,6 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase() error {
 	if err := b.executeGlobalHook("pre-checkout"); err != nil {
-		return err
-	}
-
-	if err := b.executeLocalHook("pre-checkout"); err != nil {
 		return err
 	}
 
