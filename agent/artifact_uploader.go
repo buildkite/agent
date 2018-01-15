@@ -83,7 +83,8 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 		// Resolve the globs (with * and ** in them)
 		files, err := zglob.Glob(globPath)
 		if err == os.ErrNotExist {
-			return nil, nil
+			logger.Info("No files matched glob: %s", globPath)
+			continue
 		} else if err != nil {
 			return nil, err
 		}
