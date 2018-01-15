@@ -3,10 +3,18 @@
 REM enable delayed expansion so that ERRORLEVEL is evaluated properly inside IF blocks
 SETLOCAL ENABLEDELAYEDEXPANSION
 
-echo ~~~ Preparing build folder
-
 SET SANITIZED_PROJECT_SLUG=%BUILDKITE_PROJECT_SLUG:/=\%
 SET BUILDKITE_BUILD_DIR=%BUILDKITE_BUILD_PATH%\%BUILDKITE_AGENT_NAME%\%SANITIZED_PROJECT_SLUG%
+
+REM Remove the checkout folder if BUILDKITE_CLEAN_CHECKOUT is present
+IF "%BUILDKITE_CLEAN_CHECKOUT%" == "true" (
+  IF EXIST "%BUILDKITE_BUILD_DIR%" (
+    echo ~~~ Cleaning project checkout
+    RMDIR /S /Q "%BUILDKITE_BUILD_DIR%"
+  )
+)
+
+echo ~~~ Preparing build folder
 
 REM Add the BUILDKITE_BIN_PATH to the PATH
 
@@ -30,16 +38,24 @@ IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
 REM Do we need to do a git checkout?
 
+IF "%BUILDKITE_GIT_CLONE_FLAGS%" == "" (
+  SET BUILDKITE_GIT_CLONE_FLAGS=-v
+)
+
 IF NOT EXIST ".git" (
-  ECHO ^> git clone %BUILDKITE_REPO%
-  CALL git clone "%BUILDKITE_REPO%" . -v
+  ECHO ^> git clone %BUILDKITE_GIT_CLONE_FLAGS% -- %BUILDKITE_REPO%
+  CALL git clone %BUILDKITE_GIT_CLONE_FLAGS% -- "%BUILDKITE_REPO%" .
   IF !ERRORLEVEL! NEQ 0 EXIT !ERRORLEVEL!
 )
 
 REM Clean the repo
 
-ECHO ^> git clean -fdq
-CALL git clean -fdq
+IF "%BUILDKITE_GIT_CLEAN_FLAGS%" == "" (
+  SET BUILDKITE_GIT_CLEAN_FLAGS=-fdq
+)
+
+ECHO ^> git clean %BUILDKITE_GIT_CLEAN_FLAGS%
+CALL git clean %BUILDKITE_GIT_CLEAN_FLAGS%
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
 REM Determine if a GitHub pull request fetch is possible
