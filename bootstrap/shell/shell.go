@@ -315,9 +315,16 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 			// See https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 		}
 	} else {
-		cmd.Stdout = w
+		cmd.Stdout = nil
 		cmd.Stderr = nil
 		cmd.Stdin = nil
+
+		if flags.Stdout {
+			cmd.Stdout = w
+		}
+		if flags.Stderr {
+			cmd.Stderr = w
+		}
 
 		if s.Debug {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
