@@ -2,11 +2,19 @@ env:
   DRY_RUN: false # set to true to disable publishing releases
 
 steps:
-  - name: ":hammer:"
+  - name: ":hammer: :linux:"
     command: "scripts/tests.sh"
     plugins:
       docker-compose#v1.5.0:
         run: agent
+
+  - name: ":hammer: :windows:"
+    trigger: agent-windows
+    async: true
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
 
   - wait
 

@@ -1,0 +1,3 @@
+@echo off
+echo +++ Running tests
+go test -race -v .\...

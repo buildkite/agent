@@ -1,0 +1,5 @@
+steps:
+  - name: ":hammer: :windows:"
+    command: ".\\scripts\\tests.bat"
+    agents:
+      queue: "windows"
