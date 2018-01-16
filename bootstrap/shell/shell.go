@@ -311,7 +311,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 		}
 	} else {
 		cmd.Stdout = w
-		cmd.Stderr = nil
+		cmd.Stderr = w
 		cmd.Stdin = nil
 
 		if s.Debug {
