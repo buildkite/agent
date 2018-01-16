@@ -163,7 +163,7 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 	return &lock, err
 }
 
-// Run runs a command, write to the logger and return an error if it fails
+// Run runs a command, write stdout and stderr to the logger and return an error if it fails
 func (s *Shell) Run(command string, arg ...string) error {
 	s.Promptf("%s", process.FormatCommand(command, arg))
 
@@ -174,13 +174,16 @@ func (s *Shell) Run(command string, arg ...string) error {
 	}
 
 	return s.executeCommand(cmd, s.Writer, executeFlags{
-		Silent: false,
+		Stdout: true,
+		Stderr: true,
 		PTY:    s.PTY,
 	})
 }
 
-// RunAndCapture runs a command and captures the stdout, nothing else is logged. A PTY is not used
-// even if one is enabled for the shell. Will write the command and the output to logger if Debug is enabled
+// RunAndCapture runs a command and captures and returns stdout (stderr isn't captured). If the shell is in debug
+// mode then the command will be eched and both stderr and stdout will be written to the logger. A PTY is never used
+// for RunAndCapture.
+
 func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	if s.Debug {
 		s.Promptf("%s", process.FormatCommand(command, arg))
@@ -194,7 +197,8 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	var b bytes.Buffer
 
 	err = s.executeCommand(cmd, &b, executeFlags{
-		Silent: !s.Debug,
+		Stdout: true,
+		Stderr: false,
 		PTY:    false,
 	})
 	if err != nil {
@@ -245,7 +249,8 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	cmd.Env = customEnv.ToSlice()
 
 	return s.executeCommand(cmd, s.Writer, executeFlags{
-		Silent: false,
+		Stdout: true,
+		Stderr: true,
 		PTY:    s.PTY,
 	})
 }
@@ -266,8 +271,11 @@ func (s *Shell) buildCommand(name string, arg ...string) (*exec.Cmd, error) {
 }
 
 type executeFlags struct {
-	// Don't log output of commands to the shell output stream
-	Silent bool
+	// Whether to capture stdout
+	Stdout bool
+
+	// Whether to capture stderr
+	Stderr bool
 
 	// Run the command in a PTY
 	PTY bool
@@ -286,9 +294,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 		// forward signals to the process
 		for sig := range signals {
 			if err := signalProcess(cmd, sig); err != nil {
-				if !flags.Silent {
-					s.Errorf("Error passing signal to child process: %v", err)
-				}
+				s.Errorf("Error passing signal to child process: %v", err)
 			}
 		}
 	}()
