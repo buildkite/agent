@@ -12,7 +12,7 @@ services:
     environment:
       - BUILDKITE_BUILD_NUMBER
       - "BUILDKITE_AGENT_TAGS=queue=default"
-      - "BUILDKITE_BUILD_PATH=/buildkite"
+      - "BUILDKITE_BUILD_PATH=c:\\buildkite"
 
 networks:
   default:
