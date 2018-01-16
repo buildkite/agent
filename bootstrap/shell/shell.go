@@ -315,19 +315,23 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 			// See https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 		}
 	} else {
-		cmd.Stdout = w
+		cmd.Stdout = nil
 		cmd.Stderr = nil
 		cmd.Stdin = nil
 
-		if s.Debug {
+		if flags.Stdout {
+			cmd.Stdout = w
+		} else if s.Debug {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
 			defer stdOutStreamer.Close()
+			cmd.Stdout = stdOutStreamer
+		}
 
+		if flags.Stderr {
+			cmd.Stderr = w
+		} else if s.Debug {
 			stdErrStreamer := NewLoggerStreamer(s.Logger)
 			defer stdErrStreamer.Close()
-
-			// write the stdout to the writer and stream both stdout and stderr to the logger
-			cmd.Stdout = io.MultiWriter(stdOutStreamer, w)
 			cmd.Stderr = stdErrStreamer
 		}
 
