@@ -1,6 +1,5 @@
-FROM microsoft/windowsservercore:latest   
+FROM microsoft/windowsservercore:latest
 
-#ENV chocolateyVersion 0.10.3
 ENV ChocolateyUseWindowsCompression false
 
 # Set your PowerShell execution policy
@@ -19,7 +18,7 @@ ENV GOPATH=c:/gopath
 WORKDIR c:/gopath/src/github.com/buildkite/agent
 COPY . .
 
-# Build agent
-RUN go build -v -i -o c:/gopath/bin/buildkite-agent.exe
+# Build agent and put binary in a dir in the PATH (remarkably hard to add to path)
+RUN go build -i -o .\buildkite-agent.exe
 
-CMD ["c:/gopath/bin/buildkite-agent.exe", "start"]
+CMD ["./buildkite-agent.exe", "start"]

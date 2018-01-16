@@ -1,4 +1,7 @@
-version: '2.1'
+version: "3.2"
+
+# This is a docker-compose file designed to be called in macOS and translate through to windows
+# Binding is basically impossible, see https://github.com/docker/compose/issues/5371
 
 services:
   agent:
@@ -6,11 +9,10 @@ services:
       dockerfile: Dockerfile-windows
       context: .
     working_dir: C:/gopath/src/github.com/buildkite/agent
-    # volumes:
-    #   - ./:C:/gopath/src/github.com/buildkite/agent
     environment:
-      BUILDKITE_BUILD_NUMBER:
-
+      - BUILDKITE_BUILD_NUMBER
+      - "BUILDKITE_AGENT_TAGS=queue=default"
+      - "BUILDKITE_BUILD_PATH=c:\\buildkite"
 
 networks:
   default:

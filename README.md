@@ -68,16 +68,14 @@ To test the commands locally:
 go run main.go start --debug --token "abc123"
 ```
 
-### Testing Windows via Vagrant and VMWare Fusion
+### Windows via Vagrant
 
-This requires either Virtualbox (free) or VMWare Fusion (paid) + Vagrant VMWare Fusion plugin (paid).
+This requires either Virtualbox (free) or VMWare Fusion + Vagrant VMWare Fusion plugin (paid).
 
-It assumes that you have Docker for Mac or similar installed. Based on [StefanScherer/windows-docker-machine](https://github.com/StefanScherer/windows-docker-machine).
+It assumes that you have Docker for Mac or similar installed. The following commands are run on your local machine. Expect things to take a long time, the vagrant box is 10GB and the docker base image is 3.4GB.
 
 ```bash
-brew cask install vmware-fusion vagrant
-vagrant plugin install vagrant-vmware-fusion
-vagrant up --provider vmware_fusion
+vagrant up
 eval $(docker-machine env windows-2016)
 docker-compose -f docker-compose.windows.yml run agent cmd
 C:\gopath\src\github.com\buildkite\agent> go run main.go start --token xxx --debug
