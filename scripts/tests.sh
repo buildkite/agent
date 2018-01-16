@@ -1,7 +1,4 @@
 #!/bin/bash
-
 set -euo pipefail
-
 echo '+++ Running tests'
-
-go test -v -race ./...
+go test -race -v ./...
