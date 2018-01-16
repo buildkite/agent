@@ -1,5 +1,5 @@
 steps:
   - name: ":hammer: :windows:"
-    command: "docker-compose -f docker-compose.yml run --rm agent .\\scripts\\tests.bat"
+    command: "docker-compose -f docker-compose.windows.yml run --rm agent .\\scripts\\tests.bat"
     agents:
       queue: "windows"
