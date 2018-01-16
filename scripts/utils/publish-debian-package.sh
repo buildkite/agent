@@ -52,18 +52,39 @@ info "Uploading $PACKAGE to $DEB_S3_BUCKET ($CODENAME $COMPONENT)"
 # Decrpyt the GPG_PASSPHRASE with our GPG_PASSPHRASE_PASSWORD
 GPG_PASSPHRASE=`openssl aes-256-cbc -k "$GPG_PASSPHRASE_PASSWORD" -in "$GPG_PASSPHRASE_PATH" -d`
 
+deb_s3_args=(
+  --preserve-versions
+  --sign "$GPG_SIGNING_KEY"
+  --gpg-options "\-\-digest-algo SHA512 \-\-passphrase $GPG_PASSPHRASE"
+  --codename "$CODENAME"
+  --component "$COMPONENT"
+  "--access-key-id=$DEB_S3_ACCESS_KEY_ID"
+  "--secret-access-key=$DEB_S3_SECRET_ACCESS_KEY_ID"
+)
+
+# Older versions were ok with prefix and bucket in the same parameter, but we now need to split them
+
+echo "Parsing DEB_S3_BUCKET=$DEB_S3_BUCKET"
+DEB_S3_BUCKET_ARRAY=(${DEB_S3_BUCKET//\// })
+
+if [[ ${#DEB_S3_BUCKET_ARRAY[@]} -gt 2 ]] ; then
+  echo "Expected $DEB_S3_BUCKET to have at most 1 path component"
+fi
+
+if [[ ${#DEB_S3_BUCKET_ARRAY[@]} -gt 1 ]] ; then
+  deb_s3_args+=(
+    --bucket "${DEB_S3_BUCKET_ARRAY[0]}"
+    --prefix "${DEB_S3_BUCKET_ARRAY[1]}"
+  )
+else
+  deb_s3_args+=(
+    --bucket "$DEB_S3_BUCKET_PREFIX"
+  )
+fi
+
 # Uploads to s3 and signs with the default key on the system
 
-bundle exec deb-s3 upload \
-  --preserve-versions \
-  --sign $GPG_SIGNING_KEY \
-  --gpg-options "\-\-digest-algo SHA512 \-\-passphrase $GPG_PASSPHRASE" \
-  --bucket $DEB_S3_BUCKET \
-  --codename $CODENAME \
-  --component $COMPONENT \
-  --access-key-id=$DEB_S3_ACCESS_KEY_ID \
-  --secret-access-key=$DEB_S3_SECRET_ACCESS_KEY_ID \
-  $PACKAGE
+bundle exec deb-s3 upload "${deb_s3_args[@]}" "$PACKAGE"
 
 echo "✅ All done! To install this package:"
 echo ""
