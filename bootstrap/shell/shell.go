@@ -180,10 +180,9 @@ func (s *Shell) Run(command string, arg ...string) error {
 	})
 }
 
-// RunAndCapture runs a command and captures and returns stdout (stderr isn't captured). If the shell is in debug
-// mode then the command will be eched and both stderr and stdout will be written to the logger. A PTY is never used
-// for RunAndCapture.
-
+// RunAndCapture runs a command and captures the output for processing. Stdout is captured, but
+// stderr isn't. If the shell is in debug mode then the command will be eched and both stderr
+// and stdout will be written to the logger. A PTY is never used for RunAndCapture.
 func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	if s.Debug {
 		s.Promptf("%s", process.FormatCommand(command, arg))
