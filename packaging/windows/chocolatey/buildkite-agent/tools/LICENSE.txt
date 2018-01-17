@@ -1,0 +1,83 @@
+﻿# Buildkite Agent Licence
+
+Copyright (c) 2014-2016 Buildkite Pty Ltd
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## Third-party dependencies
+
+- Golang, BSD-style
+  https://golang.org/LICENSE
+
+- goamz, LGPLv3
+  https://github.com/AdRoll/goamz/blob/master/LICENSE
+
+- gspt, MIT
+  https://github.com/erikdubbelboer/gspt/blob/master/LICENSE
+
+- aws-sdk-go, Apache 2.0
+  https://github.com/aws/aws-sdk-go/blob/master/LICENSE.txt
+
+- go-yaml/yaml, Apache 2.0
+  https://github.com/go-yaml/yaml/blob/v2/LICENSE
+
+- cli, MIT
+  https://github.com/urfave/cli/blob/master/LICENSE
+
+- go-shlex, Apache 2.0
+  https://github.com/flynn-archive/go-shlex, Apache 2.0
+
+- yaml, MIT
+  https://github.com/ghodss/yaml/blob/master/LICENSE
+
+- go-querystring, BSD-3-Clause
+  https://github.com/google/go-querystring/blob/master/LICENSE
+
+- pty, MIT
+  https://github.com/kr/pty/blob/master/License
+
+- go-shellwords, MIT
+  https://github.com/mattn/go-shellwords
+
+- go-homedir, MIT
+  https://github.com/mitchellh/go-homedir
+
+- lockfile, MIT
+  https://github.com/nightlyone/lockfile/blob/master/LICENSE
+
+- reflections, MIT
+  https://github.com/oleiade/reflections/blob/master/LICENSE
+
+- uuid, BSD 3 Clause
+  https://github.com/pborman/uuid/blob/master/LICENSE
+
+- testify, MIT
+  https://github.com/stretchr/testify/blob/master/LICENCE.txt
+
+- go-ini, MIT
+  https://github.com/vaughan0/go-ini/blob/master/LICENSE
+
+- google-api-go-client, BSD 3 Clause
+  https://github.com/google/google-api-go-client/blob/master/LICENSE
+
+- msgpack, BSD 3 Clause
+  https://github.com/vmihailenco/msgpack/blob/v2/LICENSE
