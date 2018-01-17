@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -68,7 +69,12 @@ func TestRun(t *testing.T) {
 
 	actual := out.String()
 
-	if expected := "$ " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
+	promptPrefix := "$"
+	if runtime.GOOS == "windows" {
+		promptPrefix = ">"
+	}
+
+	if expected := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
 		t.Fatalf("Expected %q, got %q", expected, actual)
 	}
 }
