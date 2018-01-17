@@ -42,7 +42,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
-		{"submodule", "foreach", "--recursive", "git", "config", "--get", "remote.origin.url"},
+		{"submodule", "foreach", "--recursive", "git", "ls-remote", "--get-url"},
 		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
 		{"--no-pager", "branch", "--contains", "HEAD", "--no-color"},
 	})
