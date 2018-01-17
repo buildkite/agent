@@ -1,7 +1,7 @@
 package bootstrap
 
 import (
-	"io"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -14,18 +14,27 @@ import (
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skipf("Not tested on windows yet")
-	}
-
 	t.Parallel()
 
-	wrapper := newTestHookWrapper(t, []string{
-		"#!/bin/bash",
-		"export LLAMAS=rock",
-		"export Alpacas=\"are ok\"",
-		"echo hello world",
-	})
+	var script []string
+
+	if runtime.GOOS != "windows" {
+		script = []string{
+			"#!/bin/bash",
+			"export LLAMAS=rock",
+			"export Alpacas=\"are ok\"",
+			"echo hello world",
+		}
+	} else {
+		script = []string{
+			"@echo off",
+			"set LLAMAS=rock",
+			"set Alpacas=are ok",
+			"echo hello world",
+		}
+	}
+
+	wrapper := newTestHookWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
 	sh := newTestShell(t)
@@ -45,10 +54,6 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skipf("Not tested on windows yet")
-	}
-
 	t.Parallel()
 
 	tempDir, err := ioutil.TempDir("", "hookwrapperdir")
@@ -57,12 +62,25 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	wrapper := newTestHookWrapper(t, []string{
-		"#!/bin/bash",
-		"mkdir mysubdir",
-		"cd mysubdir",
-		"echo hello world",
-	})
+	var script []string
+
+	if runtime.GOOS != "windows" {
+		script = []string{
+			"#!/bin/bash",
+			"mkdir mysubdir",
+			"cd mysubdir",
+			"echo hello world",
+		}
+	} else {
+		script = []string{
+			"@echo off",
+			"mkdir mysubdir",
+			"cd mysubdir",
+			"echo hello world",
+		}
+	}
+
+	wrapper := newTestHookWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
 	sh := newTestShell(t)
@@ -103,13 +121,18 @@ func newTestShell(t *testing.T) *shell.Shell {
 }
 
 func newTestHookWrapper(t *testing.T, script []string) *hookScriptWrapper {
-	hookFile, err := ioutil.TempFile("", "hookwrapper")
+	hookName := "hookwrapper"
+	if runtime.GOOS == "windows" {
+		hookName += ".bat"
+	}
+
+	hookFile, err := shell.TempFileWithExtension(hookName)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, line := range script {
-		if _, err = io.WriteString(hookFile, line+"\n"); err != nil {
+		if _, err = fmt.Fprintln(hookFile, line); err != nil {
 			t.Fatal(err)
 		}
 	}
