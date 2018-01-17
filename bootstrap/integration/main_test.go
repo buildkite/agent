@@ -24,6 +24,7 @@ func compileBootstrap(dir string) string {
 	}
 
 	cmd := exec.Command("go", "build", "-o", binPath, "main.go")
+	cmd.Env = os.Environ()
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Dir = projectRoot
