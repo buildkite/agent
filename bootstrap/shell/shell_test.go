@@ -99,7 +99,10 @@ func TestWorkingDir(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// macos has a symlinked temp dir
-	tempDir, _ = filepath.EvalSymlinks(tempDir)
+	if runtime.GOOS == "darwin" {
+		tempDir, _ = filepath.EvalSymlinks(tempDir)
+	}
+
 	dirs := []string{tempDir, "my", "test", "dirs"}
 
 	if err := os.MkdirAll(filepath.Join(dirs...), 0700); err != nil {
@@ -109,7 +112,7 @@ func TestWorkingDir(t *testing.T) {
 	currentWd, _ := os.Getwd()
 
 	sh, err := shell.New()
-	sh.Logger = shell.DiscardLogger
+	sh.Logger = shell.TestingLogger{t}
 
 	if err != nil {
 		t.Fatal(err)
@@ -126,9 +129,19 @@ func TestWorkingDir(t *testing.T) {
 			t.Fatalf("Expected working dir %q, got %q", dir, actual)
 		}
 
-		out, err := sh.RunAndCapture("pwd")
-		if err != nil {
-			t.Fatal(err)
+		var out string
+
+		// there is no pwd for windows, and getting it requires using a shell builtin
+		if runtime.GOOS == "windows" {
+			out, err = sh.RunAndCapture("cmd", "/c", "echo", "%cd%")
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			out, err = sh.RunAndCapture("pwd")
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		if actual := out; actual != dir {
