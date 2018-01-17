@@ -89,7 +89,7 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	// Entering 'vendor/frontend/vendor/emojis'
 	// git@github.com:buildkite/emojis.git
 	output, err := sh.RunAndCapture(
-		"git", "submodule", "foreach", "--recursive", "git", "remote", "get-url", "origin")
+		"git", "submodule", "foreach", "--recursive", "git", "ls-remote", "--get-url")
 	if err != nil {
 		return nil, err
 	}
