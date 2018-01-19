@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -54,7 +55,8 @@ type Process struct {
 var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
 
 func (p *Process) Start() error {
-	args, err := shellwords.Parse(p.Script)
+	// Shellwords has trouble parsing windows paths
+	args, err := shellwords.Parse(filepath.ToSlash(p.Script))
 	if err != nil {
 		return err
 	}
