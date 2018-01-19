@@ -1,7 +1,6 @@
 version: "3.2"
 
 # This is a docker-compose file designed to be called in macOS and translate through to windows
-# Binding is basically impossible, see https://github.com/docker/compose/issues/5371
 
 services:
   agent:

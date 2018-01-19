@@ -13,6 +13,11 @@ RUN choco install -y git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install -y openssh && \
   choco install -y golang
 
+# Hack for mounting in code later (Use G:)
+# See https://github.com/moby/moby/issues/27537#issuecomment-271546031
+VOLUME c:/data
+RUN powershell set-itemproperty -path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\DOS Devices' -Name 'G:' -Value '\??\C:\data' -Type String
+
 # Copy across the agent source
 ENV GOPATH=c:/gopath
 WORKDIR c:/gopath/src/github.com/buildkite/agent
