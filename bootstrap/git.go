@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 
@@ -112,24 +111,23 @@ func gitRevParse(sh *shell.Shell) (string, error) {
 
 var (
 	hasSchemePattern  = regexp.MustCompile("^[^:]+://")
-	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]+):/?(.+)$")
+	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):/?(.+)$")
 )
 
-// ParseGittableURL parses and converts a git repository url into a url.URL
-func ParseGittableURL(ref string) (*url.URL, error) {
-	if _, err := os.Stat(ref); os.IsExist(err) {
-		return url.Parse(fmt.Sprintf("file://%s", ref))
+// parseGittableURL parses and converts a git repository url into a url.URL
+func parseGittableURL(ref string) (*url.URL, error) {
+	if !hasSchemePattern.MatchString(ref) {
+		if scpLikeURLPattern.MatchString(ref) {
+			matched := scpLikeURLPattern.FindStringSubmatch(ref)
+			user := matched[1]
+			host := matched[2]
+			path := matched[3]
+			ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+		} else {
+			normalizedRef := strings.Replace(ref, "\\", "/", -1)
+			ref = fmt.Sprintf("file:///%s", strings.TrimPrefix(normalizedRef, "/"))
+		}
 	}
-
-	if !hasSchemePattern.MatchString(ref) && scpLikeURLPattern.MatchString(ref) {
-		matched := scpLikeURLPattern.FindStringSubmatch(ref)
-		user := matched[1]
-		host := matched[2]
-		path := matched[3]
-
-		ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
-	}
-
 	return url.Parse(ref)
 }
 

@@ -129,10 +129,15 @@ func (kh *knownHosts) Add(host string) error {
 
 // AddFromRepository takes a git repo url, extracts the host and adds it
 func (kh *knownHosts) AddFromRepository(repository string) error {
-	u, err := ParseGittableURL(repository)
+	u, err := parseGittableURL(repository)
 	if err != nil {
 		kh.Shell.Warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
 		return err
+	}
+
+	// File uri's don't need a host added
+	if u.Host == "" || u.Scheme == "file" {
+		return nil
 	}
 
 	host := stripAliasesFromGitHost(u.Host)
