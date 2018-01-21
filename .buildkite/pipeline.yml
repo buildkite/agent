@@ -17,6 +17,13 @@ steps:
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
 
+  - wait: ~
+    continue_on_failure: true
+
+  - label: ":junit:"
+    commands:
+      - "scripts/junit.sh"
+
   - wait
 
   - name: ":windows: 386"
