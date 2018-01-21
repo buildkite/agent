@@ -8,5 +8,6 @@ services:
       - ./:/go/src/github.com/buildkite/agent:cached
     environment:
       - BUILDKITE_BUILD_NUMBER
+      - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
