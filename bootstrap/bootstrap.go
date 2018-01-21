@@ -220,8 +220,11 @@ func (b *Bootstrap) globalHookPath(name string) (string, error) {
 	return b.findHookFile(b.HooksPath, name)
 }
 
-// Executes a global hook
+// Executes a global hook if one exists
 func (b *Bootstrap) executeGlobalHook(name string) error {
+	if !b.hasGlobalHook(name) {
+		return nil
+	}
 	p, err := b.globalHookPath(name)
 	if err != nil {
 		return err
@@ -241,6 +244,10 @@ func (b *Bootstrap) hasLocalHook(name string) bool {
 
 // Executes a local hook
 func (b *Bootstrap) executeLocalHook(name string) error {
+	if !b.hasLocalHook(name) {
+		return nil
+	}
+
 	localHookPath, err := b.localHookPath(name)
 	noLocalHooks, _ := b.shell.Env.Get(`BUILDKITE_NO_LOCAL_HOOKS`)
 
