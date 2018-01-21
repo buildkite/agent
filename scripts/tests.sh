@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+mkdir tmp/
 
 echo "~~~ Installing test dependencies"
 go get github.com/kyoh86/richgo
