@@ -51,13 +51,12 @@ func findExecutable(file string, exts []string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// LookPath searches for an executable binary named file
-// in the directories named by the PATH environment variable.
-// If file contains a slash, it is tried directly and the PATH is not consulted.
-// LookPath also uses PATHEXT environment variable to match
-// a suitable candidate.
+// LookPath searches for an executable binary named file in the directories within the path variable,
+// which is a semi-colon delimited path.
+// If file contains a slash, it is tried directly
+// LookPath also uses PATHEXT environment variable to match a suitable candidate.
 // The result may be an absolute path or a path relative to the current directory.
-func lookPath(file string, path string, fileExtensions string) (string, error) {
+func LookPath(file string, path string, fileExtensions string) (string, error) {
 	var exts []string
 	if fileExtensions != "" {
 		for _, e := range strings.Split(strings.ToLower(fileExtensions), `;`) {

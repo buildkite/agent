@@ -195,28 +195,57 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	}
 }
 
-// Returns the absolute path to a global hook
-func (b *Bootstrap) globalHookPath(name string) string {
-	return filepath.Join(b.HooksPath, normalizeScriptFileName(name))
+// Returns the absolute path to the best matching hook file in a path, or os.ErrNotExist if none is found
+func (b *Bootstrap) findHookFile(hookDir string, name string) (string, error) {
+	if runtime.GOOS == "windows" {
+		// check for windows types first
+		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD;.PS1"); err == nil {
+			return p, nil
+		}
+	}
+	// otherwise chech for th default shell script
+	if p := filepath.Join(hookDir, name); fileExists(p) {
+		return p, nil
+	}
+	return "", os.ErrNotExist
+}
+
+func (b *Bootstrap) hasGlobalHook(name string) bool {
+	_, err := b.globalHookPath(name)
+	return err == nil
+}
+
+// Returns the absolute path to a global hook, or os.ErrNotExist if none is found
+func (b *Bootstrap) globalHookPath(name string) (string, error) {
+	return b.findHookFile(b.HooksPath, name)
 }
 
 // Executes a global hook
 func (b *Bootstrap) executeGlobalHook(name string) error {
-	return b.executeHook("global "+name, b.globalHookPath(name), nil)
+	p, err := b.globalHookPath(name)
+	if err != nil {
+		return err
+	}
+	return b.executeHook("global "+name, p, nil)
 }
 
-// Returns the absolute path to a local hook
-func (b *Bootstrap) localHookPath(name string) string {
-	return filepath.Join(b.shell.Getwd(), ".buildkite", "hooks", normalizeScriptFileName(name))
+// Returns the absolute path to a local hook, or os.ErrNotExist if none is found
+func (b *Bootstrap) localHookPath(name string) (string, error) {
+	return b.findHookFile(filepath.Join(b.shell.Getwd(), ".buildkite", "hooks"), name)
+}
+
+func (b *Bootstrap) hasLocalHook(name string) bool {
+	_, err := b.localHookPath(name)
+	return err == nil
 }
 
 // Executes a local hook
 func (b *Bootstrap) executeLocalHook(name string) error {
-	localHookPath := b.localHookPath(name)
+	localHookPath, err := b.localHookPath(name)
 	noLocalHooks, _ := b.shell.Env.Get(`BUILDKITE_NO_LOCAL_HOOKS`)
 
 	// For high-security configs, we allow the disabling of local hooks. This is only exposed via env at this point
-	if noLocalHooks == "true" && fileExists(localHookPath) {
+	if noLocalHooks == "true" && err == nil {
 		return fmt.Errorf("Attempted to run %s, but BUILDKITE_NO_LOCAL_HOOKS is enabled", localHookPath)
 	}
 	return b.executeHook("local "+name, localHookPath, nil)
@@ -229,14 +258,6 @@ func (b *Bootstrap) executeLocalHook(name string) error {
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
-}
-
-// Returns a platform specific filename for scripts
-func normalizeScriptFileName(filename string) string {
-	if runtime.GOOS == "windows" {
-		return filename + ".bat"
-	}
-	return filename
 }
 
 func dirForAgentName(agentName string) string {
@@ -379,13 +400,13 @@ func (b *Bootstrap) PluginPhase() error {
 // Executes a named hook on all plugins that have it
 func (b *Bootstrap) executePluginHook(name string) error {
 	for _, p := range b.plugins {
-		path, err := p.HookPath(name)
+		hookPath, err := b.findHookFile(p.HooksDir, name)
 		if err != nil {
-			return err
+			continue
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
-		if err := b.executeHook("plugin "+p.Label()+" "+name, path, env); err != nil {
+		if err := b.executeHook("plugin "+p.Label()+" "+name, hookPath, env); err != nil {
 			return err
 		}
 	}
@@ -393,9 +414,9 @@ func (b *Bootstrap) executePluginHook(name string) error {
 }
 
 // If any plugin has a hook by this name
-func (b *Bootstrap) pluginHookExists(name string) bool {
+func (b *Bootstrap) hasPluginHook(name string) bool {
 	for _, p := range b.plugins {
-		if p.HasHook(name) {
+		if _, err := b.findHookFile(p.HooksDir, name); err == nil {
 			return true
 		}
 	}
@@ -413,7 +434,11 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 	// Create a path to the plugin
 	directory := filepath.Join(b.PluginsPath, id)
 	pluginGitDirectory := filepath.Join(directory, ".git")
-	checkout := &pluginCheckout{Plugin: p, Path: directory}
+	checkout := &pluginCheckout{
+		Plugin:      p,
+		CheckoutDir: directory,
+		HooksDir:    filepath.Join(directory, "hooks"),
+	}
 
 	// Has it already been checked out?
 	if fileExists(pluginGitDirectory) {
@@ -546,11 +571,11 @@ func (b *Bootstrap) CheckoutPhase() error {
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
-	case b.pluginHookExists("checkout"):
+	case b.hasPluginHook("checkout"):
 		if err := b.executePluginHook("checkout"); err != nil {
 			return err
 		}
-	case fileExists(b.globalHookPath("checkout")):
+	case b.hasGlobalHook("checkout"):
 		if err := b.executeGlobalHook("checkout"); err != nil {
 			return err
 		}
@@ -797,11 +822,11 @@ func (b *Bootstrap) CommandPhase() error {
 
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
-	case b.pluginHookExists("command"):
+	case b.hasPluginHook("command"):
 		commandExitError = b.executePluginHook("command")
-	case fileExists(b.localHookPath("command")):
+	case b.hasLocalHook("command"):
 		commandExitError = b.executeLocalHook("command")
-	case fileExists(b.globalHookPath("command")):
+	case b.hasGlobalHook("command"):
 		commandExitError = b.executeGlobalHook("command")
 	default:
 		commandExitError = b.defaultCommandPhase()
@@ -882,8 +907,11 @@ func (b *Bootstrap) defaultCommandPhase() error {
 
 		// Create a build script that will output each line of the command, and run it.
 		var buildScriptContents string
+		var buildScriptPath string = filepath.Join(b.shell.Getwd(), "buildkite-script-"+b.JobID)
+
 		if runtime.GOOS == "windows" {
 			buildScriptContents = "@echo off\n"
+			buildScriptPath += ".bat"
 			for _, k := range strings.Split(b.Command, "\n") {
 				if k != "" {
 					buildScriptContents = buildScriptContents +
@@ -904,7 +932,6 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 
 		// Create a temporary file where we'll run a program from
-		buildScriptPath = filepath.Join(b.shell.Getwd(), normalizeScriptFileName("buildkite-script-"+b.JobID))
 
 		if b.Debug {
 			b.shell.Headerf("Preparing build script")
@@ -997,17 +1024,6 @@ func (b *Bootstrap) uploadArtifacts() error {
 
 type pluginCheckout struct {
 	*agent.Plugin
-	Path string
-}
-
-func (p *pluginCheckout) HasHook(name string) bool {
-	path, err := p.HookPath(name)
-	if err != nil {
-		return false
-	}
-	return fileExists(path)
-}
-
-func (p *pluginCheckout) HookPath(name string) (string, error) {
-	return filepath.Join(p.Path, "hooks", normalizeScriptFileName(name)), nil
+	CheckoutDir string
+	HooksDir    string
 }

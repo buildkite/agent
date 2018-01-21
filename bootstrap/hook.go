@@ -48,11 +48,14 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	}
 
 	var err error
+	var scriptFileName string = `buildkite-agent-bootstrap-hook-runner`
+
+	if runtime.GOOS == "windows" {
+		scriptFileName += ".bat"
+	}
 
 	// Create a temporary file that we'll put the hook runner code in
-	h.scriptFile, err = shell.TempFileWithExtension(normalizeScriptFileName(
-		`buildkite-agent-bootstrap-hook-runner`,
-	))
+	h.scriptFile, err = shell.TempFileWithExtension(scriptFileName)
 	if err != nil {
 		return nil, err
 	}

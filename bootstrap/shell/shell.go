@@ -112,7 +112,7 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	fileExtensions, _ := s.Env.Get("PATHEXT") // For searching .exe, .bat, etc on Windows
 
 	// Use our custom lookPath that takes a specific path
-	absolutePath, err := lookPath(executable, envPath, fileExtensions)
+	absolutePath, err := LookPath(executable, envPath, fileExtensions)
 	if err != nil {
 		return "", err
 	}
@@ -208,27 +208,30 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 }
 
 // RunScript is like Run, but the target is an interpreted script which has
-// some extra checks to ensure it gets to the correct interpreter. It also supports
-// passing in extra environment just for that script
+// some extra checks to ensure it gets to the correct interpreter. Extra environment vars
+// can also be passed the the script
 func (s *Shell) RunScript(path string, extra *env.Environment) error {
-	// If you run a script on Linux that doesn't have the
-	// #!/bin/bash shebang at the top, it will fail to run with a
-	// "exec format error" error.
-
-	// You can solve it by adding the
-	// #!/bin/bash line to the top of the file, but that's
-	// annoying, and people generally forget it, so we'll make it
-	// easy on them and add it for them here.
-
-	// We also need to make sure the script we pass has quotes
-	// around it, otherwise `/bin/bash -c run script with space.sh` fails.
-
 	var command string
 	var args []string
 
 	if runtime.GOOS == "windows" {
-		command = path
-		args = []string{}
+		// No extension in windows means it's a bash script, which we need to handle specially
+		if filepath.Ext(path) == "" {
+			// Find Bash, either part of Cygwin or MSYS. Must be in the path
+			bashPath, err := s.AbsolutePath("bash.exe")
+			if err != nil {
+				return fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
+					"Is Git for Windows installed and correctly in your PATH variable?", err)
+			}
+			command = bashPath
+			args = []string{"-c", path}
+		} else {
+			// These are the same defaults used by docker, /S strips quote characters from the command
+			// and /C exits after running the command
+			// See https://ss64.com/nt/cmd.html
+			command = "cmd.exe"
+			args = []string{"/S", "/C", path}
+		}
 	} else {
 		command = "/bin/bash"
 		args = []string{"-c", path}
