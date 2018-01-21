@@ -3,6 +3,7 @@ env:
 
 steps:
   - name: ":hammer: :linux:"
+    artifact_paths: "tmp/junit-*.xml"
     command: "scripts/tests.sh"
     plugins:
       docker-compose#v1.5.0:
