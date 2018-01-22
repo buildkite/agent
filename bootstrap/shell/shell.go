@@ -214,27 +214,33 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	var command string
 	var args []string
 
-	if runtime.GOOS == "windows" {
-		// No extension in windows means it's a bash script, which we need to handle specially
-		if filepath.Ext(path) == "" {
-			// Find Bash, either part of Cygwin or MSYS. Must be in the path
-			bashPath, err := s.AbsolutePath("bash.exe")
-			if err != nil {
-				return fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
-					"Is Git for Windows installed and correctly in your PATH variable?", err)
-			}
-			command = bashPath
-			args = []string{"-c", path}
-		} else {
-			// These are the same defaults used by docker, /S strips quote characters from the command
-			// and /C exits after running the command
-			// See https://ss64.com/nt/cmd.html
-			command = "cmd.exe"
-			args = []string{"/S", "/C", path}
+	// we apply a variety of "feature detection checks" to figure out how we should
+	// best run the script
+
+	var isBash = filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
+	var isWindows = runtime.GOOS == "windows"
+
+	switch {
+	case isWindows && isBash:
+		if s.Debug {
+			s.Commentf("Attempting to run %s with Bash for Windows", path)
 		}
-	} else {
+		// Find Bash, either part of Cygwin or MSYS. Must be in the path
+		bashPath, err := s.AbsolutePath("bash.exe")
+		if err != nil {
+			return fmt.Errorf("Error finding bash.exe, needed to run scripts: %v. "+
+				"Is Git for Windows installed and correctly in your PATH variable?", err)
+		}
+		command = bashPath
+		args = []string{"-c", filepath.ToSlash(path)}
+
+	case !isWindows && isBash:
 		command = "/bin/bash"
 		args = []string{"-c", path}
+
+	default:
+		command = path
+		args = []string{}
 	}
 
 	s.Promptf("%s", process.FormatCommand(command, args))
