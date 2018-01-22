@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v2.6.9](https://github.com/buildkite/agent/releases/tag/v2.6.9) (2018-01-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v2.6.8...v2.6.9)
+
+### Added
+
+- Implement `BUILDKITE_CLEAN_CHECKOUT`, `BUILDKITE_GIT_CLONE_FLAGS` and `BUILDKITE_GIT_CLEAN_FLAGS` in bootstrap.bat [\#610](https://github.com/buildkite/agent/pull/610) (@solemnwarning)
+
+### Fixed
+
+- Fix unbounded memory usage in artifact uploads (#493)
+
 ## [v3.0-beta.38](https://github.com/buildkite/agent/tree/v3.0-beta.38) (2018-01-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.37...v3.0-beta.38)
 
