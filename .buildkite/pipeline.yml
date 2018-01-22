@@ -3,9 +3,10 @@ env:
 
 steps:
   - name: ":hammer: :linux:"
+    artifact_paths: "tmp/junit-*.xml"
     command: "scripts/tests.sh"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":hammer: :windows:"
@@ -16,104 +17,111 @@ steps:
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
 
+  - wait: ~
+    continue_on_failure: true
+
+  - label: ":junit:"
+    commands:
+      - "scripts/junit.sh"
+
   - wait
 
   - name: ":windows: 386"
     command: "scripts/build-binary.sh windows 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":windows: amd64"
     command: "scripts/build-binary.sh windows amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: amd64"
     command: "scripts/build-binary.sh linux amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: 386"
     command: "scripts/build-binary.sh linux 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: arm"
     command: "scripts/build-binary.sh linux arm"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: armhf"
     command: "scripts/build-binary.sh linux armhf"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: arm64"
     command: "scripts/build-binary.sh linux arm64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":mac: 386"
     command: "scripts/build-binary.sh darwin 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":mac: amd64"
     command: "scripts/build-binary.sh darwin amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":freebsd: amd64"
     command: "scripts/build-binary.sh freebsd amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":freebsd: 386"
     command: "scripts/build-binary.sh freebsd 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":openbsd: amd64"
     command: "scripts/build-binary.sh openbsd amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":openbsd: 386"
     command: "scripts/build-binary.sh openbsd 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":dragonflybsd: amd64"
     command: "scripts/build-binary.sh dragonfly amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         run: agent
 
   - wait
@@ -139,7 +147,7 @@ steps:
     command: "scripts/build-github-release.sh"
     artifact_paths: "releases/**/*"
     plugins:
-      docker-compose#v1.5.0:
+      docker-compose#v1.8.0:
         config: docker-compose.release.yml
         run: github-release
 
