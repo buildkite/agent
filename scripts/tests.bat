@@ -10,3 +10,5 @@ go get github.com/jstemmer/go-junit-report
 
 echo +++ Running tests
 go test -race ./... 2>&1 | richgo testfilter
+
+if %errorlevel% neq 0 exit /b %errorlevel%
