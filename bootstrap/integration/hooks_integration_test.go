@@ -21,17 +21,26 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	}
 	defer tester.Close()
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Not implemented for windows yet")
-	}
+	if runtime.GOOS != "windows" {
+		var script = []string{
+			"#!/bin/bash",
+			"export LLAMAS_ROCK=absolutely",
+		}
 
-	var script = []string{
-		"#!/bin/bash",
-		"export LLAMAS_ROCK=absolutely",
-	}
+		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"),
+			[]byte(strings.Join(script, "\n")), 0700); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		var script = []string{
+			"@echo off",
+			"set LLAMAS_ROCK=absolutely",
+		}
 
-	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatal(err)
+		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment.bat"),
+			[]byte(strings.Join(script, "\r\n")), 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {

@@ -1,10 +1,12 @@
 package integration
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -23,13 +25,25 @@ func TestRunningPlugins(t *testing.T) {
 
 	pluginMock := tester.MustMock(t, "my-plugin")
 
-	p := createTestPlugin(t, map[string][]string{
-		"environment": []string{
-			"#!/bin/bash",
-			"export LLAMAS_ROCK=absolutely",
-			pluginMock.Path + " testing",
-		},
-	})
+	var p *testPlugin
+
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": []string{
+				"@echo off",
+				"set LLAMAS_ROCK=absolutely",
+				pluginMock.Path + " testing",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": []string{
+				"#!/bin/bash",
+				"export LLAMAS_ROCK=absolutely",
+				pluginMock.Path + " testing",
+			},
+		})
+	}
 
 	json, err := p.ToJSON()
 	if err != nil {
@@ -97,5 +111,16 @@ func (tp *testPlugin) ToJSON() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf(`[{"%s#%s":{"setting":"blah"}}]`, tp.Path, strings.TrimSpace(commitHash)), nil
+	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
+
+	var p = []interface{}{map[string]interface{}{
+		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(commitHash)): map[string]string{
+			"settings": "blah",
+		},
+	}}
+	b, err := json.Marshal(&p)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
