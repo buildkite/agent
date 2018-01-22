@@ -911,11 +911,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		buildScriptPath = pathToCommand
 	} else {
 		headerLabel = "Running command"
+		buildScriptPath = filepath.Join(b.shell.Getwd(), "buildkite-script-"+b.JobID)
 
 		// Create a build script that will output each line of the command, and run it.
 		var buildScriptContents string
-		var buildScriptPath string = filepath.Join(b.shell.Getwd(), "buildkite-script-"+b.JobID)
-
 		if runtime.GOOS == "windows" {
 			buildScriptContents = "@echo off\n"
 			buildScriptPath += ".bat"
@@ -938,8 +937,6 @@ func (b *Bootstrap) defaultCommandPhase() error {
 			}
 		}
 
-		// Create a temporary file where we'll run a program from
-
 		if b.Debug {
 			b.shell.Headerf("Preparing build script")
 			b.shell.Commentf("A build script is being written to \"%s\" with the following:", buildScriptPath)
@@ -955,6 +952,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 
 	// Make script executable
 	if err = addExecutePermissionToFile(buildScriptPath); err != nil {
+		b.shell.Warningf("Error marking script %q as executable: %v", buildScriptPath, err)
 		return err
 	}
 
