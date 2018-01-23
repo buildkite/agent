@@ -11,8 +11,8 @@ import (
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
-	"github.com/buildkite/agent/stdin"
 	"github.com/urfave/cli"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var AnnotateHelpDescription = `Usage:
@@ -108,7 +108,7 @@ var AnnotateCommand = cli.Command{
 
 		if cfg.Body != "" {
 			body = cfg.Body
-		} else if stdin.IsPipe() {
+		} else if terminal.IsTerminal(int(os.Stdin.Fd())) {
 			logger.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN

@@ -48,11 +48,19 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	}
 
 	var err error
+	var scriptFileName string = `buildkite-agent-bootstrap-hook-runner`
+	var isBashHook bool
+
+	// we use bash hooks for scripts with no extension, otherwise on windows
+	// we probably need a .bat extension
+	if filepath.Ext(hookPath) == "" {
+		isBashHook = true
+	} else if runtime.GOOS == "windows" {
+		scriptFileName += ".bat"
+	}
 
 	// Create a temporary file that we'll put the hook runner code in
-	h.scriptFile, err = shell.TempFileWithExtension(normalizeScriptFileName(
-		`buildkite-agent-bootstrap-hook-runner`,
-	))
+	h.scriptFile, err = shell.TempFileWithExtension(scriptFileName)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +95,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 
 	// Create the hook runner code
 	var script string
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == "windows" && !isBashHook {
 		script = "@echo off\n" +
 			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
 			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
@@ -97,12 +105,11 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
 			"EXIT %" + hookExitStatusEnv + "%"
 	} else {
-		script = "#!/bin/bash\n" +
-			"export -p > \"" + h.beforeEnvFile.Name() + "\"\n" +
-			". \"" + absolutePathToHook + "\"\n" +
+		script = "export -p > \"" + filepath.ToSlash(h.beforeEnvFile.Name()) + "\"\n" +
+			". \"" + filepath.ToSlash(absolutePathToHook) + "\"\n" +
 			"export " + hookExitStatusEnv + "=$?\n" +
 			"export " + hookWorkingDirEnv + "=$PWD\n" +
-			"export -p > \"" + h.afterEnvFile.Name() + "\"\n" +
+			"export -p > \"" + filepath.ToSlash(h.afterEnvFile.Name()) + "\"\n" +
 			"exit $" + hookExitStatusEnv
 	}
 
