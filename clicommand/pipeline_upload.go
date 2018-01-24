@@ -103,7 +103,7 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
 			}
-		} else if terminal.IsTerminal(int(os.Stdin.Fd())) {
+		} else if !terminal.IsTerminal(int(os.Stdin.Fd())) {
 			logger.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
