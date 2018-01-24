@@ -108,7 +108,7 @@ var AnnotateCommand = cli.Command{
 
 		if cfg.Body != "" {
 			body = cfg.Body
-		} else if terminal.IsTerminal(int(os.Stdin.Fd())) {
+		} else if !terminal.IsTerminal(int(os.Stdin.Fd())) {
 			logger.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN
