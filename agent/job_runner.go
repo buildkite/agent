@@ -187,6 +187,17 @@ func (r *JobRunner) createEnvironment() []string {
 		env[key] = value
 	}
 
+	// Write out the job environment to a file if configured, in k=v format.
+	// We do this early to present only the clean environment, i.e excluding
+	// any varibales set or inherited here.
+	if r.envFile != nil {
+		for key, value := range(env) {
+			r.envFile.WriteString(fmt.Sprintf("%s=%s\n", key, value))
+		}
+		r.envFile.Close()
+		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
+	}
+
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_ENDPOINT"] = r.Endpoint
 	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.Agent.AccessToken
