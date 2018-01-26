@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,6 +47,9 @@ type JobRunner struct {
 
 	// A lock to protect concurrent calls to kill
 	killLock sync.Mutex
+
+	// File containing a copy of the job env
+	envFile *os.File
 }
 
 // Initializes the job runner
@@ -61,6 +65,16 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
+
+	// If configured to write the job env to a file, create that file
+	if runner.AgentConfiguration.WriteEnvFile {
+		if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)) ; err != nil {
+			return runner, err
+		} else {
+			logger.Debug("[JobRunner] Created env file: %s", file.Name())
+			runner.envFile = file
+		}
+	}
 
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
@@ -129,6 +143,15 @@ func (r *JobRunner) Run() error {
 	// Wait for the routines that we spun up to finish
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
 	r.routineWaitGroup.Wait()
+
+	// Remove the env file, if any
+	if r.envFile != nil {
+		if err := os.Remove(r.envFile.Name()); err != nil {
+			logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+		} else {
+			logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
+		}
+	}
 
 	logger.Info("Finished job %s", r.Job.ID)
 

@@ -13,5 +13,6 @@ type AgentConfiguration struct {
 	RunInPty                   bool
 	TimestampLines             bool
 	DisconnectAfterJob         bool
+	WriteEnvFile               bool
 	DisconnectAfterJobTimeout  int
 }
