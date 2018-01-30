@@ -10,7 +10,31 @@ import (
 	"time"
 )
 
-//go:generate go-bindata -pkg proxy data/
+const (
+	serverEnv = ``
+	clientSrc = `package main
+
+import (
+	"github.com/lox/bintest/proxy/client"
+	"os"
+)
+
+var (
+	debug  string
+	server string
+)
+
+func main() {
+	c := client.New(server)
+
+	if debug == "true" {
+		c.Debug = true
+	}
+
+	os.Exit(c.Run())
+}
+`
+)
 
 func compile(dest string, src string, vars []string) error {
 	args := []string{
@@ -18,7 +42,7 @@ func compile(dest string, src string, vars []string) error {
 		"-o", dest,
 	}
 
-	if len(vars) > 0 {
+	if len(vars) > 0 || Debug {
 		args = append(args, "-ldflags")
 
 		for idx, val := range vars {
@@ -39,27 +63,28 @@ func compile(dest string, src string, vars []string) error {
 		return fmt.Errorf("Compile of %s failed: %s", src, output)
 	}
 
-	debugf("Compile %#v finished in %s", args, time.Now().Sub(t))
+	debugf("[compiler] Compiled %s in %v", dest, time.Now().Sub(t))
 	return nil
 }
 
 func compileClient(dest string, vars []string) error {
-	data, err := Asset("data/client.go")
+	wd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	dir, err := ioutil.TempDir("", "binproxy")
-	if err != nil {
-		return fmt.Errorf("Error creating temp dir: %v", err)
+	dir := fmt.Sprintf(`compiled-%d`, time.Now().UnixNano())
+	if err = os.Mkdir(filepath.Join(wd, dir), 0700); err != nil {
+		return err
 	}
 
 	defer os.RemoveAll(dir)
 
-	err = ioutil.WriteFile(filepath.Join(dir, "client.go"), data, 0500)
+	f := filepath.Join(dir, `main.go`)
+	err = ioutil.WriteFile(f, []byte(clientSrc), 0500)
 	if err != nil {
 		return err
 	}
 
-	return compile(dest, filepath.Join(dir, "client.go"), vars)
+	return compile(dest, f, vars)
 }

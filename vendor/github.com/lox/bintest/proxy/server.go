@@ -3,34 +3,140 @@ package proxy
 import (
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"path"
+	"regexp"
 	"strconv"
-	"strings"
 	"sync"
+	"time"
 )
 
-type server struct {
-	sync.Mutex
+// A single instance of the server is run for each golang process. The server has sessions which then
+// have proxy calls within those sessions.
+
+var (
+	serverInstance *Server
+	serverLock     sync.Mutex
+)
+
+// StartServer starts an instance of a proxy server
+func StartServer() (*Server, error) {
+	serverLock.Lock()
+	defer serverLock.Unlock()
+
+	if serverInstance == nil {
+		l, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return nil, err
+		}
+
+		s := &Server{
+			Listener: l,
+			URL:      "http://" + l.Addr().String(),
+		}
+
+		debugf("[server] Starting server on %s", l.Addr().String())
+		go func() {
+			_ = http.Serve(l, s)
+		}()
+
+		serverInstance = s
+	}
+
+	return serverInstance, nil
+}
+
+// Stop the shared http server instance
+func StopServer() error {
+	serverLock.Lock()
+	defer serverLock.Unlock()
+
+	if serverInstance != nil {
+		debugf("[server] Stopping server on %s", serverInstance.Addr().String())
+		_ = serverInstance.Close()
+		serverInstance = nil
+	}
+
+	return nil
+}
+
+type Server struct {
 	net.Listener
+	URL string
 
-	proxy    *Proxy
-	handlers map[int64]callHandler
+	proxies      sync.Map
+	callHandlers sync.Map
 }
 
-type serverRequest struct {
-	Args []string
-	Env  []string
-	Dir  string
+func (s *Server) registerProxy(p *Proxy) {
+	debugf("[server] Registering proxy %s", p.Path)
+	s.proxies.Store(p.Path, p)
 }
 
-type serverResponse struct {
-	ID int64
+func (s *Server) deregisterProxy(p *Proxy) {
+	debugf("[server] Deregistering proxy %s", p.Path)
+	s.proxies.Delete(p.Path)
 }
 
-func (s *server) serveInitialCall(w http.ResponseWriter, r *http.Request) {
-	var req serverRequest
+var (
+	callRouteRegex = regexp.MustCompile(`^/calls/(\d+)/(stdout|stderr|stdin|exitcode)$`)
+)
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/debug" {
+		body, _ := ioutil.ReadAll(r.Body)
+		_ = r.Body.Close()
+		debugf("%s", body)
+		return
+	}
+
+	start := time.Now()
+	debugf("[server] %s %s", r.Method, r.URL.Path)
+
+	if r.URL.Path == `/calls/new` {
+		s.handleNewCall(w, r)
+		return
+	}
+
+	matches := callRouteRegex.FindStringSubmatch(r.URL.Path)
+
+	if len(matches) == 0 {
+		http.Error(w, "Unknown route "+r.URL.Path, http.StatusBadRequest)
+		return
+	}
+
+	pid, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// dispatch the request to a handler with the given id
+	handler, ok := s.callHandlers.Load(int(pid))
+	if !ok {
+		debugf("[server] ERROR: No call handler found for pid %d", pid)
+		http.Error(w, "Unknown handler", http.StatusNotFound)
+		return
+	}
+
+	debugf("[server] Found handler for %v", handler.(*callHandler).call.Args)
+
+	handler.(*callHandler).ServeHTTP(w, r)
+	debugf("[server] END %s (%v)", r.URL.Path, time.Now().Sub(start))
+}
+
+type NewCallRequest struct {
+	PID      int
+	Args     []string
+	Env      []string
+	Dir      string
+	HasStdin bool
+}
+
+func (s *Server) handleNewCall(w http.ResponseWriter, r *http.Request) {
+	var req NewCallRequest
 
 	// parse the posted args end env
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -38,7 +144,15 @@ func (s *server) serveInitialCall(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Lock()
+	// find the proxy instance in the server for the given path
+	proxy, ok := s.proxies.Load(req.Args[0])
+	if !ok {
+		debugf("[server] ERROR: No proxy found for path %s", req.Args[0])
+		http.Error(w, "No proxy found for "+req.Args[0], http.StatusNotFound)
+		return
+	} else {
+		debugf("[server] Found proxy for path %s", req.Args[0])
+	}
 
 	// these pipes connect the call to the various http request/responses
 	outR, outW := io.Pipe()
@@ -46,104 +160,63 @@ func (s *server) serveInitialCall(w http.ResponseWriter, r *http.Request) {
 	inR, inW := io.Pipe()
 
 	// create a custom handler with the id for subsequent requests to hit
-	call := s.proxy.newCall(req.Args, req.Env, req.Dir)
+	call := proxy.(*Proxy).newCall(req.PID, req.Args, req.Env, req.Dir)
 	call.Stdout = outW
 	call.Stderr = errW
 	call.Stdin = inR
 
-	s.handlers[call.ID] = callHandler{
+	// close off stdin if it's not going to be provided
+	if !req.HasStdin {
+		_ = inW.Close()
+	}
+
+	// save the handler for subsequent requests
+	s.callHandlers.Store(int(call.PID), &callHandler{
 		call:   call,
 		stdout: outR,
 		stderr: errR,
 		stdin:  inW,
-	}
+	})
 
-	s.Unlock()
+	debugf("[server] Registered call handler for pid %d", call.PID)
 
 	// dispatch to whatever handles the call
-	s.proxy.Ch <- call
-
-	w.Header().Add("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(&serverResponse{
-		ID: call.ID,
-	})
-}
-
-func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	debugf("[http] START %s", r.URL.Path)
-
-	if r.URL.Path == "/" {
-		s.serveInitialCall(w, r)
-		return
-	}
-
-	id, err := strconv.ParseInt(strings.TrimPrefix(path.Dir(r.URL.Path), "/"), 10, 64)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	ch, ok := s.handlers[id]
-	if !ok {
-		http.Error(w, "Unknown handler", http.StatusNotFound)
-		return
-	}
-
-	ch.ServeHTTP(w, r)
-	debugf("[http] END %s", r.URL.Path)
-}
-
-func startServer(p *Proxy) (*server, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return nil, err
-	}
-
-	s := &server{
-		Listener: l,
-		proxy:    p,
-		handlers: map[int64]callHandler{},
-	}
-
-	debugf("Starting server on %s", l.Addr().String())
-	go http.Serve(l, s)
-	return s, nil
+	proxy.(*Proxy).Ch <- call
 }
 
 type callHandler struct {
 	sync.WaitGroup
-	call   *Call
-	stdout *io.PipeReader
-	stderr *io.PipeReader
-	stdin  *io.PipeWriter
+	call           *Call
+	stdout, stderr *io.PipeReader
+	stdin          *io.PipeWriter
 }
 
 func (ch *callHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch path.Base(r.URL.Path) {
 	case "stdout":
-		debugf("[call] Starting copy of stdout")
+		debugf("[server] Starting copy of stdout")
 		copyPipeWithFlush(w, ch.stdout)
-		debugf("[call] Finished copy of stdout")
+		debugf("[server] Finished copy of stdout")
 
 	case "stderr":
-		debugf("[call] Starting copy of stderr")
+		debugf("[server] Starting copy of stderr")
 		copyPipeWithFlush(w, ch.stderr)
-		debugf("[call] Finished copy of stderr")
+		debugf("[server] Finished copy of stderr")
 
 	case "stdin":
-		debugf("[call] Starting copy of stdin")
+		debugf("[server] Starting copy of stdin")
 		_, _ = io.Copy(ch.stdin, r.Body)
-		r.Body.Close()
-		ch.stdin.Close()
-		debugf("[call] Finished copy of stdin")
+		_ = r.Body.Close()
+		_ = ch.stdin.Close()
+		debugf("[server] Finished copy of stdin")
 
 	case "exitcode":
-		debugf("[call] Waiting for exitcode")
+		debugf("[server] Blocking on call for exitcode")
 		exitCode := <-ch.call.exitCodeCh
 		w.Header().Add("Content-Type", "application/json; charset=utf-8")
-		json.NewEncoder(w).Encode(&exitCode)
+		_ = json.NewEncoder(w).Encode(&exitCode)
 		w.(http.Flusher).Flush()
-		debugf("[call] Sending exit code")
+		debugf("[server] Sending exit code %d to proxy", exitCode)
 		ch.call.doneCh <- struct{}{}
 
 	default:

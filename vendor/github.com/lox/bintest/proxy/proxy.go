@@ -1,16 +1,24 @@
 package proxy
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
+)
+
+const (
+	ServerEnvVar = `BINTEST_PROXY_SERVER`
 )
 
 // Proxy provides a way to programatically respond to invocations of a compiled
@@ -22,18 +30,19 @@ type Proxy struct {
 	// Path is the full path to the compiled binproxy file
 	Path string
 
+	// The server that the proxy uses to communicate with the binary
+	Server *Server
+
 	// A count of how many calls have been made
 	CallCount int64
 
 	// A temporary directory created for the binary
 	tempDir string
-
-	// The http server the proxy runs
-	server *server
 }
 
-// New returns a new instance of a Proxy with a compiled binary and a started server
-func New(path string) (*Proxy, error) {
+// Compile generates a mock binary at the provided path. If just a filename is provided a temp
+// directory is created.
+func Compile(path string) (*Proxy, error) {
 	var tempDir string
 
 	if !filepath.IsAbs(path) {
@@ -49,26 +58,96 @@ func New(path string) (*Proxy, error) {
 		path += ".exe"
 	}
 
-	p := &Proxy{
-		Path:    path,
-		Ch:      make(chan *Call),
-		tempDir: tempDir,
-	}
-
-	var err error
-	p.server, err = startServer(p)
+	server, err := StartServer()
 	if err != nil {
 		return nil, err
 	}
 
+	p := &Proxy{
+		Path:    path,
+		Ch:      make(chan *Call),
+		Server:  server,
+		tempDir: tempDir,
+	}
+
+	server.registerProxy(p)
+
 	return p, compileClient(path, []string{
-		"main.server=" + p.server.Listener.Addr().String(),
+		"main.server=" + server.URL,
 	})
 }
 
-func (p *Proxy) newCall(args []string, env []string, dir string) *Call {
+// LinkTestBinaryAsProxy uses the current binary as a Proxy rather than compiling one directly
+// This speeds things up considerably, but requires some code to be injected in TestMain
+func LinkTestBinaryAsProxy(path string) (*Proxy, error) {
+	var tempDir string
+
+	// Delete the target if it exists to be compatible with Compile
+	if _, err := os.Lstat(path); err == nil {
+		debugf("Deleting %s", path)
+		if err = os.Remove(path); err != nil {
+			return nil, err
+		}
+	}
+
+	if !filepath.IsAbs(path) {
+		var err error
+		tempDir, err = ioutil.TempDir("", "binproxy")
+		if err != nil {
+			return nil, fmt.Errorf("Error creating temp dir: %v", err)
+		}
+		path = filepath.Join(tempDir, path)
+	}
+
+	debugf("[linker] Linking %s to %s", os.Args[0], path)
+	if err := os.Symlink(os.Args[0], path); err != nil {
+		return nil, err
+	}
+
+	server, err := StartServer()
+	if err != nil {
+		return nil, err
+	}
+
+	p := &Proxy{
+		Path:    path,
+		Ch:      make(chan *Call),
+		Server:  server,
+		tempDir: tempDir,
+	}
+
+	server.registerProxy(p)
+
+	return p, nil
+}
+
+// Environ returns environment variables required to invoke the proxy
+func (p *Proxy) Environ() []string {
+	env := []string{
+		ServerEnvVar + `=` + p.Server.URL,
+	}
+
+	// Windows requires certain env variables to be present for subprocesses 🤷🏼‍♂️
+	if runtime.GOOS == "windows" {
+		env = append(env,
+			"SystemRoot="+os.Getenv("SystemRoot"),
+			"WINDIR="+os.Getenv("WINDIR"),
+			"COMSPEC="+os.Getenv("COMSPEC"),
+			"PATHEXT="+os.Getenv("PATHEXT"),
+			"TMP="+os.Getenv("TMP"),
+			"TEMP="+os.Getenv("TEMP"),
+		)
+	}
+
+	return env
+}
+
+func (p *Proxy) newCall(pid int, args []string, env []string, dir string) *Call {
+	atomic.AddInt64(&p.CallCount, 1)
+
 	return &Call{
-		ID:         atomic.AddInt64(&p.CallCount, 1),
+		PID:        pid,
+		Name:       filepath.Base(p.Path),
 		Args:       args,
 		Env:        env,
 		Dir:        dir,
@@ -77,19 +156,27 @@ func (p *Proxy) newCall(args []string, env []string, dir string) *Call {
 	}
 }
 
-// Close the proxy and remove the compiled file
-func (p *Proxy) Close() error {
-	if p.tempDir != "" {
-		defer os.RemoveAll(p.tempDir)
-	}
-	return p.server.Listener.Close()
+// Close the proxy and remove the temp directory
+func (p *Proxy) Close() (err error) {
+	close(p.Ch)
+
+	defer func() {
+		if p.tempDir != "" {
+			if removeErr := os.RemoveAll(p.tempDir); removeErr != nil {
+				err = removeErr
+			}
+		}
+	}()
+	defer func() {
+		p.Server.deregisterProxy(p)
+	}()
+	return err
 }
 
 // Call is created for every call to the proxied binary
 type Call struct {
-	sync.Mutex
-
-	ID   int64
+	PID  int
+	Name string
 	Args []string
 	Env  []string
 	Dir  string
@@ -103,9 +190,9 @@ type Call struct {
 	// Stdin is the input reader for stdin from the proxied binary
 	Stdin io.ReadCloser `json:"-"`
 
-	// proxy      *Proxy
 	exitCodeCh chan int
 	doneCh     chan struct{}
+	done       uint32
 }
 
 func (c *Call) GetEnv(key string) string {
@@ -120,6 +207,12 @@ func (c *Call) GetEnv(key string) string {
 
 // Exit finishes the call and the proxied binary returns the exit code
 func (c *Call) Exit(code int) {
+	if !atomic.CompareAndSwapUint32(&c.done, 0, 1) {
+		panic("Can't call Exit() on a Call that is already finished")
+	}
+
+	c.debugf("Sending exit code %d to server", code)
+
 	_ = c.Stderr.Close()
 	_ = c.Stdout.Close()
 
@@ -128,6 +221,93 @@ func (c *Call) Exit(code int) {
 
 	// wait for the client to get it
 	<-c.doneCh
+}
+
+// Fatal exits the call and returns the passed error. If it's a exec.ExitError the exit code is used
+func (c *Call) Fatal(err error) {
+	c.debugf("Fatal error: %v", err)
+	fmt.Fprintf(c.Stderr, "Fatal error: %v", err)
+
+	if exitError, ok := err.(*exec.ExitError); ok {
+		c.Exit(exitError.Sys().(syscall.WaitStatus).ExitStatus())
+	} else {
+		c.Exit(1)
+	}
+}
+
+// Passthrough invokes another local binary and returns the results
+func (c *Call) Passthrough(path string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.passthrough(ctx, path)
+}
+
+// PassthroughWithTimeout invokes another local binary and returns the results, if execution doesn't finish
+// before the timeout the command is killed and an error is returned
+func (c *Call) PassthroughWithTimeout(path string, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	c.passthrough(ctx, path)
+}
+
+func (c *Call) passthrough(ctx context.Context, path string) {
+	start := time.Now()
+	ticker := time.NewTicker(time.Second)
+
+	defer func() {
+		c.debugf("Passthrough to %s %v finished in %v", path, c.Args, time.Now().Sub(start))
+		ticker.Stop()
+	}()
+
+	c.debugf("Passing call through to %s %v", path, c.Args)
+	cmd := exec.CommandContext(ctx, path, c.Args[1:]...)
+	cmd.Env = c.Env
+	cmd.Stdout = c.Stdout
+	cmd.Stderr = c.Stderr
+	cmd.Stdin = c.Stdin
+	cmd.Dir = c.Dir
+
+	if err := cmd.Start(); err != nil {
+		c.Fatal(err)
+		return
+	}
+
+	// Print progress on execution to make debugging easier. We need to check the context because
+	// stopping the ticker won't actually close the
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				c.debugf("Context is done")
+				return
+			case <-ticker.C:
+				c.debugf("Passthrough %s %v has been running for %v", path, c.Args, time.Now().Sub(start))
+			}
+		}
+	}()
+
+	c.debugf("Waiting for command to finish")
+	if err := cmd.Wait(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			c.debugf("Command exceeded deadline")
+			c.Fatal(errors.New("Command exceeded deadline and was killed"))
+			return
+		}
+		c.Fatal(err)
+		return
+	}
+
+	c.Exit(0)
+}
+
+// Returns true if the call is done, doesn't block and is thread-safe
+func (c *Call) IsDone() bool {
+	return atomic.LoadUint32(&c.done) == 1
+}
+
+func (c *Call) debugf(pattern string, args ...interface{}) {
+	debugf(fmt.Sprintf("[call %d] %s", c.PID, pattern), args...)
 }
 
 var (

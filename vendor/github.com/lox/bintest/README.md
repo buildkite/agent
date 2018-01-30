@@ -31,8 +31,8 @@ Proxies
 -------
 
 ```go
-// create a proxy for the git command that echos some debug
-proxy, err := proxy.New("git")
+// Compile a proxy for the git command that echos some debug
+proxy, err := proxy.Compile("git")
 if err != nil {
   log.Fatal(err)
 }
