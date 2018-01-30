@@ -18,7 +18,7 @@ import (
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
-	sshKeygen, err := proxy.New("ssh-keygen")
+	sshKeygen, err := proxy.Compile("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	sshKeygen, err := proxy.New("ssh-keygen")
+	sshKeygen, err := proxy.Compile("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
