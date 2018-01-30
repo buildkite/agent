@@ -66,14 +66,12 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// the Buildkite Agent API
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
-	// If configured to write the job env to a file, create that file
-	if runner.AgentConfiguration.WriteEnvFile {
-		if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)) ; err != nil {
-			return runner, err
-		} else {
-			logger.Debug("[JobRunner] Created env file: %s", file.Name())
-			runner.envFile = file
-		}
+	// Prepare a file to recieve the given job environment
+	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)) ; err != nil {
+		return runner, err
+	} else {
+		logger.Debug("[JobRunner] Created env file: %s", file.Name())
+		runner.envFile = file
 	}
 
 	// The process that will run the bootstrap script
@@ -148,9 +146,8 @@ func (r *JobRunner) Run() error {
 	if r.envFile != nil {
 		if err := os.Remove(r.envFile.Name()); err != nil {
 			logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
-		} else {
-			logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 		}
+		logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
 	logger.Info("Finished job %s", r.Job.ID)
@@ -187,9 +184,9 @@ func (r *JobRunner) createEnvironment() []string {
 		env[key] = value
 	}
 
-	// Write out the job environment to a file if configured, in k=v format.
-	// We do this early to present only the clean environment, i.e excluding
-	// any varibales set or inherited here.
+	// Write out the job environment to a file, in k=v format.
+	// We present only the clean environment - i.e only variables configured
+	// on the job upstream - and expose the path in another environment variable.
 	if r.envFile != nil {
 		for key, value := range(env) {
 			r.envFile.WriteString(fmt.Sprintf("%s=%s\n", key, value))

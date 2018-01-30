@@ -58,7 +58,6 @@ type AgentStartConfig struct {
 	Debug                        bool     `cli:"debug"`
 	DebugHTTP                    bool     `cli:"debug-http"`
 	Experiments                  []string `cli:"experiment"`
-	WriteEnvFile                 bool     `cli:"write-env-file"`
 	/* Deprecated */
 	MetaData        []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
 	MetaDataEC2     bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
@@ -219,11 +218,6 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to load plugins",
 			EnvVar: "BUILDKITE_NO_PLUGINS",
 		},
-		cli.BoolFlag{
-			Name:   "write-env-file",
-			Usage:  "Write the environment variables given for a job to a file",
-			EnvVar: "BUILDKITE_WRITE_ENV_FILE",
-		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -322,7 +316,6 @@ var AgentStartCommand = cli.Command{
 				TimestampLines:             cfg.TimestampLines,
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
-				WriteEnvFile:               cfg.WriteEnvFile,
 			},
 		}
 
