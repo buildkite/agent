@@ -28,8 +28,8 @@ func TestAddingToKnownHosts(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			sh.Debug = true
-			sh.Logger = &shell.TestingLogger{T: t}
+			// sh.Debug = true
+			// sh.Logger = &shell.TestingLogger{T: t}
 
 			f, err := ioutil.TempFile("", "known-hosts")
 			if err != nil {
@@ -50,8 +50,6 @@ func TestAddingToKnownHosts(t *testing.T) {
 			if exists {
 				t.Fatalf("Host %q shouldn't exist yet in known_hosts", tc.Host)
 			}
-
-			t.Logf("Adding %s", tc.Repository)
 
 			if err := kh.AddFromRepository(tc.Repository); err != nil {
 				t.Fatal(err)

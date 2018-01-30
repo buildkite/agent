@@ -264,7 +264,6 @@ func expectCommandHooks(exitStatus string, t *testing.T, tester *BootstrapTester
 
 	preExitFunc := func(c *proxy.Call) {
 		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
-		t.Logf("Exit status is %s", cmdExitStatus)
 		if cmdExitStatus != exitStatus {
 			t.Errorf("Expected an exit status of %s, got %v", exitStatus, cmdExitStatus)
 		}

@@ -32,8 +32,6 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatal("Expected the bootstrap to fail")
-	} else {
-		t.Logf("Failed as expected with %v", err)
 	}
 
 	tester.CheckMocks(t)
