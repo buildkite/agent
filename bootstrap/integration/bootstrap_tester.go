@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/lox/bintest"
+	"github.com/lox/bintest/proxy"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
@@ -64,8 +65,13 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, err
 	}
 
+	bintestServer, err := proxy.StartServer()
+	if err != nil {
+		return nil, err
+	}
+
 	bt := &BootstrapTester{
-		Name: agentBinary,
+		Name: os.Args[0],
 		Args: []string{"bootstrap"},
 		Repo: repo,
 		Env: []string{
@@ -89,6 +95,9 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			`BUILDKITE_COMMAND=true`,
 			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
 			`BUILDKITE_AGENT_ACCESS_TOKEN=test`,
+
+			// This is required to let the bintest mocks where to phone home
+			`BINTEST_PROXY_SERVER=` + bintestServer.URL,
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
@@ -158,19 +167,15 @@ func (b *BootstrapTester) LinkCommonCommands() error {
 
 // Mock creates a mock for a binary using bintest
 func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
-	mock, err := bintest.NewMock(name)
+	mockPath := filepath.Join(b.PathDir, name)
+
+	mock, err := bintest.NewMockFromTestMain(mockPath)
 	if err != nil {
 		return mock, err
 	}
 
 	b.mocks = append(b.mocks, mock)
 
-	// move the mock into our path
-	if err := os.Rename(mock.Path, filepath.Join(b.PathDir, filepath.Base(mock.Path))); err != nil {
-		return mock, err
-	}
-
-	mock.Path = filepath.Join(b.PathDir, name)
 	return mock, err
 }
 

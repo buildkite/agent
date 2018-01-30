@@ -1,51 +1,65 @@
 package integration
 
 import (
-	"io/ioutil"
+	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"testing"
+	"time"
+
+	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/clicommand"
+	"github.com/lox/bintest/proxy"
+	"github.com/lox/bintest/proxy/client"
+	"github.com/urfave/cli"
 )
 
-var agentBinary string
-
-// This init compiles a bootstrap to be invoked by the bootstrap tester
-// We could possibly use the compiled test stub, but ran into some issues with mock compilation
-func compileBootstrap(dir string) string {
-	_, filename, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-	binPath := filepath.Join(dir, "buildkite-agent")
-
-	if runtime.GOOS == "windows" {
-		binPath += ".exe"
-	}
-
-	cmd := exec.Command("go", "build", "-o", binPath, "main.go")
-	cmd.Env = os.Environ()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = projectRoot
-
-	err := cmd.Run()
-	if err != nil {
-		panic(err)
-	}
-
-	return binPath
-}
-
 func TestMain(m *testing.M) {
-	dir, err := ioutil.TempDir("", "agent-binary")
-	if err != nil {
+	// Act as a bintest proxy stub if not integration.test
+	if filepath.Base(os.Args[0]) != `integration.test` {
+		log.Printf("Executing %v", os.Args)
+		os.Exit(client.NewFromEnv().Run())
+	}
+
+	// If we are passed "bootstrap", execute like the bootstrap cli
+	if len(os.Args) > 1 && os.Args[1] == `bootstrap` {
+		app := cli.NewApp()
+		app.Name = "buildkite-agent"
+		app.Version = agent.Version()
+		app.Commands = []cli.Command{
+			clicommand.BootstrapCommand,
+		}
+
+		if err := app.Run(os.Args); err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+
+		os.Exit(0)
+	}
+
+	initialGoRoutines := runtime.NumGoroutine()
+	code := m.Run()
+
+	// make sure all our bintest proxies are stopped
+	if err := proxy.StopServer(); err != nil {
 		log.Fatal(err)
 	}
 
-	agentBinary = compileBootstrap(dir)
-	code := m.Run()
+	// check for leaking go routines
+	if code == 0 && !testing.Short() {
 
-	os.RemoveAll(dir)
+		// give things time to shutdown
+		time.Sleep(time.Millisecond * 100)
+
+		if runtime.NumGoroutine() > initialGoRoutines {
+			log.Printf("There are %d go routines left running", runtime.NumGoroutine()-initialGoRoutines)
+			log.Fatal(pprof.Lookup("goroutine").WriteTo(os.Stdout, 1))
+		}
+	}
+
 	os.Exit(code)
 }
