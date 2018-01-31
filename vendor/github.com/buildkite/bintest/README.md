@@ -1,12 +1,14 @@
 Bintest
 =======
 
-A set of tools for generating binaries for testing. Mock objects are the primary usage,
-built on top of a general Proxy object that allows for binaries to be added to a system under test
-that are controlled from the main test case.
+A set of tools for generating fake binaries that can be used for testing. A binary is compiled and then can be orchestrated from your test suite and later checked for assertions.
+
+Mocks can communicate and respond in real-time with the tests that are calling them, which allows for testing complicated dependencies. See https://github.com/buildkite/agent/tree/master/bootstrap/integration for how we use it to test buildkite-agent's bootstrap process.
 
 Mocks
 -----
+
+Mocks are your typical mock object, but as an executable that your code can shell out to and then later test assertions on.
 
 ```go
 agent, err := bintest.Mock("buildkite-agent")
@@ -30,9 +32,11 @@ agent.AssertExpectations(t)
 Proxies
 -------
 
+Proxies are what power Mocks.
+
 ```go
 // Compile a proxy for the git command that echos some debug
-proxy, err := proxy.Compile("git")
+proxy, err := bintest.CompileProxy("git")
 if err != nil {
   log.Fatal(err)
 }
@@ -52,4 +56,4 @@ for call := range proxy.Ch {
 Credit
 ------
 
-Inspired by bats-mock and go-binmock.
+Inspired by [bats-mock](https://github.com/jasonkarns/bats-mock) and [go-binmock](https://github.com/pivotal-cf/go-binmock).

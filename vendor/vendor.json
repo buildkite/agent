@@ -15,6 +15,12 @@
 			"revisionTime": "2017-02-17T01:53:35Z"
 		},
 		{
+			"checksumSHA1": "5+PkjXsone9cEwxbbOyaXEFJH5M=",
+			"path": "github.com/buildkite/bintest",
+			"revision": "6d69e211e73a7b3edc3bf5236a21114b6fe53291",
+			"revisionTime": "2018-01-31T09:23:32Z"
+		},
+		{
 			"checksumSHA1": "8mzUiJrhQ0COz4r98YlDICpWqsw=",
 			"path": "github.com/buildkite/interpolate",
 			"revision": "3a807e47135c4139351425cae51d4bd485150282",
@@ -55,24 +61,6 @@
 			"path": "github.com/kr/pty",
 			"revision": "1278f20d9cf7455f0465f3bf74a73d1eeb555c0f",
 			"revisionTime": "2018-01-06T19:11:30Z"
-		},
-		{
-			"checksumSHA1": "ITObDfUyisDAra/tS17dfvJatf8=",
-			"path": "github.com/lox/bintest",
-			"revision": "aa42583bf78add5604afd749e6da6e5f103ea36a",
-			"revisionTime": "2018-01-30T04:56:31Z"
-		},
-		{
-			"checksumSHA1": "yAX0G4eZIy7URZOQgrr8pSW0YRA=",
-			"path": "github.com/lox/bintest/proxy",
-			"revision": "aa42583bf78add5604afd749e6da6e5f103ea36a",
-			"revisionTime": "2018-01-30T04:56:31Z"
-		},
-		{
-			"checksumSHA1": "78VO/F/GxIZWrt+lo054q+zwLYA=",
-			"path": "github.com/lox/bintest/proxy/client",
-			"revision": "aa42583bf78add5604afd749e6da6e5f103ea36a",
-			"revisionTime": "2018-01-30T04:56:31Z"
 		},
 		{
 			"checksumSHA1": "R8z+BOS81hOWgcqymuVWHNta/yc=",

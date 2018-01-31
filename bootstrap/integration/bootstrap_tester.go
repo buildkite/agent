@@ -13,8 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lox/bintest"
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
@@ -65,7 +64,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, err
 	}
 
-	bintestServer, err := proxy.StartServer()
+	bintestServer, err := bintest.StartServer()
 	if err != nil {
 		return nil, err
 	}

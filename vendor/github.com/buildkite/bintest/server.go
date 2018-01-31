@@ -1,4 +1,4 @@
-package proxy
+package bintest
 
 import (
 	"encoding/json"
@@ -37,7 +37,7 @@ func StartServer() (*Server, error) {
 			URL:      "http://" + l.Addr().String(),
 		}
 
-		debugf("[server] Starting server on %s", l.Addr().String())
+		debugf("[server] Starting server on %s", s.URL)
 		go func() {
 			_ = http.Serve(l, s)
 		}()
@@ -54,7 +54,7 @@ func StopServer() error {
 	defer serverLock.Unlock()
 
 	if serverInstance != nil {
-		debugf("[server] Stopping server on %s", serverInstance.Addr().String())
+		debugf("[server] Stopping server on %s", serverInstance.URL)
 		_ = serverInstance.Close()
 		serverInstance = nil
 	}
@@ -127,7 +127,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	debugf("[server] END %s (%v)", r.URL.Path, time.Now().Sub(start))
 }
 
-type NewCallRequest struct {
+type callRequest struct {
 	PID      int
 	Args     []string
 	Env      []string
@@ -136,7 +136,7 @@ type NewCallRequest struct {
 }
 
 func (s *Server) handleNewCall(w http.ResponseWriter, r *http.Request) {
-	var req NewCallRequest
+	var req callRequest
 
 	// parse the posted args end env
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

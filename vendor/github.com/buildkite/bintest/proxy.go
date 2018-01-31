@@ -1,4 +1,4 @@
-package proxy
+package bintest
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,8 +20,7 @@ const (
 	ServerEnvVar = `BINTEST_PROXY_SERVER`
 )
 
-// Proxy provides a way to programatically respond to invocations of a compiled
-// binary that is created
+// Proxy provides a way to programatically respond to invocations of a binary
 type Proxy struct {
 	// Ch is the channel of calls
 	Ch chan *Call
@@ -42,7 +40,7 @@ type Proxy struct {
 
 // Compile generates a mock binary at the provided path. If just a filename is provided a temp
 // directory is created.
-func Compile(path string) (*Proxy, error) {
+func CompileProxy(path string) (*Proxy, error) {
 	var tempDir string
 
 	if !filepath.IsAbs(path) {
@@ -97,6 +95,10 @@ func LinkTestBinaryAsProxy(path string) (*Proxy, error) {
 			return nil, fmt.Errorf("Error creating temp dir: %v", err)
 		}
 		path = filepath.Join(tempDir, path)
+	}
+
+	if runtime.GOOS == "windows" && !strings.HasSuffix(path, ".exe") {
+		path += ".exe"
 	}
 
 	debugf("[linker] Linking %s to %s", os.Args[0], path)
@@ -239,7 +241,8 @@ func (c *Call) Fatal(err error) {
 func (c *Call) Passthrough(path string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	c.passthrough(ctx, path)
+
+	c.passthrough(ctx, path, c.Args[1:]...)
 }
 
 // PassthroughWithTimeout invokes another local binary and returns the results, if execution doesn't finish
@@ -248,20 +251,20 @@ func (c *Call) PassthroughWithTimeout(path string, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	c.passthrough(ctx, path)
+	c.passthrough(ctx, path, c.Args[1:]...)
 }
 
-func (c *Call) passthrough(ctx context.Context, path string) {
+func (c *Call) passthrough(ctx context.Context, path string, args ...string) {
 	start := time.Now()
 	ticker := time.NewTicker(time.Second)
 
 	defer func() {
-		c.debugf("Passthrough to %s %v finished in %v", path, c.Args, time.Now().Sub(start))
+		c.debugf("Passthrough to %s %v finished in %v", path, args, time.Now().Sub(start))
 		ticker.Stop()
 	}()
 
-	c.debugf("Passing call through to %s %v", path, c.Args)
-	cmd := exec.CommandContext(ctx, path, c.Args[1:]...)
+	c.debugf("Passing call through to %s %v", path, args)
+	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Env = c.Env
 	cmd.Stdout = c.Stdout
 	cmd.Stderr = c.Stderr
@@ -279,7 +282,8 @@ func (c *Call) passthrough(ctx context.Context, path string) {
 		for {
 			select {
 			case <-ctx.Done():
-				c.debugf("Context is done")
+				c.debugf("Context is done, gently killing process")
+				_ = cmd.Process.Kill()
 				return
 			case <-ticker.C:
 				c.debugf("Passthrough %s %v has been running for %v", path, c.Args, time.Now().Sub(start))
@@ -308,14 +312,4 @@ func (c *Call) IsDone() bool {
 
 func (c *Call) debugf(pattern string, args ...interface{}) {
 	debugf(fmt.Sprintf("[call %d] %s", c.PID, pattern), args...)
-}
-
-var (
-	Debug bool
-)
-
-func debugf(pattern string, args ...interface{}) {
-	if Debug {
-		log.Printf(pattern, args...)
-	}
 }

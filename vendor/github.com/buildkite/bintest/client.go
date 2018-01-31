@@ -1,4 +1,4 @@
-package client
+package bintest
 
 import (
 	"bytes"
@@ -10,8 +10,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-
-	"github.com/lox/bintest/proxy"
 )
 
 type Client struct {
@@ -28,7 +26,7 @@ type Client struct {
 	Stderr io.WriteCloser
 }
 
-func New(URL string) *Client {
+func NewClient(URL string) *Client {
 	wd, err := os.Getwd()
 	if err != nil {
 		panic(err)
@@ -46,19 +44,19 @@ func New(URL string) *Client {
 	}
 }
 
-func NewFromEnv() *Client {
-	server := os.Getenv(proxy.ServerEnvVar)
+func NewClientFromEnv() *Client {
+	server := os.Getenv(ServerEnvVar)
 	if server == `` {
-		panic(fmt.Sprintf("No %s environment var set", proxy.ServerEnvVar))
+		panic(fmt.Sprintf("No %s environment var set", ServerEnvVar))
 	}
-	return New(server)
+	return NewClient(server)
 }
 
 // Run the client, panics on error and returns an exit code on success
 func (c *Client) Run() int {
 	c.debugf("Running %s", strings.Join(c.Args, " "))
 
-	var req = proxy.NewCallRequest{
+	var req = callRequest{
 		PID:      c.PID,
 		Args:     c.Args,
 		Env:      c.Env,
@@ -76,7 +74,6 @@ func (c *Client) Run() int {
 	wg.Add(2)
 
 	if c.isStdinReadable() {
-		c.debugf("Stdin is readable")
 		go func() {
 			r, w := io.Pipe()
 			wg.Add(1)
@@ -154,6 +151,7 @@ func (c *Client) Run() int {
 
 func (c *Client) isStdinReadable() bool {
 	if c.Stdin == nil {
+		c.debugf("Nil stdin passed")
 		return false
 	}
 
@@ -162,6 +160,7 @@ func (c *Client) isStdinReadable() bool {
 	if stdinFile, ok := c.Stdin.(*os.File); ok {
 		stat, _ := stdinFile.Stat()
 		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			c.debugf("Stdin is a terminal, nothing to read")
 			return false
 		}
 
@@ -169,11 +168,9 @@ func (c *Client) isStdinReadable() bool {
 			c.debugf("Stdin has %d bytes to read", stat.Size())
 			return true
 		}
-	} else {
-		return true
 	}
 
-	return false
+	return true
 }
 
 func (c *Client) debugf(pattern string, args ...interface{}) {
