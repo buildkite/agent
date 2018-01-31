@@ -3,7 +3,6 @@ env:
 
 steps:
   - name: ":hammer: :linux:"
-    artifact_paths: "tmp/junit-*.xml"
     command: "scripts/tests.sh"
     plugins:
       docker-compose#v1.8.0:
@@ -13,13 +12,6 @@ steps:
     command: "docker-compose -f docker-compose.windows.yml run --rm -T agent .\\scripts\\tests.bat"
     agents:
       queue: "windows"
-
-  - wait: ~
-    continue_on_failure: true
-
-  - label: ":junit:"
-    commands:
-      - "scripts/junit.sh"
 
   - wait
 
