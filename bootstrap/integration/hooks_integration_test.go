@@ -8,8 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lox/bintest"
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
@@ -52,7 +51,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	git.Expect().AtLeastOnce().WithAnyArguments()
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *proxy.Call) {
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -87,7 +86,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *proxy.Call) {
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if c.GetEnv("MY_CUSTOM_SUBDIR") != c.Dir {
 			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir)
 			c.Exit(1)
@@ -138,14 +137,13 @@ func TestReplacingCheckoutHook(t *testing.T) {
 	defer tester.Close()
 
 	// run a checkout in our checkout hook, otherwise we won't have local hooks to run
-	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *proxy.Call) {
+	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
 		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv(`BUILDKITE_BUILD_CHECKOUT_PATH`))
+		fmt.Fprint(c.Stderr, out)
 		if err != nil {
-			fmt.Println(out)
 			c.Exit(1)
 			return
 		}
-		fmt.Println(out)
 		c.Exit(0)
 	})
 
@@ -223,8 +221,6 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatal("Expected the bootstrap to fail")
-	} else {
-		t.Logf("Failed as expected with %v", err)
 	}
 
 	tester.CheckMocks(t)
@@ -318,8 +314,6 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=true"); err == nil {
 		t.Fatal("Expected the bootstrap to fail due to local hook being called")
-	} else {
-		t.Logf("Failed as expected with %v", err)
 	}
 
 	tester.CheckMocks(t)

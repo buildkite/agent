@@ -1,10 +1,8 @@
 package integration
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -15,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lox/bintest"
+	"github.com/buildkite/bintest"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
@@ -66,8 +64,13 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, err
 	}
 
+	bintestServer, err := bintest.StartServer()
+	if err != nil {
+		return nil, err
+	}
+
 	bt := &BootstrapTester{
-		Name: agentBinary,
+		Name: os.Args[0],
 		Args: []string{"bootstrap"},
 		Repo: repo,
 		Env: []string{
@@ -91,6 +94,9 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			`BUILDKITE_COMMAND=true`,
 			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
 			`BUILDKITE_AGENT_ACCESS_TOKEN=test`,
+
+			// This is required to let the bintest mocks where to phone home
+			`BINTEST_PROXY_SERVER=` + bintestServer.URL,
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
@@ -160,19 +166,15 @@ func (b *BootstrapTester) LinkCommonCommands() error {
 
 // Mock creates a mock for a binary using bintest
 func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
-	mock, err := bintest.NewMock(name)
+	mockPath := filepath.Join(b.PathDir, name)
+
+	mock, err := bintest.NewMockFromTestMain(mockPath)
 	if err != nil {
 		return mock, err
 	}
 
 	b.mocks = append(b.mocks, mock)
 
-	// move the mock into our path
-	if err := os.Rename(mock.Path, filepath.Join(b.PathDir, filepath.Base(mock.Path))); err != nil {
-		return mock, err
-	}
-
-	mock.Path = filepath.Join(b.PathDir, name)
 	return mock, err
 }
 
@@ -251,8 +253,6 @@ func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 
 // Run the bootstrap and return any errors
 func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
-	w := newTestLogWriter(t)
-
 	// Mock out the meta-data calls to the agent after checkout
 	if !b.HasMock("buildkite-agent") {
 		agent := b.MustMock(t, "buildkite-agent")
@@ -269,8 +269,8 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 
 	cmd := exec.Command(path, b.Args...)
 	buf := &buffer{}
-	cmd.Stdout = io.MultiWriter(buf, w)
-	cmd.Stderr = io.MultiWriter(buf, w)
+	cmd.Stdout = buf
+	cmd.Stderr = buf
 	cmd.Env = append(b.Env, env...)
 
 	err = cmd.Run()
@@ -280,8 +280,8 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 
 func (b *BootstrapTester) CheckMocks(t *testing.T) {
 	for _, mock := range b.mocks {
-		if mock.Check(t) {
-			t.Logf("Mock %s passed checks", mock.Name)
+		if !mock.Check(t) {
+			return
 		}
 	}
 }
@@ -335,34 +335,6 @@ func (b *BootstrapTester) Close() error {
 		return err
 	}
 	return nil
-}
-
-type testLogWriter struct {
-	io.Writer
-	sync.Mutex
-}
-
-func newTestLogWriter(t *testing.T) *testLogWriter {
-	r, w := io.Pipe()
-	in := bufio.NewScanner(r)
-	lw := &testLogWriter{Writer: w}
-
-	go func() {
-		for in.Scan() {
-			lw.Lock()
-			t.Logf("%s", in.Text())
-			lw.Unlock()
-		}
-
-		if err := in.Err(); err != nil {
-			t.Errorf("Error with log writer: %v", err)
-			r.CloseWithError(err)
-		} else {
-			r.Close()
-		}
-	}()
-
-	return lw
 }
 
 type buffer struct {

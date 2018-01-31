@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lox/bintest"
+	"github.com/buildkite/bintest"
 )
 
 func TestCheckingOutLocalGitProject(t *testing.T) {
@@ -173,7 +173,6 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
 
-	t.Logf("Wrote %s", filepath.Join(tester.CheckoutDir(), "test.txt"))
 	tester.RunAndCheck(t)
 
 	_, err = os.Stat(filepath.Join(tester.CheckoutDir(), "test.txt"))

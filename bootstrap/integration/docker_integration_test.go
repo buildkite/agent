@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 func jobScriptName(jobId string) string {
@@ -262,9 +262,8 @@ func expectCommandHooks(exitStatus string, t *testing.T, tester *BootstrapTester
 	tester.ExpectGlobalHook("post-command").Once()
 	tester.ExpectLocalHook("post-command").Once()
 
-	preExitFunc := func(c *proxy.Call) {
+	preExitFunc := func(c *bintest.Call) {
 		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
-		t.Logf("Exit status is %s", cmdExitStatus)
 		if cmdExitStatus != exitStatus {
 			t.Errorf("Expected an exit status of %s, got %v", exitStatus, cmdExitStatus)
 		}

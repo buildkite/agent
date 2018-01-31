@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
-	"syscall"
-
-	"github.com/lox/bintest/proxy"
+	"time"
 )
 
 const (
@@ -47,7 +45,7 @@ type Mock struct {
 	ignoreUnexpected bool
 
 	// The related proxy
-	proxy *proxy.Proxy
+	proxy *Proxy
 
 	// A command to passthrough execution to
 	passthroughPath string
@@ -57,7 +55,27 @@ type Mock struct {
 func NewMock(path string) (*Mock, error) {
 	m := &Mock{}
 
-	proxy, err := proxy.New(path)
+	proxy, err := CompileProxy(path)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Name = strings.TrimSuffix(filepath.Base(proxy.Path), `.exe`)
+	m.Path = proxy.Path
+	m.proxy = proxy
+
+	go func() {
+		for call := range m.proxy.Ch {
+			m.invoke(call)
+		}
+	}()
+	return m, nil
+}
+
+func NewMockFromTestMain(path string) (*Mock, error) {
+	m := &Mock{}
+
+	proxy, err := LinkTestBinaryAsProxy(path)
 	if err != nil {
 		return nil, err
 	}
@@ -74,14 +92,14 @@ func NewMock(path string) (*Mock, error) {
 	return m, nil
 }
 
-func (m *Mock) invoke(call *proxy.Call) {
+func (m *Mock) invoke(call *Call) {
 	m.Lock()
 	defer m.Unlock()
 
-	debugf("Handling invocation for %s %s", m.Name, call.Args)
+	debugf("Handling invocation for %s %v", m.Name, call.Args[1:])
 
 	var invocation = Invocation{
-		Args: call.Args,
+		Args: call.Args[1:],
 		Env:  call.Env,
 		Dir:  call.Dir,
 	}
@@ -95,7 +113,7 @@ func (m *Mock) invoke(call *proxy.Call) {
 		}
 	}
 
-	result := m.expected.ForArguments(call.Args...)
+	result := m.expected.ForArguments(call.Args[1:]...)
 	expected, err := result.Match()
 	if err != nil {
 		debugf("No match found for expectation: %v", err)
@@ -119,9 +137,9 @@ func (m *Mock) invoke(call *proxy.Call) {
 	invocation.Expectation = expected
 
 	if m.passthroughPath != "" {
-		call.Exit(m.invokePassthrough(m.passthroughPath, call))
+		call.PassthroughWithTimeout(m.passthroughPath, time.Second*10)
 	} else if expected.passthroughPath != "" {
-		call.Exit(m.invokePassthrough(expected.passthroughPath, call))
+		call.PassthroughWithTimeout(expected.passthroughPath, time.Second*10)
 	} else if expected.callFunc != nil {
 		expected.callFunc(call)
 	} else {
@@ -136,36 +154,13 @@ func (m *Mock) invoke(call *proxy.Call) {
 	m.invocations = append(m.invocations, invocation)
 }
 
-func (m *Mock) invokePassthrough(path string, call *proxy.Call) int {
-	debugf("Passing through to %s %v", path, call.Args)
-	cmd := exec.Command(path, call.Args...)
-	cmd.Env = call.Env
-	cmd.Stdout = call.Stdout
-	cmd.Stderr = call.Stderr
-	cmd.Stdin = call.Stdin
-	cmd.Dir = call.Dir
-
-	var waitStatus syscall.WaitStatus
-	if err := cmd.Run(); err != nil {
-		debugf("Exited with error: %v", err)
-		if exitError, ok := err.(*exec.ExitError); ok {
-			waitStatus = exitError.Sys().(syscall.WaitStatus)
-			return waitStatus.ExitStatus()
-		} else {
-			panic(err)
-		}
-	}
-
-	debugf("Exited with 0")
-	return 0
-}
-
 // PassthroughToLocalCommand executes the mock name as a local command (looked up in PATH) and then passes
 // the result as the result of the mock. Useful for assertions that commands happen, but where
 // you want the command to actually be executed.
 func (m *Mock) PassthroughToLocalCommand() *Mock {
 	m.Lock()
 	defer m.Unlock()
+	debugf("[mock] Looking up %s in path", m.Name)
 	path, err := exec.LookPath(m.Name)
 	if err != nil {
 		panic(err)
@@ -209,7 +204,7 @@ func (m *Mock) Expect(args ...interface{}) *Expectation {
 		maxCalls:        1,
 		passthroughPath: m.passthroughPath,
 	}
-	debugf("creating expectaion %s", ex)
+	debugf("Creating expectation %s", ex)
 	m.expected = append(m.expected, ex)
 	return ex
 }
@@ -286,14 +281,4 @@ type Invocation struct {
 	Env         []string
 	Dir         string
 	Expectation *Expectation
-}
-
-var (
-	Debug bool
-)
-
-func debugf(pattern string, args ...interface{}) {
-	if Debug {
-		log.Printf("[mock] "+pattern, args...)
-	}
 }

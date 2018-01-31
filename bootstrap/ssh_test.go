@@ -14,13 +14,10 @@ func TestFindingSSHTools(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sh.Debug = true
 	sh.Logger = shell.TestingLogger{t}
 
-	d, err := findPathToSSHTools(sh)
+	_, err = findPathToSSHTools(sh)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	t.Logf("Found ssh tools at %s ", d)
 }
