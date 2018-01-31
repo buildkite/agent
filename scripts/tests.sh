@@ -1,3 +1,3 @@
 #!/bin/bash
-set -e
-go test -race -v ./...
+set -euo pipefail
+go test -v ./... |& sed -e 's/^---/***/'
