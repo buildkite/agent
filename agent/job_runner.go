@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -46,6 +47,9 @@ type JobRunner struct {
 
 	// A lock to protect concurrent calls to kill
 	killLock sync.Mutex
+
+	// File containing a copy of the job env
+	envFile *os.File
 }
 
 // Initializes the job runner
@@ -61,6 +65,14 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
+
+	// Prepare a file to recieve the given job environment
+	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)) ; err != nil {
+		return runner, err
+	} else {
+		logger.Debug("[JobRunner] Created env file: %s", file.Name())
+		runner.envFile = file
+	}
 
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
@@ -130,6 +142,14 @@ func (r *JobRunner) Run() error {
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
 	r.routineWaitGroup.Wait()
 
+	// Remove the env file, if any
+	if r.envFile != nil {
+		if err := os.Remove(r.envFile.Name()); err != nil {
+			logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+		}
+		logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
+	}
+
 	logger.Info("Finished job %s", r.Job.ID)
 
 	return nil
@@ -162,6 +182,17 @@ func (r *JobRunner) createEnvironment() []string {
 	env := make(map[string]string)
 	for key, value := range r.Job.Env {
 		env[key] = value
+	}
+
+	// Write out the job environment to a file, in k=v format.
+	// We present only the clean environment - i.e only variables configured
+	// on the job upstream - and expose the path in another environment variable.
+	if r.envFile != nil {
+		for key, value := range(env) {
+			r.envFile.WriteString(fmt.Sprintf("%s=%s\n", key, value))
+		}
+		r.envFile.Close()
+		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
 	// Add agent environment variables
