@@ -14,17 +14,19 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/bootstrap/shell"
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/agent/env"
+	"github.com/buildkite/bintest"
 )
 
-func TestRunAndCaptureWithTTY(t *testing.T) {
-	sshKeygen, err := proxy.Compile("ssh-keygen")
+func TestShellRunAndCaptureWithTTY(t *testing.T) {
+	sshKeygen, err := bintest.LinkTestBinaryAsProxy("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer sshKeygen.Close()
 
 	sh := newShellForTest(t)
+	sh.Env = env.FromSlice(sshKeygen.Environ())
 	sh.PTY = true
 
 	go func() {
@@ -43,8 +45,8 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
-	sshKeygen, err := proxy.Compile("ssh-keygen")
+func TestShellRun(t *testing.T) {
+	sshKeygen, err := bintest.LinkTestBinaryAsProxy("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +58,7 @@ func TestRun(t *testing.T) {
 	sh.PTY = false
 	sh.Writer = out
 	sh.Logger = &shell.WriterLogger{Writer: out, Ansi: false}
+	sh.Env = env.FromSlice(sshKeygen.Environ())
 
 	go func() {
 		call := <-sshKeygen.Ch
@@ -111,12 +114,7 @@ func TestWorkingDir(t *testing.T) {
 
 	currentWd, _ := os.Getwd()
 
-	sh, err := shell.New()
-	sh.Logger = shell.TestingLogger{t}
-
-	if err != nil {
-		t.Fatal(err)
-	}
+	sh := newShellForTest(t)
 
 	for idx := range dirs {
 		dir := filepath.Join(dirs[0 : idx+1]...)
@@ -163,7 +161,6 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	sh := newShellForTest(t)
-	sh.Logger = shell.TestingLogger{t}
 
 	lockPath := filepath.Join(dir, "my.lock")
 

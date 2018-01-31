@@ -7,21 +7,20 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/clicommand"
-	"github.com/lox/bintest/proxy"
-	"github.com/lox/bintest/proxy/client"
+	"github.com/buildkite/bintest"
 	"github.com/urfave/cli"
 )
 
 func TestMain(m *testing.M) {
 	// Act as a bintest proxy stub if not integration.test
-	if filepath.Base(os.Args[0]) != `integration.test` {
-		log.Printf("Executing %v", os.Args)
-		os.Exit(client.NewFromEnv().Run())
+	if strings.TrimSuffix(filepath.Base(os.Args[0]), ".exe") != `integration.test` {
+		os.Exit(bintest.NewClientFromEnv().Run())
 	}
 
 	// If we are passed "bootstrap", execute like the bootstrap cli
@@ -45,7 +44,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// make sure all our bintest proxies are stopped
-	if err := proxy.StopServer(); err != nil {
+	if err := bintest.StopServer(); err != nil {
 		log.Fatal(err)
 	}
 
