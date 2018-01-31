@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.39](https://github.com/buildkite/agent/tree/v3.0-beta.39) (2018-01-31)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.38...v3.0-beta.39)
+
+### Fixed
+
+- Fix bug failing artifact upload glob would cause later globs to fail [\#620](https://github.com/buildkite/agent/pull/620) (@lox)
+- Fix race condition in process management [\#618](https://github.com/buildkite/agent/pull/618) (@lox)
+- Support older git versions for submodule commands [\#628](https://github.com/buildkite/agent/pull/628) (@lox)
+- Lots of windows fixes and tests! [\#630](https://github.com/buildkite/agent/pull/630) [\#631](https://github.com/buildkite/agent/pull/631) [\#632](https://github.com/buildkite/agent/pull/632)
+
+### Added
+
+- Support for Bash for Windows for plugins and hooks! [\#636](https://github.com/buildkite/agent/pull/636) (@lox)
+- Correct mimetypes for .log files [\#635](https://github.com/buildkite/agent/pull/635) (@DazWorrall)
+- Usable Content-Disposition for GCE uploaded artifacts [\#640](https://github.com/buildkite/agent/pull/640) (@DazWorrall)
+- Experiment for retrying checkout on failure [\#613](https://github.com/buildkite/agent/pull/613) (@lox)
+- Skip local hooks when BUILDKITE_NO_LOCAL_HOOKS is set [\#622](https://github.com/buildkite/agent/pull/622) (@lox)
+
+### Changed
+
+- Bootstrap shell commands output stderr now [\#626](https://github.com/buildkite/agent/pull/626) (@lox)
+
 ## [v2.6.9](https://github.com/buildkite/agent/releases/tag/v2.6.9) (2018-01-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v2.6.8...v2.6.9)
 
