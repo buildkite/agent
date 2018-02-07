@@ -41,6 +41,7 @@ type AgentStartConfig struct {
 	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                        string   `cli:"shell"`
 	Tags                         []string `cli:"tags"`
 	TagsFromEC2                  bool     `cli:"tags-from-ec2"`
 	TagsFromEC2Tags              bool     `cli:"tags-from-ec2-tags"`
@@ -63,6 +64,15 @@ type AgentStartConfig struct {
 	MetaDataEC2     bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
 	MetaDataEC2Tags bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
 	MetaDataGCP     bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
+}
+
+func DefaultShell() string {
+	if runtime.GOOS == "windows" {
+		return "C:\\Windows\\System32\\CMD.EXE /S /C"
+	} else {
+		return "/bin/bash -c"
+
+	}
 }
 
 func DefaultConfigFilePaths() (paths []string) {
@@ -129,6 +139,12 @@ var AgentStartCommand = cli.Command{
 			Value:  120,
 			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
+		},
+		cli.StringFlag{
+			Name:   "shell",
+			Value:  DefaultShell(),
+			Usage:  "The shell to use to interpret build commands",
+			EnvVar: "BUILDKITE_SHELL",
 		},
 		cli.StringSliceFlag{
 			Name:   "tags",
@@ -277,6 +293,11 @@ var AgentStartCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%q bootstrap", os.Args[0])
 		}
 
+		// Guess the shell if none is provided
+		if cfg.Shell == "" {
+			cfg.Shell = DefaultShell()
+		}
+
 		// Make sure the DisconnectAfterJobTimeout value is correct
 		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
 			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
@@ -316,6 +337,7 @@ var AgentStartCommand = cli.Command{
 				TimestampLines:             cfg.TimestampLines,
 				DisconnectAfterJob:         cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
+				Shell: cfg.Shell,
 			},
 		}
 
