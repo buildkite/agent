@@ -115,7 +115,10 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	}
 
 	// Write the hook script to the runner then close the file so we can run it
-	h.scriptFile.WriteString(script)
+	_, err = h.scriptFile.WriteString(script)
+	if err != nil {
+		return nil, err
+	}
 
 	// Make script executable
 	if err = addExecutePermissionToFile(h.scriptFile.Name()); err != nil {
