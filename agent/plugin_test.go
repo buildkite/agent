@@ -54,37 +54,28 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 	assert.Equal(t, err.Error(), "Too many #'s in \"github.com/buildkite/plugins/ping#master#lololo\"")
 }
 
-func TestPluginName(t *testing.T) {
+func TestPluginNameParsedFromLocation(t *testing.T) {
 	t.Parallel()
 
-	var plugin *Plugin
-
-	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin.git"}
-	assert.Equal(t, "docker-compose", plugin.Name())
-
-	plugin = &Plugin{Location: "github.com/buildkite-plugins/docker-compose-buildkite-plugin"}
-	assert.Equal(t, "docker-compose", plugin.Name())
-
-	plugin = &Plugin{Location: "github.com/my-org/docker-compose-buildkite-plugin"}
-	assert.Equal(t, "docker-compose", plugin.Name())
-
-	plugin = &Plugin{Location: "github.com/buildkite/plugins/docker-compose"}
-	assert.Equal(t, "docker-compose", plugin.Name())
-
-	plugin = &Plugin{Location: "github.com/buildkite/my-plugin"}
-	assert.Equal(t, "my-plugin", plugin.Name())
-
-	plugin = &Plugin{Location: "~/Development/plugins/test"}
-	assert.Equal(t, "test", plugin.Name())
-
-	plugin = &Plugin{Location: "~/Development/plugins/UPPER     CASE_party"}
-	assert.Equal(t, "upper-case-party", plugin.Name())
-
-	plugin = &Plugin{Location: "vendor/src/vendored with a space"}
-	assert.Equal(t, "vendored-with-a-space", plugin.Name())
-
-	plugin = &Plugin{Location: ""}
-	assert.Equal(t, "", plugin.Name())
+	for _, tc := range []struct {
+		location     string
+		expectedName string
+	}{
+		{`github.com/buildkite-plugins/docker-compose-buildkite-plugin.git`, `docker-compose`},
+		{"github.com/buildkite-plugins/docker-compose-buildkite-plugin", "docker-compose"},
+		{"github.com/my-org/docker-compose-buildkite-plugin", "docker-compose"},
+		{"github.com/buildkite/plugins/docker-compose", "docker-compose"},
+		{"~/Development/plugins/test", "test"},
+		{"~/Development/plugins/UPPER     CASE_party", "my-plugin"},
+		{"vendor/src/vendored with a space", "vendored-with-a-space"},
+		{"", ""},
+	} {
+		t.Run("", func(tt *testing.T) {
+			tt.Parallel()
+			plugin := &Plugin{Location: tc.location}
+			assert.Equal(tt, tc.expectedName, plugin.Name())
+		})
+	}
 }
 
 func TestIdentifier(t *testing.T) {
