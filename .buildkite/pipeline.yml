@@ -10,9 +10,12 @@ steps:
         run: agent
 
   - name: ":hammer: :windows:"
-    command: "docker-compose -f docker-compose.windows.yml run --rm -T agent .\\scripts\\tests.bat"
-    agents:
-      queue: "windows"
+    trigger: agent-windows
+    async: true
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
 
   - wait: ~
     continue_on_failure: true
