@@ -61,16 +61,17 @@ func TestPluginNameParsedFromLocation(t *testing.T) {
 		location     string
 		expectedName string
 	}{
-		{`github.com/buildkite-plugins/docker-compose-buildkite-plugin.git`, `docker-compose`},
+		{"github.com/buildkite-plugins/docker-compose-buildkite-plugin.git", "docker-compose"},
 		{"github.com/buildkite-plugins/docker-compose-buildkite-plugin", "docker-compose"},
 		{"github.com/my-org/docker-compose-buildkite-plugin", "docker-compose"},
 		{"github.com/buildkite/plugins/docker-compose", "docker-compose"},
 		{"~/Development/plugins/test", "test"},
-		{"~/Development/plugins/UPPER     CASE_party", "my-plugin"},
+		{"~/Development/plugins/UPPER     CASE_party", "upper-case-party"},
 		{"vendor/src/vendored with a space", "vendored-with-a-space"},
 		{"", ""},
 	} {
-		t.Run("", func(tt *testing.T) {
+		tc := tc
+		t.Run(tc.location, func(tt *testing.T) {
 			tt.Parallel()
 			plugin := &Plugin{Location: tc.location}
 			assert.Equal(tt, tc.expectedName, plugin.Name())
