@@ -11,11 +11,11 @@ steps:
 
   - name: ":hammer: :windows:"
     trigger: agent-windows
-      async: true
-      build:
-        message: "${BUILDKITE_MESSAGE}"
-        commit: "${BUILDKITE_COMMIT}"
-        branch: "${BUILDKITE_BRANCH}"
+    async: true
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
 
   - wait: ~
     continue_on_failure: true
