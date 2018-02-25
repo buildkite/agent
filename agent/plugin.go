@@ -176,45 +176,60 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 	return strings.TrimPrefix(dir, "/"), nil
 }
 
+var (
+	toDashRegex            = regexp.MustCompile(`-|\s+`)
+	removeWhitespaceRegex  = regexp.MustCompile(`\s+`)
+	removeDoubleUnderscore = regexp.MustCompile(`_+`)
+)
+
+// formatEnvKey converts strings into an ENV key friendly format
+func formatEnvKey(key string) string {
+	key = strings.ToUpper(key)
+	key = removeWhitespaceRegex.ReplaceAllString(key, " ")
+	key = toDashRegex.ReplaceAllString(key, "_")
+	key = removeDoubleUnderscore.ReplaceAllString(key, "_")
+	return key
+}
+
+func walkConfigValues(prefix string, v interface{}, into *[]string) error {
+	switch vv := v.(type) {
+
+	// handles all of our primitive types, golang provides a good string representation
+	case string, bool, json.Number:
+		*into = append(*into, fmt.Sprintf("%s=%v", prefix, vv))
+		return nil
+
+	// handle lists of things, which get a KEY_N prefix depending on the index
+	case []interface{}:
+		for i := range vv {
+			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	// handle maps of things, which get a KEY_SUBKEY prefix depending on the map keys
+	case map[string]interface{}:
+		for k, vvv := range vv {
+			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k)), vvv, into); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("Unknown type %T %v", v, v)
+}
+
 // Converts the plugin configuration values to environment variables
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	envSlice := []string{}
-
-	toDashRegex := regexp.MustCompile(`-|\s+`)
-	removeWhitespaceRegex := regexp.MustCompile(`\s+`)
-	removeDoubleUnderscore := regexp.MustCompile(`_+`)
+	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
 
 	for k, v := range p.Configuration {
-		k = removeWhitespaceRegex.ReplaceAllString(k, " ")
-		name := strings.ToUpper(toDashRegex.ReplaceAllString(fmt.Sprintf("BUILDKITE_PLUGIN_%s_%s", p.Name(), k), "_"))
-		name = removeDoubleUnderscore.ReplaceAllString(name, "_")
-
-		switch vv := v.(type) {
-		case string:
-			envSlice = append(envSlice, fmt.Sprintf("%s=%s", name, vv))
-		case bool:
-			envSlice = append(envSlice, fmt.Sprintf("%s=%t", name, vv))
-		case json.Number:
-			envSlice = append(envSlice, fmt.Sprintf("%s=%s", name, vv.String()))
-		case []string:
-			for i := range vv {
-				envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
-			}
-		case []interface{}:
-			for i := range vv {
-				switch vvv := vv[i].(type) {
-				case json.Number:
-					envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vvv.String()))
-				case string:
-					envSlice = append(envSlice, fmt.Sprintf("%s_%d=%s", name, i, vvv))
-				default:
-					fmt.Printf("Unknown type %T %v", vvv, vvv)
-					// unknown type
-				}
-			}
-		default:
-			fmt.Printf("Unknown type %T %v", vv, vv)
-			// unknown type
+		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
+		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
+			return nil, err
 		}
 	}
 
