@@ -54,6 +54,7 @@ type BootstrapConfig struct {
 	PluginsEnabled               bool   `cli:"plugins-enabled"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
+	Shell                        string `cli:"shell"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -217,6 +218,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Run jobs within a pseudo terminal",
 			EnvVar: "BUILDKITE_NO_PTY",
 		},
+		cli.StringFlag{
+			Name:   "shell",
+			Usage:  "The shell to use to interpret build commands",
+			EnvVar: "BUILDKITE_SHELL",
+		},
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
@@ -265,6 +271,7 @@ var BootstrapCommand = cli.Command{
 				CommandEval:                  cfg.CommandEval,
 				PluginsEnabled:               cfg.PluginsEnabled,
 				SSHFingerprintVerification:   cfg.SSHFingerprintVerification,
+				Shell: cfg.Shell,
 			},
 		}
 

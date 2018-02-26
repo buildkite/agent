@@ -68,10 +68,9 @@ type AgentStartConfig struct {
 
 func DefaultShell() string {
 	if runtime.GOOS == "windows" {
-		return "C:\\Windows\\System32\\CMD.EXE /S /C"
+		return `C:\Windows\System32\CMD.EXE /S /C`
 	} else {
-		return "/bin/bash -c"
-
+		return `/bin/bash -e -c`
 	}
 }
 
@@ -297,6 +296,8 @@ var AgentStartCommand = cli.Command{
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
 		}
+
+		logger.Debug("Using shell %q", cfg.Shell)
 
 		// Make sure the DisconnectAfterJobTimeout value is correct
 		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {

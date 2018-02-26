@@ -67,7 +67,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
 	// Prepare a file to recieve the given job environment
-	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)) ; err != nil {
+	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)); err != nil {
 		return runner, err
 	} else {
 		logger.Debug("[JobRunner] Created env file: %s", file.Name())
@@ -188,7 +188,7 @@ func (r *JobRunner) createEnvironment() []string {
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envFile != nil {
-		for key, value := range(env) {
+		for key, value := range env {
 			r.envFile.WriteString(fmt.Sprintf("%s=%s\n", key, value))
 		}
 		r.envFile.Close()
@@ -215,6 +215,7 @@ func (r *JobRunner) createEnvironment() []string {
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.AgentConfiguration.GitCleanFlags
+	env["BUILDKITE_SHELL"] = r.AgentConfiguration.Shell
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
