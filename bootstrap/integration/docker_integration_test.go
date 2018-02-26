@@ -1,19 +1,10 @@
 package integration
 
 import (
-	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/lox/bintest/proxy"
 )
-
-func jobScriptName(jobId string) string {
-	if runtime.GOOS == "windows" {
-		return filepath.FromSlash("./buildkite-script-"+jobId) + ".bat"
-	}
-	return filepath.FromSlash("./buildkite-script-" + jobId)
-}
 
 func TestRunningCommandWithDocker(t *testing.T) {
 	tester, err := NewBootstrapTester()
@@ -39,7 +30,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	docker := tester.MustMock(t, "docker")
 	docker.ExpectAll([][]interface{}{
 		{"build", "-f", "Dockerfile", "-t", imageId, "."},
-		{"run", "--name", containerId, imageId, jobScriptName(jobId)},
+		{"run", "--name", containerId, imageId, "true"},
 		{"rm", "-f", "-v", containerId},
 	})
 
@@ -73,7 +64,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	docker := tester.MustMock(t, "docker")
 	docker.ExpectAll([][]interface{}{
 		{"build", "-f", "Dockerfile.llamas", "-t", imageId, "."},
-		{"run", "--name", containerId, imageId, jobScriptName(jobId)},
+		{"run", "--name", containerId, imageId, "true"},
 		{"rm", "-f", "-v", containerId},
 	})
 
@@ -109,7 +100,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 		{"rm", "-f", "-v", containerId},
 	})
 
-	docker.Expect("run", "--name", containerId, imageId, jobScriptName(jobId)).
+	docker.Expect("run", "--name", containerId, imageId, "true").
 		AndExitWith(1)
 
 	expectCommandHooks("1", t, tester)
@@ -138,13 +129,12 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 		"BUILDKITE_DOCKER_COMPOSE_CONTAINER=llamas",
 	}
 
-	jobId := "1111-1111-1111-1111"
 	projectName := "buildkite1111111111111111"
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
-		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", jobScriptName(jobId)},
+		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", "true"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "kill"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "rm", "--force", "--all", "-v"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "down"},
@@ -172,7 +162,6 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 		"BUILDKITE_DOCKER_COMPOSE_CONTAINER=llamas",
 	}
 
-	jobId := "1111-1111-1111-1111"
 	projectName := "buildkite1111111111111111"
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
@@ -183,7 +172,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "down"},
 	})
 
-	dockerCompose.Expect("-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", jobScriptName(jobId)).
+	dockerCompose.Expect("-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", "true").
 		AndWriteToStderr("Nope!").
 		AndExitWith(1)
 
@@ -214,13 +203,12 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 		"BUILDKITE_DOCKER_COMPOSE_FILE=dc1.yml:dc2.yml:dc3.yml",
 	}
 
-	jobId := "1111-1111-1111-1111"
 	projectName := "buildkite1111111111111111"
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
-		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "run", "llamas", jobScriptName(jobId)},
+		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "run", "llamas", "true"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "kill"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "rm", "--force", "--all", "-v"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "down"},
