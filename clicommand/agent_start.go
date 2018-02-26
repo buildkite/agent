@@ -67,9 +67,13 @@ type AgentStartConfig struct {
 }
 
 func DefaultShell() string {
-	if runtime.GOOS == "windows" {
-		return `C:\Windows\System32\CMD.EXE /S /C`
-	} else {
+	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
+	switch runtime.GOOS {
+	case "windows":
+		return `C:\Windows\System32\CMD.exe /S /C`
+	case "freebsd", "openbsd", "netbsd":
+		return `/usr/local/bin/bash -e -c`
+	default:
 		return `/bin/bash -e -c`
 	}
 }
