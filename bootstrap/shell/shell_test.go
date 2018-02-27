@@ -18,7 +18,7 @@ import (
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
-	sshKeygen, err := bintest.NewMock("ssh-keygen")
+	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	sshKeygen, err := bintest.NewMock("ssh-keygen")
+	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
