@@ -15,10 +15,10 @@
 			"revisionTime": "2017-02-17T01:53:35Z"
 		},
 		{
-			"checksumSHA1": "ymizVB3ISqEDEFEaGL1dFTNShCc=",
+			"checksumSHA1": "MhcxqkIbRjEd4sCc+f0F5KxXeaE=",
 			"path": "github.com/buildkite/bintest",
-			"revision": "c7843bc8f69f2c3293768dc3127a2f23b773fc73",
-			"revisionTime": "2018-02-27T03:45:30Z"
+			"revision": "92989f6c91c11dd6af2e0eafaa2c2efb2c339441",
+			"revisionTime": "2018-02-27T07:15:39Z"
 		},
 		{
 			"checksumSHA1": "8mzUiJrhQ0COz4r98YlDICpWqsw=",
@@ -57,16 +57,16 @@
 			"revisionTime": "2016-11-07T00:24:06Z"
 		},
 		{
+			"checksumSHA1": "gEjGS03N1eysvpQ+FCHTxPcbxXc=",
+			"path": "github.com/kardianos/osext",
+			"revision": "ae77be60afb1dcacde03767a8c37337fad28ac14",
+			"revisionTime": "2017-05-10T13:15:34Z"
+		},
+		{
 			"checksumSHA1": "RRbuqW6/i6m9ChhQDTVU7A2F9E8=",
 			"path": "github.com/kr/pty",
 			"revision": "1278f20d9cf7455f0465f3bf74a73d1eeb555c0f",
 			"revisionTime": "2018-01-06T19:11:30Z"
-		},
-		{
-			"checksumSHA1": "GLNCOdn8jAHeCQSuDNdgSIYNlhM=",
-			"path": "github.com/lox/bintest",
-			"revision": "04ae4ffc42d49c49caa97d26c7c88795251144f4",
-			"revisionTime": "2017-11-08T00:12:52Z"
 		},
 		{
 			"checksumSHA1": "vtvVqCnKI84k5jo9sfuGsNlFUKM=",

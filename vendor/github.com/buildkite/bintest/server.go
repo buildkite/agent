@@ -2,7 +2,6 @@ package bintest
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -24,25 +23,15 @@ var (
 	serverLock     deadlock.Mutex
 )
 
-const (
-	defaultPort = 57567
-)
-
 // StartServer starts an instance of a proxy server
 func StartServer() (*Server, error) {
 	serverLock.Lock()
 	defer serverLock.Unlock()
 
 	if serverInstance == nil {
-		// try a default port first so that we get better cached binary re-usage
-		l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", defaultPort))
+		l, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
-
-			// otherwise grab the first available
-			l, err = net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				return nil, err
-			}
+			return nil, err
 		}
 
 		s := &Server{
@@ -52,7 +41,8 @@ func StartServer() (*Server, error) {
 
 		debugf("[server] Starting server on %s", s.URL)
 		go func() {
-			_ = http.Serve(l, s)
+			err = http.Serve(l, s)
+			debugf("[server] Server on %s finished: %v", s.URL, err)
 		}()
 
 		serverInstance = s
@@ -129,7 +119,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// dispatch the request to a handler with the given id
 	handler, ok := s.callHandlers.Load(int(pid))
 	if !ok {
-		debugf("[server] ERROR: No call handler found for pid %d", pid)
+		errorf("No call handler found for pid %d", pid)
 		http.Error(w, "Unknown handler", http.StatusNotFound)
 		return
 	}
@@ -160,8 +150,8 @@ func (s *Server) handleNewCall(w http.ResponseWriter, r *http.Request) {
 	// find the proxy instance in the server for the given path
 	proxy, ok := s.proxies.Load(req.Args[0])
 	if !ok {
-		debugf("[server] ERROR: No proxy found for path %s", req.Args[0])
-		http.Error(w, "No proxy found for "+req.Args[0], http.StatusNotFound)
+		errorf("No bintest proxy registered that matches %q", req.Args[0])
+		http.Error(w, "No bintest proxy registered that matches "+req.Args[0], http.StatusNotFound)
 		return
 	} else {
 		debugf("[server] Found proxy for path %s", req.Args[0])
