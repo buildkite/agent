@@ -70,7 +70,6 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		Repo: repo,
 		Env: []string{
 			"HOME=" + homeDir,
-			"PATH=" + pathDir,
 			"BUILDKITE_BIN_PATH=" + pathDir,
 			"BUILDKITE_BUILD_PATH=" + buildDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
@@ -99,6 +98,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	// Windows requires certain env variables to be present
 	if runtime.GOOS == "windows" {
 		bt.Env = append(bt.Env,
+			"PATH="+pathDir+";"+os.Getenv("PATH"),
 			"SystemRoot="+os.Getenv("SystemRoot"),
 			"WINDIR="+os.Getenv("WINDIR"),
 			"COMSPEC="+os.Getenv("COMSPEC"),
@@ -106,10 +106,10 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			"TMP="+os.Getenv("TMP"),
 			"TEMP="+os.Getenv("TEMP"),
 		)
-	}
-
-	if err = bt.LinkCommonCommands(); err != nil {
-		return nil, err
+	} else {
+		bt.Env = append(bt.Env,
+			"PATH="+pathDir+":"+os.Getenv("PATH"),
+		)
 	}
 
 	// Create a mock used for hook assertions
@@ -120,40 +120,6 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	bt.hookMock = hook
 
 	return bt, nil
-}
-
-// LinkLocalCommand creates a symlink for commands into the tester PATH
-func (b *BootstrapTester) LinkLocalCommand(name string) error {
-	if runtime.GOOS == "windows" && !strings.HasSuffix(name, ".exe") {
-		name += ".exe"
-	}
-	if !filepath.IsAbs(name) {
-		var err error
-		name, err = exec.LookPath(name)
-		if err != nil {
-			return err
-		}
-	}
-	// Good grief windows, symlinks for executables are a shitshow, writing batch works
-	if runtime.GOOS == "windows" {
-		batchPath := strings.TrimSuffix(filepath.Join(b.PathDir, filepath.Base(name)), ".exe") + ".bat"
-		return ioutil.WriteFile(batchPath, []byte(fmt.Sprintf("@\"%s\" %%*", name)), 0777)
-	}
-
-	return os.Symlink(name, filepath.Join(b.PathDir, filepath.Base(name)))
-}
-
-// Link common commands from system path, these can be mocked as needed
-func (b *BootstrapTester) LinkCommonCommands() error {
-	for _, bin := range []string{
-		"ls", "tr", "mkdir", "cp", "sed", "basename", "uname", "chmod",
-		"touch", "env", "grep", "sort", "cat", "true", "false", "git", "ssh-keyscan",
-	} {
-		if err := b.LinkLocalCommand(bin); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Mock creates a mock for a binary using bintest
@@ -298,6 +264,7 @@ func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
 // Run the bootstrap and then check the mocks
 func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
 	if err := b.Run(t, env...); err != nil {
+		t.Logf("Bootstrap output:\n%s", b.Output)
 		t.Fatal(err)
 	}
 	b.CheckMocks(t)
