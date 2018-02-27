@@ -6,14 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
-	"github.com/lox/bintest/proxy"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Expectation is used for setting expectations
 type Expectation struct {
-	sync.RWMutex
+	deadlock.RWMutex
 
 	// Name of the binary that the expectation is against
 	name string
@@ -31,7 +30,7 @@ type Expectation struct {
 	passthroughPath string
 
 	// The function to call when executed
-	callFunc func(*proxy.Call)
+	callFunc func(*Call)
 
 	// A custom argument matcher function
 	matcherFunc func(arg ...string) ArgumentsMatchResult
@@ -129,7 +128,7 @@ func (e *Expectation) AndPassthroughToLocalCommand(path string) *Expectation {
 }
 
 // AndCallFunc causes a middleware function to be called before invocation
-func (e *Expectation) AndCallFunc(f func(*proxy.Call)) *Expectation {
+func (e *Expectation) AndCallFunc(f func(*Call)) *Expectation {
 	e.Lock()
 	defer e.Unlock()
 	e.callFunc = f

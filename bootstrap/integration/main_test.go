@@ -1,51 +1,45 @@
 package integration
 
 import (
-	"io/ioutil"
-	"log"
+	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"testing"
+
+	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/clicommand"
+	"github.com/buildkite/bintest"
+	"github.com/urfave/cli"
 )
 
-var agentBinary string
-
-// This init compiles a bootstrap to be invoked by the bootstrap tester
-// We could possibly use the compiled test stub, but ran into some issues with mock compilation
-func compileBootstrap(dir string) string {
-	_, filename, _, _ := runtime.Caller(0)
-	projectRoot := filepath.Join(filepath.Dir(filename), "..", "..")
-	binPath := filepath.Join(dir, "buildkite-agent")
-
-	if runtime.GOOS == "windows" {
-		binPath += ".exe"
-	}
-
-	cmd := exec.Command("go", "build", "-o", binPath, "main.go")
-	cmd.Env = os.Environ()
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = projectRoot
-
-	err := cmd.Run()
-	if err != nil {
-		panic(err)
-	}
-
-	return binPath
-}
-
 func TestMain(m *testing.M) {
-	dir, err := ioutil.TempDir("", "agent-binary")
-	if err != nil {
-		log.Fatal(err)
+	// If we are passed "bootstrap", execute like the bootstrap cli
+	if len(os.Args) > 1 && os.Args[1] == `bootstrap` {
+		app := cli.NewApp()
+		app.Name = "buildkite-agent"
+		app.Version = agent.Version()
+		app.Commands = []cli.Command{
+			clicommand.BootstrapCommand,
+		}
+
+		if err := app.Run(os.Args); err != nil {
+			fmt.Printf("%v\n", err)
+			os.Exit(1)
+		}
+
+		os.Exit(0)
 	}
 
-	agentBinary = compileBootstrap(dir)
-	code := m.Run()
+	if os.Getenv(`BINTEST_DEBUG`) == "1" {
+		bintest.Debug = true
+	}
 
-	os.RemoveAll(dir)
+	// Start a server to share
+	_, err := bintest.StartServer()
+	if err != nil {
+		fmt.Printf("Error starting server: %v", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
 	os.Exit(code)
 }

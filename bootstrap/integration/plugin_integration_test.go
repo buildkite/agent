@@ -10,8 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lox/bintest"
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 func TestRunningPlugins(t *testing.T) {
@@ -55,7 +54,7 @@ func TestRunningPlugins(t *testing.T) {
 		`BUILDKITE_PLUGINS=` + json,
 	}
 
-	pluginMock.Expect("testing").Once().AndCallFunc(func(c *proxy.Call) {
+	pluginMock.Expect("testing").Once().AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
@@ -63,7 +62,7 @@ func TestRunningPlugins(t *testing.T) {
 		c.Exit(0)
 	})
 
-	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *proxy.Call) {
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)

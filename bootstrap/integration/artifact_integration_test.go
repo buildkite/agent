@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 func TestArtifactsUploadAfterCommand(t *testing.T) {
@@ -18,7 +18,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 	defer tester.Close()
 
 	// Write a file in the command hook
-	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *proxy.Call) {
+	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
 		err := ioutil.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
 			t.Fatalf("Write failed with %v", err)
@@ -47,7 +47,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *proxy.Call) {
+	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *bintest.Call) {
 		err := ioutil.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
 			t.Fatalf("Write failed with %v", err)
@@ -82,7 +82,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	defer tester.Close()
 
 	// Write a file in the command hook
-	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *proxy.Call) {
+	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
 		err := ioutil.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
 			t.Fatalf("Write failed with %v", err)

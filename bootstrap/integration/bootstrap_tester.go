@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lox/bintest"
+	"github.com/buildkite/bintest"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
@@ -65,7 +65,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	}
 
 	bt := &BootstrapTester{
-		Name: agentBinary,
+		Name: os.Args[0],
 		Args: []string{"bootstrap"},
 		Repo: repo,
 		Env: []string{
@@ -124,19 +124,12 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 
 // Mock creates a mock for a binary using bintest
 func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
-	mock, err := bintest.NewMock(name)
+	mock, err := bintest.NewMock(filepath.Join(b.PathDir, name))
 	if err != nil {
 		return mock, err
 	}
 
 	b.mocks = append(b.mocks, mock)
-
-	// move the mock into our path
-	if err := os.Rename(mock.Path, filepath.Join(b.PathDir, filepath.Base(mock.Path))); err != nil {
-		return mock, err
-	}
-
-	mock.Path = filepath.Join(b.PathDir, name)
 	return mock, err
 }
 
