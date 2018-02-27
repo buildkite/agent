@@ -14,11 +14,11 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/bootstrap/shell"
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
-	sshKeygen, err := proxy.New("ssh-keygen")
+	sshKeygen, err := bintest.NewMock("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 }
 
 func TestRun(t *testing.T) {
-	sshKeygen, err := proxy.New("ssh-keygen")
+	sshKeygen, err := bintest.NewMock("ssh-keygen")
 	if err != nil {
 		t.Fatal(err)
 	}

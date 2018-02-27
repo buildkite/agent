@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"github.com/lox/bintest/proxy"
+	"github.com/buildkite/bintest"
 )
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
@@ -19,7 +19,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
 
-	preExitFunc := func(c *proxy.Call) {
+	preExitFunc := func(c *bintest.Call) {
 		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
 		if cmdExitStatus != "1" {
 			t.Errorf("Expected an exit status of 1, got %v", cmdExitStatus)

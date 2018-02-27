@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lox/bintest"
+	"github.com/buildkite/bintest"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
