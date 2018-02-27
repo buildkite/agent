@@ -8,9 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
-
-	"github.com/kardianos/osext"
 )
 
 type Client struct {
@@ -31,14 +30,6 @@ func NewClient(URL string) *Client {
 	wd, err := os.Getwd()
 	if err != nil {
 		panic(err)
-	}
-
-	// replace what we are invoked with with the full path to the
-	// binary that was executed, otherwise we have trouble looking
-	// it up in the registry
-	filename, err := osext.Executable()
-	if err == nil {
-		os.Args[0] = filename
 	}
 
 	return &Client{
@@ -63,7 +54,21 @@ func NewClientFromEnv() *Client {
 
 // Run the client, panics on error and returns an exit code on success
 func (c *Client) Run() int {
-	c.debugf("Client invoked with %v, PID %d", c.Args, c.PID)
+	c.debugf("Invoked with %v", c.Args)
+	c.debugf("Server is %s", c.URL)
+
+	args := c.Args[:]
+
+	// In some situations the binary can be invoked via a relative path which
+	// makes it hard to lookup. In this case we use the executable location
+	if !filepath.IsAbs(os.Args[0]) {
+		filename, err := os.Executable()
+		if err != nil {
+			panic(err)
+		}
+		c.debugf("Using executable %s in place of relative %s", filename, args[0])
+		args[0] = filename
+	}
 
 	var req = callRequest{
 		PID:      c.PID,

@@ -2,6 +2,7 @@ package bintest
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -69,6 +70,7 @@ type Server struct {
 	net.Listener
 	URL string
 
+	aliases      sync.Map
 	proxies      sync.Map
 	callHandlers sync.Map
 }
@@ -76,11 +78,55 @@ type Server struct {
 func (s *Server) registerProxy(p *Proxy) {
 	debugf("[server] Registering proxy %s", p.Path)
 	s.proxies.Store(p.Path, p)
+	s.unaliasProxy(p.Path)
 }
 
 func (s *Server) deregisterProxy(p *Proxy) {
 	debugf("[server] Deregistering proxy %s", p.Path)
 	s.proxies.Delete(p.Path)
+	s.unaliasProxy(p.Path)
+}
+
+func (s *Server) aliasProxy(from, to string) {
+	debugf("[server] Aliasing proxy %s to %s", to, from)
+	s.aliases.Store(from, to)
+}
+
+func (s *Server) unaliasProxy(path string) {
+	s.aliases.Range(func(key, value interface{}) bool {
+		if key.(string) == path {
+			s.aliases.Delete(key)
+		}
+		return true
+	})
+}
+
+func (s *Server) lookupProxy(path string) (*Proxy, error) {
+	var aliases []string
+
+	proxy, ok := s.proxies.Load(path)
+	if !ok {
+		// Build a list of possible aliases
+		s.aliases.Range(func(key, value interface{}) bool {
+			debugf("Looking at %v, %v", key, value)
+			if key.(string) == path {
+				aliases = append(aliases, value.(string))
+			}
+			return true
+		})
+
+		// Check if any of the aliases have proxies registered
+		for _, alias := range aliases {
+			proxy, ok = s.proxies.Load(alias)
+			if ok {
+				return proxy.(*Proxy), nil
+			}
+		}
+
+		return nil, fmt.Errorf("Failed to find a proxy for path %s", path)
+	}
+
+	return proxy.(*Proxy), nil
 }
 
 var (
@@ -148,14 +194,14 @@ func (s *Server) handleNewCall(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find the proxy instance in the server for the given path
-	proxy, ok := s.proxies.Load(req.Args[0])
-	if !ok {
-		errorf("No bintest proxy registered that matches %q", req.Args[0])
-		http.Error(w, "No bintest proxy registered that matches "+req.Args[0], http.StatusNotFound)
+	proxy, err := s.lookupProxy(req.Args[0])
+	if err != nil {
+		errorf(err.Error())
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
-	} else {
-		debugf("[server] Found proxy for path %s", req.Args[0])
 	}
+
+	debugf("[server] Found proxy for path %s", req.Args[0])
 
 	// these pipes connect the call to the various http request/responses
 	outR, outW := io.Pipe()
@@ -163,7 +209,7 @@ func (s *Server) handleNewCall(w http.ResponseWriter, r *http.Request) {
 	inR, inW := io.Pipe()
 
 	// create a custom handler with the id for subsequent requests to hit
-	call := proxy.(*Proxy).newCall(req.PID, req.Args, req.Env, req.Dir)
+	call := proxy.newCall(req.PID, req.Args, req.Env, req.Dir)
 	call.Stdout = outW
 	call.Stderr = errW
 	call.Stdin = inR
@@ -184,7 +230,7 @@ func (s *Server) handleNewCall(w http.ResponseWriter, r *http.Request) {
 	debugf("[server] Registered call handler for pid %d", call.PID)
 
 	// dispatch to whatever handles the call
-	proxy.(*Proxy).Ch <- call
+	proxy.Ch <- call
 }
 
 type callHandler struct {

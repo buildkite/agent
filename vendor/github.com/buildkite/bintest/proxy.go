@@ -61,6 +61,13 @@ func CompileProxy(path string) (*Proxy, error) {
 		return nil, err
 	}
 
+	err = compileClient(path, []string{
+		"main.server=" + server.URL,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	p := &Proxy{
 		Path:    path,
 		Ch:      make(chan *Call),
@@ -70,9 +77,13 @@ func CompileProxy(path string) (*Proxy, error) {
 
 	server.registerProxy(p)
 
-	return p, compileClient(path, []string{
-		"main.server=" + server.URL,
-	})
+	// If the proxy is a symlink (for instance in a temp dir that is symlinked like macos)
+	// we register an alias for the actual underlying binary
+	if resolved, err := filepath.EvalSymlinks(path); err == nil && resolved != path {
+		server.aliasProxy(resolved, path)
+	}
+
+	return p, nil
 }
 
 // LinkTestBinaryAsProxy uses the current binary as a Proxy rather than compiling one directly
