@@ -68,7 +68,6 @@ func TestProcessCallsLineCallbacksForEachOutputLine(t *testing.T) {
 			lines = append(lines, s)
 		},
 		LinePreProcessor: func(s string) string {
-			t.Logf("Preprocessing: %s", s)
 			lineNumber := atomic.AddInt32(&lineCounter, 1)
 			return fmt.Sprintf("#%d: chars %d", lineNumber, len(s))
 		},
