@@ -140,12 +140,11 @@ func TestReplacingCheckoutHook(t *testing.T) {
 	// run a checkout in our checkout hook, otherwise we won't have local hooks to run
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *proxy.Call) {
 		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv(`BUILDKITE_BUILD_CHECKOUT_PATH`))
+		fmt.Fprint(c.Stderr, out)
 		if err != nil {
-			fmt.Println(out)
 			c.Exit(1)
 			return
 		}
-		fmt.Println(out)
 		c.Exit(0)
 	})
 
@@ -223,8 +222,6 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatal("Expected the bootstrap to fail")
-	} else {
-		t.Logf("Failed as expected with %v", err)
 	}
 
 	tester.CheckMocks(t)
@@ -318,8 +315,6 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=true"); err == nil {
 		t.Fatal("Expected the bootstrap to fail due to local hook being called")
-	} else {
-		t.Logf("Failed as expected with %v", err)
 	}
 
 	tester.CheckMocks(t)

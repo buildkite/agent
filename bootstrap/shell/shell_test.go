@@ -112,7 +112,7 @@ func TestWorkingDir(t *testing.T) {
 	currentWd, _ := os.Getwd()
 
 	sh, err := shell.New()
-	sh.Logger = shell.TestingLogger{t}
+	sh.Logger = shell.DiscardLogger
 
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	sh := newShellForTest(t)
-	sh.Logger = shell.TestingLogger{t}
+	sh.Logger = shell.DiscardLogger
 
 	lockPath := filepath.Join(dir, "my.lock")
 

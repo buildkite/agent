@@ -3,7 +3,6 @@ env:
 
 steps:
   - name: ":hammer: :linux:"
-    artifact_paths: "tmp/junit-*.xml"
     command: "scripts/tests.sh"
     plugins:
       docker-compose#v1.8.0:
@@ -16,13 +15,6 @@ steps:
       message: "${BUILDKITE_MESSAGE}"
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
-
-  - wait: ~
-    continue_on_failure: true
-
-  - label: ":junit:"
-    commands:
-      - "scripts/junit.sh"
 
   - wait
 
