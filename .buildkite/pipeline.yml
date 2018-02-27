@@ -9,20 +9,12 @@ steps:
         run: agent
 
   - name: ":hammer: :windows:"
-<<<<<<< HEAD
     trigger: agent-windows
     async: true
     build:
       message: "${BUILDKITE_MESSAGE}"
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
-=======
-    command:
-      - "docker-compose -f docker-compose.windows.yml build --pull agent"
-      - "docker-compose -f docker-compose.windows.yml run --rm -T agent bash.exe ./scripts/tests.sh"
-    agents:
-      queue: "windows"
->>>>>>> Run windows tests in bash
 
   - wait
 
