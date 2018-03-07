@@ -2,8 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/agent/bootstrap/shell"
@@ -28,28 +26,19 @@ func hasDeprecatedDockerIntegration(sh *shell.Shell) bool {
 	return false
 }
 
-func runDeprecatedDockerIntegration(sh *shell.Shell, scriptPath string) error {
+func runDeprecatedDockerIntegration(sh *shell.Shell, cmd []string) error {
 	var warnNotSet = func(k1, k2 string) {
 		sh.Warningf("%s is set, but without %s, which it requires. You should be able to safely remove this from your pipeline.", k1, k2)
 	}
 
-	// scriptPath needs to be relative to wd
-	relativePath, err := filepath.Rel(sh.Getwd(), scriptPath)
-	if err != nil {
-		return err
-	}
-
-	// this gives us ./scriptPath, which is needed for executing from wd
-	relativePathToDot := "." + string(os.PathSeparator) + relativePath
-
 	switch {
 	case sh.Env.Exists(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`):
 		sh.Warningf("BUILDKITE_DOCKER_COMPOSE_CONTAINER is set, which is deprecated in Agent v3 and will be removed in v4. Consider using the :docker: docker-compose plugin instead at https://github.com/buildkite-plugins/docker-compose-buildkite-plugin.")
-		return runDockerComposeCommand(sh, relativePathToDot)
+		return runDockerComposeCommand(sh, cmd)
 
 	case sh.Env.Exists(`BUILDKITE_DOCKER`):
 		sh.Warningf("BUILDKITE_DOCKER is set, which is deprecated in Agent v3 and will be removed in v4. Consider using the docker plugin instead at https://github.com/buildkite-plugins/docker-buildkite-plugin.")
-		return runDockerCommand(sh, relativePathToDot)
+		return runDockerCommand(sh, cmd)
 
 	case sh.Env.Exists(`BUILDKITE_DOCKER_COMPOSE_FILE`):
 		warnNotSet(`BUILDKITE_DOCKER_COMPOSE_FILE`, `BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
@@ -92,9 +81,9 @@ func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
 	return nil
 }
 
-// runDockerCommand executes a script inside a docker container that is built as needed
+// runDockerCommand executes a command inside a docker container that is built as needed
 // Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L439
-func runDockerCommand(sh *shell.Shell, scriptPath string) error {
+func runDockerCommand(sh *shell.Shell, cmd []string) error {
 	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
 	dockerContainer := fmt.Sprintf("buildkite_%s_container", jobId)
 	dockerImage := fmt.Sprintf("buildkite_%s_image", jobId)
@@ -113,16 +102,16 @@ func runDockerCommand(sh *shell.Shell, scriptPath string) error {
 	}
 
 	sh.Headerf(":docker: Running command (in Docker container)")
-	if err := sh.Run("docker", "run", "--name", dockerContainer, dockerImage, scriptPath); err != nil {
+	if err := sh.Run("docker", append([]string{"run", "--name", dockerContainer, dockerImage}, cmd...)...); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// runDockerComposeCommand executes a script with docker-compose
+// runDockerComposeCommand executes a command with docker-compose
 // Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L462
-func runDockerComposeCommand(sh *shell.Shell, scriptPath string) error {
+func runDockerComposeCommand(sh *shell.Shell, cmd []string) error {
 	composeContainer, _ := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
 	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
 
@@ -144,7 +133,7 @@ func runDockerComposeCommand(sh *shell.Shell, scriptPath string) error {
 	}
 
 	sh.Headerf(":docker: Running command (in Docker Compose container)")
-	return runDockerCompose(sh, projectName, "run", composeContainer, scriptPath)
+	return runDockerCompose(sh, projectName, append([]string{"run", composeContainer}, cmd...)...)
 }
 
 func runDockerCompose(sh *shell.Shell, projectName string, commandArgs ...string) error {

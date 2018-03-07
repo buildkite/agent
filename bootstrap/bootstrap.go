@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,6 +15,7 @@ import (
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/retry"
+	shellwords "github.com/mattn/go-shellwords"
 	"github.com/pkg/errors"
 )
 
@@ -890,76 +890,25 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
-	var headerLabel string
-	var buildScriptPath string
-	var promptDisplay string
-
-	// Come up with the contents of the build script. While we
-	// generate the script, we need to handle the case of running a
-	// script vs. a command differently
-	if commandIsScript {
-		headerLabel = "Running build script"
-
-		if runtime.GOOS == "windows" {
-			promptDisplay = b.Command
-		} else {
-			// Show a prettier (more accurate version) of
-			// what we're doing on Linux
-			promptDisplay = "./\"" + b.Command + "\""
-		}
-
-		buildScriptPath = pathToCommand
-	} else {
-		headerLabel = "Running command"
-		buildScriptPath = filepath.Join(b.shell.Getwd(), "buildkite-script-"+b.JobID)
-
-		// Create a build script that will output each line of the command, and run it.
-		var buildScriptContents string
-		if runtime.GOOS == "windows" {
-			buildScriptContents = "@echo off\n"
-			buildScriptPath += ".bat"
-			for _, k := range strings.Split(b.Command, "\n") {
-				if k != "" {
-					buildScriptContents = buildScriptContents +
-						fmt.Sprintf("ECHO %s\n", shell.BatchEscape("\033[90m>\033[0m "+k)) +
-						k + "\n" +
-						"if %errorlevel% neq 0 exit /b %errorlevel%\n"
-				}
-			}
-		} else {
-			buildScriptContents = "#!/bin/bash\nset -e\n"
-			for _, k := range strings.Split(b.Command, "\n") {
-				if k != "" {
-					buildScriptContents = buildScriptContents +
-						fmt.Sprintf("echo '\033[90m$\033[0m %s'\n", strings.Replace(k, "'", "'\\''", -1)) +
-						k + "\n"
-				}
-			}
-		}
-
-		if b.Debug {
-			b.shell.Headerf("Preparing build script")
-			b.shell.Commentf("A build script is being written to \"%s\" with the following:", buildScriptPath)
-			b.shell.Printf("%s", buildScriptContents)
-		}
-
-		// Write the build script to disk
-		err := ioutil.WriteFile(buildScriptPath, []byte(buildScriptContents), 0644)
-		if err != nil {
-			return errors.Wrapf(err, "Failed to write to \"%s\"", buildScriptPath)
-		}
-	}
-
-	// Make script executable
-	if err = addExecutePermissionToFile(buildScriptPath); err != nil {
-		b.shell.Warningf("Error marking script %q as executable: %v", buildScriptPath, err)
+	shell, err := shellwords.Parse(b.Shell)
+	if err != nil {
 		return err
 	}
 
-	// Show we're running the script
-	b.shell.Headerf("%s", headerLabel)
-	if promptDisplay != "" {
-		b.shell.Promptf("%s", promptDisplay)
+	var cmd []string
+
+	if commandIsScript {
+		// Make script executable
+		if err = addExecutePermissionToFile(pathToCommand); err != nil {
+			b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
+			return err
+		}
+
+		b.shell.Headerf("Running script")
+		cmd = []string{pathToCommand}
+	} else {
+		b.shell.Headerf("Running commands")
+		cmd = append(shell, b.Command)
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
@@ -967,10 +916,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		if b.Debug {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		return runDeprecatedDockerIntegration(b.shell, buildScriptPath)
+		return runDeprecatedDockerIntegration(b.shell, cmd)
 	}
 
-	return b.shell.RunScript(buildScriptPath, nil)
+	return b.shell.Run(cmd[0], cmd[1:]...)
 }
 
 func (b *Bootstrap) uploadArtifacts() error {

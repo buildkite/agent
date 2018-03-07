@@ -1,6 +1,7 @@
 package process
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -22,8 +23,7 @@ func FormatCommand(command string, args []string) string {
 	s := []string{command}
 	for _, a := range args {
 		if strings.Contains(a, "\n") || strings.Contains(a, " ") {
-			aa := strings.Replace(strings.Replace(a, "\n", "", -1), "\"", "\\", -1)
-			s = append(s, "\""+truncate(aa, 40)+"\"")
+			s = append(s, fmt.Sprintf("%q", truncate(a, 120)))
 		} else {
 			s = append(s, a)
 		}

@@ -96,6 +96,9 @@ type Config struct {
 
 	// Whether or not to automatically authorize SSH key hosts
 	SSHFingerprintVerification bool
+
+	// The shell used to execute commands
+	Shell string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
