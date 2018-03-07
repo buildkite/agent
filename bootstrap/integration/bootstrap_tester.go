@@ -1,8 +1,10 @@
 package integration
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -224,8 +226,16 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 
 	cmd := exec.Command(path, b.Args...)
 	buf := &buffer{}
-	cmd.Stdout = buf
-	cmd.Stderr = buf
+
+	if os.Getenv(`DEBUG_BOOTSTRAP`) == "1" {
+		w := newTestLogWriter(t)
+		cmd.Stdout = io.MultiWriter(buf, w)
+		cmd.Stderr = io.MultiWriter(buf, w)
+	} else {
+		cmd.Stdout = buf
+		cmd.Stderr = buf
+	}
+
 	cmd.Env = append(b.Env, env...)
 
 	err = cmd.Run()
@@ -291,6 +301,34 @@ func (b *BootstrapTester) Close() error {
 		return err
 	}
 	return nil
+}
+
+type testLogWriter struct {
+	io.Writer
+	sync.Mutex
+}
+
+func newTestLogWriter(t *testing.T) *testLogWriter {
+	r, w := io.Pipe()
+	in := bufio.NewScanner(r)
+	lw := &testLogWriter{Writer: w}
+
+	go func() {
+		for in.Scan() {
+			lw.Lock()
+			t.Logf("%s", in.Text())
+			lw.Unlock()
+		}
+
+		if err := in.Err(); err != nil {
+			t.Errorf("Error with log writer: %v", err)
+			r.CloseWithError(err)
+		} else {
+			r.Close()
+		}
+	}()
+
+	return lw
 }
 
 type buffer struct {

@@ -309,6 +309,13 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 
 	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
 
+	if s.Debug {
+		t := time.Now()
+		defer func() {
+			s.Commentf("Command completed in %v", time.Now().Sub(t))
+		}()
+	}
+
 	if flags.PTY {
 		pty, err := process.StartPTY(cmd)
 		if err != nil {
