@@ -91,6 +91,20 @@ ECHO ^> git checkout -qf "%BUILDKITE_COMMIT%"
 CALL git checkout -qf "%BUILDKITE_COMMIT%"
 IF %ERRORLEVEL% NEQ 0 EXIT %ERRORLEVEL%
 
+IF NOT "%BUILDKITE_DISABLE_GIT_SUBMODULES%" == "true" (
+	ECHO ^> git submodule sync --recursive
+	CALL git submodule sync --recursive
+
+	ECHO ^> git submodule update --init --recursive --force
+	CALL git submodule update --init --recursive --force
+
+	ECHO ^> git submodule foreach --recursive git clean -fdqx
+	CALL git submodule foreach --recursive git clean -fdqx
+
+	ECHO ^> git submodule foreach --recursive git reset --hard
+	CALL git submodule foreach --recursive git reset --hard
+)
+
 ECHO ~~~ Running build script
 
 IF "%BUILDKITE_SCRIPT_PATH%" == "" (
