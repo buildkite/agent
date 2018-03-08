@@ -6,13 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/stdin"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 var AnnotateHelpDescription = `Usage:
@@ -108,7 +109,7 @@ var AnnotateCommand = cli.Command{
 
 		if cfg.Body != "" {
 			body = cfg.Body
-		} else if !terminal.IsTerminal(int(os.Stdin.Fd())) {
+		} else if stdin.IsReadable() {
 			logger.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN

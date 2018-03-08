@@ -13,8 +13,8 @@ import (
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/stdin"
 	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 var PipelineUploadHelpDescription = `Usage:
@@ -103,7 +103,7 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
 			}
-		} else if !terminal.IsTerminal(int(os.Stdin.Fd())) {
+		} else if stdin.IsReadable() {
 			logger.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
