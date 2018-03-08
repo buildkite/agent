@@ -21,10 +21,10 @@
 			"revisionTime": "2018-02-27T22:21:32Z"
 		},
 		{
-			"checksumSHA1": "8mzUiJrhQ0COz4r98YlDICpWqsw=",
+			"checksumSHA1": "S97KA7bbFepIS2ZFHr9ImA4uEGQ=",
 			"path": "github.com/buildkite/interpolate",
-			"revision": "3a807e47135c4139351425cae51d4bd485150282",
-			"revisionTime": "2017-11-14T09:02:18Z"
+			"revision": "c1c376f870d259871fcc9bf3bcfd4889b999ed1a",
+			"revisionTime": "2018-02-15T13:27:03Z"
 		},
 		{
 			"checksumSHA1": "bplZOqTp6JAbkn25zHEPIob25WI=",
@@ -91,6 +91,12 @@
 			"path": "github.com/petermattis/goid",
 			"revision": "b0b1615b78e5ee59739545bb38426383b2cda4c9",
 			"revisionTime": "2018-02-02T15:45:49Z"
+		},
+		{
+			"checksumSHA1": "xu9jD9+X17GL8ZlMipeoYjgaHEo=",
+			"path": "github.com/philopon/go-toposort",
+			"revision": "9be86dbd762f98b5b9a4eca110a3f40ef31d0375",
+			"revisionTime": "2017-06-20T08:54:41Z"
 		},
 		{
 			"checksumSHA1": "LuFv4/jlrmFNnDb/5SCSEPAM9vU=",

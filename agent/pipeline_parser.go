@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/interpolate"
 	"github.com/ghodss/yaml"
+	toposort "github.com/philopon/go-toposort"
 )
 
 type PipelineParser struct {
@@ -37,17 +38,16 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 		return nil, err
 	}
 
-	// Preprocess any env that are defined in the top level block and place them into env for
-	// later interpolation. We do this a few times so that you can reference env vars in other env vars
+	// Preprocess any env that are defined in the top level block
 	if unmarshaledMap, ok := unmarshaled.(map[string]interface{}); ok {
 		if envMap, ok := unmarshaledMap["env"].(map[string]interface{}); ok {
-			if err = p.interpolateEnvBlock(envMap); err != nil {
+			if err = p.interpolateTopLevelEnvBlock(envMap); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	// Recursivly go through the entire pipeline and perform environment
+	// Recursively go through the entire pipeline and perform environment
 	// variable interpolation on strings
 	interpolated, err := p.interpolate(unmarshaled)
 	if err != nil {
@@ -57,26 +57,62 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	return interpolated, nil
 }
 
-func (p PipelineParser) interpolateEnvBlock(envMap map[string]interface{}) error {
-	// do a first pass without interpolation
-	for k, v := range envMap {
-		switch tv := v.(type) {
-		case string, int, bool:
-			p.Env.Set(k, fmt.Sprintf("%v", tv))
+// interpolateTopLevelEnvBlock runs through the top level env block and interpolates them into the env
+// for subsequent steps so that step level env can reference top level env as users expect
+func (p PipelineParser) interpolateTopLevelEnvBlock(envMap map[string]interface{}) error {
+
+	// Because maps in golang are iterated in a random order, we get the env map out of order, despite
+	// users assuming it's ordered. This means that if there is references in an ENV to entries that lexically
+	// preceeded it then things go badly. The solution to this is to use a directed acyclic graph and then
+	// walk it in order (a topological sort).
+
+	// NB: 10 is the initial size of the graph, will dynamically increase after that
+	graph := toposort.NewGraph(10)
+
+	// create nodes in a graph for the env keys
+	for key := range envMap {
+		graph.AddNode(key)
+	}
+
+	// add edges for the dependencies that are needed to be interpolated
+	for key, val := range envMap {
+		ids, err := interpolate.Identifiers(fmt.Sprintf("%s", val))
+		if err != nil {
+			return err
+		}
+
+		for _, id := range ids {
+			// skip cycles
+			if key != id {
+				graph.AddEdge(id, key)
+			}
 		}
 	}
 
-	// next do a pass of interpolation and read the results
-	for k, v := range envMap {
+	// sort by dependency order, unfortunately we don't get much in the way of
+	// useful errors here
+	result, ok := graph.Toposort()
+	if !ok {
+		return fmt.Errorf("Cycle detected in ENV variables")
+	}
+
+	// process env variables in dependency order
+	for _, envKey := range result {
+		v, ok := envMap[envKey]
+		if !ok {
+			return fmt.Errorf("Missing env key for %s", envKey)
+		}
+
 		switch tv := v.(type) {
 		case string:
 			interpolated, err := interpolate.Interpolate(p.Env, tv)
 			if err != nil {
 				return err
 			}
-			p.Env.Set(k, interpolated)
+			p.Env.Set(envKey, interpolated)
 		}
 	}
+
 	return nil
 }
 
