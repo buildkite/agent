@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.40](https://github.com/buildkite/agent/tree/v3.0-beta.40) (2018-03-07)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.39...v3.0-beta.40)
+
+### Changed
+
+- Commands are no longer written to temporary script files before execution [#648](https://github.com/buildkite/agent/pull/648) (@lox)
+- Support more complex types in plugin config [#658](https://github.com/buildkite/agent/pull/658) (@lox)
+
+### Added
+
+- Write an env-file for the bootstrap [#643](https://github.com/buildkite/agent/pull/643) (@DazWorrall)
+- Allow the shell interpreter to be configured [#648](https://github.com/buildkite/agent/pull/648) (@lox)
+
+### Fixed
+
+- Fix stdin detection on windows [#665](https://github.com/buildkite/agent/pull/665) (@lox)
+- Check hook scripts get written to disk without error [#652](https://github.com/buildkite/agent/pull/652) (@sj26)
+
 ## [v3.0-beta.39](https://github.com/buildkite/agent/tree/v3.0-beta.39) (2018-01-31)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.38...v3.0-beta.39)
 
