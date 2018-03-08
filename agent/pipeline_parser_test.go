@@ -154,6 +154,51 @@ func TestPipelineParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	assert.Equal(t, `echo England smashes Australia to win the ashes in 1912!!`, decoded.Steps[0].Command)
 }
 
+func TestPipelineParserProcessesEnvironmentBlockRecursively(t *testing.T) {
+	var pipeline = `{
+		"env": {
+			"BOTANICAL": "${BOTANICAL?must specify a botanical}",
+			"GIN": "Dry London Gin with ${BOTANICAL}",
+			"CAMPARI": "Campari",
+			"VERMOUTH": "Sweet Vermouth",
+			"NEGRONI": "${GIN}, ${CAMPARI} and ${VERMOUTH}, stirred down"
+		},
+		"steps": [{
+			"command": "echo ${NEGRONI}"
+		}]
+	}`
+
+	var decoded struct {
+		Env   map[string]string `json:"env"`
+		Steps []struct {
+			Command string `json:"command"`
+		} `json:"steps"`
+	}
+
+	environ := env.FromSlice([]string{`BOTANICAL=Juniper`})
+
+	result, err := PipelineParser{Pipeline: []byte(pipeline), Env: environ}.Parse()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = decodeIntoStruct(&decoded, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	assert.Equal(t,
+		`Dry London Gin with Juniper, Campari and Sweet Vermouth, stirred down`,
+		decoded.Env["NEGRONI"],
+	)
+
+	// Check that without an env we get an error because BOTANICAL isn't set
+	_, err = PipelineParser{Pipeline: []byte(pipeline)}.Parse()
+	if err == nil || err.Error() != `$BOTANICAL: must specify a botanical` {
+		t.Fatalf("Expected error, got %v", err)
+	}
+}
+
 func decodeIntoStruct(into interface{}, from interface{}) error {
 	b, err := json.Marshal(from)
 	if err != nil {
