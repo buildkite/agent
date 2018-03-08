@@ -47,7 +47,7 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 		}
 	}
 
-	// Recursivly go through the entire pipeline and perform environment
+	// Recursively go through the entire pipeline and perform environment
 	// variable interpolation on strings
 	interpolated, err := p.interpolate(unmarshaled)
 	if err != nil {
@@ -57,7 +57,16 @@ func (p PipelineParser) Parse() (pipeline interface{}, err error) {
 	return interpolated, nil
 }
 
+// interpolateTopLevelEnvBlock runs through the top level env block and interpolates them into the env
+// for subsequent steps so that step level env can reference top level env as users expect
 func (p PipelineParser) interpolateTopLevelEnvBlock(envMap map[string]interface{}) error {
+
+	// Because maps in golang are iterated in a random order, we get the env map out of order, despite
+	// users assuming it's ordered. This means that if there is references in an ENV to entries that lexically
+	// preceeded it then things go badly. The solution to this is to use a directed acyclic graph and then
+	// walk it in order (a topological sort).
+
+	// NB: 10 is the initial size of the graph, will dynamically increase after that
 	graph := toposort.NewGraph(10)
 
 	// create nodes in a graph for the env keys
@@ -73,13 +82,15 @@ func (p PipelineParser) interpolateTopLevelEnvBlock(envMap map[string]interface{
 		}
 
 		for _, id := range ids {
+			// skip cycles
 			if key != id {
 				graph.AddEdge(id, key)
 			}
 		}
 	}
 
-	// sort by dependency order
+	// sort by dependency order, unfortunately we don't get much in the way of
+	// useful errors here
 	result, ok := graph.Toposort()
 	if !ok {
 		return fmt.Errorf("Cycle detected in ENV variables")
