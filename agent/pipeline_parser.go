@@ -38,6 +38,7 @@ func (p PipelineParser) Parse() (interface{}, error) {
 	}
 
 	// Preprocess any env that are defined in the top level block and place them into env for
+	// later interpolation into env blocks
 	if item, ok := mapSliceItem("env", pipeline); ok {
 		if envMap, ok := item.Value.(yaml.MapSlice); ok {
 			if err := p.interpolateEnvBlock(envMap); err != nil {
