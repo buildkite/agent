@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -12,14 +11,6 @@ import (
 	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice
 	yaml "github.com/vinzenz/yaml"
 )
-
-type Pipeline struct {
-	yaml.MapSlice
-}
-
-func (p Pipeline) MarshalJSON() ([]byte, error) {
-	return nil, errors.New("Nope")
-}
 
 type PipelineParser struct {
 	Env      *env.Environment
