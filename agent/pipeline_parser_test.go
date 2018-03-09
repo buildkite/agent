@@ -23,18 +23,21 @@ func TestPipelineParser(t *testing.T) {
 	j, err = json.Marshal(result)
 	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
 
-	// It parses complex YAML files
-	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte(`base_step: &base_step
+	complexYAML := `---
+base_step: &base_step
   type: script
   agent_query_rules:
     - queue=default
 
 steps:
-- <<: *base_step
-  name: ':docker: building image'
-  command: docker build .
-  agents:
-    queue: default`)}.Parse()
+  - <<: *base_step
+    name: ':docker: building image'
+    command: docker build .
+    agents:
+      queue: default`
+
+	// It parses complex YAML files
+	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte(complexYAML)}.Parse()
 	assert.Nil(t, err)
 	j, err = json.Marshal(result)
 	assert.Equal(t, `{"base_step":{"agent_query_rules":["queue=default"],"type":"script"},"steps":[{"agent_query_rules":["queue=default"],"agents":{"queue":"default"},"command":"docker build .","name":":docker: building image","type":"script"}]}`, string(j))
@@ -48,12 +51,12 @@ steps:
 	// Returns YAML parsing errors
 	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte("steps: %blah%")}.Parse()
 	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse YAML: found character that cannot start any token`, fmt.Sprintf("%s", err))
+	assert.Equal(t, `Failed to parse yaml: found character that cannot start any token`, fmt.Sprintf("%s", err))
 
 	// Returns JSON parsing errors
 	result, err = PipelineParser{Filename: "awesome.json", Pipeline: []byte("{"), Env: environ}.Parse()
 	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse JSON: unexpected end of JSON input`, fmt.Sprintf("%s", err))
+	assert.Equal(t, `Failed to parse yaml: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
 
 	// It parses pipelines with .json filenames
 	result, err = PipelineParser{Filename: "thing.json", Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()
@@ -70,7 +73,7 @@ steps:
 	// Returns YAML parsing errors if the content looks like YAML
 	result, err = PipelineParser{Pipeline: []byte("steps: %blah%")}.Parse()
 	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse YAML: found character that cannot start any token`, fmt.Sprintf("%s", err))
+	assert.Equal(t, `Failed to parse yaml: found character that cannot start any token`, fmt.Sprintf("%s", err))
 
 	// It parses unknown JSON objects
 	result, err = PipelineParser{Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()
@@ -78,16 +81,10 @@ steps:
 	j, err = json.Marshal(result)
 	assert.Equal(t, `{"foo":"bye \"friend\""}`, string(j))
 
-	// It parses unknown JSON arrays
+	// It returns an error for arrays
 	result, err = PipelineParser{Pipeline: []byte("\n\n     \n  [ { \"foo\": \"bye ${ENV_VAR_FRIEND}\" } ]\n"), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
-	assert.Equal(t, `[{"foo":"bye \"friend\""}]`, string(j))
-
-	// Returns JSON parsing errors if the content looks like JSON
-	result, err = PipelineParser{Pipeline: []byte("{")}.Parse()
-	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse JSON: unexpected end of JSON input`, fmt.Sprintf("%s", err))
+	assert.Nil(t, result)
+	assert.Error(t, err)
 }
 
 func TestPipelineParserInterpolatesKeysAsWellAsValues(t *testing.T) {
