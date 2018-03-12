@@ -497,7 +497,7 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 
 	b.shell.Commentf("Switching to the plugin directory")
 
-	if b.SSHFingerprintVerification {
+	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, repo)
 	}
 
@@ -655,7 +655,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
-	if b.SSHFingerprintVerification {
+	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
@@ -742,7 +742,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 
 	if b.GitSubmodules {
 		// submodules might need their fingerprints verified too
-		if b.SSHFingerprintVerification {
+		if b.SSHKeyscan {
 			b.shell.Commentf("Checking to see if submodule urls need to be added to known_hosts")
 			submoduleRepos, err := gitEnumerateSubmoduleURLs(b.shell)
 			if err != nil {
