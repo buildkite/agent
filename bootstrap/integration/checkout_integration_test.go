@@ -1,10 +1,13 @@
 package integration
 
 import (
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/buildkite/bintest"
@@ -224,4 +227,81 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 		AndExitWith(0)
 
 	tester.RunAndCheck(t)
+}
+
+func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	var cleanCounter int32
+
+	// Mock out all git commands, passing them through to the real thing unless it's a checkout
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		if i.Args[0] == "clean" {
+			c := atomic.AddInt32(&cleanCounter, 1)
+
+			// NB: clean gets run twice per checkout
+			if c == 1 {
+				return errors.New("Sunspots have caused git clean to fail")
+			}
+		}
+		return nil
+	})
+
+	git.Expect().AtLeastOnce().WithAnyArguments()
+	tester.RunAndCheck(t)
+}
+
+func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	var cloneCounter int32
+
+	// Mock out all git commands, passing them through to the real thing unless it's a checkout
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		if i.Args[0] == "clone" {
+			c := atomic.AddInt32(&cloneCounter, 1)
+			if c == 1 {
+				return errors.New("Sunspots have caused git clone to fail")
+			}
+		}
+		return nil
+	})
+
+	git.Expect().AtLeastOnce().WithAnyArguments()
+	tester.RunAndCheck(t)
+}
+
+func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	var checkoutCounter int32
+
+	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
+		counter := atomic.AddInt32(&checkoutCounter, 1)
+		fmt.Fprintf(c.Stdout, "Checkout invocation %d\n", counter)
+		if counter == 1 {
+			fmt.Fprintf(c.Stdout, "Sunspots have caused checkout to fail\n")
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	if err = tester.Run(t); err == nil {
+		t.Fatal("Expected the bootstrap to fail")
+	}
+
+	tester.CheckMocks(t)
 }
