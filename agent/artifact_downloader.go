@@ -48,7 +48,7 @@ func (a *ArtifactDownloader) Download() error {
 	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
-		logger.Info("No artifacts found for downloading")
+		logger.Fatal("No artifacts found for downloading")
 	} else {
 		logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
 
