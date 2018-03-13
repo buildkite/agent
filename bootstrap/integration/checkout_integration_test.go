@@ -92,7 +92,7 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
-func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
+func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -105,27 +105,21 @@ func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
 		Expect("github.com").
 		AndExitWith(0)
 
-	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(0)
-
 	git := tester.MustMock(t, "git")
-	git.IgnoreUnexpectedInvocations().PassthroughToLocalCommand()
+	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
+	git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
 		AndExitWith(0)
 
 	env := []string{
-		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
+		`BUILDKITE_REPO=git@github.com:buildkite/agent.git`,
 		`BUILDKITE_SSH_KEYSCAN=true`,
 	}
 
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutWithoutSSHFingerprintVerification(t *testing.T) {
+func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -138,14 +132,36 @@ func TestCheckingOutWithoutSSHFingerprintVerification(t *testing.T) {
 		Expect("github.com").
 		NotCalled()
 
-	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
+	env := []string{
+		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
+		`BUILDKITE_SSH_KEYSCAN=false`,
+	}
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	tester.MustMock(t, "ssh-keyscan").
+		Expect("github.com").
+		NotCalled()
+
+	git := tester.MustMock(t, "git")
+	git.IgnoreUnexpectedInvocations()
+
+	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
 		AndExitWith(0)
 
 	env := []string{
 		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
-		`BUILDKITE_SSH_KEYSCAN=false`,
+		`BUILDKITE_SSH_KEYSCAN=true`,
 	}
 
 	tester.RunAndCheck(t, env...)
