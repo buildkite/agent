@@ -203,7 +203,7 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Allow plugins to be run",
 			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
 		},
-		cli.BoolFlag{
+		cli.BoolTFlag{
 			Name:   "ssh-keyscan",
 			Usage:  "Automatically run ssh-keyscan before checkout",
 			EnvVar: "BUILDKITE_SSH_KEYSCAN",
@@ -216,7 +216,7 @@ var BootstrapCommand = cli.Command{
 		cli.BoolTFlag{
 			Name:   "pty",
 			Usage:  "Run jobs within a pseudo terminal",
-			EnvVar: "BUILDKITE_NO_PTY",
+			EnvVar: "BUILDKITE_PTY",
 		},
 		cli.StringFlag{
 			Name:   "shell",
