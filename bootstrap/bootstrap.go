@@ -905,7 +905,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 
 		b.shell.Headerf("Running script")
-		cmd = []string{pathToCommand}
+		cmd = append(shell, b.Command)
 	} else {
 		b.shell.Headerf("Running commands")
 		cmd = append(shell, b.Command)
