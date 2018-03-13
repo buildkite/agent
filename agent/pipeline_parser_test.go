@@ -81,10 +81,11 @@ steps:
 	j, err = json.Marshal(result)
 	assert.Equal(t, `{"foo":"bye \"friend\""}`, string(j))
 
-	// It returns an error for arrays
+	// It parses unknown JSON arrays
 	result, err = PipelineParser{Pipeline: []byte("\n\n     \n  [ { \"foo\": \"bye ${ENV_VAR_FRIEND}\" } ]\n"), Env: environ}.Parse()
-	assert.Nil(t, result)
-	assert.Error(t, err)
+	assert.Nil(t, err)
+	j, err = json.Marshal(result)
+	assert.Equal(t, `[{"foo":"bye \"friend\""}]`, string(j))
 }
 
 func TestPipelineParserInterpolatesKeysAsWellAsValues(t *testing.T) {

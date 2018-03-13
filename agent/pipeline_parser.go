@@ -32,30 +32,19 @@ func (p PipelineParser) Parse() (interface{}, error) {
 		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
 	}
 
-	var pipelineAsMap map[string]interface{}
+	var pipeline interface{}
+	var pipelineAsSlice []interface{}
 
-	// Check we can parse this as a map, otherwise later inferences about map structures break
-	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipelineAsMap); err != nil {
-		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
-	}
-
-	var pipeline yaml.MapSlice
-
-	// Initially we unmarshal this into a yaml.MapSlice so that we preserve the order of maps
-	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipeline); err != nil {
-		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
-	}
-
-	// Preprocess any env that are defined in the top level block and place them into env for
-	// later interpolation into env blocks
-	if item, ok := mapSliceItem("env", pipeline); ok {
-		if envMap, ok := item.Value.(yaml.MapSlice); ok {
-			if err := p.interpolateEnvBlock(envMap); err != nil {
-				return nil, err
-			}
-		} else {
-			return nil, fmt.Errorf("Expected pipeline top-level env block to be a map, got %T", item)
+	// Historically we support uploading just steps, so we parse it as either a
+	// slice, or if it's a map we need to do environment block processing
+	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipelineAsSlice); err == nil {
+		pipeline = pipelineAsSlice
+	} else {
+		pipelineAsMap, err := p.parseWithEnv()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 		}
+		pipeline = pipelineAsMap
 	}
 
 	// Recursively go through the entire pipeline and perform environment
@@ -80,6 +69,29 @@ func (p PipelineParser) Parse() (interface{}, error) {
 	}
 
 	return result, nil
+}
+
+func (p PipelineParser) parseWithEnv() (interface{}, error) {
+	var pipeline yaml.MapSlice
+
+	// Initially we unmarshal this into a yaml.MapSlice so that we preserve the order of maps
+	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipeline); err != nil {
+		return nil, err
+	}
+
+	// Preprocess any env tat are defined in the top level block and place them into env for
+	// later interpolation into env blocks
+	if item, ok := mapSliceItem("env", pipeline); ok {
+		if envMap, ok := item.Value.(yaml.MapSlice); ok {
+			if err := p.interpolateEnvBlock(envMap); err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("Expected pipeline top-level env block to be a map, got %T", item)
+		}
+	}
+
+	return pipeline, nil
 }
 
 func mapSliceItem(key string, s yaml.MapSlice) (yaml.MapItem, bool) {
