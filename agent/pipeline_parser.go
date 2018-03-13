@@ -1,17 +1,17 @@
 package agent
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 
 	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/interpolate"
-	"github.com/ghodss/yaml"
+
+	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice
+	yaml "github.com/buildkite/yaml"
 )
 
 type PipelineParser struct {
@@ -20,55 +20,96 @@ type PipelineParser struct {
 	Pipeline []byte
 }
 
-func (p PipelineParser) Parse() (pipeline interface{}, err error) {
+func (p PipelineParser) Parse() (interface{}, error) {
 	if p.Env == nil {
 		p.Env = env.FromSlice(os.Environ())
 	}
 
-	// First try and figure out the format from the filename
-	format, err := inferFormat(p.Pipeline, p.Filename)
-	if err != nil {
-		return nil, err
+	var errPrefix string
+	if p.Filename == "" {
+		errPrefix = "Failed to parse pipeline"
+	} else {
+		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
 	}
 
-	// Unmarshal the pipeline into an actual data structure
-	unmarshaled, err := unmarshal(p.Pipeline, format)
-	if err != nil {
-		return nil, err
-	}
+	var pipeline interface{}
+	var pipelineAsSlice []interface{}
 
-	// Preprocess any env that are defined in the top level block and place them into env for
-	// later interpolation. We do this a few times so that you can reference env vars in other env vars
-	if unmarshaledMap, ok := unmarshaled.(map[string]interface{}); ok {
-		if envMap, ok := unmarshaledMap["env"].(map[string]interface{}); ok {
-			if err = p.interpolateEnvBlock(envMap); err != nil {
-				return nil, err
-			}
+	// Historically we support uploading just steps, so we parse it as either a
+	// slice, or if it's a map we need to do environment block processing
+	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipelineAsSlice); err == nil {
+		pipeline = pipelineAsSlice
+	} else {
+		pipelineAsMap, err := p.parseWithEnv()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 		}
+		pipeline = pipelineAsMap
 	}
 
-	// Recursivly go through the entire pipeline and perform environment
+	// Recursively go through the entire pipeline and perform environment
 	// variable interpolation on strings
-	interpolated, err := p.interpolate(unmarshaled)
+	interpolated, err := p.interpolate(pipeline)
 	if err != nil {
 		return nil, err
 	}
 
-	return interpolated, nil
+	// Now we roundtrip this back into YAML bytes and back into a generic interface{}
+	// that works with all upstream code (which likes working with JSON). Specifically we
+	// need to convert the map[interface{}]interface{}'s that YAML likes into JSON compatible
+	// map[string]interface{}
+	b, err := yaml.Marshal(interpolated)
+	if err != nil {
+		return nil, err
+	}
+
+	var result interface{}
+	if err := unmarshalAsStringMap(b, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
-func (p PipelineParser) interpolateEnvBlock(envMap map[string]interface{}) error {
-	// do a first pass without interpolation
-	for k, v := range envMap {
-		switch tv := v.(type) {
-		case string, int, bool:
-			p.Env.Set(k, fmt.Sprintf("%v", tv))
+func (p PipelineParser) parseWithEnv() (interface{}, error) {
+	var pipeline yaml.MapSlice
+
+	// Initially we unmarshal this into a yaml.MapSlice so that we preserve the order of maps
+	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipeline); err != nil {
+		return nil, err
+	}
+
+	// Preprocess any env tat are defined in the top level block and place them into env for
+	// later interpolation into env blocks
+	if item, ok := mapSliceItem("env", pipeline); ok {
+		if envMap, ok := item.Value.(yaml.MapSlice); ok {
+			if err := p.interpolateEnvBlock(envMap); err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("Expected pipeline top-level env block to be a map, got %T", item)
 		}
 	}
 
-	// next do a pass of interpolation and read the results
-	for k, v := range envMap {
-		switch tv := v.(type) {
+	return pipeline, nil
+}
+
+func mapSliceItem(key string, s yaml.MapSlice) (yaml.MapItem, bool) {
+	for _, item := range s {
+		if k, ok := item.Key.(string); ok && k == key {
+			return item, true
+		}
+	}
+	return yaml.MapItem{}, false
+}
+
+func (p PipelineParser) interpolateEnvBlock(envMap yaml.MapSlice) error {
+	for _, item := range envMap {
+		k, ok := item.Key.(string)
+		if !ok {
+			return fmt.Errorf("Unexpected type of %T for env block key %v", item.Key, item.Key)
+		}
+		switch tv := item.Value.(type) {
 		case string:
 			interpolated, err := interpolate.Interpolate(p.Env, tv)
 			if err != nil {
@@ -80,60 +121,8 @@ func (p PipelineParser) interpolateEnvBlock(envMap map[string]interface{}) error
 	return nil
 }
 
-func inferFormat(pipeline []byte, filename string) (string, error) {
-	// If we have a filename, try and figure out a format from that
-	if filename != "" {
-		extension := filepath.Ext(filename)
-		if extension == ".yaml" || extension == ".yml" {
-			return "yaml", nil
-		} else if extension == ".json" {
-			return "json", nil
-		}
-	}
-
-	// Boo...we couldn't figure it out based on the filename. Next we'll
-	// use a very dirty and ugly way of detecting if the pipeline is JSON.
-	// It's not nice...but seems to work really well for our use case!
-	firstCharacter := string(strings.TrimSpace(string(pipeline))[0])
-	if firstCharacter == "{" || firstCharacter == "[" {
-		return "json", nil
-	}
-
-	// If nothing else could be figured out, then default to YAML
-	return "yaml", nil
-}
-
-func unmarshal(pipeline []byte, format string) (interface{}, error) {
-	var unmarshaled interface{}
-
-	if format == "yaml" {
-		logger.Debug("Parsing pipeline configuration as YAML")
-
-		err := yaml.Unmarshal(pipeline, &unmarshaled)
-		if err != nil {
-			// Error messages from the YAML parser have this ugly
-			// prefix, so I'll just strip it for the sake of the
-			// "aesthetics"
-			message := strings.Replace(fmt.Sprintf("%s", err), "error converting YAML to JSON: yaml: ", "", 1)
-
-			return nil, fmt.Errorf("Failed to parse YAML: %s", message)
-		}
-	} else if format == "json" {
-		logger.Debug("Parsing pipeline configuration as JSON")
-
-		err := json.Unmarshal(pipeline, &unmarshaled)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to parse JSON: %s", err)
-		}
-	} else {
-		if format == "" {
-			return nil, fmt.Errorf("No format was supplied")
-		} else {
-			return nil, fmt.Errorf("Unknown format `%s`", format)
-		}
-	}
-
-	return unmarshaled, nil
+func formatYAMLError(err error) error {
+	return errors.New(strings.TrimPrefix(err.Error(), "yaml: "))
 }
 
 // interpolate function inspired from: https://gist.github.com/hvoecking/10772475
@@ -266,4 +255,47 @@ func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error
 	}
 
 	return nil
+}
+
+// Unmarshal YAML to map[string]interface{} instead of map[interface{}]interface{}, such that
+// we can Marshal cleanly into JSON
+// Via https://github.com/go-yaml/yaml/issues/139#issuecomment-220072190
+func unmarshalAsStringMap(in []byte, out interface{}) error {
+	var res interface{}
+
+	if err := yaml.Unmarshal(in, &res); err != nil {
+		return err
+	}
+	*out.(*interface{}) = cleanupMapValue(res)
+
+	return nil
+}
+
+func cleanupInterfaceArray(in []interface{}) []interface{} {
+	res := make([]interface{}, len(in))
+	for i, v := range in {
+		res[i] = cleanupMapValue(v)
+	}
+	return res
+}
+
+func cleanupInterfaceMap(in map[interface{}]interface{}) map[string]interface{} {
+	res := make(map[string]interface{})
+	for k, v := range in {
+		res[fmt.Sprintf("%v", k)] = cleanupMapValue(v)
+	}
+	return res
+}
+
+func cleanupMapValue(v interface{}) interface{} {
+	switch v := v.(type) {
+	case []interface{}:
+		return cleanupInterfaceArray(v)
+	case map[interface{}]interface{}:
+		return cleanupInterfaceMap(v)
+	case string:
+		return v
+	default:
+		return fmt.Sprintf("%v", v)
+	}
 }
