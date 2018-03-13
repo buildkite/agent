@@ -600,7 +600,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 				b.shell.Warningf("%s (%s)", err, s)
 			}
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
 		if err != nil {
 			return err
 		}
