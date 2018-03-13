@@ -36,7 +36,7 @@ type BootstrapConfig struct {
 	Plugins                      string `cli:"plugins"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
-	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
+	SSHKeyscan                   bool   `cli:"ssh-keyscan"`
 	AgentName                    string `cli:"agent" validate:"required"`
 	OrganizationSlug             string `cli:"organization" validate:"required"`
 	PipelineSlug                 string `cli:"pipeline" validate:"required"`
@@ -204,9 +204,9 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
 		},
 		cli.BoolTFlag{
-			Name:   "ssh-fingerprint-verification",
-			Usage:  "Automatically verify SSH fingerprints",
-			EnvVar: "BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION",
+			Name:   "ssh-keyscan",
+			Usage:  "Automatically run ssh-keyscan before checkout",
+			EnvVar: "BUILDKITE_SSH_KEYSCAN",
 		},
 		cli.BoolTFlag{
 			Name:   "git-submodules",
@@ -216,7 +216,7 @@ var BootstrapCommand = cli.Command{
 		cli.BoolTFlag{
 			Name:   "pty",
 			Usage:  "Run jobs within a pseudo terminal",
-			EnvVar: "BUILDKITE_NO_PTY",
+			EnvVar: "BUILDKITE_PTY",
 		},
 		cli.StringFlag{
 			Name:   "shell",
@@ -270,8 +270,8 @@ var BootstrapCommand = cli.Command{
 				RunInPty:                     runInPty,
 				CommandEval:                  cfg.CommandEval,
 				PluginsEnabled:               cfg.PluginsEnabled,
-				SSHFingerprintVerification:   cfg.SSHFingerprintVerification,
-				Shell: cfg.Shell,
+				SSHKeyscan:                   cfg.SSHKeyscan,
+				Shell:                        cfg.Shell,
 			},
 		}
 

@@ -116,7 +116,7 @@ func TestCheckingOutWithSSHFingerprintVerification(t *testing.T) {
 
 	env := []string{
 		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
-		`BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION=true`,
+		`BUILDKITE_SSH_KEYSCAN=true`,
 	}
 
 	tester.RunAndCheck(t, env...)
@@ -142,7 +142,7 @@ func TestCheckingOutWithoutSSHFingerprintVerification(t *testing.T) {
 
 	env := []string{
 		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
-		`BUILDKITE_AUTO_SSH_FINGERPRINT_VERIFICATION=false`,
+		`BUILDKITE_SSH_KEYSCAN=false`,
 	}
 
 	tester.RunAndCheck(t, env...)

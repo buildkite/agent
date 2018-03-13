@@ -206,11 +206,11 @@ func (r *JobRunner) createEnvironment() []string {
 	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	env["BUILDKITE_BIN_PATH"] = dir
 
-	// Add misc options
+	// Add options from the agent configuration
 	env["BUILDKITE_BUILD_PATH"] = r.AgentConfiguration.BuildPath
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHFingerprintVerification)
+	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHKeyscan)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags

@@ -271,8 +271,8 @@ func (r *AgentPool) ShowBanner() {
 	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
 	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
 
-	if !r.AgentConfiguration.SSHFingerprintVerification {
-		logger.Debug("Automatic SSH fingerprint verification has been disabled")
+	if !r.AgentConfiguration.SSHKeyscan {
+		logger.Debug("Automatic ssh-keyscan has been disabled")
 	}
 
 	if !r.AgentConfiguration.CommandEval {

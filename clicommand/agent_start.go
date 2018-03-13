@@ -31,39 +31,41 @@ Example:
    $ buildkite-agent start --token xxx`
 
 type AgentStartConfig struct {
-	Config                       string   `cli:"config"`
-	Token                        string   `cli:"token" validate:"required"`
-	Name                         string   `cli:"name"`
-	Priority                     string   `cli:"priority"`
-	DisconnectAfterJob           bool     `cli:"disconnect-after-job"`
-	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout"`
-	BootstrapScript              string   `cli:"bootstrap-script" normalize:"filepath"`
-	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
-	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                        string   `cli:"shell"`
-	Tags                         []string `cli:"tags"`
-	TagsFromEC2                  bool     `cli:"tags-from-ec2"`
-	TagsFromEC2Tags              bool     `cli:"tags-from-ec2-tags"`
-	TagsFromGCP                  bool     `cli:"tags-from-gcp"`
-	WaitForEC2TagsTimeout        string   `cli:"wait-for-ec2-tags-timeout"`
-	GitCloneFlags                string   `cli:"git-clone-flags"`
-	GitCleanFlags                string   `cli:"git-clean-flags"`
-	NoColor                      bool     `cli:"no-color"`
-	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification"`
-	NoCommandEval                bool     `cli:"no-command-eval"`
-	NoPlugins                    bool     `cli:"no-plugins"`
-	NoPTY                        bool     `cli:"no-pty"`
-	TimestampLines               bool     `cli:"timestamp-lines"`
-	Endpoint                     string   `cli:"endpoint" validate:"required"`
-	Debug                        bool     `cli:"debug"`
-	DebugHTTP                    bool     `cli:"debug-http"`
-	Experiments                  []string `cli:"experiment"`
+	Config                    string   `cli:"config"`
+	Token                     string   `cli:"token" validate:"required"`
+	Name                      string   `cli:"name"`
+	Priority                  string   `cli:"priority"`
+	DisconnectAfterJob        bool     `cli:"disconnect-after-job"`
+	DisconnectAfterJobTimeout int      `cli:"disconnect-after-job-timeout"`
+	BootstrapScript           string   `cli:"bootstrap-script" normalize:"filepath"`
+	BuildPath                 string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                 string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath               string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                     string   `cli:"shell"`
+	Tags                      []string `cli:"tags"`
+	TagsFromEC2               bool     `cli:"tags-from-ec2"`
+	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
+	TagsFromGCP               bool     `cli:"tags-from-gcp"`
+	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
+	GitCloneFlags             string   `cli:"git-clone-flags"`
+	GitCleanFlags             string   `cli:"git-clean-flags"`
+	NoColor                   bool     `cli:"no-color"`
+	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval             bool     `cli:"no-command-eval"`
+	NoPlugins                 bool     `cli:"no-plugins"`
+	NoPTY                     bool     `cli:"no-pty"`
+	TimestampLines            bool     `cli:"timestamp-lines"`
+	Endpoint                  string   `cli:"endpoint" validate:"required"`
+	Debug                     bool     `cli:"debug"`
+	DebugHTTP                 bool     `cli:"debug-http"`
+	Experiments               []string `cli:"experiment"`
+
 	/* Deprecated */
-	MetaData        []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
-	MetaDataEC2     bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
-	MetaDataEC2Tags bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
-	MetaDataGCP     bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
+	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
+	MetaData                     []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
+	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
+	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
+	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
 }
 
 func DefaultShell() string {
@@ -223,9 +225,9 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_PTY",
 		},
 		cli.BoolFlag{
-			Name:   "no-automatic-ssh-fingerprint-verification",
-			Usage:  "Don't automatically verify SSH fingerprints",
-			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
+			Name:   "no-ssh-keyscan",
+			Usage:  "Don't automatically run ssh-keyscan before checkout",
+			EnvVar: "BUILDKITE_NO_SSH_KEYSCAN",
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
@@ -263,6 +265,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "meta-data-gcp",
 			Hidden: true,
 			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
+		},
+		cli.BoolFlag{
+			Name:   "no-automatic-ssh-fingerprint-verification",
+			Hidden: true,
+			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
 		},
 	},
 	Action: func(c *cli.Context) {
@@ -329,19 +336,19 @@ var AgentStartCommand = cli.Command{
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
-				BootstrapScript:            cfg.BootstrapScript,
-				BuildPath:                  cfg.BuildPath,
-				HooksPath:                  cfg.HooksPath,
-				PluginsPath:                cfg.PluginsPath,
-				GitCloneFlags:              cfg.GitCloneFlags,
-				GitCleanFlags:              cfg.GitCleanFlags,
-				SSHFingerprintVerification: !cfg.NoSSHFingerprintVerification,
-				CommandEval:                !cfg.NoCommandEval,
-				PluginsEnabled:             !cfg.NoPlugins,
-				RunInPty:                   !cfg.NoPTY,
-				TimestampLines:             cfg.TimestampLines,
-				DisconnectAfterJob:         cfg.DisconnectAfterJob,
-				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
+				BootstrapScript:           cfg.BootstrapScript,
+				BuildPath:                 cfg.BuildPath,
+				HooksPath:                 cfg.HooksPath,
+				PluginsPath:               cfg.PluginsPath,
+				GitCloneFlags:             cfg.GitCloneFlags,
+				GitCleanFlags:             cfg.GitCleanFlags,
+				SSHKeyscan:                !cfg.NoSSHKeyscan,
+				CommandEval:               !cfg.NoCommandEval,
+				PluginsEnabled:            !cfg.NoPlugins,
+				RunInPty:                  !cfg.NoPTY,
+				TimestampLines:            cfg.TimestampLines,
+				DisconnectAfterJob:        cfg.DisconnectAfterJob,
+				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
 				Shell: cfg.Shell,
 			},
 		}

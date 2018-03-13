@@ -94,8 +94,8 @@ type Config struct {
 	// A custom destination to upload artifacts to (i.e. s3://...)
 	ArtifactUploadDestination string `env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 
-	// Whether or not to automatically authorize SSH key hosts
-	SSHFingerprintVerification bool
+	// Whether ssh-keyscan is run on ssh hosts before checkout
+	SSHKeyscan bool
 
 	// The shell used to execute commands
 	Shell string
