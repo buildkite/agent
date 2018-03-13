@@ -13,14 +13,9 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/retry"
 	shellwords "github.com/mattn/go-shellwords"
 	"github.com/pkg/errors"
-)
-
-const (
-	retryCheckoutOnFailure = `RetryCheckoutOnFailure`
 )
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
@@ -599,21 +594,15 @@ func (b *Bootstrap) CheckoutPhase() error {
 			return err
 		}
 
-		if experiments.IsEnabled(retryCheckoutOnFailure) {
-			err := retry.Do(func(s *retry.Stats) error {
-				err := doCheckout()
-				if err != nil {
-					b.shell.Warningf("%s (%s)", err, s)
-				}
-				return err
-			}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+		err := retry.Do(func(s *retry.Stats) error {
+			err := doCheckout()
 			if err != nil {
-				return err
+				b.shell.Warningf("%s (%s)", err, s)
 			}
-		} else {
-			if err := doCheckout(); err != nil {
-				return err
-			}
+			return err
+		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+		if err != nil {
+			return err
 		}
 	}
 
