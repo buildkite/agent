@@ -73,6 +73,26 @@ func TestRunningPlugins(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		`BUILDKITE_PLUGINS=["sdgmdgn.@$!sdf,asdf#llamas"]`,
+	}
+
+	if err = tester.Run(t, env...); err == nil {
+		t.Fatal("Expected the bootstrap to fail")
+	}
+
+	tester.CheckMocks(t)
+}
+
 type testPlugin struct {
 	*gitRepository
 }

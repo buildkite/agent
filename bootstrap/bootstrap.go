@@ -389,15 +389,15 @@ func (b *Bootstrap) PluginPhase() error {
 		return errors.Wrap(err, "Failed to parse plugin definition")
 	}
 
-	b.plugins = make([]*pluginCheckout, len(plugins))
+	b.plugins = []*pluginCheckout{}
 
-	for idx, p := range plugins {
+	for _, p := range plugins {
 		checkout, err := b.checkoutPlugin(p)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
 
 		}
-		b.plugins[idx] = checkout
+		b.plugins = append(b.plugins, checkout)
 	}
 
 	// Now we can run plugin environment hooks too
