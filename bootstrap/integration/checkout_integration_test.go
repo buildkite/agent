@@ -34,7 +34,6 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"rev-parse"},
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
