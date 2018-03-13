@@ -535,8 +535,10 @@ func (b *Bootstrap) createCheckoutDir() error {
 		}
 	}
 
-	if err := b.shell.Chdir(checkoutPath); err != nil {
-		return err
+	if b.shell.Getwd() != checkoutPath {
+		if err := b.shell.Chdir(checkoutPath); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -582,7 +584,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		err := retry.Do(func(s *retry.Stats) error {
 			err := b.defaultCheckoutPhase()
 			if err != nil {
-				b.shell.Warningf("%s (%s)", err, s)
+				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 			}
 			return err
 		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
@@ -643,11 +645,13 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	if fileExists(existingGitDir) {
 		// Update the the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
+			// Remove the checkout as often this is due to a corrupt git repo
+			_ = b.removeCheckoutDir()
 			return err
 		}
 	} else {
 		if err := gitClone(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
-			// Remove the checkout dir to clear out any files that might have failed the clone
+			// Remove the checkout as often this is due to files left in the dir
 			_ = b.removeCheckoutDir()
 			return err
 		}
