@@ -27,6 +27,12 @@
 			"revisionTime": "2017-11-14T09:02:18Z"
 		},
 		{
+			"checksumSHA1": "VRf3PC1Kr7ET7Ukvvgsy1FXa7Gs=",
+			"path": "github.com/buildkite/yaml",
+			"revision": "35282ab071f92dad183b70e7ed117f1ab244c880",
+			"revisionTime": "2016-11-03T09:02:47Z"
+		},
+		{
 			"checksumSHA1": "bplZOqTp6JAbkn25zHEPIob25WI=",
 			"path": "github.com/codegangsta/cli",
 			"revision": "2526b57c56f30b50466c96c4133b1a4ad0f0191f",
@@ -115,12 +121,6 @@
 			"path": "github.com/urfave/cli",
 			"revision": "44cb242eeb4d76cc813fdc69ba5c4b224677e799",
 			"revisionTime": "2017-11-04T02:35:40Z"
-		},
-		{
-			"checksumSHA1": "bqBeRoATPjkPOxp15MCUcCpfUMM=",
-			"path": "github.com/vinzenz/yaml",
-			"revision": "35282ab071f92dad183b70e7ed117f1ab244c880",
-			"revisionTime": "2016-11-03T09:02:47Z"
 		},
 		{
 			"checksumSHA1": "MlEHIE/60sB86Lmf0MPTIXHzKzE=",
