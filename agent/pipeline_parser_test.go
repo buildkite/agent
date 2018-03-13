@@ -51,12 +51,12 @@ steps:
 	// Returns YAML parsing errors
 	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte("steps: %blah%")}.Parse()
 	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse yaml: found character that cannot start any token`, fmt.Sprintf("%s", err))
+	assert.Equal(t, `Failed to parse awesome.yml: found character that cannot start any token`, fmt.Sprintf("%s", err))
 
 	// Returns JSON parsing errors
 	result, err = PipelineParser{Filename: "awesome.json", Pipeline: []byte("{"), Env: environ}.Parse()
 	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse yaml: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
+	assert.Equal(t, `Failed to parse awesome.json: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
 
 	// It parses pipelines with .json filenames
 	result, err = PipelineParser{Filename: "thing.json", Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()
@@ -73,7 +73,7 @@ steps:
 	// Returns YAML parsing errors if the content looks like YAML
 	result, err = PipelineParser{Pipeline: []byte("steps: %blah%")}.Parse()
 	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse yaml: found character that cannot start any token`, fmt.Sprintf("%s", err))
+	assert.Equal(t, `Failed to parse pipeline: found character that cannot start any token`, fmt.Sprintf("%s", err))
 
 	// It parses unknown JSON objects
 	result, err = PipelineParser{Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()

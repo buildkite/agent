@@ -1,15 +1,17 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/interpolate"
 
 	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice
-	yaml "github.com/vinzenz/yaml"
+	yaml "github.com/buildkite/yaml"
 )
 
 type PipelineParser struct {
@@ -23,18 +25,25 @@ func (p PipelineParser) Parse() (interface{}, error) {
 		p.Env = env.FromSlice(os.Environ())
 	}
 
+	var errPrefix string
+	if p.Filename == "" {
+		errPrefix = "Failed to parse pipeline"
+	} else {
+		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
+	}
+
 	var pipelineAsMap map[string]interface{}
 
 	// Check we can parse this as a map, otherwise later inferences about map structures break
 	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipelineAsMap); err != nil {
-		return nil, fmt.Errorf("Failed to parse %v", err)
+		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 	}
 
 	var pipeline yaml.MapSlice
 
 	// Initially we unmarshal this into a yaml.MapSlice so that we preserve the order of maps
 	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipeline); err != nil {
-		return nil, fmt.Errorf("Failed to parse %v", err)
+		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 	}
 
 	// Preprocess any env that are defined in the top level block and place them into env for
@@ -98,6 +107,10 @@ func (p PipelineParser) interpolateEnvBlock(envMap yaml.MapSlice) error {
 		}
 	}
 	return nil
+}
+
+func formatYAMLError(err error) error {
+	return errors.New(strings.TrimPrefix(err.Error(), "yaml: "))
 }
 
 // interpolate function inspired from: https://gist.github.com/hvoecking/10772475
