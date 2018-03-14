@@ -353,10 +353,11 @@ var AgentStartCommand = cli.Command{
 			},
 		}
 
-		// Store the loaded config file path on the pool so we can
-		// show it when the agent starts
+		// Store the loaded config file path on the pool and agent config so we can
+		// show it when the agent starts and set an env
 		if loader.File != nil {
 			pool.ConfigFilePath = loader.File.Path
+			pool.AgentConfiguration.ConfigPath = loader.File.Path
 		}
 
 		// Start the agent pool

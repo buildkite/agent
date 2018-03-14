@@ -1,6 +1,7 @@
 package agent
 
 type AgentConfiguration struct {
+	ConfigPath                string
 	BootstrapScript           string
 	BuildPath                 string
 	HooksPath                 string

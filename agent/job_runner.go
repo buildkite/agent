@@ -222,6 +222,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_BIN_PATH"] = dir
 
 	// Add options from the agent configuration
+	env["BUILDKITE_CONFIG_PATH"] = r.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.AgentConfiguration.BuildPath
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
