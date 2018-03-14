@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -828,7 +829,14 @@ func (b *Bootstrap) CommandPhase() error {
 		commandExitError = b.defaultCommandPhase()
 	}
 
-	// Expand the command header if it fails
+	// If the command returned an exit that wasn't a `exec.ExitError`
+	// (which is returned when the command is actually run, but fails),
+	// then we'll show it in the log.
+	if _, ok := commandExitError.(*exec.ExitError); commandExitError != nil && !ok {
+		b.shell.Errorf(commandExitError.Error())
+	}
+
+	// Expand the command header if the command fails for any reason
 	if commandExitError != nil {
 		b.shell.Printf("^^^ +++")
 	}
@@ -856,8 +864,8 @@ func (b *Bootstrap) CommandPhase() error {
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase() error {
 	// Make sure we actually have a command to run
-	if b.Command == "" {
-		return fmt.Errorf("No command has been defined. Please go to \"Pipeline Settings\" and configure your build step's \"Command\"")
+	if strings.TrimSpace(b.Command) == "" {
+		return fmt.Errorf("No command has been provided")
 	}
 
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
