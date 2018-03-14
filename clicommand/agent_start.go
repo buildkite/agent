@@ -324,6 +324,12 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		// Grab the path to the config file
+		var configPath string
+		if loader.File != nil {
+			configPath = loader.File.Path
+		}
+
 		// Setup the agent
 		pool := agent.AgentPool{
 			Token:                 cfg.Token,
@@ -336,6 +342,7 @@ var AgentStartCommand = cli.Command{
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
+				ConfigPath:                configPath,
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
 				HooksPath:                 cfg.HooksPath,
