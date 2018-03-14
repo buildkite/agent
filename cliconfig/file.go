@@ -21,8 +21,14 @@ func (f *File) Load() error {
 	// Set the default config
 	f.Config = map[string]string{}
 
+	// Figure out the absolute path
+	absolutePath, err := f.AbsolutePath()
+	if err != nil {
+		return err
+	}
+
 	// Open the file
-	file, err := os.Open(f.AbsolutePath())
+	file, err := os.Open(absolutePath)
 	if err != nil {
 		return err
 	}
@@ -52,12 +58,19 @@ func (f *File) Load() error {
 	return nil
 }
 
-func (f File) AbsolutePath() string {
+func (f File) AbsolutePath() (string, error) {
 	return utils.NormalizeFilePath(f.Path)
 }
 
 func (f File) Exists() bool {
-	if _, err := os.Stat(f.AbsolutePath()); err == nil {
+	// If getting the absolute path fails, we can just assume it doesn't
+	// exit...probably...
+	absolutePath, err := f.AbsolutePath()
+	if err != nil {
+		return false
+	}
+
+	if _, err := os.Stat(absolutePath); err == nil {
 		return true
 	} else {
 		return false

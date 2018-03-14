@@ -49,7 +49,8 @@ func (l *Loader) Load() error {
 		if file.Exists() {
 			l.File = &file
 		} else {
-			return fmt.Errorf("A configuration file could not be found at: %s", file.AbsolutePath())
+			absolutePath, _ := file.AbsolutePath()
+			return fmt.Errorf("A configuration file could not be found at: %q", absolutePath)
 		}
 	} else if len(l.DefaultConfigFilePaths) > 0 {
 		for _, path := range l.DefaultConfigFilePaths {
@@ -344,7 +345,11 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 
 		// Normalize the field to be a filepath
 		if valueAsString, ok := value.(string); ok {
-			normalizedPath := utils.NormalizeFilePath(valueAsString)
+			normalizedPath, err := utils.NormalizeFilePath(valueAsString)
+			if err != nil {
+				return err
+			}
+
 			if err := reflections.SetField(l.Config, fieldName, normalizedPath); err != nil {
 				return err
 			}
