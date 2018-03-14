@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -188,9 +189,8 @@ func (r *JobRunner) createEnvironment() []string {
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envFile != nil {
-		for key, value := range env {
-			r.envFile.WriteString(fmt.Sprintf("%s=%s\n", key, value))
-		}
+		encoded, _ := json.Marshal(d)
+		r.envFile.WriteString(string(encoded))
 		r.envFile.Close()
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
