@@ -448,7 +448,15 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 
 	// Has it already been checked out?
 	if fileExists(pluginGitDirectory) {
-		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
+		// It'd be nice to show the current commit of the plugin, so
+		// let's figure that out.
+		headCommit, err := b.shell.RunAndCapture("git", "--git-dir", pluginGitDirectory, "--work-tree", directory, "rev-parse", "--short=7", "HEAD")
+		if err != nil {
+			b.shell.Commentf("Plugin \"%s\" already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
+		} else {
+			b.shell.Commentf("Plugin \"%s\" already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
+		}
+
 		return checkout, nil
 	}
 
