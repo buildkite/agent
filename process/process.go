@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -21,14 +20,13 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/logger"
-	"github.com/mattn/go-shellwords"
 )
 
 type Process struct {
 	Pid        int
 	PTY        bool
 	Timestamp  bool
-	Script     string
+	Script     []string
 	Env        []string
 	ExitStatus string
 
@@ -55,13 +53,7 @@ type Process struct {
 var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
 
 func (p *Process) Start() error {
-	// Shellwords has trouble parsing windows paths
-	args, err := shellwords.Parse(filepath.ToSlash(p.Script))
-	if err != nil {
-		return err
-	}
-
-	p.command = exec.Command(args[0], args[1:]...)
+	p.command = exec.Command(p.Script[0], p.Script[1:]...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -250,7 +242,7 @@ func (p *Process) Start() error {
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
 	logger.Debug("[Process] Waiting for routines to finish")
-	err = timeoutWait(&waitGroup)
+	err := timeoutWait(&waitGroup)
 	if err != nil {
 		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}

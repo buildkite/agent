@@ -25,7 +25,7 @@ func TestProcessRunsAndCallsStartCallback(t *testing.T) {
 	var started int32
 
 	p := process.Process{
-		Script: os.Args[0],
+		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester"},
 		StartCallback: func() {
 			atomic.AddInt32(&started, 1)
@@ -59,7 +59,7 @@ func TestProcessCallsLineCallbacksForEachOutputLine(t *testing.T) {
 	var linesLock sync.Mutex
 
 	p := process.Process{
-		Script:        os.Args[0],
+		Script:        []string{os.Args[0]},
 		Env:           []string{"TEST_MAIN=tester"},
 		StartCallback: func() {},
 		LineCallback: func(s string) {
@@ -97,7 +97,7 @@ func TestProcessCallsLineCallbacksForEachOutputLine(t *testing.T) {
 
 func TestProcessPrependsLinesWithTimestamps(t *testing.T) {
 	p := process.Process{
-		Script:             os.Args[0],
+		Script:             []string{os.Args[0]},
 		Env:                []string{"TEST_MAIN=tester"},
 		StartCallback:      func() {},
 		LineCallback:       func(s string) {},
@@ -129,7 +129,7 @@ func TestProcessOutputIsSafeFromRaces(t *testing.T) {
 	var counter int32
 
 	p := process.Process{
-		Script:             os.Args[0],
+		Script:             []string{os.Args[0]},
 		Env:                []string{"TEST_MAIN=tester"},
 		LineCallback:       func(s string) {},
 		LinePreProcessor:   func(s string) string { return s },

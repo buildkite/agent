@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
@@ -79,9 +80,14 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		return nil, err
 	}
 
+	args, err := shell.Parse(r.AgentConfiguration.BootstrapScript)
+	if err != nil {
+		return nil, err
+	}
+
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
-		Script:             r.AgentConfiguration.BootstrapScript,
+		Script:             args,
 		Env:                env,
 		PTY:                r.AgentConfiguration.RunInPty,
 		Timestamp:          r.AgentConfiguration.TimestampLines,
