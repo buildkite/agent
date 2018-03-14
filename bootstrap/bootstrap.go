@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/retry"
-	shellwords "github.com/mattn/go-shellwords"
 	"github.com/pkg/errors"
 )
 
@@ -883,7 +882,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
-	shell, err := shellwords.Parse(b.Shell)
+	shellArgs, err := shell.Parse(b.Shell)
 	if err != nil {
 		return err
 	}
@@ -898,10 +897,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 
 		b.shell.Headerf("Running script")
-		cmd = append(shell, b.Command)
+		cmd = append(shellArgs, b.Command)
 	} else {
 		b.shell.Headerf("Running commands")
-		cmd = append(shell, b.Command)
+		cmd = append(shellArgs, b.Command)
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
