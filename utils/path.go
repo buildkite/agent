@@ -3,34 +3,24 @@ package utils
 import (
 	"os"
 	"os/user"
-	"path/filepath"
 	"strings"
 )
 
-// Normalizes a path and returns an clean absolute version. It correctly
-// expands environment variables inside paths, converts "~/" into the users
-// home directory, and replaces "./" with the current working directory.
-func NormalizeFilePath(path string) string, error {
+// Replaces ~/ with the users home directory, ./ with the woring directory, and
+// replaces any parses any environment variables.
+func NormalizeFilePath(path string) string {
 	expandedPath := os.ExpandEnv(path)
 
 	if len(expandedPath) > 2 {
 		if expandedPath[:2] == "~/" {
-			if usr, err := user.Current(); err != nil {
-				return "", err
-			}
-			homeDir := usr.HomeDir
-			return strings.Replace(expandedPath, "~", homeDir, 1), nil
+			usr, _ := user.Current()
+			dir := usr.HomeDir
+			return strings.Replace(expandedPath, "~", dir, 1)
 		} else if expandedPath[:2] == "./" {
-			if workingDir, err := os.Getwd(); err != nil {
-				return "", err
-			}
-			return strings.Replace(expandedPath, ".", workingDir, 1), nil
+			dir, _ := os.Getwd()
+			return strings.Replace(expandedPath, ".", dir, 1)
 		}
 	}
 
-	if absolutePath, err := filepath.Abs(expandedPath); err != nil {
-		return "", err
-	}
-
-	return absolutePath
+	return expandedPath
 }
