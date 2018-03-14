@@ -194,7 +194,7 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 func (b *Bootstrap) findHookFile(hookDir string, name string) (string, error) {
 	if runtime.GOOS == "windows" {
 		// check for windows types first
-		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD;.PS1"); err == nil {
+		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD"); err == nil {
 			return p, nil
 		}
 	}
