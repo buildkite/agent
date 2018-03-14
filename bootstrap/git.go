@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"path/filepath"
 
 	"github.com/buildkite/agent/bootstrap/shell"
 	shellwords "github.com/mattn/go-shellwords"
@@ -105,8 +106,13 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	return urls, nil
 }
 
-func gitRevParse(sh *shell.Shell) (string, error) {
-	return sh.RunAndCapture("git", "rev-parse")
+func gitRevParseInWorkingDirectory(sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
+	gitDirectory := filepath.Join(workingDirectory, ".git")
+
+	revParseArgs := []string{"--git-dir", gitDirectory, "--work-tree", workingDirectory, "rev-parse"}
+	revParseArgs = append(revParseArgs, extraRevParseArgs...)
+
+	return sh.RunAndCapture("git", revParseArgs...)
 }
 
 var (
