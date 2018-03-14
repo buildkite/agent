@@ -85,10 +85,6 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		return nil, err
 	}
 
-	logger.Debug("[JobRunner] Parsed bootstrap-script %q into %v",
-		r.AgentConfiguration.BootstrapScript,
-		args)
-
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
 		Script:             args,
