@@ -344,7 +344,10 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 
 		// Normalize the field to be a filepath
 		if valueAsString, ok := value.(string); ok {
-			normalizedPath := utils.NormalizeFilePath(valueAsString)
+			if normalizedPath, err := utils.NormalizeFilePath(valueAsString); err != nil {
+				return err
+			}
+
 			if err := reflections.SetField(l.Config, fieldName, normalizedPath); err != nil {
 				return err
 			}
