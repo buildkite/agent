@@ -43,7 +43,10 @@ func (cs *PipelinesService) Upload(jobId string, pipeline *Pipeline) (*Response,
 	}
 
 	// Write the pipeline to the form
-	part, _ := createFormFileWithContentType(writer, "pipeline", fileName, contentType)
+	part, err := createFormFileWithContentType(writer, "pipeline", fileName, contentType)
+	if err != nil {
+		return nil, err
+	}
 	part.Write([]byte(pipeline.Data))
 
 	// Add the replace option
@@ -56,7 +59,7 @@ func (cs *PipelinesService) Upload(jobId string, pipeline *Pipeline) (*Response,
 	writer.WriteField("uuid", pipeline.UUID)
 
 	// Close the writer because we don't need to add any more values to it
-	err := writer.Close()
+	err = writer.Close()
 	if err != nil {
 		return nil, err
 	}
