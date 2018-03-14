@@ -103,7 +103,7 @@ func (kh *knownHosts) Add(host string) error {
 
 	// If the keygen output already contains the host, we can skip!
 	if contains, _ := kh.Contains(host); contains {
-		kh.Shell.Commentf("Host \"%s\" already in list of known hosts at \"%s\"", host, kh.Path)
+		kh.Shell.Commentf("Host %q already in list of known hosts at \"%s\"", host, kh.Path)
 		return nil
 	}
 
@@ -131,7 +131,7 @@ func (kh *knownHosts) Add(host string) error {
 func (kh *knownHosts) AddFromRepository(repository string) error {
 	u, err := parseGittableURL(repository)
 	if err != nil {
-		kh.Shell.Warningf("Could not parse \"%s\" as a URL - skipping adding host to SSH known_hosts", repository)
+		kh.Shell.Warningf("Could not parse %q as a URL - skipping adding host to SSH known_hosts", repository)
 		return err
 	}
 
