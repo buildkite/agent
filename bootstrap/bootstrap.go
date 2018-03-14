@@ -35,6 +35,9 @@ type Bootstrap struct {
 
 	// Tracks whether there is a checkout to upload in the teardown
 	hasCheckout bool
+
+	// Whether the checkout dir was created as part of checkout
+	createdCheckoutDir bool
 }
 
 // Start runs the bootstrap and returns the exit code
@@ -513,6 +516,35 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 	return checkout, nil
 }
 
+func (b *Bootstrap) removeCheckoutDir() error {
+	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	b.shell.Commentf("Removing %s", checkoutPath)
+	if err := os.RemoveAll(checkoutPath); err != nil {
+		return fmt.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
+	}
+	return nil
+}
+
+func (b *Bootstrap) createCheckoutDir() error {
+	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	if !fileExists(checkoutPath) {
+		b.shell.Commentf("Creating \"%s\"", checkoutPath)
+		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
+			return err
+		}
+	}
+
+	if b.shell.Getwd() != checkoutPath {
+		if err := b.shell.Chdir(checkoutPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase() error {
@@ -524,53 +556,20 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-
-	var removeCheckoutDir = func() error {
-		b.shell.Commentf("Removing %s", checkoutPath)
-		if err := os.RemoveAll(checkoutPath); err != nil {
-			return fmt.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
-		}
-		return nil
-	}
-
-	var createCheckoutDir = func() error {
-		b.shell.Commentf("Creating \"%s\"", checkoutPath)
-		return os.MkdirAll(checkoutPath, 0777)
-	}
-
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		b.shell.Headerf("Cleaning pipeline checkout")
-		if err := removeCheckoutDir(); err != nil {
+		if err := b.removeCheckoutDir(); err != nil {
 			return err
 		}
 	}
 
-	b.shell.Headerf("Preparing build directory")
-
-	// Create the build directory
-	if !fileExists(checkoutPath) {
-		if err := createCheckoutDir(); err != nil {
-			return err
-		}
-	}
-
-	// Change to the new build checkout path
-	if err := b.shell.Chdir(checkoutPath); err != nil {
+	// Make sure the build directory exists
+	if err := b.createCheckoutDir(); err != nil {
 		return err
 	}
 
-	// Check if the checkout is working, sometimes we get broken git checkouts if there was a previous failure
-	if _, err := gitRevParse(b.shell); err != nil {
-		b.shell.Commentf("Previous checkout seems to be an invalid git repository, deleting and re-creating")
-		if err := removeCheckoutDir(); err != nil {
-			return err
-		}
-		if err := createCheckoutDir(); err != nil {
-			return err
-		}
-	}
+	b.shell.Headerf("Preparing build directory")
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
@@ -583,22 +582,10 @@ func (b *Bootstrap) CheckoutPhase() error {
 			return err
 		}
 	default:
-		doCheckout := func() error {
+		err := retry.Do(func(s *retry.Stats) error {
 			err := b.defaultCheckoutPhase()
 			if err != nil {
-				// Just to be certain, if we aren't in debug mode, let's nuke the checkout directory
-				// so that a partial checkout doesn't poison future builds
-				if !b.Debug {
-					_ = removeCheckoutDir()
-				}
-			}
-			return err
-		}
-
-		err := retry.Do(func(s *retry.Stats) error {
-			err := doCheckout()
-			if err != nil {
-				b.shell.Warningf("%s (%s)", err, s)
+				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 			}
 			return err
 		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
@@ -645,19 +632,28 @@ func (b *Bootstrap) CheckoutPhase() error {
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
+	// Make sure the build directory exists
+	if err := b.createCheckoutDir(); err != nil {
+		return err
+	}
+
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
-	// Do we need to do a git clone?
+	// Does the git directory exist?
 	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
 	if fileExists(existingGitDir) {
 		// Update the the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
+			// Remove the checkout as often this is due to a corrupt git repo
+			_ = b.removeCheckoutDir()
 			return err
 		}
 	} else {
 		if err := gitClone(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
+			// Remove the checkout as often this is due to files left in the dir
+			_ = b.removeCheckoutDir()
 			return err
 		}
 	}
