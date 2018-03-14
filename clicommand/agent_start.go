@@ -300,14 +300,7 @@ var AgentStartCommand = cli.Command{
 
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
-			// "%q" on Windows doesn't work quite well for escaping
-			// paths, since it'll escape `\` which is the Windows
-			// path seperator (and we don't want that escaped).
-			if runtime.GOOS == "windows" {
-				cfg.BootstrapScript = fmt.Sprintf("\"%s\" bootstrap", os.Args[0])
-			} else {
-				cfg.BootstrapScript = fmt.Sprintf("%q bootstrap", os.Args[0])
-			}
+			cfg.BootstrapScript = fmt.Sprintf("%q bootstrap", filepath.ToSlash(os.Args[0]))
 		}
 
 		// Guess the shell if none is provided

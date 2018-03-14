@@ -17,7 +17,6 @@ import (
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
-	shellwords "github.com/mattn/go-shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 )
@@ -384,22 +383,4 @@ func GetExitCode(err error) int {
 		}
 	}
 	return 1
-}
-
-// Parse parses a shell expression into tokens
-func Parse(s string) ([]string, error) {
-	// Shellwords needs to be converted to slashes for windows
-	args, err := shellwords.Parse(filepath.ToSlash(s))
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert back to backslashes for windows
-	if runtime.GOOS == `windows` {
-		for idx := range args {
-			args[idx] = filepath.FromSlash(args[idx])
-		}
-	}
-
-	return args, nil
 }
