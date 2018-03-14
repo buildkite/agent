@@ -3,35 +3,40 @@ package utils
 import (
 	"os"
 	"os/user"
-	"testing"
 	"path/filepath"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNormalizeFilePath(t *testing.T) {
+func TestNormalizingHomeDirectories(t *testing.T) {
 	t.Parallel()
 
-	// `NormalizeFilePath` uses the current users home directory and the
-	// current working dir, so we'll grab them now so we can make the right
-	// assertions.
 	usr, err := user.Current()
 	assert.NoError(t, err)
+
+	fp, err := NormalizeFilePath(filepath.Join(`~`, `.ssh`))
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join(usr.HomeDir, `.ssh`), fp)
+	assert.True(t, filepath.IsAbs(fp))
+}
+
+func TestNormalizingFilePaths(t *testing.T) {
+	t.Parallel()
+
 	workingDir, err := os.Getwd()
 	assert.NoError(t, err)
 
-	fp, err := NormalizeFilePath(`/home/vagrant/repo`)
+	fp, err := NormalizeFilePath(filepath.Join(`.`, `builds`))
 	assert.NoError(t, err)
-	assert.Equal(t, `/home/vagrant/repo`, fp)
+	assert.Equal(t, workingDir+`/builds`, fp)
 	assert.True(t, filepath.IsAbs(fp))
+}
 
-	fp, err = NormalizeFilePath(`~/.ssh`)
-	assert.NoError(t, err)
-	assert.Equal(t, usr.HomeDir + `/.ssh`, fp)
-	assert.True(t, filepath.IsAbs(fp))
+func TestNormalizingEmptyPaths(t *testing.T) {
+	t.Parallel()
 
-	fp, err = NormalizeFilePath(`./builds`)
+	fp, err := NormalizeFilePath("")
 	assert.NoError(t, err)
-	assert.Equal(t, workingDir + `/builds`, fp)
-	assert.True(t, filepath.IsAbs(fp))
+	assert.Equal(t, "", fp)
 }
