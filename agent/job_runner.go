@@ -74,10 +74,15 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		runner.envFile = file
 	}
 
+	env, err := r.createEnvironment()
+	if err != nil {
+		return nil, err
+	}
+
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
 		Script:             r.AgentConfiguration.BootstrapScript,
-		Env:                r.createEnvironment(),
+		Env:                env,
 		PTY:                r.AgentConfiguration.RunInPty,
 		Timestamp:          r.AgentConfiguration.TimestampLines,
 		StartCallback:      r.onProcessStartCallback,
@@ -173,8 +178,8 @@ func (r *JobRunner) Kill() error {
 	return nil
 }
 
-// Creates the environment variables that will be used in the process
-func (r *JobRunner) createEnvironment() []string {
+// Creates the environment variables that will be used in the process and writes a flat environment file
+func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
 	// sent by Buildkite. The variables below should always take
@@ -184,14 +189,18 @@ func (r *JobRunner) createEnvironment() []string {
 		env[key] = value
 	}
 
-	// Write out the job environment to a file, in k=v format.
+	// Write out the job environment to a file, in k="v" format, with newlines escaped
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
 	if r.envFile != nil {
 		for key, value := range env {
-			r.envFile.WriteString(fmt.Sprintf("%s=%s\n", key, value))
+			if _, err := r.envFile.WriteString(fmt.Sprintf("%s=%q\n", key, value)); err != nil {
+				return nil, err
+			}
 		}
-		r.envFile.Close()
+		if err := r.envFile.Close(); err != nil {
+			return nil, err
+		}
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
@@ -224,7 +233,7 @@ func (r *JobRunner) createEnvironment() []string {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	return envSlice
+	return envSlice, nil
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related
