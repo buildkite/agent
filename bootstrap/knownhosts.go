@@ -135,8 +135,8 @@ func (kh *knownHosts) AddFromRepository(repository string) error {
 		return err
 	}
 
-	// File uri's don't need a host added
-	if u.Host == "" || u.Scheme == "file" {
+	// We only need to keyscan ssh repository urls
+	if u.Scheme != "ssh" {
 		return nil
 	}
 
