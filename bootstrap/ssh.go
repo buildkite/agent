@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/bootstrap/shell"
 )
 
@@ -16,29 +18,54 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 		return "", err
 	}
 
-	parts := strings.Split(host, ":")
-	if len(parts) == 2 {
-		return sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), "-p", parts[1], parts[0])
-	}
+	sshKeyScanPath := filepath.Join(toolsDir, "ssh-keyscan")
+	hostParts := strings.Split(host, ":")
+	sshKeyScanOutput := ""
 
-	out, err := sh.RunAndCapture(filepath.Join(toolsDir, "ssh-keyscan"), host)
-	if err != nil {
-		return out, err
-	}
+	err = retry.Do(func(s *retry.Stats) error {
+		// `ssh-keyscan` needs `-p` when scanning a host with a port
+		var sshKeyScanCommand string
+		if len(hostParts) == 2 {
+			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan -p %q %q", hostParts[1], hostParts[0])
+			sshKeyScanOutput, err = sh.RunAndCapture(sshKeyScanPath, "-p", hostParts[1], hostParts[0])
+		} else {
+			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan %q", host)
+			sshKeyScanOutput, err = sh.RunAndCapture(sshKeyScanPath, host)
+		}
 
-	// older versions of ssh-keyscan would exit 0 but not return anything
-	if strings.TrimSpace(out) == "" {
-		return "", fmt.Errorf("No keys returned for %q", host)
-	}
+		if err != nil {
+			keyScanError := fmt.Errorf("`%s` failed", sshKeyScanCommand)
+			sh.Warningf("%s (%s)", keyScanError, s)
+			return keyScanError
+		} else if strings.TrimSpace(sshKeyScanOutput) == "" {
+			// Older versions of ssh-keyscan would exit 0 but not
+			// return anything, and we've observed newer versions
+			// of ssh-keyscan - just sometimes return no data
+			// (maybe networking related?). In any case, no
+			// response, means an error.
+			keyScanError := fmt.Errorf("`%s` returned nothing", sshKeyScanCommand)
+			sh.Warningf("%s (%s)", keyScanError, s)
+			return keyScanError
+		}
 
-	return out, err
+		return nil
+	}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+
+	return sshKeyScanOutput, err
 }
 
-// On Windows, there are many horrible different versions of the ssh tools. Our preference is the one bundled with
-// git for windows which is generally MinGW. Often this isn't in the path, so we go looking for it specifically.
+// On Windows, there are many horrible different versions of the ssh tools. Our
+// preference is the one bundled with git for windows which is generally MinGW.
+// Often this isn't in the path, so we go looking for it specifically.
 //
-// Some more details on the relative paths at https://stackoverflow.com/a/11771907
+// Some more details on the relative paths at
+// https://stackoverflow.com/a/11771907
 func findPathToSSHTools(sh *shell.Shell) (string, error) {
+	sshKeyscan, err := sh.AbsolutePath("ssh-keyscan")
+	if err == nil {
+		return filepath.Dir(sshKeyscan), nil
+	}
+
 	if runtime.GOOS == "windows" {
 		execPath, _ := sh.RunAndCapture("git", "--exec-path")
 		if len(execPath) > 0 {
@@ -52,9 +79,6 @@ func findPathToSSHTools(sh *shell.Shell) (string, error) {
 			}
 		}
 	}
-	sshKeyscan, err := sh.AbsolutePath("ssh-keyscan")
-	if err != nil {
-		return "", fmt.Errorf("Unable to find ssh-keyscan: %v", err)
-	}
-	return filepath.Dir(sshKeyscan), nil
+
+	return "", fmt.Errorf("Unable to find ssh-keyscan: %v", err)
 }

@@ -102,6 +102,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 
 	tester.MustMock(t, "ssh-keyscan").
 		Expect("github.com").
+		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
 	git := tester.MustMock(t, "git")
