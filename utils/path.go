@@ -1,40 +1,58 @@
 package utils
 
 import (
+	"errors"
 	"os"
 	"os/user"
 	"path/filepath"
-	"strings"
 )
 
 // Normalizes a path and returns an clean absolute version. It correctly
 // expands environment variables inside paths, converts "~/" into the users
 // home directory, and replaces "./" with the current working directory.
 func NormalizeFilePath(path string) (string, error) {
-	expandedPath := os.ExpandEnv(path)
-
-	if len(expandedPath) > 2 {
-		if expandedPath[:2] == "~/" {
-			usr, err := user.Current()
-			if err != nil {
-				return "", err
-			}
-
-			return strings.Replace(expandedPath, "~", usr.HomeDir, 1), nil
-		} else if expandedPath[:2] == "./" {
-			workingDir, err := os.Getwd()
-			if err != nil {
-				return "", err
-			}
-
-			return strings.Replace(expandedPath, ".", workingDir, 1), nil
-		}
+	// don't normalize empty strings
+	if path == "" {
+		return "", nil
 	}
 
-	absolutePath, err := filepath.Abs(expandedPath)
+	// expand env and home directory
+	var err error
+	path, err = ExpandHome(os.ExpandEnv(path))
+	if err != nil {
+		return "", err
+	}
+
+	// make sure its absolute
+	absolutePath, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
 
 	return absolutePath, nil
+}
+
+// ExpandHome expands the path to include the home directory if the path
+// is prefixed with `~`. If it isn't prefixed with `~`, the path is
+// returned as-is.
+// Via https://github.com/mitchellh/go-homedir/blob/master/homedir.go
+func ExpandHome(path string) (string, error) {
+	if len(path) == 0 {
+		return path, nil
+	}
+
+	if path[0] != '~' {
+		return path, nil
+	}
+
+	if len(path) > 1 && path[1] != '/' && path[1] != '\\' {
+		return "", errors.New("cannot expand user-specific home dir")
+	}
+
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(usr.HomeDir, path[1:]), nil
 }
