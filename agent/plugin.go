@@ -86,18 +86,30 @@ func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
 			plugins = append(plugins, plugin)
 		case map[string]interface{}:
 			for location, config := range vv {
-				// Ensure the config is a hash
-				config, ok := config.(map[string]interface{})
-				if !ok {
-					return nil, fmt.Errorf("Configuration for \"%s\" is not a hash", location)
-				}
+				// First check to make sure this plugin has config
+				if config != nil {
+					// Since there is a config, it's gotta be a hash
+					config, ok := config.(map[string]interface{})
+					if !ok {
+						return nil, fmt.Errorf("Configuration for \"%s\" is not a hash", location)
+					}
 
-				// Add the plugin with config to the array
-				plugin, err := CreatePlugin(string(location), config)
-				if err != nil {
-					return nil, err
+					// Add the plugin with config to the array
+					plugin, err := CreatePlugin(string(location), config)
+					if err != nil {
+						return nil, err
+					}
+
+					plugins = append(plugins, plugin)
+				} else {
+					// Add the plugin with no config to the array
+					plugin, err := CreatePlugin(string(location), map[string]interface{}{})
+					if err != nil {
+						return nil, err
+					}
+
+					plugins = append(plugins, plugin)
 				}
-				plugins = append(plugins, plugin)
 			}
 		default:
 			return nil, fmt.Errorf("Unknown type in plugin definition (%s)", vv)
