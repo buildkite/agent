@@ -272,18 +272,22 @@ func (r *AgentPool) ShowBanner() {
 	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
 
 	if !r.AgentConfiguration.SSHKeyscan {
-		logger.Debug("Automatic ssh-keyscan has been disabled")
+		logger.Info("Automatic ssh-keyscan has been disabled")
 	}
 
 	if !r.AgentConfiguration.CommandEval {
-		logger.Debug("Evaluating console commands has been disabled")
+		logger.Info("Evaluating console commands has been disabled")
+	}
+
+	if !r.AgentConfiguration.PluginsEnabled {
+		logger.Info("Plugins have been disabled")
 	}
 
 	if !r.AgentConfiguration.RunInPty {
-		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
+		logger.Info("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
 
 	if r.AgentConfiguration.DisconnectAfterJob {
-		logger.Debug("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
+		logger.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 }

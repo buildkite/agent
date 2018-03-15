@@ -231,7 +231,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands",
+			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
 		cli.BoolFlag{
@@ -301,6 +301,11 @@ var AgentStartCommand = cli.Command{
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
 			cfg.BootstrapScript = fmt.Sprintf("%q bootstrap", filepath.ToSlash(os.Args[0]))
+		}
+
+		// Turning off command eval will also turn off plugins.
+		if cfg.NoCommandEval {
+			cfg.NoPlugins = true
 		}
 
 		// Guess the shell if none is provided
