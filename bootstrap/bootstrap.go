@@ -893,19 +893,21 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
+	var cmdToExec string
+
 	// The shell gets parsed based on the operating system
-	cmd, err := shellwords.Split(b.Shell)
+	shell, err := shellwords.Split(b.Shell)
 	if err != nil {
 		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
 	}
 
-	if len(cmd) == 0 {
+	if len(shell) == 0 {
 		return fmt.Errorf("No shell set for bootstrap")
 	}
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
-	if strings.ToUpper(filepath.Base(cmd[0])) == `CMD.EXE` {
+	if strings.ToUpper(filepath.Base(shell[0])) == `CMD.EXE` {
 		batchScript, err := b.writeBatchScript(b.Command)
 		if err != nil {
 			return err
@@ -921,7 +923,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 			b.shell.Commentf("Wrote batch script %s\n%s", batchScript, contents)
 		}
 
-		cmd = append(cmd, batchScript)
+		cmdToExec = batchScript
 	} else if commandIsScript {
 		// Make script executable
 		if err = addExecutePermissionToFile(pathToCommand); err != nil {
@@ -936,10 +938,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 
 		b.shell.Headerf("Running script")
-		cmd = append(cmd, fmt.Sprintf(".%c%s", os.PathSeparator, scriptPath))
+		cmdToExec = fmt.Sprintf(".%c%s", os.PathSeparator, scriptPath)
 	} else {
 		b.shell.Headerf("Running commands")
-		cmd = append(cmd, b.Command)
+		cmdToExec = b.Command
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
@@ -947,8 +949,12 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		if b.Debug {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		return runDeprecatedDockerIntegration(b.shell, cmd)
+		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
+
+	var cmd []string
+	cmd = append(cmd, shell...)
+	cmd = append(cmd, cmdToExec)
 
 	return b.shell.Run(cmd[0], cmd[1:]...)
 }
