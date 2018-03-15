@@ -231,7 +231,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands. Turning off command eval will also disallow this agent to use plugins.",
+			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
 		cli.BoolFlag{
