@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +17,7 @@ import (
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
 )
 
@@ -890,14 +893,43 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
-	shellArgs, err := shell.Parse(b.Shell)
-	if err != nil {
-		return err
-	}
-
 	var cmd []string
 
-	if commandIsScript {
+	// The shell gets parsed based on the operating system
+	if runtime.GOOS == `windows` {
+		var err error
+		if cmd, err = shellwords.SplitBatch(b.Shell); err != nil {
+			return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
+		}
+	} else {
+		var err error
+		if cmd, err = shellwords.SplitPosix(b.Shell); err != nil {
+			return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
+		}
+	}
+
+	b.shell.Commentf("Executing command with shell %#v:\n%s", cmd, b.Command)
+
+	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
+	// a batch script so that it works, but we don't like it
+	if strings.ToUpper(filepath.Base(cmd[0])) == `CMD.EXE` {
+		batchScript, err := b.writeBatchScript(b.Command)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(batchScript)
+
+		b.shell.Headerf("Running batch script")
+		if b.Debug {
+			contents, err := ioutil.ReadFile(batchScript)
+			if err != nil {
+				return err
+			}
+			b.shell.Commentf("Wrote batch script %s\n%s", batchScript, contents)
+		}
+
+		cmd = append(cmd, batchScript)
+	} else if commandIsScript {
 		// Make script executable
 		if err = addExecutePermissionToFile(pathToCommand); err != nil {
 			b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
@@ -905,10 +937,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 
 		b.shell.Headerf("Running script")
-		cmd = append(shellArgs, b.Command)
+		cmd = append(cmd, b.Command)
 	} else {
 		b.shell.Headerf("Running commands")
-		cmd = append(shellArgs, b.Command)
+		cmd = append(cmd, b.Command)
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
@@ -920,6 +952,32 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	}
 
 	return b.shell.Run(cmd[0], cmd[1:]...)
+}
+
+func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
+	scriptFile, err := shell.TempFileWithExtension(
+		`buildkite-script.bat`,
+	)
+	if err != nil {
+		return "", err
+	}
+	defer scriptFile.Close()
+
+	var scriptContents = "@echo off\n"
+
+	for _, line := range strings.Split(cmd, "\n") {
+		if line != "" {
+			scriptContents += line + "\n" + "if %errorlevel% neq 0 exit /b %errorlevel%\n"
+		}
+	}
+
+	_, err = io.WriteString(scriptFile, scriptContents)
+	if err != nil {
+		return "", err
+	}
+
+	return scriptFile.Name(), nil
+
 }
 
 func (b *Bootstrap) uploadArtifacts() error {
