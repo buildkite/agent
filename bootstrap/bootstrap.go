@@ -899,6 +899,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
 	}
 
+	if len(cmd) == 0 {
+		return fmt.Errorf("No shell set for bootstrap")
+	}
+
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
 	if strings.ToUpper(filepath.Base(cmd[0])) == `CMD.EXE` {

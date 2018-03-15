@@ -222,6 +222,7 @@ var BootstrapCommand = cli.Command{
 			Name:   "shell",
 			Usage:  "The shell to use to interpret build commands",
 			EnvVar: "BUILDKITE_SHELL",
+			Value:  DefaultShell(),
 		},
 		DebugFlag,
 	},
