@@ -908,8 +908,6 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 	}
 
-	b.shell.Commentf("Executing command with shell %#v:\n%s", cmd, b.Command)
-
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
 	if strings.ToUpper(filepath.Base(cmd[0])) == `CMD.EXE` {
@@ -936,8 +934,14 @@ func (b *Bootstrap) defaultCommandPhase() error {
 			return err
 		}
 
+		// Make the path relative to the shell working dir
+		scriptPath, err := filepath.Rel(b.shell.Getwd(), pathToCommand)
+		if err != nil {
+			return err
+		}
+
 		b.shell.Headerf("Running script")
-		cmd = append(cmd, b.Command)
+		cmd = append(cmd, fmt.Sprintf(".%c%s", os.PathSeparator, scriptPath))
 	} else {
 		b.shell.Headerf("Running commands")
 		cmd = append(cmd, b.Command)
