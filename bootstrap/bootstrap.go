@@ -379,7 +379,11 @@ func (b *Bootstrap) PluginPhase() error {
 
 	// Check if we can run plugins (disabled via --no-plugins)
 	if b.Plugins != "" && !b.Config.PluginsEnabled {
-		return fmt.Errorf("This agent isn't allowed to run plugins. To allow this, re-run this agent without the `--no-plugins` option.")
+		if !b.Config.CommandEval {
+			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
+		} else {
+			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+		}
 	}
 
 	plugins, err := agent.CreatePluginsFromJSON(b.Plugins)
