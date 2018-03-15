@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync"
 	"time"
 
@@ -81,20 +80,11 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		return nil, err
 	}
 
-	var cmd []string
-	var script = r.AgentConfiguration.BootstrapScript
-
 	// The bootstrap-script gets parsed based on the operating system
-	if runtime.GOOS == `windows` {
-		var err error
-		if cmd, err = shellwords.SplitBatch(script); err != nil {
-			return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v", script, err)
-		}
-	} else {
-		var err error
-		if cmd, err = shellwords.SplitPosix(script); err != nil {
-			return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v", script, err)
-		}
+	cmd, err := shellwords.Split(r.AgentConfiguration.BootstrapScript)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v",
+			r.AgentConfiguration.BootstrapScript, err)
 	}
 
 	// The process that will run the bootstrap script

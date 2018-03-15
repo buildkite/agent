@@ -893,19 +893,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return fmt.Errorf("This agent is only allowed to run scripts within your repository. To allow this, re-run this agent without the `--no-command-eval` option, or specify a script within your repository to run instead (such as scripts/test.sh).")
 	}
 
-	var cmd []string
-
 	// The shell gets parsed based on the operating system
-	if runtime.GOOS == `windows` {
-		var err error
-		if cmd, err = shellwords.SplitBatch(b.Shell); err != nil {
-			return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
-		}
-	} else {
-		var err error
-		if cmd, err = shellwords.SplitPosix(b.Shell); err != nil {
-			return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
-		}
+	cmd, err := shellwords.Split(b.Shell)
+	if err != nil {
+		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
 	}
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write

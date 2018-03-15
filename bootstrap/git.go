@@ -3,16 +3,16 @@ package bootstrap
 import (
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"strings"
-	"path/filepath"
 
 	"github.com/buildkite/agent/bootstrap/shell"
-	shellwords "github.com/mattn/go-shellwords"
+	"github.com/buildkite/shellwords"
 )
 
 func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
-	individualCloneFlags, err := shellwords.Parse(gitCloneFlags)
+	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
 	if err != nil {
 		return err
 	}
@@ -29,7 +29,7 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 }
 
 func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
-	individualCleanFlags, err := shellwords.Parse(gitCleanFlags)
+	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
 }
 
 func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...string) error {
-	individualFetchFlags, err := shellwords.Parse(gitFetchFlags)
+	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...stri
 	commandArgs = append(commandArgs, repository)
 
 	for _, r := range refSpec {
-		individualRefSpecs, err := shellwords.Parse(r)
+		individualRefSpecs, err := shellwords.Split(r)
 		if err != nil {
 			return err
 		}

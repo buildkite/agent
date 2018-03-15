@@ -300,11 +300,7 @@ var AgentStartCommand = cli.Command{
 
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
-			if runtime.GOOS == "windows" {
-				cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.QuoteBatch(os.Args[0]))
-			} else {
-				cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.QuotePosix(os.Args[0]))
-			}
+			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(os.Args[0]))
 		}
 
 		// Guess the shell if none is provided
