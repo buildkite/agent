@@ -2,7 +2,6 @@ package shellwords
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"unicode/utf8"
 )
@@ -38,8 +37,6 @@ func (p *parser) Parse() ([]string, error) {
 	var words = []string{}
 	var word strings.Builder
 
-	log.Printf("Parsing %s", p.Input)
-
 	for {
 		// Read until we encounter a delimiter character
 		scanned := p.scanUntil(func(r rune) bool {
@@ -47,7 +44,6 @@ func (p *parser) Parse() ([]string, error) {
 		})
 
 		if len(scanned) > 0 {
-			log.Printf("Scanned [%s]", scanned)
 			word.WriteString(scanned)
 		}
 
