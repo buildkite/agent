@@ -149,7 +149,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "shell",
 			Value:  DefaultShell(),
-			Usage:  "The shell to use to interpret build commands",
+			Usage:  "The shell commamnd used to interpret build commands, e.g /bin/bash -e -c",
 			EnvVar: "BUILDKITE_SHELL",
 		},
 		cli.StringSliceFlag{
