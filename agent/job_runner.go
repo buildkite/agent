@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/shellwords"
 )
 
 type JobRunner struct {
@@ -80,14 +80,16 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 		return nil, err
 	}
 
-	args, err := shell.Parse(r.AgentConfiguration.BootstrapScript)
+	// The bootstrap-script gets parsed based on the operating system
+	cmd, err := shellwords.Split(r.AgentConfiguration.BootstrapScript)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v",
+			r.AgentConfiguration.BootstrapScript, err)
 	}
 
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
-		Script:             args,
+		Script:             cmd,
 		Env:                env,
 		PTY:                r.AgentConfiguration.RunInPty,
 		Timestamp:          r.AgentConfiguration.TimestampLines,

@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
 )
 
@@ -148,7 +149,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "shell",
 			Value:  DefaultShell(),
-			Usage:  "The shell to use to interpret build commands",
+			Usage:  "The shell commamnd used to interpret build commands, e.g /bin/bash -e -c",
 			EnvVar: "BUILDKITE_SHELL",
 		},
 		cli.StringSliceFlag{
@@ -292,15 +293,14 @@ var AgentStartCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(cfg)
 
-		// Force some settings if on Windows (these aren't supported
-		// yet)
+		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
 		}
 
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
-			cfg.BootstrapScript = fmt.Sprintf("%q bootstrap", filepath.ToSlash(os.Args[0]))
+			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(os.Args[0]))
 		}
 
 		// Turning off command eval will also turn off plugins.
@@ -312,8 +312,6 @@ var AgentStartCommand = cli.Command{
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
 		}
-
-		logger.Debug("Using shell %q", cfg.Shell)
 
 		// Make sure the DisconnectAfterJobTimeout value is correct
 		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {

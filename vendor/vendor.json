@@ -27,6 +27,12 @@
 			"revisionTime": "2017-11-14T09:02:18Z"
 		},
 		{
+			"checksumSHA1": "8jX8OQdkK2SUxre37qTrr0qeN/Y=",
+			"path": "github.com/buildkite/shellwords",
+			"revision": "c3f497d1e000222494aec2b1d1e5fe4027dd6197",
+			"revisionTime": "2018-03-15T08:41:42Z"
+		},
+		{
 			"checksumSHA1": "VRf3PC1Kr7ET7Ukvvgsy1FXa7Gs=",
 			"path": "github.com/buildkite/yaml",
 			"revision": "35282ab071f92dad183b70e7ed117f1ab244c880",
