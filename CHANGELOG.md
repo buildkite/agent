@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.41](https://github.com/buildkite/agent/tree/v3.0-beta.41) (2018-03-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.40...v3.0-beta.41)
+
+### Added
+- Retry failed checkouts [#670](https://github.com/buildkite/agent/pull/670) (@lox)
+
+### Changed
+- Write temporary batch scripts for Windows/CMD.EXE [#692](https://github.com/buildkite/agent/pull/692) (@lox)
+- Enabling `no-command-eval` will also disable use of plugins [#690](https://github.com/buildkite/agent/pull/690) (@keithpitt)
+- Support plugins that have a `null` config [#691](https://github.com/buildkite/agent/pull/691) (@keithpitt)
+- Handle upgrading bootstrap-path from old 2.x shell script [#580](https://github.com/buildkite/agent/pull/580) (@lox)
+- Show plugin commit if it's already installed [#685](https://github.com/buildkite/agent/pull/685) (@keithpitt)
+- Handle windows paths in all usage of shellwords parsing [#686](https://github.com/buildkite/agent/pull/686) (@lox)
+- Make NormalizeFilePath handle empty strings and windows [#688](https://github.com/buildkite/agent/pull/688) (@lox)
+- Retry ssh-keyscans on error or blank output [#687](https://github.com/buildkite/agent/pull/687) (@keithpitt)
+- Quote and escape env-file values [#682](https://github.com/buildkite/agent/pull/682) (@lox)
+- Prevent incorrect corrupt git checkout detection on fresh checkout dir creation [#681](https://github.com/buildkite/agent/pull/681) (@lox)
+- Only keyscan git/ssh urls [#675](https://github.com/buildkite/agent/pull/675) (@lox)
+- Fail the job when no command is provided in the default command phase [#678](https://github.com/buildkite/agent/pull/678) (@keithpitt)
+- Don't look for powershell hooks since we don't support them yet [#679](https://github.com/buildkite/agent/pull/679) (@keithpitt)
+- Exit when artifacts can't be found for downloading [#676](https://github.com/buildkite/agent/pull/676) (@keithpitt)
+- Run scripts via the shell, rather than invoking with exec [#673](https://github.com/buildkite/agent/pull/673) (@lox)
+- Rename no-automatic-ssh-fingerprint-verification to no-ssh-keyscan [#671](https://github.com/buildkite/agent/pull/671) (@lox)
+
+### Fixed
+- Parse pipeline.yml env block in order [#668](https://github.com/buildkite/agent/pull/668) (@lox)
+- Bootstrap shouldn't panic if plugin checkout fails [#672](https://github.com/buildkite/agent/pull/672) (@lox)
+
 ## [v3.0-beta.40](https://github.com/buildkite/agent/tree/v3.0-beta.40) (2018-03-07)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.39...v3.0-beta.40)
 
