@@ -33,10 +33,16 @@
 			"revisionTime": "2018-03-15T08:41:42Z"
 		},
 		{
-			"checksumSHA1": "VRf3PC1Kr7ET7Ukvvgsy1FXa7Gs=",
+			"checksumSHA1": "64PNeP1XJyV8RrSYBl9gt4wRcHY=",
 			"path": "github.com/buildkite/yaml",
-			"revision": "35282ab071f92dad183b70e7ed117f1ab244c880",
-			"revisionTime": "2016-11-03T09:02:47Z"
+			"revision": "7f97868eec74b32b0982dd158a51a446d1da7eb5",
+			"revisionTime": "2018-02-23T19:12:37Z",
+			"version": "v2",
+			"versionExact": "v2.1.1"
+		},
+		{
+			"path": "github.com/buildkite/yaml:v2",
+			"revision": ""
 		},
 		{
 			"checksumSHA1": "bplZOqTp6JAbkn25zHEPIob25WI=",
