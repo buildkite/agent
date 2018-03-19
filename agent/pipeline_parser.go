@@ -65,7 +65,7 @@ func (p PipelineParser) Parse() (interface{}, error) {
 
 	var result interface{}
 	if err := unmarshalAsStringMap(b, &result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 	}
 
 	return result, nil
@@ -293,9 +293,9 @@ func cleanupMapValue(v interface{}) interface{} {
 		return cleanupInterfaceArray(v)
 	case map[interface{}]interface{}:
 		return cleanupInterfaceMap(v)
-	case string:
+	case nil, bool, string, int, float64:
 		return v
 	default:
-		return fmt.Sprintf("%v", v)
+		panic("Unhandled map type " + fmt.Sprintf("%T", v))
 	}
 }
