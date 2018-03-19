@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.42](https://github.com/buildkite/agent/tree/v3.0-beta.42) (2018-03-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.41...v3.0-beta.42)
+
+### Fixed
+- Preserve types in pipeline.yml [#696](https://github.com/buildkite/agent/pull/696) (@lox)
+
 ## [v3.0-beta.41](https://github.com/buildkite/agent/tree/v3.0-beta.41) (2018-03-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.40...v3.0-beta.41)
 
