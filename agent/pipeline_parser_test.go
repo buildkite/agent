@@ -6,8 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/buildkite/agent/env"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,9 +18,9 @@ func TestPipelineParserParsesYaml(t *testing.T) {
 		Pipeline: []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""),
 		Env:      environ}.Parse()
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	j, err := json.Marshal(result)
-	require.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
 }
 
 func TestPipelineParserSupportsYamlMergesAndAnchors(t *testing.T) {
@@ -43,19 +41,19 @@ steps:
 		Filename: "awesome.yml",
 		Pipeline: []byte(complexYAML)}.Parse()
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	j, err := json.Marshal(result)
-	require.Equal(t, `{"base_step":{"agent_query_rules":["queue=default"],"type":"script"},"steps":[{"agent_query_rules":["queue=default"],"agents":{"queue":"default"},"command":"docker build .","name":":docker: building image","type":"script"}]}`, string(j))
+	assert.Equal(t, `{"base_step":{"agent_query_rules":["queue=default"],"type":"script"},"steps":[{"agent_query_rules":["queue=default"],"agents":{"queue":"default"},"command":"docker build .","name":":docker: building image","type":"script"}]}`, string(j))
 }
 
 func TestPipelineParserReturnsYamlParsingErrors(t *testing.T) {
 	_, err := PipelineParser{Filename: "awesome.yml", Pipeline: []byte("steps: %blah%")}.Parse()
-	require.Error(t, err, `Failed to parse awesome.yml: found character that cannot start any token`, fmt.Sprintf("%s", err))
+	assert.Error(t, err, `Failed to parse awesome.yml: found character that cannot start any token`, fmt.Sprintf("%s", err))
 }
 
 func TestPipelineParserReturnsJsonParsingErrors(t *testing.T) {
 	_, err := PipelineParser{Filename: "awesome.json", Pipeline: []byte("{")}.Parse()
-	require.Error(t, err, `Failed to parse awesome.json: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
+	assert.Error(t, err, `Failed to parse awesome.json: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
 }
 
 func TestPipelineParserParsesJson(t *testing.T) {
@@ -66,9 +64,9 @@ func TestPipelineParserParsesJson(t *testing.T) {
 		Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"),
 		Env:      environ}.Parse()
 
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	j, err := json.Marshal(result)
-	require.Equal(t, `{"foo":"bye \"friend\""}`, string(j))
+	assert.Equal(t, `{"foo":"bye \"friend\""}`, string(j))
 }
 
 func TestPipelineParserParsesJsonObjects(t *testing.T) {
