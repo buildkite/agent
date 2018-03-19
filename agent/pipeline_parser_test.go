@@ -10,19 +10,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestPipelineParser(t *testing.T) {
-	var err error
-	var result interface{}
-	var j []byte
-
+func TestPipelineParserParsesYaml(t *testing.T) {
 	environ := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 
-	// It parses pipelines with .yml filenames
-	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
-	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+	result, err := PipelineParser{
+		Filename: "awesome.yml",
+		Pipeline: []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""),
+		Env:      environ}.Parse()
 
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+}
+
+func TestPipelineParserSupportsYamlMergesAndAnchors(t *testing.T) {
 	complexYAML := `---
 base_step: &base_step
   type: script
@@ -36,56 +37,89 @@ steps:
     agents:
       queue: default`
 
-	// It parses complex YAML files
-	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte(complexYAML)}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
+	result, err := PipelineParser{
+		Filename: "awesome.yml",
+		Pipeline: []byte(complexYAML)}.Parse()
+
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
 	assert.Equal(t, `{"base_step":{"agent_query_rules":["queue=default"],"type":"script"},"steps":[{"agent_query_rules":["queue=default"],"agents":{"queue":"default"},"command":"docker build .","name":":docker: building image","type":"script"}]}`, string(j))
+}
 
-	// It parses pipelines with .yaml filenames
-	result, err = PipelineParser{Filename: "awesome.yaml", Pipeline: []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
-	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+func TestPipelineParserReturnsYamlParsingErrors(t *testing.T) {
+	_, err := PipelineParser{Filename: "awesome.yml", Pipeline: []byte("steps: %blah%")}.Parse()
+	assert.Error(t, err, `Failed to parse awesome.yml: found character that cannot start any token`, fmt.Sprintf("%s", err))
+}
 
-	// Returns YAML parsing errors
-	result, err = PipelineParser{Filename: "awesome.yml", Pipeline: []byte("steps: %blah%")}.Parse()
-	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse awesome.yml: found character that cannot start any token`, fmt.Sprintf("%s", err))
+func TestPipelineParserReturnsJsonParsingErrors(t *testing.T) {
+	_, err := PipelineParser{Filename: "awesome.json", Pipeline: []byte("{")}.Parse()
+	assert.Error(t, err, `Failed to parse awesome.json: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
+}
 
-	// Returns JSON parsing errors
-	result, err = PipelineParser{Filename: "awesome.json", Pipeline: []byte("{"), Env: environ}.Parse()
-	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse awesome.json: line 1: did not find expected node content`, fmt.Sprintf("%s", err))
+func TestPipelineParserParsesJson(t *testing.T) {
+	environ := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 
-	// It parses pipelines with .json filenames
-	result, err = PipelineParser{Filename: "thing.json", Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
+	result, err := PipelineParser{
+		Filename: "thing.json",
+		Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"),
+		Env:      environ}.Parse()
+
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
 	assert.Equal(t, `{"foo":"bye \"friend\""}`, string(j))
+}
 
-	// It parses unknown YAML
-	result, err = PipelineParser{Pipeline: []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
-	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+func TestPipelineParserParsesJsonObjects(t *testing.T) {
+	environ := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
 
-	// Returns YAML parsing errors if the content looks like YAML
-	result, err = PipelineParser{Pipeline: []byte("steps: %blah%")}.Parse()
-	assert.NotNil(t, err)
-	assert.Equal(t, `Failed to parse pipeline: found character that cannot start any token`, fmt.Sprintf("%s", err))
-
-	// It parses unknown JSON objects
-	result, err = PipelineParser{Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
+	result, err := PipelineParser{Pipeline: []byte("\n\n     \n  { \"foo\": \"bye ${ENV_VAR_FRIEND}\" }\n"), Env: environ}.Parse()
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
 	assert.Equal(t, `{"foo":"bye \"friend\""}`, string(j))
+}
 
-	// It parses unknown JSON arrays
-	result, err = PipelineParser{Pipeline: []byte("\n\n     \n  [ { \"foo\": \"bye ${ENV_VAR_FRIEND}\" } ]\n"), Env: environ}.Parse()
-	assert.Nil(t, err)
-	j, err = json.Marshal(result)
+func TestPipelineParserParsesJsonArrays(t *testing.T) {
+	environ := env.FromSlice([]string{`ENV_VAR_FRIEND="friend"`})
+
+	result, err := PipelineParser{Pipeline: []byte("\n\n     \n  [ { \"foo\": \"bye ${ENV_VAR_FRIEND}\" } ]\n"), Env: environ}.Parse()
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
 	assert.Equal(t, `[{"foo":"bye \"friend\""}]`, string(j))
+}
+
+func TestPipelineParserPreservesBools(t *testing.T) {
+	result, err := PipelineParser{Pipeline: []byte("steps:\n  - trigger: hello\n    async: true")}.Parse()
+	assert.Nil(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"async":true,"trigger":"hello"}]}`, string(j))
+}
+
+func TestPipelineParserPreservesInts(t *testing.T) {
+	result, err := PipelineParser{Pipeline: []byte("steps:\n  - label: hello\n    parallelism: 10")}.Parse()
+	assert.Nil(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"label":"hello","parallelism":10}]}`, string(j))
+}
+
+func TestPipelineParserPreservesNull(t *testing.T) {
+	result, err := PipelineParser{Pipeline: []byte("steps:\n  - wait: ~")}.Parse()
+	assert.Nil(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"wait":null}]}`, string(j))
+}
+
+func TestPipelineParserPreservesFloats(t *testing.T) {
+	result, err := PipelineParser{Pipeline: []byte("steps:\n  - trigger: hello\n    llamas: 3.142")}.Parse()
+	assert.Nil(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"llamas":3.142,"trigger":"hello"}]}`, string(j))
+}
+
+func TestPipelineParserHandlesDates(t *testing.T) {
+	result, err := PipelineParser{Pipeline: []byte("steps:\n  - trigger: hello\n    llamas: 2002-08-15T17:18:23.18-06:00")}.Parse()
+	assert.Nil(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"llamas":"2002-08-15T17:18:23.18-06:00","trigger":"hello"}]}`, string(j))
 }
 
 func TestPipelineParserInterpolatesKeysAsWellAsValues(t *testing.T) {
