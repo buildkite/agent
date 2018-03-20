@@ -1,10 +1,20 @@
 package integration
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/buildkite/bintest"
 )
+
+func argumentForCommand(cmd string) interface{} {
+	// This is unpleasant, but we have to work around the fact that we generate
+	// batch scripts for windows and plain commands for everything else
+	if runtime.GOOS == `windows` {
+		return bintest.MatchPattern(`buildkite-script-.+.bat$`)
+	}
+	return cmd
+}
 
 func TestRunningCommandWithDocker(t *testing.T) {
 	tester, err := NewBootstrapTester()
@@ -30,7 +40,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	docker := tester.MustMock(t, "docker")
 	docker.ExpectAll([][]interface{}{
 		{"build", "-f", "Dockerfile", "-t", imageId, "."},
-		{"run", "--name", containerId, imageId, "true"},
+		{"run", "--name", containerId, imageId, argumentForCommand("true")},
 		{"rm", "-f", "-v", containerId},
 	})
 
@@ -64,7 +74,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	docker := tester.MustMock(t, "docker")
 	docker.ExpectAll([][]interface{}{
 		{"build", "-f", "Dockerfile.llamas", "-t", imageId, "."},
-		{"run", "--name", containerId, imageId, "true"},
+		{"run", "--name", containerId, imageId, argumentForCommand("true")},
 		{"rm", "-f", "-v", containerId},
 	})
 
@@ -100,7 +110,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 		{"rm", "-f", "-v", containerId},
 	})
 
-	docker.Expect("run", "--name", containerId, imageId, "true").
+	docker.Expect("run", "--name", containerId, imageId, argumentForCommand("true")).
 		AndExitWith(1)
 
 	expectCommandHooks("1", t, tester)
@@ -134,7 +144,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
-		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", "true"},
+		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", argumentForCommand("true")},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "kill"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "rm", "--force", "--all", "-v"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "down"},
@@ -172,7 +182,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "down"},
 	})
 
-	dockerCompose.Expect("-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", "true").
+	dockerCompose.Expect("-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", argumentForCommand("true")).
 		AndWriteToStderr("Nope!").
 		AndExitWith(1)
 
@@ -208,7 +218,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 	dockerCompose := tester.MustMock(t, "docker-compose")
 	dockerCompose.ExpectAll([][]interface{}{
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
-		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "run", "llamas", "true"},
+		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "run", "llamas", argumentForCommand("true")},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "kill"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "rm", "--force", "--all", "-v"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "down"},
