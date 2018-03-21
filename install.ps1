@@ -1,10 +1,10 @@
 Param(
     [string]$installDir = "C:\buildkite",
     [string]$arch = "amd64",
-    [switch]$beta = $false,
+    [switch]$beta = ($env:buildkiteAgentBeta -eq 'true'),
     [switch]$path = $true,
-    [string]$token = "",
-    [string]$tags = ""
+    [string]$token = $env:buildkiteAgentToken,
+    [string]$tags = $env:builkiteAgentTags
 )   
 
 $ErrorActionPreference = "Stop"
