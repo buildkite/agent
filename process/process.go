@@ -183,9 +183,9 @@ func (p *Process) Started() <-chan struct{} {
 	return d
 }
 
-// Kill terminates the process gracefully. Initially a SIGTERM is sent, and
-// then 10 seconds later a SIGTERM is sent.
-func (p *Process) Kill() error {
+// Kill the process. If supported by the operating system it is initially signaled for termination
+// and then forcefully killed after the provided grace period.
+func (p *Process) Kill(gracePeriod time.Duration) error {
 	var err error
 	if runtime.GOOS == "windows" {
 		// Sending Interrupt on Windows is not implemented.
@@ -205,9 +205,9 @@ func (p *Process) Kill() error {
 		logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
 		return nil
 
-	// Forcefully kill the process after 10 seconds
-	case <-time.After(10 * time.Second):
-		logger.Debug("[Process] Process %d didn't terminate within 10 seconds, killing.", p.Pid)
+	// Forcefully kill the process after grace period expires
+	case <-time.After(gracePeriod):
+		logger.Debug("[Process] Process %d didn't terminate within %v, killing.", p.Pid, gracePeriod)
 		return p.signal(syscall.SIGKILL)
 	}
 }
