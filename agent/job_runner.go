@@ -229,6 +229,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHKeyscan)
+	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.AgentConfiguration.GitSubmodules)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags

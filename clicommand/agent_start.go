@@ -31,6 +31,12 @@ Example:
 
    $ buildkite-agent start --token xxx`
 
+// Adding config requires changes in a few different spots
+// - The AgentStartConfig struct with a cli parameter
+// - As a flag in the AgentStartCommand (with matching env)
+// - Into an env to be passed to the bootstrap in agent/job_runner.go, createEnvironment()
+// - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
+
 type AgentStartConfig struct {
 	Config                    string   `cli:"config"`
 	Token                     string   `cli:"token" validate:"required"`
@@ -50,6 +56,7 @@ type AgentStartConfig struct {
 	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
 	GitCloneFlags             string   `cli:"git-clone-flags"`
 	GitCleanFlags             string   `cli:"git-clean-flags"`
+	NoGitSubmodules           bool     `cli:"no-git-submodules"`
 	NoColor                   bool     `cli:"no-color"`
 	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval             bool     `cli:"no-command-eval"`
@@ -240,6 +247,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to load plugins",
 			EnvVar: "BUILDKITE_NO_PLUGINS",
 		},
+		cli.BoolFlag{
+			Name:   "no-git-submodules",
+			Usage:  "Don't automatically checkout git submodules",
+			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
+		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -345,6 +357,7 @@ var AgentStartCommand = cli.Command{
 				PluginsPath:               cfg.PluginsPath,
 				GitCloneFlags:             cfg.GitCloneFlags,
 				GitCleanFlags:             cfg.GitCleanFlags,
+				GitSubmodules:             !cfg.NoGitSubmodules,
 				SSHKeyscan:                !cfg.NoSSHKeyscan,
 				CommandEval:               !cfg.NoCommandEval,
 				PluginsEnabled:            !cfg.NoPlugins,

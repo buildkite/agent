@@ -8,6 +8,7 @@ type AgentConfiguration struct {
 	PluginsPath               string
 	GitCloneFlags             string
 	GitCleanFlags             string
+	GitSubmodules             bool
 	SSHKeyscan                bool
 	CommandEval               bool
 	PluginsEnabled            bool
