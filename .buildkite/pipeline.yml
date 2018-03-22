@@ -123,6 +123,11 @@ steps:
 
   - wait
 
+  - name: ":docker: build"
+    command: "scripts/build-docker-images.sh"
+    agents:
+      queue: "deploy"
+
   - name: ":debian: build"
     command: "scripts/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
