@@ -34,18 +34,6 @@ steps:
 
   - wait
 
-  - name: ":whale:"
-    trigger: docker-buildkite-agent
-    async: true
-    build:
-      message: "Update Docker images"
-      commit: "HEAD"
-      branch: "master"
-      env:
-        CODENAME: "stable"
-
-  - wait
-
   - name: ":beer:"
     command: "scripts/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
