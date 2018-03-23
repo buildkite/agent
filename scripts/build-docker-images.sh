@@ -1,26 +1,26 @@
 #!/bin/bash
 set -e
 
-echo '--- Getting agent version from build meta data'
-
-export FULL_AGENT_VERSION; FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
-export AGENT_VERSION; AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
-export BUILD_VERSION; BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
-
-echo "Full agent version: $FULL_AGENT_VERSION"
-echo "Agent version: $AGENT_VERSION"
-echo "Build version: $BUILD_VERSION"
+image_tag="buildkiteci/agent:buildkite-agent-linux-build-${BUILDKITE_BUILD_NUMBER}"
 
 rm -rf pkg
 mkdir -p pkg
 
 echo '--- Downloading :linux: binaries'
-
 buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
 
-image_tag="buildkite-agent-linux-build-${BUILDKITE_BUILD_NUMBER}"
-
-echo '--- Building :linux: :docker: image'
-
+echo '--- Building :docker: image'
 cp pkg/buildkite-agent-linux-amd64  packaging/docker/linux/buildkite-agent
 docker build --tag "$image_tag" packaging/docker/linux
+
+echo "--- :hammer: Testing $image_tag can run"
+docker run --rm --entrypoint "buildkite-agent" "$image_tag" --version
+
+echo "--- :hammer: Testing $image_tag can access docker socket"
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --entrypoint "docker" "$image_tag" version
+
+echo "--- :hammer: Testing $image_tag has docker-compose"
+docker run --rm --entrypoint "docker-compose" "$image_tag" --version
+
+echo '--- Pushing :docker: image'
+docker push "$image_tag"
