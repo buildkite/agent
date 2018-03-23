@@ -22,4 +22,5 @@ image_tag="buildkite-agent-linux-build-${BUILDKITE_BUILD_NUMBER}"
 
 echo '--- Building :linux: :docker: image'
 
+cp pkg/buildkite-agent-linux-amd64  packaging/docker/linux/buildkite-agent
 docker build --tag "$image_tag" packaging/docker/linux
