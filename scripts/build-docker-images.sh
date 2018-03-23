@@ -10,7 +10,8 @@ echo '--- Downloading :linux: binaries'
 buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
 
 echo '--- Building :docker: image'
-cp pkg/buildkite-agent-linux-amd64  packaging/docker/linux/buildkite-agent
+cp pkg/buildkite-agent-linux-amd64 packaging/docker/linux/buildkite-agent
+chmod +x packaging/docker/linux/buildkite-agent
 docker build --tag "$image_tag" packaging/docker/linux
 
 echo "--- :hammer: Testing $image_tag can run"
