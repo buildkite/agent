@@ -123,6 +123,9 @@ steps:
 
   - wait
 
+  - name: ":docker: build"
+    command: "scripts/build-docker-images.sh"
+
   - name: ":debian: build"
     command: "scripts/build-debian-packages.sh"
     artifact_paths: "deb/**/*"

@@ -1,0 +1,77 @@
+#!/bin/bash
+set -euo pipefail
+
+: "${DOCKER_IMAGE:=buildkite/agent}"
+: "${DOCKER_PUSH:=1}"
+: "${DOCKER_PULL:=1}"
+: "${PREBUILT_IMAGE:=buildkiteci/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}}"
+: "${CODENAME:=stable}"
+: "${STABLE_VERSION:=2}"
+
+# Convert 2.3.2 into [ 2.3.2 2.3 2 ] or 3.0-beta.42 in [ 3.0-beta.42 3.0 3 ]
+parse_version() {
+  local v="$1"
+  IFS='.' read -r -a parts <<< "${v%-*}"
+
+  for idx in $(seq 1 ${#parts[*]}) ; do
+    sed -e 's/ /./g' <<< "${parts[@]:0:$idx}"
+  done
+
+  [[ "${v%-*}" == "$v" ]] || echo "$v"
+}
+
+is_stable_version() {
+  local v="$1"
+  for stable_tag in $(parse_version "$STABLE_VERSION") ; do
+    if [[ "$v" == "$stable_tag" ]] ; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+release_image() {
+  local tag="$1"
+  echo "--- :docker: Taggng ${DOCKER_IMAGE}:${tag}"
+  docker tag "$PREBUILT_IMAGE" "${DOCKER_IMAGE}:$tag"
+  if [[ "$DOCKER_PUSH" =~ (true|1) ]] ; then
+    docker push "${DOCKER_IMAGE}:$tag"
+  fi
+}
+
+# echo "Parsing $AGENT_VERSION into $(parse_version "$AGENT_VERSION")"
+
+if [[ -z "${AGENT_VERSION:-}" ]] ; then
+  echo '--- Getting agent version from build meta data'
+  AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+  echo "Agent version: $AGENT_VERSION"
+fi
+
+if [[ "$DOCKER_PULL" =~ (true|1) ]] ; then
+  echo '--- :docker: Pulling prebuilt image'
+  docker pull "$PREBUILT_IMAGE"
+fi
+
+# variants of edge/experimental
+if [[ "$CODENAME" == "experimental" ]] ; then
+  release_image "edge-build-${BUILDKITE_BUILD_NUMBER}"
+  release_image "edge"
+fi
+
+# variants of stable - e.g 2.3.2
+if [[ "$CODENAME" == "stable" ]] ; then
+  for tag in latest stable $(parse_version "$AGENT_VERSION") ; do
+    release_image "$tag"
+  done
+fi
+
+# variants of beta/unstable - e.g 3.0-beta.16
+if [[ "$CODENAME" == "unstable" ]] ; then
+  for tag in beta $(parse_version "$AGENT_VERSION") ; do
+    if is_stable_version "$tag" ; then
+      echo "--- :docker: Skipping tagging stable ${DOCKER_IMAGE}:${tag}"
+      continue
+    fi
+    release_image "$tag"
+  done
+fi

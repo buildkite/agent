@@ -27,14 +27,9 @@ steps:
     agents:
       queue: "deploy"
 
-  - wait
-
-  - name: ":whale:"
-    trigger: docker-buildkite-agent
-    async: true
-    build:
-      message: "Update Docker images"
-      commit: "HEAD"
-      branch: "master"
-      env:
-        CODENAME: "stable"
+  - name: ":docker:"
+    command: "scripts/publish-docker-images.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
