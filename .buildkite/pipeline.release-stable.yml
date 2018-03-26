@@ -27,3 +27,9 @@ steps:
     agents:
       queue: "deploy"
 
+  - name: ":docker:"
+    command: "scripts/publish-docker-images.sh"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"

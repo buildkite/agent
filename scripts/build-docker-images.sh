@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-image_tag="buildkiteci/agent:buildkite-agent-linux-build-${BUILDKITE_BUILD_NUMBER}"
+image_tag="buildkiteci/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}"
 
 rm -rf pkg
 mkdir -p pkg
@@ -23,5 +23,5 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --entrypoint "docke
 echo "--- :hammer: Testing $image_tag has docker-compose"
 docker run --rm --entrypoint "docker-compose" "$image_tag" --version
 
-echo '--- Pushing :docker: image'
+echo '--- Pushing :docker: image to buildkiteci/agent'
 docker push "$image_tag"
