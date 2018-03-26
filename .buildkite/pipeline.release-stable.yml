@@ -30,6 +30,6 @@ steps:
   - name: ":docker:"
     command: "scripts/publish-docker-images.sh"
     env:
-      CODENAME: "unstable"
+      CODENAME: "stable"
     agents:
       queue: "deploy"

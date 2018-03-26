@@ -52,8 +52,8 @@ if [[ "$DOCKER_PULL" =~ (true|1) ]] ; then
   docker pull "$PREBUILT_IMAGE"
 fi
 
-# variants of edge/unstable
-if [[ "$CODENAME" == "unstable" ]] ; then
+# variants of edge/experimental
+if [[ "$CODENAME" == "experimental" ]] ; then
   release_image "edge-build-${BUILDKITE_BUILD_NUMBER}"
   release_image "edge"
 fi
@@ -65,8 +65,8 @@ if [[ "$CODENAME" == "stable" ]] ; then
   done
 fi
 
-# variants of beta/experimental - e.g 3.0-beta.16
-if [[ "$CODENAME" == "experimental" ]] ; then
+# variants of beta/unstable - e.g 3.0-beta.16
+if [[ "$CODENAME" == "unstable" ]] ; then
   for tag in beta $(parse_version "$AGENT_VERSION") ; do
     if is_stable_version "$tag" ; then
       echo "--- :docker: Skipping tagging stable ${DOCKER_IMAGE}:${tag}"

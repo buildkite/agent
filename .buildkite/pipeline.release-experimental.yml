@@ -21,3 +21,10 @@ steps:
       CODENAME: "experimental"
     agents:
       queue: "deploy"
+
+  - name: ":docker:"
+    command: "scripts/publish-docker-images.sh"
+    env:
+      CODENAME: "experimental"
+    agents:
+      queue: "deploy"
