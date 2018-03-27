@@ -25,3 +25,5 @@ docker run --rm --entrypoint "docker-compose" "$image_tag" --version
 
 echo '--- Pushing :docker: image to buildkiteci/agent'
 docker push "$image_tag"
+
+buildkite-agent meta-data set "agent-docker-image-alpine" "$image_tag"

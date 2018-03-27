@@ -4,7 +4,7 @@ set -euo pipefail
 : "${DOCKER_IMAGE:=buildkite/agent}"
 : "${DOCKER_PUSH:=1}"
 : "${DOCKER_PULL:=1}"
-: "${PREBUILT_IMAGE:=buildkiteci/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}}"
+: "${PREBUILT_IMAGE:=}"
 : "${CODENAME:=stable}"
 : "${STABLE_VERSION:=2}"
 
@@ -38,6 +38,12 @@ release_image() {
     docker push "${DOCKER_IMAGE}:$tag"
   fi
 }
+
+if [[ -z "${PREBUILT_IMAGE}" ]] ; then
+  echo '--- Getting prebuilt docker image from build meta data'
+  AGENT_VERSION=$(buildkite-agent meta-data get "agent-docker-image-alpine")
+  echo "Docker image: $PREBUILT_IMAGE"
+fi
 
 # echo "Parsing $AGENT_VERSION into $(parse_version "$AGENT_VERSION")"
 
