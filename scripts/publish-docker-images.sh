@@ -32,7 +32,7 @@ is_stable_version() {
 
 release_image() {
   local tag="$1"
-  echo "--- :docker: Taggng ${DOCKER_IMAGE}:${tag}"
+  echo "--- :docker: Tagging ${DOCKER_IMAGE}:${tag}"
   docker tag "$PREBUILT_IMAGE" "${DOCKER_IMAGE}:$tag"
   if [[ "$DOCKER_PUSH" =~ (true|1) ]] ; then
     docker push "${DOCKER_IMAGE}:$tag"
