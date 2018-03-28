@@ -10,6 +10,7 @@ trigger_step() {
 
   if [[ "${DRY_RUN:-false}" == "true" ]] ; then
     branch="$BUILDKITE_BRANCH"
+    name="${name} dry-run"
   fi
 
   cat <<YAML
