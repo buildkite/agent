@@ -7,19 +7,20 @@ trigger_step() {
   local name="$1"
   local trigger_pipeline="$2"
   local branch="master"
+  local message_suffix=""
 
   if [[ "${DRY_RUN:-false}" == "true" ]] ; then
     branch="$BUILDKITE_BRANCH"
-    name="${name} dry-run"
+    message_suffix=" (dry-run)"
   fi
 
   cat <<YAML
-  - name: ":rocket: ${name}"
+  - name: ":rocket: ${name}${message_suffix}"
     trigger: "${trigger_pipeline}"
     async: false
     branches: "${branch}"
     build:
-      message: "Release for ${agent_version}, build ${build_version}"
+      message: "Release for ${agent_version}, build ${build_version}${message_suffix}"
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
       meta_data:
