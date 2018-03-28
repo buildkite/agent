@@ -57,10 +57,8 @@ if [[ -z "${AGENT_VERSION:-}" ]] ; then
   echo "Agent version: $AGENT_VERSION"
 fi
 
-if [[ "$DOCKER_PULL" =~ (true|1) ]] ; then
-  echo '--- :docker: Pulling prebuilt image'
-  dry_run docker pull "$PREBUILT_IMAGE"
-fi
+echo '--- :docker: Pulling prebuilt image'
+dry_run docker pull "$PREBUILT_IMAGE"
 
 # variants of edge/experimental
 if [[ "$CODENAME" == "experimental" ]] ; then
