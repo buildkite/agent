@@ -21,6 +21,7 @@ trigger_step() {
         agent-version: "${agent_version}"
         agent-version-build: "${build_version}"
         agent-version-full:  "${full_agent_version}"
+        agent-docker-image-alpine: "${agent_docker_image_alpine}"
       env:
         DRY_RUN: "${DRY_RUN:-false}"
 YAML
@@ -59,6 +60,7 @@ output_steps_yaml() {
 agent_version=$(buildkite-agent meta-data get "agent-version")
 build_version=$(buildkite-agent meta-data get "agent-version-build")
 full_agent_version=$(buildkite-agent meta-data get "agent-version-full")
+agent_docker_image_alpine=$(buildkite-agent meta-data get "agent-docker-image-alpine")
 
 git fetch --tags
 

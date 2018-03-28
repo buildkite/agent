@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build" )
+artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build")
 
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
