@@ -643,6 +643,10 @@ func (b *Bootstrap) CheckoutPhase() error {
 	return nil
 }
 
+func hasGitSubmodules(sh *shell.Shell) bool {
+	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
+}
+
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
@@ -673,8 +677,22 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	// Git clean prior to checkout
-	if err := gitClean(b.shell, b.GitCleanFlags, b.GitSubmodules); err != nil {
+	if hasGitSubmodules(b.shell) {
+		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
+			return err
+		}
+	}
+
+	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
 		return err
+	}
+
+	var gitSubmodules bool
+	if !b.GitSubmodules && hasGitSubmodules(b.shell) {
+		b.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
+	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
+		b.shell.Commentf("Git submodules detected")
+		gitSubmodules = true
 	}
 
 	// If a refspec is provided then use it instead.
@@ -740,7 +758,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		}
 	}
 
-	if b.GitSubmodules {
+	if gitSubmodules {
 		// submodules might need their fingerprints verified too
 		if b.SSHKeyscan {
 			b.shell.Commentf("Checking to see if submodule urls need to be added to known_hosts")
@@ -773,8 +791,14 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	// Git clean after checkout
-	if err := gitClean(b.shell, b.GitCleanFlags, b.GitSubmodules); err != nil {
+	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
 		return err
+	}
+
+	if gitSubmodules {
+		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
+			return err
+		}
 	}
 
 	if _, hasToken := b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
