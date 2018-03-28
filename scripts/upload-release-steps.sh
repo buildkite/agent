@@ -6,14 +6,21 @@ set -euo pipefail
 trigger_step() {
   local name="$1"
   local trigger_pipeline="$2"
+  local branch="master"
+  local message_suffix=""
+
+  if [[ "${DRY_RUN:-false}" == "true" ]] ; then
+    branch="$BUILDKITE_BRANCH"
+    message_suffix=" (dry-run)"
+  fi
 
   cat <<YAML
-  - name: ":rocket: ${name}"
+  - name: ":rocket: ${name}${message_suffix}"
     trigger: "${trigger_pipeline}"
     async: false
-    branches: "master"
+    branches: "${branch}"
     build:
-      message: "Release for ${agent_version}, build ${build_version}"
+      message: "Release for ${agent_version}, build ${build_version}${message_suffix}"
       commit: "${BUILDKITE_COMMIT}"
       branch: "${BUILDKITE_BRANCH}"
       meta_data:
@@ -56,6 +63,11 @@ output_steps_yaml() {
       "agent-release-stable"
   fi
 }
+
+if [[ "${BUILDKITE_BRANCH}" != "master" && "${DRY_RUN}" != "true" ]] ; then
+  echo "No release steps to be uploaded"
+  exit 0
+fi
 
 agent_version=$(buildkite-agent meta-data get "agent-version")
 build_version=$(buildkite-agent meta-data get "agent-version-build")

@@ -1,7 +1,11 @@
 #!/bin/bash
 set -e
 
-image_tag="buildkiteci/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}"
+echo '--- Getting agent version from build meta data'
+
+image_tag=$(buildkite-agent meta-data get "agent-docker-image-alpine")
+
+echo "Docker Alpine Image Tag: $image_tag"
 
 rm -rf pkg
 mkdir -p pkg
@@ -25,5 +29,3 @@ docker run --rm --entrypoint "docker-compose" "$image_tag" --version
 
 echo '--- Pushing :docker: image to buildkiteci/agent'
 docker push "$image_tag"
-
-buildkite-agent meta-data set "agent-docker-image-alpine" "$image_tag"

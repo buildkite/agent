@@ -150,4 +150,3 @@ steps:
 
   - name: ":pipeline:"
     command: "scripts/upload-release-steps.sh"
-    branches: master
