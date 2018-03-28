@@ -67,6 +67,22 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	}
 	defer tester.Close()
 
+	submoduleRepo, err := createTestGitRespository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer submoduleRepo.Close()
+
+	out, err := tester.Repo.Execute("submodule", "add", submoduleRepo.Path)
+	if err != nil {
+		t.Fatalf("Adding submodule failed: %s", out)
+	}
+
+	out, err = tester.Repo.Execute("commit", "-am", "Add example submodule")
+	if err != nil {
+		t.Fatalf("Committing submodule failed: %s", out)
+	}
+
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
@@ -117,22 +133,6 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tester.Close()
-
-	submoduleRepo, err := createTestGitRespository()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer submoduleRepo.Close()
-
-	out, err := tester.Repo.Execute("submodule", "add", submoduleRepo.Path)
-	if err != nil {
-		t.Fatalf("Adding submodule failed: %s", out)
-	}
-
-	out, err = tester.Repo.Execute("commit", "-am", "Add example submodule")
-	if err != nil {
-		t.Fatalf("Committing submodule failed: %s", out)
-	}
 
 	agent := tester.MustMock(t, "buildkite-agent")
 	agent.
