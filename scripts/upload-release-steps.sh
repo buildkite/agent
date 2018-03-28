@@ -11,7 +11,9 @@ trigger_step() {
   - name: ":rocket: ${name}"
     trigger: "${trigger_pipeline}"
     async: false
-    branches: "master"
+    branches:
+     - master
+     - use-meta-data-for-docker-build-image-name
     build:
       message: "Release for ${agent_version}, build ${build_version}"
       commit: "${BUILDKITE_COMMIT}"
