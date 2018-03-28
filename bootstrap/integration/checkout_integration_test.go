@@ -36,6 +36,51 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	git.ExpectAll([][]interface{}{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
+		{"fetch", "-v", "--prune", "origin", "master"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		{"--no-pager", "branch", "--contains", "HEAD", "--no-color"},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(1)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
+		AndExitWith(0)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:branch", bintest.MatchAny()).
+		AndExitWith(0)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	git.ExpectAll([][]interface{}{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
 		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -72,6 +117,22 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tester.Close()
+
+	submoduleRepo, err := createTestGitRespository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer submoduleRepo.Close()
+
+	out, err := tester.Repo.Execute("submodule", "add", submoduleRepo.Path)
+	if err != nil {
+		t.Fatalf("Adding submodule failed: %s", out)
+	}
+
+	out, err = tester.Repo.Execute("commit", "-am", "Add example submodule")
+	if err != nil {
+		t.Fatalf("Committing submodule failed: %s", out)
+	}
 
 	agent := tester.MustMock(t, "buildkite-agent")
 	agent.

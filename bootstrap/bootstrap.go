@@ -687,14 +687,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		return err
 	}
 
-	var gitSubmodules bool
-	if !b.GitSubmodules && hasGitSubmodules(b.shell) {
-		b.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
-	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
-		b.shell.Commentf("Git submodules detected")
-		gitSubmodules = true
-	}
-
 	// If a refspec is provided then use it instead.
 	// i.e. `refs/not/a/head`
 	if b.RefSpec != "" {
@@ -756,6 +748,16 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
 			return err
 		}
+	}
+
+	var gitSubmodules bool
+	if !b.GitSubmodules && hasGitSubmodules(b.shell) {
+		b.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
+	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
+		b.shell.Commentf("Git submodules detected")
+		gitSubmodules = true
+	} else if !hasGitSubmodules(b.shell) {
+		b.shell.Commentf("No git submodules detected")
 	}
 
 	if gitSubmodules {

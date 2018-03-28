@@ -50,7 +50,7 @@ func gitCleanSubmodules(sh *shell.Shell, gitCleanFlags string) error {
 		return err
 	}
 
-	commandArgs := append([]string{"submodule", "foreach", "--recursive", "git"}, individualCleanFlags...)
+	commandArgs := append([]string{"submodule", "foreach", "--recursive", "git", "clean"}, individualCleanFlags...)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
 		return err
