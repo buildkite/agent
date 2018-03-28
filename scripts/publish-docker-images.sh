@@ -49,11 +49,14 @@ if [[ -z "${PREBUILT_IMAGE}" ]] ; then
   echo "Docker image: $PREBUILT_IMAGE"
 fi
 
-# echo "Parsing $AGENT_VERSION into $(parse_version "$AGENT_VERSION")"
-
 if [[ -z "${AGENT_VERSION:-}" ]] ; then
-  echo '--- Getting agent version from build meta data'
-  AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
+  echo '--- Getting agent version from build meta-data'
+  AGENT_VERSION=$(buildkite-agent meta-data get "agent-docker-image-alpine")
+  if [[ -z "$AGENT_VERSION" ]] ; then
+    echo "^^^ +++"
+    echo "No meta-data found for agent-docker-image-alpine"
+    exit 1
+  fi
   echo "Agent version: $AGENT_VERSION"
 fi
 
