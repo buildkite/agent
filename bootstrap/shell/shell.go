@@ -318,7 +318,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 	if s.Debug {
 		t := time.Now()
 		defer func() {
-			s.Commentf("Command completed in %v", time.Now().Sub(t))
+			s.Commentf("↳ Command completed in %v", time.Now().Sub(t))
 		}()
 	}
 
@@ -363,10 +363,6 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 	}
 
 	if err := cmd.Wait(); err != nil {
-		if s.Debug {
-			s.Printf("Exited with error: %v", err)
-		}
-
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 
