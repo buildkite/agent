@@ -17,6 +17,7 @@ import (
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
+	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 )
@@ -90,7 +91,7 @@ func (s *Shell) Chdir(path string) error {
 		path = filepath.Join(s.wd, path)
 	}
 
-	s.Commentf("Changing working directory to \"%s\"", path)
+	s.Promptf("cd %s", shellwords.Quote(path))
 
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("Failed to change working: directory does not exist")
@@ -242,8 +243,6 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		command = path
 		args = []string{}
 	}
-
-	s.Promptf("%s", process.FormatCommand(command, args))
 
 	cmd, err := s.buildCommand(command, args...)
 	if err != nil {

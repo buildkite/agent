@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
@@ -125,12 +126,22 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 	defer script.Close()
 
+	// Show the hook runner in debug, but the thing being run otherwise 💅🏻
 	if b.Debug {
 		b.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
-		b.shell.Printf("%s", hookPath)
-	}
+		b.shell.Promptf("%s", process.FormatCommand(script.Path(), nil))
+	} else {
+		cleanPath := hookPath
 
-	b.shell.Commentf("Executing \"%s\"", script.Path())
+		// Show a relative path if we can
+		if strings.HasPrefix(hookPath, b.shell.Getwd()) {
+			var err error
+			if cleanPath, err = filepath.Rel(b.shell.Getwd(), hookPath); err != nil {
+				cleanPath = hookPath
+			}
+		}
+		b.shell.Promptf("%s", process.FormatCommand(cleanPath, []string{}))
+	}
 
 	// Run the wrapper script
 	if err := b.shell.RunScript(script.Path(), extraEnviron); err != nil {
@@ -159,8 +170,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 }
 
 func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string) {
-	if dir != "" {
-		b.shell.Commentf("Applying working directory change: %s", dir)
+	if dir != b.shell.Getwd() {
 		_ = b.shell.Chdir(dir)
 	}
 
@@ -591,7 +601,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		}
 	}
 
-	b.shell.Headerf("Preparing build directory")
+	b.shell.Headerf("Preparing working directory")
 
 	// Make sure the build directory exists
 	if err := b.createCheckoutDir(); err != nil {
@@ -768,8 +778,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
 		b.shell.Commentf("Git submodules detected")
 		gitSubmodules = true
-	} else if !hasGitSubmodules(b.shell) {
-		b.shell.Commentf("No git submodules detected")
 	}
 
 	if gitSubmodules {
@@ -804,7 +812,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		}
 	}
 
-	// Git clean after checkout
+	// Git clean after checkout. We need to do this because submodules could have
+	// changed in between the last checkout and this one. A double clean is the only
+	// good solution to this problem that we've found
+	b.shell.Commentf("Cleaning again to catch any post-checkout changes")
+
 	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
 		return err
 	}
@@ -825,7 +837,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
+	if err := b.shell.Run("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
 		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color")
@@ -1028,13 +1040,12 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 }
 
 func (b *Bootstrap) uploadArtifacts() error {
-	if !b.hasCheckout {
-		b.shell.Commentf("Skipping artifact upload, no checkout")
+	if b.AutomaticArtifactUploadPaths == "" {
 		return nil
 	}
 
-	if b.AutomaticArtifactUploadPaths == "" {
-		b.shell.Commentf("Skipping artifact upload, no artifact upload path set")
+	if !b.hasCheckout {
+		b.shell.Commentf("Skipping artifact upload, no checkout")
 		return nil
 	}
 
