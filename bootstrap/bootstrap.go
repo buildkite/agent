@@ -344,9 +344,11 @@ func (b *Bootstrap) setUp() error {
 	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
 	if b.Debug {
-		b.shell.Headerf("Build environment variables")
+		b.shell.Headerf("Buildkite environment variables")
 		for _, e := range b.shell.Env.ToSlice() {
-			if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
+			if strings.HasPrefix(e, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
+				b.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
+			} else if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
 				b.shell.Printf("%s", strings.Replace(e, "\n", "\\n", -1))
 			}
 		}
