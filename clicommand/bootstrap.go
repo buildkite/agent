@@ -52,6 +52,7 @@ type BootstrapConfig struct {
 	PluginsPath                  string `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool   `cli:"command-eval"`
 	PluginsEnabled               bool   `cli:"plugins-enabled"`
+	LocalHooksEnabled            bool   `cli:"local-hooks-enabled"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
 	Shell                        string `cli:"shell"`
