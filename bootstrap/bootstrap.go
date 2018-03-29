@@ -591,12 +591,12 @@ func (b *Bootstrap) CheckoutPhase() error {
 		}
 	}
 
+	b.shell.Headerf("Preparing build directory")
+
 	// Make sure the build directory exists
 	if err := b.createCheckoutDir(); err != nil {
 		return err
 	}
-
-	b.shell.Headerf("Preparing build directory")
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
@@ -717,7 +717,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// references the commit. We presume a commit sha is provided. See:
 		// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 	} else if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
-		b.shell.Commentf("Fetch and checkout pull request head")
+		b.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 
 		if err := gitFetch(b.shell, "-v", "origin", refspec); err != nil {
@@ -747,7 +747,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// support fetching a specific commit so we fall back to fetching all heads
 		// and tags, hoping that the commit is included.
 	} else {
-		b.shell.Commentf("Fetch and checkout commit")
 		if err := gitFetch(b.shell, "-v", "origin", b.Commit); err != nil {
 			// By default `git fetch origin` will only fetch tags which are
 			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
