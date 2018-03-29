@@ -28,7 +28,7 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	return nil
 }
 
-func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
+func gitClean(sh *shell.Shell, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -41,13 +41,19 @@ func gitClean(sh *shell.Shell, gitCleanFlags string, gitSubmodules bool) error {
 		return err
 	}
 
-	// Also clean up submodules if we can
-	if gitSubmodules {
-		commandArgs = append([]string{"submodule", "foreach", "--recursive", "git"}, commandArgs...)
+	return nil
+}
 
-		if err = sh.Run("git", commandArgs...); err != nil {
-			return err
-		}
+func gitCleanSubmodules(sh *shell.Shell, gitCleanFlags string) error {
+	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
+	if err != nil {
+		return err
+	}
+
+	commandArgs := append([]string{"submodule", "foreach", "--recursive", "git", "clean"}, individualCleanFlags...)
+
+	if err = sh.Run("git", commandArgs...); err != nil {
+		return err
 	}
 
 	return nil
