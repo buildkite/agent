@@ -250,12 +250,23 @@ func (b *Bootstrap) executeLocalHook(name string) error {
 	}
 
 	localHookPath, err := b.localHookPath(name)
-	noLocalHooks, _ := b.shell.Env.Get(`BUILDKITE_NO_LOCAL_HOOKS`)
-
-	// For high-security configs, we allow the disabling of local hooks. This is only exposed via env at this point
-	if noLocalHooks == "true" && err == nil {
-		return fmt.Errorf("Attempted to run %s, but BUILDKITE_NO_LOCAL_HOOKS is enabled", localHookPath)
+	if err != nil {
+		return nil
 	}
+
+	// For high-security configs, we allow the disabling of local hooks.
+	localHooksEnabled := b.Config.LocalHooksEnabled
+
+	// Allow hooks to disable local hooks by setting BUILDKITE_NO_LOCAL_HOOKS=true
+	noLocalHooks, _ := b.shell.Env.Get(`BUILDKITE_NO_LOCAL_HOOKS`)
+	if noLocalHooks == "true" || noLocalHooks == "1" {
+		localHooksEnabled = false
+	}
+
+	if !localHooksEnabled {
+		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
+	}
+
 	return b.executeHook("local "+name, localHookPath, nil)
 }
 
@@ -382,7 +393,9 @@ func (b *Bootstrap) PluginPhase() error {
 
 	// Check if we can run plugins (disabled via --no-plugins)
 	if b.Plugins != "" && !b.Config.PluginsEnabled {
-		if !b.Config.CommandEval {
+		if !b.Config.LocalHooksEnabled {
+			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+		} else if !b.Config.CommandEval {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
 			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")

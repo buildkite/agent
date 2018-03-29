@@ -12,6 +12,7 @@ type AgentConfiguration struct {
 	SSHKeyscan                bool
 	CommandEval               bool
 	PluginsEnabled            bool
+	LocalHooksEnabled         bool
 	RunInPty                  bool
 	TimestampLines            bool
 	DisconnectAfterJob        bool

@@ -60,6 +60,7 @@ type AgentStartConfig struct {
 	NoColor                   bool     `cli:"no-color"`
 	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval             bool     `cli:"no-command-eval"`
+	NoLocalHooks              bool     `cli:"no-local-hooks"`
 	NoPlugins                 bool     `cli:"no-plugins"`
 	NoPTY                     bool     `cli:"no-pty"`
 	TimestampLines            bool     `cli:"timestamp-lines"`
@@ -248,6 +249,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_PLUGINS",
 		},
 		cli.BoolFlag{
+			Name:   "no-local-hooks",
+			Usage:  "Don't allow local hooks to be run from checked out repositories",
+			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
+		},
+		cli.BoolFlag{
 			Name:   "no-git-submodules",
 			Usage:  "Don't automatically checkout git submodules",
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
@@ -315,8 +321,8 @@ var AgentStartCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(os.Args[0]))
 		}
 
-		// Turning off command eval will also turn off plugins.
-		if cfg.NoCommandEval {
+		// Turning off command eval or local hooks will also turn off plugins.
+		if cfg.NoCommandEval || cfg.NoLocalHooks {
 			cfg.NoPlugins = true
 		}
 
@@ -361,6 +367,7 @@ var AgentStartCommand = cli.Command{
 				SSHKeyscan:                !cfg.NoSSHKeyscan,
 				CommandEval:               !cfg.NoCommandEval,
 				PluginsEnabled:            !cfg.NoPlugins,
+				LocalHooksEnabled:         !cfg.NoLocalHooks,
 				RunInPty:                  !cfg.NoPTY,
 				TimestampLines:            cfg.TimestampLines,
 				DisconnectAfterJob:        cfg.DisconnectAfterJob,
