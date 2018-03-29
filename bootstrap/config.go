@@ -76,6 +76,9 @@ type Config struct {
 	// Are plugins enabled?
 	PluginsEnabled bool
 
+	// Are local hooks enabled?
+	LocalHooksEnabled bool
+
 	// Path where the builds will be run
 	BuildPath string
 

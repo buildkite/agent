@@ -204,6 +204,11 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
 		},
 		cli.BoolTFlag{
+			Name:   "local-hooks-enabled",
+			Usage:  "Allow local hooks to be run",
+			EnvVar: "BUILDKITE_LOCAL_HOOKS_ENABLED",
+		},
+		cli.BoolTFlag{
 			Name:   "ssh-keyscan",
 			Usage:  "Automatically run ssh-keyscan before checkout",
 			EnvVar: "BUILDKITE_SSH_KEYSCAN",
@@ -271,6 +276,7 @@ var BootstrapCommand = cli.Command{
 				RunInPty:                     runInPty,
 				CommandEval:                  cfg.CommandEval,
 				PluginsEnabled:               cfg.PluginsEnabled,
+				LocalHooksEnabled:            cfg.LocalHooksEnabled,
 				SSHKeyscan:                   cfg.SSHKeyscan,
 				Shell:                        cfg.Shell,
 			},
