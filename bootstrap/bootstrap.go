@@ -1012,7 +1012,13 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	cmd = append(cmd, shell...)
 	cmd = append(cmd, cmdToExec)
 
-	return b.shell.Run(cmd[0], cmd[1:]...)
+	if b.Debug {
+		b.shell.Promptf("%s", process.FormatCommand(cmd[0], cmd[1:]))
+	} else {
+		b.shell.Promptf("%s", cmdToExec)
+	}
+
+	return b.shell.RunWithoutPrompt(cmd[0], cmd[1:]...)
 }
 
 func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {

@@ -164,10 +164,17 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 	return &lock, err
 }
 
-// Run runs a command, write stdout and stderr to the logger and return an error if it fails
+// Run runs a command, write stdout and stderr to the logger and return an error
+// if it fails
 func (s *Shell) Run(command string, arg ...string) error {
 	s.Promptf("%s", process.FormatCommand(command, arg))
 
+	return s.RunWithoutPrompt(command, arg...)
+}
+
+// RunWithoutPrompt runs a command, write stdout and stderr to the logger and
+// return an error if it fails. Notably it doesn't show a prompt.
+func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
 	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
