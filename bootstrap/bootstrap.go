@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -126,37 +125,38 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 	defer script.Close()
 
+	cleanHookPath := hookPath
+
+	// Show a relative path if we can
+	if strings.HasPrefix(hookPath, b.shell.Getwd()) {
+		var err error
+		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookPath); err != nil {
+			cleanHookPath = hookPath
+		}
+	}
+
 	// Show the hook runner in debug, but the thing being run otherwise 💅🏻
 	if b.Debug {
 		b.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
 		b.shell.Promptf("%s", process.FormatCommand(script.Path(), nil))
 	} else {
-		cleanPath := hookPath
-
-		// Show a relative path if we can
-		if strings.HasPrefix(hookPath, b.shell.Getwd()) {
-			var err error
-			if cleanPath, err = filepath.Rel(b.shell.Getwd(), hookPath); err != nil {
-				cleanPath = hookPath
-			}
-		}
-		b.shell.Promptf("%s", process.FormatCommand(cleanPath, []string{}))
+		b.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
 	}
 
 	// Run the wrapper script
 	if err := b.shell.RunScript(script.Path(), extraEnviron); err != nil {
-		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(err)))
-		b.shell.Errorf("The %s hook exited with an error: %v", name, err)
+		exitCode := shell.GetExitCode(err)
+		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
+
+		// Give a simpler error if it's just an os.ExitError
+		if shell.IsExitError(err) {
+			return fmt.Errorf("The %s hook exited with status %d", name, exitCode)
+		}
 		return err
 	}
 
 	// Store the last hook exit code for subsequent steps
-	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS",
-		fmt.Sprintf("%d", shell.GetExitCode(err)))
-
-	if err != nil {
-		return errors.Wrapf(err, "The %s hook exited with an error", name)
-	}
+	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", "0")
 
 	// Get changed environment
 	changes, err := script.Changes()
@@ -892,7 +892,9 @@ func (b *Bootstrap) CommandPhase() error {
 	// If the command returned an exit that wasn't a `exec.ExitError`
 	// (which is returned when the command is actually run, but fails),
 	// then we'll show it in the log.
-	if _, ok := commandExitError.(*exec.ExitError); commandExitError != nil && !ok {
+	if shell.IsExitError(commandExitError) {
+		b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+	} else if commandExitError != nil {
 		b.shell.Errorf(commandExitError.Error())
 	}
 

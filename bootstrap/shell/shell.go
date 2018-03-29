@@ -383,3 +383,8 @@ func GetExitCode(err error) int {
 	}
 	return 1
 }
+
+func IsExitError(err error) bool {
+	_, ok := errors.Cause(err).(*exec.ExitError)
+	return ok
+}
