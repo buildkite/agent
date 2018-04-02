@@ -29,7 +29,7 @@ func TestNormalizingFilePaths(t *testing.T) {
 
 	fp, err := NormalizeFilePath(filepath.Join(`.`, `builds`))
 	assert.NoError(t, err)
-	assert.Equal(t, workingDir+`/builds`, fp)
+	assert.Equal(t, filepath.Join(workingDir,`builds`), fp)
 	assert.True(t, filepath.IsAbs(fp))
 }
 
