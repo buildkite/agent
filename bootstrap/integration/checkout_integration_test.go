@@ -73,7 +73,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	}
 	defer submoduleRepo.Close()
 
-	out, err := tester.Repo.Execute("submodule", "add", submoduleRepo.Path)
+	out, err := tester.Repo.Execute("submodule", "add", "-f", submoduleRepo.Path)
 	if err != nil {
 		t.Fatalf("Adding submodule failed: %s", out)
 	}
