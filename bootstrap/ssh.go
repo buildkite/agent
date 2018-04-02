@@ -8,8 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/agent/retry"
+)
+
+var (
+	sshKeyscanRetryInterval = 2 * time.Second
 )
 
 func sshKeyScan(sh *shell.Shell, host string) (string, error) {
@@ -49,7 +53,7 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 		}
 
 		return nil
-	}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+	}, &retry.Config{Maximum: 3, Interval: sshKeyscanRetryInterval})
 
 	return sshKeyScanOutput, err
 }

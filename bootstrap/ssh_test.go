@@ -1,13 +1,18 @@
 package bootstrap
 
 import (
-	"testing"
 	"path/filepath"
+	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/buildkite/bintest"
 	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/bintest"
+	"github.com/stretchr/testify/assert"
 )
+
+func init() {
+	sshKeyscanRetryInterval = time.Millisecond
+}
 
 func TestFindingSSHTools(t *testing.T) {
 	t.Parallel()
