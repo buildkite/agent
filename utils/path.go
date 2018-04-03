@@ -7,6 +7,24 @@ import (
 	"path/filepath"
 )
 
+// NormalizeCommand has very similar semantics to `NormalizeFilePath`, except
+// we don't "absolute" paths before returning them.
+func NormalizeCommand(path string) (string, error) {
+	// don't normalize empty strings
+	if path == "" {
+		return "", nil
+	}
+
+	// expand env and home directory
+	var err error
+	path, err = ExpandHome(os.ExpandEnv(path))
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
+}
+
 // Normalizes a path and returns an clean absolute version. It correctly
 // expands environment variables inside paths, converts "~/" into the users
 // home directory, and replaces "./" with the current working directory.

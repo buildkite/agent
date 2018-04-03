@@ -354,6 +354,26 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 				return err
 			}
 		}
+	} else if normalization == "command" {
+		value, _ := reflections.GetField(l.Config, fieldName)
+		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
+
+		// Make sure we're normalizing a string filed
+		if fieldKind != reflect.String {
+			return fmt.Errorf("command normalization only works on string fields")
+		}
+
+		// Normalize the field to be a command
+		if valueAsString, ok := value.(string); ok {
+			normalizedPath, err := utils.NormalizeCommand(valueAsString)
+			if err != nil {
+				return err
+			}
+
+			if err := reflections.SetField(l.Config, fieldName, normalizedPath); err != nil {
+				return err
+			}
+		}
 	} else {
 		return fmt.Errorf("Unknown normalization `%s`", normalization)
 	}

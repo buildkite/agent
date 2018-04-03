@@ -44,7 +44,7 @@ type AgentStartConfig struct {
 	Priority                  string   `cli:"priority"`
 	DisconnectAfterJob        bool     `cli:"disconnect-after-job"`
 	DisconnectAfterJobTimeout int      `cli:"disconnect-after-job-timeout"`
-	BootstrapScript           string   `cli:"bootstrap-script" normalize:"filepath"`
+	BootstrapScript           string   `cli:"bootstrap-script" normalize:"command"`
 	BuildPath                 string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                 string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath               string   `cli:"plugins-path" normalize:"filepath"`

@@ -29,7 +29,7 @@ func TestNormalizingFilePaths(t *testing.T) {
 
 	fp, err := NormalizeFilePath(filepath.Join(`.`, `builds`))
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(workingDir,`builds`), fp)
+	assert.Equal(t, filepath.Join(workingDir, `builds`), fp)
 	assert.True(t, filepath.IsAbs(fp))
 }
 
@@ -39,4 +39,19 @@ func TestNormalizingEmptyPaths(t *testing.T) {
 	fp, err := NormalizeFilePath("")
 	assert.NoError(t, err)
 	assert.Equal(t, "", fp)
+}
+
+func TestNormalizingCommands(t *testing.T) {
+	t.Parallel()
+
+	usr, err := user.Current()
+	assert.NoError(t, err)
+
+	c, err := NormalizeCommand(filepath.Join(`~/`, `buildkite-agent`, `bootstrap.sh`))
+	assert.NoError(t, err)
+	assert.Equal(t, filepath.Join(usr.HomeDir, `buildkite-agent`, `bootstrap.sh`), c)
+
+	c, err = NormalizeCommand("cat test.log")
+	assert.NoError(t, err)
+	assert.Equal(t, c, "cat test.log")
 }
