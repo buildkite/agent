@@ -7,8 +7,6 @@ export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
 export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
 
-YUM_PATH=/yum.buildkite.com
-
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
 echo "Build version: $BUILD_VERSION"
