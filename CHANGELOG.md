@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.44](https://github.com/buildkite/agent/tree/v3.0-beta.44) (2018-04-03)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.43...v3.0-beta.44)
+
+### Fixed
+- Normalize the `bootstrap-script` command using a new `commandpath` normalization [#714](https://github.com/buildkite/agent/pull/714) (@keithpitt)
+
+### Changed
+- Install windows binary to c:\buildkite-agent\bin [#713](https://github.com/buildkite/agent/pull/713) (@lox)
+
 ## [v3.0-beta.43](https://github.com/buildkite/agent/tree/v3.0-beta.43) (2018-04-03)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.42...v3.0-beta.43)
 
