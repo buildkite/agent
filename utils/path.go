@@ -8,7 +8,7 @@ import (
 )
 
 // NormalizeCommand has very similar semantics to `NormalizeFilePath`, except
-// we don't "absolute" paths before returning them.
+// we only "absolute" the path if it exists on the filesystem.
 func NormalizeCommand(path string) (string, error) {
 	// don't normalize empty strings
 	if path == "" {
@@ -20,6 +20,16 @@ func NormalizeCommand(path string) (string, error) {
 	path, err = ExpandHome(os.ExpandEnv(path))
 	if err != nil {
 		return "", err
+	}
+
+	// if the file exists, absolute it
+	if _, err := os.Stat(path); err == nil {
+		// make sure its absolute
+		absolutePath, err := filepath.Abs(path)
+		if err != nil {
+			return "", err
+		}
+		path = absolutePath
 	}
 
 	return path, nil
