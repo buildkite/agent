@@ -29,7 +29,7 @@ bundle
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
 mkdir -p $YUM_PATH
-dry_run aws --region us-east-1 s3 sync --delete "s3://$RPM_S3_BUCKET" "$YUM_PATH"
+aws --region us-east-1 s3 sync --delete "s3://$RPM_S3_BUCKET" "$YUM_PATH"
 
 # Add the rpms and update meta-data
 for ARCH in "x86_64" "i386"; do
@@ -39,8 +39,8 @@ for ARCH in "x86_64" "i386"; do
   mkdir -p "$ARCH_PATH"
   find "rpm/" -type f -name "*${ARCH}*" | xargs cp -t "$ARCH_PATH"
   # createrepo_c is much faster and more resilient than createrepo
-  dry_run createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=7d --update "$ARCH_PATH" || \
-    dry_run createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=7d "$ARCH_PATH"
+  createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=7d --update "$ARCH_PATH" || \
+    createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=7d "$ARCH_PATH"
   #createrepo --no-database --unique-md-filenames --update "$ARCH_PATH" || \
   #  createrepo --no-database --unique-md-filenames "$ARCH_PATH"
 done
