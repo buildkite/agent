@@ -47,7 +47,7 @@ mkdir -p "$DESTINATION_PATH"
 info "Building debian package $PACKAGE_NAME to $DESTINATION_PATH"
 
 bundle exec fpm -s "dir" \
-  -t "deb"
+  -t "deb" \
   -n "$NAME" \
   --url "$URL" \
   --maintainer "$MAINTAINER" \
