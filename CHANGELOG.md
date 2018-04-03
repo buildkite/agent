@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.0-beta.43](https://github.com/buildkite/agent/tree/v3.0-beta.43) (2018-04-03)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.42...v3.0-beta.43)
+
+### Changed
+- Prettier bootstrap output 💅🏻 [#708](https://github.com/buildkite/agent/pull/708) (@lox)
+- Only run git submodule operations if there is a .gitmodules [#704](https://github.com/buildkite/agent/pull/704) (@lox)
+- Add an agent config for no-local-hooks [#707](https://github.com/buildkite/agent/pull/707) (@lox)
+- Build docker image as part of agent pipeline [#701](https://github.com/buildkite/agent/pull/701) (@lox)
+- Windows install script [#699](https://github.com/buildkite/agent/pull/699) (@lox)
+- Expose no-git-submodules config and arg to start [#698](https://github.com/buildkite/agent/pull/698) (@lox)
+
 ## [v3.0-beta.42](https://github.com/buildkite/agent/tree/v3.0-beta.42) (2018-03-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0-beta.41...v3.0-beta.42)
 
