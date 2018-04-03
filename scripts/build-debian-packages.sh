@@ -11,21 +11,6 @@ echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
 echo "Build version: $BUILD_VERSION"
 
-function build() {
-  echo "--- Building debian package $1/$2"
-
-  BINARY_FILENAME="pkg/buildkite-agent-$1-$2"
-
-  # Download the built binary artifact
-  buildkite-agent artifact download "$BINARY_FILENAME" .
-
-  # Make sure it's got execute permissions so we can extract the version out of it
-  chmod +x "$BINARY_FILENAME"
-
-  # Build the debian package using the architectre and binary, they are saved to deb/
-  ./scripts/utils/build-debian-package.sh "$2" "$BINARY_FILENAME" "$AGENT_VERSION" "$BUILD_VERSION"
-}
-
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
     "$@"
@@ -41,8 +26,18 @@ bundle
 rm -rf deb
 
 # Build the packages into deb/
-dry_run build "linux" "amd64"
-dry_run build "linux" "386"
-dry_run build "linux" "arm"
-dry_run build "linux" "armhf"
-dry_run build "linux" "arm64"
+PLATFORM="linux"
+for ARCH in "amd64" "386" "arm" "armhf" "arm64"; do
+  echo "--- Building debian package ${PLATFORM}/${ARCH}"
+
+  BINARY="pkg/buildkite-agent-${PLATFORM}-${ARCH}"
+
+  # Download the built binary artifact
+  buildkite-agent artifact download "$BINARY" .
+
+  # Make sure it's got execute permissions so we can extract the version out of it
+  chmod +x "$BINARY"
+
+  # Build the debian package using the architectre and binary, they are saved to deb/
+  dry_run ./scripts/utils/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+done

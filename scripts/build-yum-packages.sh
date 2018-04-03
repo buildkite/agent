@@ -11,21 +11,6 @@ echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
 echo "Build version: $BUILD_VERSION"
 
-function build() {
-  echo "--- Building rpm package $1/$2"
-
-  BINARY_FILENAME="pkg/buildkite-agent-$1-$2"
-
-  # Download the built binary artifact
-  buildkite-agent artifact download "$BINARY_FILENAME" .
-
-  # Make sure it's got execute permissions so we can extract the version out of it
-  chmod +x "$BINARY_FILENAME"
-
-  # Build the rpm package using the architecture and binary, they are saved to rpm/
-  ./scripts/utils/build-rpm-package.sh "$2" "$BINARY_FILENAME" "$AGENT_VERSION" "$BUILD_VERSION"
-}
-
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
     "$@"
@@ -41,5 +26,18 @@ bundle
 rm -rf rpm
 
 # Build the packages into rpm/
-dry_run build "linux" "amd64"
-dry_run build "linux" "386"
+PLATFORM="linux"
+for ARCH in "amd64" "386"; do
+  echo "--- Building rpm package ${PLATFORM}/${ARCH}"
+
+  BINARY="pkg/buildkite-agent-${PLATFORM}-${ARCH}"
+
+  # Download the built binary artifact
+  buildkite-agent artifact download "$BINARY" .
+
+  # Make sure it's got execute permissions so we can extract the version out of it
+  chmod +x "$BINARY"
+
+  # Build the rpm package using the architecture and binary, they are saved to rpm/
+  dry_run ./scripts/utils/build-rpm-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+done
