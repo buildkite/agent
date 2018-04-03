@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "--- Getting agent version from build meta data"
 
@@ -26,6 +26,14 @@ function build() {
   ./scripts/utils/build-debian-package.sh "$2" "$BINARY_FILENAME" "$AGENT_VERSION" "$BUILD_VERSION"
 }
 
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
+
 echo "--- Installing dependencies"
 bundle
 
@@ -33,8 +41,8 @@ bundle
 rm -rf deb
 
 # Build the packages into deb/
-build "linux" "amd64"
-build "linux" "386"
-build "linux" "arm"
-build "linux" "armhf"
-build "linux" "arm64"
+dry_run build "linux" "amd64"
+dry_run build "linux" "386"
+dry_run build "linux" "arm"
+dry_run build "linux" "armhf"
+dry_run build "linux" "arm64"

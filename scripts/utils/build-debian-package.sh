@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 if [[ ${#} -lt 3 ]]; then
   echo "Usage: ${0} [arch] [binary] [version] [revision]" >&2
