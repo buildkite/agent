@@ -50,4 +50,4 @@ dry_run publish "i386"
 
 # Sync back our changes to S3
 echo "--- Syncing local $YUM_PATH changes back to s3://$RPM_S3_BUCKET"
-dry_run aws --region us-east-1 s3 sync "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --acl "public-read" --no-guess-mime-type --exclude "lost+found" --exclude ".repodata"
+dry_run aws --region us-east-1 s3 sync --delete "$YUM_PATH/" "s3://$RPM_S3_BUCKET" --acl "public-read" --no-guess-mime-type --exclude "lost+found" --exclude ".repodata"
