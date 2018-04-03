@@ -133,7 +133,7 @@ steps:
       queue: "deploy"
 
   - name: ":redhat: build"
-    command: "scripts/build-yum-packages.sh"
+    command: "scripts/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
     agents:
       queue: "deploy"
