@@ -42,7 +42,7 @@ bundle
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
 mkdir -p $YUM_PATH
-dry_run aws --region us-east-1 s3 sync "s3://$RPM_S3_BUCKET" "$YUM_PATH"
+dry_run aws --region us-east-1 s3 sync --delete "s3://$RPM_S3_BUCKET" "$YUM_PATH"
 
 # Move the files to the right places
 dry_run publish "x86_64"
