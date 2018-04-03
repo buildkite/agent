@@ -8,31 +8,37 @@ import (
 )
 
 // NormalizeCommand has very similar semantics to `NormalizeFilePath`, except
-// we only "absolute" the path if it exists on the filesystem.
-func NormalizeCommand(path string) (string, error) {
+// we only "absolute" the path if it exists on the filesystem. This will ensure
+// that:
+//
+// "templates/bootstrap.sh" => "/Users/keithpitt/Development/.../templates/bootstrap.sh"
+// "~/.buildkite-agent/bootstrap.sh" => "/Users/keithpitt/.buildkite-agent/bootstrap.sh"
+// "cat Readme.md" => "cat Readme.md"
+
+func NormalizeCommand(commandPath string) (string, error) {
 	// don't normalize empty strings
-	if path == "" {
+	if commandPath == "" {
 		return "", nil
 	}
 
 	// expand env and home directory
 	var err error
-	path, err = ExpandHome(os.ExpandEnv(path))
+	commandPath, err = ExpandHome(os.ExpandEnv(commandPath))
 	if err != nil {
 		return "", err
 	}
 
 	// if the file exists, absolute it
-	if _, err := os.Stat(path); err == nil {
+	if _, err := os.Stat(commandPath); err == nil {
 		// make sure its absolute
-		absolutePath, err := filepath.Abs(path)
+		absoluteCommandPath, err := filepath.Abs(commandPath)
 		if err != nil {
 			return "", err
 		}
-		path = absolutePath
+		commandPath = absoluteCommandPath
 	}
 
-	return path, nil
+	return commandPath, nil
 }
 
 // Normalizes a path and returns an clean absolute version. It correctly
