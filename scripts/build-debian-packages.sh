@@ -39,5 +39,5 @@ for ARCH in "amd64" "386" "arm" "armhf" "arm64"; do
   chmod +x "$BINARY"
 
   # Build the debian package using the architectre and binary, they are saved to deb/
-  dry_run ./scripts/utils/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+  ./scripts/utils/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
 done
