@@ -115,7 +115,25 @@ func newTestShell(t *testing.T) *shell.Shell {
 
 	sh.Logger = shell.DiscardLogger
 	sh.Writer = ioutil.Discard
-	sh.Env = env.FromSlice([]string{})
+
+	if os.Getenv(`DEBUG_SHELL`) == "1" {
+		sh.Logger = shell.TestingLogger{T: t}
+	}
+
+	// Windows requires certain env variables to be present
+	if runtime.GOOS == "windows" {
+		sh.Env = env.FromSlice([]string{
+			//			"PATH=" + os.Getenv("PATH"),
+			"SystemRoot=" + os.Getenv("SystemRoot"),
+			"WINDIR=" + os.Getenv("WINDIR"),
+			"COMSPEC=" + os.Getenv("COMSPEC"),
+			"PATHEXT=" + os.Getenv("PATHEXT"),
+			"TMP=" + os.Getenv("TMP"),
+			"TEMP=" + os.Getenv("TEMP"),
+		})
+	} else {
+		sh.Env = env.New()
+	}
 
 	return sh
 }

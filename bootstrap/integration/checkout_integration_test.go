@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -60,6 +61,11 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	t.Parallel()
+
+	// Git for windows seems to struggle with local submodules in the temp dir
+	if runtime.GOOS == `windows` {
+		t.Skip()
+	}
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
