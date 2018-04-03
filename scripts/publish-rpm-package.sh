@@ -24,7 +24,7 @@ function publish() {
   ARCH_PATH="$YUM_PATH/buildkite-agent/$CODENAME/$1"
   mkdir -p $ARCH_PATH
   find "rpm/" -type f -name "*$1*" | xargs cp -t "$ARCH_PATH"
-  createrepo $ARCH_PATH --database --unique-md-filenames
+  createrepo $ARCH_PATH --no-database --unique-md-filenames
 }
 
 echo '--- Downloading built yum packages packages'
