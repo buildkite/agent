@@ -25,8 +25,8 @@ function publish() {
   mkdir -p $ARCH_PATH
   find "rpm/" -type f -name "*$1*" | xargs cp -t "$ARCH_PATH"
   # createrepo_c is much faster and more resilient than createrepo
-  createrepo_c --no-database --unique-md-filenames --update "$ARCH_PATH" || \
-    createrepo_c --no-database --unique-md-filenames "$ARCH_PATH"
+  createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=7d --update "$ARCH_PATH" || \
+    createrepo_c --no-database --unique-md-filenames --retain-old-md-by-age=7d "$ARCH_PATH"
   #createrepo --no-database --unique-md-filenames --update "$ARCH_PATH" || \
   #  createrepo --no-database --unique-md-filenames "$ARCH_PATH"
 }
