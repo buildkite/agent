@@ -17,6 +17,7 @@ import (
 
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
+	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 )
@@ -90,7 +91,7 @@ func (s *Shell) Chdir(path string) error {
 		path = filepath.Join(s.wd, path)
 	}
 
-	s.Commentf("Changing working directory to \"%s\"", path)
+	s.Promptf("cd %s", shellwords.Quote(path))
 
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("Failed to change working: directory does not exist")
@@ -163,10 +164,17 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 	return &lock, err
 }
 
-// Run runs a command, write stdout and stderr to the logger and return an error if it fails
+// Run runs a command, write stdout and stderr to the logger and return an error
+// if it fails
 func (s *Shell) Run(command string, arg ...string) error {
 	s.Promptf("%s", process.FormatCommand(command, arg))
 
+	return s.RunWithoutPrompt(command, arg...)
+}
+
+// RunWithoutPrompt runs a command, write stdout and stderr to the logger and
+// return an error if it fails. Notably it doesn't show a prompt.
+func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
 	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
@@ -243,8 +251,6 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		args = []string{}
 	}
 
-	s.Promptf("%s", process.FormatCommand(command, args))
-
 	cmd, err := s.buildCommand(command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
@@ -312,7 +318,7 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 	if s.Debug {
 		t := time.Now()
 		defer func() {
-			s.Commentf("Command completed in %v", time.Now().Sub(t))
+			s.Commentf("↳ Command completed in %v", time.Now().Sub(t))
 		}()
 	}
 
@@ -357,10 +363,6 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 	}
 
 	if err := cmd.Wait(); err != nil {
-		if s.Debug {
-			s.Printf("Exited with error: %v", err)
-		}
-
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 
@@ -383,4 +385,9 @@ func GetExitCode(err error) int {
 		}
 	}
 	return 1
+}
+
+func IsExitError(err error) bool {
+	_, ok := errors.Cause(err).(*exec.ExitError)
+	return ok
 }

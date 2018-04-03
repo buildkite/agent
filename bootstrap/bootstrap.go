@@ -5,7 +5,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -16,6 +15,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
@@ -125,27 +125,38 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 	defer script.Close()
 
-	if b.Debug {
-		b.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
-		b.shell.Printf("%s", hookPath)
+	cleanHookPath := hookPath
+
+	// Show a relative path if we can
+	if strings.HasPrefix(hookPath, b.shell.Getwd()) {
+		var err error
+		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookPath); err != nil {
+			cleanHookPath = hookPath
+		}
 	}
 
-	b.shell.Commentf("Executing \"%s\"", script.Path())
+	// Show the hook runner in debug, but the thing being run otherwise 💅🏻
+	if b.Debug {
+		b.shell.Commentf("A hook runner was written to \"%s\" with the following:", script.Path())
+		b.shell.Promptf("%s", process.FormatCommand(script.Path(), nil))
+	} else {
+		b.shell.Promptf("%s", process.FormatCommand(cleanHookPath, []string{}))
+	}
 
 	// Run the wrapper script
 	if err := b.shell.RunScript(script.Path(), extraEnviron); err != nil {
-		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(err)))
-		b.shell.Errorf("The %s hook exited with an error: %v", name, err)
+		exitCode := shell.GetExitCode(err)
+		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
+
+		// Give a simpler error if it's just an os.ExitError
+		if shell.IsExitError(err) {
+			return fmt.Errorf("The %s hook exited with status %d", name, exitCode)
+		}
 		return err
 	}
 
 	// Store the last hook exit code for subsequent steps
-	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS",
-		fmt.Sprintf("%d", shell.GetExitCode(err)))
-
-	if err != nil {
-		return errors.Wrapf(err, "The %s hook exited with an error", name)
-	}
+	b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", "0")
 
 	// Get changed environment
 	changes, err := script.Changes()
@@ -159,8 +170,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 }
 
 func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string) {
-	if dir != "" {
-		b.shell.Commentf("Applying working directory change: %s", dir)
+	if dir != b.shell.Getwd() {
 		_ = b.shell.Chdir(dir)
 	}
 
@@ -334,9 +344,11 @@ func (b *Bootstrap) setUp() error {
 	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
 	if b.Debug {
-		b.shell.Headerf("Build environment variables")
+		b.shell.Headerf("Buildkite environment variables")
 		for _, e := range b.shell.Env.ToSlice() {
-			if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
+			if strings.HasPrefix(e, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
+				b.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
+			} else if strings.HasPrefix(e, "BUILDKITE") || strings.HasPrefix(e, "CI") || strings.HasPrefix(e, "PATH") {
 				b.shell.Printf("%s", strings.Replace(e, "\n", "\\n", -1))
 			}
 		}
@@ -591,7 +603,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		}
 	}
 
-	b.shell.Headerf("Preparing build directory")
+	b.shell.Headerf("Preparing working directory")
 
 	// Make sure the build directory exists
 	if err := b.createCheckoutDir(); err != nil {
@@ -768,8 +780,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
 		b.shell.Commentf("Git submodules detected")
 		gitSubmodules = true
-	} else if !hasGitSubmodules(b.shell) {
-		b.shell.Commentf("No git submodules detected")
 	}
 
 	if gitSubmodules {
@@ -804,7 +814,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		}
 	}
 
-	// Git clean after checkout
+	// Git clean after checkout. We need to do this because submodules could have
+	// changed in between the last checkout and this one. A double clean is the only
+	// good solution to this problem that we've found
+	b.shell.Commentf("Cleaning again to catch any post-checkout changes")
+
 	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
 		return err
 	}
@@ -825,7 +839,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if _, err := b.shell.RunAndCapture("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
+	if err := b.shell.Run("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
 		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color")
@@ -880,7 +894,9 @@ func (b *Bootstrap) CommandPhase() error {
 	// If the command returned an exit that wasn't a `exec.ExitError`
 	// (which is returned when the command is actually run, but fails),
 	// then we'll show it in the log.
-	if _, ok := commandExitError.(*exec.ExitError); commandExitError != nil && !ok {
+	if shell.IsExitError(commandExitError) {
+		b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+	} else if commandExitError != nil {
 		b.shell.Errorf(commandExitError.Error())
 	}
 
@@ -998,7 +1014,13 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	cmd = append(cmd, shell...)
 	cmd = append(cmd, cmdToExec)
 
-	return b.shell.Run(cmd[0], cmd[1:]...)
+	if b.Debug {
+		b.shell.Promptf("%s", process.FormatCommand(cmd[0], cmd[1:]))
+	} else {
+		b.shell.Promptf("%s", cmdToExec)
+	}
+
+	return b.shell.RunWithoutPrompt(cmd[0], cmd[1:]...)
 }
 
 func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
@@ -1028,13 +1050,12 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 }
 
 func (b *Bootstrap) uploadArtifacts() error {
-	if !b.hasCheckout {
-		b.shell.Commentf("Skipping artifact upload, no checkout")
+	if b.AutomaticArtifactUploadPaths == "" {
 		return nil
 	}
 
-	if b.AutomaticArtifactUploadPaths == "" {
-		b.shell.Commentf("Skipping artifact upload, no artifact upload path set")
+	if !b.hasCheckout {
+		b.shell.Commentf("Skipping artifact upload, no checkout")
 		return nil
 	}
 
