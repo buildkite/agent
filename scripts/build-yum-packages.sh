@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo '--- Getting agent version from build meta data'
+echo "--- Getting agent version from build meta data"
 
 export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
@@ -23,7 +23,7 @@ function build() {
   chmod +x "$BINARY_FILENAME"
 
   # Build the rpm package using the architecture and binary, they are saved to rpm/
-  ./scripts/utils/build-linux-package.sh "rpm" "$2" "$BINARY_FILENAME" "$AGENT_VERSION" "$BUILD_VERSION"
+  ./scripts/utils/build-rpm-package.sh "$2" "$BINARY_FILENAME" "$AGENT_VERSION" "$BUILD_VERSION"
 }
 
 dry_run() {
@@ -34,7 +34,7 @@ dry_run() {
   fi
 }
 
-echo '--- Installing dependencies'
+echo "--- Installing dependencies"
 bundle
 
 # Make sure we have a clean rpm folder

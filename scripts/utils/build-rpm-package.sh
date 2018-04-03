@@ -1,9 +1,8 @@
 #!/bin/bash
 set -e
 
-if [[ ${#} -lt 4 ]]
-then
-  echo "Usage: ${0} [type] [arch] [binary] [version] [revision]" >&2
+if [[ ${#} -lt 3 ]]; then
+  echo "Usage: ${0} [arch] [binary] [version] [revision]" >&2
   exit 1
 fi
 
@@ -11,11 +10,10 @@ function info {
   echo -e "\033[35m$1\033[0m"
 }
 
-PACKAGE_TYPE=${1}
-BUILD_ARCH=${2}
-BUILD_BINARY_PATH=${3}
-VERSION=${4}
-REVISION=${5}
+BUILD_ARCH="${1}"
+BUILD_BINARY_PATH="${2}"
+VERSION="${3}"
+REVISION="${4}"
 
 NAME="buildkite-agent"
 MAINTAINER="dev@buildkite.com"
@@ -28,28 +26,22 @@ if [ "$BUILD_ARCH" == "amd64" ]; then
   ARCH="x86_64"
 elif [ "$BUILD_ARCH" == "386" ]; then
   ARCH="i386"
-elif [ "$BUILD_ARCH" == "arm" ]; then
-  ARCH="arm"
-elif [ "$BUILD_ARCH" == "armhf" ]; then
-  ARCH="armhf"
-elif [ "$BUILD_ARCH" == "arm64" ]; then
-  ARCH="arm64"
 else
   echo "Unknown architecture: $BUILD_ARCH"
   exit 1
 fi
 
-DESTINATION_PATH="$PACKAGE_TYPE"
+DESTINATION_PATH="rpm"
 
-PACKAGE_NAME=$NAME"_"$VERSION"-"$REVISION"_"$ARCH".$PACKAGE_TYPE"
-PACKAGE_PATH="$DESTINATION_PATH/$PACKAGE_NAME"
+PACKAGE_NAME="${NAME}_${VERSION}-${REVISION}_${ARCH}.rpm"
+PACKAGE_PATH="${DESTINATION_PATH}/${PACKAGE_NAME}"
 
-mkdir -p $DESTINATION_PATH
+mkdir -p "$DESTINATION_PATH"
 
-info "Building $PACKAGE_TYPE package $PACKAGE_NAME to $DESTINATION_PATH"
+info "Building rpm package $PACKAGE_NAME to $DESTINATION_PATH"
 
 bundle exec fpm -s "dir" \
-  -t "$PACKAGE_TYPE" \
+  -t "rpm" \
   -n "$NAME" \
   --url "$URL" \
   --maintainer "$MAINTAINER" \
@@ -62,8 +54,6 @@ bundle exec fpm -s "dir" \
   --debug \
   --force \
   --category admin \
-  --deb-priority optional \
-  --deb-compression bzip2 \
   --rpm-compression bzip2 \
   --rpm-os linux \
   --before-install "packaging/linux/scripts/before-install.sh" \
@@ -81,19 +71,9 @@ bundle exec fpm -s "dir" \
 echo ""
 echo -e "Successfully created \033[33m$PACKAGE_PATH\033[0m 👏"
 echo ""
-
-if [ "$PACKAGE_TYPE" == "deb" ]; then
-  echo "    # To install this package"
-  echo "    $ sudo dpkg -i $PACKAGE_PATH"
-  echo ""
-  echo "    # To uninstall"
-  echo "    $ sudo dpkg --purge $NAME"
-elif [ "$PACKAGE_TYPE" == "rpm" ]; then
-  echo "    # To install this package"
-  echo "    $ sudo rpm -i $PACKAGE_PATH"
-  echo ""
-  echo "    # To uninstall"
-  echo "    $ sudo rpm -ev $NAME"
-fi
-
+echo "    # To install this package"
+echo "    $ sudo rpm -i $PACKAGE_PATH"
+echo ""
+echo "    # To uninstall"
+echo "    $ sudo rpm -ev $NAME"
 echo ""

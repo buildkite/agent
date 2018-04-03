@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo '--- Getting agent version from build meta data'
+echo "--- Getting agent version from build meta data"
 
 export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
@@ -17,16 +17,16 @@ function build() {
   BINARY_FILENAME="pkg/buildkite-agent-$1-$2"
 
   # Download the built binary artifact
-  buildkite-agent artifact download $BINARY_FILENAME .
+  buildkite-agent artifact download "$BINARY_FILENAME" .
 
   # Make sure it's got execute permissions so we can extract the version out of it
-  chmod +x $BINARY_FILENAME
+  chmod +x "$BINARY_FILENAME"
 
   # Build the debian package using the architectre and binary, they are saved to deb/
-  ./scripts/utils/build-linux-package.sh "deb" $2 $BINARY_FILENAME $AGENT_VERSION $BUILD_VERSION
+  ./scripts/utils/build-debian-package.sh "$2" "$BINARY_FILENAME" "$AGENT_VERSION" "$BUILD_VERSION"
 }
 
-echo '--- Installing dependencies'
+echo "--- Installing dependencies"
 bundle
 
 # Make sure we have a clean deb folder
