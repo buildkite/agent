@@ -93,6 +93,7 @@ func DefaultConfigFilePaths() (paths []string) {
 	// Toggle beetwen windows an *nix paths
 	if runtime.GOOS == "windows" {
 		paths = []string{
+			"C:\\buildkite-agent\\buildkite-agent.cfg",
 			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
 		}
 	} else {
