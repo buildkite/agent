@@ -1,4 +1,4 @@
-// +build linux,386 linux,arm linux,arm64 linux,amd64,!cgo darwin windows freebsd openbsd dragonfly
+// +build linux,386 linux,arm linux,arm64 linux,amd64,!cgo linux,ppc64le darwin windows freebsd openbsd dragonfly
 
 package proctitle
 
