@@ -74,11 +74,9 @@ build_version=$(buildkite-agent meta-data get "agent-version-build")
 full_agent_version=$(buildkite-agent meta-data get "agent-version-full")
 agent_docker_image_alpine=$(buildkite-agent meta-data get "agent-docker-image-alpine")
 
-git fetch --tags
-
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
-if git rev-parse -q --verify "refs/tags/v${agent_version}" >/dev/null; then
+if git ls-remote --tags origin | grep "refs/tags/v${agent_version}" ; then
   echo "Tag refs/tags/v${agent_version} already exists"
   exit 0
 fi
