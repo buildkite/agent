@@ -67,7 +67,7 @@ if ($path -eq $true) {
 }   
 
 # Verify it worked
-buildkite-agent --version
+./buildkite-agent --version
 
 Write-Host "Updating configuration in ${installDir}\buildkite-agent.cfg"
 $buildkiteAgentCfgTemplate = Get-Content "${installDir}\buildkite-agent.cfg"
