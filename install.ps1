@@ -3,7 +3,6 @@ $arch = "amd64"
 $beta = $env:buildkiteAgentBeta
 $token = $env:buildkiteAgentToken
 $tags = $env:builkiteAgentTags
-$path = $false
 
 if ([string]::IsNullOrEmpty($token)) {
     throw "No token specified, set `$env:buildkiteAgentToken"
@@ -60,11 +59,9 @@ if (![System.IO.Directory]::Exists($binDir)) {[void][System.IO.Directory]::Creat
 Write-Host 'Expanding buildkite-agent.exe into bin'
 Join-Path $installDir "buildkite-agent.exe" | Move-item -Destination $binDir -Force
 
-if ($path -eq $true) {
-    Write-Host 'Updating PATH'
-    $env:PATH = "${binDir};" + $env:PATH
-    [Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine)
-}   
+Write-Host 'Updating PATH'
+$env:PATH = "${binDir};" + $env:PATH
+[Environment]::SetEnvironmentVariable('PATH', $env:PATH, [EnvironmentVariableTarget]::Machine)
 
 # Verify it worked
 buildkite-agent --version
