@@ -13,6 +13,13 @@ steps:
     agents:
       queue: "deploy"
 
+  - name: ":octocat: :rocket:"
+    command: "scripts/github-release.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
   - name: ":redhat:"
     command: "scripts/publish-rpm-package.sh"
     env:
@@ -33,3 +40,14 @@ steps:
       CODENAME: "stable"
     agents:
       queue: "deploy"
+
+  - wait
+
+  - name: ":beer:"
+    command: "scripts/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+

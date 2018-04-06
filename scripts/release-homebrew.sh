@@ -4,15 +4,6 @@
 
 set -euo pipefail
 
-GITHUB_RELEASE_VERSION=$(buildkite-agent meta-data get github_release_version)
-GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
-
-if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
-  BREW_RELEASE_TYPE="devel"
-else
-  BREW_RELEASE_TYPE="stable"
-fi
-
 # Allows you to pipe JSON in and fetch keys using Ruby hash syntax
 #
 # Examples:
@@ -31,10 +22,31 @@ echo '--- Getting agent version from build meta data'
 export FULL_AGENT_VERSION=$(buildkite-agent meta-data get "agent-version-full")
 export AGENT_VERSION=$(buildkite-agent meta-data get "agent-version")
 export BUILD_VERSION=$(buildkite-agent meta-data get "agent-version-build")
+export IS_PRERELEASE=$(buildkite-agent meta-data get "agent-is-prerelease")
 
 echo "Full agent version: $FULL_AGENT_VERSION"
 echo "Agent version: $AGENT_VERSION"
 echo "Build version: $BUILD_VERSION"
+echo "Is prerelease?: $IS_PRERELEASE"
+
+if [[ "$CODENAME" == "unstable" && "$IS_PRERELEASE" == "0" ]] ; then
+  echo "Skipping homebrew release, will happen in stable pipeline"
+  exit 0
+fi
+
+if [[ "$CODENAME" == "stable" && "$IS_PRERELEASE" == "1" ]] ; then
+  echo "Skipping homebrew release, should have happened in unstable pipeline"
+  exit 0
+fi
+
+GITHUB_RELEASE_VERSION=$(buildkite-agent meta-data get github_release_version)
+GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
+
+if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
+  BREW_RELEASE_TYPE="devel"
+else
+  BREW_RELEASE_TYPE="stable"
+fi
 
 BINARY_NAME=buildkite-agent-darwin-386-$AGENT_VERSION.tar.gz
 
