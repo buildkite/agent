@@ -10,11 +10,11 @@ set -euo pipefail
 #
 #   echo '{"key":{"subkey": ["value"]}}' | parse_json '["key"]["subkey"].first'
 function parse_json {
-  ruby -rjson -e "print JSON.parse(\$<.read)$1"
+  ruby -r json -e "print JSON.parse(STDIN.read)$1"
 }
 
 function to_json {
-  ruby -rjson -e "print \$<.read.to_json"
+  ruby -r json -e "print STDIN.read.to_json"
 }
 
 echo '--- Getting agent version from build meta data'
@@ -48,30 +48,35 @@ else
   BREW_RELEASE_TYPE="stable"
 fi
 
-BINARY_NAME=buildkite-agent-darwin-386-$AGENT_VERSION.tar.gz
+BINARY_ARCH="386"
+BINARY_NAME="buildkite-agent-darwin-${BINARY_ARCH}-${AGENT_VERSION}.tar.gz"
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME"
 FORMULA_FILE=./pkg/buildkite-agent.rb
 UPDATED_FORMULA_FILE=./pkg/buildkite-agent-updated.rb
 
-ARTIFACTS_BUILD=$(buildkite-agent meta-data get "agent-artifacts-build")
+ARTIFACTS_BUILD="$(buildkite-agent meta-data get "agent-artifacts-build")"
 
 echo "--- :package: Calculating SHAs for releases/$BINARY_NAME"
 
 buildkite-agent artifact download  --build "$ARTIFACTS_BUILD" "releases/$BINARY_NAME" .
 
-RELEASE_SHA256=$(sha256sum "releases/$BINARY_NAME" | cut -d" " -f1)
+# $ openssl dgst -sha256 -hex $FILE # portable sha256 with openssl
+# SHA256($FILE)= 26ff51b51eab2bfbcb2796bc72feec366d7e37a6cf8a11686ee8a6f14a8fc92c
+# | grep -o '\S*$' # grab the last word (some openssl versions only list the hex)
+# 26ff51b51eab2bfbcb2796bc72feec366d7e37a6cf8a11686ee8a6f14a8fc92c
+RELEASE_SHA256="$(openssl dgst -sha256 -hex "releases/$BINARY_NAME" | grep -o '\S*$')"
 
 echo "Release SHA256: $RELEASE_SHA256"
 
 echo "--- :octocat: Fetching current homebrew formula from Github Contents API"
 
-CONTENTS_API_RESPONSE=$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN")
+CONTENTS_API_RESPONSE="$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN")"
 
 echo "Base64 decoding Github response into $FORMULA_FILE"
 
 mkdir -p pkg
-echo $CONTENTS_API_RESPONSE | parse_json '["content"]' | base64 -d > $FORMULA_FILE
+parse_json '["content"]' <<< "$CONTENTS_API_RESPONSE" | openssl enc -base64 -d > "$FORMULA_FILE"
 
 echo "--- :ruby: Updating formula file"
 
@@ -80,23 +85,23 @@ echo "Homebrew release version: $GITHUB_RELEASE_VERSION"
 echo "Homebrew release download URL: $DOWNLOAD_URL"
 echo "Homebrew release download SHA256: $RELEASE_SHA256"
 
-cat $FORMULA_FILE |
-  ./scripts/utils/update-homebrew-formula.rb $BREW_RELEASE_TYPE $GITHUB_RELEASE_VERSION $DOWNLOAD_URL $RELEASE_SHA256 \
-  > $UPDATED_FORMULA_FILE
+./scripts/utils/update-homebrew-formula.rb "$BREW_RELEASE_TYPE" "$GITHUB_RELEASE_VERSION" "$DOWNLOAD_URL" "$RELEASE_SHA256" < "$FORMULA_FILE" > "$UPDATED_FORMULA_FILE"
 
 echo "--- :rocket: Commiting new formula to master via Github Contents API"
 
-UPDATED_FORMULA_BASE64=$(base64 --wrap=0 $UPDATED_FORMULA_FILE)
-MASTER_FORMULA_SHA=$(echo $CONTENTS_API_RESPONSE | parse_json '["sha"]')
+UPDATED_FORMULA_BASE64="$(openssl enc -base64 -A < "$UPDATED_FORMULA_FILE")"
+MASTER_FORMULA_SHA="$(parse_json '["sha"]' <<< "$CONTENTS_API_RESPONSE")"
 
 echo "Old formula SHA: $MASTER_FORMULA_SHA"
 
-echo "{
-       \"message\": \"buildkite-agent $GITHUB_RELEASE_VERSION\",
-       \"sha\": \"$MASTER_FORMULA_SHA\",
-       \"content\": \"$UPDATED_FORMULA_BASE64\",
-       \"branch\": \"master\"
-     }" > pkg/github_post_data.json
+cat <<JSON > pkg/github_post_data.json
+{
+  "message": "buildkite-agent $GITHUB_RELEASE_VERSION",
+  "sha": "$MASTER_FORMULA_SHA",
+  "content": "$UPDATED_FORMULA_BASE64",
+  "branch": "master"
+}
+JSON
 
 
 if [[ "${DRY_RUN:-}" == "false" ]] ; then
