@@ -48,7 +48,7 @@ else
   BREW_RELEASE_TYPE="stable"
 fi
 
-BINARY_ARCH="386"
+BINARY_ARCH="amd64"
 BINARY_NAME="buildkite-agent-darwin-${BINARY_ARCH}-${AGENT_VERSION}.tar.gz"
 
 DOWNLOAD_URL="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME"
