@@ -2,40 +2,40 @@ steps:
   - wait
 
   - name: ":spiral_note_pad:"
-    command: "scripts/check-changelog.sh"
+    command: ".buildkite/steps/check-changelog.sh"
 
   - wait
 
   - name: ":s3:"
-    command: "scripts/publish-to-s3.sh"
+    command: ".buildkite/steps/publish-to-s3.sh"
     env:
       CODENAME: "unstable"
     agents:
       queue: "deploy"
 
   - name: ":octocat: :rocket:"
-    command: "scripts/github-release.sh"
+    command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "unstable"
     agents:
       queue: "deploy"
 
   - name: ":redhat:"
-    command: "scripts/publish-rpm-package.sh"
+    command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "unstable"
     agents:
       queue: "deploy"
 
   - name: ":debian:"
-    command: "scripts/publish-debian-package.sh"
+    command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "unstable"
     agents:
       queue: "deploy"
 
   - name: ":docker:"
-    command: "scripts/publish-docker-images.sh"
+    command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "unstable"
     agents:
@@ -44,7 +44,7 @@ steps:
   - wait
 
   - name: ":beer:"
-    command: "scripts/release-homebrew.sh"
+    command: ".buildkite/steps/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     env:
       CODENAME: "unstable"

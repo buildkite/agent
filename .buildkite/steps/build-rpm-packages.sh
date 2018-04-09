@@ -22,13 +22,13 @@ dry_run() {
 echo "--- Installing dependencies"
 bundle
 
-# Make sure we have a clean deb folder
-rm -rf deb
+# Make sure we have a clean rpm folder
+rm -rf rpm
 
-# Build the packages into deb/
+# Build the packages into rpm/
 PLATFORM="linux"
-for ARCH in "amd64" "386" "arm" "armhf" "arm64"; do
-  echo "--- Building debian package ${PLATFORM}/${ARCH}"
+for ARCH in "amd64" "386"; do
+  echo "--- Building rpm package ${PLATFORM}/${ARCH}"
 
   BINARY="pkg/buildkite-agent-${PLATFORM}-${ARCH}"
 
@@ -38,6 +38,6 @@ for ARCH in "amd64" "386" "arm" "armhf" "arm64"; do
   # Make sure it's got execute permissions so we can extract the version out of it
   chmod +x "$BINARY"
 
-  # Build the debian package using the architectre and binary, they are saved to deb/
-  ./scripts/utils/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+  # Build the rpm package using the architecture and binary, they are saved to rpm/
+  ./scripts/build-rpm-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
 done
