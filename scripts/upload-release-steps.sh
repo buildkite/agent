@@ -29,6 +29,7 @@ trigger_step() {
         agent-version-build: "${build_version}"
         agent-version-full:  "${full_agent_version}"
         agent-docker-image-alpine: "${agent_docker_image_alpine}"
+        agent-is-prerelease: "${agent_is_prerelease}"
       env:
         DRY_RUN: "${DRY_RUN:-false}"
 YAML
@@ -73,6 +74,7 @@ agent_version=$(buildkite-agent meta-data get "agent-version")
 build_version=$(buildkite-agent meta-data get "agent-version-build")
 full_agent_version=$(buildkite-agent meta-data get "agent-version-full")
 agent_docker_image_alpine=$(buildkite-agent meta-data get "agent-docker-image-alpine")
+agent_is_prerelease=$(buildkite-agent meta-data get "agent-is-prerelease")
 
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
