@@ -2,6 +2,6 @@ steps:
   - name: ":hammer: :windows:"
     command: 
       - "docker-compose -f docker-compose.windows.yml build --pull agent"
-      - "docker-compose -f docker-compose.windows.yml run --rm -T agent bash.exe ./scripts/tests.sh"
+      - "docker-compose -f docker-compose.windows.yml run --rm -T agent bash.exe ./.buildkite/steps/tests.sh"
     agents:
       queue: "windows"

@@ -2,28 +2,28 @@ steps:
   - wait
 
   - name: ":s3: publish binaries"
-    command: "scripts/publish-to-s3.sh"
+    command: ".buildkite/steps/publish-to-s3.sh"
     env:
       CODENAME: "experimental"
     agents:
       queue: "deploy"
 
   - name: ":redhat: publish rpms"
-    command: "scripts/publish-rpm-package.sh"
+    command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "experimental"
     agents:
       queue: "deploy"
 
   - name: ":debian: publish debs"
-    command: "scripts/publish-debian-package.sh"
+    command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "experimental"
     agents:
       queue: "deploy"
 
   - name: ":docker:"
-    command: "scripts/publish-docker-images.sh"
+    command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "experimental"
     agents:

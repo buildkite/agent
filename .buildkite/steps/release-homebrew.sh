@@ -85,7 +85,7 @@ echo "Homebrew release version: $GITHUB_RELEASE_VERSION"
 echo "Homebrew release download URL: $DOWNLOAD_URL"
 echo "Homebrew release download SHA256: $RELEASE_SHA256"
 
-./scripts/utils/update-homebrew-formula.rb "$BREW_RELEASE_TYPE" "$GITHUB_RELEASE_VERSION" "$DOWNLOAD_URL" "$RELEASE_SHA256" < "$FORMULA_FILE" > "$UPDATED_FORMULA_FILE"
+./scripts/update-homebrew-formula.rb "$BREW_RELEASE_TYPE" "$GITHUB_RELEASE_VERSION" "$DOWNLOAD_URL" "$RELEASE_SHA256" < "$FORMULA_FILE" > "$UPDATED_FORMULA_FILE"
 
 echo "--- :rocket: Commiting new formula to master via Github Contents API"
 
