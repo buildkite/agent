@@ -2,7 +2,7 @@ $installDir = "C:\buildkite-agent"
 $arch = "amd64"
 $beta = $env:buildkiteAgentBeta
 $token = $env:buildkiteAgentToken
-$tags = $env:builkiteAgentTags
+$tags = $env:buildkiteAgentTags
 
 if ([string]::IsNullOrEmpty($token)) {
     throw "No token specified, set `$env:buildkiteAgentToken"
