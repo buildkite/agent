@@ -74,6 +74,7 @@ type AgentStartConfig struct {
 	Experiments               []string `cli:"experiment" normalize:"list"`
 	MetricsDatadog            bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
+	Workers                   int      `cli:"workers"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -290,6 +291,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The dogstatsd instance to send metrics to via udp",
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
+		cli.IntFlag{
+			Name:   "workers",
+			Usage:  "The number of parallel workers to run within this agent",
+			Value:  1,
+			EnvVar: "BUILDKITE_AGENT_WORKERS",
 		},
 		ExperimentsFlag,
 		EndpointFlag,
@@ -407,6 +413,7 @@ var AgentStartCommand = cli.Command{
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
 			DisableHTTP2:          cfg.NoHTTP2,
+			Workers:               cfg.Workers,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
