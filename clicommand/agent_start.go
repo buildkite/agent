@@ -292,9 +292,8 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		cli.IntFlag{
-			Name: "workers",
-			Usage: "The number of agent workers to run, each of which can handle a job concurrently. " +
-				"Each worker will register as a separate agent with a unique name.",
+			Name:   "workers",
+			Usage:  "The number of workers to run. Workers will register as separate agents, with unique names, and can run different jobs in parallel.",
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_WORKERS",
 		},
