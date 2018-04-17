@@ -15,9 +15,10 @@ import (
 )
 
 type PipelineParser struct {
-	Env      *env.Environment
-	Filename string
-	Pipeline []byte
+	Env             *env.Environment
+	Filename        string
+	Pipeline        []byte
+	NoInterpolation bool
 }
 
 func (p PipelineParser) Parse() (interface{}, error) {
@@ -30,6 +31,15 @@ func (p PipelineParser) Parse() (interface{}, error) {
 		errPrefix = "Failed to parse pipeline"
 	} else {
 		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
+	}
+
+	// If interpolation is disabled, just parse and return
+	if p.NoInterpolation {
+		var result interface{}
+		if err := unmarshalAsStringMap([]byte(p.Pipeline), &result); err != nil {
+			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
+		}
+		return result, nil
 	}
 
 	var pipeline interface{}
