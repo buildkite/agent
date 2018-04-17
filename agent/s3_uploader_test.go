@@ -3,7 +3,6 @@ package agent
 import (
 	"testing"
 
-	"github.com/buildkite/agent/api"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,13 +20,4 @@ func TestS3UploaderBucketName(t *testing.T) {
 
 	s3Uploader.Destination = "s3://starts-with-an-s"
 	assert.Equal(t, s3Uploader.BucketName(), "starts-with-an-s")
-}
-
-func TestS3UploaderContentEncoding(t *testing.T) {
-	s3Uploader := S3Uploader{Destination: "s3://my-bucket-name/foo/bar"}
-	artifact := api.Artifact{Path: "foo/bar/thing.csv"}
-	assert.Equal(t, s3Uploader.contentEncoding(&artifact), "")
-
-	gzipArtifact := api.Artifact{Path: "foo/bar/thing.csv.gz"}
-	assert.Equal(t, s3Uploader.contentEncoding(&gzipArtifact), "gzip")
 }
