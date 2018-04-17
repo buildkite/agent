@@ -10,7 +10,7 @@ dry_run() {
 }
 
 docker_image="buildkite/agent"
-stable_version="2"
+stable_version="3"
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
