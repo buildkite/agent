@@ -23,6 +23,18 @@ func TestPipelineParserParsesYaml(t *testing.T) {
 	assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
 }
 
+func TestPipelineParserParsesYamlWithNoInterpolation(t *testing.T) {
+	result, err := PipelineParser{
+		Filename:        "awesome.yml",
+		Pipeline:        []byte("steps:\n  - label: \"hello ${ENV_VAR_FRIEND}\""),
+		NoInterpolation: true,
+	}.Parse()
+
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"label":"hello ${ENV_VAR_FRIEND}"}]}`, string(j))
+}
+
 func TestPipelineParserSupportsYamlMergesAndAnchors(t *testing.T) {
 	complexYAML := `---
 base_step: &base_step
