@@ -166,9 +166,9 @@ var PipelineUploadCommand = cli.Command{
 
 		// Parse the pipeline
 		parsed, err = agent.PipelineParser{
-			Filename:       filename,
-			Pipeline:       input,
-			NoInterolation: cfg.NoInterpolation,
+			Filename:        filename,
+			Pipeline:        input,
+			NoInterpolation: cfg.NoInterpolation,
 		}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
