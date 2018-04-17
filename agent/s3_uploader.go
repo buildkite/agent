@@ -78,7 +78,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return err
 	}
-  
+
 	// Create an uploader with the session and default options
 	uploader := s3manager.NewUploaderWithClient(s3Client)
 
@@ -89,22 +89,14 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 		return fmt.Errorf("failed to open file %q (%v)", artifact.AbsolutePath, err)
 	}
 
-  var contentEncoding *string
-  
-  // Detect content encoding and send it for the file
-	if ce := u.contentEncoding(artifact); ce != "" {
-    contentEncoding = aws.String(ce)
-	}
-  
 	// Upload the file to S3.
 	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
 	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket:          aws.String(u.BucketName()),
-		Key:             aws.String(u.artifactPath(artifact)),
-		ContentType:     aws.String(u.mimeType(artifact)),
-    ContentEncoding: contentEncoding,
-		ACL:             aws.String(permission),
-		Body:            f,
+		Bucket:      aws.String(u.BucketName()),
+		Key:         aws.String(u.artifactPath(artifact)),
+		ContentType: aws.String(u.mimeType(artifact)),
+		ACL:         aws.String(permission),
+		Body:        f,
 	})
 
 	return err
@@ -139,9 +131,4 @@ func (u *S3Uploader) mimeType(a *api.Artifact) string {
 	} else {
 		return "binary/octet-stream"
 	}
-}
-
-func (u *S3Uploader) contentEncoding(a *api.Artifact) string {
-	extension := filepath.Ext(a.Path)
-	return mime.EncodingByExtension(extension)
 }

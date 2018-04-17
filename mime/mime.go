@@ -25,15 +25,6 @@ func TypeByExtension(ext string) string {
 	return mime.TypeByExtension(ext)
 }
 
-func EncodingByExtension(ext string) string {
-	encoding, ok := encodings[ext]
-	if ok {
-		return encoding
-	} else {
-		return ""
-	}
-}
-
 var types = []string{
 	"ez", "application/andrew-inset",
 	"anx", "application/annodex",
@@ -576,9 +567,4 @@ var types = []string{
 	"vrm", "x-world/x-vrml",
 	"vrml", "x-world/x-vrml",
 	"wrl", "x-world/x-vrml",
-}
-
-var encodings = map[string]string{
-	".gzip": "gzip",
-	".gz":   "gzip",
 }
