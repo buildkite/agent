@@ -6,7 +6,7 @@ The buildkite-agent is a small, reliable, and cross-platform build runner that m
 
 Full documentation is available at [buildkite.com/docs/agent](https://buildkite.com/docs/agent)
 
-```bash
+```
 $ buildkite-agent --help
 Usage:
 
