@@ -175,7 +175,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		} else if strings.HasPrefix(a.Destination, "gs://") {
 			uploader = new(GSUploader)
 		} else {
-			return errors.New("Unknown upload destination: " + a.Destination)
+			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.Destination))
 		}
 	} else {
 		uploader = new(FormUploader)
