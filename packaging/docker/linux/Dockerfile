@@ -14,6 +14,7 @@ RUN apk add --no-cache \
       py-pip \
       libc6-compat \
       run-parts \
+      tzdata \
     && \
     pip install --upgrade pip && \
     pip install docker-compose
