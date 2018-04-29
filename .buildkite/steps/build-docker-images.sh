@@ -1,5 +1,13 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
 
 build_alpine_docker_image() {
   local image_tag="$1"
@@ -23,11 +31,11 @@ test_docker_image() {
   docker run --rm --entrypoint "docker-compose" "$image_tag" --version
 }
 
-echo '--- Getting agent version from build meta data'
-
-image_tag=$(buildkite-agent meta-data get "agent-docker-image-alpine")
-
-echo "Docker Alpine Image Tag: $image_tag"
+push_docker_image() {
+  local image_tag="$1"
+  echo '--- Pushing :docker: image to buildkiteci/agent'
+  dry_run docker push "$image_tag"
+}
 
 rm -rf pkg
 mkdir -p pkg
@@ -35,9 +43,16 @@ mkdir -p pkg
 echo '--- Downloading :linux: binaries'
 buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
 
+variant="$1"
+if [[ ! $variant =~ ^(alpine)$ ]] ; then
+  echo "Unknown docker variant $variant"
+  exit 1
+fi
+
+echo "--- Getting docker image tag for $variant from build meta data"
+image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
+echo "Docker Image Tag for $variant: $image_tag"
+
 build_alpine_docker_image "$image_tag"
-
 test_docker_image "$image_tag"
-
-echo '--- Pushing :docker: image to buildkiteci/agent'
-docker push "$image_tag"
+push_docker_image "$image_tag"
