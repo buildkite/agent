@@ -1,4 +1,4 @@
-package agent
+package plugin
 
 import (
 	"encoding/json"
@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreatePluginsFromJSON(t *testing.T) {
+func TestCreateFromJSON(t *testing.T) {
 	t.Parallel()
 
 	var plugins []*Plugin
 	var err error
 
-	plugins, err = CreatePluginsFromJSON(`[{"http://github.com/buildkite/plugins/docker-compose#a34fa34":{"container":"app"}}, "github.com/buildkite/plugins/ping#master"]`)
+	plugins, err = CreateFromJSON(`[{"http://github.com/buildkite/plugins/docker-compose#a34fa34":{"container":"app"}}, "github.com/buildkite/plugins/ping#master"]`)
 	assert.Equal(t, len(plugins), 2)
 	assert.Nil(t, err)
 
@@ -29,7 +29,7 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 	assert.Equal(t, plugins[1].Scheme, "")
 	assert.Equal(t, plugins[1].Configuration, map[string]interface{}{})
 
-	plugins, err = CreatePluginsFromJSON(`["ssh://git:foo@github.com/buildkite/plugins/docker-compose#a34fa34"]`)
+	plugins, err = CreateFromJSON(`["ssh://git:foo@github.com/buildkite/plugins/docker-compose#a34fa34"]`)
 	assert.Equal(t, len(plugins), 1)
 	assert.Nil(t, err)
 
@@ -38,17 +38,17 @@ func TestCreatePluginsFromJSON(t *testing.T) {
 	assert.Equal(t, plugins[0].Scheme, "ssh")
 	assert.Equal(t, plugins[0].Authentication, "git:foo")
 
-	plugins, err = CreatePluginsFromJSON(`blah`)
+	plugins, err = CreateFromJSON(`blah`)
 	assert.Equal(t, len(plugins), 0)
 	assert.NotNil(t, err)
 	assert.Equal(t, err.Error(), "invalid character 'b' looking for beginning of value")
 
-	plugins, err = CreatePluginsFromJSON(`{"foo": "bar"}`)
+	plugins, err = CreateFromJSON(`{"foo": "bar"}`)
 	assert.Equal(t, len(plugins), 0)
 	assert.NotNil(t, err)
 	assert.Equal(t, err.Error(), "JSON structure was not an array")
 
-	plugins, err = CreatePluginsFromJSON(`["github.com/buildkite/plugins/ping#master#lololo"]`)
+	plugins, err = CreateFromJSON(`["github.com/buildkite/plugins/ping#master#lololo"]`)
 	assert.Equal(t, len(plugins), 0)
 	assert.NotNil(t, err)
 	assert.Equal(t, err.Error(), "Too many #'s in \"github.com/buildkite/plugins/ping#master#lololo\"")
@@ -271,7 +271,7 @@ func pluginEnvFromConfig(t *testing.T, configJson string) (*env.Environment, err
 
 	jsonString := fmt.Sprintf(`[ { "%s": %s } ]`, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", configJson)
 
-	plugins, err := CreatePluginsFromJSON(jsonString)
+	plugins, err := CreateFromJSON(jsonString)
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(plugins))

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
@@ -449,7 +450,7 @@ func (b *Bootstrap) PluginPhase() error {
 		}
 	}
 
-	plugins, err := agent.CreatePluginsFromJSON(b.Plugins)
+	plugins, err := plugin.CreateFromJSON(b.Plugins)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse plugin definition")
 	}
@@ -1149,7 +1150,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 }
 
 type pluginCheckout struct {
-	*agent.Plugin
+	*plugin.Plugin
 	CheckoutDir string
 	HooksDir    string
 }
