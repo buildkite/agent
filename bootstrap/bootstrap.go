@@ -588,6 +588,14 @@ func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
 		}
 	}
 
+	// Load the plugin definition
+	checkout.Definition, err = plugin.LoadDefinitionFromDir(directory)
+	if err == plugin.ErrDefinitionNotFound {
+		b.shell.Warningf("Failed to find plugin definition")
+	} else if err != nil {
+		return nil, err
+	}
+
 	return checkout, nil
 }
 
@@ -1151,6 +1159,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 
 type pluginCheckout struct {
 	*plugin.Plugin
+	*plugin.Definition
 	CheckoutDir string
 	HooksDir    string
 }
