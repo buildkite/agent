@@ -9,6 +9,16 @@ dry_run() {
   fi
 }
 
+build_docker_image() {
+  local image_tag="$1"
+  local packaging_dir="$2"
+
+  echo "--- Building :docker: $image_tag"
+  cp pkg/buildkite-agent-linux-amd64 "${packaging_dir}/buildkite-agent"
+  chmod +x "${packaging_dir}/buildkite-agent"
+  docker build --tag "$image_tag" "${packaging_dir}"
+}
+
 build_alpine_docker_image() {
   local image_tag="$1"
   local packaging_dir="packaging/docker/alpine-linux"
@@ -45,15 +55,23 @@ echo '--- Downloading :linux: binaries'
 buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
 
 variant="$1"
-if [[ ! $variant =~ ^(alpine)$ ]] ; then
-  echo "Unknown docker variant $variant"
+
+case $variant in
+alpine)
+  build_docker_image "$image_tag" "packaging/docker/alpine-linux"
+  ;;
+ubuntu)
+  build_docker_image "$image_tag" "packaging/docker/ubuntu-linux"
+  ;;
+*)
+  echo "Unknown variant $variant"
   exit 1
-fi
+  ;;
+esac
 
 echo "--- Getting docker image tag for $variant from build meta data"
 image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
 echo "Docker Image Tag for $variant: $image_tag"
 
-build_alpine_docker_image "$image_tag"
 test_docker_image "$image_tag"
 push_docker_image "$image_tag"

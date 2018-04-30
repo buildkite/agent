@@ -126,6 +126,9 @@ steps:
   - name: ":docker: alpine build"
     command: ".buildkite/steps/build-docker-images.sh alpine"
 
+  - name: ":docker: ubuntu build"
+    command: ".buildkite/steps/build-docker-images.sh ubuntu"
+
   - name: ":debian: build"
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"

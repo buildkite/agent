@@ -1,6 +1,9 @@
-FROM alpine:3.7
+FROM ubuntu:latest
 
-RUN apk add --no-cache \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl \
       bash \
       git \
       perl \
@@ -9,14 +12,12 @@ RUN apk add --no-cache \
       curl \
       docker \
       jq \
-      su-exec \
-      py-pip \
-      libc6-compat \
-      run-parts \
       tzdata \
-    && \
-    pip install --upgrade pip && \
-    pip install docker-compose
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v0.18.0/tini \
+    && chmod +x /sbin/tini \
+    && curl -Lfs https://github.com/docker/compose/releases/download/1.21.0/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose
 
 ENV BUILDKITE_BUILD_PATH=/buildkite/builds \
     BUILDKITE_HOOKS_PATH=/buildkite/hooks \
