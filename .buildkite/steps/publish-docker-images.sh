@@ -14,7 +14,6 @@ stable_version="3"
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
-image_tag=$(buildkite-agent meta-data get "agent-docker-image-alpine")
 
 # Convert 2.3.2 into [ 2.3.2 2.3 2 ] or 3.0-beta.42 in [ 3.0-beta.42 3.0 3 ]
 parse_version() {
@@ -45,19 +44,35 @@ release_image() {
   dry_run docker push "${docker_image}:$tag"
 }
 
+variant="$1"
+suffix=""
+
+if [[ ! "$variant" =~ ^(alpine|ubuntu)$ ]] ; then
+  echo "Unknown docker variant $variant"
+  exit 1
+fi
+
+if [[ "$variant" != "alpine" ]] ; then
+  suffix="-$variant"
+fi
+
+echo "--- Getting docker image tag for $variant from build meta data"
+image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
+echo "Docker Image Tag for $variant: $image_tag"
+
 echo "--- :docker: Pulling prebuilt image"
 dry_run docker pull "$image_tag"
 
 # variants of edge/experimental
 if [[ "$CODENAME" == "experimental" ]] ; then
-  release_image "edge-build-${build}"
-  release_image "edge"
+  release_image "edge-build-${build}${suffix}"
+  release_image "edge${suffix}"
 fi
 
 # variants of stable - e.g 2.3.2
 if [[ "$CODENAME" == "stable" ]] ; then
   for tag in latest stable $(parse_version "$version") ; do
-    release_image "$tag"
+    release_image "$tag${suffix}"
   done
 fi
 
@@ -68,6 +83,6 @@ if [[ "$CODENAME" == "unstable" ]] ; then
       echo "--- :docker: Skipping tagging stable ${docker_image}:${tag}"
       continue
     fi
-    release_image "$tag"
+    release_image "$tag${suffix}"
   done
 fi
