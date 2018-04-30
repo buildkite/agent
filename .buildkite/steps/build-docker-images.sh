@@ -19,16 +19,6 @@ build_docker_image() {
   docker build --tag "$image_tag" "${packaging_dir}"
 }
 
-build_alpine_docker_image() {
-  local image_tag="$1"
-  local packaging_dir="packaging/docker/alpine-linux"
-
-  echo "--- Building :docker: $image_tag"
-  cp pkg/buildkite-agent-linux-amd64 "${packaging_dir}/buildkite-agent"
-  chmod +x "${packaging_dir}/buildkite-agent"
-  docker build --tag "$image_tag" "${packaging_dir}"
-}
-
 test_docker_image() {
   local image_tag="$1"
 
