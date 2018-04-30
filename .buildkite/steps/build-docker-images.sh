@@ -55,6 +55,14 @@ echo '--- Downloading :linux: binaries'
 buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
 
 variant="$1"
+if [[ ! "$variant" =~ ^(alpine|ubuntu)$ ]] ; then
+  echo "Unknown docker variant $variant"
+  exit 1
+fi
+
+echo "--- Getting docker image tag for $variant from build meta data"
+image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
+echo "Docker Image Tag for $variant: $image_tag"
 
 case $variant in
 alpine)
@@ -68,10 +76,6 @@ ubuntu)
   exit 1
   ;;
 esac
-
-echo "--- Getting docker image tag for $variant from build meta data"
-image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
-echo "Docker Image Tag for $variant: $image_tag"
 
 test_docker_image "$image_tag"
 push_docker_image "$image_tag"
