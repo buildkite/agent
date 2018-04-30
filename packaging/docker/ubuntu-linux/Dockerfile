@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       rsync \
       openssh-client \
       curl \
-      docker \
+      docker.io \
       jq \
     && rm -rf /var/lib/apt/lists/*
 
