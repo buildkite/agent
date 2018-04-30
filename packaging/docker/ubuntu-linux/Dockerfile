@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       docker \
       jq \
-      tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v0.18.0/tini \
     && chmod +x /sbin/tini \
