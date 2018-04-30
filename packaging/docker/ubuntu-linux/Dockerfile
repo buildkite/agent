@@ -1,9 +1,10 @@
-FROM ubuntu:latest
+FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
+      ca-certificates \
       bash \
       git \
       perl \
@@ -12,8 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       curl \
       docker \
       jq \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v0.18.0/tini \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v0.18.0/tini \
     && chmod +x /sbin/tini \
     && curl -Lfs https://github.com/docker/compose/releases/download/1.21.0/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
