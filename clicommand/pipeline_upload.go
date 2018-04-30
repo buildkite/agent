@@ -50,6 +50,7 @@ type PipelineUploadConfig struct {
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
+	NoInterpolation  bool   `cli:"no-interpolation"`
 	Debug            bool   `cli:"debug"`
 	DebugHTTP        bool   `cli:"debug-http"`
 }
@@ -69,6 +70,11 @@ var PipelineUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "The job that is making the changes to it's build",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "no-interpolation",
+			Usage:  "Skip variable interpolation the pipeline when uploaded",
+			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -159,7 +165,11 @@ var PipelineUploadCommand = cli.Command{
 		var parsed interface{}
 
 		// Parse the pipeline
-		parsed, err = agent.PipelineParser{Filename: filename, Pipeline: input}.Parse()
+		parsed, err = agent.PipelineParser{
+			Filename:        filename,
+			Pipeline:        input,
+			NoInterpolation: cfg.NoInterpolation,
+		}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
