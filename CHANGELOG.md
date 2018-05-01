@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.1.0](https://github.com/buildkite/agent/tree/v3.1.0) (2018-05-01)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.0.1...v3.1.0)
+
+### Changed
+- Add ubuntu docker image [#749](https://github.com/buildkite/agent/pull/749) (@lox)
+- Support `--no-interpolation` option in `pipeline upload` [#733](https://github.com/buildkite/agent/pull/733) (@lox)
+- Bump our Docker image base to alpine v3.7 [#745](https://github.com/buildkite/agent/pull/745) (@sj26)
+- Better error for multiple file args to artifact upload [#740](https://github.com/buildkite/agent/pull/740) (@toolmantim)
+
 ## [v3.0.1](https://github.com/buildkite/agent/tree/v3.0.1) (2018-04-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.0.0...v3.0.1)
 
