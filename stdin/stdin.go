@@ -14,10 +14,11 @@ func IsReadable() bool {
 		return false
 	}
 
-	// Named pipes on unix/linux indicate a readable stdin, but might not have size yet
-	if fi.Mode()&os.ModeNamedPipe != 0 {
-		return true
+	// Character devices in Linux/Unix are unbuffered devices that have
+	// direct access to underlying hardware and don't allow reading single characters at a time
+	if (fi.Mode() & os.ModeCharDevice) == os.ModeCharDevice {
+		return false
 	}
 
-	return fi.Size() > 0
+	return true
 }
