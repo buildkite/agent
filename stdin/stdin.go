@@ -9,7 +9,9 @@ func IsReadable() bool {
 	if err != nil {
 		return false
 	}
-	if fi.Mode()&os.ModeNamedPipe == 0 {
+	// Check we have something to read on stdin
+	// See https://flaviocopes.com/go-shell-pipes/
+	if fi.Mode()&os.ModeCharDevice != 0 || fi.Size() <= 0 {
 		return false
 	}
 	return true
