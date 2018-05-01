@@ -1,11 +1,42 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-echo '--- Getting agent version from build meta data'
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
 
-image_tag=$(buildkite-agent meta-data get "agent-docker-image-alpine")
+build_docker_image() {
+  local image_tag="$1"
+  local packaging_dir="$2"
 
-echo "Docker Alpine Image Tag: $image_tag"
+  echo "--- Building :docker: $image_tag"
+  cp pkg/buildkite-agent-linux-amd64 "${packaging_dir}/buildkite-agent"
+  chmod +x "${packaging_dir}/buildkite-agent"
+  docker build --tag "$image_tag" "${packaging_dir}"
+}
+
+test_docker_image() {
+  local image_tag="$1"
+
+  echo "--- :hammer: Testing $image_tag can run"
+  docker run --rm --entrypoint "buildkite-agent" "$image_tag" --version
+
+  echo "--- :hammer: Testing $image_tag can access docker socket"
+  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --entrypoint "docker" "$image_tag" version
+
+  echo "--- :hammer: Testing $image_tag has docker-compose"
+  docker run --rm --entrypoint "docker-compose" "$image_tag" --version
+}
+
+push_docker_image() {
+  local image_tag="$1"
+  echo '--- Pushing :docker: image to buildkiteci/agent'
+  dry_run docker push "$image_tag"
+}
 
 rm -rf pkg
 mkdir -p pkg
@@ -13,19 +44,28 @@ mkdir -p pkg
 echo '--- Downloading :linux: binaries'
 buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
 
-echo '--- Building :docker: image'
-cp pkg/buildkite-agent-linux-amd64 packaging/docker/linux/buildkite-agent
-chmod +x packaging/docker/linux/buildkite-agent
-docker build --tag "$image_tag" packaging/docker/linux
+variant="$1"
+if [[ ! "$variant" =~ ^(alpine|ubuntu)$ ]] ; then
+  echo "Unknown docker variant $variant"
+  exit 1
+fi
 
-echo "--- :hammer: Testing $image_tag can run"
-docker run --rm --entrypoint "buildkite-agent" "$image_tag" --version
+echo "--- Getting docker image tag for $variant from build meta data"
+image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
+echo "Docker Image Tag for $variant: $image_tag"
 
-echo "--- :hammer: Testing $image_tag can access docker socket"
-docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --entrypoint "docker" "$image_tag" version
+case $variant in
+alpine)
+  build_docker_image "$image_tag" "packaging/docker/alpine-linux"
+  ;;
+ubuntu)
+  build_docker_image "$image_tag" "packaging/docker/ubuntu-linux"
+  ;;
+*)
+  echo "Unknown variant $variant"
+  exit 1
+  ;;
+esac
 
-echo "--- :hammer: Testing $image_tag has docker-compose"
-docker run --rm --entrypoint "docker-compose" "$image_tag" --version
-
-echo '--- Pushing :docker: image to buildkiteci/agent'
-docker push "$image_tag"
+test_docker_image "$image_tag"
+push_docker_image "$image_tag"

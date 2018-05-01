@@ -34,8 +34,15 @@ steps:
     agents:
       queue: "deploy"
 
-  - name: ":docker:"
-    command: ".buildkite/steps/publish-docker-images.sh"
+  - name: ":docker: alpine"
+    command: ".buildkite/steps/publish-docker-images.sh alpine"
+    env:
+      CODENAME: "unstable"
+    agents:
+      queue: "deploy"
+
+  - name: ":docker: ubuntu"
+    command: ".buildkite/steps/publish-docker-images.sh ubuntu"
     env:
       CODENAME: "unstable"
     agents:

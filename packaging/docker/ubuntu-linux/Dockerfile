@@ -1,23 +1,24 @@
-FROM alpine:3.7
+FROM ubuntu:18.04
 
-RUN apk add --no-cache \
-      tini \
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl \
+      ca-certificates \
       bash \
       git \
       perl \
       rsync \
       openssh-client \
       curl \
-      docker \
+      docker.io \
       jq \
-      su-exec \
-      py-pip \
-      libc6-compat \
-      run-parts \
-      tzdata \
-    && \
-    pip install --upgrade pip && \
-    pip install docker-compose
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v0.18.0/tini \
+    && chmod +x /sbin/tini \
+    && curl -Lfs https://github.com/docker/compose/releases/download/1.21.0/docker-compose-Linux-x86_64 -o /usr/local/bin/docker-compose \
+    && chmod +x /usr/local/bin/docker-compose
 
 ENV BUILDKITE_BUILD_PATH=/buildkite/builds \
     BUILDKITE_HOOKS_PATH=/buildkite/hooks \
