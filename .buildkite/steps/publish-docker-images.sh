@@ -44,6 +44,7 @@ stable_version="3"
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
 
+# iterate over the variants we want to release
 for variant in "alpine" "ubuntu" ; do
   suffix=""
 
