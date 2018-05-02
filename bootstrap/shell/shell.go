@@ -26,6 +26,10 @@ var (
 	lockRetryDuration = time.Second
 )
 
+const (
+	termType = `xterm-256color`
+)
+
 // Shell represents a virtual shell, handles logging, executing commands and
 // provides hooks for capturing output and exit conditions.
 //
@@ -281,6 +285,11 @@ func (s *Shell) buildCommand(name string, arg ...string) (*exec.Cmd, error) {
 	cmd.Env = s.Env.ToSlice()
 	cmd.Dir = s.wd
 
+	// Add env that commands expect a shell to set
+	cmd.Env = append(cmd.Env,
+		`PWD=`+s.wd,
+	)
+
 	return cmd, nil
 }
 
@@ -336,6 +345,9 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 			// that it closed successfully.
 			// See https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 		}
+
+		// Commands like tput expect a TERM value for a PTY
+		cmd.Env = append(cmd.Env, `TERM=`+termType)
 	} else {
 		cmd.Stdout = nil
 		cmd.Stderr = nil
