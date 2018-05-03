@@ -13,6 +13,7 @@ RUN apk add --no-cache \
       py-pip \
       libc6-compat \
       run-parts \
+      tini \
       tzdata \
     && \
     pip install --upgrade pip && \
