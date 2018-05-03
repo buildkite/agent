@@ -847,15 +847,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 
-		gitBranchOutput, err := b.shell.RunAndCapture("git", "--no-pager", "branch", "--contains", "HEAD", "--no-color")
-		if err != nil {
-			return err
-		}
-
 		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput); err != nil {
-			return err
-		}
-		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:branch", gitBranchOutput); err != nil {
 			return err
 		}
 	}

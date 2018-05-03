@@ -41,7 +41,6 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
-		{"--no-pager", "branch", "--contains", "HEAD", "--no-color"},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -51,9 +50,6 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		AndExitWith(1)
 	agent.
 		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:branch", bintest.MatchAny()).
 		AndExitWith(0)
 
 	tester.RunAndCheck(t, env...)
@@ -113,7 +109,6 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "ls-remote", "--get-url"},
 		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
-		{"--no-pager", "branch", "--contains", "HEAD", "--no-color"},
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
@@ -123,9 +118,6 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		AndExitWith(1)
 	agent.
 		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:branch", bintest.MatchAny()).
 		AndExitWith(0)
 
 	tester.RunAndCheck(t, env...)
@@ -148,11 +140,6 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	agent.
 		Expect("meta-data", "set", "buildkite:git:commit",
 			bintest.MatchPattern(`^commit`)).
-		AndExitWith(0)
-
-	agent.
-		Expect("meta-data", "set", "buildkite:git:branch",
-			bintest.MatchPattern(`^\* \(HEAD detached at FETCH_HEAD\)`)).
 		AndExitWith(0)
 
 	tester.RunAndCheck(t)
