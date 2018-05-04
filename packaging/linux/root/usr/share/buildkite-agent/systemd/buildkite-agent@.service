@@ -8,6 +8,7 @@ After=network.target
 Type=simple
 User=buildkite-agent
 Environment=HOME=/var/lib/buildkite-agent
+Environment=BUILDKITE_AGENT_INSTANCE_NUMBER=%i
 ExecStart=/usr/bin/buildkite-agent start
 RestartSec=5
 Restart=on-failure
