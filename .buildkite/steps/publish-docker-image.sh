@@ -1,6 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
+## This script can be run locally like this:
+##
+## .buildkite/steps/publish-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
+
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
     "$@"
@@ -21,65 +25,48 @@ parse_version() {
   [[ "${v%-*}" == "$v" ]] || echo "$v"
 }
 
-is_stable_version() {
-  local v="$1"
-  for stable_tag in $(parse_version "$stable_version") ; do
-    if [[ "$v" == "$stable_tag" ]] ; then
-      return 0
-    fi
-  done
-  return 1
-}
-
 release_image() {
   local tag="$1"
-  echo "--- :docker: Tagging ${docker_image}:${tag}"
-  dry_run docker tag "$image_tag" "${docker_image}:$tag"
-  dry_run docker push "${docker_image}:$tag"
+  echo "--- :docker: Tagging ${target_image}:${tag}"
+  dry_run docker tag "$source_image" "${target_image}:$tag"
+  dry_run docker push "${target_image}:$tag"
 }
 
-docker_image="buildkite/agent"
-stable_version="3"
+variant="${1:-}"
+source_image="${2:-}"
+codename="${3:-}"
+version="${4:-}"
+build="${5:-}"
 
-version=$(buildkite-agent meta-data get "agent-version")
-build=$(buildkite-agent meta-data get "agent-version-build")
+target_image="buildkite/agent"
+variant_suffix=""
 
-# iterate over the variants we want to release
-for variant in "alpine" "ubuntu" ; do
-  suffix=""
+if [[ "$variant" != "alpine" ]] ; then
+  variant_suffix="-$variant"
+fi
 
-  if [[ "$variant" != "alpine" ]] ; then
-    suffix="-$variant"
+echo "--- Tagging docker images for $variant/$codename"
+
+# variants of edge/experimental
+if [[ "$codename" == "experimental" ]] ; then
+  release_image "edge-build-${build}${variant_suffix}"
+  release_image "edge${variant_suffix}"
+fi
+
+# variants of stable - e.g 2.3.2
+if [[ "$codename" == "stable" ]] ; then
+  for tag in $(parse_version "$version") ; do
+    release_image "${tag}${variant_suffix}"
+  done
+  release_image "${variant}"
+  release_image "latest"
+  release_image "stable"
+fi
+
+# variants of beta/unstable - e.g 3.0-beta.16
+if [[ "$codename" == "unstable" ]] ; then
+  release_image "beta${variant_suffix}"
+  if [[ "$version" =~ -(alpha|beta|rc)\.[0-9]+$ ]] ; then
+    release_image "${version}${variant_suffix}"
   fi
-
-  echo "--- Getting docker image tag for $variant from build meta data"
-  image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
-  echo "Docker Image Tag for $variant: $image_tag"
-
-  echo "--- :docker: Pulling prebuilt image"
-  dry_run docker pull "$image_tag"
-
-  # variants of edge/experimental
-  if [[ "$CODENAME" == "experimental" ]] ; then
-    release_image "edge-build-${build}${suffix}"
-    release_image "edge${suffix}"
-  fi
-
-  # variants of stable - e.g 2.3.2
-  if [[ "$CODENAME" == "stable" ]] ; then
-    for tag in latest stable $(parse_version "$version") ; do
-      release_image "$tag${suffix}"
-    done
-  fi
-
-  # variants of beta/unstable - e.g 3.0-beta.16
-  if [[ "$CODENAME" == "unstable" ]] ; then
-    for tag in beta $(parse_version "$version") ; do
-      if is_stable_version "$tag" ; then
-        echo "--- :docker: Skipping tagging stable ${docker_image}:${tag}"
-        continue
-      fi
-      release_image "$tag${suffix}"
-    done
-  fi
-done
+fi

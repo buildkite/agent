@@ -2,8 +2,13 @@
 set -euo pipefail
 
 ## This script can be run locally like this:
+##
 ## .buildkite/steps/build-docker-image.sh (alpine|ubuntu) (image tag) (codename) (version)
 ## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
+##
+## You can then publish that image with
+##
+## .buildkite/steps/publish-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 
 dry_run() {
   if [[ "${DRY_RUN:-}" == "false" ]] ; then
