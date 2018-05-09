@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
@@ -21,6 +22,9 @@ type JobRunner struct {
 
 	// The APIClient that will be used when updating the job
 	APIClient *api.Client
+
+	// The APIProxy that will be exposed to the job bootstrap
+	APIProxy *APIProxy
 
 	// The endpoint that should be used when communicating with the API
 	Endpoint string
@@ -60,12 +64,22 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// Our own APIClient using the endpoint and the agents access token
 	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
 
-	// // Create our header times struct
+	// A proxy for our APIClient that is expose to the bootstrap
+	runner.APIProxy = &APIProxy{UpstreamEndpoint: r.Endpoint, UpstreamToken: r.Agent.AccessToken}
+
+	// Create our header times struct
 	runner.headerTimesStreamer = &HeaderTimesStreamer{UploadCallback: r.onUploadHeaderTime}
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
+
+	// Start a proxy to give to the job for api operations
+	if experiments.IsEnabled("agent-socket") {
+		if err := r.APIProxy.Listen(); err != nil {
+			return nil, err
+		}
+	}
 
 	// Prepare a file to recieve the given job environment
 	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)); err != nil {
@@ -163,6 +177,13 @@ func (r *JobRunner) Run() error {
 		logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
+	// Destroy the proxy
+	if experiments.IsEnabled("agent-socket") {
+		if err := r.APIProxy.Close(); err != nil {
+			logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
+		}
+	}
+
 	logger.Info("Finished job %s", r.Job.ID)
 
 	return nil
@@ -212,9 +233,15 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
+	if experiments.IsEnabled("agent-socket") {
+		env["BUILDKITE_AGENT_ENDPOINT"] = r.APIProxy.Endpoint()
+		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.APIProxy.AccessToken()
+	} else {
+		env["BUILDKITE_AGENT_ENDPOINT"] = r.Endpoint
+		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.Agent.AccessToken
+	}
+
 	// Add agent environment variables
-	env["BUILDKITE_AGENT_ENDPOINT"] = r.Endpoint
-	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.Agent.AccessToken
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", logger.GetLevel() == logger.DEBUG)
 	env["BUILDKITE_AGENT_PID"] = fmt.Sprintf("%d", os.Getpid())
 

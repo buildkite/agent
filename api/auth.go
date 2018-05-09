@@ -31,11 +31,6 @@ func (t AuthenticatedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	return t.transport().RoundTrip(req)
 }
 
-// Client builds a new http client.
-func (t *AuthenticatedTransport) Client() *http.Client {
-	return &http.Client{Transport: t}
-}
-
 // CancelRequest cancels an in-flight request by closing its connection.
 func (t *AuthenticatedTransport) CancelRequest(req *http.Request) {
 	cancelableTransport := t.Transport.(canceler)
