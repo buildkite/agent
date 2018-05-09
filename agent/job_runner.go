@@ -64,8 +64,8 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// Our own APIClient using the endpoint and the agents access token
 	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
 
-	// A proxy for our APIClient that is expose to the bootstrap
-	runner.APIProxy = &APIProxy{UpstreamEndpoint: r.Endpoint, UpstreamToken: r.Agent.AccessToken}
+	// A proxy for the agent API that is expose to the bootstrap
+	runner.APIProxy = NewAPIProxy(r.Endpoint, r.Agent.AccessToken)
 
 	// Create our header times struct
 	runner.headerTimesStreamer = &HeaderTimesStreamer{UploadCallback: r.onUploadHeaderTime}

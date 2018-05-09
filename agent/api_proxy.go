@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -19,20 +20,30 @@ import (
 // APIProxy provides either a unix socket or a tcp socket listener with a proxy
 // that will authenticate to the Buildkite Agent API
 type APIProxy struct {
-	UpstreamToken    string
-	UpstreamEndpoint string
+	upstreamToken    string
+	upstreamEndpoint string
+	token            string
+	socket           *os.File
+	listener         net.Listener
+	listenerWg       *sync.WaitGroup
+}
 
-	token    string
-	socket   *os.File
-	listener net.Listener
+func NewAPIProxy(endpoint string, token string) *APIProxy {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	return &APIProxy{
+		upstreamToken:    token,
+		upstreamEndpoint: endpoint,
+		token:            fmt.Sprintf("%x", sha256.Sum256([]byte(string(time.Now().UnixNano())))),
+		listenerWg:       &wg,
+	}
 }
 
 // Listen on either a tcp socket (for windows) or a unix socket
 func (p *APIProxy) Listen() error {
+	defer p.listenerWg.Done()
 	var err error
-
-	// generate a per-proxy secret to give to the bootstrap
-	p.token = fmt.Sprintf("%x", sha256.Sum256([]byte(string(time.Now().UnixNano()))))
 
 	// windows doesn't support unix sockets, so we fall back to a tcp socket
 	if runtime.GOOS == `windows` {
@@ -45,14 +56,14 @@ func (p *APIProxy) Listen() error {
 		return err
 	}
 
-	endpoint, err := url.Parse(p.UpstreamEndpoint)
+	endpoint, err := url.Parse(p.upstreamEndpoint)
 	if err != nil {
 		return err
 	}
 
 	go func() {
 		proxy := httputil.NewSingleHostReverseProxy(endpoint)
-		proxy.Transport = &api.AuthenticatedTransport{Token: p.UpstreamToken}
+		proxy.Transport = &api.AuthenticatedTransport{Token: p.upstreamToken}
 
 		// customize the reverse proxy director so that we can make some changes to the request
 		director := proxy.Director
@@ -115,7 +126,13 @@ func (p *APIProxy) listenOnTCPSocket() (net.Listener, error) {
 
 // Close any listeners or internal files
 func (p *APIProxy) Close() error {
+	defer p.listenerWg.Add(1)
 	return p.listener.Close()
+}
+
+// Wait blocks until the listener is ready
+func (p *APIProxy) Wait() {
+	p.listenerWg.Wait()
 }
 
 func (p *APIProxy) Endpoint() string {
