@@ -1,9 +1,17 @@
 package clicommand
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/stdin"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )
@@ -80,4 +88,76 @@ func HandleGlobalFlags(cfg interface{}) {
 			}
 		}
 	}
+}
+
+// HandlePipelineFileFlag reads either a provided file path, stdin, or searches for a pipeline file
+func HandlePipelineFileFlag(filePath string) (filename string, content []byte, err error) {
+	// first try the provided path
+	if filePath != "" {
+		logger.Info("Reading pipeline config from \"%s\"", filePath)
+
+		filename = filepath.Base(filePath)
+		content, err = ioutil.ReadFile(filePath)
+		if err != nil {
+			return "", nil, fmt.Errorf("Failed to read file: %s", err)
+		}
+
+		return filename, content, nil
+	}
+
+	// next try stdin
+	if stdin.IsReadable() {
+		logger.Info("Reading pipeline config from STDIN")
+
+		// Actually read the file from STDIN
+		content, err = ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			return "", nil, fmt.Errorf("Failed to read from STDIN: %s", err)
+		}
+
+		return filename, content, nil
+	}
+
+	// otherwise search for a pipeline config
+	logger.Info("Searching for pipeline config...")
+
+	// Collect all pipeline files that exist
+	exists := []string{}
+	for _, path := range []string{
+		"buildkite.yml",
+		"buildkite.yaml",
+		"buildkite.json",
+		filepath.Join(".buildkite", "pipeline.yml"),
+		filepath.Join(".buildkite", "pipeline.yaml"),
+		filepath.Join(".buildkite", "pipeline.json"),
+	} {
+		if _, err := os.Stat(path); err == nil {
+			exists = append(exists, path)
+		}
+	}
+
+	// If more than 1 of the config files exist, throw an
+	// error. There can only be one!!
+	if len(exists) > 1 {
+		return "", nil, fmt.Errorf("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
+	} else if len(exists) == 0 {
+		return "", nil, fmt.Errorf("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
+	}
+
+	found := exists[0]
+	logger.Info("Found config file \"%s\"", found)
+
+	// Read the default file
+	filename = path.Base(found)
+	content, err = ioutil.ReadFile(found)
+	if err != nil {
+		return "", nil, fmt.Errorf("Failed to read file \"%s\": %v", found, err)
+	}
+
+	// Make sure the file actually has something in it
+	if len(content) == 0 {
+		return "", nil, fmt.Errorf("Config file %q is empty", found)
+	}
+
+	return filename, content, nil
 }
