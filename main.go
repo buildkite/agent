@@ -59,6 +59,7 @@ func main() {
 	app.Commands = []cli.Command{
 		clicommand.AgentStartCommand,
 		clicommand.AnnotateCommand,
+		clicommand.RunCommand,
 		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",
