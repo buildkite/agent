@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.1.2](https://github.com/buildkite/agent/tree/v3.1.2) (2018-05-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.1.1...v3.1.2)
+
+### Changed
+- Experiment: Pass jobs an authenticated unix socket rather than an access token  [#759](https://github.com/buildkite/agent/pull/759) (@lox)
+- Remove buildkite:git:branch meta-data [#753](https://github.com/buildkite/agent/pull/753) (@sj26)
+- Set TERM and PWD for commands that get executed in shell [#751](https://github.com/buildkite/agent/pull/751) (@lox)
+
+### Fixed
+- Avoid pausing after job has finished [#764](https://github.com/buildkite/agent/pull/764) (@sj26)
+
 ## [v3.1.1](https://github.com/buildkite/agent/tree/v3.1.1) (2018-05-02)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.1.0...v3.1.1)
 
