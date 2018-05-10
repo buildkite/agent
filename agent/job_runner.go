@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -35,6 +36,10 @@ type JobRunner struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
 
+	// Go context for goroutine supervision
+	context context.Context
+	contextCancel context.CancelFunc
+
 	// The interal process of the job
 	process *process.Process
 
@@ -60,6 +65,8 @@ type JobRunner struct {
 // Initializes the job runner
 func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner = &r
+
+	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Our own APIClient using the endpoint and the agents access token
 	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
@@ -162,11 +169,9 @@ func (r *JobRunner) Run() error {
 		logger.Warn("%d chunks failed to upload for this job", r.logStreamer.ChunksFailedCount)
 	}
 
-	// Finish the build in the Buildkite Agent API
-	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
-
 	// Wait for the routines that we spun up to finish
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
+	r.contextCancel()
 	r.routineWaitGroup.Wait()
 
 	// Remove the env file, if any
@@ -183,6 +188,12 @@ func (r *JobRunner) Run() error {
 			logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
 		}
 	}
+
+	// Finish the build in the Buildkite Agent API
+	//
+	// Once we tell the API we're finished it might assign us new work, so make
+	// sure everything else is done first.
+	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
 
 	logger.Info("Finished job %s", r.Job.ID)
 
@@ -341,9 +352,14 @@ func (r *JobRunner) onProcessStartCallback() {
 			// for processing
 			r.logStreamer.Process(r.process.Output())
 
-			// Check the output in another second
-			time.Sleep(1 * time.Second)
+			// Sleep for a bit, or until the job is finished
+			select {
+			case <-time.After(1 * time.Second):
+			case <-r.context.Done():
+			}
 		}
+
+		// The final output after the process has finished is processed in Run()
 
 		// Mark this routine as done in the wait group
 		r.routineWaitGroup.Done()
@@ -366,8 +382,11 @@ func (r *JobRunner) onProcessStartCallback() {
 				r.Kill()
 			}
 
-			// Check for cancellations
-			time.Sleep(time.Duration(r.Agent.JobStatusInterval) * time.Second)
+			// Sleep for a bit, or until the job is finished
+			select {
+			case <-time.After(time.Duration(r.Agent.JobStatusInterval) * time.Second):
+			case <-r.context.Done():
+			}
 		}
 
 		// Mark this routine as done in the wait group
