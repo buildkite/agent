@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -31,6 +32,10 @@ type JobRunner struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
 
+	// Go context for goroutine supervision
+	context context.Context
+	contextCancel context.CancelFunc
+
 	// The interal process of the job
 	process *process.Process
 
@@ -56,6 +61,8 @@ type JobRunner struct {
 // Initializes the job runner
 func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner = &r
+
+	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Our own APIClient using the endpoint and the agents access token
 	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
@@ -153,6 +160,7 @@ func (r *JobRunner) Run() error {
 
 	// Wait for the routines that we spun up to finish
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
+	r.contextCancel()
 	r.routineWaitGroup.Wait()
 
 	// Remove the env file, if any
@@ -314,8 +322,11 @@ func (r *JobRunner) onProcessStartCallback() {
 			// for processing
 			r.logStreamer.Process(r.process.Output())
 
-			// Check the output in another second
-			time.Sleep(1 * time.Second)
+			// Sleep for a bit, or until the job is finished
+			select {
+			case <-time.After(1 * time.Second):
+			case <-r.context.Done():
+			}
 		}
 
 		// Mark this routine as done in the wait group
@@ -339,8 +350,11 @@ func (r *JobRunner) onProcessStartCallback() {
 				r.Kill()
 			}
 
-			// Check for cancellations
-			time.Sleep(time.Duration(r.Agent.JobStatusInterval) * time.Second)
+			// Sleep for a bit, or until the job is finished
+			select {
+			case <-time.After(time.Duration(r.Agent.JobStatusInterval) * time.Second):
+			case <-r.context.Done():
+			}
 		}
 
 		// Mark this routine as done in the wait group
