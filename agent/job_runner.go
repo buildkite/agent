@@ -155,9 +155,6 @@ func (r *JobRunner) Run() error {
 		logger.Warn("%d chunks failed to upload for this job", r.logStreamer.ChunksFailedCount)
 	}
 
-	// Finish the build in the Buildkite Agent API
-	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
-
 	// Wait for the routines that we spun up to finish
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
 	r.contextCancel()
@@ -170,6 +167,12 @@ func (r *JobRunner) Run() error {
 		}
 		logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
+
+	// Finish the build in the Buildkite Agent API
+	//
+	// Once we tell the API we're finished it might assign us new work, so make
+	// sure everything else is done first.
+	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
 
 	logger.Info("Finished job %s", r.Job.ID)
 
@@ -328,6 +331,8 @@ func (r *JobRunner) onProcessStartCallback() {
 			case <-r.context.Done():
 			}
 		}
+
+		// The final output after the process has finished is processed in Run()
 
 		// Mark this routine as done in the wait group
 		r.routineWaitGroup.Done()
