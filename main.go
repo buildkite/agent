@@ -81,6 +81,7 @@ func main() {
 			Name:  "pipeline",
 			Usage: "Make changes to the pipeline of the currently running build",
 			Subcommands: []cli.Command{
+				clicommand.PipelineParseCommand,
 				clicommand.PipelineUploadCommand,
 			},
 		},
