@@ -121,9 +121,6 @@ var AnnotateCommand = cli.Command{
 			body = string(stdin[:])
 		}
 
-		// Trim any whitespace edges on the annotation body
-		body = strings.TrimSpace(body)
-
 		// Create the API client
 		client := agent.APIClient{
 			Endpoint: cfg.Endpoint,
