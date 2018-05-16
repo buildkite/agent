@@ -3,7 +3,6 @@ package clicommand
 import (
 	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/buildkite/agent/stdin"
