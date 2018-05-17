@@ -22,7 +22,8 @@ RUN curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v
 
 ENV BUILDKITE_BUILD_PATH=/buildkite/builds \
     BUILDKITE_HOOKS_PATH=/buildkite/hooks \
-    BUILDKITE_PLUGINS_PATH=/buildkite/plugins
+    BUILDKITE_PLUGINS_PATH=/buildkite/plugins \
+    PATH="/usr/local/bin:${PATH}"
 
 RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && curl -Lfs -o /usr/local/bin/ssh-env-config.sh https://raw.githubusercontent.com/buildkite/docker-ssh-env-config/master/ssh-env-config.sh \
