@@ -1,9 +1,15 @@
 # Experiments
 
-We frequently introduce new experimental features to the agent. You can use the `--experiment` flag, or the `experiment` config value to opt-in to them and test them out.
+We frequently introduce new experimental features to the agent. You can use the `--experiment` flag to opt-in to them and test them out:
 
 ```bash
 buildkite-agent start --experiment experiment1 --experiment expertiment2
+```
+
+Or uou can set them in your [agent configuration file](https://buildkite.com/docs/agent/v3/configuration) and they will apply whenever your agent runs:
+
+```
+experiment="experiment1,experiment2"
 ```
 
 ## Available Experiments
