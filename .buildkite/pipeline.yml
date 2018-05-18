@@ -124,10 +124,10 @@ steps:
   - wait
 
   - name: ":docker: alpine build"
-    command: ".buildkite/steps/build-docker-images.sh alpine"
+    command: ".buildkite/steps/build-docker-image.sh alpine"
 
   - name: ":docker: ubuntu build"
-    command: ".buildkite/steps/build-docker-images.sh ubuntu"
+    command: ".buildkite/steps/build-docker-image.sh ubuntu"
 
   - name: ":debian: build"
     command: ".buildkite/steps/build-debian-packages.sh"

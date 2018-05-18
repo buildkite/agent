@@ -80,7 +80,7 @@ agent_is_prerelease=$(buildkite-agent meta-data get "agent-is-prerelease")
 
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
-if git ls-remote --tags origin | grep "refs/tags/v${agent_version}" ; then
+if [[ "${DRY_RUN:-false}" == "false" ]] && git ls-remote --tags origin | grep "refs/tags/v${agent_version}" ; then
   echo "Tag refs/tags/v${agent_version} already exists"
   exit 0
 fi
