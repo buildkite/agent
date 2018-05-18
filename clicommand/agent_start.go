@@ -49,7 +49,7 @@ type AgentStartConfig struct {
 	HooksPath                 string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath               string   `cli:"plugins-path" normalize:"filepath"`
 	Shell                     string   `cli:"shell"`
-	Tags                      []string `cli:"tags"`
+	Tags                      []string `cli:"tags" normalize:"list"`
 	TagsFromEC2               bool     `cli:"tags-from-ec2"`
 	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
 	TagsFromGCP               bool     `cli:"tags-from-gcp"`
@@ -67,7 +67,7 @@ type AgentStartConfig struct {
 	Endpoint                  string   `cli:"endpoint" validate:"required"`
 	Debug                     bool     `cli:"debug"`
 	DebugHTTP                 bool     `cli:"debug-http"`
-	Experiments               []string `cli:"experiment"`
+	Experiments               []string `cli:"experiment" normalize:"list"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`

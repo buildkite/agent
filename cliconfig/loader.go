@@ -374,6 +374,31 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 				return err
 			}
 		}
+	} else if normalization == "list" {
+		value, _ := reflections.GetField(l.Config, fieldName)
+		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
+
+		// Make sure we're normalizing a string filed
+		if fieldKind != reflect.Slice {
+			return fmt.Errorf("list normalization only works on slice fields")
+		}
+
+		// Normalize the field to be a command
+		if valueAsSlice, ok := value.([]string); ok {
+			normalizedSlice := []string{}
+
+			for _, value := range valueAsSlice {
+				// Split values with commas into fields
+				for _, normalized := range strings.Split(value, ",") {
+					normalizedSlice = append(normalizedSlice, normalized)
+				}
+			}
+
+			if err := reflections.SetField(l.Config, fieldName, normalizedSlice); err != nil {
+				return err
+			}
+		}
+
 	} else {
 		return fmt.Errorf("Unknown normalization `%s`", normalization)
 	}

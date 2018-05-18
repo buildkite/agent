@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,7 +53,8 @@ func (r *AgentPool) Start() error {
 		logger.Fatal("%s", err)
 	}
 
-	logger.Info("Successfully registered agent \"%s\" with tags %s", registered.Name, registered.Tags)
+	logger.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
+		strings.Join(registered.Tags, ", "))
 
 	logger.Debug("Ping interval: %ds", registered.PingInterval)
 	logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
