@@ -3,7 +3,7 @@
 We frequently introduce new experimental features to the agent. You can use the `--experiment` flag, or the `experiment` config value to opt-in to them and test them out.
 
 ```bash
-buildkite-agent start --experiment "experiment1,expertiment2"
+buildkite-agent start --experiment experiment1 --experiment expertiment2
 ```
 
 ## Available Experiments
