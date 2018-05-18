@@ -388,6 +388,9 @@ func GetExitCode(err error) int {
 		return 0
 	}
 	switch cause := errors.Cause(err).(type) {
+	case *ExitError:
+		return cause.Code
+
 	case *exec.ExitError:
 		// The program has exited with an exit code != 0
 		// There is no platform independent way to retrieve
@@ -400,6 +403,22 @@ func GetExitCode(err error) int {
 }
 
 func IsExitError(err error) bool {
-	_, ok := errors.Cause(err).(*exec.ExitError)
-	return ok
+	switch errors.Cause(err).(type) {
+	case *ExitError:
+		return true
+	case *exec.ExitError:
+		return true
+	}
+	return false
+}
+
+// ExitError is an error that carries a shell exit code
+type ExitError struct {
+	Code    int
+	Message string
+}
+
+// Error returns the string message and fulfils the error interface
+func (ee *ExitError) Error() string {
+	return ee.Message
 }

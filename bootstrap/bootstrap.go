@@ -148,9 +148,12 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 		exitCode := shell.GetExitCode(err)
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
-		// Give a simpler error if it's just an os.ExitError
+		// Give a simpler error if it's just a shell exit error
 		if shell.IsExitError(err) {
-			return fmt.Errorf("The %s hook exited with status %d", name, exitCode)
+			return &shell.ExitError{
+				Code:    exitCode,
+				Message: fmt.Sprintf("The %s hook exited with status %d", name, exitCode),
+			}
 		}
 		return err
 	}
