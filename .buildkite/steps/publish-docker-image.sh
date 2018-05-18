@@ -3,6 +3,7 @@ set -euo pipefail
 
 ## This script can be run locally like this:
 ##
+## .buildkite/steps/publish-docker-image.sh (alpine|ubuntu) imagename (stable|experimental|unstable) <version> <build>
 ## .buildkite/steps/publish-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 
 dry_run() {
@@ -36,7 +37,7 @@ variant="${1:-}"
 source_image="${2:-}"
 codename="${3:-}"
 version="${4:-}"
-build="${5:-}"
+build="${5:-dev}"
 
 target_image="buildkite/agent"
 variant_suffix=""
@@ -45,7 +46,7 @@ if [[ "$variant" != "alpine" ]] ; then
   variant_suffix="-$variant"
 fi
 
-echo "--- Tagging docker images for $variant/$codename"
+echo "Tagging docker images for $variant/$codename (version $version build $build)"
 
 # variants of edge/experimental
 if [[ "$codename" == "experimental" ]] ; then

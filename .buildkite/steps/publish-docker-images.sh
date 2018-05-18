@@ -9,6 +9,11 @@ dry_run() {
   fi
 }
 
+if [[ "$CODENAME" == "" ]]; then
+  echo "Error: Missing \$CODENAME (stable, experimental or unstable)"
+  exit 1
+fi
+
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
 
@@ -21,6 +26,6 @@ for variant in "alpine" "ubuntu" ; do
   dry_run docker pull "$source_image"
 
   echo "--- :docker: Publishing images for $variant"
-  .buildkite/steps/publish-docker-image.sh "$variant" "$source_image" "$version" "$build"
+  .buildkite/steps/publish-docker-image.sh "$variant" "$source_image" "$CODENAME" "$version" "$build"
 done
 
