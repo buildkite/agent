@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/bintest"
 )
 
@@ -71,6 +72,56 @@ func TestRunningPlugins(t *testing.T) {
 	})
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	var p *testPlugin
+
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": []string{
+				"@echo off",
+				"exit 5",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": []string{
+				"#!/bin/bash",
+				"exit 5",
+			},
+		})
+	}
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`BUILDKITE_PLUGINS=` + json,
+	}
+
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatal("Expected the bootstrap to fail")
+	}
+
+	exitCode := shell.GetExitCode(err)
+
+	if exitCode != 5 {
+		t.Fatalf("Expected an exit code of %d, got %d", 5, exitCode)
+	}
+
+	tester.CheckMocks(t)
 }
 
 func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {

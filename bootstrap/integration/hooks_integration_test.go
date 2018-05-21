@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/bintest"
 )
 
@@ -317,4 +318,44 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	}
 
 	tester.CheckMocks(t)
+}
+
+func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
+	t.Parallel()
+
+	for _, hook := range []string{
+		"environment",
+		"pre-checkout",
+		"post-checkout",
+		"checkout",
+		"pre-command",
+		"command",
+		"post-command",
+		"pre-exit",
+		// "pre-artifact",
+		// "post-artifact",
+	} {
+		t.Run(hook, func(t *testing.T) {
+			tester, err := NewBootstrapTester()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+
+			tester.ExpectGlobalHook(hook).Once().AndExitWith(5)
+
+			err = tester.Run(t)
+			if err == nil {
+				t.Fatalf("Expected the bootstrap to fail because %s hook exits", hook)
+			}
+
+			exitCode := shell.GetExitCode(err)
+
+			if exitCode != 5 {
+				t.Fatalf("Expected an exit code of %d, got %d", 5, exitCode)
+			}
+
+			tester.CheckMocks(t)
+		})
+	}
 }
