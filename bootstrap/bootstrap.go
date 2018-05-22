@@ -43,7 +43,7 @@ type Bootstrap struct {
 }
 
 // Start runs the bootstrap and returns the exit code
-func (b *Bootstrap) Start() int {
+func (b *Bootstrap) Start() (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
@@ -61,13 +61,16 @@ func (b *Bootstrap) Start() int {
 	defer func() {
 		if err := b.tearDown(); err != nil {
 			b.shell.Errorf("Error tearing down bootstrap: %v", err)
+
+			// this gets passed back via the named return
+			exitCode = shell.GetExitCode(err)
 		}
 	}()
 
 	// Initialize the environment, a failure here will still call the tearDown
 	if err := b.setUp(); err != nil {
 		b.shell.Errorf("Error setting up bootstrap: %v", err)
-		return 1
+		return shell.GetExitCode(err)
 	}
 
 	// These are the "Phases of bootstrap execution". They are designed to be
@@ -100,9 +103,9 @@ func (b *Bootstrap) Start() int {
 
 	// Use the exit code from the command phase
 	exitStatus, _ := b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`)
-	exitStatusInt, _ := strconv.Atoi(exitStatus)
+	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
-	return exitStatusInt
+	return exitStatusCode
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -148,9 +151,12 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 		exitCode := shell.GetExitCode(err)
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
-		// Give a simpler error if it's just an os.ExitError
+		// Give a simpler error if it's just a shell exit error
 		if shell.IsExitError(err) {
-			return fmt.Errorf("The %s hook exited with status %d", name, exitCode)
+			return &shell.ExitError{
+				Code:    exitCode,
+				Message: fmt.Sprintf("The %s hook exited with status %d", name, exitCode),
+			}
 		}
 		return err
 	}
