@@ -143,7 +143,7 @@ steps:
 
   - name: ":alpine: build"
     command: ".buildkite/steps/build-alpine-packages.sh"
-    artifact_paths: "rpm/**/*"
+    artifact_paths: "fpm/**/*"
     agents:
       queue: "deploy"
 
