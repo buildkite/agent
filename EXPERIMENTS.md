@@ -6,11 +6,15 @@ We frequently introduce new experimental features to the agent. You can use the 
 buildkite-agent start --experiment experiment1 --experiment expertiment2
 ```
 
-Or uou can set them in your [agent configuration file](https://buildkite.com/docs/agent/v3/configuration) and they will apply whenever your agent runs:
+Or you can set them in your [agent configuration file](https://buildkite.com/docs/agent/v3/configuration):
 
 ```
 experiment="experiment1,experiment2"
 ```
+
+If an experiment doesn't exist, no error will be raised.
+
+**Please note that there is every chance we will remove or change these experiments, so using them should be at your own risk and without the expectation that they will work in future!**
 
 ## Available Experiments
 
