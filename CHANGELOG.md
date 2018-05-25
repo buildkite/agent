@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.2.0](https://github.com/buildkite/agent/tree/v3.2.0) (2018-05-25)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.1.2...v3.2.0)
+
+### Changed
+- Propagate exit code > 1 out of failing hooks [#768](https://github.com/buildkite/agent/pull/768) (@lox)
+- Fix broken list parsing in cli arguments --tags and --experiments [#772](https://github.com/buildkite/agent/pull/772) (@lox)
+- Add a virtual provides to the RPM package [#737](https://github.com/buildkite/agent/pull/737) (@jnewbigin)
+- Clean up docker image building [#755](https://github.com/buildkite/agent/pull/755) (@lox)
+- Don't trim whitespace from the annotation body [#766](https://github.com/buildkite/agent/pull/766) (@petemounce)
+
 ## [v3.1.2](https://github.com/buildkite/agent/tree/v3.1.2) (2018-05-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.1.1...v3.1.2)
 
