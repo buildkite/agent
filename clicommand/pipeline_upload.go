@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"path"
@@ -46,9 +47,10 @@ Example:
 type PipelineUploadConfig struct {
 	FilePath         string `cli:"arg:0" label:"upload paths"`
 	Replace          bool   `cli:"replace"`
-	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Job              string `cli:"job"`
+	AgentAccessToken string `cli:"agent-access-token"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
+	DryRun           bool   `cli:"dry-run"`
 	NoColor          bool   `cli:"no-color"`
 	NoInterpolation  bool   `cli:"no-interpolation"`
 	Debug            bool   `cli:"debug"`
@@ -70,6 +72,11 @@ var PipelineUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "The job that is making the changes to it's build",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "dry-run",
+			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
 		},
 		cli.BoolFlag{
 			Name:   "no-interpolation",
@@ -172,6 +179,30 @@ var PipelineUploadCommand = cli.Command{
 		}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
+		}
+
+		// In dry-run mode we just output the generated pipeline to stdout
+		if cfg.DryRun {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+
+			// Dump json indented to stdout. All logging happens to stderr
+			// this can be used with other tools to get interpolated json
+			if err := enc.Encode(parsed); err != nil {
+				logger.Fatal("%#v", err)
+			}
+
+			os.Exit(0)
+		}
+
+		// Check we have a job id set if not in dry run
+		if cfg.Job == "" {
+			logger.Fatal("Missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+		}
+
+		// Check we have an agent access token if not in dry run
+		if cfg.AgentAccessToken == "" {
+			logger.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
 		}
 
 		// Create the API client
