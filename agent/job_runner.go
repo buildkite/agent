@@ -37,7 +37,7 @@ type JobRunner struct {
 	AgentConfiguration *AgentConfiguration
 
 	// Go context for goroutine supervision
-	context context.Context
+	context       context.Context
 	contextCancel context.CancelFunc
 
 	// The interal process of the job
@@ -247,6 +247,14 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	if experiments.IsEnabled("agent-socket") {
 		env["BUILDKITE_AGENT_ENDPOINT"] = r.APIProxy.Endpoint()
 		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.APIProxy.AccessToken()
+
+		logger.Debug("[JobRunner] Exposing agent socket with endpoint %v",
+			env["BUILDKITE_AGENT_ENDPOINT"])
+
+		// Only unix platforms get sockets, so omit this if blank
+		if sock := r.APIProxy.Socket(); sock != "" {
+			env["BUILDKITE_AGENT_SOCK"] = sock
+		}
 	} else {
 		env["BUILDKITE_AGENT_ENDPOINT"] = r.Endpoint
 		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.Agent.AccessToken

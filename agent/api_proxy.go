@@ -142,6 +142,13 @@ func (p *APIProxy) Endpoint() string {
 	return `http://` + p.listener.Addr().String()
 }
 
+func (p *APIProxy) Socket() string {
+	if p.socket != nil {
+		return p.listener.Addr().String()
+	}
+	return ""
+}
+
 func (p *APIProxy) AccessToken() string {
 	return p.token
 }
