@@ -710,11 +710,15 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// Git clean prior to checkout
 	if hasGitSubmodules(b.shell) {
 		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
+			// Remove the checkout as often this is due to a corrupt git submodules
+			_ = b.removeCheckoutDir()
 			return err
 		}
 	}
 
 	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
+		// Remove the checkout as often this is due to a corrupt git submodules
+		_ = b.removeCheckoutDir()
 		return err
 	}
 
