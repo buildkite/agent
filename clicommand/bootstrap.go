@@ -63,6 +63,7 @@ type BootstrapConfig struct {
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
+	PluginValidation             bool     `cli:"plugin-validation"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
 	PTY                          bool     `cli:"pty"`
 	Debug                        bool     `cli:"debug"`
@@ -216,6 +217,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Allow plugins to be run",
 			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
 		},
+		cli.BoolFlag{
+			Name:   "plugin-validation",
+			Usage:  "Validate plugin configuration",
+			EnvVar: "BUILDKITE_PLUGIN_VALIDATION",
+		},
 		cli.BoolTFlag{
 			Name:   "local-hooks-enabled",
 			Usage:  "Allow local hooks to be run",
@@ -301,6 +307,7 @@ var BootstrapCommand = cli.Command{
 				BinPath:                      cfg.BinPath,
 				HooksPath:                    cfg.HooksPath,
 				PluginsPath:                  cfg.PluginsPath,
+				PluginValidation:             cfg.PluginValidation,
 				Debug:                        cfg.Debug,
 				RunInPty:                     runInPty,
 				CommandEval:                  cfg.CommandEval,

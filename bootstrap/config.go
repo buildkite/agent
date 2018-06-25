@@ -76,6 +76,9 @@ type Config struct {
 	// Are plugins enabled?
 	PluginsEnabled bool
 
+	// Whether to validate plugin configuration
+	PluginValidation bool
+
 	// Are local hooks enabled?
 	LocalHooksEnabled bool
 

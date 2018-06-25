@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/buildkite/agent/yamltojson"
 	"github.com/qri-io/jsonschema"
@@ -139,6 +140,10 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 type ValidateResult struct {
 	Valid  bool
 	Errors []string
+}
+
+func (vr ValidateResult) Error() string {
+	return "Validation errors: " + strings.Join(vr.Errors, ", ")
 }
 
 func commandExists(command string) bool {

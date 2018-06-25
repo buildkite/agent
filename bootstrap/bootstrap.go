@@ -460,7 +460,15 @@ func (b *Bootstrap) PluginPhase() error {
 		checkout, err := b.checkoutPlugin(p)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
-
+		}
+		if b.Config.PluginValidation {
+			if b.Debug {
+				b.shell.Commentf("Validating plugin configuration for %q", p.Label())
+			}
+			result := checkout.Validate()
+			if !result.Valid {
+				return result
+			}
 		}
 		b.plugins = append(b.plugins, checkout)
 	}
@@ -588,11 +596,13 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Load the plugin definition
-	checkout.Definition, err = plugin.LoadDefinitionFromDir(directory)
-	if err == plugin.ErrDefinitionNotFound {
-		b.shell.Warningf("Failed to find plugin definition")
-	} else if err != nil {
-		return nil, err
+	if b.Config.PluginValidation {
+		checkout.Definition, err = plugin.LoadDefinitionFromDir(directory)
+		if err == plugin.ErrDefinitionNotFound {
+			b.shell.Warningf("Failed to find plugin definition")
+		} else if err != nil {
+			return nil, err
+		}
 	}
 
 	return checkout, nil
@@ -1161,4 +1171,9 @@ type pluginCheckout struct {
 	*plugin.Definition
 	CheckoutDir string
 	HooksDir    string
+}
+
+func (c *pluginCheckout) Validate() plugin.ValidateResult {
+	val := &plugin.Validator{}
+	return val.Validate(c.Definition, c.Plugin.Configuration)
 }
