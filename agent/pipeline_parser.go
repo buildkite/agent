@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/yamltojson"
 	"github.com/buildkite/interpolate"
 
 	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice
@@ -36,7 +37,7 @@ func (p PipelineParser) Parse() (interface{}, error) {
 	// If interpolation is disabled, just parse and return
 	if p.NoInterpolation {
 		var result interface{}
-		if err := unmarshalAsStringMap([]byte(p.Pipeline), &result); err != nil {
+		if err := yamltojson.UnmarshalAsStringMap([]byte(p.Pipeline), &result); err != nil {
 			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 		}
 		return result, nil
@@ -74,7 +75,7 @@ func (p PipelineParser) Parse() (interface{}, error) {
 	}
 
 	var result interface{}
-	if err := unmarshalAsStringMap(b, &result); err != nil {
+	if err := yamltojson.UnmarshalAsStringMap(b, &result); err != nil {
 		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 	}
 
@@ -265,47 +266,4 @@ func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error
 	}
 
 	return nil
-}
-
-// Unmarshal YAML to map[string]interface{} instead of map[interface{}]interface{}, such that
-// we can Marshal cleanly into JSON
-// Via https://github.com/go-yaml/yaml/issues/139#issuecomment-220072190
-func unmarshalAsStringMap(in []byte, out interface{}) error {
-	var res interface{}
-
-	if err := yaml.Unmarshal(in, &res); err != nil {
-		return err
-	}
-	*out.(*interface{}) = cleanupMapValue(res)
-
-	return nil
-}
-
-func cleanupInterfaceArray(in []interface{}) []interface{} {
-	res := make([]interface{}, len(in))
-	for i, v := range in {
-		res[i] = cleanupMapValue(v)
-	}
-	return res
-}
-
-func cleanupInterfaceMap(in map[interface{}]interface{}) map[string]interface{} {
-	res := make(map[string]interface{})
-	for k, v := range in {
-		res[fmt.Sprintf("%v", k)] = cleanupMapValue(v)
-	}
-	return res
-}
-
-func cleanupMapValue(v interface{}) interface{} {
-	switch v := v.(type) {
-	case []interface{}:
-		return cleanupInterfaceArray(v)
-	case map[interface{}]interface{}:
-		return cleanupInterfaceMap(v)
-	case nil, bool, string, int, float64:
-		return v
-	default:
-		panic("Unhandled map type " + fmt.Sprintf("%T", v))
-	}
 }
