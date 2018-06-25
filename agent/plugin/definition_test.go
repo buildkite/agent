@@ -3,6 +3,7 @@ package plugin
 import (
 	"testing"
 
+	"github.com/qri-io/jsonschema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,7 +35,55 @@ func TestDefinitionParsesYaml(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, def.Name, `test-plugin`)
 	assert.Equal(t, def.Requirements, []string{`docker`, `docker-compose`})
+}
 
-	// j, err := json.Marshal(result)
-	// assert.Equal(t, `{"steps":[{"label":"hello \"friend\""}]}`, string(j))
+func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
+	validator := &Validator{
+		CommandExists: func(cmd string) bool {
+			return false
+		},
+	}
+
+	def := &Definition{
+		Requirements: []string{`llamas`},
+	}
+
+	res := validator.Validate(def, nil)
+
+	assert.False(t, res.Valid)
+	assert.Equal(t, res.Errors, []string{
+		`Required command "llamas" isn't in PATH`,
+	})
+}
+
+func TestDefinitionValidatesConfiguration(t *testing.T) {
+	validator := &Validator{
+		CommandExists: func(cmd string) bool {
+			return false
+		},
+	}
+
+	def := &Definition{
+		Configuration: jsonschema.Must(`{
+			"type": "object",
+			"properties": {
+				"llamas": {
+					"type": "string"
+				},
+				"alpacas": {
+					"type": "string"
+				}
+			},
+			"required": ["llamas", "alpacas"]
+		}`),
+	}
+
+	res := validator.Validate(def, map[string]interface{}{
+		"llamas": "always",
+	})
+
+	assert.False(t, res.Valid)
+	assert.Equal(t, res.Errors, []string{
+		`Plugin validation failed at /: {"llamas":"always"} "alpacas" value is required`,
+	})
 }

@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
@@ -497,7 +496,7 @@ func (b *Bootstrap) hasPluginHook(name string) bool {
 }
 
 // Checkout a given plugin to the plugins directory and return that directory
-func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
+func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Get the identifer for the plugin
 	id, err := p.Identifier()
 	if err != nil {
