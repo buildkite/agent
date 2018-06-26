@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -461,16 +462,39 @@ func (b *Bootstrap) PluginPhase() error {
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
 		}
-		if b.Config.PluginValidation {
+		if b.Config.PluginValidation && checkout.Definition == nil {
 			if b.Debug {
-				b.shell.Commentf("Validating plugin configuration for %q", p.Label())
+				b.shell.Commentf("Parsing plugin definition for %q from %s", p.Label(), checkout.CheckoutDir)
 			}
-			result := checkout.Validate()
-			if !result.Valid {
-				return result
+			// parse the plugin definition from the plugin checkout dir
+			checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
+			if err == plugin.ErrDefinitionNotFound {
+				b.shell.Warningf("Failed to find plugin definition")
+			} else if err != nil {
+				return err
 			}
 		}
 		b.plugins = append(b.plugins, checkout)
+	}
+
+	if b.Config.PluginValidation {
+		for _, checkout := range b.plugins {
+			if b.Debug {
+				b.shell.Commentf("Validating plugin configuration for %q", checkout.Label())
+				json, _ := json.MarshalIndent(checkout.Definition, "", "  ")
+				b.shell.Printf("%s", json)
+			}
+
+			val := &plugin.Validator{}
+			result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
+
+			if !result.Valid {
+				b.shell.Commentf("Validation plugin config of %q failed", checkout.Label())
+				return result
+			} else {
+				b.shell.Commentf("Validation plugin config of %q succeeded", checkout.Label())
+			}
+		}
 	}
 
 	// Now we can run plugin environment hooks too
@@ -591,16 +615,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	if p.Version != "" {
 		b.shell.Commentf("Checking out `%s`", p.Version)
 		if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
-			return nil, err
-		}
-	}
-
-	// Load the plugin definition
-	if b.Config.PluginValidation {
-		checkout.Definition, err = plugin.LoadDefinitionFromDir(directory)
-		if err == plugin.ErrDefinitionNotFound {
-			b.shell.Warningf("Failed to find plugin definition")
-		} else if err != nil {
 			return nil, err
 		}
 	}
@@ -1171,9 +1185,4 @@ type pluginCheckout struct {
 	*plugin.Definition
 	CheckoutDir string
 	HooksDir    string
-}
-
-func (c *pluginCheckout) Validate() plugin.ValidateResult {
-	val := &plugin.Validator{}
-	return val.Validate(c.Definition, c.Plugin.Configuration)
 }

@@ -79,7 +79,7 @@ func findDefinitionFile(dir string) (string, error) {
 		filepath.Join(dir, `plugin.yml`),
 	}
 	for _, filename := range possibleFilenames {
-		if _, err := os.Stat(filename); os.IsExist(err) {
+		if _, err := os.Stat(filename); err == nil {
 			return filename, nil
 		}
 	}
@@ -109,11 +109,13 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 	}
 
 	// validate that the required commands exist
-	for _, command := range def.Requirements {
-		if !commandExistsFunc(command) {
-			result.Valid = false
-			result.Errors = append(result.Errors,
-				fmt.Sprintf(`Required command %q isn't in PATH`, command))
+	if def.Requirements != nil {
+		for _, command := range def.Requirements {
+			if !commandExistsFunc(command) {
+				result.Valid = false
+				result.Errors = append(result.Errors,
+					fmt.Sprintf(`Required command %q isn't in PATH`, command))
+			}
 		}
 	}
 
@@ -127,7 +129,6 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 		if len(valErrors) > 0 {
 			result.Valid = false
 			for _, err := range valErrors {
-				// fmt.Printf("%#v", err)
 				result.Errors = append(result.Errors,
 					fmt.Sprintf("Plugin validation failed at %v", err.Error()))
 			}
