@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.2.0...master)
 
 ### Changed
+- Add `--default-timeout-in-minutes` flag to `buildkite-agent start` command [(discussion)](https://github.com/buildkite/feedback/issues/170#issuecomment-400535789) (@pda)
 
 ### Fixed
 
