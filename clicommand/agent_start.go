@@ -68,6 +68,7 @@ type AgentStartConfig struct {
 	Debug                     bool     `cli:"debug"`
 	DebugHTTP                 bool     `cli:"debug-http"`
 	Experiments               []string `cli:"experiment" normalize:"list"`
+	DefaultTimeoutInMinutes   int      `cli:"default-timeout-in-minutes"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -264,6 +265,11 @@ var AgentStartCommand = cli.Command{
 		NoColorFlag,
 		DebugFlag,
 		DebugHTTPFlag,
+		cli.IntFlag{
+			Name:   "default-timeout-in-minutes",
+			Usage:  "Timeout for jobs without an explicit timeout_in_minutes",
+			EnvVar: "BUILDKITE_DEFAULT_TIMEOUT_IN_MINUTES",
+		},
 		/* Deprecated flags which will be removed in v4 */
 		cli.StringSliceFlag{
 			Name:   "meta-data",
@@ -374,6 +380,7 @@ var AgentStartCommand = cli.Command{
 				DisconnectAfterJob:        cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
 				Shell: cfg.Shell,
+				DefaultTimeoutInMinutes: cfg.DefaultTimeoutInMinutes,
 			},
 		}
 
