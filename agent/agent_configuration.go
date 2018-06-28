@@ -18,4 +18,5 @@ type AgentConfiguration struct {
 	DisconnectAfterJob        bool
 	DisconnectAfterJobTimeout int
 	Shell                     string
+	DefaultTimeoutInMinutes   int
 }

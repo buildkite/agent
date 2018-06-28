@@ -127,6 +127,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Build:             BuildVersion(),
 		PID:               os.Getpid(),
 		Arch:              runtime.GOARCH,
+		DefaultTimeoutInMinutes: r.AgentConfiguration.DefaultTimeoutInMinutes,
 	}
 
 	// Attempt to add the EC2 tags
