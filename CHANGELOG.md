@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.2.1](https://github.com/buildkite/agent/tree/v3.2.1) (2018-06-28)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.2.0...v3.2.1)
+
+### Changed
+- Remove the checkout dir when git clean fails [#786](https://github.com/buildkite/agent/pull/786) (@lox)
+- Add a --dry-run to pipeline upload that dumps json [#781](https://github.com/buildkite/agent/pull/781) (@lox)
+- Support PTY under OpenBSD [#785](https://github.com/buildkite/agent/pull/785) (@derekmarcotte) [#787](https://github.com/buildkite/agent/pull/787) (@derekmarcotte)
+- Experiments docs and experiment cleanup [#771](https://github.com/buildkite/agent/pull/771) (@lox)
+
 ## [v3.2.0](https://github.com/buildkite/agent/tree/v3.2.0) (2018-05-25)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.1.2...v3.2.0)
 
