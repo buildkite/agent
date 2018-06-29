@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/bintest"
@@ -358,4 +360,36 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 			tester.CheckMocks(t)
 		})
 	}
+}
+
+func TestPreExitHooksFireAfterCancel(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	tester.ExpectGlobalHook("pre-exit").Once()
+	tester.ExpectLocalHook("pre-exit").Once()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		if err = tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
+			t.Errorf("Expected tester to fail with error")
+		}
+		t.Logf("Command finished")
+	}()
+
+	time.Sleep(time.Millisecond * 500)
+	tester.Cancel()
+
+	t.Logf("Waiting for command to finish")
+	wg.Wait()
+
+	tester.CheckMocks(t)
 }
