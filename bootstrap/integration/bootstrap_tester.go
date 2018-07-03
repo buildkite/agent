@@ -230,7 +230,6 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 
 	b.cmdLock.Lock()
 	b.cmd = exec.Command(path, b.Args...)
-	b.cmdLock.Unlock()
 
 	buf := &buffer{}
 
@@ -245,7 +244,15 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 
 	b.cmd.Env = append(b.Env, env...)
 
-	err = b.cmd.Run()
+	err = b.cmd.Start()
+	if err != nil {
+		b.cmdLock.Unlock()
+		return err
+	}
+
+	b.cmdLock.Unlock()
+
+	err = b.cmd.Wait()
 	b.Output = buf.String()
 	return err
 }
