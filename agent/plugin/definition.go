@@ -129,8 +129,7 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 		if len(valErrors) > 0 {
 			result.Valid = false
 			for _, err := range valErrors {
-				result.Errors = append(result.Errors,
-					fmt.Sprintf("Plugin validation failed at %v", err.Error()))
+				result.Errors = append(result.Errors, err.Error())
 			}
 		}
 	}
@@ -144,7 +143,7 @@ type ValidateResult struct {
 }
 
 func (vr ValidateResult) Error() string {
-	return "Validation errors: " + strings.Join(vr.Errors, ", ")
+	return strings.Join(vr.Errors, ", ")
 }
 
 func commandExists(command string) bool {

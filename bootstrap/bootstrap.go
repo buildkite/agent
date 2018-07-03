@@ -480,19 +480,19 @@ func (b *Bootstrap) PluginPhase() error {
 	if b.Config.PluginValidation {
 		for _, checkout := range b.plugins {
 			if b.Debug {
-				b.shell.Commentf("Validating plugin configuration for %q", checkout.Label())
-				json, _ := json.MarshalIndent(checkout.Definition, "", "  ")
-				b.shell.Printf("%s", json)
+				json, _ := json.Marshal(checkout.Definition)
+				b.shell.Commentf("Plugin configuration JSON is %s", json)
 			}
 
 			val := &plugin.Validator{}
 			result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
 
 			if !result.Valid {
-				b.shell.Commentf("Validation plugin config of %q failed", checkout.Label())
+				b.shell.Headerf("Plugin validation failed for %q", checkout.Label())
+				b.shell.Commentf("Plugin JSON is %s", b.Plugins)
 				return result
 			} else {
-				b.shell.Commentf("Validation plugin config of %q succeeded", checkout.Label())
+				b.shell.Commentf("Valid plugin configuration for %q", checkout.Label())
 			}
 		}
 	}
