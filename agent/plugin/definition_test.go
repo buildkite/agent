@@ -84,6 +84,6 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 
 	assert.False(t, res.Valid)
 	assert.Equal(t, res.Errors, []string{
-		`Plugin validation failed at /: {"llamas":"always"} "alpacas" value is required`,
+		`/: {"llamas":"always"} "alpacas" value is required`,
 	})
 }
