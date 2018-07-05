@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/buildkite/bintest"
@@ -31,6 +33,8 @@ type BootstrapTester struct {
 	Repo       *gitRepository
 	Output     string
 
+	cmd      *exec.Cmd
+	cmdLock  sync.Mutex
 	hookMock *bintest.Mock
 	mocks    []*bintest.Mock
 }
@@ -224,23 +228,40 @@ func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 		return err
 	}
 
-	cmd := exec.Command(path, b.Args...)
+	b.cmdLock.Lock()
+	b.cmd = exec.Command(path, b.Args...)
+
 	buf := &buffer{}
 
 	if os.Getenv(`DEBUG_BOOTSTRAP`) == "1" {
 		w := newTestLogWriter(t)
-		cmd.Stdout = io.MultiWriter(buf, w)
-		cmd.Stderr = io.MultiWriter(buf, w)
+		b.cmd.Stdout = io.MultiWriter(buf, w)
+		b.cmd.Stderr = io.MultiWriter(buf, w)
 	} else {
-		cmd.Stdout = buf
-		cmd.Stderr = buf
+		b.cmd.Stdout = buf
+		b.cmd.Stderr = buf
 	}
 
-	cmd.Env = append(b.Env, env...)
+	b.cmd.Env = append(b.Env, env...)
 
-	err = cmd.Run()
+	err = b.cmd.Start()
+	if err != nil {
+		b.cmdLock.Unlock()
+		return err
+	}
+
+	b.cmdLock.Unlock()
+
+	err = b.cmd.Wait()
 	b.Output = buf.String()
 	return err
+}
+
+func (b *BootstrapTester) Cancel() error {
+	b.cmdLock.Lock()
+	defer b.cmdLock.Unlock()
+	log.Printf("Killing pid %d", b.cmd.Process.Pid)
+	return b.cmd.Process.Signal(syscall.SIGINT)
 }
 
 func (b *BootstrapTester) CheckMocks(t *testing.T) {
