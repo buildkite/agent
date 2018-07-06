@@ -51,6 +51,12 @@
 			"revisionTime": "2016-10-29T20:57:26Z"
 		},
 		{
+			"checksumSHA1": "2DkaOkIZMaQHOiON70xIrL/3TRs=",
+			"path": "github.com/denisbrodbeck/machineid",
+			"revision": "f73c20e1eb0edb032f45bf995dd3875b12fa0531",
+			"revisionTime": "2018-02-08T19:16:14Z"
+		},
+		{
 			"checksumSHA1": "kBeNcaKk56FguvPSUCEaH6AxpRc=",
 			"path": "github.com/golang/protobuf/proto",
 			"revision": "69b215d01a5606c843240eab4937eab3acee6530",
@@ -217,6 +223,18 @@
 			"path": "golang.org/x/sys/unix",
 			"revision": "075e574b89e4c2d22f2286a7e2b919519c6f3547",
 			"revisionTime": "2017-02-16T21:06:26Z"
+		},
+		{
+			"checksumSHA1": "OnMg/E0jAbpbS8yFOIz8KcUHXWY=",
+			"path": "golang.org/x/sys/windows",
+			"revision": "ce36f3865eeb42541ce3f87f32f8462c5687befa",
+			"revisionTime": "2018-07-05T15:01:54Z"
+		},
+		{
+			"checksumSHA1": "P9OIhD26uWlIST/me4TYnvseCoY=",
+			"path": "golang.org/x/sys/windows/registry",
+			"revision": "ce36f3865eeb42541ce3f87f32f8462c5687befa",
+			"revisionTime": "2018-07-05T15:01:54Z"
 		},
 		{
 			"checksumSHA1": "8Z43m+zNTbxHUHQPMUNirEp1BLg=",
