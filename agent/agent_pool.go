@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/signalwatcher"
 	"github.com/buildkite/agent/system"
+	"github.com/denisbrodbeck/machineid"
 )
 
 type AgentPool struct {
@@ -26,6 +27,7 @@ type AgentPool struct {
 	TagsFromEC2           bool
 	TagsFromEC2Tags       bool
 	TagsFromGCP           bool
+	TagsFromHost          bool
 	WaitForEC2TagsTimeout time.Duration
 	Endpoint              string
 	AgentConfiguration    *AgentConfiguration
@@ -129,6 +131,13 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		Arch:              runtime.GOARCH,
 	}
 
+	// get a unique identifier for the underlying host
+	if machineID, err := machineid.ProtectedID("buildkite-agent"); err != nil {
+		logger.Warn("Failed to find unique machine-id", err)
+	} else {
+		agent.MachineID = machineID
+	}
+
 	// Attempt to add the EC2 tags
 	if r.TagsFromEC2 {
 		logger.Info("Fetching EC2 meta-data...")
@@ -207,6 +216,17 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	agent.OS, err = system.VersionDump()
 	if err != nil {
 		logger.Warn("Failed to find OS information: %s", err)
+	}
+
+	// Attempt to add the host tags
+	if r.TagsFromHost {
+		agent.Tags = append(agent.Tags,
+			fmt.Sprintf("hostname=%s", agent.Hostname),
+			fmt.Sprintf("os=%s", runtime.GOOS),
+		)
+		if agent.MachineID != "" {
+			agent.Tags = append(agent.Tags, fmt.Sprintf("machine-id=%s", agent.MachineID))
+		}
 	}
 
 	return agent

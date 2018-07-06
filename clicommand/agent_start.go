@@ -53,6 +53,7 @@ type AgentStartConfig struct {
 	TagsFromEC2               bool     `cli:"tags-from-ec2"`
 	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
 	TagsFromGCP               bool     `cli:"tags-from-gcp"`
+	TagsFromHost              bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
 	GitCloneFlags             string   `cli:"git-clone-flags"`
 	GitCleanFlags             string   `cli:"git-clean-flags"`
@@ -166,6 +167,11 @@ var AgentStartCommand = cli.Command{
 			Value:  &cli.StringSlice{},
 			Usage:  "A comma-separated list of tags for the agent (e.g. \"linux\" or \"mac,xcode=8\")",
 			EnvVar: "BUILDKITE_AGENT_TAGS",
+		},
+		cli.BoolFlag{
+			Name:   "tags-from-host",
+			Usage:  "Include tags from the host (hostname, machine-id, os)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-ec2",
@@ -355,6 +361,7 @@ var AgentStartCommand = cli.Command{
 			TagsFromEC2:           cfg.TagsFromEC2,
 			TagsFromEC2Tags:       cfg.TagsFromEC2Tags,
 			TagsFromGCP:           cfg.TagsFromGCP,
+			TagsFromHost:          cfg.TagsFromHost,
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
