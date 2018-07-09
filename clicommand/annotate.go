@@ -29,7 +29,8 @@ Description:
    - Graphs that include analysis about your codebase
    - Helpful information for team members about what happened during a build
 
-   Annotations can be written in either Markdown or HTML.
+   Annotations are written in CommonMark-compliant Markdown, with "GitHub
+   Flavored Markdown" extensions.
 
    You can update an existing annotation's body by running the annotate command
    again and provide the same context as the one you want to update. Or if you
