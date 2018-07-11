@@ -29,6 +29,7 @@ type Agent struct {
 	Build             string   `json:"build" msgpack:"build"`
 	Tags              []string `json:"meta_data" msgpack:"meta_data"`
 	PID               int      `json:"pid,omitempty" msgpack:"pid,omitempty"`
+	MachineID         string   `json:"machine_id,omitempty" msgpack:"machine_id,omitempty"`
 }
 
 // Registers the agent against the Buildktie Agent API. The client for this
