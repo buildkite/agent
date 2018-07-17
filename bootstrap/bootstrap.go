@@ -462,14 +462,14 @@ func (b *Bootstrap) PluginPhase() error {
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
 		}
-		if b.Config.PluginValidation && checkout.Definition == nil {
+		if b.Config.PluginValidation {
 			if b.Debug {
-				b.shell.Commentf("Parsing plugin definition for %q from %s", p.Label(), checkout.CheckoutDir)
+				b.shell.Commentf("Parsing plugin definition for %s from %s", p.Name(), checkout.CheckoutDir)
 			}
 			// parse the plugin definition from the plugin checkout dir
 			checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
 			if err == plugin.ErrDefinitionNotFound {
-				b.shell.Warningf("Failed to find plugin definition")
+				b.shell.Warningf("Failed to find plugin definition for plugin %s", p.Name())
 			} else if err != nil {
 				return err
 			}
@@ -479,20 +479,21 @@ func (b *Bootstrap) PluginPhase() error {
 
 	if b.Config.PluginValidation {
 		for _, checkout := range b.plugins {
-			if b.Debug {
-				json, _ := json.Marshal(checkout.Definition)
-				b.shell.Commentf("Plugin configuration JSON is %s", json)
+			// This is nil if the definition failed to parse or is missing
+			if checkout.Definition == nil {
+				continue
 			}
 
 			val := &plugin.Validator{}
 			result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
 
 			if !result.Valid {
-				b.shell.Headerf("Plugin validation failed for %q", checkout.Label())
-				b.shell.Commentf("Plugin JSON is %s", b.Plugins)
+				b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
+				json, _ := json.Marshal(checkout.Plugin.Configuration)
+				b.shell.Commentf("Plugin configuration JSON is %s", json)
 				return result
 			} else {
-				b.shell.Commentf("Valid plugin configuration for %q", checkout.Label())
+				b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
 			}
 		}
 	}
