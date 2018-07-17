@@ -349,6 +349,9 @@ func (b *Bootstrap) setUp() error {
 
 	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
+	// The job runner rewrites any protected environment variables to a certain format
+	// This detects those environment vars and shows a warning to the user so they don't get confused
+	// when their environment changes don't seem to do anything
 	if ignored := b.ignoredEnv(); len(ignored) > 0 {
 		b.shell.Headerf("Detected protected environment variables")
 		b.shell.Commentf("Your pipeline environment has protected environment variables set. These can only be set via hooks or via the agent configuration.")
