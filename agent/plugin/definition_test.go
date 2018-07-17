@@ -39,7 +39,7 @@ func TestDefinitionParsesYaml(t *testing.T) {
 
 func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
 	validator := &Validator{
-		CommandExists: func(cmd string) bool {
+		commandExists: func(cmd string) bool {
 			return false
 		},
 	}
@@ -50,7 +50,7 @@ func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
 
 	res := validator.Validate(def, nil)
 
-	assert.False(t, res.Valid)
+	assert.False(t, res.Valid())
 	assert.Equal(t, res.Errors, []string{
 		`Required command "llamas" isn't in PATH`,
 	})
@@ -58,7 +58,7 @@ func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
 
 func TestDefinitionValidatesConfiguration(t *testing.T) {
 	validator := &Validator{
-		CommandExists: func(cmd string) bool {
+		commandExists: func(cmd string) bool {
 			return false
 		},
 	}
@@ -82,7 +82,7 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 		"llamas": "always",
 	})
 
-	assert.False(t, res.Valid)
+	assert.False(t, res.Valid())
 	assert.Equal(t, res.Errors, []string{
 		`/: {"llamas":"always"} "alpacas" value is required`,
 	})

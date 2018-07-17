@@ -487,7 +487,7 @@ func (b *Bootstrap) PluginPhase() error {
 			val := &plugin.Validator{}
 			result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
 
-			if !result.Valid {
+			if !result.Valid() {
 				b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
 				json, _ := json.Marshal(checkout.Plugin.Configuration)
 				b.shell.Commentf("Plugin configuration JSON is %s", json)

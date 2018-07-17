@@ -87,23 +87,21 @@ func findDefinitionFile(dir string) (string, error) {
 }
 
 type Validator struct {
-	CommandExists func(string) bool
+	commandExists func(string) bool
 }
 
 func (v Validator) Validate(def *Definition, config map[string]interface{}) ValidateResult {
 	result := ValidateResult{
-		Valid:  true,
 		Errors: []string{},
 	}
 
 	configAsJson, err := json.Marshal(config)
 	if err != nil {
-		result.Valid = false
 		result.Errors = append(result.Errors, err.Error())
 		return result
 	}
 
-	var commandExistsFunc = v.CommandExists
+	var commandExistsFunc = v.commandExists
 	if commandExistsFunc == nil {
 		commandExistsFunc = commandExists
 	}
@@ -112,7 +110,6 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 	if def.Requirements != nil {
 		for _, command := range def.Requirements {
 			if !commandExistsFunc(command) {
-				result.Valid = false
 				result.Errors = append(result.Errors,
 					fmt.Sprintf(`Required command %q isn't in PATH`, command))
 			}
@@ -123,11 +120,9 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 	if def.Configuration != nil {
 		valErrors, err := def.Configuration.ValidateBytes(configAsJson)
 		if err != nil {
-			result.Valid = false
 			result.Errors = append(result.Errors, err.Error())
 		}
 		if len(valErrors) > 0 {
-			result.Valid = false
 			for _, err := range valErrors {
 				result.Errors = append(result.Errors, err.Error())
 			}
@@ -138,8 +133,11 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 }
 
 type ValidateResult struct {
-	Valid  bool
 	Errors []string
+}
+
+func (vr ValidateResult) Valid() bool {
+	return len(vr.Errors) == 0
 }
 
 func (vr ValidateResult) Error() string {
