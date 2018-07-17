@@ -354,7 +354,8 @@ func (b *Bootstrap) setUp() error {
 	// when their environment changes don't seem to do anything
 	if ignored := b.ignoredEnv(); len(ignored) > 0 {
 		b.shell.Headerf("Detected protected environment variables")
-		b.shell.Commentf("Your pipeline environment has protected environment variables set. These can only be set via hooks or via the agent configuration.")
+		b.shell.Commentf("Your pipeline environment has protected environment variables set. " +
+			"These can only be set via hooks, plugins or the agent configuration.")
 
 		for _, env := range ignored {
 			b.shell.Warningf("Ignoring %s", env)
