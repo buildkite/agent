@@ -349,6 +349,17 @@ func (b *Bootstrap) setUp() error {
 
 	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
+	if ignored := b.ignoredEnv(); len(ignored) > 0 {
+		b.shell.Headerf("Detected protected environment variables")
+		b.shell.Commentf("Your pipeline environment has protected environment variables set. These can only be set via hooks or via the agent configuration.")
+
+		for _, env := range ignored {
+			b.shell.Warningf("Ignoring %s", env)
+		}
+
+		b.shell.Printf("^^^ +++")
+	}
+
 	if b.Debug {
 		b.shell.Headerf("Buildkite environment variables")
 		for _, e := range b.shell.Env.ToSlice() {
@@ -1102,6 +1113,21 @@ func (b *Bootstrap) uploadArtifacts() error {
 	}
 
 	return nil
+}
+
+// Check for ignored env variables from the job runner. Some
+// env (e.g BUILDKITE_BUILD_PATH) can only be set from config or by hooks.
+// If these env are set at a pipeline level, we rewrite them to BUILDKITE_X_BUILD_PATH
+// and warn on them here so that users know what is going on
+func (b *Bootstrap) ignoredEnv() []string {
+	var ignored []string
+	for _, env := range os.Environ() {
+		if strings.HasPrefix(env, `BUILDKITE_X_`) {
+			ignored = append(ignored, fmt.Sprintf("BUILDKITE_%s",
+				strings.TrimPrefix(env, `BUILDKITE_X_`)))
+		}
+	}
+	return ignored
 }
 
 type pluginCheckout struct {
