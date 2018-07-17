@@ -56,6 +56,8 @@ type BootstrapConfig struct {
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
 	Shell                        string `cli:"shell"`
+	CheckoutOnly                 bool   `cli:"checkout-only"`
+	CommandOnly                  bool   `cli:"command-only"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -230,6 +232,16 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_SHELL",
 			Value:  DefaultShell(),
 		},
+		cli.BoolFlag{
+			Name:   "checkout-only",
+			Usage:  "Only execute the checkout phase",
+			EnvVar: "BUILDKITE_CHECKOUT_ONLY",
+		},
+		cli.BoolFlag{
+			Name:   "command-only",
+			Usage:  "Only execute the command phase",
+			EnvVar: "BUILDKITE_COMMAND_ONLY",
+		},
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
@@ -247,8 +259,14 @@ var BootstrapCommand = cli.Command{
 			runInPty = false
 		}
 
+		if cfg.CheckoutOnly && cfg.CommandOnly {
+			logger.Fatal("Only one of checkout-only and command-only can be set")
+		}
+
 		// Configure the bootstraper
 		bootstrap := &bootstrap.Bootstrap{
+			CheckoutOnly: cfg.CheckoutOnly,
+			CommandOnly:  cfg.CommandOnly,
 			Config: bootstrap.Config{
 				Command:                      cfg.Command,
 				JobID:                        cfg.JobID,
