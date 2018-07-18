@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +38,7 @@ type JobRunner struct {
 	AgentConfiguration *AgentConfiguration
 
 	// Go context for goroutine supervision
-	context context.Context
+	context       context.Context
 	contextCancel context.CancelFunc
 
 	// The interal process of the job
@@ -242,6 +243,43 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 			return nil, err
 		}
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
+	}
+
+	// Certain env can only be set by agent configuration.
+	// We show the user a warning in the bootstrap if they use any of these at a job level.
+
+	var protectedEnv = []string{
+		`BUILDKITE_AGENT_ENDPOINT`,
+		`BUILDKITE_AGENT_ACCESS_TOKEN`,
+		`BUILDKITE_AGENT_DEBUG`,
+		`BUILDKITE_AGENT_PID`,
+		`BUILDKITE_BIN_PATH`,
+		`BUILDKITE_CONFIG_PATH`,
+		`BUILDKITE_BUILD_PATH`,
+		`BUILDKITE_HOOKS_PATH`,
+		`BUILDKITE_PLUGINS_PATH`,
+		`BUILDKITE_SSH_KEYSCAN`,
+		`BUILDKITE_GIT_SUBMODULES`,
+		`BUILDKITE_COMMAND_EVAL`,
+		`BUILDKITE_PLUGINS_ENABLED`,
+		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
+		`BUILDKITE_GIT_CLONE_FLAGS`,
+		`BUILDKITE_GIT_CLEAN_FLAGS`,
+		`BUILDKITE_SHELL`,
+	}
+
+	var ignoredEnv []string
+
+	// Check if the user has defined any protected env
+	for _, p := range protectedEnv {
+		if _, exists := r.Job.Env[p]; exists {
+			ignoredEnv = append(ignoredEnv, p)
+		}
+	}
+
+	// Set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings
+	if len(ignoredEnv) > 0 {
+		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
 	if experiments.IsEnabled("agent-socket") {
