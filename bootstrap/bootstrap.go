@@ -29,6 +29,9 @@ type Bootstrap struct {
 	// Config provides the bootstrap configuration
 	Config
 
+	// Phases to execute, defaults to all phases
+	Phases []string
+
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
 
@@ -73,19 +76,29 @@ func (b *Bootstrap) Start() (exitCode int) {
 		return shell.GetExitCode(err)
 	}
 
-	// These are the "Phases of bootstrap execution". They are designed to be
-	// run independently at some later stage (think buildkite-agent bootstrap checkout)
-	var phases = []func() error{
-		b.PluginPhase,
-		b.CheckoutPhase,
-		b.CommandPhase,
+	var includePhase = func(phase string) bool {
+		if len(b.Phases) == 0 {
+			return true
+		}
+		for _, include := range b.Phases {
+			if include == phase {
+				return true
+			}
+		}
+		return false
 	}
 
+	//  Execute the bootstrap phases
 	var phaseError error
-
-	for _, phase := range phases {
-		if phaseError = phase(); phaseError != nil {
-			break
+	for phase, phaseFunc := range map[string]func() error{
+		`plugin`:   b.PluginPhase,
+		`checkout`: b.CheckoutPhase,
+		`command`:  b.CommandPhase,
+	} {
+		if includePhase(phase) {
+			if phaseError = phaseFunc(); phaseError != nil {
+				break
+			}
 		}
 	}
 
