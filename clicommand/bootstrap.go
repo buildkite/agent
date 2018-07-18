@@ -244,7 +244,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.StringSliceFlag{
 			Name:   "phases",
-			Usage:  "The specific phases to execute",
+			Usage:  "The specific phases to execute. The order they're defined is is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
 		DebugFlag,
