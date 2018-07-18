@@ -363,6 +363,10 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 }
 
 func TestPreExitHooksFireAfterCancel(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
