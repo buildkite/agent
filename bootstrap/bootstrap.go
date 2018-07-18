@@ -88,18 +88,19 @@ func (b *Bootstrap) Start() (exitCode int) {
 		return false
 	}
 
-	//  Execute the bootstrap phases
-	var phaseError error
-	for phase, phaseFunc := range map[string]func() error{
-		`plugin`:   b.PluginPhase,
-		`checkout`: b.CheckoutPhase,
-		`command`:  b.CommandPhase,
-	} {
-		if includePhase(phase) {
-			if phaseError = phaseFunc(); phaseError != nil {
-				break
-			}
-		}
+	//  Execute the bootstrap phases in order
+	var phaseErr error
+
+	if includePhase(`plugin`) {
+		phaseErr = b.PluginPhase()
+	}
+
+	if phaseErr == nil && includePhase(`checkout`) {
+		phaseErr = b.CheckoutPhase()
+	}
+
+	if phaseErr == nil && includePhase(`command`) {
+		phaseErr = b.CommandPhase()
 	}
 
 	if err := b.uploadArtifacts(); err != nil {
@@ -109,9 +110,9 @@ func (b *Bootstrap) Start() (exitCode int) {
 
 	// Phase errors are where something of ours broke that merits a big red error
 	// this won't include command failures, as we view that as more in the user space
-	if phaseError != nil {
-		b.shell.Errorf("%v", phaseError)
-		return shell.GetExitCode(phaseError)
+	if phaseErr != nil {
+		b.shell.Errorf("%v", phaseErr)
+		return shell.GetExitCode(phaseErr)
 	}
 
 	// Use the exit code from the command phase
