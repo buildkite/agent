@@ -245,8 +245,8 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
-	// Certain env can only be set by agent configuration. We rewrite these env
-	// to BUILDKITE_X_BLAH so that we can show the user a warning in the bootstrap
+	// Certain env can only be set by agent configuration.
+	// We show the user a warning in the bootstrap if they use any of these at a job level.
 
 	var protectedEnv = []string{
 		`BUILDKITE_AGENT_ENDPOINT`,
@@ -268,10 +268,18 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_SHELL`,
 	}
 
+	var ignoredEnv []string
+
+	// Check if the user has defined any protected env
 	for _, p := range protectedEnv {
-		if val, exists := r.Job.Env[p]; exists {
-			env[fmt.Sprintf("BUILDKITE_X_%s", strings.TrimPrefix(p, "BUILDKITE_"))] = val
+		if _, exists := r.Job.Env[p]; exists {
+			ignoredEnv = append(ignoredEnv, p)
 		}
+	}
+
+	// Set BUILDKITE_IGNORED_ENV so the bootstrap can show warnings
+	if len(ignoredEnv) > 0 {
+		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
 	if experiments.IsEnabled("agent-socket") {

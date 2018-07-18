@@ -349,16 +349,16 @@ func (b *Bootstrap) setUp() error {
 
 	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 
-	// The job runner rewrites any protected environment variables to a certain format
-	// This detects those environment vars and shows a warning to the user so they don't get confused
+	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
+	// or overwritten. This shows a warning to the user so they don't get confused
 	// when their environment changes don't seem to do anything
-	if ignored := b.ignoredEnv(); len(ignored) > 0 {
+	if ignored, exists := b.shell.Env.Get("BUILDKITE_IGNORED_ENV"); exists {
 		b.shell.Headerf("Detected protected environment variables")
 		b.shell.Commentf("Your pipeline environment has protected environment variables set. " +
 			"These can only be set via hooks, plugins or the agent configuration.")
 
-		for _, env := range ignored {
-			b.shell.Warningf("Ignoring %s", env)
+		for _, env := range strings.Split(ignored, ",") {
+			b.shell.Warningf("Ignored %s", env)
 		}
 
 		b.shell.Printf("^^^ +++")
