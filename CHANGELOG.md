@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.4.0](https://github.com/buildkite/agent/tree/v3.4.0) (2018-07-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.3.0...v3.4.0)
+
+### Changed
+- Add basic plugin definition parsing [#748](https://github.com/buildkite/agent/pull/748) (@lox)
+- Allow specifying which phases bootstrap should execute [#799](https://github.com/buildkite/agent/pull/799) (@lox)
+- Warn in bootstrap when protected env are used [#796](https://github.com/buildkite/agent/pull/796) (@lox)
+- Cancellation on windows kills bootstrap subprocesses [#795](https://github.com/buildkite/agent/pull/795) (@amitsaha)
+
 ## [v3.3.0](https://github.com/buildkite/agent/tree/v3.3.0) (2018-07-11)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.2.1...v3.3.0)
 
