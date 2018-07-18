@@ -1,4 +1,4 @@
-package agent
+package plugin
 
 import (
 	"encoding/json"
@@ -55,7 +55,7 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 }
 
 // Given a JSON structure, convert it to an array of plugins
-func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
+func CreateFromJSON(j string) ([]*Plugin, error) {
 	// Use more versatile number decoding
 	decoder := json.NewDecoder(strings.NewReader(j))
 	decoder.UseNumber()

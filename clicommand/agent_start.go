@@ -63,6 +63,7 @@ type AgentStartConfig struct {
 	NoCommandEval             bool     `cli:"no-command-eval"`
 	NoLocalHooks              bool     `cli:"no-local-hooks"`
 	NoPlugins                 bool     `cli:"no-plugins"`
+	NoPluginValidation        bool     `cli:"no-plugin-validation"`
 	NoPTY                     bool     `cli:"no-pty"`
 	TimestampLines            bool     `cli:"timestamp-lines"`
 	Endpoint                  string   `cli:"endpoint" validate:"required"`
@@ -255,6 +256,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to load plugins",
 			EnvVar: "BUILDKITE_NO_PLUGINS",
 		},
+		cli.BoolTFlag{
+			Name:   "no-plugin-validation",
+			Usage:  "Don't validate plugin configuration and requirements",
+			EnvVar: "BUILDKITE_NO_PLUGIN_VALIDATION",
+		},
 		cli.BoolFlag{
 			Name:   "no-local-hooks",
 			Usage:  "Don't allow local hooks to be run from checked out repositories",
@@ -391,6 +397,7 @@ var AgentStartCommand = cli.Command{
 				SSHKeyscan:                !cfg.NoSSHKeyscan,
 				CommandEval:               !cfg.NoCommandEval,
 				PluginsEnabled:            !cfg.NoPlugins,
+				PluginValidation:          !cfg.NoPluginValidation,
 				LocalHooksEnabled:         !cfg.NoLocalHooks,
 				RunInPty:                  !cfg.NoPTY,
 				TimestampLines:            cfg.TimestampLines,

@@ -313,6 +313,19 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.AgentConfiguration.GitCleanFlags
 	env["BUILDKITE_SHELL"] = r.AgentConfiguration.Shell
 
+	enablePluginValidation := r.AgentConfiguration.PluginValidation
+
+	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
+	// per-pipeline testing
+	if pluginValidation, ok := env["BUILDKITE_PLUGIN_VALIDATION"]; ok {
+		switch pluginValidation {
+		case "true", "1", "on":
+			enablePluginValidation = true
+		}
+	}
+
+	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
+
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
 	envSlice := []string{}

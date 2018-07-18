@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/process"
@@ -449,7 +450,7 @@ func (b *Bootstrap) PluginPhase() error {
 		}
 	}
 
-	plugins, err := agent.CreatePluginsFromJSON(b.Plugins)
+	plugins, err := plugin.CreateFromJSON(b.Plugins)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse plugin definition")
 	}
@@ -460,9 +461,41 @@ func (b *Bootstrap) PluginPhase() error {
 		checkout, err := b.checkoutPlugin(p)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
-
+		}
+		if b.Config.PluginValidation {
+			if b.Debug {
+				b.shell.Commentf("Parsing plugin definition for %s from %s", p.Name(), checkout.CheckoutDir)
+			}
+			// parse the plugin definition from the plugin checkout dir
+			checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
+			if err == plugin.ErrDefinitionNotFound {
+				b.shell.Warningf("Failed to find plugin definition for plugin %s", p.Name())
+			} else if err != nil {
+				return err
+			}
 		}
 		b.plugins = append(b.plugins, checkout)
+	}
+
+	if b.Config.PluginValidation {
+		for _, checkout := range b.plugins {
+			// This is nil if the definition failed to parse or is missing
+			if checkout.Definition == nil {
+				continue
+			}
+
+			val := &plugin.Validator{}
+			result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
+
+			if !result.Valid() {
+				b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
+				json, _ := json.Marshal(checkout.Plugin.Configuration)
+				b.shell.Commentf("Plugin configuration JSON is %s", json)
+				return result
+			} else {
+				b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
+			}
+		}
 	}
 
 	// Now we can run plugin environment hooks too
@@ -496,7 +529,7 @@ func (b *Bootstrap) hasPluginHook(name string) bool {
 }
 
 // Checkout a given plugin to the plugins directory and return that directory
-func (b *Bootstrap) checkoutPlugin(p *agent.Plugin) (*pluginCheckout, error) {
+func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Get the identifer for the plugin
 	id, err := p.Identifier()
 	if err != nil {
@@ -1149,7 +1182,8 @@ func (b *Bootstrap) ignoredEnv() []string {
 }
 
 type pluginCheckout struct {
-	*agent.Plugin
+	*plugin.Plugin
+	*plugin.Definition
 	CheckoutDir string
 	HooksDir    string
 }
