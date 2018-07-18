@@ -29,6 +29,9 @@ type Bootstrap struct {
 	// Config provides the bootstrap configuration
 	Config
 
+	// Phases to execute, defaults to all phases
+	Phases []string
+
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
 
@@ -73,20 +76,31 @@ func (b *Bootstrap) Start() (exitCode int) {
 		return shell.GetExitCode(err)
 	}
 
-	// These are the "Phases of bootstrap execution". They are designed to be
-	// run independently at some later stage (think buildkite-agent bootstrap checkout)
-	var phases = []func() error{
-		b.PluginPhase,
-		b.CheckoutPhase,
-		b.CommandPhase,
+	var includePhase = func(phase string) bool {
+		if len(b.Phases) == 0 {
+			return true
+		}
+		for _, include := range b.Phases {
+			if include == phase {
+				return true
+			}
+		}
+		return false
 	}
 
-	var phaseError error
+	//  Execute the bootstrap phases in order
+	var phaseErr error
 
-	for _, phase := range phases {
-		if phaseError = phase(); phaseError != nil {
-			break
-		}
+	if includePhase(`plugin`) {
+		phaseErr = b.PluginPhase()
+	}
+
+	if phaseErr == nil && includePhase(`checkout`) {
+		phaseErr = b.CheckoutPhase()
+	}
+
+	if phaseErr == nil && includePhase(`command`) {
+		phaseErr = b.CommandPhase()
 	}
 
 	if err := b.uploadArtifacts(); err != nil {
@@ -96,9 +110,9 @@ func (b *Bootstrap) Start() (exitCode int) {
 
 	// Phase errors are where something of ours broke that merits a big red error
 	// this won't include command failures, as we view that as more in the user space
-	if phaseError != nil {
-		b.shell.Errorf("%v", phaseError)
-		return shell.GetExitCode(phaseError)
+	if phaseErr != nil {
+		b.shell.Errorf("%v", phaseErr)
+		return shell.GetExitCode(phaseErr)
 	}
 
 	// Use the exit code from the command phase
