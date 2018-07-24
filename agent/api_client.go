@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
 	"golang.org/x/net/http2"
 )
 
@@ -19,6 +18,7 @@ var debug = false
 type APIClient struct {
 	Endpoint string
 	Token    string
+	Socket   string
 }
 
 func APIClientEnableHTTPDebug() {
@@ -26,13 +26,8 @@ func APIClientEnableHTTPDebug() {
 }
 
 func (a APIClient) Create() *api.Client {
-	u, err := url.Parse(a.Endpoint)
-	if err != nil {
-		logger.Warn("Failed to parse %q: %v", a.Endpoint, err)
-	}
-
-	if u != nil && u.Scheme == `unix` {
-		return a.createFromSocket(u.Path)
+	if a.Socket != "" {
+		return a.createFromSocket(a.Socket)
 	}
 
 	httpTransport := &http.Transport{
@@ -65,12 +60,8 @@ func (a APIClient) Create() *api.Client {
 
 func (a APIClient) createFromSocket(socket string) *api.Client {
 	httpClient := &http.Client{
-		Transport: &api.AuthenticatedTransport{
-			Token: a.Token,
-			Transport: &socketTransport{
-				Socket:      socket,
-				DialTimeout: 30 * time.Second,
-			},
+		Transport: &socketTransport{
+			Socket: socket,
 		},
 	}
 

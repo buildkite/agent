@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/oleiade/reflections"
@@ -24,6 +25,12 @@ var EndpointFlag = cli.StringFlag{
 	Value:  DefaultEndpoint,
 	Usage:  "The Agent API endpoint",
 	EnvVar: "BUILDKITE_AGENT_ENDPOINT",
+}
+
+var AgentSocketFlag = cli.StringFlag{
+	Name:   "agent-socket",
+	Usage:  "The Agent API socket",
+	EnvVar: "BUILDKITE_AGENT_SOCKET",
 }
 
 var DebugFlag = cli.BoolFlag{
@@ -80,4 +87,33 @@ func HandleGlobalFlags(cfg interface{}) {
 			}
 		}
 	}
+}
+
+func CreateAPIClientFromConfig(cfg interface{}) *api.Client {
+	var hasSocket, hasEndpoint, hasAccessToken bool
+
+	socket, err := reflections.GetField(cfg, "AgentSocket")
+	if socket != "" && err == nil {
+		hasSocket = true
+	}
+
+	endpoint, err := reflections.GetField(cfg, "Endpoint")
+	if endpoint != "" && err == nil {
+		hasEndpoint = true
+	}
+
+	accessToken, err := reflections.GetField(cfg, "AgentAccessToken")
+	if accessToken != "" && err == nil {
+		hasAccessToken = true
+	}
+
+	if !hasSocket && !hasEndpoint && !hasAccessToken {
+		logger.Fatal("Must provide either agent-socket or agent-access-token and endpoint")
+	}
+
+	return agent.APIClient{
+		Endpoint: endpoint.(string),
+		Token:    accessToken.(string),
+		Socket:   socket.(string),
+	}.Create()
 }

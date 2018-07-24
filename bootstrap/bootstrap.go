@@ -901,8 +901,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		}
 	}
 
-	if _, hasToken := b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
-		b.shell.Warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
+	if !b.Config.SendGitCommitMetadata {
 		return nil
 	}
 

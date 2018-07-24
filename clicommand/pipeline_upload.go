@@ -49,7 +49,8 @@ type PipelineUploadConfig struct {
 	Replace          bool   `cli:"replace"`
 	Job              string `cli:"job"`
 	AgentAccessToken string `cli:"agent-access-token"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
+	AgentSocket      string `cli:"agent-socket"`
+	Endpoint         string `cli:"endpoint"`
 	DryRun           bool   `cli:"dry-run"`
 	NoColor          bool   `cli:"no-color"`
 	NoInterpolation  bool   `cli:"no-interpolation"`
@@ -84,6 +85,7 @@ var PipelineUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 		AgentAccessTokenFlag,
+		AgentSocketFlag,
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
@@ -200,16 +202,8 @@ var PipelineUploadCommand = cli.Command{
 			logger.Fatal("Missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
 		}
 
-		// Check we have an agent access token if not in dry run
-		if cfg.AgentAccessToken == "" {
-			logger.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
-		}
-
 		// Create the API client
-		client := agent.APIClient{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		}.Create()
+		client := CreateAPIClientFromConfig(cfg)
 
 		// Generate a UUID that will identifiy this pipeline change. We
 		// do this outside of the retry loop because we want this UUID

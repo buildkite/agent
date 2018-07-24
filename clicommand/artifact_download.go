@@ -39,6 +39,7 @@ type ArtifactDownloadConfig struct {
 	Step             string `cli:"step"`
 	Build            string `cli:"build" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	AgentSocket      string `cli:"agent-socket"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
@@ -63,6 +64,7 @@ var ArtifactDownloadCommand = cli.Command{
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		AgentSocketFlag,
 		NoColorFlag,
 		DebugFlag,
 		DebugHTTPFlag,
@@ -81,10 +83,7 @@ var ArtifactDownloadCommand = cli.Command{
 
 		// Setup the downloader
 		downloader := agent.ArtifactDownloader{
-			APIClient: agent.APIClient{
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			}.Create(),
+			APIClient:   CreateAPIClientFromConfig(cfg),
 			Query:       cfg.Query,
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,

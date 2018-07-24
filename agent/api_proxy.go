@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -11,7 +9,6 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"time"
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
@@ -22,7 +19,6 @@ import (
 type APIProxy struct {
 	upstreamToken    string
 	upstreamEndpoint string
-	token            string
 	socket           *os.File
 	listener         net.Listener
 	listenerWg       *sync.WaitGroup
@@ -35,7 +31,6 @@ func NewAPIProxy(endpoint string, token string) *APIProxy {
 	return &APIProxy{
 		upstreamToken:    token,
 		upstreamEndpoint: endpoint,
-		token:            fmt.Sprintf("%x", sha256.Sum256([]byte(string(time.Now().UnixNano())))),
 		listenerWg:       &wg,
 	}
 }
@@ -76,10 +71,6 @@ func (p *APIProxy) Listen() error {
 
 		// serve traffic, proxy off to the reverse proxy
 		_ = http.Serve(p.listener, http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-			if r.Header.Get(`Authorization`) != `Token `+p.token {
-				http.Error(rw, "Invalid authorization token", http.StatusBadRequest)
-				return
-			}
 			proxy.ServeHTTP(rw, r)
 		}))
 	}()
@@ -135,13 +126,10 @@ func (p *APIProxy) Wait() {
 	p.listenerWg.Wait()
 }
 
+// Endpoint returns either the socket name or a url if the endpoint is http
 func (p *APIProxy) Endpoint() string {
 	if p.socket != nil {
-		return `unix://` + p.listener.Addr().String()
+		return p.listener.Addr().String()
 	}
 	return `http://` + p.listener.Addr().String()
-}
-
-func (p *APIProxy) AccessToken() string {
-	return p.token
 }

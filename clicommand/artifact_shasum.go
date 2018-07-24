@@ -41,6 +41,7 @@ type ArtifactShasumConfig struct {
 	Step             string `cli:"step"`
 	Build            string `cli:"build" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	AgentSocket      string `cli:"agent-socket"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
@@ -64,6 +65,7 @@ var ArtifactShasumCommand = cli.Command{
 			Usage:  "The build that the artifacts were uploaded to",
 		},
 		AgentAccessTokenFlag,
+		AgentSocketFlag,
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
@@ -83,11 +85,8 @@ var ArtifactShasumCommand = cli.Command{
 
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.ArtifactSearcher{
-			APIClient: agent.APIClient{
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			}.Create(),
-			BuildID: cfg.Build,
+			APIClient: CreateAPIClientFromConfig(cfg),
+			BuildID:   cfg.Build,
 		}
 
 		artifacts, err := searcher.Search(cfg.Query, cfg.Step)

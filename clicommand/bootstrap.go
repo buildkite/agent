@@ -280,6 +280,14 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		// Send git commit metadata as part of bootstrap
+		// only if we have a token or a socket
+		var sendGitCommitMetadata bool
+		if os.Getenv("BUILDKITE_AGENT_ACCESS_TOKEN") != "" ||
+			os.Getenv("BUILDKITE_AGENT_SOCKET") != "" {
+			sendGitCommitMetadata = true
+		}
+
 		// Configure the bootstraper
 		bootstrap := &bootstrap.Bootstrap{
 			Phases: cfg.Phases,
@@ -315,6 +323,7 @@ var BootstrapCommand = cli.Command{
 				LocalHooksEnabled:            cfg.LocalHooksEnabled,
 				SSHKeyscan:                   cfg.SSHKeyscan,
 				Shell:                        cfg.Shell,
+				SendGitCommitMetadata: sendGitCommitMetadata,
 			},
 		}
 

@@ -283,8 +283,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	if experiments.IsEnabled("agent-socket") {
-		env["BUILDKITE_AGENT_ENDPOINT"] = r.APIProxy.Endpoint()
-		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.APIProxy.AccessToken()
+		env["BUILDKITE_AGENT_SOCKET"] = r.APIProxy.Endpoint()
 	} else {
 		env["BUILDKITE_AGENT_ENDPOINT"] = r.Endpoint
 		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.Agent.AccessToken

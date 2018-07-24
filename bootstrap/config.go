@@ -105,6 +105,9 @@ type Config struct {
 
 	// The shell used to execute commands
 	Shell string
+
+	// Whether to send buildkite:git:commit metadata
+	SendGitCommitMetadata bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

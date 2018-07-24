@@ -40,8 +40,9 @@ type ArtifactUploadConfig struct {
 	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`
 	Destination      string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
+	AgentAccessToken string `cli:"agent-access-token"`
+	AgentSocket      string `cli:"agent-socket"`
+	Endpoint         string `cli:"endpoint"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -59,6 +60,7 @@ var ArtifactUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 		AgentAccessTokenFlag,
+		AgentSocketFlag,
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
@@ -78,10 +80,7 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := agent.ArtifactUploader{
-			APIClient: agent.APIClient{
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			}.Create(),
+			APIClient:   CreateAPIClientFromConfig(cfg),
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,

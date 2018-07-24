@@ -7,7 +7,6 @@ import (
 
 	"github.com/buildkite/agent/stdin"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
@@ -52,8 +51,9 @@ type AnnotateConfig struct {
 	Context          string `cli:"context"`
 	Append           bool   `cli:"append"`
 	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
+	AgentAccessToken string `cli:"agent-access-token"`
+	AgentSocket      string `cli:"agent-socket"`
+	Endpoint         string `cli:"endpoint"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -86,6 +86,7 @@ var AnnotateCommand = cli.Command{
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 		AgentAccessTokenFlag,
+		AgentSocketFlag,
 		EndpointFlag,
 		NoColorFlag,
 		DebugFlag,
@@ -122,10 +123,7 @@ var AnnotateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.APIClient{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		}.Create()
+		client := CreateAPIClientFromConfig(cfg)
 
 		// Create the annotation we'll send to the Buildkite API
 		annotation := &api.Annotation{
