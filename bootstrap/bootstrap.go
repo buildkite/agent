@@ -368,6 +368,9 @@ func (b *Bootstrap) setUp() error {
 	// Set a BUILDKITE_BUILD_CHECKOUT_PATH unless one exists already. We do this here
 	// so that the environment will have a checkout path to work with
 	if _, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
+		if b.BuildPath == "" {
+			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
+		}
 		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
 			filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
 	}
@@ -708,9 +711,6 @@ func (b *Bootstrap) CheckoutPhase() error {
 			return err
 		}
 	}
-
-	// After this point, artifacts will be uploaded on failure
-	b.hasCheckout = true
 
 	// Store the current value of BUILDKITE_BUILD_CHECKOUT_PATH, so we can detect if
 	// one of the post-checkout hooks changed it.
