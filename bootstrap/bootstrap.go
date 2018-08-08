@@ -39,9 +39,6 @@ type Bootstrap struct {
 	// Plugins are checkout out in the PluginPhase
 	plugins []*pluginCheckout
 
-	// Tracks whether there is a checkout to upload in the teardown
-	hasCheckout bool
-
 	// Whether the checkout dir was created as part of checkout
 	createdCheckoutDir bool
 }
@@ -98,15 +95,21 @@ func (b *Bootstrap) Start() (exitCode int) {
 
 	if phaseErr == nil && includePhase(`checkout`) {
 		phaseErr = b.CheckoutPhase()
+	} else {
+		checkoutDir, exists := b.shell.Env.Get(`BUILDKITE_BUILD_CHECKOUT_PATH`)
+		if exists {
+			_ = b.shell.Chdir(checkoutDir)
+		}
 	}
 
 	if phaseErr == nil && includePhase(`command`) {
 		phaseErr = b.CommandPhase()
-	}
 
-	if err := b.uploadArtifacts(); err != nil {
-		b.shell.Errorf("%v", err)
-		return shell.GetExitCode(err)
+		// Only upload artifacts as part of the command phase
+		if err := b.uploadArtifacts(); err != nil {
+			b.shell.Errorf("%v", err)
+			return shell.GetExitCode(err)
+		}
 	}
 
 	// Phase errors are where something of ours broke that merits a big red error
@@ -362,7 +365,12 @@ func (b *Bootstrap) setUp() error {
 		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), path))
 	}
 
-	b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+	// Set a BUILDKITE_BUILD_CHECKOUT_PATH unless one exists already. We do this here
+	// so that the environment will have a checkout path to work with
+	if _, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH"); !exists {
+		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+			filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+	}
 
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
 	// or overwritten. This shows a warning to the user so they don't get confused
@@ -1115,11 +1123,6 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 func (b *Bootstrap) uploadArtifacts() error {
 	if b.AutomaticArtifactUploadPaths == "" {
-		return nil
-	}
-
-	if !b.hasCheckout {
-		b.shell.Commentf("Skipping artifact upload, no checkout")
 		return nil
 	}
 
