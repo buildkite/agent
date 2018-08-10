@@ -58,7 +58,7 @@ type BootstrapConfig struct {
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
-	BuildPath                    string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
