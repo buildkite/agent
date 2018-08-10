@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -42,6 +43,9 @@ type AgentWorker struct {
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
 	jobRunner *JobRunner
+
+	// Tracks the last successful heartbeat and ping
+	lastPing, lastHeartbeat int64
 }
 
 // Creates the agent worker and initializes it's API Client
@@ -73,7 +77,11 @@ func (a *AgentWorker) Start() error {
 		for a.running {
 			err := a.Heartbeat()
 			if err != nil {
-				logger.Error("Failed to heartbeat %s. Will try again in %s", err, heartbeatInterval)
+				// Get the last heartbeat time to the nearest microsecond
+				lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
+
+				logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+					err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
 			}
 
 			time.Sleep(heartbeatInterval)
@@ -216,6 +224,9 @@ func (a *AgentWorker) Heartbeat() error {
 		return err
 	}
 
+	// Track a timestamp for the successful heartbeat for better errors
+	atomic.StoreInt64(&a.lastHeartbeat, time.Now().Unix())
+
 	logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
 	return nil
 }
@@ -227,9 +238,12 @@ func (a *AgentWorker) Ping() {
 
 	ping, _, err := a.APIClient.Pings.Get()
 	if err != nil {
+		// Get the last ping time to the nearest microsecond
+		lastPing := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
+
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
-		logger.Warn("Failed to ping: %s", err)
+		logger.Warn("Failed to ping: %s (Last successful was %v ago)", err, time.Now().Sub(lastPing))
 
 		// When the ping fails, we wan't to reset our disconnection
 		// timer. It wouldnt' be very nice if we just killed the agent
@@ -242,6 +256,9 @@ func (a *AgentWorker) Ping() {
 		}
 
 		return
+	} else {
+		// Track a timestamp for the successful ping for better errors
+		atomic.StoreInt64(&a.lastPing, time.Now().Unix())
 	}
 
 	// Should we switch endpoints?
