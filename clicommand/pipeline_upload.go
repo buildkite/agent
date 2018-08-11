@@ -48,6 +48,7 @@ type PipelineUploadConfig struct {
 	FilePath         string `cli:"arg:0" label:"upload paths"`
 	Replace          bool   `cli:"replace"`
 	Job              string `cli:"job"`
+	StepSigningKey   string `cli:"step-signing-key"`
 	AgentAccessToken string `cli:"agent-access-token"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	DryRun           bool   `cli:"dry-run"`
@@ -72,6 +73,12 @@ var PipelineUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "The job that is making the changes to it's build",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "step-signing-key",
+			Value:  "",
+			Usage:  "Key to use for signing step commands",
+			EnvVar: "BUILDKITE_STEP_SIGNING_KEY",
 		},
 		cli.BoolFlag{
 			Name:   "dry-run",
@@ -179,6 +186,17 @@ var PipelineUploadCommand = cli.Command{
 		}.Parse()
 		if err != nil {
 			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
+		}
+
+		// Sign the pipeline if a key is provided
+		if cfg.StepSigningKey != "" {
+			// Replace the parsed pipeline with the signed pipeline
+			parsed, err = agent.StepSigner{
+				SigningKey: cfg.StepSigningKey,
+			}.SignPipeline(parsed)
+			if err != nil {
+				logger.Fatal("Pipeline signing failed (%s)", err)
+			}
 		}
 
 		// In dry-run mode we just output the generated pipeline to stdout
