@@ -704,6 +704,13 @@ func (b *Bootstrap) CheckoutPhase() error {
 			err := b.defaultCheckoutPhase()
 			if err != nil {
 				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
+
+				// Checkout can fail because of corrupted files in the checkout
+				// which can leave the agent in a state where it keeps failing
+				// This removes the checkout dir, which means the next checkout
+				// will be a lot slower (clone vs fetch), but hopefully will
+				// allow the agent to self-heal
+				_ = b.removeCheckoutDir()
 			}
 			return err
 		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
@@ -765,14 +772,10 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	if fileExists(existingGitDir) {
 		// Update the the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
-			// Remove the checkout as often this is due to a corrupt git repo
-			_ = b.removeCheckoutDir()
 			return err
 		}
 	} else {
 		if err := gitClone(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
-			// Remove the checkout as often this is due to files left in the dir
-			_ = b.removeCheckoutDir()
 			return err
 		}
 	}
@@ -780,15 +783,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// Git clean prior to checkout
 	if hasGitSubmodules(b.shell) {
 		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
-			// Remove the checkout as often this is due to a corrupt git submodules
-			_ = b.removeCheckoutDir()
 			return err
 		}
 	}
 
 	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
-		// Remove the checkout as often this is due to a corrupt git submodules
-		_ = b.removeCheckoutDir()
 		return err
 	}
 
