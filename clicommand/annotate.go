@@ -17,7 +17,7 @@ import (
 
 var AnnotateHelpDescription = `Usage:
 
-   buildkite-agent annotate <file> [arguments...]
+   buildkite-agent annotate [<body>] [arguments...]
 
 Description:
 
@@ -32,12 +32,15 @@ Description:
    Annotations are written in CommonMark-compliant Markdown, with "GitHub
    Flavored Markdown" extensions.
 
+   The annotation body can be supplied as a command line argument, or by piping
+   content into the command.
+
    You can update an existing annotation's body by running the annotate command
    again and provide the same context as the one you want to update. Or if you
    leave context blank, it will use the default context.
 
-   You can also just update the style of an existing annotation by omitting the
-   body and just providing a new style value.
+   You can also update just the style of an existing annotation by omitting the
+   body entirely and providing a new style value.
 
 Example:
 
