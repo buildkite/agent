@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,8 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
+
+	_ "expvar"
 )
 
 var StartDescription = `Usage:
@@ -71,6 +74,7 @@ type AgentStartConfig struct {
 	Debug                     bool     `cli:"debug"`
 	DebugHTTP                 bool     `cli:"debug-http"`
 	Experiments               []string `cli:"experiment" normalize:"list"`
+	Metrics                   bool     `cli:"metrics"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -277,6 +281,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Disable HTTP2 when communicating with the Agent API.",
 			EnvVar: "BUILDKITE_NO_HTTP2",
 		},
+		cli.BoolFlag{
+			Name:   "metrics",
+			Usage:  "Expose agent metrics via http",
+			EnvVar: "BUILDKITE_METRICS",
+		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -364,6 +373,12 @@ var AgentStartCommand = cli.Command{
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
+		}
+
+		// If metrics or debug is enabled we start the default http listener
+		if cfg.Debug || cfg.Metrics {
+			logger.Info("Starting http server for metrics and debug on :8080")
+			go http.ListenAndServe(":8080", http.DefaultServeMux)
 		}
 
 		// Make sure the DisconnectAfterJobTimeout value is correct
