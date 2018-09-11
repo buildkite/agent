@@ -11,7 +11,9 @@ Environment=HOME=/var/lib/buildkite-agent
 ExecStart=/usr/bin/buildkite-agent start
 RestartSec=5
 Restart=on-failure
-TimeoutSec=10
+TimeoutStartSec=10
+TimeoutStopSec=5min
+KillMode=mixed
 
 [Install]
 WantedBy=multi-user.target
