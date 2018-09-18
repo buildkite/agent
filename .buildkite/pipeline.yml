@@ -141,6 +141,12 @@ steps:
     agents:
       queue: "deploy"
 
+  - name: ":alpine: build"
+    command: ".buildkite/steps/build-alpine-packages.sh"
+    artifact_paths: "fpm/**/*"
+    agents:
+      queue: "deploy"
+
   - name: ":github: :hammer:"
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"

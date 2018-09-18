@@ -3,6 +3,7 @@
 /releases
 /deb
 /rpm
+/apk
 /vendor/bundle
 /vendor/pkg
 .bundle
