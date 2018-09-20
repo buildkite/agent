@@ -126,14 +126,14 @@ func TestPipelineParserPreservesFloats(t *testing.T) {
 	result, err := PipelineParser{Pipeline: []byte("steps:\n  - trigger: hello\n    llamas: 3.142")}.Parse()
 	assert.Nil(t, err)
 	j, err := json.Marshal(result)
-	assert.Equal(t, `{"steps":[{"llamas":3.142,"trigger":"hello"}]}`, string(j))
+	assert.Equal(t, `{"steps":[{"trigger":"hello","llamas":3.142}]}`, string(j))
 }
 
 func TestPipelineParserHandlesDates(t *testing.T) {
 	result, err := PipelineParser{Pipeline: []byte("steps:\n  - trigger: hello\n    llamas: 2002-08-15T17:18:23.18-06:00")}.Parse()
 	assert.Nil(t, err)
 	j, err := json.Marshal(result)
-	assert.Equal(t, `{"steps":[{"llamas":"2002-08-15T17:18:23.18-06:00","trigger":"hello"}]}`, string(j))
+	assert.Equal(t, `{"steps":[{"trigger":"hello","llamas":"2002-08-15T17:18:23.18-06:00"}]}`, string(j))
 }
 
 func TestPipelineParserInterpolatesKeysAsWellAsValues(t *testing.T) {
