@@ -169,10 +169,8 @@ var PipelineUploadCommand = cli.Command{
 			logger.Fatal("Config file is empty")
 		}
 
-		var parsed interface{}
-
 		// Parse the pipeline
-		parsed, err = agent.PipelineParser{
+		result, err := agent.PipelineParser{
 			Filename:        filename,
 			Pipeline:        input,
 			NoInterpolation: cfg.NoInterpolation,
@@ -188,7 +186,7 @@ var PipelineUploadCommand = cli.Command{
 
 			// Dump json indented to stdout. All logging happens to stderr
 			// this can be used with other tools to get interpolated json
-			if err := enc.Encode(parsed); err != nil {
+			if err := enc.Encode(result); err != nil {
 				logger.Fatal("%#v", err)
 			}
 
@@ -218,7 +216,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: parsed, Replace: cfg.Replace})
+			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 

@@ -133,7 +133,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 	// get a unique identifier for the underlying host
 	if machineID, err := machineid.ProtectedID("buildkite-agent"); err != nil {
-		logger.Warn("Failed to find unique machine-id", err)
+		logger.Warn("Failed to find unique machine-id: %v", err)
 	} else {
 		agent.MachineID = machineID
 	}

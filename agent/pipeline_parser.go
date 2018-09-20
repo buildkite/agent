@@ -22,7 +22,7 @@ type PipelineParser struct {
 	NoInterpolation bool
 }
 
-func (p PipelineParser) Parse() (interface{}, error) {
+func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 	if p.Env == nil {
 		p.Env = env.FromSlice(os.Environ())
 	}
@@ -34,63 +34,24 @@ func (p PipelineParser) Parse() (interface{}, error) {
 		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
 	}
 
-	// If interpolation is disabled, just parse and return
-	if p.NoInterpolation {
-		var result interface{}
-		if err := yamltojson.UnmarshalAsStringMap([]byte(p.Pipeline), &result); err != nil {
+	var pipeline yaml.MapSlice
+
+	// Historically we supported top-level json step arrays so try that first
+	if strings.HasPrefix(strings.TrimSpace(string(p.Pipeline)), "[") {
+		modifiedJSON := fmt.Sprintf(`{"steps":%s}`, strings.TrimSpace(string(p.Pipeline)))
+
+		if err := yaml.Unmarshal([]byte(modifiedJSON), &pipeline); err != nil {
 			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 		}
-		return result, nil
-	}
-
-	var pipeline interface{}
-	var pipelineAsSlice []interface{}
-
-	// Historically we support uploading just steps, so we parse it as either a
-	// slice, or if it's a map we need to do environment block processing
-	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipelineAsSlice); err == nil {
-		pipeline = pipelineAsSlice
-	} else {
-		pipelineAsMap, err := p.parseWithEnv()
-		if err != nil {
-			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
-		}
-		pipeline = pipelineAsMap
-	}
-
-	// Recursively go through the entire pipeline and perform environment
-	// variable interpolation on strings
-	interpolated, err := p.interpolate(pipeline)
-	if err != nil {
-		return nil, err
-	}
-
-	// Now we roundtrip this back into YAML bytes and back into a generic interface{}
-	// that works with all upstream code (which likes working with JSON). Specifically we
-	// need to convert the map[interface{}]interface{}'s that YAML likes into JSON compatible
-	// map[string]interface{}
-	b, err := yaml.Marshal(interpolated)
-	if err != nil {
-		return nil, err
-	}
-
-	var result interface{}
-	if err := yamltojson.UnmarshalAsStringMap(b, &result); err != nil {
+	} else if err := yaml.Unmarshal(p.Pipeline, &pipeline); err != nil {
 		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 	}
 
-	return result, nil
-}
-
-func (p PipelineParser) parseWithEnv() (interface{}, error) {
-	var pipeline yaml.MapSlice
-
-	// Initially we unmarshal this into a yaml.MapSlice so that we preserve the order of maps
-	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipeline); err != nil {
-		return nil, err
+	if p.NoInterpolation {
+		return &PipelineParserResult{pipeline: pipeline}, nil
 	}
 
-	// Preprocess any env tat are defined in the top level block and place them into env for
+	// Preprocess any env that are defined in the top level block and place them into env for
 	// later interpolation into env blocks
 	if item, ok := mapSliceItem("env", pipeline); ok {
 		if envMap, ok := item.Value.(yaml.MapSlice); ok {
@@ -102,7 +63,14 @@ func (p PipelineParser) parseWithEnv() (interface{}, error) {
 		}
 	}
 
-	return pipeline, nil
+	// Recursively go through the entire pipeline and perform environment
+	// variable interpolation on strings
+	interpolated, err := p.interpolate(pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PipelineParserResult{pipeline: interpolated.(yaml.MapSlice)}, nil
 }
 
 func mapSliceItem(key string, s yaml.MapSlice) (yaml.MapItem, bool) {
@@ -266,4 +234,13 @@ func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error
 	}
 
 	return nil
+}
+
+// PipelineParserResult is the ordered parse tree of a Pipeline document
+type PipelineParserResult struct {
+	pipeline yaml.MapSlice
+}
+
+func (p *PipelineParserResult) MarshalJSON() ([]byte, error) {
+	return yamltojson.MarshalMapSliceJSON(p.pipeline)
 }
