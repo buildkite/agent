@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/yamltojson"
+	"github.com/buildkite/yaml"
 	"github.com/qri-io/jsonschema"
 )
 
@@ -25,25 +26,15 @@ type Definition struct {
 
 // ParseDefinition parses either yaml or json bytes into a Definition
 func ParseDefinition(b []byte) (*Definition, error) {
-	var parsed interface{}
+	var parsed yaml.MapSlice
 
-	// Parse the definition as a json compatible string map, the plain yaml
-	// Unmarshal returns a structure that has map[interface{}]interface{}
-	// which causes anything that expects map[string]interface{} to break
-	if err := yamltojson.UnmarshalAsStringMap(b, &parsed); err != nil {
+	if err := yaml.Unmarshal(b, &parsed); err != nil {
 		return nil, err
-	}
-
-	// Check we've got a map, vs a list or something else, this lets us
-	// give a useful error message
-	parsedMap, ok := parsed.(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Failed to convert %T to map[string]interface{}", parsed)
 	}
 
 	// Marshal the whole lot back into json which will let the jsonschema library
 	// parse the schema into and object tree 💃🏼
-	jsonBytes, err := json.Marshal(parsedMap)
+	jsonBytes, err := yamltojson.MarshalMapSliceJSON(parsed)
 	if err != nil {
 		return nil, err
 	}
