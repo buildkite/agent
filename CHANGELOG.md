@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.5.0](https://github.com/buildkite/agent/tree/v3.5.0) (2018-10-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.4.0...v3.5.0)
+
+### Fixed
+- Add plugin locking before checkout [#827](https://github.com/buildkite/agent/pull/827) (@lox)
+- Ensure pipeline parser maintains map order in output [#824](https://github.com/buildkite/agent/pull/824) (@lox)
+- Update aws sdk [#818](https://github.com/buildkite/agent/pull/818) (@sj26)
+- Fix boostrap typo [#814](https://github.com/buildkite/agent/pull/814) (@ChefAustin)
+
+### Changed
+- `annotate` takes body as an arg, or reads from a pipe [#813](https://github.com/buildkite/agent/pull/813) (@sj26)
+- Respect pre-set BUILDKITE_BUILD_CHECKOUT_PATH [#806](https://github.com/buildkite/agent/pull/806) (@lox)
+- Add time since last successful heartbeat/ping [#810](https://github.com/buildkite/agent/pull/810) (@lox)
+- Updating launchd templates to only restart on error [#804](https://github.com/buildkite/agent/pull/804) (@lox)
+- Allow more time for systemd graceful stop [#819](https://github.com/buildkite/agent/pull/819) (@lox)
+
 ## [v3.4.0](https://github.com/buildkite/agent/tree/v3.4.0) (2018-07-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.3.0...v3.4.0)
 
