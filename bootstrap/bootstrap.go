@@ -547,6 +547,12 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return nil, err
 	}
 
+	// Ensure the plugin directory exists, otherwise we can't create the lock
+	err = os.MkdirAll(b.PluginsPath, 0777)
+	if err != nil {
+		return nil, err
+	}
+
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
