@@ -38,10 +38,6 @@ steps:
     command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "stable"
-    plugins:
-      docker-login#v2.0.1:
-        username: "$DOCKER_HUB_AGENT_WRITE_USERNAME"
-        password-env: "DOCKER_HUB_AGENT_WRITE_PASSWORD"
     agents:
       queue: "deploy"
 
