@@ -14,6 +14,12 @@ import (
 )
 
 type AgentWorker struct {
+	// Tracks the last successful heartbeat and ping
+	// NOTE: to avoid alignment issues on ARM architectures when
+	// using atomic.StoreInt64 we need to keep this at the beginning
+	// of the struct
+	lastPing, lastHeartbeat int64
+
 	// The API Client used when this agent is communicating with the API
 	APIClient *api.Client
 
@@ -43,9 +49,6 @@ type AgentWorker struct {
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
 	jobRunner *JobRunner
-
-	// Tracks the last successful heartbeat and ping
-	lastPing, lastHeartbeat int64
 }
 
 // Creates the agent worker and initializes it's API Client
