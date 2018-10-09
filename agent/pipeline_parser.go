@@ -34,14 +34,24 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
 	}
 
+	var pipelineAsSlice []topLevelStep
 	var pipeline yaml.MapSlice
 
-	// Historically we supported top-level json step arrays so try that first
-	if strings.HasPrefix(strings.TrimSpace(string(p.Pipeline)), "[") {
-		modifiedJSON := fmt.Sprintf(`{"steps":%s}`, strings.TrimSpace(string(p.Pipeline)))
+	// We support top-level arrays of steps, so try that first
+	if err := yaml.Unmarshal(p.Pipeline, &pipelineAsSlice); err == nil {
+		var steps []interface{}
 
-		if err := yaml.Unmarshal([]byte(modifiedJSON), &pipeline); err != nil {
-			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
+		// Unwrap our custom topLevelStep types for marshaling later
+		for _, step := range pipelineAsSlice {
+			if step.MapSlice != nil {
+				steps = append(steps, step.MapSlice)
+			} else {
+				steps = append(steps, step.Body)
+			}
+		}
+
+		pipeline = yaml.MapSlice{
+			{Key: "steps", Value: steps},
 		}
 	} else if err := yaml.Unmarshal(p.Pipeline, &pipeline); err != nil {
 		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
@@ -243,4 +253,20 @@ type PipelineParserResult struct {
 
 func (p *PipelineParserResult) MarshalJSON() ([]byte, error) {
 	return yamltojson.MarshalMapSliceJSON(p.pipeline)
+}
+
+// topLevelStep is a custom type to support "step or string" which works around
+// an issue where ordered parsing of yaml doesn't work with a top-level slice
+type topLevelStep struct {
+	yaml.MapSlice
+	Body string
+}
+
+func (s *topLevelStep) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	// Some steps are plain old strings like "wait". To avoid unmarshaling errors
+	// we check for plain old strings
+	if err := unmarshal(&s.Body); err == nil {
+		return nil
+	}
+	return unmarshal(&s.MapSlice)
 }

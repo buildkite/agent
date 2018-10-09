@@ -101,6 +101,13 @@ func TestPipelineParserParsesJsonArrays(t *testing.T) {
 	assert.Equal(t, `{"steps":[{"foo":"bye \"friend\""}]}`, string(j))
 }
 
+func TestPipelineParserParsesTopLevelSteps(t *testing.T) {
+	result, err := PipelineParser{Pipeline: []byte("---\n- name: Build\n  command: echo hello world\n- wait\n"), Env: nil}.Parse()
+	assert.NoError(t, err)
+	j, err := json.Marshal(result)
+	assert.Equal(t, `{"steps":[{"name":"Build","command":"echo hello world"},"wait"]}`, string(j))
+}
+
 func TestPipelineParserPreservesBools(t *testing.T) {
 	result, err := PipelineParser{Pipeline: []byte("steps:\n  - trigger: hello\n    async: true")}.Parse()
 	assert.Nil(t, err)
