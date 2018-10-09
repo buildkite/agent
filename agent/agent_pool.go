@@ -2,6 +2,7 @@ package agent
 
 import (
 	"errors"
+	"expvar"
 	"fmt"
 	"os"
 	"runtime"
@@ -61,6 +62,11 @@ func (r *AgentPool) Start() error {
 	logger.Debug("Ping interval: %ds", registered.PingInterval)
 	logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
 	logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
+
+	var start = time.Now()
+	expvar.Publish("uptime", expvar.Func(func() interface{} {
+		return int64(time.Since(start) / time.Second)
+	}))
 
 	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.

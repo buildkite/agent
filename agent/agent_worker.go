@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"expvar"
 	"fmt"
 	"strings"
 	"sync"
@@ -46,6 +47,9 @@ type AgentWorker struct {
 
 	// Tracks the last successful heartbeat and ping
 	lastPing, lastHeartbeat int64
+
+	// Metrics that the worker exposes
+	heartbeatMetrics, pingMetrics *expvar.Map
 }
 
 // Creates the agent worker and initializes it's API Client
@@ -58,6 +62,10 @@ func (a AgentWorker) Create() AgentWorker {
 	}
 
 	a.APIClient = APIClient{Endpoint: endpoint, Token: a.Agent.AccessToken}.Create()
+
+	// create counters for metrics
+	a.heartbeatMetrics = expvar.NewMap("heartbeats")
+	a.pingMetrics = expvar.NewMap("pings")
 
 	return a
 }
@@ -79,6 +87,9 @@ func (a *AgentWorker) Start() error {
 			if err != nil {
 				// Get the last heartbeat time to the nearest microsecond
 				lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
+
+				// Track metrics
+				a.heartbeatMetrics.Add("Fail", 1)
 
 				logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
 					err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
@@ -227,6 +238,10 @@ func (a *AgentWorker) Heartbeat() error {
 	// Track a timestamp for the successful heartbeat for better errors
 	atomic.StoreInt64(&a.lastHeartbeat, time.Now().Unix())
 
+	// Track metrics
+	a.heartbeatMetrics.Add("Total", 1)
+	a.heartbeatMetrics.Add("Success", 1)
+
 	logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
 	return nil
 }
@@ -255,10 +270,17 @@ func (a *AgentWorker) Ping() {
 			logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.AgentConfiguration.DisconnectAfterJobTimeout)
 		}
 
+		// Track metrics
+		a.pingMetrics.Add("Fail", 1)
+
 		return
 	} else {
 		// Track a timestamp for the successful ping for better errors
 		atomic.StoreInt64(&a.lastPing, time.Now().Unix())
+
+		// Track metrics
+		a.pingMetrics.Add("Total", 1)
+		a.pingMetrics.Add("Success", 1)
 	}
 
 	// Should we switch endpoints?
