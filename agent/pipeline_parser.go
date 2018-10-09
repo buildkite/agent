@@ -34,14 +34,22 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
 	}
 
+	var pipelineAsSlice []yaml.MapSlice
 	var pipeline yaml.MapSlice
 
-	// Historically we supported top-level json step arrays so try that first
-	if strings.HasPrefix(strings.TrimSpace(string(p.Pipeline)), "[") {
-		modifiedJSON := fmt.Sprintf(`{"steps":%s}`, strings.TrimSpace(string(p.Pipeline)))
+	// We support top-level arrays of steps, so try that first
+	if err := yaml.Unmarshal(p.Pipeline, &pipelineAsSlice); err == nil {
+		var steps []interface{}
+		for _, step := range pipelineAsSlice {
+			steps = append(steps, step)
+		}
 
-		if err := yaml.Unmarshal([]byte(modifiedJSON), &pipeline); err != nil {
-			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
+		// Reformat as a map with steps
+		pipeline = yaml.MapSlice{
+			yaml.MapItem{
+				Key:   "steps",
+				Value: steps,
+			},
 		}
 	} else if err := yaml.Unmarshal(p.Pipeline, &pipeline); err != nil {
 		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
