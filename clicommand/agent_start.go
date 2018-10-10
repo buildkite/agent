@@ -2,7 +2,6 @@ package clicommand
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,10 +10,9 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
-
-	_ "expvar"
 )
 
 var StartDescription = `Usage:
@@ -74,7 +72,8 @@ type AgentStartConfig struct {
 	Debug                     bool     `cli:"debug"`
 	DebugHTTP                 bool     `cli:"debug-http"`
 	Experiments               []string `cli:"experiment" normalize:"list"`
-	Metrics                   bool     `cli:"metrics"`
+	MetricsDatadog            bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -282,9 +281,15 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_HTTP2",
 		},
 		cli.BoolFlag{
-			Name:   "metrics",
-			Usage:  "Expose agent metrics via http",
-			EnvVar: "BUILDKITE_METRICS",
+			Name:   "metrics-datadog",
+			Usage:  "Send metrics to DogStatsD for Datadog",
+			EnvVar: "BUILDKITE_METRICS_DATADOG",
+		},
+		cli.StringFlag{
+			Name:   "metrics-datadog-host",
+			Usage:  "The host to send metrics to",
+			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
+			Value:  "127.0.0.1:8125",
 		},
 		ExperimentsFlag,
 		EndpointFlag,
@@ -375,12 +380,6 @@ var AgentStartCommand = cli.Command{
 			cfg.Shell = DefaultShell()
 		}
 
-		// If metrics or debug is enabled we start the default http listener
-		if cfg.Debug || cfg.Metrics {
-			logger.Info("Starting http server for metrics and debug on :8080")
-			go http.ListenAndServe(":8080", http.DefaultServeMux)
-		}
-
 		// Make sure the DisconnectAfterJobTimeout value is correct
 		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
 			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
@@ -426,6 +425,10 @@ var AgentStartCommand = cli.Command{
 				DisconnectAfterJob:        cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
 				Shell:                     cfg.Shell,
+			},
+			MetricsCollector: &metrics.Collector{
+				Datadog:     cfg.MetricsDatadog,
+				DatadogHost: cfg.MetricsDatadogHost,
 			},
 		}
 

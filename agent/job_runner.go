@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/shellwords"
@@ -36,6 +37,9 @@ type JobRunner struct {
 
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
+
+	// A scope for metrics within a job
+	Metrics *metrics.Scope
 
 	// Go context for goroutine supervision
 	context       context.Context
@@ -128,10 +132,12 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 func (r *JobRunner) Run() error {
 	logger.Info("Starting job %s", r.Job.ID)
 
+	startedAt := time.Now()
+
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
 	// up like started log streamer workers, etc.
-	if err := r.startJob(time.Now()); err != nil {
+	if err := r.startJob(startedAt); err != nil {
 		return err
 	}
 
@@ -188,6 +194,15 @@ func (r *JobRunner) Run() error {
 		if err := r.APIProxy.Close(); err != nil {
 			logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
 		}
+	}
+
+	// Write some metrics about the job run
+	if r.process.ExitStatus == "0" {
+		r.Metrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
+		r.Metrics.Count(`jobs.success`, 1)
+	} else {
+		r.Metrics.Timing(`jobs.duration.error`, finishedAt.Sub(startedAt))
+		r.Metrics.Count(`jobs.failed`, 1)
 	}
 
 	// Finish the build in the Buildkite Agent API
@@ -349,10 +364,13 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 		if err != nil {
 			if api.IsRetryableError(err) {
 				logger.Warn("%s (%s)", err, s)
+				r.Metrics.Count(`job.start.error`, 1)
 			} else {
 				logger.Warn("Buildkite rejected the call to start the job (%s)", err)
 				s.Break()
 			}
+		} else {
+			r.Metrics.Count(`job.start.success`, 1)
 		}
 
 		return err
