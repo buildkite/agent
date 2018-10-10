@@ -364,13 +364,10 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 		if err != nil {
 			if api.IsRetryableError(err) {
 				logger.Warn("%s (%s)", err, s)
-				r.Metrics.Count(`job.start.error`, 1)
 			} else {
 				logger.Warn("Buildkite rejected the call to start the job (%s)", err)
 				s.Break()
 			}
-		} else {
-			r.Metrics.Count(`job.start.success`, 1)
 		}
 
 		return err
