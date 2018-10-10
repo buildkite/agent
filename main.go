@@ -84,6 +84,13 @@ func main() {
 				clicommand.PipelineUploadCommand,
 			},
 		},
+		{
+			Name:  "job",
+			Usage: "Make changes to a job",
+			Subcommands: []cli.Command{
+				clicommand.JobUpdateCommand,
+			},
+		},
 		clicommand.BootstrapCommand,
 	}
 
