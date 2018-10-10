@@ -17,21 +17,26 @@ type Collector struct {
 }
 
 func (c *Collector) Start() error {
-	logger.Info("Starting metrics collection to %s", c.DatadogHost)
+	if c.Datadog {
+		logger.Info("Starting datadog metrics collection to %s", c.DatadogHost)
 
-	var err error
-	c.client, err = statsd.New(c.DatadogHost)
-	if err != nil {
-		return err
+		var err error
+		c.client, err = statsd.New(c.DatadogHost)
+		if err != nil {
+			return err
+		}
+
+		c.client.Namespace = "buildkite."
 	}
-
-	c.client.Namespace = "buildkite."
 	return nil
 }
 
 func (c *Collector) Stop() error {
-	logger.Info("Stopping metrics collection")
-	return c.client.Close()
+	if c.Datadog && c.client != nil {
+		logger.Info("Stopping metrics collection")
+		return c.client.Close()
+	}
+	return nil
 }
 
 func (c *Collector) Scope(tags Tags) *Scope {
@@ -48,6 +53,10 @@ type Scope struct {
 
 // Timing sends timing information in milliseconds.
 func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
+	if s.c.client == nil {
+		return
+	}
+
 	mergedTags := s.mergeTags(tags...).StringSlice()
 	logger.Debug("Metrics timing %s=%v %v", name, value, mergedTags)
 
@@ -58,6 +67,10 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 
 // Count tracks how many times something happened per second.
 func (s *Scope) Count(name string, value int64, tags ...Tags) {
+	if s.c.client == nil {
+		return
+	}
+
 	mergedTags := s.mergeTags(tags...).StringSlice()
 	logger.Debug("Metrics count %s=%v %v", name, value, mergedTags)
 
