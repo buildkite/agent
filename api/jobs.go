@@ -25,9 +25,10 @@ type Job struct {
 
 // JobUpdate represents a change request to a job
 type JobUpdate struct {
-	ID        string `json:"id,omitempty"`
+	UUID      string `json:"uuid,omitempty"`
 	Attribute string `json:"attribute,omitempty"`
 	Value     string `json:"value,omitempty"`
+	Append    bool   `json:"append,omitempty"`
 }
 
 type JobState struct {

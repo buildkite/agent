@@ -51,6 +51,11 @@ var JobUpdateCommand = cli.Command{
 			Usage:  "Which job should the change be made to",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
+		cli.BoolFlag{
+			Name:   "append",
+			Usage:  "Append to current attribute instead of replacing it",
+			EnvVar: "BUILDKITE_JOB_UPDATE_APPEND",
+		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -86,10 +91,17 @@ var JobUpdateCommand = cli.Command{
 			Token:    cfg.AgentAccessToken,
 		}.Create()
 
+		// Generate a UUID that will identifiy this change. We do this
+		// outside of the retry loop because we want this UUID to be
+		// the same for each attempt at updating the job.
+		uuid := api.NewUUID()
+
 		// Create the value to update
 		update := &api.JobUpdate{
+			UUID:      uuid,
 			Attribute: cfg.Attribute,
 			Value:     cfg.Value,
+			Append:    cfg.Append,
 		}
 
 		// Post the change
