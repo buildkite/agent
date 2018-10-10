@@ -19,7 +19,8 @@ RUN apk add --no-cache \
     pip install --upgrade pip && \
     pip install docker-compose
 
-ENV BUILDKITE_BUILD_PATH=/buildkite/builds \
+ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg \
+    BUILDKITE_BUILD_PATH=/buildkite/builds \
     BUILDKITE_HOOKS_PATH=/buildkite/hooks \
     BUILDKITE_PLUGINS_PATH=/buildkite/plugins
 
