@@ -43,6 +43,7 @@ func (a APIClient) Create() *api.Client {
 			KeepAlive: 30 * time.Second,
 		}).Dial,
 		TLSHandshakeTimeout: 30 * time.Second,
+		TLSNextProto:        nil,
 	}
 
 	// http2.ConfigureTransport(httpTransport)
