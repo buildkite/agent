@@ -60,8 +60,12 @@ if [[ "$codename" == "stable" ]] ; then
     release_image "${tag}${variant_suffix}"
   done
   release_image "${variant}"
-  release_image "latest"
-  release_image "stable"
+
+  # publish latest and stable only from alpine
+  if [[ "$variant" == "alpine" ]] ; then
+    release_image "latest"
+    release_image "stable"
+  fi
 fi
 
 # variants of beta/unstable - e.g 3.0-beta.16
