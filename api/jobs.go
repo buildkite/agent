@@ -104,3 +104,15 @@ func (js *JobsService) Finish(job *Job) (*Response, error) {
 
 	return js.client.Do(req, nil)
 }
+
+// Updates a step
+func (js *JobsService) StepUpdate(jobId string, stepUpdate *StepUpdate) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/step_update", jobId)
+
+	req, err := js.client.NewRequest("PUT", u, stepUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	return js.client.Do(req, nil)
+}

@@ -19,7 +19,7 @@ var StepUpdateHelpDescription = `Usage:
 
 Description:
 
-   Update an attribute of a step
+   Update an attribute of a step associated with a job
 
 Example:
 
@@ -32,7 +32,7 @@ type StepUpdateConfig struct {
 	Attribute        string `cli:"arg:0" label:"attribute" validate:"required"`
 	Value            string `cli:"arg:1" label:"value" validate:"required"`
 	Append           bool   `cli:"append"`
-	Step             string `cli:"step" validate:"required"`
+	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
@@ -46,10 +46,10 @@ var StepUpdateCommand = cli.Command{
 	Description: StepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "step",
+			Name:   "job",
 			Value:  "",
-			Usage:  "Target the step of a specific step",
-			EnvVar: "BUILDKITE_STEP_ID",
+			Usage:  "Target the step of a specific job in the build",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
 		cli.BoolFlag{
 			Name:   "append",
@@ -106,7 +106,7 @@ var StepUpdateCommand = cli.Command{
 
 		// Post the change
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.Steps.Update(cfg.Step, update)
+			resp, err := client.Jobs.StepUpdate(cfg.Job, update)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}
