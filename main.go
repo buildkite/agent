@@ -85,10 +85,10 @@ func main() {
 			},
 		},
 		{
-			Name:  "job",
-			Usage: "Make changes to a job",
+			Name:  "step",
+			Usage: "Make changes to a step",
 			Subcommands: []cli.Command{
-				clicommand.JobUpdateCommand,
+				clicommand.StepUpdateCommand,
 			},
 		},
 		clicommand.BootstrapCommand,

@@ -13,26 +13,26 @@ import (
 	"github.com/urfave/cli"
 )
 
-var JobUpdateHelpDescription = `Usage:
+var StepUpdateHelpDescription = `Usage:
 
-   buildkite-agent job update <attribute> <value> [arguments...]
+   buildkite-agent step update <attribute> <value> [arguments...]
 
 Description:
 
-   Update an attribute of a job
+   Update an attribute of a step
 
 Example:
 
-   $ buildkite-agent job update "label" "New Label"
-   $ buildkite-agent job update "label" " (add to end of label)" --append
-   $ buildkite-agent job update "label" < ./tmp/some-new-label
-   $ ./script/label-generator | buildkite-agent job update "label"`
+   $ buildkite-agent step update "label" "New Label"
+   $ buildkite-agent step update "label" " (add to end of label)" --append
+   $ buildkite-agent step update "label" < ./tmp/some-new-label
+   $ ./script/label-generator | buildkite-agent step update "label"`
 
-type JobUpdateConfig struct {
+type StepUpdateConfig struct {
 	Attribute        string `cli:"arg:0" label:"attribute" validate:"required"`
 	Value            string `cli:"arg:1" label:"value" validate:"required"`
 	Append           bool   `cli:"append"`
-	Job              string `cli:"job" validate:"required"`
+	Step             string `cli:"step" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
@@ -40,21 +40,21 @@ type JobUpdateConfig struct {
 	DebugHTTP        bool   `cli:"debug-http"`
 }
 
-var JobUpdateCommand = cli.Command{
+var StepUpdateCommand = cli.Command{
 	Name:        "update",
-	Usage:       "Change an attribute on a job",
-	Description: JobUpdateHelpDescription,
+	Usage:       "Change an attribute on a step",
+	Description: StepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "job",
+			Name:   "step",
 			Value:  "",
-			Usage:  "Which job should the change be made to",
-			EnvVar: "BUILDKITE_JOB_ID",
+			Usage:  "Target the step of a specific step",
+			EnvVar: "BUILDKITE_STEP_ID",
 		},
 		cli.BoolFlag{
 			Name:   "append",
 			Usage:  "Append to current attribute instead of replacing it",
-			EnvVar: "BUILDKITE_JOB_UPDATE_APPEND",
+			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -64,7 +64,7 @@ var JobUpdateCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
-		cfg := JobUpdateConfig{}
+		cfg := StepUpdateConfig{}
 
 		// Load the configuration
 		if err := cliconfig.Load(c, &cfg); err != nil {
@@ -93,11 +93,11 @@ var JobUpdateCommand = cli.Command{
 
 		// Generate a UUID that will identifiy this change. We do this
 		// outside of the retry loop because we want this UUID to be
-		// the same for each attempt at updating the job.
+		// the same for each attempt at updating the step.
 		uuid := api.NewUUID()
 
 		// Create the value to update
-		update := &api.JobUpdate{
+		update := &api.StepUpdate{
 			UUID:      uuid,
 			Attribute: cfg.Attribute,
 			Value:     cfg.Value,
@@ -106,7 +106,7 @@ var JobUpdateCommand = cli.Command{
 
 		// Post the change
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.Jobs.Update(cfg.Job, update)
+			resp, err := client.Steps.Update(cfg.Step, update)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}
@@ -117,7 +117,7 @@ var JobUpdateCommand = cli.Command{
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 		if err != nil {
-			logger.Fatal("Failed to change job: %s", err)
+			logger.Fatal("Failed to change step: %s", err)
 		}
 	},
 }

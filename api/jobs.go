@@ -23,14 +23,6 @@ type Job struct {
 	ChunksFailedCount  int               `json:"chunks_failed_count,omitempty"`
 }
 
-// JobUpdate represents a change request to a job
-type JobUpdate struct {
-	UUID      string `json:"uuid,omitempty"`
-	Attribute string `json:"attribute,omitempty"`
-	Value     string `json:"value,omitempty"`
-	Append    bool   `json:"append,omitempty"`
-}
-
 type JobState struct {
 	State string `json:"state,omitempty"`
 }
@@ -106,18 +98,6 @@ func (js *JobsService) Finish(job *Job) (*Response, error) {
 		ExitStatus:        job.ExitStatus,
 		ChunksFailedCount: job.ChunksFailedCount,
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	return js.client.Do(req, nil)
-}
-
-// Updates a job
-func (js *JobsService) Update(jobId string, jobUpdate *JobUpdate) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s", jobId)
-
-	req, err := js.client.NewRequest("PUT", u, jobUpdate)
 	if err != nil {
 		return nil, err
 	}

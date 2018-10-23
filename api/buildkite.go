@@ -44,6 +44,7 @@ type Client struct {
 	Agents      *AgentsService
 	Pings       *PingsService
 	Jobs        *JobsService
+	Steps       *StepsService
 	Chunks      *ChunksService
 	MetaData    *MetaDataService
 	HeaderTimes *HeaderTimesService
@@ -66,6 +67,7 @@ func NewClient(httpClient *http.Client) *Client {
 	c.Agents = &AgentsService{c}
 	c.Pings = &PingsService{c}
 	c.Jobs = &JobsService{c}
+	c.Steps = &StepsService{c}
 	c.Chunks = &ChunksService{c}
 	c.MetaData = &MetaDataService{c}
 	c.HeaderTimes = &HeaderTimesService{c}
