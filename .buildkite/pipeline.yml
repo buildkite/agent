@@ -146,7 +146,7 @@ steps:
     artifact_paths: "releases/**/*"
     plugins:
       docker-compose#v1.8.0:
-        config: docker-compose.release.yml
+        config: .buildkite/docker-compose.release.yml
         run: github-release
 
   - wait
