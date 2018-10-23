@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.5.3](https://github.com/buildkite/agent/tree/v3.5.3) (2018-10-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.5.2...v3.5.3)
+
+### Fixed
+- Update to alpine to 3.8 in docker image [#842](https://github.com/buildkite/agent/pull/842) (@lox)
+- Set BUILDKITE_AGENT_CONFIG in docker images to /buildkite [#834](https://github.com/buildkite/agent/pull/834) (@blakestoddard)
+- Fix agent panics on ARM architecture [#831](https://github.com/buildkite/agent/pull/831) (@jhedev)
+
 ## [v3.5.2](https://github.com/buildkite/agent/tree/v3.5.2) (2018-10-09)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.5.1...v3.5.2)
 
