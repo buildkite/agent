@@ -5,7 +5,7 @@ services:
     image: golang:1.10
     working_dir: /go/src/github.com/buildkite/agent
     volumes:
-      - ./:/go/src/github.com/buildkite/agent:cached
+      - ../:/go/src/github.com/buildkite/agent:cached
     environment:
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
