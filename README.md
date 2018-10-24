@@ -68,19 +68,6 @@ To test the commands locally:
 go run main.go start --debug --token "abc123"
 ```
 
-### Windows via Vagrant
-
-This requires either Virtualbox (free) or VMWare Fusion + Vagrant VMWare Fusion plugin (paid).
-
-It assumes that you have Docker for Mac or similar installed. The following commands are run on your local machine. Expect things to take a long time, the vagrant box is 10GB and the docker base image is 3.4GB.
-
-```bash
-vagrant up
-eval $(docker-machine env windows-2016)
-docker-compose -f docker-compose.windows.yml run agent cmd
-C:\gopath\src\github.com\buildkite\agent> go run main.go start --token xxx --debug
-```
-
 ### Dependency management
 
 We're using [govendor](https://github.com/kardianos/govendor) to manage our Go dependencies. Install it with:

@@ -7,7 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile-github-release
     volumes:
-      - ./:/app
+      - ../:/app
       - /usr/bin/buildkite-agent:/usr/bin/buildkite-agent
     working_dir: /app
     environment:

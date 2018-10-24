@@ -6,6 +6,7 @@ steps:
     command: ".buildkite/steps/tests.sh"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":hammer: :windows:"
@@ -23,6 +24,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":windows: amd64"
@@ -30,6 +32,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":linux: amd64"
@@ -37,6 +40,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":linux: 386"
@@ -44,6 +48,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":linux: arm"
@@ -51,6 +56,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":linux: armhf"
@@ -58,6 +64,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":linux: arm64"
@@ -65,6 +72,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":mac: 386"
@@ -72,6 +80,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":mac: amd64"
@@ -79,6 +88,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":freebsd: amd64"
@@ -86,6 +96,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":freebsd: 386"
@@ -93,6 +104,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":openbsd: amd64"
@@ -100,6 +112,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":openbsd: 386"
@@ -107,6 +120,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":dragonflybsd: amd64"
@@ -114,6 +128,7 @@ steps:
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
         run: agent
 
   - wait
@@ -146,7 +161,7 @@ steps:
     artifact_paths: "releases/**/*"
     plugins:
       docker-compose#v1.8.0:
-        config: docker-compose.release.yml
+        config: .buildkite/docker-compose.release.yml
         run: github-release
 
   - wait
