@@ -40,17 +40,8 @@ buildkite-agent start --token
 
 These instructions assume you are running a recent macOS, but could easily be adapted to Linux and Windows.
 
-### With Docker
-
 ```bash
-docker-compose run agent bash
-root@d854f845511a:/go/src/github.com/buildkite/agent# go run main.go start --token xxx --debug
-```
-
-### Without Docker
-
-```bash
-# Make sure you have go installed.
+# Make sure you have go 1.10+ installed.
 brew install go
 
 # Setup your GOPATH
@@ -60,11 +51,8 @@ export PATH="$HOME/go/bin:$PATH"
 # Checkout the code
 go get github.com/buildkite/agent
 cd "$HOME/go/src/github.com/buildkite/agent"
-```
 
-To test the commands locally:
-
-```bash
+# Start the agent
 go run main.go start --debug --token "abc123"
 ```
 
@@ -102,4 +90,4 @@ Many thanks to our fine contributors! @adill, @airhorns, @alexjurkiewicz, @bendr
 
 ## Copyright
 
-Copyright (c) 2014-2017 Buildkite Pty Ltd. See [LICENSE](./LICENSE.txt) and [DEPENDENCIES](./DEPENDENCIES.txt) for details.
+Copyright (c) 2014-2017 Buildkite Pty Ltd. See [LICENSE](./LICENSE.txt) for details.
