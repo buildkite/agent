@@ -307,7 +307,7 @@ func (p *Process) Kill() error {
 		c <- 1
 	}()
 
-	// Timeout this process after 3 seconds
+	// Timeout this process after 10 seconds
 	select {
 	case _ = <-c:
 		// Was successfully terminated
