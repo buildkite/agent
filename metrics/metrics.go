@@ -9,6 +9,12 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
+const (
+	// Number of statsd commands that are buffered before
+	// being sent to statsd
+	statsdBufferLen = 10
+)
+
 type Collector struct {
 	Datadog     bool
 	DatadogHost string
@@ -21,7 +27,7 @@ func (c *Collector) Start() error {
 		logger.Info("Starting datadog metrics collection to %s", c.DatadogHost)
 
 		var err error
-		c.client, err = statsd.New(c.DatadogHost)
+		c.client, err = statsd.NewBuffered(c.DatadogHost, statsdBufferLen)
 		if err != nil {
 			return err
 		}
@@ -62,6 +68,14 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 
 	if err := s.c.client.Timing(name, value, mergedTags, 1); err != nil {
 		logger.Error("Metrics timing failed: %v", err)
+	}
+}
+
+// With returns a scope with more tags added
+func (s *Scope) With(tags Tags) *Scope {
+	return &Scope{
+		Tags: s.mergeTags(tags),
+		c:    s.c,
 	}
 }
 

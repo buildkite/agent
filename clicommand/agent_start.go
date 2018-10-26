@@ -287,7 +287,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "metrics-datadog-host",
-			Usage:  "The host to send metrics to",
+			Usage:  "The dogstatsd instance to send metrics to via udp",
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
