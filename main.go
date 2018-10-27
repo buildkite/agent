@@ -84,6 +84,13 @@ func main() {
 				clicommand.PipelineUploadCommand,
 			},
 		},
+		{
+			Name:  "step",
+			Usage: "Make changes to a step",
+			Subcommands: []cli.Command{
+				clicommand.StepUpdateCommand,
+			},
+		},
 		clicommand.BootstrapCommand,
 	}
 
