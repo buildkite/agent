@@ -19,15 +19,13 @@ RUN apk add --no-cache \
     pip install --upgrade pip && \
     pip install docker-compose
 
-ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg \
-    BUILDKITE_BUILD_PATH=/buildkite/builds \
-    BUILDKITE_HOOKS_PATH=/buildkite/hooks \
-    BUILDKITE_PLUGINS_PATH=/buildkite/plugins
+ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
 RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && curl -Lfs -o /usr/local/bin/ssh-env-config.sh https://raw.githubusercontent.com/buildkite/docker-ssh-env-config/master/ssh-env-config.sh \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
+COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
 COPY ./buildkite-agent /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
