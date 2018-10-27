@@ -23,6 +23,7 @@ build_docker_image() {
   local packaging_dir="$2"
 
   echo "--- Building :docker: $image_tag"
+  cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
   cp pkg/buildkite-agent-linux-amd64 "${packaging_dir}/buildkite-agent"
   chmod +x "${packaging_dir}/buildkite-agent"
   docker build --tag "$image_tag" "${packaging_dir}"
