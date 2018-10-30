@@ -6,11 +6,10 @@ set -euo pipefail
 trigger_step() {
   local name="$1"
   local trigger_pipeline="$2"
-  local branch="master"
+  local branch="$BUILDKITE_BRANCH"
   local message_suffix=""
 
   if [[ "${DRY_RUN:-false}" == "true" ]] ; then
-    branch="$BUILDKITE_BRANCH"
     message_suffix=" (dry-run)"
   fi
 
@@ -66,7 +65,7 @@ output_steps_yaml() {
   fi
 }
 
-if [[ "${BUILDKITE_BRANCH}" != "master" && "${DRY_RUN}" != "true" ]] ; then
+if [[ "${BUILDKITE_BRANCH}" != "master" && "${DRY_RUN}" != "true" && "${BUILDKITE_BRANCH}" != *-*-stable ]] ; then
   echo "No release steps to be uploaded"
   exit 0
 fi
