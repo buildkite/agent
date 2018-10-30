@@ -107,7 +107,7 @@ var StepUpdateCommand = cli.Command{
 		// Post the change
 		err := retry.Do(func(s *retry.Stats) error {
 			resp, err := client.Jobs.StepUpdate(cfg.Job, update)
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
+			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}
 			if err != nil {
