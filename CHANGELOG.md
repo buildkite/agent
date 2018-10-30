@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.5.4](https://github.com/buildkite/agent/tree/v3.5.4) (2018-10-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.5.3...v3.5.4)
+
+### Fixed
+- Prevent docker image from crashing with missing config error [#847](https://github.com/buildkite/agent/pull/847) (@lox)
+
 ## [v3.5.3](https://github.com/buildkite/agent/tree/v3.5.3) (2018-10-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.5.2...v3.5.3)
 
