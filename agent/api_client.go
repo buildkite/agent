@@ -11,7 +11,6 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"golang.org/x/net/http2"
 )
 
 var debug = false
@@ -45,7 +44,6 @@ func (a APIClient) Create() *api.Client {
 		}).Dial,
 		TLSHandshakeTimeout: 30 * time.Second,
 	}
-	http2.ConfigureTransport(httpTransport)
 
 	// Configure the HTTP client
 	httpClient := &http.Client{Transport: &api.AuthenticatedTransport{
