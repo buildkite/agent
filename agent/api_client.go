@@ -35,7 +35,9 @@ func (a APIClient) Create() *api.Client {
 	}
 
 	httpTransport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		Proxy:              http.ProxyFromEnvironment,
+		DisableCompression: false,
+		DisableKeepAlives:  false,
 		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
