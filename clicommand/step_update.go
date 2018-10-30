@@ -30,7 +30,7 @@ Example:
 
 type StepUpdateConfig struct {
 	Attribute        string `cli:"arg:0" label:"attribute" validate:"required"`
-	Value            string `cli:"arg:1" label:"value" validate:"required"`
+	Value            string `cli:"arg:1" label:"value"`
 	Append           bool   `cli:"append"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
