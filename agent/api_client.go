@@ -11,7 +11,6 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"golang.org/x/net/http2"
 )
 
 var debug = false
@@ -37,15 +36,16 @@ func (a APIClient) Create() *api.Client {
 
 	httpTransport := &http.Transport{
 		Proxy:              http.ProxyFromEnvironment,
-		DisableKeepAlives:  false,
 		DisableCompression: false,
-		Dial: (&net.Dialer{
+		DisableKeepAlives:  false,
+		DialContext: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
-		}).Dial,
+		}).DialContext,
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
 		TLSHandshakeTimeout: 30 * time.Second,
 	}
-	http2.ConfigureTransport(httpTransport)
 
 	// Configure the HTTP client
 	httpClient := &http.Client{Transport: &api.AuthenticatedTransport{
