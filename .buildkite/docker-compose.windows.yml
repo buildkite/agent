@@ -1,0 +1,18 @@
+version: "3.2"
+
+# This is a docker-compose file designed to be called in macOS and translate through to windows
+
+services:
+  agent:
+    build:
+      dockerfile: Dockerfile-windows
+      context: ../
+    working_dir: C:/gopath/src/github.com/buildkite/agent
+    environment:
+      - BUILDKITE_BUILD_NUMBER
+      - "BUILDKITE_BUILD_PATH=c:\\buildkite\\builds"
+
+networks:
+  default:
+    external:
+      name: nat
