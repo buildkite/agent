@@ -22,6 +22,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	envChangesEnvVar = `BUILDKITE_HOOK_CHANGES_ENV_NAMES`
+)
+
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
 // as a sub-process of the buildkite-agent and finishes at the conclusion of a job.
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
@@ -193,6 +197,32 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	return nil
 }
 
+func (b *Bootstrap) trackChangedEnvVars(environ *env.Environment) {
+	previousChanges, ok := b.shell.Env.Get(envChangesEnvVar)
+	if !ok {
+		previousChanges = ""
+	}
+
+	variableNames := strings.Split(previousChanges, " ")
+
+	// merge previous changes and updated changes together
+	uniqueChanges := make(map[string]bool)
+	for _, name := range variableNames {
+		uniqueChanges[name] = true
+	}
+	for k, _ := range environ.ToMap() {
+		uniqueChanges[k] = true
+	}
+
+	// grab a slice of the environment variable names
+	updatedNames := []string{}
+	for k := range uniqueChanges {
+		updatedNames = append(updatedNames, k)
+	}
+
+	b.shell.Env.Set(envChangesEnvVar, strings.Join(updatedNames, " "))
+}
+
 func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string) {
 	if dir != b.shell.Getwd() {
 		_ = b.shell.Chdir(dir)
@@ -227,6 +257,9 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 		// let's mutate the current shell environment to include all
 		// the new values.
 		b.shell.Env = b.shell.Env.Merge(environ)
+
+		// Expose the changed variable names to future hooks, this allows things like docker run -e SOME_VAR
+		b.trackChangedEnvVars(environ)
 	}
 }
 
