@@ -34,7 +34,7 @@ type AgentPool struct {
 	DisableHTTP2          bool
 	AgentConfiguration    *AgentConfiguration
 	MetricsCollector      *metrics.Collector
-	Workers               int
+	Spawn                 int
 
 	interruptCount int
 	signalLock     sync.Mutex
@@ -53,11 +53,11 @@ func (r *AgentPool) Start() error {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < r.Workers; i++ {
-		if r.Workers == 1 {
+	for i := 0; i < r.Spawn; i++ {
+		if r.Spawn == 1 {
 			logger.Info("Registering agent with Buildkite...")
 		} else {
-			logger.Info("Registering agent %d of %d with Buildkite...", i+1, r.Workers)
+			logger.Info("Registering agent %d of %d with Buildkite...", i+1, r.Spawn)
 		}
 
 		wg.Add(1)

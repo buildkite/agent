@@ -74,7 +74,7 @@ type AgentStartConfig struct {
 	Experiments               []string `cli:"experiment" normalize:"list"`
 	MetricsDatadog            bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
-	Workers                   int      `cli:"workers"`
+	Spawn                     int      `cli:"spawn"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -292,10 +292,10 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		cli.IntFlag{
-			Name:   "workers",
-			Usage:  "The number of workers to run. Workers will register as separate agents, with unique names, and can run different jobs in parallel.",
+			Name:   "spawn",
+			Usage:  "The number of agents to spawn in parallel",
 			Value:  1,
-			EnvVar: "BUILDKITE_AGENT_WORKERS",
+			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
 		ExperimentsFlag,
 		EndpointFlag,
@@ -414,6 +414,7 @@ var AgentStartCommand = cli.Command{
 			Endpoint:              cfg.Endpoint,
 			DisableHTTP2:          cfg.NoHTTP2,
 			Workers:               cfg.Workers,
+			Spawn:                 cfg.Spawn,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
