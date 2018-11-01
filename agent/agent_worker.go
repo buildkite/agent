@@ -26,6 +26,9 @@ type AgentWorker struct {
 	// The endpoint that should be used when communicating with the API
 	Endpoint string
 
+	// Whether to disable http for the API
+	DisableHTTP2 bool
+
 	// The registred agent API record
 	Agent *api.Agent
 
@@ -60,7 +63,11 @@ func (a AgentWorker) Create() AgentWorker {
 		endpoint = a.Endpoint
 	}
 
-	a.APIClient = APIClient{Endpoint: endpoint, Token: a.Agent.AccessToken}.Create()
+	a.APIClient = APIClient{
+		Endpoint:     endpoint,
+		Token:        a.Agent.AccessToken,
+		DisableHTTP2: a.DisableHTTP2,
+	}.Create()
 
 	return a
 }

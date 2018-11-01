@@ -30,6 +30,7 @@ type AgentPool struct {
 	TagsFromHost          bool
 	WaitForEC2TagsTimeout time.Duration
 	Endpoint              string
+	DisableHTTP2          bool
 	AgentConfiguration    *AgentConfiguration
 
 	interruptCount int
@@ -41,7 +42,11 @@ func (r *AgentPool) Start() error {
 	r.ShowBanner()
 
 	// Create the agent registration API Client
-	r.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Token}.Create()
+	r.APIClient = APIClient{
+		Endpoint:     r.Endpoint,
+		Token:        r.Token,
+		DisableHTTP2: r.DisableHTTP2,
+	}.Create()
 
 	// Create the agent template. We use pass this template to the register
 	// call, at which point we get back a real agent.
@@ -64,7 +69,12 @@ func (r *AgentPool) Start() error {
 
 	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
-	worker := AgentWorker{Agent: registered, AgentConfiguration: r.AgentConfiguration, Endpoint: r.Endpoint}.Create()
+	worker := AgentWorker{
+		Agent:              registered,
+		AgentConfiguration: r.AgentConfiguration,
+		Endpoint:           r.Endpoint,
+		DisableHTTP2:       r.DisableHTTP2,
+	}.Create()
 
 	logger.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {

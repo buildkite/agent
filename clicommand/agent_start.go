@@ -65,6 +65,7 @@ type AgentStartConfig struct {
 	NoPlugins                 bool     `cli:"no-plugins"`
 	NoPluginValidation        bool     `cli:"no-plugin-validation"`
 	NoPTY                     bool     `cli:"no-pty"`
+	NoHTTP2                   bool     `cli:"no-http2"`
 	TimestampLines            bool     `cli:"timestamp-lines"`
 	Endpoint                  string   `cli:"endpoint" validate:"required"`
 	Debug                     bool     `cli:"debug"`
@@ -271,6 +272,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't automatically checkout git submodules",
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
 		},
+		cli.BoolFlag{
+			Name:   "no-http2",
+			Usage:  "Disable HTTP2 when communicating with the Agent API.",
+			EnvVar: "BUILDKITE_NO_HTTP2",
+		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -386,6 +392,7 @@ var AgentStartCommand = cli.Command{
 			TagsFromHost:          cfg.TagsFromHost,
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
+			DisableHTTP2:          cfg.NoHTTP2,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
@@ -403,7 +410,7 @@ var AgentStartCommand = cli.Command{
 				TimestampLines:            cfg.TimestampLines,
 				DisconnectAfterJob:        cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
-				Shell: cfg.Shell,
+				Shell:                     cfg.Shell,
 			},
 		}
 
