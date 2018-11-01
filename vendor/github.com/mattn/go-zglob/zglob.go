@@ -18,12 +18,13 @@ var (
 )
 
 type zenv struct {
-	dre  *regexp.Regexp
-	fre  *regexp.Regexp
-	root string
+	dre     *regexp.Regexp
+	fre     *regexp.Regexp
+	pattern string
+	root    string
 }
 
-func makePattern(pattern string) (*zenv, error) {
+func New(pattern string) (*zenv, error) {
 	globmask := ""
 	root := ""
 	for n, i := range strings.Split(filepath.ToSlash(pattern), "/") {
@@ -56,9 +57,10 @@ func makePattern(pattern string) (*zenv, error) {
 	}
 	if root == "" {
 		return &zenv{
-			dre:  nil,
-			fre:  nil,
-			root: "",
+			dre:     nil,
+			fre:     nil,
+			pattern: pattern,
+			root:    "",
 		}, nil
 	}
 	if globmask == "" {
@@ -73,7 +75,9 @@ func makePattern(pattern string) (*zenv, error) {
 		if cc[i] == '*' {
 			if i < len(cc)-2 && cc[i+1] == '*' && cc[i+2] == '/' {
 				filemask += "(.*/)?"
-				dirmask = filemask
+				if dirmask == "" {
+					dirmask = filemask
+				}
 				i += 2
 			} else {
 				filemask += "[^/]*"
@@ -104,14 +108,23 @@ func makePattern(pattern string) (*zenv, error) {
 		filemask = "(?i:" + filemask + ")"
 	}
 	return &zenv{
-		dre:  regexp.MustCompile("^" + dirmask),
-		fre:  regexp.MustCompile("^" + filemask + "$"),
-		root: filepath.Clean(root),
+		dre:     regexp.MustCompile("^" + dirmask),
+		fre:     regexp.MustCompile("^" + filemask + "$"),
+		pattern: pattern,
+		root:    filepath.Clean(root),
 	}, nil
 }
 
 func Glob(pattern string) ([]string, error) {
-	zenv, err := makePattern(pattern)
+	return glob(pattern, false)
+}
+
+func GlobFollowSymlinks(pattern string) ([]string, error) {
+	return glob(pattern, true)
+}
+
+func glob(pattern string, followSymlinks bool) ([]string, error) {
+	zenv, err := New(pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -131,8 +144,24 @@ func Glob(pattern string) ([]string, error) {
 		}
 		path = filepath.ToSlash(path)
 
+		if followSymlinks && info == os.ModeSymlink {
+			followedPath, err := filepath.EvalSymlinks(path)
+			if err == nil {
+				fi, err := os.Lstat(followedPath)
+				if err == nil && fi.IsDir() {
+					return fastwalk.TraverseLink
+				}
+			}
+		}
+
 		if info.IsDir() {
 			if path == "." || len(path) <= len(zenv.root) {
+				return nil
+			}
+			if zenv.fre.MatchString(path) {
+				mu.Lock()
+				matches = append(matches, path)
+				mu.Unlock()
 				return nil
 			}
 			if !zenv.dre.MatchString(path + "/") {
@@ -154,22 +183,26 @@ func Glob(pattern string) ([]string, error) {
 }
 
 func Match(pattern, name string) (matched bool, err error) {
-	zenv, err := makePattern(pattern)
+	zenv, err := New(pattern)
 	if err != nil {
 		return false, err
 	}
-	if zenv.root == "" {
-		return pattern == name, nil
+	return zenv.Match(name), nil
+}
+
+func (z *zenv) Match(name string) bool {
+	if z.root == "" {
+		return z.pattern == name
 	}
 
 	name = filepath.ToSlash(name)
 
-	if name == "." || len(name) <= len(zenv.root) {
-		return false, nil
+	if name == "." || len(name) <= len(z.root) {
+		return false
 	}
 
-	if zenv.fre.MatchString(name) {
-		return true, nil
+	if z.fre.MatchString(name) {
+		return true
 	}
-	return false, nil
+	return false
 }

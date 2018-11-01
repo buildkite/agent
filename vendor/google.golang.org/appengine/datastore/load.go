@@ -65,36 +65,35 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 	var sliceIndex int
 
 	name := p.Name
-	for name != "" {
-		// First we try to find a field with name matching
-		// the value of 'name' exactly.
-		decoder, ok := codec.fields[name]
-		if ok {
-			name = ""
-		} else {
-			// Now try for legacy flattened nested field (named eg. "A.B.C.D").
 
-			parent := name
-			child := ""
+	// If name ends with a '.', the last field is anonymous.
+	// In this case, strings.Split will give us "" as the
+	// last element of our fields slice, which will match the ""
+	// field name in the substruct codec.
+	fields := strings.Split(name, ".")
 
-			// Cut off the last field (delimited by ".") and find its parent
-			// in the codec.
-			// eg. for name "A.B.C.D", split off "A.B.C" and try to
-			// find a field in the codec with this name.
-			// Loop again with "A.B", etc.
-			for !ok {
-				i := strings.LastIndex(parent, ".")
-				if i < 0 {
-					return "no such struct field"
-				}
-				if i == len(name)-1 {
-					return "field name cannot end with '.'"
-				}
-				parent, child = name[:i], name[i+1:]
-				decoder, ok = codec.fields[parent]
+	for len(fields) > 0 {
+		var decoder fieldCodec
+		var ok bool
+
+		// Cut off the last field (delimited by ".") and find its parent
+		// in the codec.
+		// eg. for name "A.B.C.D", split off "A.B.C" and try to
+		// find a field in the codec with this name.
+		// Loop again with "A.B", etc.
+		for i := len(fields); i > 0; i-- {
+			parent := strings.Join(fields[:i], ".")
+			decoder, ok = codec.fields[parent]
+			if ok {
+				fields = fields[i:]
+				break
 			}
+		}
 
-			name = child
+		// If we never found a matching field in the codec, return
+		// error message.
+		if !ok {
+			return "no such struct field"
 		}
 
 		v = initField(structValue, decoder.path)

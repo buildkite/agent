@@ -3,6 +3,8 @@ package msgpack
 import (
 	"fmt"
 	"reflect"
+
+	"gopkg.in/vmihailenco/msgpack.v2/codes"
 )
 
 var interfaceType = reflect.TypeOf((*interface{})(nil)).Elem()
@@ -43,8 +45,15 @@ func init() {
 func getDecoder(typ reflect.Type) decoderFunc {
 	kind := typ.Kind()
 
+	if decoder, ok := typDecMap[typ]; ok {
+		return decoder
+	}
+
 	if typ.Implements(customDecoderType) {
 		return decodeCustomValue
+	}
+	if typ.Implements(unmarshalerType) {
+		return unmarshalValue
 	}
 
 	// Addressable struct field value.
@@ -56,14 +65,6 @@ func getDecoder(typ reflect.Type) decoderFunc {
 		if ptr.Implements(unmarshalerType) {
 			return unmarshalValueAddr
 		}
-	}
-
-	if typ.Implements(unmarshalerType) {
-		return unmarshalValue
-	}
-
-	if decoder, ok := typDecMap[typ]; ok {
-		return decoder
 	}
 
 	switch kind {
@@ -117,22 +118,46 @@ func decodeCustomValueAddr(d *Decoder, v reflect.Value) error {
 	if !v.CanAddr() {
 		return fmt.Errorf("msgpack: Decode(nonsettable %T)", v.Interface())
 	}
-	if d.hasNilCode() {
-		// TODO: zeroing?
-		return d.DecodeNil()
-	}
-	decoder := v.Addr().Interface().(CustomDecoder)
-	return decoder.DecodeMsgpack(d)
+	return decodeCustomValue(d, v.Addr())
 }
 
 func decodeCustomValue(d *Decoder, v reflect.Value) error {
-	if d.hasNilCode() {
-		// TODO: zeroing?
+	c, err := d.PeekCode()
+	if err != nil {
+		return err
+	}
+
+	if codes.IsExt(c) {
+		c, err = d.readByte()
+		if err != nil {
+			return err
+		}
+
+		_, err = d.parseExtLen(c)
+		if err != nil {
+			return err
+		}
+
+		_, err = d.readByte()
+		if err != nil {
+			return err
+		}
+
+		c, err = d.PeekCode()
+		if err != nil {
+			return err
+		}
+	}
+
+	if c == codes.Nil {
+		// TODO: set nil
 		return d.DecodeNil()
 	}
+
 	if v.IsNil() {
 		v.Set(reflect.New(v.Type().Elem()))
 	}
+
 	decoder := v.Interface().(CustomDecoder)
 	return decoder.DecodeMsgpack(d)
 }
@@ -141,45 +166,73 @@ func unmarshalValueAddr(d *Decoder, v reflect.Value) error {
 	if !v.CanAddr() {
 		return fmt.Errorf("msgpack: Decode(nonsettable %T)", v.Interface())
 	}
-	if d.hasNilCode() {
-		// TODO: zeroing?
-		return d.DecodeNil()
-	}
-	return _unmarshalValue(d, v.Addr())
+	return unmarshalValue(d, v.Addr())
 }
 
 func unmarshalValue(d *Decoder, v reflect.Value) error {
-	if d.hasNilCode() {
-		// TODO: zeroing?
-		return d.DecodeNil()
-	}
-	if v.IsNil() {
-		v.Set(reflect.New(v.Type().Elem()))
-	}
-	return _unmarshalValue(d, v)
-}
-
-func _unmarshalValue(d *Decoder, v reflect.Value) error {
-	d.rec = makeBuffer()
-	if err := d.Skip(); err != nil {
-		return err
-	}
-
-	unmarshaler := v.Interface().(Unmarshaler)
-	if err := unmarshaler.UnmarshalMsgpack(d.rec); err != nil {
-		return err
-	}
-
-	d.rec = nil
-	return nil
-}
-
-func decodeBoolValue(d *Decoder, v reflect.Value) error {
-	r, err := d.DecodeBool()
+	c, err := d.PeekCode()
 	if err != nil {
 		return err
 	}
-	v.SetBool(r)
+
+	if codes.IsExt(c) {
+		c, err = d.readByte()
+		if err != nil {
+			return err
+		}
+
+		extLen, err := d.parseExtLen(c)
+		if err != nil {
+			return err
+		}
+		d.extLen = extLen
+
+		_, err = d.readByte()
+		if err != nil {
+			return err
+		}
+
+		c, err = d.PeekCode()
+		if err != nil {
+			return err
+		}
+	}
+
+	if c == codes.Nil {
+		// TODO: set nil
+		return d.DecodeNil()
+	}
+
+	if v.IsNil() {
+		v.Set(reflect.New(v.Type().Elem()))
+	}
+
+	if d.extLen != 0 {
+		b, err := d.readN(d.extLen)
+		d.extLen = 0
+		if err != nil {
+			return err
+		}
+		d.rec = b
+	} else {
+		d.rec = makeBuffer()
+		if err := d.Skip(); err != nil {
+			return err
+		}
+	}
+
+	unmarshaler := v.Interface().(Unmarshaler)
+	err = unmarshaler.UnmarshalMsgpack(d.rec)
+	d.rec = nil
+	return err
+}
+
+func decodeBoolValue(d *Decoder, v reflect.Value) error {
+	flag, err := d.DecodeBool()
+	if err != nil {
+		return err
+	}
+	v.SetBool(flag)
 	return nil
 }
 

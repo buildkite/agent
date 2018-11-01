@@ -22,10 +22,12 @@ const (
 
 var (
 	HaveSetProcTitle int
+	HaveSetProcTitleFast int
 )
 
 func init() {
 	HaveSetProcTitle = int(C.spt_init1())
+	HaveSetProcTitleFast = int(C.spt_fast_init1())
 
 	if HaveSetProcTitle == HaveReplacement {
 		newArgs := make([]string, len(os.Args))
@@ -59,4 +61,11 @@ func SetProcTitle(title string) {
 	defer C.free(unsafe.Pointer(cs))
 
 	C.spt_setproctitle(cs)
+}
+
+func SetProcTitleFast(title string) {
+	cs := C.CString(title)
+	defer C.free(unsafe.Pointer(cs))
+
+	C.spt_setproctitle_fast(cs)
 }

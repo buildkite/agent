@@ -663,7 +663,6 @@ func (sc *serverConn) condlogf(err error, format string, args ...interface{}) {
 
 func (sc *serverConn) canonicalHeader(v string) string {
 	sc.serveG.check()
-	buildCommonHeaderMapsOnce()
 	cv, ok := commonCanonHeader[v]
 	if ok {
 		return cv
@@ -1110,7 +1109,7 @@ func (sc *serverConn) startFrameWrite(wr FrameWriteRequest) {
 
 // errHandlerPanicked is the error given to any callers blocked in a read from
 // Request.Body when the main goroutine panics. Since most handlers read in the
-// main ServeHTTP goroutine, this will show up rarely.
+// the main ServeHTTP goroutine, this will show up rarely.
 var errHandlerPanicked = errors.New("http2: handler panicked")
 
 // wroteFrame is called on the serve goroutine with the result of
@@ -2347,7 +2346,15 @@ func (rws *responseWriterState) writeChunk(p []byte) (n int, err error) {
 		}
 		_, hasContentType := rws.snapHeader["Content-Type"]
 		if !hasContentType && bodyAllowedForStatus(rws.status) && len(p) > 0 {
-			ctype = http.DetectContentType(p)
+			if cto := rws.snapHeader.Get("X-Content-Type-Options"); strings.EqualFold("nosniff", cto) {
+				// nosniff is an explicit directive not to guess a content-type.
+				// Content-sniffing is no less susceptible to polyglot attacks via
+				// hosted content when done on the server.
+				ctype = "application/octet-stream"
+				rws.conn.logf("http2: WriteHeader called with X-Content-Type-Options:nosniff but no Content-Type")
+			} else {
+				ctype = http.DetectContentType(p)
+			}
 		}
 		var date string
 		if _, ok := rws.snapHeader["Date"]; !ok {

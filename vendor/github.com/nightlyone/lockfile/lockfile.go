@@ -93,7 +93,7 @@ func (l Lockfile) TryLock() error {
 		panic(ErrNeedAbsPath)
 	}
 
-	tmplock, err := ioutil.TempFile(filepath.Dir(name), "")
+	tmplock, err := ioutil.TempFile(filepath.Dir(name), filepath.Base(name)+".")
 	if err != nil {
 		return err
 	}
@@ -108,8 +108,18 @@ func (l Lockfile) TryLock() error {
 		return err
 	}
 
-	// return value intentionally ignored, as ignoring it is part of the algorithm
-	_ = os.Link(tmplock.Name(), name)
+	// EEXIST and similiar error codes, caught by os.IsExist, are intentionally ignored,
+	// as it means that someone was faster creating this link
+	// and ignoring this kind of error is part of the algorithm.
+	// The we will probably fail the pid owner check later, if this process is still alive.
+	// We cannot ignore ALL errors, since failure to support hard links, disk full
+	// as well as many other errors can happen to a filesystem operation
+	// and we really want to abort on those.
+	if err := os.Link(tmplock.Name(), name); err != nil {
+		if !os.IsExist(err) {
+			return err
+		}
+	}
 
 	fiTmp, err := os.Lstat(tmplock.Name())
 	if err != nil {

@@ -19,10 +19,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 )
 
-// traverseLink is a sentinel error for fastWalk, similar to filepath.SkipDir.
-var traverseLink = errors.New("traverse symlink, assuming target is a directory")
+// TraverseLink is a sentinel error for fastWalk, similar to filepath.SkipDir.
+var TraverseLink = errors.New("traverse symlink, assuming target is a directory")
 
 // FastWalk walks the file tree rooted at root, calling walkFn for
 // each file or directory in the tree, including root.
@@ -35,10 +36,20 @@ var traverseLink = errors.New("traverse symlink, assuming target is a directory"
 //     any permission bits.
 //   * multiple goroutines stat the filesystem concurrently. The provided
 //     walkFn must be safe for concurrent use.
-//   * fastWalk can follow symlinks if walkFn returns the traverseLink
+//   * fastWalk can follow symlinks if walkFn returns the TraverseLink
 //     sentinel error. It is the walkFn's responsibility to prevent
 //     fastWalk from going into symlink cycles.
 func FastWalk(root string, walkFn func(path string, typ os.FileMode) error) error {
+	// Check if "root" is actually a file, not a directory.
+	stat, err := os.Stat(root)
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		// If it is, just directly pass it to walkFn and return.
+		return walkFn(root, stat.Mode())
+	}
+
 	// TODO(bradfitz): make numWorkers configurable? We used a
 	// minimum of 4 to give the kernel more info about multiple
 	// things we want, in hopes its I/O scheduling can take
@@ -57,11 +68,14 @@ func FastWalk(root string, walkFn func(path string, typ os.FileMode) error) erro
 		// buffered for correctness & not leaking goroutines:
 		resc: make(chan error, numWorkers),
 	}
-	defer close(w.donec)
+
 	// TODO(bradfitz): start the workers as needed? maybe not worth it.
+	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
-		go w.doWork()
+		wg.Add(1)
+		go w.doWork(&wg)
 	}
+
 	todo := []walkItem{{dir: root}}
 	out := 0
 	for {
@@ -79,10 +93,28 @@ func FastWalk(root string, walkFn func(path string, typ os.FileMode) error) erro
 		case it := <-w.enqueuec:
 			todo = append(todo, it)
 		case err := <-w.resc:
-			out--
 			if err != nil {
+				// Signal to the workers to close.
+				close(w.donec)
+
+				// Drain the results channel from the other workers which
+				// haven't returned yet.
+				go func() {
+					for {
+						select {
+						case _, ok := <-w.resc:
+							if !ok {
+								return
+							}
+						}
+					}
+				}()
+
+				wg.Wait()
 				return err
 			}
+
+			out--
 			if out == 0 && len(todo) == 0 {
 				// It's safe to quit here, as long as the buffered
 				// enqueue channel isn't also readable, which might
@@ -94,6 +126,10 @@ func FastWalk(root string, walkFn func(path string, typ os.FileMode) error) erro
 				case it := <-w.enqueuec:
 					todo = append(todo, it)
 				default:
+					// Signal to the workers to close, and wait for all of
+					// them to return.
+					close(w.donec)
+					wg.Wait()
 					return nil
 				}
 			}
@@ -103,10 +139,11 @@ func FastWalk(root string, walkFn func(path string, typ os.FileMode) error) erro
 
 // doWork reads directories as instructed (via workc) and runs the
 // user's callback function.
-func (w *walker) doWork() {
+func (w *walker) doWork(wg *sync.WaitGroup) {
 	for {
 		select {
 		case <-w.donec:
+			wg.Done()
 			return
 		case it := <-w.workc:
 			w.resc <- w.walk(it.dir, !it.callbackDone)
@@ -144,7 +181,7 @@ func (w *walker) onDirEnt(dirName, baseName string, typ os.FileMode) error {
 
 	err := w.fn(joined, typ)
 	if typ == os.ModeSymlink {
-		if err == traverseLink {
+		if err == TraverseLink {
 			// Set callbackDone so we don't call it twice for both the
 			// symlink-as-symlink and the symlink-as-directory later:
 			w.enqueue(walkItem{dir: joined, callbackDone: true})
