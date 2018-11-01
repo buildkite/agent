@@ -2,10 +2,10 @@ version: '2.1'
 
 services:
   agent:
-    image: golang:1.10
-    working_dir: /go/src/github.com/buildkite/agent
+    image: golang:1.11
+    working_dir: /code
     volumes:
-      - ../:/go/src/github.com/buildkite/agent:cached
+      - ../:/code:cached
     environment:
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
