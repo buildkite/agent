@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -16,8 +17,9 @@ import (
 var debug = false
 
 type APIClient struct {
-	Endpoint string
-	Token    string
+	Endpoint     string
+	Token        string
+	DisableHTTP2 bool
 }
 
 func APIClientEnableHTTPDebug() {
@@ -45,6 +47,10 @@ func (a APIClient) Create() *api.Client {
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
 		TLSHandshakeTimeout: 30 * time.Second,
+	}
+
+	if a.DisableHTTP2 {
+		httpTransport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
 	}
 
 	// Configure the HTTP client

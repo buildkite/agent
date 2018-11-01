@@ -17,7 +17,7 @@ import (
 
 	"github.com/buildkite/agent/logger"
 	"github.com/google/go-querystring/query"
-	"gopkg.in/vmihailenco/msgpack.v2"
+	msgpack "gopkg.in/vmihailenco/msgpack.v2"
 )
 
 const (
@@ -197,7 +197,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 		return nil, err
 	}
 
-	logger.Debug("↳ %s %s (%s %s)", req.Method, req.URL, resp.Status, time.Now().Sub(ts))
+	logger.Debug("↳ %s %s (%s %s %s)", req.Method, req.URL, resp.Proto, resp.Status, time.Now().Sub(ts))
 
 	defer resp.Body.Close()
 	defer io.Copy(ioutil.Discard, resp.Body)
