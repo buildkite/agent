@@ -199,8 +199,8 @@ func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
 		f := t.Field(i)
 		// Skip unexported fields.
 		// Note that if f is an anonymous, unexported struct field,
-		// we will not promote its fields. We will skip f entirely.
-		if f.PkgPath != "" {
+		// we will promote its fields.
+		if f.PkgPath != "" && !f.Anonymous {
 			continue
 		}
 
@@ -253,11 +253,13 @@ func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
 					"datastore: flattening nested structs leads to a slice of slices: field %q", f.Name)
 			}
 			c.hasSlice = c.hasSlice || sub.hasSlice
-			// If name is empty at this point, f is an anonymous struct field.
-			// In this case, we promote the substruct's fields up to this level
+			// If f is an anonymous struct field, we promote the substruct's fields up to this level
 			// in the linked list of struct codecs.
-			if name == "" {
+			if f.Anonymous {
 				for subname, subfield := range sub.fields {
+					if name != "" {
+						subname = name + "." + subname
+					}
 					if _, ok := c.fields[subname]; ok {
 						return nil, fmt.Errorf("datastore: struct tag has repeated property name: %q", subname)
 					}

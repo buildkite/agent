@@ -1,0 +1,155 @@
+# cloud.google.com/go v0.0.0-20170217213217-65216237311a
+cloud.google.com/go/compute/metadata
+cloud.google.com/go/internal
+# github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc
+github.com/ErikDubbelboer/gspt
+# github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5
+github.com/aws/aws-sdk-go/aws
+github.com/aws/aws-sdk-go/aws/credentials
+github.com/aws/aws-sdk-go/aws/defaults
+github.com/aws/aws-sdk-go/aws/ec2metadata
+github.com/aws/aws-sdk-go/aws/endpoints
+github.com/aws/aws-sdk-go/aws/session
+github.com/aws/aws-sdk-go/service/ec2
+github.com/aws/aws-sdk-go/service/s3
+github.com/aws/aws-sdk-go/service/s3/s3manager
+github.com/aws/aws-sdk-go/aws/awserr
+github.com/aws/aws-sdk-go/internal/sdkio
+github.com/aws/aws-sdk-go/internal/shareddefaults
+github.com/aws/aws-sdk-go/aws/corehandlers
+github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds
+github.com/aws/aws-sdk-go/aws/credentials/endpointcreds
+github.com/aws/aws-sdk-go/aws/request
+github.com/aws/aws-sdk-go/aws/client
+github.com/aws/aws-sdk-go/aws/client/metadata
+github.com/aws/aws-sdk-go/internal/sdkuri
+github.com/aws/aws-sdk-go/aws/credentials/stscreds
+github.com/aws/aws-sdk-go/aws/csm
+github.com/aws/aws-sdk-go/aws/awsutil
+github.com/aws/aws-sdk-go/aws/signer/v4
+github.com/aws/aws-sdk-go/internal/sdkrand
+github.com/aws/aws-sdk-go/private/protocol
+github.com/aws/aws-sdk-go/private/protocol/ec2query
+github.com/aws/aws-sdk-go/private/protocol/eventstream
+github.com/aws/aws-sdk-go/private/protocol/eventstream/eventstreamapi
+github.com/aws/aws-sdk-go/private/protocol/rest
+github.com/aws/aws-sdk-go/private/protocol/restxml
+github.com/aws/aws-sdk-go/service/s3/s3iface
+github.com/aws/aws-sdk-go/service/sts
+github.com/aws/aws-sdk-go/private/protocol/query/queryutil
+github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
+github.com/aws/aws-sdk-go/private/protocol/query
+# github.com/buildkite/bintest v0.0.0-20180227222132-85c293267aed
+github.com/buildkite/bintest
+# github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c
+github.com/buildkite/interpolate
+# github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
+github.com/buildkite/shellwords
+# github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3
+github.com/buildkite/yaml
+# github.com/davecgh/go-spew v1.1.0
+github.com/davecgh/go-spew/spew
+# github.com/denisbrodbeck/machineid v1.0.0
+github.com/denisbrodbeck/machineid
+# github.com/go-ini/ini v1.25.4
+github.com/go-ini/ini
+# github.com/golang/protobuf v1.2.0
+github.com/golang/protobuf/proto
+# github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
+github.com/google/go-querystring/query
+# github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e
+github.com/googleapis/gax-go
+# github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8
+github.com/jmespath/go-jmespath
+# github.com/kr/pty v1.1.2
+github.com/kr/pty
+# github.com/mattn/go-zglob v0.0.0-20180803001819-2ea3427bfa53
+github.com/mattn/go-zglob
+github.com/mattn/go-zglob/fastwalk
+# github.com/mitchellh/go-homedir v1.0.0
+github.com/mitchellh/go-homedir
+# github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
+github.com/nightlyone/lockfile
+# github.com/oleiade/reflections v0.0.0-20160817071559-0e86b3c98b2f
+github.com/oleiade/reflections
+# github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222
+github.com/pborman/uuid
+# github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5
+github.com/petermattis/goid
+# github.com/pkg/errors v0.8.0
+github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
+# github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2
+github.com/qri-io/jsonpointer
+# github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
+github.com/qri-io/jsonschema
+# github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5
+github.com/sasha-s/go-deadlock
+# github.com/stretchr/testify v0.0.0-20170130113145-4d4bfba8f1d1
+github.com/stretchr/testify/assert
+# github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
+github.com/urfave/cli
+# golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
+golang.org/x/crypto/ssh/knownhosts
+golang.org/x/crypto/ssh/terminal
+golang.org/x/crypto/ssh
+golang.org/x/crypto/curve25519
+golang.org/x/crypto/ed25519
+golang.org/x/crypto/ed25519/internal/edwards25519
+# golang.org/x/net v0.0.0-20180724234803-3673e40ba225
+golang.org/x/net/context
+golang.org/x/net/context/ctxhttp
+golang.org/x/net/http2
+golang.org/x/net/trace
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+golang.org/x/net/internal/timeseries
+# golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
+golang.org/x/oauth2
+golang.org/x/oauth2/google
+golang.org/x/oauth2/internal
+golang.org/x/oauth2/jws
+golang.org/x/oauth2/jwt
+# golang.org/x/sys v0.0.0-20180706062352-ce36f3865eeb
+golang.org/x/sys/windows/registry
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# golang.org/x/text v0.3.0
+golang.org/x/text/secure/bidirule
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+golang.org/x/text/transform
+# google.golang.org/api v0.0.0-20181016191922-cc9bd73d51b4
+google.golang.org/api/googleapi
+google.golang.org/api/storage/v1
+google.golang.org/api/googleapi/internal/uritemplates
+google.golang.org/api/gensupport
+# google.golang.org/appengine v1.2.0
+google.golang.org/appengine
+google.golang.org/appengine/datastore
+google.golang.org/appengine/urlfetch
+google.golang.org/appengine/internal
+google.golang.org/appengine/internal/app_identity
+google.golang.org/appengine/internal/modules
+google.golang.org/appengine/internal/datastore
+google.golang.org/appengine/internal/urlfetch
+google.golang.org/appengine/internal/base
+google.golang.org/appengine/internal/log
+google.golang.org/appengine/internal/remote_api
+# google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441
+google.golang.org/grpc
+google.golang.org/grpc/codes
+google.golang.org/grpc/credentials
+google.golang.org/grpc/grpclog
+google.golang.org/grpc/internal
+google.golang.org/grpc/metadata
+google.golang.org/grpc/naming
+google.golang.org/grpc/peer
+google.golang.org/grpc/stats
+google.golang.org/grpc/tap
+google.golang.org/grpc/transport
+# gopkg.in/vmihailenco/msgpack.v2 v2.9.1
+gopkg.in/vmihailenco/msgpack.v2
+gopkg.in/vmihailenco/msgpack.v2/codes

@@ -41,16 +41,12 @@ buildkite-agent start --token
 These instructions assume you are running a recent macOS, but could easily be adapted to Linux and Windows.
 
 ```bash
-# Make sure you have go 1.10+ installed.
+# Make sure you have go 1.11+ installed.
 brew install go
 
-# Setup your GOPATH
-export GOPATH="$HOME/go"
-export PATH="$HOME/go/bin:$PATH"
-
-# Checkout the code
-go get github.com/buildkite/agent
-cd "$HOME/go/src/github.com/buildkite/agent"
+# Download the code somewhere, no GOPATH required
+git clone https://github.com/buildkite/agent.git
+cd agent
 
 # Start the agent
 go run main.go start --debug --token "abc123"
@@ -58,22 +54,24 @@ go run main.go start --debug --token "abc123"
 
 ### Dependency management
 
-We're using [govendor](https://github.com/kardianos/govendor) to manage our Go dependencies. Install it with:
+We're go 1.11+ and [Go Modules](https://github.com/golang/go/wiki/Modules) to manage our Go dependencies. We are keeping the dependencies vendored to remain backwards compatible with older go versions.
+
+If you are using go 1.11 and have the agent in your `GOPATH`, you will need to enable modules via the environment variable:
 
 ```bash
-go get github.com/kardianos/govendor
+export GO111MODULE=on
 ```
 
-If you introduce a new package, just add the import to your source file and run:
+If you introduce a new package:
 
 ```bash
-govendor fetch +missing
+go get github.com/my/new/package
 ```
 
-Or explicitly fetch it with a version using:
+Then you can write that package to the `vendor/` with:
 
 ```bash
-govendor fetch github.com/buildkite/go-buildkite@v2.0.0
+go mod vendor
 ```
 
 ## Contributing

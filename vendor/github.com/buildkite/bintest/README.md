@@ -22,6 +22,9 @@ agent.
 agent.
   Expect("meta-data", "set", mock.MatchAny()).
   AndExitWith(0)
+agent.
+  Expect("meta-data", "set", "buildkite:git:branch", mock.MatchAny()).
+  AndExitWith(0)
 
 agent.AssertExpectations(t)
 ```

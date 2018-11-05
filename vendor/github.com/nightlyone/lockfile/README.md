@@ -27,7 +27,7 @@ Then run
 
 LICENSE
 -------
-BSD
+MIT
 
 documentation
 -------------

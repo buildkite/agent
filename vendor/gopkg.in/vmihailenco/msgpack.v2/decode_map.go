@@ -7,6 +7,8 @@ import (
 	"gopkg.in/vmihailenco/msgpack.v2/codes"
 )
 
+const mapElemsAllocLimit = 1e4
+
 var mapStringStringPtrType = reflect.TypeOf((*map[string]string)(nil))
 var mapStringStringType = mapStringStringPtrType.Elem()
 
@@ -56,7 +58,7 @@ func decodeMap(d *Decoder) (interface{}, error) {
 		return nil, nil
 	}
 
-	m := make(map[interface{}]interface{}, min(n, mapAllocLimit))
+	m := make(map[interface{}]interface{}, min(n, mapElemsAllocLimit))
 	for i := 0; i < n; i++ {
 		mk, err := d.DecodeInterface()
 		if err != nil {
@@ -76,12 +78,18 @@ func (d *Decoder) DecodeMapLen() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	if codes.IsExt(c) {
-		c, err = d.skipExtHeader(c)
+		if err = d.skipExtHeader(c); err != nil {
+			return 0, err
+		}
+
+		c, err = d.readByte()
 		if err != nil {
 			return 0, err
 		}
 	}
+
 	return d.mapLen(c)
 }
 
@@ -120,7 +128,7 @@ func (d *Decoder) decodeMapStringStringPtr(ptr *map[string]string) error {
 
 	m := *ptr
 	if m == nil {
-		*ptr = make(map[string]string, min(n, mapAllocLimit))
+		*ptr = make(map[string]string, min(n, mapElemsAllocLimit))
 		m = *ptr
 	}
 
@@ -156,7 +164,7 @@ func (d *Decoder) decodeMapStringInterfacePtr(ptr *map[string]interface{}) error
 
 	m := *ptr
 	if m == nil {
-		*ptr = make(map[string]interface{}, min(n, mapAllocLimit))
+		*ptr = make(map[string]interface{}, min(n, mapElemsAllocLimit))
 		m = *ptr
 	}
 
