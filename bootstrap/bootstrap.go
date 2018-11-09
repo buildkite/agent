@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ import (
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
 // Golang for portability and testability
 type Bootstrap struct {
+	// Context is the execution context of the bootstrap
+	Context context.Context
+
 	// Config provides the bootstrap configuration
 	Config
 
@@ -48,7 +52,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
-		b.shell, err = shell.New()
+		b.shell, err = shell.NewWithContext(b.Context)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -124,6 +128,12 @@ func (b *Bootstrap) Start() (exitCode int) {
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
+}
+
+// Cancel interrupts any running shell processes and causes the bootstrap to stop
+func (b *Bootstrap) Cancel() error {
+	b.shell.Cancel()
+	return nil
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -708,7 +718,9 @@ func (b *Bootstrap) CheckoutPhase() error {
 	default:
 		err := retry.Do(func(s *retry.Stats) error {
 			err := b.defaultCheckoutPhase()
-			if err != nil {
+			if err != nil && errors.Cause(err) == context.Canceled {
+				return nil
+			} else if err != nil {
 				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 
 				// Checkout can fail because of corrupted files in the checkout
@@ -972,7 +984,12 @@ func (b *Bootstrap) CommandPhase() error {
 	// (which is returned when the command is actually run, but fails),
 	// then we'll show it in the log.
 	if shell.IsExitError(commandExitError) {
-		b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+		exitCode := shell.GetExitCode(commandExitError)
+		if exitCode == -1 {
+			b.shell.Errorf("The command was cancelled")
+		} else {
+			b.shell.Errorf("The command exited with status %d", exitCode)
+		}
 	} else if commandExitError != nil {
 		b.shell.Errorf(commandExitError.Error())
 	}
