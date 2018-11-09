@@ -315,6 +315,8 @@ func (p *Process) Kill() error {
 		// Stop checking in the routine above
 		checking = false
 
+		logger.Debug("[Process] Failed to shutdown in time, forcefully killing")
+
 		// Forcefully kill the thing
 		err = p.signal(syscall.SIGKILL)
 
@@ -330,7 +332,7 @@ func (p *Process) signal(sig os.Signal) error {
 	if p.command != nil && p.command.Process != nil {
 		logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
-		err := p.command.Process.Signal(sig)
+		err := Signal(p.command, sig)
 		if err != nil {
 			logger.Error("[Process] Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
 			return err
