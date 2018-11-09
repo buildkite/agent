@@ -37,16 +37,6 @@ if [ -z "$DEB_S3_BUCKET" ]; then
   exit 1
 fi
 
-if [ -z "$DEB_S3_ACCESS_KEY_ID" ]; then
-  echo "Error: Missing ENV variable DEB_S3_ACCESS_KEY_ID"
-  exit 1
-fi
-
-if [ -z "$DEB_S3_SECRET_ACCESS_KEY_ID" ]; then
-  echo "Error: Missing ENV variable DEB_S3_SECRET_ACCESS_KEY_ID"
-  exit 1
-fi
-
 info "Uploading $PACKAGE to $DEB_S3_BUCKET ($CODENAME $COMPONENT)"
 
 # Decrpyt the GPG_PASSPHRASE with our GPG_PASSPHRASE_PASSWORD
@@ -58,8 +48,6 @@ deb_s3_args=(
   --gpg-options "\-\-digest-algo SHA512 \-\-passphrase $GPG_PASSPHRASE"
   --codename "$CODENAME"
   --component "$COMPONENT"
-  "--access-key-id=$DEB_S3_ACCESS_KEY_ID"
-  "--secret-access-key=$DEB_S3_SECRET_ACCESS_KEY_ID"
 )
 
 # Older versions were ok with prefix and bucket in the same parameter, but we now need to split them
