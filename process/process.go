@@ -60,6 +60,8 @@ func (p *Process) Start() error {
 
 	p.command = exec.Command(p.Script[0], p.Script[1:]...)
 
+	// Create a channel that we use for signaling when the process is
+	// done for Done()
 	p.mu.Lock()
 	if p.done == nil {
 		p.done = make(chan struct{})
@@ -244,6 +246,8 @@ func (p *Process) Start() error {
 
 	// The process is no longer running at this point
 	p.setRunning(false)
+
+	// Signal waiting consumers in Done() by closing the done channel
 	close(p.done)
 
 	// Find the exit status of the script
@@ -271,6 +275,7 @@ func (p *Process) Output() string {
 // Done returns a channel that is closed when the process finishes
 func (p *Process) Done() <-chan struct{} {
 	p.mu.Lock()
+	// We create this here in case this is called before Start()
 	if p.done == nil {
 		p.done = make(chan struct{})
 	}
