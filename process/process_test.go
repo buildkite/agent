@@ -3,14 +3,17 @@ package process_test
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"reflect"
 	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 )
 
@@ -159,6 +162,46 @@ func TestProcessOutputIsSafeFromRaces(t *testing.T) {
 	}
 }
 
+func TestKillingProcess(t *testing.T) {
+	logger.SetLevel(logger.DEBUG)
+
+	p := process.Process{
+		Script: []string{os.Args[0]},
+		Env:    []string{"TEST_MAIN=tester-signal"},
+		LineCallback: func(s string) {
+			t.Logf("Line: %s", s)
+		},
+		LinePreProcessor:   func(s string) string { return s },
+		LineCallbackFilter: func(s string) bool { return false },
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	p.StartCallback = func() {
+		go func() {
+			<-time.After(time.Millisecond * 10)
+			if err := p.Kill(); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+
+	go func() {
+		defer wg.Done()
+		if err := p.Start(); err != nil {
+			t.Error(err)
+		}
+	}()
+
+	wg.Wait()
+
+	output := p.Output()
+	if output != `SIG terminated` {
+		t.Fatalf("Bad output: %q", output)
+	}
+}
+
 // Invoked by `go test`, switch between helper and running tests based on env
 func TestMain(m *testing.M) {
 	switch os.Getenv("TEST_MAIN") {
@@ -168,6 +211,18 @@ func TestMain(m *testing.M) {
 			time.Sleep(time.Millisecond * 20)
 		}
 		os.Exit(0)
+
+	case "tester-signal":
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt,
+			syscall.SIGTERM,
+			syscall.SIGINT,
+		)
+
+		sig := <-signals
+		fmt.Printf("SIG %v", sig)
+		os.Exit(0)
+
 	default:
 		os.Exit(m.Run())
 	}

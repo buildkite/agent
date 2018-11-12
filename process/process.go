@@ -1,8 +1,5 @@
 package process
 
-// Logic for this file is largely based on:
-// https://github.com/jarib/childprocess/blob/783f7a00a1678b5d929062564ef5ae76822dfd62/lib/childprocess/unix/process.rb
-
 import (
 	"bufio"
 	"bytes"
@@ -45,6 +42,9 @@ type Process struct {
 	// Running is stored as an int32 so we can use atomic operations to
 	// set/get it (it's accessed by multiple goroutines)
 	running int32
+
+	mu   sync.Mutex
+	done chan struct{}
 }
 
 // If you change header parsing here make sure to change it in the
@@ -84,6 +84,10 @@ func (p *Process) Start() error {
 		p.Pid = p.command.Process.Pid
 		p.setRunning(true)
 
+		p.mu.Lock()
+		p.done = make(chan struct{})
+		p.mu.Unlock()
+
 		waitGroup.Add(1)
 
 		go func() {
@@ -121,6 +125,10 @@ func (p *Process) Start() error {
 
 		p.Pid = p.command.Process.Pid
 		p.setRunning(true)
+
+		p.mu.Lock()
+		p.done = make(chan struct{})
+		p.mu.Unlock()
 	}
 
 	logger.Info("[Process] Process is running with PID: %d", p.Pid)
@@ -233,6 +241,7 @@ func (p *Process) Start() error {
 
 	// The process is no longer running at this point
 	p.setRunning(false)
+	close(p.done)
 
 	// Find the exit status of the script
 	p.ExitStatus = getExitStatus(waitResult)
@@ -255,6 +264,17 @@ func (p *Process) Output() string {
 	return p.buffer.String()
 }
 
+// Done returns a channel that is closed when the process finishes
+func (p *Process) Done() <-chan struct{} {
+	p.mu.Lock()
+	if p.done == nil {
+		p.done = make(chan struct{})
+	}
+	d := p.done
+	p.mu.Unlock()
+	return d
+}
+
 func (p *Process) Kill() error {
 	var err error
 	if runtime.GOOS == "windows" {
@@ -269,56 +289,14 @@ func (p *Process) Kill() error {
 		return err
 	}
 
-	// Make a channel that we'll use as a timeout
-	c := make(chan int, 1)
-	checking := true
-
-	// Start a routine that checks to see if the process
-	// is still alive.
-	go func() {
-		for checking {
-			logger.Debug("[Process] Checking to see if PID: %d is still alive", p.Pid)
-
-			foundProcess, err := os.FindProcess(p.Pid)
-
-			// Can't find the process at all
-			if err != nil {
-				logger.Debug("[Process] Could not find process with PID: %d", p.Pid)
-
-				break
-			}
-
-			// We have some information about the process
-			if foundProcess != nil {
-				processState, err := foundProcess.Wait()
-
-				if err != nil || processState.Exited() {
-					logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
-
-					break
-				}
-			}
-
-			// Retry in a moment
-			sleepTime := time.Duration(1 * time.Second)
-			time.Sleep(sleepTime)
-		}
-
-		c <- 1
-	}()
-
-	// Timeout this process after 10 seconds
 	select {
-	case _ = <-c:
-		// Was successfully terminated
+	// Was successfully terminated
+	case <-p.Done():
+		logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
+
+	// Forcefully kill the process after 10 seconds
 	case <-time.After(10 * time.Second):
-		// Stop checking in the routine above
-		checking = false
-
-		// Forcefully kill the thing
-		err = p.signal(syscall.SIGKILL)
-
-		if err != nil {
+		if err = p.signal(syscall.SIGKILL); err != nil {
 			return err
 		}
 	}
@@ -327,6 +305,9 @@ func (p *Process) Kill() error {
 }
 
 func (p *Process) signal(sig os.Signal) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.command != nil && p.command.Process != nil {
 		logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
 
@@ -343,6 +324,7 @@ func (p *Process) signal(sig os.Signal) error {
 }
 
 // Returns whether or not the process is running
+// Deprecated: use Wait() instead
 func (p *Process) IsRunning() bool {
 	return atomic.LoadInt32(&p.running) != 0
 }
@@ -396,8 +378,6 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	case <-time.After(10 * time.Second):
 		return errors.New("Timeout")
 	}
-
-	return nil
 }
 
 // outputBuffer is a goroutine safe bytes.Buffer
