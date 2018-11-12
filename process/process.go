@@ -275,6 +275,8 @@ func (p *Process) Done() <-chan struct{} {
 	return d
 }
 
+// Kill terminates the process gracefully. Initially a SIGTERM is sent, and
+// then 10 seconds later a SIGTERM is sent.
 func (p *Process) Kill() error {
 	var err error
 	if runtime.GOOS == "windows" {
@@ -324,7 +326,7 @@ func (p *Process) signal(sig os.Signal) error {
 }
 
 // Returns whether or not the process is running
-// Deprecated: use Wait() instead
+// Deprecated: use Done() instead
 func (p *Process) IsRunning() bool {
 	return atomic.LoadInt32(&p.running) != 0
 }
