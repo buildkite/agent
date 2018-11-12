@@ -52,8 +52,19 @@ type Process struct {
 
 var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
 
+// Start executes the command and blocks until it finishes
 func (p *Process) Start() error {
+	if p.IsRunning() {
+		return fmt.Errorf("Process is already running")
+	}
+
 	p.command = exec.Command(p.Script[0], p.Script[1:]...)
+
+	p.mu.Lock()
+	if p.done == nil {
+		p.done = make(chan struct{})
+	}
+	p.mu.Unlock()
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -83,10 +94,6 @@ func (p *Process) Start() error {
 
 		p.Pid = p.command.Process.Pid
 		p.setRunning(true)
-
-		p.mu.Lock()
-		p.done = make(chan struct{})
-		p.mu.Unlock()
 
 		waitGroup.Add(1)
 
@@ -125,10 +132,6 @@ func (p *Process) Start() error {
 
 		p.Pid = p.command.Process.Pid
 		p.setRunning(true)
-
-		p.mu.Lock()
-		p.done = make(chan struct{})
-		p.mu.Unlock()
 	}
 
 	logger.Info("[Process] Process is running with PID: %d", p.Pid)
@@ -260,6 +263,7 @@ func (p *Process) Start() error {
 	return nil
 }
 
+// Output returns the current state of the output buffer and can be called incrementally
 func (p *Process) Output() string {
 	return p.buffer.String()
 }
