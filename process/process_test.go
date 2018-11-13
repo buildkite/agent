@@ -63,9 +63,10 @@ func TestProcessIsKilledGracefully(t *testing.T) {
 
 	go func() {
 		<-p.Started()
+		t.Logf("PID %d", p.Pid)
 
 		// Needs some time to install signal handler
-		<-time.After(time.Millisecond * 10)
+		<-time.After(time.Millisecond * 20)
 
 		t.Logf("Killing process")
 		if err := p.Kill(); err != nil {
