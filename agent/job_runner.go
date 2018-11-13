@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -41,8 +42,11 @@ type JobRunner struct {
 	context       context.Context
 	contextCancel context.CancelFunc
 
-	// The interal process of the job
+	// The internal process of the job
 	process *process.Process
+
+	// The internal line buffer of the process output
+	lineBuffer *process.LineBuffer
 
 	// The internal header time streamer
 	headerTimesStreamer *HeaderTimesStreamer
@@ -109,19 +113,40 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 			r.AgentConfiguration.BootstrapScript, err)
 	}
 
-	// The process that will run the bootstrap script
-	runner.process = &process.Process{
-		Script:             cmd,
-		Env:                env,
-		PTY:                r.AgentConfiguration.RunInPty,
-		Timestamp:          r.AgentConfiguration.TimestampLines,
-		StartCallback:      r.onProcessStartCallback,
-		LineCallback:       runner.headerTimesStreamer.Scan,
-		LinePreProcessor:   runner.headerTimesStreamer.LinePreProcessor,
-		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
+	// Our log scanner currently needs a full buffer of the log output
+	runner.lineBuffer = &process.LineBuffer{}
+
+	// Called for every line of process output
+	var handleProcessOutput = func(line string) {
+		// Send to our header streamer if it's a header
+		if runner.headerTimesStreamer.LineIsHeader(line) {
+			runner.headerTimesStreamer.Scan(runner.headerTimesStreamer.LinePreProcessor(line))
+		}
+
+		// Optionally prefix log lines with timestamps
+		if r.AgentConfiguration.TimestampLines && !isExpandableHeader(line) {
+			line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+		}
+
+		// Write the log line to the buffer
+		runner.lineBuffer.WriteLine(line)
 	}
 
-	return
+	// The process that will run the bootstrap script
+	runner.process = &process.Process{
+		Script:  cmd,
+		Env:     env,
+		PTY:     r.AgentConfiguration.RunInPty,
+		Handler: handleProcessOutput,
+	}
+
+	// Kick off our callback when the process starts
+	go func() {
+		<-runner.process.Started()
+		runner.onProcessStartCallback()
+	}()
+
+	return runner, nil
 }
 
 // Runs the job
@@ -151,7 +176,7 @@ func (r *JobRunner) Run() error {
 		r.logStreamer.Process(fmt.Sprintf("%s", err))
 	} else {
 		// Add the final output to the streamer
-		r.logStreamer.Process(r.process.Output())
+		r.logStreamer.Process(r.lineBuffer.Output())
 	}
 
 	// Store the finished at time
@@ -398,30 +423,39 @@ func (r *JobRunner) onProcessStartCallback() {
 	// Start a routine that will grab the output every few seconds and send
 	// it back to Buildkite
 	go func() {
-		for r.process.IsRunning() {
+		defer func() {
+			r.routineWaitGroup.Done()
+			logger.Debug("[JobRunner] Routine that processes the log has finished")
+		}()
+
+		for {
 			// Send the output of the process to the log streamer
 			// for processing
-			r.logStreamer.Process(r.process.Output())
+			r.logStreamer.Process(r.lineBuffer.Output())
 
 			// Sleep for a bit, or until the job is finished
 			select {
 			case <-time.After(1 * time.Second):
 			case <-r.context.Done():
+				return
+			case <-r.process.Done():
+				return
 			}
 		}
 
 		// The final output after the process has finished is processed in Run()
-
-		// Mark this routine as done in the wait group
-		r.routineWaitGroup.Done()
-
-		logger.Debug("[JobRunner] Routine that processes the log has finished")
 	}()
 
 	// Start a routine that will constantly ping Buildkite to see if the
 	// job has been canceled
 	go func() {
-		for r.process.IsRunning() {
+		defer func() {
+			// Mark this routine as done in the wait group
+			r.routineWaitGroup.Done()
+
+			logger.Debug("[JobRunner] Routine that refreshes the job has finished")
+		}()
+		for {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
 			jobState, _, err := r.APIClient.Jobs.GetState(r.Job.ID)
@@ -437,13 +471,11 @@ func (r *JobRunner) onProcessStartCallback() {
 			select {
 			case <-time.After(time.Duration(r.Agent.JobStatusInterval) * time.Second):
 			case <-r.context.Done():
+				return
+			case <-r.process.Done():
+				return
 			}
 		}
-
-		// Mark this routine as done in the wait group
-		r.routineWaitGroup.Done()
-
-		logger.Debug("[JobRunner] Routine that refreshes the job has finished")
 	}()
 }
 
@@ -474,4 +506,12 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 
 		return err
 	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+}
+
+// If you change header parsing here make sure to change it in the
+// buildkite.com frontend logic, too
+var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
+
+func isExpandableHeader(line string) bool {
+	return headerExpansionRegex.MatchString(line)
 }
