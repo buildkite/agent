@@ -90,7 +90,6 @@ func (a AgentWorker) Create() AgentWorker {
 // Starts the agent worker
 func (a *AgentWorker) Start() error {
 	a.metrics = a.MetricsCollector.Scope(metrics.Tags{
-		"hostname":   a.Agent.Hostname,
 		"agent_name": a.Agent.Name,
 	})
 
