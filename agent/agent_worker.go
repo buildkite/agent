@@ -70,20 +70,12 @@ func (a AgentWorker) Create() AgentWorker {
 		endpoint = a.Endpoint
 	}
 
-<<<<<<< HEAD
 	a.APIClient = APIClient{
 		Endpoint:     endpoint,
 		Token:        a.Agent.AccessToken,
 		DisableHTTP2: a.DisableHTTP2,
 	}.Create()
 
-	// create counters for metrics
-	a.heartbeatMetrics = expvar.NewMap("heartbeats")
-	a.pingMetrics = expvar.NewMap("pings")
-
-=======
-	a.APIClient = APIClient{Endpoint: endpoint, Token: a.Agent.AccessToken}.Create()
->>>>>>> Initial implementation of datadog metrics
 	return a
 }
 
