@@ -196,13 +196,17 @@ func (r *JobRunner) Run() error {
 		}
 	}
 
+	jobMetrics := r.Metrics.With(metrics.Tags{
+		"exit_code": r.process.ExitStatus,
+	})
+
 	// Write some metrics about the job run
 	if r.process.ExitStatus == "0" {
-		r.Metrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
-		r.Metrics.Count(`jobs.success`, 1)
+		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
+		jobMetrics.Count(`jobs.success`, 1)
 	} else {
-		r.Metrics.Timing(`jobs.duration.error`, finishedAt.Sub(startedAt))
-		r.Metrics.Count(`jobs.failed`, 1)
+		jobMetrics.Timing(`jobs.duration.error`, finishedAt.Sub(startedAt))
+		jobMetrics.Count(`jobs.failed`, 1)
 	}
 
 	// Finish the build in the Buildkite Agent API
