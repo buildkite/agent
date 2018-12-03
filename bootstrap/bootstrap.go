@@ -708,7 +708,16 @@ func (b *Bootstrap) CheckoutPhase() error {
 	default:
 		err := retry.Do(func(s *retry.Stats) error {
 			err := b.defaultCheckoutPhase()
-			if err != nil {
+			if err == nil {
+				return nil
+			}
+
+			switch {
+			case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
+				b.shell.Warningf("Checkout was interrupted by a signal")
+				s.Break()
+
+			default:
 				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 
 				// Checkout can fail because of corrupted files in the checkout
