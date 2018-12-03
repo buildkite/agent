@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/signalwatcher"
 	"github.com/buildkite/agent/system"
@@ -32,6 +33,7 @@ type AgentPool struct {
 	Endpoint              string
 	DisableHTTP2          bool
 	AgentConfiguration    *AgentConfiguration
+	MetricsCollector      *metrics.Collector
 
 	interruptCount int
 	signalLock     sync.Mutex
@@ -74,6 +76,7 @@ func (r *AgentPool) Start() error {
 		AgentConfiguration: r.AgentConfiguration,
 		Endpoint:           r.Endpoint,
 		DisableHTTP2:       r.DisableHTTP2,
+		MetricsCollector:   r.MetricsCollector,
 	}.Create()
 
 	logger.Info("Connecting to Buildkite...")

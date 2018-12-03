@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/agent/proctitle"
 	"github.com/buildkite/agent/retry"
 )
@@ -34,6 +35,12 @@ type AgentWorker struct {
 
 	// The configuration of the agent from the CLI
 	AgentConfiguration *AgentConfiguration
+
+	// Metric collection for the agent
+	MetricsCollector *metrics.Collector
+
+	// Metrics scope for the agent
+	metrics *metrics.Scope
 
 	// Whether or not the agent is running
 	running bool
@@ -74,6 +81,16 @@ func (a AgentWorker) Create() AgentWorker {
 
 // Starts the agent worker
 func (a *AgentWorker) Start() error {
+	a.metrics = a.MetricsCollector.Scope(metrics.Tags{
+		"agent_name": a.Agent.Name,
+	})
+
+	// Start running our metrics collector
+	if err := a.MetricsCollector.Start(); err != nil {
+		return err
+	}
+	defer a.MetricsCollector.Stop()
+
 	// Mark the agent as running
 	a.running = true
 
@@ -137,12 +154,13 @@ func (a *AgentWorker) Start() error {
 			continue
 		case <-a.stop:
 			a.ticker.Stop()
+
+			// Mark the agent as not running anymore
+			a.running = false
+
 			return nil
 		}
 	}
-
-	// Mark the agent as not running anymore
-	a.running = false
 
 	return nil
 }
@@ -337,12 +355,20 @@ func (a *AgentWorker) Ping() {
 		return
 	}
 
+	jobMetricsScope := a.metrics.With(metrics.Tags{
+		`pipeline`: accepted.Env[`BUILDKITE_PIPELINE_SLUG`],
+		`org`:      accepted.Env[`BUILDKITE_ORGANIZATION_SLUG`],
+		`branch`:   accepted.Env[`BUILDKITE_BRANCH`],
+		`source`:   accepted.Env[`BUILDKITE_SOURCE`],
+	})
+
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = JobRunner{
 		Endpoint:           accepted.Endpoint,
 		Agent:              a.Agent,
 		AgentConfiguration: a.AgentConfiguration,
 		Job:                accepted,
+		Metrics:            jobMetricsScope,
 	}.Create()
 
 	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer

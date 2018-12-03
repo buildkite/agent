@@ -1,5 +1,7 @@
 cloud.google.com/go v0.0.0-20170217213217-65216237311a h1:jCsBzsjojdK5UhWQfZurxl0ZyWZbvvX9QS5/4rFKGDs=
 cloud.google.com/go v0.0.0-20170217213217-65216237311a/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
+github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895 h1:dmc/C8bpE5VkQn65PNbbyACDC8xw8Hpp/NEurdPmQDQ=
+github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc h1:Qs3YRJ9WQ1+Et+uoXBVfKUBzdn9FGJiH98UgfBIiqzk=
 github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc/go.mod h1:01yGrV5aDnYieX2hSBoKGMaRiqHvnLoUy4ngWGZ/owg=
 github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5 h1:raOAL5Uz269DesNi7ejlUuwQY2fyvRrBYuzRWHkl+Wo=

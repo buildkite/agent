@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
 )
@@ -71,6 +72,8 @@ type AgentStartConfig struct {
 	Debug                     bool     `cli:"debug"`
 	DebugHTTP                 bool     `cli:"debug-http"`
 	Experiments               []string `cli:"experiment" normalize:"list"`
+	MetricsDatadog            bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -277,6 +280,17 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Disable HTTP2 when communicating with the Agent API.",
 			EnvVar: "BUILDKITE_NO_HTTP2",
 		},
+		cli.BoolFlag{
+			Name:   "metrics-datadog",
+			Usage:  "Send metrics to DogStatsD for Datadog",
+			EnvVar: "BUILDKITE_METRICS_DATADOG",
+		},
+		cli.StringFlag{
+			Name:   "metrics-datadog-host",
+			Usage:  "The dogstatsd instance to send metrics to via udp",
+			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
+			Value:  "127.0.0.1:8125",
+		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -411,6 +425,10 @@ var AgentStartCommand = cli.Command{
 				DisconnectAfterJob:        cfg.DisconnectAfterJob,
 				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
 				Shell:                     cfg.Shell,
+			},
+			MetricsCollector: &metrics.Collector{
+				Datadog:     cfg.MetricsDatadog,
+				DatadogHost: cfg.MetricsDatadogHost,
 			},
 		}
 
