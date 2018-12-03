@@ -5,6 +5,7 @@ services:
     image: golang:1.11
     working_dir: /code
     volumes:
+      - module_cache:/go/pkg/mod
       - ../:/code:cached
     environment:
       - BUILDKITE_BUILD_NUMBER
