@@ -75,6 +75,14 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
+  - name: ":linux: ppc64le"
+    command: ".buildkite/steps/build-binary.sh linux ppc64le"
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
   - name: ":mac: 386"
     command: ".buildkite/steps/build-binary.sh darwin 386"
     artifact_paths: "pkg/*"
