@@ -203,15 +203,13 @@ func (p *Process) Kill() error {
 	// Was successfully terminated
 	case <-p.Done():
 		logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
+		return nil
 
 	// Forcefully kill the process after 10 seconds
 	case <-time.After(10 * time.Second):
-		if err = p.signal(syscall.SIGKILL); err != nil {
-			return err
-		}
+		logger.Debug("[Process] Process %d didn't terminate within 10 seconds, killing.", p.Pid)
+		return p.signal(syscall.SIGKILL)
 	}
-
-	return nil
 }
 
 func (p *Process) signal(sig os.Signal) error {

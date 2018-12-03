@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -47,6 +48,37 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	}
 }
 
+func TestProcessCapturesOutputLineByLine(t *testing.T) {
+	var lines []string
+	var mu sync.Mutex
+
+	p := process.Process{
+		Script: []string{os.Args[0]},
+		Env:    []string{"TEST_MAIN=tester"},
+		Handler: func(line string) {
+			mu.Lock()
+			defer mu.Unlock()
+			lines = append(lines, line)
+		},
+	}
+
+	if err := p.Start(); err != nil {
+		t.Error(err)
+	}
+
+	expected := []string{
+		"+++ My header",
+		"llamas",
+		"and more llamas",
+		"a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line",
+		"and some alpacas",
+	}
+
+	if !reflect.DeepEqual(expected, lines) {
+		t.Fatalf("Unexpected lines: %v", lines)
+	}
+}
+
 func TestProcessIsKilledGracefully(t *testing.T) {
 	var lines []string
 	var mu sync.Mutex
@@ -54,28 +86,24 @@ func TestProcessIsKilledGracefully(t *testing.T) {
 	p := process.Process{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester-signal"},
-		Handler: func(s string) {
+		Handler: func(line string) {
 			mu.Lock()
 			defer mu.Unlock()
-			lines = append(lines, s)
+			lines = append(lines, line)
 		},
 	}
 
 	go func() {
 		<-p.Started()
-		t.Logf("PID %d", p.Pid)
 
-		// Needs some time to install signal handler
-		<-time.After(time.Millisecond * 20)
+		// give the signal handler some time to install
+		time.Sleep(time.Millisecond * 50)
 
-		t.Logf("Killing process")
-		if err := p.Kill(); err != nil {
-			t.Error(err)
-		}
+		p.Kill()
 	}()
 
 	if err := p.Start(); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	mu.Lock()
@@ -103,7 +131,6 @@ func TestMain(m *testing.M) {
 			syscall.SIGTERM,
 			syscall.SIGINT,
 		)
-
 		sig := <-signals
 		fmt.Printf("SIG %v", sig)
 		os.Exit(0)
