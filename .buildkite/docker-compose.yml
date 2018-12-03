@@ -2,10 +2,10 @@ version: '2.1'
 
 services:
   agent:
-    image: golang:1.11
-    working_dir: /code
+    build:
+      dockerfile: .buildkite/Dockerfile
+      context: ../
     volumes:
-      - module_cache:/go/pkg/mod
       - ../:/code:cached
     environment:
       - BUILDKITE_BUILD_NUMBER
