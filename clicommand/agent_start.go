@@ -74,6 +74,7 @@ type AgentStartConfig struct {
 	Experiments               []string `cli:"experiment" normalize:"list"`
 	MetricsDatadog            bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
+	Spawn                     int      `cli:"spawn"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -291,6 +292,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
+		cli.IntFlag{
+			Name:   "spawn",
+			Usage:  "The number of agents to spawn in parallel",
+			Value:  1,
+			EnvVar: "BUILDKITE_AGENT_SPAWN",
+		},
 		ExperimentsFlag,
 		EndpointFlag,
 		NoColorFlag,
@@ -407,6 +414,7 @@ var AgentStartCommand = cli.Command{
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
 			DisableHTTP2:          cfg.NoHTTP2,
+			Spawn:                 cfg.Spawn,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
