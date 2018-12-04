@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.6.0](https://github.com/buildkite/agent/tree/v3.6.0) (2018-12-04)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.5.4...v3.6.0)
+
+### Fixed
+- Fix bug that caused an extra log chunk to be sent in some cases [#845](https://github.com/buildkite/agent/pull/845) (@idledaemon)
+- Don't retry checkout on build cancel [#863](https://github.com/buildkite/agent/pull/863) (@lox)
+- Add buildkite-agent.cfg to docker images [#847](https://github.com/buildkite/agent/pull/847) (@lox)
+
+### Added
+- Experimental `--spawn` option to spawn multiple parallel agents [#590](https://github.com/buildkite/agent/pull/590) (@lox)
+- Add a linux/ppc64le build target [#859](https://github.com/buildkite/agent/pull/859) (@lox)
+- Basic metrics collection for Datadog [#832](https://github.com/buildkite/agent/pull/832) (@lox)
+- Added a `job update` command to make changes to a job [#833](https://github.com/buildkite/agent/pull/833) (@keithpitt)
+- Remove the checkout dir if the checkout phase fails [#812](https://github.com/buildkite/agent/pull/812) (@lox)
+
+### Changed
+- Add tests around gracefully killing processes [#862](https://github.com/buildkite/agent/pull/862) (@lox)
+- Removes process callbacks and moves them to job runner [#856](https://github.com/buildkite/agent/pull/856) (@lox)
+- Use a channel to monitor whether process is killed [#855](https://github.com/buildkite/agent/pull/855) (@lox)
+- Move to golang 1.11 [#839](https://github.com/buildkite/agent/pull/839) (@lox)
+- Add a flag to disable http2 in the start command [#851](https://github.com/buildkite/agent/pull/851) (@lox)
+- Use transparent for golang http2 transport [#849](https://github.com/buildkite/agent/pull/849) (@lox)
+
 ## [v3.5.4](https://github.com/buildkite/agent/tree/v3.5.4) (2018-10-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.5.3...v3.5.4)
 
