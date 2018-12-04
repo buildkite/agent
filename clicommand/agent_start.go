@@ -291,6 +291,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The dogstatsd instance to send metrics to via udp",
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
+		},
 		cli.IntFlag{
 			Name:   "spawn",
 			Usage:  "The number of agents to spawn in parallel",
@@ -413,7 +414,6 @@ var AgentStartCommand = cli.Command{
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
 			DisableHTTP2:          cfg.NoHTTP2,
-			Workers:               cfg.Workers,
 			Spawn:                 cfg.Spawn,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
