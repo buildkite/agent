@@ -112,14 +112,14 @@ func (ls *LogStreamer) Process(output string) error {
 				Data:   partialChunk,
 				Order:  ls.order,
 				Offset: ls.bytes,
-				Size:   bytes - ls.bytes,
+				Size:   len(partialChunk),
 			}
 
 			ls.queue <- &chunk
+			
+			// Save the new amount of bytes
+			ls.bytes += len(partialChunk)
 		}
-
-		// Save the new amount of bytes
-		ls.bytes = bytes
 	}
 
 	ls.processMutex.Unlock()
