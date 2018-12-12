@@ -99,7 +99,7 @@ func TestProcessIsKilledGracefully(t *testing.T) {
 		// give the signal handler some time to install
 		time.Sleep(time.Millisecond * 50)
 
-		p.Kill()
+		p.Kill(time.Millisecond * 20)
 	}()
 
 	if err := p.Start(); err != nil {
