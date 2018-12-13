@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -122,13 +121,11 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 	// Called for every line of process output
 	var handleProcessOutput = func(line string) {
-		// Send to our header streamer if it's a header
-		if runner.headerTimesStreamer.LineIsHeader(line) {
-			runner.headerTimesStreamer.Scan(runner.headerTimesStreamer.LinePreProcessor(line))
-		}
+		// Send to our header streamer and determine if it's a header
+		isHeader := runner.headerTimesStreamer.Scan(line)
 
 		// Optionally prefix log lines with timestamps
-		if r.AgentConfiguration.TimestampLines && !isExpandableHeader(line) {
+		if r.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
 			line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
 		}
 
@@ -525,12 +522,4 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 
 		return err
 	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
-}
-
-// If you change header parsing here make sure to change it in the
-// buildkite.com frontend logic, too
-var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
-
-func isExpandableHeader(line string) bool {
-	return headerExpansionRegex.MatchString(line)
 }
