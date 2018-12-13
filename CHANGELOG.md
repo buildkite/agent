@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.6.1](https://github.com/buildkite/agent/tree/v3.6.1) (2018-12-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.6.0...v3.6.1)
+
+### Added
+- Add another search path for config file on Windows [#867](https://github.com/buildkite/agent/pull/867) (@petemounce)
+
+### Fixed
+- Exclude headers from timestamp-lines output [#870](https://github.com/buildkite/agent/pull/870) (@lox)
+
 ## [v3.6.0](https://github.com/buildkite/agent/tree/v3.6.0) (2018-12-04)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.5.4...v3.6.0)
 
