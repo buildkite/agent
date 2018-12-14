@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
+	"github.com/buildkite/agent/env"
 	"github.com/urfave/cli"
 )
 
@@ -169,8 +171,23 @@ var PipelineUploadCommand = cli.Command{
 			logger.Fatal("Config file is empty")
 		}
 
+		// Load environment to pass into parser
+		environ := env.FromSlice(os.Environ())
+
+		// resolve BUILDKITE_COMMIT based on the local git repo
+		if commitRef, ok := environ.Get(`BUILDKITE_COMMIT`); ok {
+			cmdOut, err := exec.Command(`git`, `rev-parse`, commitRef).Output()
+			if err != nil {
+				logger.Warn("Error running git rev-parse %q: %v", commitRef, err)
+			} else {
+				logger.Info("Updating BUILDKITE_COMMIT to %q", string(cmdOut))
+				environ.Set(`BUILDKITE_COMMIT`, string(cmdOut))
+			}
+		}
+
 		// Parse the pipeline
 		result, err := agent.PipelineParser{
+			Env:             environ,
 			Filename:        filename,
 			Pipeline:        input,
 			NoInterpolation: cfg.NoInterpolation,
