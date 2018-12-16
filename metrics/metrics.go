@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"time"
@@ -13,6 +14,9 @@ const (
 	// Number of statsd commands that are buffered before
 	// being sent to statsd
 	statsdBufferLen = 10
+
+	// The default port for dogstatsd
+	defaultDogStatsdPort = 8125
 )
 
 type Collector struct {
@@ -22,8 +26,14 @@ type Collector struct {
 	client *statsd.Client
 }
 
+var portSuffixRegexp = regexp.MustCompile(`:\d+$`)
+
 func (c *Collector) Start() error {
 	if c.Datadog {
+		if !portSuffixRegexp.MatchString(c.DatadogHost) {
+			c.DatadogHost += fmt.Sprintf(":%d", defaultDogStatsdPort)
+		}
+
 		logger.Info("Starting datadog metrics collection to %s", c.DatadogHost)
 
 		var err error
