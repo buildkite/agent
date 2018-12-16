@@ -180,8 +180,9 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				logger.Warn("Error running git rev-parse %q: %v", commitRef, err)
 			} else {
-				logger.Info("Updating BUILDKITE_COMMIT to %q", string(cmdOut))
-				environ.Set(`BUILDKITE_COMMIT`, string(cmdOut))
+				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+				logger.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+				environ.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
 			}
 		}
 
