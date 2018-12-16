@@ -247,11 +247,11 @@ func (r *JobRunner) Kill() error {
 	defer r.killLock.Unlock()
 
 	if !r.cancelled {
-		logger.Info("Canceling job %s", r.Job.ID)
+		logger.Info("Canceling job %s with a grace period of %ds", r.Job.ID, r.AgentConfiguration.CancelGracePeriod)
 		r.cancelled = true
 
 		if r.process != nil {
-			r.process.Kill()
+			r.process.Kill(time.Second * time.Duration(r.AgentConfiguration.CancelGracePeriod))
 		} else {
 			logger.Error("No process to kill")
 		}
