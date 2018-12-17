@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.6.1...master)
+
+### Added
+- Hooks can now modify $BUILDKITE_REPO before checkout to change the git clone or fetch address [#877](https://github.com/buildkite/agent/pull/877) (@sj26)
+
 ## [v3.6.1](https://github.com/buildkite/agent/tree/v3.6.1) (2018-12-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.6.0...v3.6.1)
 
