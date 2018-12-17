@@ -88,25 +88,26 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	urls := []string{}
 
 	// The output of this command looks like:
-	// Entering 'vendor/docs'
-	// git@github.com:buildkite/docs.git
-	// Entering 'vendor/frontend'
-	// git@github.com:buildkite/frontend.git
-	// Entering 'vendor/frontend/vendor/emojis'
-	// git@github.com:buildkite/emojis.git
+	//submodule.bitbucket-git-docker-example.url\ngit@bitbucket.org:lox24/docker-example.git\0
+	//submodule.bitbucket-https-docker-example.url\nhttps://lox24@bitbucket.org/lox24/docker-example.git\0
+	//submodule.github-git-docker-example.url\ngit@github.com:buildkite/docker-example.git\0
+	//submodule.github-https-docker-example.url\nhttps://github.com/buildkite/docker-example.git\0
 	output, err := sh.RunAndCapture(
-		"git", "submodule", "foreach", "--recursive", "git", "ls-remote", "--get-url")
+		"git", "config", "--file", ".gitmodules", "--null", "--get-regexp", "url")
 	if err != nil {
 		return nil, err
 	}
 
-	// splits into "Entering" "'vendor/blah'" "git@github.com:blah/.."
-	// this should work for windows and unix line endings
-	for idx, val := range strings.Fields(output) {
-		// every third element to get the git@github.com:blah bit
-		if idx%3 == 2 {
-			urls = append(urls, val)
+	// splits lines on null-bytes to gracefully handle line endings and repositories with newlines
+	lines := strings.Split(strings.TrimRight(output, "\x00"), "\x00")
+
+	// process each line
+	for _, line := range lines {
+		tokens := strings.SplitN(line, "\n", 2)
+		if len(tokens) != 2 {
+			return nil, fmt.Errorf("Failed to parse .gitmodule line %q", line)
 		}
+		urls = append(urls, tokens[1])
 	}
 
 	return urls, nil
