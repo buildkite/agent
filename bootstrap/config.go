@@ -23,7 +23,7 @@ type Config struct {
 	Debug bool
 
 	// The repository that needs to be cloned
-	Repository string
+	Repository string `env:"BUILDKITE_REPO"`
 
 	// The commit being built
 	Commit string
