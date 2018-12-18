@@ -105,7 +105,7 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	for _, line := range lines {
 		tokens := strings.SplitN(line, "\n", 2)
 		if len(tokens) != 2 {
-			return nil, fmt.Errorf("Failed to parse .gitmodule line %q", line)
+			return nil, fmt.Errorf("Failed to parse .gitmodules line %q", line)
 		}
 		urls = append(urls, tokens[1])
 	}
