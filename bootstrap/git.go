@@ -93,7 +93,7 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	// submodule.github-git-docker-example.url\ngit@github.com:buildkite/docker-example.git\0
 	// submodule.github-https-docker-example.url\nhttps://github.com/buildkite/docker-example.git\0
 	output, err := sh.RunAndCapture(
-		"git", "config", "--file", ".gitmodules", "--null", "--get-regexp", "url")
+		"git", "config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url")
 	if err != nil {
 		return nil, err
 	}
