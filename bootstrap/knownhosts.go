@@ -113,6 +113,8 @@ func (kh *knownHosts) Add(host string) error {
 		return errors.Wrap(err, "Could not perform `ssh-keyscan`")
 	}
 
+	kh.Shell.Commentf("Added host %q to known hosts at \"%s\"", host, kh.Path)
+
 	// Try and open the existing hostfile in (append_only) mode
 	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0700)
 	if err != nil {
