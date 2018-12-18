@@ -36,9 +36,6 @@ type Bootstrap struct {
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
 
-	// Plugins to run from the plugin phase
-	plugins []*plugin.Plugin
-
 	// Plugin checkouts from the plugin phases
 	pluginCheckouts []*pluginCheckout
 
@@ -105,7 +102,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 		}
 	}
 
-	if includePhase(`plugin`) || includePhase(`vendored-plugin`) {
+	if includePhase(`plugin`) {
 		phaseErr = b.VendoredPluginPhase()
 	}
 
@@ -473,7 +470,7 @@ func (b *Bootstrap) loadPlugins() ([]*plugin.Plugin, error) {
 }
 
 func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout)  error {
-	if b.Config.PluginValidation {
+	if !b.Config.PluginValidation {
 		return nil
 	}
 
@@ -481,11 +478,14 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout)  error {
 		if b.Debug {
 			b.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.CheckoutDir)
 		}
+
 		// parse the plugin definition from the plugin checkout dir
 		var err error
 		checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
+
 		if err == plugin.ErrDefinitionNotFound {
 			b.shell.Warningf("Failed to find plugin definition for plugin %s", checkout.Plugin.Name())
+			return nil
 		} else if err != nil {
 			return err
 		}
