@@ -36,6 +36,9 @@ type Bootstrap struct {
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
 
+	// Plugins to use
+	plugins []*plugin.Plugin
+
 	// Plugin checkouts from the plugin phases
 	pluginCheckouts []*pluginCheckout
 
