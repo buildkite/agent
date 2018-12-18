@@ -24,3 +24,8 @@ WORKDIR c:/code
 # Cache go modules in docker cache
 COPY go.mod go.sum c:/code/
 RUN go mod download
+
+WORKDIR 'G:\\'
+ENV GO111MODULE=on
+
+ENTRYPOINT ["CMD.EXE", "/S", "/C"]
