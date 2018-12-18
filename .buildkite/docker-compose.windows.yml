@@ -9,7 +9,7 @@ services:
       context: ../
     volumes:
       - ../:c:/data
-    working_dir: g:/
+    working_dir: c:/data
     tty: false
     environment:
       - BUILDKITE_BUILD_NUMBER
