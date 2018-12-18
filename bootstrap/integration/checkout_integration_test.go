@@ -102,7 +102,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
 		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
-		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "url"},
+		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
 		{"submodule", "sync", "--recursive"},
 		{"submodule", "update", "--init", "--recursive", "--force"},
 		{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
