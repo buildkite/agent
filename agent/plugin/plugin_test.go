@@ -54,6 +54,21 @@ func TestCreateFromJSON(t *testing.T) {
 	assert.Equal(t, err.Error(), "Too many #'s in \"github.com/buildkite/plugins/ping#master#lololo\"")
 }
 
+func TestCreateFromJSONForVendoredPlugins(t *testing.T) {
+	t.Parallel()
+
+	plugins, err := CreateFromJSON(`[{"./.buildkite/plugins/llamas":{}}]`)
+	assert.Equal(t, len(plugins), 1)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "./.buildkite/plugins/llamas", plugins[0].Location)
+
+	assert.True(t, plugins[0].Vendored)
+	assert.Equal(t, "", plugins[0].Version)
+	assert.Equal(t, "", plugins[0].Scheme)
+	assert.Equal(t, map[string]interface{}{}, plugins[0].Configuration)
+}
+
 func TestPluginNameParsedFromLocation(t *testing.T) {
 	t.Parallel()
 
@@ -68,6 +83,9 @@ func TestPluginNameParsedFromLocation(t *testing.T) {
 		{"~/Development/plugins/test", "test"},
 		{"~/Development/plugins/UPPER     CASE_party", "upper-case-party"},
 		{"vendor/src/vendored with a space", "vendored-with-a-space"},
+		{"./.buildkite/plugins/docker-compose", "docker-compose"},
+		{".\\.buildkite\\plugins\\docker-compose", "docker-compose"},
+		{".buildkite/plugins/docker-compose", "docker-compose"},
 		{"", ""},
 	} {
 		tc := tc
@@ -104,6 +122,11 @@ func TestIdentifier(t *testing.T) {
 	plugin = &Plugin{Location: "/foo/bar/"}
 	id, err = plugin.Identifier()
 	assert.Equal(t, id, "foo-bar")
+	assert.Nil(t, err)
+
+	plugin = &Plugin{Location: "./.buildkite/plugins/llamas/"}
+	id, err = plugin.Identifier()
+	assert.Equal(t, id, "buildkite-plugins-llamas")
 	assert.Nil(t, err)
 }
 
