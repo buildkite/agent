@@ -4,11 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## Unreleased
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.6.1...master)
+## [v3.7.0](https://github.com/buildkite/agent/tree/v3.7.0) (2018-12-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.6.1...v3.7.0)
 
-### Added
+### Changed
+- Fixed bug where submodules hosts weren't ssh keyscanned correctly [#876](https://github.com/buildkite/agent/pull/876) (@lox)
+- Add a default port to metrics-datadog-host [#874](https://github.com/buildkite/agent/pull/874) (@lox)
 - Hooks can now modify $BUILDKITE_REPO before checkout to change the git clone or fetch address [#877](https://github.com/buildkite/agent/pull/877) (@sj26)
+- Add a configurable cancel-grace-period [#700](https://github.com/buildkite/agent/pull/700) (@lox)
+- Resolve BUILDKITE_COMMIT before pipeline upload [#871](https://github.com/buildkite/agent/pull/871) (@lox)
 
 ## [v3.6.1](https://github.com/buildkite/agent/tree/v3.6.1) (2018-12-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.6.0...v3.6.1)
