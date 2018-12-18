@@ -105,7 +105,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 		}
 	}
 
-	if includePhase(`plugin`) {
+	if phaseErr == nil && includePhase(`plugin`) {
 		phaseErr = b.VendoredPluginPhase()
 	}
 
