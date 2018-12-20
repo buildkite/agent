@@ -79,7 +79,7 @@ func TestProcessCapturesOutputLineByLine(t *testing.T) {
 	}
 }
 
-func TestProcessIsKilledGracefully(t *testing.T) {
+func TestProcessInterrupts(t *testing.T) {
 	var lines []string
 	var mu sync.Mutex
 
@@ -99,7 +99,7 @@ func TestProcessIsKilledGracefully(t *testing.T) {
 		// give the signal handler some time to install
 		time.Sleep(time.Millisecond * 50)
 
-		p.Kill(time.Millisecond * 20)
+		p.Interrupt()
 	}()
 
 	if err := p.Start(); err != nil {
@@ -131,8 +131,7 @@ func TestMain(m *testing.M) {
 			syscall.SIGTERM,
 			syscall.SIGINT,
 		)
-		sig := <-signals
-		fmt.Printf("SIG %v", sig)
+		fmt.Printf("SIG %v", <-signals)
 		os.Exit(0)
 
 	default:
