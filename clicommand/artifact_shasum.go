@@ -70,20 +70,24 @@ var ArtifactShasumCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLevelLogger(logger.INFO)
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactShasumConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.ArtifactSearcher{
+			Logger: l,
 			APIClient: agent.APIClient{
+				Logger:   l,
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
 			}.Create(),
@@ -92,17 +96,17 @@ var ArtifactShasumCommand = cli.Command{
 
 		artifacts, err := searcher.Search(cfg.Query, cfg.Step)
 		if err != nil {
-			logger.Fatal("Failed to find artifacts: %s", err)
+			l.Fatal("Failed to find artifacts: %s", err)
 		}
 
 		artifactsFoundLength := len(artifacts)
 
 		if artifactsFoundLength == 0 {
-			logger.Fatal("No artifacts found for downloading")
+			l.Fatal("No artifacts found for downloading")
 		} else if artifactsFoundLength > 1 {
-			logger.Fatal("Multiple artifacts were found. Try being more specific with the search or scope by step")
+			l.Fatal("Multiple artifacts were found. Try being more specific with the search or scope by step")
 		} else {
-			logger.Debug("Artifact \"%s\" found", artifacts[0].Path)
+			l.Debug("Artifact \"%s\" found", artifacts[0].Path)
 
 			fmt.Printf("%s\n", artifacts[0].Sha1Sum)
 		}

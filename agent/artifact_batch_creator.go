@@ -9,6 +9,9 @@ import (
 )
 
 type ArtifactBatchCreator struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// The APIClient that will be used when uploading jobs
 	APIClient *api.Client
 
@@ -43,7 +46,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		// upload)
 		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts, a.UploadDestination}
 
-		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
+		a.Logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
 		var creation *api.ArtifactBatchCreateResponse
 		var resp *api.Response
@@ -56,7 +59,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 				s.Break()
 			}
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				a.Logger.Warn("%s (%s)", err, s)
 			}
 
 			return err

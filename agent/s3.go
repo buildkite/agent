@@ -93,7 +93,7 @@ func awsS3Session(region string) (*session.Session, error) {
 	return sess, nil
 }
 
-func newS3Client(bucket string) (*s3.S3, error) {
+func newS3Client(logger logger.Logger, bucket string) (*s3.S3, error) {
 	region, err := awsS3RegionFromEnv()
 	if err != nil {
 		return nil, err

@@ -340,6 +340,8 @@ var AgentStartCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLevelLogger(logger.INFO)
+
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
@@ -349,15 +351,16 @@ var AgentStartCommand = cli.Command{
 			CLI:                    c,
 			Config:                 &cfg,
 			DefaultConfigFilePaths: DefaultConfigFilePaths(),
+			Logger:                 l,
 		}
 
 		// Load the configuration
 		if err := loader.Load(); err != nil {
-			logger.Fatal("%s", err)
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
@@ -378,9 +381,9 @@ var AgentStartCommand = cli.Command{
 
 			switch {
 			case cfg.NoCommandEval:
-				logger.Warn(msg, `no-command-eval`)
+				l.Warn(msg, `no-command-eval`)
 			case cfg.NoLocalHooks:
-				logger.Warn(msg, `no-local-hooks`)
+				l.Warn(msg, `no-local-hooks`)
 			}
 		}
 
@@ -397,7 +400,7 @@ var AgentStartCommand = cli.Command{
 
 		// Make sure the DisconnectAfterJobTimeout value is correct
 		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
-			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
+			l.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
 		}
 
 		var ec2TagTimeout time.Duration
@@ -405,12 +408,13 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ec2TagTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				logger.Fatal("Failed to parse ec2 tag timeout: %v", err)
+				l.Fatal("Failed to parse ec2 tag timeout: %v", err)
 			}
 		}
 
 		// Setup the agent
 		pool := agent.AgentPool{
+			Logger:                l,
 			Token:                 cfg.Token,
 			Name:                  cfg.Name,
 			Priority:              cfg.Priority,
@@ -421,6 +425,7 @@ var AgentStartCommand = cli.Command{
 			TagsFromHost:          cfg.TagsFromHost,
 			WaitForEC2TagsTimeout: ec2TagTimeout,
 			Endpoint:              cfg.Endpoint,
+			Debug:                 cfg.Debug,
 			DisableHTTP2:          cfg.NoHTTP2,
 			Spawn:                 cfg.Spawn,
 			AgentConfiguration: &agent.AgentConfiguration{
@@ -458,7 +463,7 @@ var AgentStartCommand = cli.Command{
 
 		// Start the agent pool
 		if err := pool.Start(); err != nil {
-			logger.Fatal("%s", err)
+			l.Fatal("%s", err)
 		}
 	},
 }

@@ -6,11 +6,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/buildkite/agent/logger"
 	"golang.org/x/oauth2/google"
 	storage "google.golang.org/api/storage/v1"
 )
 
 type GSDownloader struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// The name of the bucket
 	Bucket string
 
@@ -38,6 +42,7 @@ func (d GSDownloader) Start() error {
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{
+		Logger:      d.Logger,
 		Client:      *client,
 		URL:         url,
 		Path:        d.Path,

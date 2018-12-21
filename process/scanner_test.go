@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 )
 
@@ -33,7 +34,9 @@ func TestScanLines(t *testing.T) {
 		pw.Close()
 	}()
 
-	err := process.ScanLines(pr, func(l string) {
+	scanner := &process.Scanner{Logger: logger.DiscardLogger}
+
+	err := scanner.ScanLines(pr, func(l string) {
 		lineNumber := atomic.AddInt32(&lineCounter, 1)
 		s := fmt.Sprintf("#%d: chars %d", lineNumber, len(l))
 		lines = append(lines, s)

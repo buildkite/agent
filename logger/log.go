@@ -3,9 +3,9 @@ package logger
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,21 +22,57 @@ const (
 	cyan    = "1;36"
 )
 
-var level = INFO
-var colors = true
-var mutex = sync.Mutex{}
+const (
+	DateFormat = "2006-01-02 15:04:05"
+)
 
-func GetLevel() Level {
-	return level
+var (
+	mutex  = sync.Mutex{}
+	colors bool
+)
+
+type Logger interface {
+	Debug(format string, v ...interface{})
+	Notice(format string, v ...interface{})
+	Info(format string, v ...interface{})
+	Warn(format string, v ...interface{})
+	Error(format string, v ...interface{})
+	Fatal(format string, v ...interface{})
 }
 
-func SetLevel(l Level) {
-	level = l
+type Tag struct {
+	Key   string
+	Value interface{}
+}
 
-	if level == DEBUG {
-		Debug("Debug mode enabled")
+type LevelLogger struct {
+	Level  Level
+	Colors bool
+	Writer io.Writer
+	Tags   []Tag
+	ExitFn func()
+}
+
+func NewLevelLogger(l Level, tags ...Tag) *LevelLogger {
+	return &LevelLogger{
+		Level:  l,
+		Colors: true,
+		Writer: os.Stderr,
+		Tags:   []Tag{},
 	}
 }
+
+// func LevelledLogger GetLevel() Level {
+// 	return level
+// }
+
+// func SetLevel(l Level) {
+// 	level = l
+
+// 	if level == DEBUG {
+// 		Debug("Debug mode enabled")
+// 	}
+// }
 
 func SetColors(b bool) {
 	colors = b
@@ -56,58 +92,63 @@ func ColorsEnabled() bool {
 	}
 }
 
-func OutputPipe() io.Writer {
-	// All logging, all the time, goes to STDERR
-	return os.Stderr
+func (l *LevelLogger) SetLevel(v Level) {
+	l.Level = v
 }
 
-func Debug(format string, v ...interface{}) {
-	if level == DEBUG {
-		log(DEBUG, format, v...)
+func (l *LevelLogger) Debug(format string, v ...interface{}) {
+	if l.Level == DEBUG {
+		l.log(DEBUG, format, v...)
 	}
 }
 
-func Error(format string, v ...interface{}) {
-	log(ERROR, format, v...)
+func (l *LevelLogger) Error(format string, v ...interface{}) {
+	l.log(ERROR, format, v...)
 }
 
-func Fatal(format string, v ...interface{}) {
-	log(FATAL, format, v...)
+func (l *LevelLogger) Fatal(format string, v ...interface{}) {
+	l.log(FATAL, format, v...)
 	os.Exit(1)
 }
 
-func Notice(format string, v ...interface{}) {
-	log(NOTICE, format, v...)
+func (l *LevelLogger) Notice(format string, v ...interface{}) {
+	if l.Level <= NOTICE {
+		l.log(NOTICE, format, v...)
+	}
 }
 
-func Info(format string, v ...interface{}) {
-	log(INFO, format, v...)
+func (l *LevelLogger) Info(format string, v ...interface{}) {
+	if l.Level <= INFO {
+		l.log(INFO, format, v...)
+	}
 }
 
-func Warn(format string, v ...interface{}) {
-	log(WARN, format, v...)
+func (l *LevelLogger) Warn(format string, v ...interface{}) {
+	if l.Level <= WARN {
+		l.log(WARN, format, v...)
+	}
 }
 
-func log(l Level, format string, v ...interface{}) {
-	level := strings.ToUpper(l.String())
+func (l *LevelLogger) log(level Level, format string, v ...interface{}) {
 	message := fmt.Sprintf(format, v...)
-	now := time.Now().Format("2006-01-02 15:04:05")
+	now := time.Now().Format(DateFormat)
 	line := ""
 
-	if ColorsEnabled() {
+	if l.Colors {
 		prefixColor := green
 		messageColor := nocolor
 
-		if l == DEBUG {
+		switch level {
+		case DEBUG:
 			prefixColor = gray
 			messageColor = gray
-		} else if l == NOTICE {
+		case NOTICE:
 			prefixColor = cyan
-		} else if l == WARN {
+		case WARN:
 			prefixColor = yellow
-		} else if l == ERROR {
+		case ERROR:
 			prefixColor = red
-		} else if l == FATAL {
+		case FATAL:
 			prefixColor = red
 			messageColor = red
 		}
@@ -119,6 +160,10 @@ func log(l Level, format string, v ...interface{}) {
 
 	// Make sure we're only outputing a line one at a time
 	mutex.Lock()
-	fmt.Fprint(OutputPipe(), line)
+	fmt.Fprint(l.Writer, line)
 	mutex.Unlock()
+}
+
+var DiscardLogger = &LevelLogger{
+	Writer: ioutil.Discard,
 }

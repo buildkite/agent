@@ -19,6 +19,7 @@ import (
 )
 
 type AgentPool struct {
+	Logger                logger.Logger
 	APIClient             *api.Client
 	Token                 string
 	ConfigFilePath        string
@@ -31,6 +32,7 @@ type AgentPool struct {
 	TagsFromHost          bool
 	WaitForEC2TagsTimeout time.Duration
 	Endpoint              string
+	Debug                 bool
 	DisableHTTP2          bool
 	AgentConfiguration    *AgentConfiguration
 	MetricsCollector      *metrics.Collector
@@ -49,28 +51,34 @@ func (r *AgentPool) Start() error {
 		Endpoint:     r.Endpoint,
 		Token:        r.Token,
 		DisableHTTP2: r.DisableHTTP2,
+		Logger:       r.Logger,
 	}.Create()
 
 	var wg sync.WaitGroup
+	var errs = make(chan error, r.Spawn)
 
 	for i := 0; i < r.Spawn; i++ {
 		if r.Spawn == 1 {
-			logger.Info("Registering agent with Buildkite...")
+			r.Logger.Info("Registering agent with Buildkite...")
 		} else {
-			logger.Info("Registering agent %d of %d with Buildkite...", i+1, r.Spawn)
+			r.Logger.Info("Registering agent %d of %d with Buildkite...", i+1, r.Spawn)
 		}
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if err := r.startWorker(); err != nil {
-				logger.Fatal("%v", err)
+				errs<-err
 			}
 		}()
 	}
 
-	wg.Wait()
-	return nil
+	go func() {
+		wg.Wait()
+		close(errs)
+	}()
+
+	return <-errs
 }
 
 func (r *AgentPool) startWorker() error {
@@ -79,36 +87,38 @@ func (r *AgentPool) startWorker() error {
 		return err
 	}
 
-	logger.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
+	r.Logger.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
 		strings.Join(registered.Tags, ", "))
 
-	logger.Debug("Ping interval: %ds", registered.PingInterval)
-	logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
-	logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
+	r.Logger.Debug("Ping interval: %ds", registered.PingInterval)
+	r.Logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
+	r.Logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
 
 	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
 	worker := AgentWorker{
+		Logger:             r.Logger,
 		Agent:              registered,
 		AgentConfiguration: r.AgentConfiguration,
 		Endpoint:           r.Endpoint,
+		Debug:              r.Debug,
 		DisableHTTP2:       r.DisableHTTP2,
 		MetricsCollector:   r.MetricsCollector,
 	}.Create()
 
-	logger.Info("Connecting to Buildkite...")
+	r.Logger.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {
 		return err
 	}
 
-	logger.Info("Agent successfully connected")
-	logger.Info("You can press Ctrl-C to stop the agent")
+	r.Logger.Info("Agent successfully connected")
+	r.Logger.Info("You can press Ctrl-C to stop the agent")
 
 	if r.AgentConfiguration.DisconnectAfterJob {
-		logger.Info("Waiting for job to be assigned...")
-		logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
+		r.Logger.Info("Waiting for job to be assigned...")
+		r.Logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	} else {
-		logger.Info("Waiting for work...")
+		r.Logger.Info("Waiting for work...")
 	}
 
 	// Start a signalwatcher so we can monitor signals and handle shutdowns
@@ -117,20 +127,20 @@ func (r *AgentPool) startWorker() error {
 		defer r.signalLock.Unlock()
 
 		if sig == signalwatcher.QUIT {
-			logger.Debug("Received signal `%s`", sig.String())
+			r.Logger.Debug("Received signal `%s`", sig.String())
 			worker.Stop(false)
 		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
-			logger.Debug("Received signal `%s`", sig.String())
+			r.Logger.Debug("Received signal `%s`", sig.String())
 			if r.interruptCount == 0 {
 				r.interruptCount++
-				logger.Info("Received CTRL-C, send again to forcefully kill the agent")
+				r.Logger.Info("Received CTRL-C, send again to forcefully kill the agent")
 				worker.Stop(true)
 			} else {
-				logger.Info("Forcefully stopping running jobs and stopping the agent")
+				r.Logger.Info("Forcefully stopping running jobs and stopping the agent")
 				worker.Stop(false)
 			}
 		} else {
-			logger.Debug("Ignoring signal `%s`", sig.String())
+			r.Logger.Debug("Ignoring signal `%s`", sig.String())
 		}
 	})
 
@@ -140,7 +150,7 @@ func (r *AgentPool) startWorker() error {
 	}
 
 	// Now that the agent has stopped, we can disconnect it
-	logger.Info("Disconnecting %s...", worker.Agent.Name)
+	r.Logger.Info("Disconnecting %s...", worker.Agent.Name)
 	if err := worker.Disconnect(); err != nil {
 		return err
 	}
@@ -164,21 +174,21 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 	// get a unique identifier for the underlying host
 	if machineID, err := machineid.ProtectedID("buildkite-agent"); err != nil {
-		logger.Warn("Failed to find unique machine-id: %v", err)
+		r.Logger.Warn("Failed to find unique machine-id: %v", err)
 	} else {
 		agent.MachineID = machineID
 	}
 
 	// Attempt to add the EC2 tags
 	if r.TagsFromEC2 {
-		logger.Info("Fetching EC2 meta-data...")
+		r.Logger.Info("Fetching EC2 meta-data...")
 
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2MetaData{}.Get()
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				r.Logger.Warn("%s (%s)", err, s)
 			} else {
-				logger.Info("Successfully fetched EC2 meta-data")
+				r.Logger.Info("Successfully fetched EC2 meta-data")
 				for tag, value := range tags {
 					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
 				}
@@ -190,13 +200,13 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			r.Logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the EC2 tags
 	if r.TagsFromEC2Tags {
-		logger.Info("Fetching EC2 tags...")
+		r.Logger.Info("Fetching EC2 tags...")
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
@@ -205,9 +215,9 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				r.Logger.Warn("%s (%s)", err, s)
 			} else {
-				logger.Info("Successfully fetched EC2 tags")
+				r.Logger.Info("Successfully fetched EC2 tags")
 				for tag, value := range tags {
 					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
 				}
@@ -218,7 +228,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			logger.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
+			r.Logger.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
 		}
 	}
 
@@ -227,7 +237,7 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		tags, err := GCPMetaData{}.Get()
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
-			logger.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+			r.Logger.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
 				agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
@@ -240,13 +250,13 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	// Add the hostname
 	agent.Hostname, err = os.Hostname()
 	if err != nil {
-		logger.Warn("Failed to find hostname: %s", err)
+		r.Logger.Warn("Failed to find hostname: %s", err)
 	}
 
 	// Add the OS dump
-	agent.OS, err = system.VersionDump()
+	agent.OS, err = system.VersionDump(r.Logger)
 	if err != nil {
-		logger.Warn("Failed to find OS information: %s", err)
+		r.Logger.Warn("Failed to find OS information: %s", err)
 	}
 
 	// Attempt to add the host tags
@@ -275,10 +285,10 @@ func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 		registered, resp, err = r.APIClient.Agents.Register(agent)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
-				logger.Warn("Buildkite rejected the registration (%s)", err)
+				r.Logger.Warn("Buildkite rejected the registration (%s)", err)
 				s.Break()
 			} else {
-				logger.Warn("%s (%s)", err, s)
+				r.Logger.Warn("%s (%s)", err, s)
 			}
 		}
 
@@ -306,41 +316,41 @@ func (r *AgentPool) ShowBanner() {
 			" http://buildkite.com/agent                    |___/\n%s\n"
 
 	if logger.ColorsEnabled() {
-		fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "\x1b[32m", "\x1b[0m")
+		fmt.Fprintf(os.Stderr, welcomeMessage, "\x1b[32m", "\x1b[0m")
 	} else {
-		fmt.Fprintf(logger.OutputPipe(), welcomeMessage, "", "")
+		fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
 	}
 
-	logger.Notice("Starting buildkite-agent v%s with PID: %s", Version(), fmt.Sprintf("%d", os.Getpid()))
-	logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
-	logger.Notice("For questions and support, email us at: hello@buildkite.com")
+	r.Logger.Notice("Starting buildkite-agent v%s with PID: %s", Version(), fmt.Sprintf("%d", os.Getpid()))
+	r.Logger.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
+	r.Logger.Notice("For questions and support, email us at: hello@buildkite.com")
 
 	if r.ConfigFilePath != "" {
-		logger.Info("Configuration loaded from: %s", r.ConfigFilePath)
+		r.Logger.Info("Configuration loaded from: %s", r.ConfigFilePath)
 	}
 
-	logger.Debug("Bootstrap command: %s", r.AgentConfiguration.BootstrapScript)
-	logger.Debug("Build path: %s", r.AgentConfiguration.BuildPath)
-	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
-	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
+	r.Logger.Debug("Bootstrap command: %s", r.AgentConfiguration.BootstrapScript)
+	r.Logger.Debug("Build path: %s", r.AgentConfiguration.BuildPath)
+	r.Logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
+	r.Logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
 
 	if !r.AgentConfiguration.SSHKeyscan {
-		logger.Info("Automatic ssh-keyscan has been disabled")
+		r.Logger.Info("Automatic ssh-keyscan has been disabled")
 	}
 
 	if !r.AgentConfiguration.CommandEval {
-		logger.Info("Evaluating console commands has been disabled")
+		r.Logger.Info("Evaluating console commands has been disabled")
 	}
 
 	if !r.AgentConfiguration.PluginsEnabled {
-		logger.Info("Plugins have been disabled")
+		r.Logger.Info("Plugins have been disabled")
 	}
 
 	if !r.AgentConfiguration.RunInPty {
-		logger.Info("Running builds within a pseudoterminal (PTY) has been disabled")
+		r.Logger.Info("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
 
 	if r.AgentConfiguration.DisconnectAfterJob {
-		logger.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
+		r.Logger.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 }

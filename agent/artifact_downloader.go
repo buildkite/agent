@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +13,9 @@ import (
 )
 
 type ArtifactDownloader struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// The APIClient that will be used when uploading jobs
 	APIClient *api.Client
 
@@ -32,10 +37,10 @@ func (a *ArtifactDownloader) Download() error {
 	downloadDestination, _ := filepath.Abs(a.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
-		logger.Fatal("Could not find information about destination: %s", downloadDestination)
+		return fmt.Errorf("Could not find information about destination: %s", downloadDestination)
 	}
 	if !fileInfo.IsDir() {
-		logger.Fatal("%s is not a directory", downloadDestination)
+		return fmt.Errorf("%s is not a directory", downloadDestination)
 	}
 
 	// Find the artifacts that we want to download
@@ -48,9 +53,9 @@ func (a *ArtifactDownloader) Download() error {
 	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
-		logger.Fatal("No artifacts found for downloading")
+		return errors.New("No artifacts found for downloading")
 	} else {
-		logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
+		a.Logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
 
 		p := pool.New(pool.MaxConcurrencyLimit)
 		errors := []error{}
@@ -66,6 +71,7 @@ func (a *ArtifactDownloader) Download() error {
 				// Handle downloading from S3 and GS
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
 					err = S3Downloader{
+						Logger:      a.Logger,
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
@@ -74,6 +80,7 @@ func (a *ArtifactDownloader) Download() error {
 					}.Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
 					err = GSDownloader{
+						Logger:      a.Logger,
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
@@ -82,6 +89,7 @@ func (a *ArtifactDownloader) Download() error {
 					}.Start()
 				} else {
 					err = Download{
+						Logger:      a.Logger,
 						URL:         artifact.URL,
 						Path:        artifact.Path,
 						Destination: downloadDestination,
@@ -94,7 +102,7 @@ func (a *ArtifactDownloader) Download() error {
 				// the pool, collect it, then unlock the pool
 				// again.
 				if err != nil {
-					logger.Error("Failed to download artifact: %s", err)
+					a.Logger.Error("Failed to download artifact: %s", err)
 
 					p.Lock()
 					errors = append(errors, err)
@@ -106,7 +114,7 @@ func (a *ArtifactDownloader) Download() error {
 		p.Wait()
 
 		if len(errors) > 0 {
-			logger.Fatal("There were errors with downloading some of the artifacts")
+			return fmt.Errorf("There were errors with downloading some of the artifacts")
 		}
 	}
 

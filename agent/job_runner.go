@@ -20,6 +20,9 @@ import (
 )
 
 type JobRunner struct {
+	// The logger to use
+	Logger logger.Logger
+
 	// The job being run
 	Job *api.Job
 
@@ -40,6 +43,9 @@ type JobRunner struct {
 
 	// A scope for metrics within a job
 	Metrics *metrics.Scope
+
+	// Whether to set debug in the job
+	Debug bool
 
 	// Go context for goroutine supervision
 	context       context.Context
@@ -77,17 +83,29 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Our own APIClient using the endpoint and the agents access token
-	runner.APIClient = APIClient{Endpoint: r.Endpoint, Token: r.Agent.AccessToken}.Create()
+	runner.APIClient = APIClient{
+		Logger: r.Logger,
+		Endpoint: r.Endpoint, 
+		Token: r.Agent.AccessToken,
+		}.Create()
 
 	// A proxy for the agent API that is expose to the bootstrap
 	runner.APIProxy = NewAPIProxy(r.Endpoint, r.Agent.AccessToken)
+	runner.APIProxy.Logger = r.Logger
 
 	// Create our header times struct
-	runner.headerTimesStreamer = &HeaderTimesStreamer{UploadCallback: r.onUploadHeaderTime}
+	runner.headerTimesStreamer = &HeaderTimesStreamer{
+		Logger:         r.Logger,
+		UploadCallback: r.onUploadHeaderTime,
+	}
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
-	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
+	runner.logStreamer = LogStreamer{
+		Logger:            r.Logger,
+		MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, 
+		Callback:          r.onUploadChunk,
+	}.New()
 
 	// Start a proxy to give to the job for api operations
 	if experiments.IsEnabled("agent-socket") {
@@ -95,12 +113,11 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 			return nil, err
 		}
 	}
-
 	// Prepare a file to recieve the given job environment
 	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)); err != nil {
 		return runner, err
 	} else {
-		logger.Debug("[JobRunner] Created env file: %s", file.Name())
+		r.Logger.Debug("[JobRunner] Created env file: %s", file.Name())
 		runner.envFile = file
 	}
 
@@ -135,6 +152,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
+		Logger:  r.Logger,
 		Script:  cmd,
 		Env:     env,
 		PTY:     r.AgentConfiguration.RunInPty,
@@ -152,7 +170,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 // Runs the job
 func (r *JobRunner) Run() error {
-	logger.Info("Starting job %s", r.Job.ID)
+	r.Logger.Info("Starting job %s", r.Job.ID)
 
 	startedAt := time.Now()
 
@@ -195,26 +213,26 @@ func (r *JobRunner) Run() error {
 
 	// Warn about failed chunks
 	if r.logStreamer.ChunksFailedCount > 0 {
-		logger.Warn("%d chunks failed to upload for this job", r.logStreamer.ChunksFailedCount)
+		r.Logger.Warn("%d chunks failed to upload for this job", r.logStreamer.ChunksFailedCount)
 	}
 
 	// Wait for the routines that we spun up to finish
-	logger.Debug("[JobRunner] Waiting for all other routines to finish")
+	r.Logger.Debug("[JobRunner] Waiting for all other routines to finish")
 	r.contextCancel()
 	r.routineWaitGroup.Wait()
 
 	// Remove the env file, if any
 	if r.envFile != nil {
 		if err := os.Remove(r.envFile.Name()); err != nil {
-			logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+			r.Logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
 		}
-		logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
+		r.Logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
 	// Destroy the proxy
 	if experiments.IsEnabled("agent-socket") {
 		if err := r.APIProxy.Close(); err != nil {
-			logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
+			r.Logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
 		}
 	}
 
@@ -237,7 +255,7 @@ func (r *JobRunner) Run() error {
 	// sure everything else is done first.
 	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
 
-	logger.Info("Finished job %s", r.Job.ID)
+	r.Logger.Info("Finished job %s", r.Job.ID)
 
 	return nil
 }
@@ -353,7 +371,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	// Add agent environment variables
-	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", logger.GetLevel() == logger.DEBUG)
+	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", r.Debug)
 	env["BUILDKITE_AGENT_PID"] = fmt.Sprintf("%d", os.Getpid())
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the
@@ -410,9 +428,9 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 
 		if err != nil {
 			if api.IsRetryableError(err) {
-				logger.Warn("%s (%s)", err, s)
+				r.Logger.Warn("%s (%s)", err, s)
 			} else {
-				logger.Warn("Buildkite rejected the call to start the job (%s)", err)
+				r.Logger.Warn("Buildkite rejected the call to start the job (%s)", err)
 				s.Break()
 			}
 		}
@@ -441,10 +459,10 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 			// to finish the job forever so we'll just bail out and
 			// go find some more work to do.
 			if response != nil && response.StatusCode == 422 {
-				logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
+				r.Logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
 				s.Break()
 			} else {
-				logger.Warn("%s (%s)", err, s)
+				r.Logger.Warn("%s (%s)", err, s)
 			}
 		}
 
@@ -462,7 +480,7 @@ func (r *JobRunner) onProcessStartCallback() {
 	go func() {
 		defer func() {
 			r.routineWaitGroup.Done()
-			logger.Debug("[JobRunner] Routine that processes the log has finished")
+			r.Logger.Debug("[JobRunner] Routine that processes the log has finished")
 		}()
 
 		for {
@@ -490,7 +508,7 @@ func (r *JobRunner) onProcessStartCallback() {
 			// Mark this routine as done in the wait group
 			r.routineWaitGroup.Done()
 
-			logger.Debug("[JobRunner] Routine that refreshes the job has finished")
+			r.Logger.Debug("[JobRunner] Routine that refreshes the job has finished")
 		}()
 		for {
 			// Re-get the job and check it's status to see if it's been
@@ -499,7 +517,7 @@ func (r *JobRunner) onProcessStartCallback() {
 			if err != nil {
 				// We don't really care if it fails, we'll just
 				// try again soon anyway
-				logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
+				r.Logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
 			} else if jobState.State == "canceling" || jobState.State == "canceled" {
 				r.Cancel()
 			}
@@ -520,7 +538,7 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 	retry.Do(func(s *retry.Stats) error {
 		_, err := r.APIClient.HeaderTimes.Save(r.Job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
-			logger.Warn("%s (%s)", err, s)
+			r.Logger.Warn("%s (%s)", err, s)
 		}
 
 		return err
@@ -538,7 +556,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 			Size:     chunk.Size,
 		})
 		if err != nil {
-			logger.Warn("%s (%s)", err, s)
+			r.Logger.Warn("%s (%s)", err, s)
 		}
 
 		return err

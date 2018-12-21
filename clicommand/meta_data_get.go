@@ -58,19 +58,22 @@ var MetaDataGetCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLevelLogger(logger.INFO)
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataGetConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
 		client := agent.APIClient{
+			Logger: l,
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
 		}.Create()
@@ -87,7 +90,7 @@ var MetaDataGetCommand = cli.Command{
 				return err
 			}
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			}
 
 			return err
@@ -102,12 +105,12 @@ var MetaDataGetCommand = cli.Command{
 			// We also use `IsSet` instead of `cfg.Default != ""`
 			// to allow people to use a default of a blank string.
 			if resp.StatusCode == 404 && c.IsSet("default") {
-				logger.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
+				l.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
 
 				fmt.Print(cfg.Default)
 				return
 			} else {
-				logger.Fatal("Failed to get meta-data: %s", err)
+				l.Fatal("Failed to get meta-data: %s", err)
 			}
 		}
 

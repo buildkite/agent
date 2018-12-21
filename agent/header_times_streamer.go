@@ -10,6 +10,9 @@ import (
 )
 
 type HeaderTimesStreamer struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// The callback that will be called when a header time is ready for
 	// upload
 	UploadCallback func(int, int, map[string]string)
@@ -40,7 +43,7 @@ func (h *HeaderTimesStreamer) Start() error {
 	h.streaming = true
 
 	go func() {
-		logger.Debug("[HeaderTimesStreamer] Streamer has started...")
+		h.Logger.Debug("[HeaderTimesStreamer] Streamer has started...")
 
 		for true {
 			// Break out of streaming if it's finished. We also
@@ -59,7 +62,7 @@ func (h *HeaderTimesStreamer) Start() error {
 			time.Sleep(1 * time.Second)
 		}
 
-		logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
+		h.Logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
 	}()
 
 	return nil
@@ -73,7 +76,7 @@ func (h *HeaderTimesStreamer) Scan(line string) bool {
 	defer h.scanWaitGroup.Done()
 
 	if isHeader(line) {
-		logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+		h.Logger.Debug("[HeaderTimesStreamer] Found header %q", line)
 
 		// Aquire a lock on the times and then add the current time to
 		// our times slice.
@@ -115,9 +118,9 @@ func (h *HeaderTimesStreamer) Upload() {
 	// Do we even have some times to upload
 	if timesToUpload > 0 {
 		// Call our callback with the times for upload
-		logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
+		h.Logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
 		h.UploadCallback(c, length, payload)
-		logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
+		h.Logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
 
 		// Decrement the wait group for every time we've uploaded.
 		h.uploadWaitGroup.Add(timesToUpload * -1)
@@ -125,10 +128,10 @@ func (h *HeaderTimesStreamer) Upload() {
 }
 
 func (h *HeaderTimesStreamer) Stop() {
-	logger.Debug("[HeaderTimesStreamer] Waiting for all the lines to be scanned")
+	h.Logger.Debug("[HeaderTimesStreamer] Waiting for all the lines to be scanned")
 	h.scanWaitGroup.Wait()
 
-	logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
+	h.Logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
 	h.uploadWaitGroup.Wait()
 
 	// Since we're modifying the waitGroup and the streaming flag, we need

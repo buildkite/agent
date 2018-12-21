@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"regexp"
+
 	// "net/http/httputil"
 	"errors"
 	"net/url"
@@ -21,6 +22,9 @@ import (
 var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
 
 type FormUploader struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// Whether or not HTTP calls shoud be debugged
 	DebugHTTP bool
 }
@@ -48,7 +52,7 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 	client := &http.Client{}
 
 	// Perform the request
-	logger.Debug("%s %s", request.Method, request.URL)
+	u.Logger.Debug("%s %s", request.Method, request.URL)
 	response, err := client.Do(request)
 
 	// Check for errors
@@ -61,7 +65,7 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 
 		if u.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			u.Logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 		}
 
 		if response.StatusCode/100 != 2 {

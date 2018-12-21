@@ -16,6 +16,9 @@ import (
 )
 
 type S3Uploader struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// The destination which includes the S3 bucket name and the path.
 	// e.g s3://my-bucket-name/foo/bar
 	Destination string
@@ -32,7 +35,7 @@ func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
 	u.DebugHTTP = debugHTTP
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(u.BucketName())
+	s3Client, err := newS3Client(u.Logger, u.BucketName())
 	if err != nil {
 		return err
 	}
@@ -74,7 +77,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	}
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(u.BucketName())
+	s3Client, err := newS3Client(u.Logger, u.BucketName())
 	if err != nil {
 		return err
 	}
@@ -83,14 +86,14 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	uploader := s3manager.NewUploaderWithClient(s3Client)
 
 	// Open file from filesystem
-	logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
+	u.Logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
 	f, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
 		return fmt.Errorf("failed to open file %q (%v)", artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.
-	logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
+	u.Logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:      aws.String(u.BucketName()),
 		Key:         aws.String(u.artifactPath(artifact)),

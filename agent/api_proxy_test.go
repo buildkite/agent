@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/buildkite/agent/logger"
 )
 
 func TestAPIProxy(t *testing.T) {
@@ -25,6 +27,7 @@ func TestAPIProxy(t *testing.T) {
 
 	// create a client to talk to our proxy api
 	client := APIClient{
+		Logger:   logger.DiscardLogger,
 		Endpoint: proxy.Endpoint(),
 		Token:    proxy.AccessToken(),
 	}.Create()
@@ -58,6 +61,7 @@ func TestAPIProxyFailsWithoutAccessToken(t *testing.T) {
 
 	// create a client to talk to our proxy api, but with incorrect access token
 	client := APIClient{
+		Logger:   logger.DiscardLogger,
 		Endpoint: proxy.Endpoint(),
 		Token:    `xxx`,
 	}.Create()

@@ -21,6 +21,9 @@ import (
 )
 
 type GSUploader struct {
+	// The logger instance to use
+	Logger logger.Logger
+
 	// The destination which includes the GS bucket name and the path.
 	// gs://my-bucket-name/foo/bar
 	Destination string
@@ -73,14 +76,14 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 		permission != "projectPrivate" &&
 		permission != "publicRead" &&
 		permission != "publicReadWrite" {
-		logger.Fatal("Invalid GS ACL `%s`", permission)
+			return fmt.Errorf("Invalid GS ACL `%s`", permission)
 	}
 
 	if permission == "" {
-		logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
+		u.Logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
 			u.artifactPath(artifact), u.BucketName())
 	} else {
-		logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
+		u.Logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
 			u.artifactPath(artifact), u.BucketName(), permission)
 	}
 	object := &storage.Object{
@@ -97,7 +100,7 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 		call = call.PredefinedAcl(permission)
 	}
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
-		logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
+		u.Logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%v)", u.artifactPath(artifact), err))
 	}
