@@ -18,13 +18,11 @@ func createCommand(name string, arg ...string) *exec.Cmd {
 }
 
 func terminateProcess(p *os.Process) error {
-	logger.Debug("[Process] Killing process with PID: %d", p.Pid)
-	return p.Kill()
+	logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
+	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
 }
 
 func interruptProcess(p *os.Process) error {
-	logger.Debug("[Process] Killing process tree with TASKKILL.EXE PID: %d", p.Pid)
-	// Sending Interrupt on Windows is not implemented.
-	// https://golang.org/src/os/exec.go?s=3842:3884#L110
-	return exec.Command("CMD", "/C", "TASKKILL", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
+	logger.Debug("[Process] Interrupting process tree with TASKKILL.EXE PID: %d", p.Pid)
+	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
 }

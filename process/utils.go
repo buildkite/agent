@@ -26,5 +26,7 @@ func terminateProcess(p *os.Process) error {
 
 func interruptProcess(p *os.Process) error {
 	logger.Debug("[Process] Sending signal SIGTERM to PID: %d", p.Pid)
+
+	// TODO: this should be SIGINT, but will be a breaking change
 	return p.Signal(syscall.SIGTERM)
 }
