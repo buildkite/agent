@@ -78,6 +78,9 @@ func (r *AgentPool) Start() error {
 		close(errs)
 	}()
 
+	r.Logger.Info("Started %d Agent(s)", r.Spawn)
+	r.Logger.Info("You can press Ctrl-C to stop the agents")
+
 	return <-errs
 }
 
@@ -90,14 +93,17 @@ func (r *AgentPool) startWorker() error {
 	r.Logger.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
 		strings.Join(registered.Tags, ", "))
 
-	r.Logger.Debug("Ping interval: %ds", registered.PingInterval)
-	r.Logger.Debug("Job status interval: %ds", registered.JobStatusInterval)
-	r.Logger.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
+	// Create a prefixed logger for some context in concurrent output
+	l := r.Logger.WithPrefix(registered.Name)
+
+	l.Debug("Ping interval: %ds", registered.PingInterval)
+	l.Debug("Job status interval: %ds", registered.JobStatusInterval)
+	l.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
 
 	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
 	worker := AgentWorker{
-		Logger:             r.Logger,
+		Logger:         l,
 		Agent:              registered,
 		AgentConfiguration: r.AgentConfiguration,
 		Endpoint:           r.Endpoint,
@@ -106,19 +112,16 @@ func (r *AgentPool) startWorker() error {
 		MetricsCollector:   r.MetricsCollector,
 	}.Create()
 
-	r.Logger.Info("Connecting to Buildkite...")
+	l.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {
 		return err
 	}
 
-	r.Logger.Info("Agent successfully connected")
-	r.Logger.Info("You can press Ctrl-C to stop the agent")
-
 	if r.AgentConfiguration.DisconnectAfterJob {
-		r.Logger.Info("Waiting for job to be assigned...")
-		r.Logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
+		l.Info("Waiting for job to be assigned...")
+		l.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	} else {
-		r.Logger.Info("Waiting for work...")
+		l.Info("Waiting for work...")
 	}
 
 	// Start a signalwatcher so we can monitor signals and handle shutdowns
@@ -127,20 +130,20 @@ func (r *AgentPool) startWorker() error {
 		defer r.signalLock.Unlock()
 
 		if sig == signalwatcher.QUIT {
-			r.Logger.Debug("Received signal `%s`", sig.String())
+			l.Debug("Received signal `%s`", sig.String())
 			worker.Stop(false)
 		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
-			r.Logger.Debug("Received signal `%s`", sig.String())
+			l.Debug("Received signal `%s`", sig.String())
 			if r.interruptCount == 0 {
 				r.interruptCount++
-				r.Logger.Info("Received CTRL-C, send again to forcefully kill the agent")
+				l.Info("Received CTRL-C, send again to forcefully kill the agent")
 				worker.Stop(true)
 			} else {
-				r.Logger.Info("Forcefully stopping running jobs and stopping the agent")
+				l.Info("Forcefully stopping running jobs and stopping the agent")
 				worker.Stop(false)
 			}
 		} else {
-			r.Logger.Debug("Ignoring signal `%s`", sig.String())
+			l.Debug("Ignoring signal `%s`", sig.String())
 		}
 	})
 
@@ -150,7 +153,7 @@ func (r *AgentPool) startWorker() error {
 	}
 
 	// Now that the agent has stopped, we can disconnect it
-	r.Logger.Info("Disconnecting %s...", worker.Agent.Name)
+	l.Info("Disconnecting %s...", worker.Agent.Name)
 	if err := worker.Disconnect(); err != nil {
 		return err
 	}
