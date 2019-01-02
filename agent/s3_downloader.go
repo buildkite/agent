@@ -13,7 +13,7 @@ import (
 
 type S3Downloader struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The S3 bucket name and the path, e.g s3://my-bucket-name/foo/bar
 	Bucket string

@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-func Run(l logger.Logger, command string, arg ...string) (string, error) {
+func Run(l *logger.Logger, command string, arg ...string) (string, error) {
 	output, err := exec.Command(command, arg...).Output()
 
 	if err != nil {

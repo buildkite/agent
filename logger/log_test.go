@@ -8,12 +8,12 @@ import (
 
 func TestLevelLogger(t *testing.T) {
 	b := &bytes.Buffer{}
-	l := NewLevelLogger(INFO)
+	l := NewLogger()
+	l.Level = INFO
 	l.Colors = false
 	l.Writer = b
 
 	l.Debug("Debug %q", "llamas")
-	l.Notice("Notice %q", "llamas")
 	l.Info("Info %q", "llamas")
 	l.Warn("Warn %q", "llamas")
 	l.Error("Error %q", "llamas")

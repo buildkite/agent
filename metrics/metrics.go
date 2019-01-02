@@ -24,7 +24,7 @@ type Collector struct {
 	DatadogHost string
 
 	// The logger to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	client *statsd.Client
 }

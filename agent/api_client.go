@@ -17,7 +17,7 @@ import (
 var debug = false
 
 type APIClient struct {
-	Logger       logger.Logger
+	Logger       *logger.Logger
 	Endpoint     string
 	Token        string
 	DisableHTTP2 bool

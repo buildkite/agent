@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/logger"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,6 +38,7 @@ func TestCollect(t *testing.T) {
 			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
 		),
+		Logger: logger.Discard,
 	}
 
 	artifacts, err := uploader.Collect()
@@ -110,12 +112,15 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := ArtifactUploader{Paths: strings.Join([]string{
-		filepath.Join("log", "*"),
-		filepath.Join("tmp", "capybara", "**", "*"),
-		filepath.Join("mkmf.log"),
-		filepath.Join("log", "mkmf.log"),
-	}, ";")}
+	uploader := ArtifactUploader{
+		Logger: logger.Discard,
+		Paths: strings.Join([]string{
+			filepath.Join("log", "*"),
+			filepath.Join("tmp", "capybara", "**", "*"),
+			filepath.Join("mkmf.log"),
+			filepath.Join("log", "mkmf.log"),
+		}, ";"),
+	}
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
@@ -131,11 +136,14 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := ArtifactUploader{Paths: strings.Join([]string{
-		filepath.Join("dontmatchanything", "*"),
-		filepath.Join("dontmatchanything.zip"),
-		filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
-	}, ";")}
+	uploader := ArtifactUploader{
+		Logger: logger.Discard,
+		Paths: strings.Join([]string{
+			filepath.Join("dontmatchanything", "*"),
+			filepath.Join("dontmatchanything.zip"),
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+		}, ";"),
+	}
 
 	artifacts, err := uploader.Collect()
 	if err != nil {

@@ -31,7 +31,7 @@ type Client struct {
 	client *http.Client
 
 	// The logger used
-	logger logger.Logger
+	logger *logger.Logger
 
 	// Base URL for API requests. Defaults to the public Buildkite Agent API.
 	// The URL should always be specified with a trailing slash.
@@ -57,7 +57,7 @@ type Client struct {
 }
 
 // NewClient returns a new Buildkite Agent API Client.
-func NewClient(httpClient *http.Client, l logger.Logger) *Client {
+func NewClient(httpClient *http.Client, l *logger.Logger) *Client {
 	baseURL, _ := url.Parse(defaultBaseURL)
 
 	c := &Client{

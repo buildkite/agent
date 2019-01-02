@@ -23,7 +23,7 @@ var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
 
 type FormUploader struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// Whether or not HTTP calls shoud be debugged
 	DebugHTTP bool

@@ -21,7 +21,7 @@ import (
 
 type JobRunner struct {
 	// The logger to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The job being run
 	Job *api.Job

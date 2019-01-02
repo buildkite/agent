@@ -21,7 +21,7 @@ import (
 // that will authenticate to the Buildkite Agent API
 type APIProxy struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	upstreamToken    string
 	upstreamEndpoint string
@@ -36,7 +36,7 @@ func NewAPIProxy(endpoint string, token string) *APIProxy {
 	wg.Add(1)
 
 	return &APIProxy{
-		Logger:           logger.DiscardLogger,
+		Logger:           logger.Discard,
 		upstreamToken:    token,
 		upstreamEndpoint: endpoint,
 		token:            fmt.Sprintf("%x", sha256.Sum256([]byte(string(time.Now().UnixNano())))),

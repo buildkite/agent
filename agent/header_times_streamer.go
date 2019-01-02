@@ -11,7 +11,7 @@ import (
 
 type HeaderTimesStreamer struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The callback that will be called when a header time is ready for
 	// upload

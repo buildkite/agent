@@ -27,7 +27,7 @@ func TestAPIProxy(t *testing.T) {
 
 	// create a client to talk to our proxy api
 	client := APIClient{
-		Logger:   logger.DiscardLogger,
+		Logger:   logger.Discard,
 		Endpoint: proxy.Endpoint(),
 		Token:    proxy.AccessToken(),
 	}.Create()
@@ -61,7 +61,7 @@ func TestAPIProxyFailsWithoutAccessToken(t *testing.T) {
 
 	// create a client to talk to our proxy api, but with incorrect access token
 	client := APIClient{
-		Logger:   logger.DiscardLogger,
+		Logger:   logger.Discard,
 		Endpoint: proxy.Endpoint(),
 		Token:    `xxx`,
 	}.Create()

@@ -22,7 +22,7 @@ import (
 
 type GSUploader struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The destination which includes the GS bucket name and the path.
 	// gs://my-bucket-name/foo/bar

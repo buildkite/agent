@@ -256,7 +256,7 @@ var BootstrapCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewLevelLogger(logger.INFO)
+		l := logger.NewLogger()
 
 		// The configuration will be loaded into this struct
 		cfg := BootstrapConfig{}
@@ -268,7 +268,7 @@ var BootstrapCommand = cli.Command{
 
 		// Enable debug if set
 		if cfg.Debug {
-			l = logger.NewLevelLogger(logger.DEBUG)
+			l.Level = logger.DEBUG
 		}
 
 		// Turn of PTY support if we're on Windows

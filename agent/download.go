@@ -16,7 +16,7 @@ import (
 
 type Download struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The HTTP client to use for downloading
 	Client http.Client

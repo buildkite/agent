@@ -59,7 +59,7 @@ var MetaDataSetCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewLevelLogger(logger.INFO)
+		l := logger.NewLogger()
 
 		// The configuration will be loaded into this struct
 		cfg := MetaDataSetConfig{}

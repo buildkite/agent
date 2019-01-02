@@ -28,7 +28,7 @@ type Process struct {
 	Handler func(string)
 
 	// The logger to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	command       *exec.Cmd
 	mu            sync.Mutex

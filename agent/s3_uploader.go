@@ -17,7 +17,7 @@ import (
 
 type S3Uploader struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The destination which includes the S3 bucket name and the path.
 	// e.g s3://my-bucket-name/foo/bar

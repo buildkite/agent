@@ -11,7 +11,7 @@ import (
 
 type LogStreamer struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// How many log streamer workers are running at any one time
 	Concurrency int

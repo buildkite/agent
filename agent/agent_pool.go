@@ -19,7 +19,7 @@ import (
 )
 
 type AgentPool struct {
-	Logger                logger.Logger
+	Logger                *logger.Logger
 	APIClient             *api.Client
 	Token                 string
 	ConfigFilePath        string

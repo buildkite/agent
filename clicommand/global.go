@@ -51,13 +51,11 @@ var ExperimentsFlag = cli.StringSliceFlag{
 	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
-func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
+func HandleGlobalFlags(l *logger.Logger, cfg interface{}) {
 	// Enable debugging if a Debug option is present
-	if levelLogger, ok := l.(*logger.LevelLogger); ok {
-		debug, err := reflections.GetField(cfg, "Debug")
-		if debug == true && err == nil {
-			levelLogger.SetLevel(logger.DEBUG)
-		}
+	debug, err := reflections.GetField(cfg, "Debug")
+	if debug == false && err == nil {
+		l.Level = logger.INFO
 	}
 
 	// Enable HTTP debugging

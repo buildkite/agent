@@ -22,7 +22,7 @@ type AgentWorker struct {
 	lastPing, lastHeartbeat int64
 
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// Whether to set debug in the job
 	Debug bool

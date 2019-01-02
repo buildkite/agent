@@ -13,7 +13,7 @@ import (
 
 type GSDownloader struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The name of the bucket
 	Bucket string

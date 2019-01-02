@@ -25,7 +25,7 @@ const (
 
 type ArtifactUploader struct {
 	// The logger instance to use
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// The APIClient that will be used when uploading jobs
 	APIClient *api.Client

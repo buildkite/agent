@@ -10,7 +10,7 @@ import (
 )
 
 type Scanner struct {
-	Logger logger.Logger
+	Logger *logger.Logger
 }
 
 func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {

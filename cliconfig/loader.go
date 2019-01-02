@@ -22,7 +22,7 @@ type Loader struct {
 	Config interface{}
 
 	// The logger used
-	Logger logger.Logger
+	Logger *logger.Logger
 
 	// A slice of paths to files that should be used as config files
 	DefaultConfigFilePaths []string
@@ -34,7 +34,7 @@ type Loader struct {
 var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
-func Load(c *cli.Context, l logger.Logger, cfg interface{}) error {
+func Load(c *cli.Context, l*logger.Logger, cfg interface{}) error {
 	loader := Loader{
 		CLI:    c,
 		Config: cfg,
