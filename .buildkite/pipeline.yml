@@ -10,9 +10,11 @@ steps:
         run: agent
 
   - name: ":hammer: :windows:"
-    command:
-      - "docker-compose -f ./.buildkite/docker-compose.windows.yml build --pull agent"
-      - "docker-compose -f ./.buildkite/docker-compose.windows.yml run --rm -T agent bash.exe .buildkite/steps/tests.sh"
+    command: ".buildkite/steps/tests.sh"
+    plugins:
+      docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
     agents:
       queue: "windows"
 

@@ -23,3 +23,6 @@ RUN go mod download
 
 # Copy the rest of the code
 COPY . c:/code/
+
+# Run things in bash
+ENTRYPOINT ["BASH.EXE"]
