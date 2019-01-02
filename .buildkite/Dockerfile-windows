@@ -12,7 +12,8 @@ RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object Sys
 # Install Chocolatey packages
 RUN choco install -y git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install -y openssh && \
-  choco install golang --version 1.11.4 -my
+  choco install golang --version 1.11.4 -my && \
+  choco install -y mingw
 
 WORKDIR c:/code
 
