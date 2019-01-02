@@ -13,7 +13,7 @@ steps:
     command: ".buildkite/steps/tests.sh"
     plugins:
       docker-compose#v1.8.0:
-        config: .buildkite/docker-compose.yml
+        config: .buildkite/docker-compose.windows.yml
         run: agent
     agents:
       queue: "windows"
