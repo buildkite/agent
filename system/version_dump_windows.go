@@ -3,9 +3,11 @@ package system
 import (
 	"fmt"
 	"syscall"
+
+	"github.com/buildkite/agent/logger"
 )
 
-func VersionDump() (string, error) {
+func VersionDump(_ *logger.Logger) (string, error) {
 	dll := syscall.MustLoadDLL("kernel32.dll")
 	p := dll.MustFindProc("GetVersion")
 	v, _, _ := p.Call()
