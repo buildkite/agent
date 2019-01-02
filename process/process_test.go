@@ -25,16 +25,25 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 		Env:    []string{"TEST_MAIN=tester"},
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
+
 		<-p.Started()
 		atomic.AddInt32(&started, 1)
 		<-p.Done()
 		atomic.AddInt32(&done, 1)
 	}()
 
+	// wait for the process to finish
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
+
+	// wait for our go routine to finish
+	wg.Wait()
 
 	if startedVal := atomic.LoadInt32(&started); startedVal != 1 {
 		t.Fatalf("Expected started to be 1, got %d", startedVal)
@@ -98,7 +107,11 @@ func TestProcessIsKilledGracefully(t *testing.T) {
 		},
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
 		<-p.Started()
 
 		// give the signal handler some time to install
@@ -110,6 +123,8 @@ func TestProcessIsKilledGracefully(t *testing.T) {
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
+
+	wg.Wait()
 
 	mu.Lock()
 	defer mu.Unlock()
