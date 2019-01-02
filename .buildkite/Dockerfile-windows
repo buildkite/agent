@@ -14,15 +14,11 @@ RUN choco install -y git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install -y openssh && \
   choco install golang --version 1.11.4 -my
 
-# Hack for mounting in code later (Use G:)
-# See https://github.com/moby/moby/issues/27537#issuecomment-271546031
-VOLUME c:/data
-RUN powershell set-itemproperty -path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\DOS Devices' -Name 'G:' -Value '\??\C:\data' -Type String
-
 WORKDIR c:/code
 
 # Cache go modules in docker cache
 COPY go.mod go.sum c:/code/
 RUN go mod download
 
-ENTRYPOINT ["CMD.EXE", "/S", "/C"]
+# Copy the rest of the code
+COPY . c:/code/

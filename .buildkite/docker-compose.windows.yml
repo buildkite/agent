@@ -7,13 +7,11 @@ services:
     build:
       dockerfile: .buildkite/Dockerfile-windows
       context: ../
-    volumes:
-      - ../:c:/data
-    working_dir: c:/data
     tty: false
     environment:
       - BUILDKITE_BUILD_NUMBER
       - "BUILDKITE_BUILD_PATH=c:\\buildkite\\builds"
+      - GO111MODULE=on
 
 networks:
   default:

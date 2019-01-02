@@ -12,9 +12,6 @@ steps:
   - name: ":hammer: :windows:"
     command:
       - "docker-compose -f ./.buildkite/docker-compose.windows.yml build --pull agent"
-      - "docker-compose -f ./.buildkite/docker-compose.windows.yml run -T agent cd"
-      - "docker-compose -f ./.buildkite/docker-compose.windows.yml run -T agent dir"
-      - "docker-compose -f ./.buildkite/docker-compose.windows.yml run -T agent go list ./..."
       - "docker-compose -f ./.buildkite/docker-compose.windows.yml run --rm -T agent go test -race -v ./..."
     agents:
       queue: "windows"
