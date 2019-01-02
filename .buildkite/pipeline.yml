@@ -15,6 +15,7 @@ steps:
       docker-compose#v1.8.0:
         config: .buildkite/docker-compose.windows.yml
         run: agent
+        tty: false
     agents:
       queue: "windows"
 
