@@ -5,12 +5,13 @@ version: "3.2"
 services:
   agent:
     build:
-      dockerfile: Dockerfile-windows
+      dockerfile: .buildkite/Dockerfile-windows
       context: ../
-    working_dir: C:/gopath/src/github.com/buildkite/agent
+    tty: false
     environment:
       - BUILDKITE_BUILD_NUMBER
       - "BUILDKITE_BUILD_PATH=c:\\buildkite\\builds"
+      - GO111MODULE=on
 
 networks:
   default:
