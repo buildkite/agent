@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 )
 
@@ -23,6 +24,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	p := process.Process{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester"},
+		Logger: logger.Discard,
 	}
 
 	var wg sync.WaitGroup
@@ -65,6 +67,7 @@ func TestProcessCapturesOutputLineByLine(t *testing.T) {
 	p := process.Process{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester"},
+		Logger: logger.Discard,
 		Handler: func(line string) {
 			mu.Lock()
 			defer mu.Unlock()
@@ -100,6 +103,7 @@ func TestProcessInterrupts(t *testing.T) {
 	p := process.Process{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester-signal"},
+		Logger: logger.Discard,
 		Handler: func(line string) {
 			mu.Lock()
 			defer mu.Unlock()
