@@ -193,7 +193,7 @@ func (a *AgentWorker) Stop(graceful bool) {
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
-			a.jobRunner.Kill()
+			a.jobRunner.Cancel()
 		} else {
 			logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 		}

@@ -63,8 +63,8 @@ type JobRunner struct {
 	// Used to wait on various routines that we spin up
 	routineWaitGroup sync.WaitGroup
 
-	// A lock to protect concurrent calls to kill
-	killLock sync.Mutex
+	// A lock to protect concurrent calls to cancel
+	cancelLock sync.Mutex	
 
 	// File containing a copy of the job env
 	envFile *os.File
@@ -242,22 +242,43 @@ func (r *JobRunner) Run() error {
 	return nil
 }
 
-func (r *JobRunner) Kill() error {
-	r.killLock.Lock()
-	defer r.killLock.Unlock()
+func (r *JobRunner) Cancel() error {
+	r.cancelLock.Lock()
+	defer r.cancelLock.Unlock()
 
-	if !r.cancelled {
-		logger.Info("Canceling job %s with a grace period of %ds", r.Job.ID, r.AgentConfiguration.CancelGracePeriod)
-		r.cancelled = true
-
-		if r.process != nil {
-			r.process.Kill(time.Second * time.Duration(r.AgentConfiguration.CancelGracePeriod))
-		} else {
-			logger.Error("No process to kill")
-		}
+	if r.cancelled {
+		return nil
 	}
 
-	return nil
+	if r.process == nil {
+		logger.Error("No process to kill")
+		return nil
+	}
+
+	logger.Info("Canceling job %s with a grace period of %ds",
+		r.Job.ID, r.AgentConfiguration.CancelGracePeriod)
+
+	// First we interrupt the process (ctrl-c or SIGINT)
+	if err := r.process.Interrupt(); err != nil {
+		return err
+	}
+
+	select {
+	// Grace period for cancelling
+	case <-time.After(time.Second * time.Duration(r.AgentConfiguration.CancelGracePeriod)):
+		logger.Info("Job %s hasn't stopped in time, terminating", r.Job.ID)
+
+		// Terminate the process as we've exceeded our context
+		if err := r.process.Terminate(); err != nil {
+			return err
+		}
+
+		return nil
+
+	// Process successfully terminated
+	case <-r.process.Done():
+		return nil
+	}
 }
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
@@ -480,7 +501,7 @@ func (r *JobRunner) onProcessStartCallback() {
 				// try again soon anyway
 				logger.Warn("Problem with getting job state %s (%s)", r.Job.ID, err)
 			} else if jobState.State == "canceling" || jobState.State == "canceled" {
-				r.Kill()
+				r.Cancel()
 			}
 
 			// Sleep for a bit, or until the job is finished

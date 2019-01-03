@@ -7,8 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"runtime"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -17,11 +15,13 @@ import (
 )
 
 type Process struct {
+	PTY       bool
+	Timestamp bool
+	Script    []string
+	Env       []string
+
+	// Outputs available after the process starts
 	Pid        int
-	PTY        bool
-	Timestamp  bool
-	Script     []string
-	Env        []string
 	ExitStatus string
 
 	// Handler is called with each line of output
@@ -38,7 +38,8 @@ func (p *Process) Start() error {
 		return fmt.Errorf("Process is already running")
 	}
 
-	p.command = exec.Command(p.Script[0], p.Script[1:]...)
+	// Create a command with platform specific options
+	p.command = createCommand(p.Script[0], p.Script[1:]...)
 
 	// Create channels for signalling started and done
 	p.mu.Lock()
@@ -183,52 +184,40 @@ func (p *Process) Started() <-chan struct{} {
 	return d
 }
 
-// Kill the process. If supported by the operating system it is initially signaled for termination
-// and then forcefully killed after the provided grace period.
-func (p *Process) Kill(gracePeriod time.Duration) error {
-	var err error
-	if runtime.GOOS == "windows" {
-		// Sending Interrupt on Windows is not implemented.
-		// https://golang.org/src/os/exec.go?s=3842:3884#L110
-		err = exec.Command("CMD", "/C", "TASKKILL", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
-	} else {
-		// Send a sigterm
-		err = p.signal(syscall.SIGTERM)
-	}
-	if err != nil {
-		return err
-	}
-
-	select {
-	// Was successfully terminated
-	case <-p.Done():
-		logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
-		return nil
-
-	// Forcefully kill the process after grace period expires
-	case <-time.After(gracePeriod):
-		logger.Debug("[Process] Process %d didn't terminate within %v, killing.", p.Pid, gracePeriod)
-		return p.signal(syscall.SIGKILL)
-	}
-}
-
-func (p *Process) signal(sig os.Signal) error {
+// Interrupt the process on platforms that support it, terminate otherwise
+func (p *Process) Interrupt() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.command != nil && p.command.Process != nil {
-		logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
+	if p.command == nil || p.command.Process == nil {
+		logger.Debug("[Process] No process to interrupt yet")
+		return nil
+	}
 
-		err := p.command.Process.Signal(sig)
-		if err != nil {
-			logger.Error("[Process] Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
-			return err
+	// interrupt the process (ctrl-c or SIGINT)
+	if err := interruptProcess(p.command.Process); err != nil {
+		logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
+
+		// Fallback to terminating if we get an error
+		if termErr := terminateProcess(p.command.Process); termErr != nil {
+			return termErr
 		}
-	} else {
-		logger.Debug("[Process] No process to signal yet")
 	}
 
 	return nil
+}
+
+// Terminate the process
+func (p *Process) Terminate() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.command == nil || p.command.Process == nil {
+		logger.Debug("[Process] No process to terminate yet")
+		return nil
+	}
+
+	return terminateProcess(p.command.Process)
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
