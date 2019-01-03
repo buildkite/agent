@@ -19,7 +19,6 @@ import (
 
 var (
 	libkernel32                  = syscall.MustLoadDLL("kernel32")
-	procSetConsoleCtrlHandler    = libkernel32.MustFindProc("SetConsoleCtrlHandler")
 	procGenerateConsoleCtrlEvent = libkernel32.MustFindProc("GenerateConsoleCtrlEvent")
 )
 
@@ -48,13 +47,9 @@ func terminateProcess(p *os.Process, l *logger.Logger) error {
 }
 
 func interruptProcess(p *os.Process, l *logger.Logger) error {
-	procSetConsoleCtrlHandler.Call(0, 1)
-	defer procSetConsoleCtrlHandler.Call(0, 0)
+	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
+	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
 	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
-	if r1 == 0 {
-		return err
-	}
-	r1, _, err = procGenerateConsoleCtrlEvent.Call(syscall.CTRL_C_EVENT, uintptr(p.Pid))
 	if r1 == 0 {
 		return err
 	}
