@@ -92,17 +92,18 @@ var PipelineUploadCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := PipelineUploadConfig{}
 
 		// Load the configuration
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		if err := loader.Load(); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Find the pipeline file either from STDIN or the first
 		// argument
@@ -111,23 +112,23 @@ var PipelineUploadCommand = cli.Command{
 		var filename string
 
 		if cfg.FilePath != "" {
-			logger.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
+			l.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
 
 			filename = filepath.Base(cfg.FilePath)
 			input, err = ioutil.ReadFile(cfg.FilePath)
 			if err != nil {
-				logger.Fatal("Failed to read file: %s", err)
+				l.Fatal("Failed to read file: %s", err)
 			}
 		} else if stdin.IsReadable() {
-			logger.Info("Reading pipeline config from STDIN")
+			l.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
 			input, err = ioutil.ReadAll(os.Stdin)
 			if err != nil {
-				logger.Fatal("Failed to read from STDIN: %s", err)
+				l.Fatal("Failed to read from STDIN: %s", err)
 			}
 		} else {
-			logger.Info("Searching for pipeline config...")
+			l.Info("Searching for pipeline config...")
 
 			paths := []string{
 				"buildkite.yml",
@@ -149,26 +150,26 @@ var PipelineUploadCommand = cli.Command{
 			// If more than 1 of the config files exist, throw an
 			// error. There can only be one!!
 			if len(exists) > 1 {
-				logger.Fatal("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
+				l.Fatal("Found multiple configuration files: %s. Please only have 1 configuration file present.", strings.Join(exists, ", "))
 			} else if len(exists) == 0 {
-				logger.Fatal("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
+				l.Fatal("Could not find a default pipeline configuration file. See `buildkite-agent pipeline upload --help` for more information.")
 			}
 
 			found := exists[0]
 
-			logger.Info("Found config file \"%s\"", found)
+			l.Info("Found config file \"%s\"", found)
 
 			// Read the default file
 			filename = path.Base(found)
 			input, err = ioutil.ReadFile(found)
 			if err != nil {
-				logger.Fatal("Failed to read file \"%s\" (%s)", found, err)
+				l.Fatal("Failed to read file \"%s\" (%s)", found, err)
 			}
 		}
 
 		// Make sure the file actually has something in it
 		if len(input) == 0 {
-			logger.Fatal("Config file is empty")
+			l.Fatal("Config file is empty")
 		}
 
 		// Load environment to pass into parser
@@ -178,10 +179,10 @@ var PipelineUploadCommand = cli.Command{
 		if commitRef, ok := environ.Get(`BUILDKITE_COMMIT`); ok {
 			cmdOut, err := exec.Command(`git`, `rev-parse`, commitRef).Output()
 			if err != nil {
-				logger.Warn("Error running git rev-parse %q: %v", commitRef, err)
+				l.Warn("Error running git rev-parse %q: %v", commitRef, err)
 			} else {
 				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-				logger.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+				l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
 				environ.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
 			}
 		}
@@ -194,7 +195,7 @@ var PipelineUploadCommand = cli.Command{
 			NoInterpolation: cfg.NoInterpolation,
 		}.Parse()
 		if err != nil {
-			logger.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
+			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
 
 		// In dry-run mode we just output the generated pipeline to stdout
@@ -205,7 +206,7 @@ var PipelineUploadCommand = cli.Command{
 			// Dump json indented to stdout. All logging happens to stderr
 			// this can be used with other tools to get interpolated json
 			if err := enc.Encode(result); err != nil {
-				logger.Fatal("%#v", err)
+				l.Fatal("%#v", err)
 			}
 
 			os.Exit(0)
@@ -213,16 +214,17 @@ var PipelineUploadCommand = cli.Command{
 
 		// Check we have a job id set if not in dry run
 		if cfg.Job == "" {
-			logger.Fatal("Missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
+			l.Fatal("Missing job parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_JOB_ID.")
 		}
 
 		// Check we have an agent access token if not in dry run
 		if cfg.AgentAccessToken == "" {
-			logger.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
+			l.Fatal("Missing agent-access-token parameter. Usually this is set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN.")
 		}
 
 		// Create the API client
 		client := agent.APIClient{
+			Logger: l,
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
 		}.Create()
@@ -236,11 +238,11 @@ var PipelineUploadCommand = cli.Command{
 		err = retry.Do(func(s *retry.Stats) error {
 			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 
 				// 422 responses will always fail no need to retry
 				if apierr, ok := err.(*api.ErrorResponse); ok && apierr.Response.StatusCode == 422 {
-					logger.Error("Unrecoverable error, skipping retries")
+					l.Error("Unrecoverable error, skipping retries")
 					s.Break()
 				}
 			}
@@ -248,9 +250,9 @@ var PipelineUploadCommand = cli.Command{
 			return err
 		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
 		if err != nil {
-			logger.Fatal("Failed to upload and process pipeline: %s", err)
+			l.Fatal("Failed to upload and process pipeline: %s", err)
 		}
 
-		logger.Info("Successfully uploaded and parsed pipeline config")
+		l.Info("Successfully uploaded and parsed pipeline config")
 	},
 }

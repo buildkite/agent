@@ -6,6 +6,9 @@ import (
 )
 
 type ArtifactSearcher struct {
+	// The logger instance to use
+	Logger *logger.Logger
+
 	// The APIClient that will be used when uploading jobs
 	APIClient *api.Client
 
@@ -15,9 +18,9 @@ type ArtifactSearcher struct {
 
 func (a *ArtifactSearcher) Search(query string, scope string) ([]*api.Artifact, error) {
 	if scope == "" {
-		logger.Info("Searching for artifacts: \"%s\"", query)
+		a.Logger.Info("Searching for artifacts: \"%s\"", query)
 	} else {
-		logger.Info("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope)
+		a.Logger.Info("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope)
 	}
 
 	options := &api.ArtifactSearchOptions{Query: query, Scope: scope}

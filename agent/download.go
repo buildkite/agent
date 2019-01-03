@@ -15,6 +15,9 @@ import (
 )
 
 type Download struct {
+	// The logger instance to use
+	Logger *logger.Logger
+
 	// The HTTP client to use for downloading
 	Client http.Client
 
@@ -38,7 +41,7 @@ func (d Download) Start() error {
 	return retry.Do(func(s *retry.Stats) error {
 		err := d.try()
 		if err != nil {
-			logger.Warn("Error trying to download %s (%s) %s", d.URL, err, s)
+			d.Logger.Warn("Error trying to download %s (%s) %s", d.URL, err, s)
 		}
 		return err
 	}, &retry.Config{Maximum: d.Retries, Interval: 5 * time.Second})
@@ -74,7 +77,7 @@ func (d Download) try() error {
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
-	logger.Debug("Downloading %s to %s", d.URL, targetFile)
+	d.Logger.Debug("Downloading %s to %s", d.URL, targetFile)
 
 	// Start by downloading the file
 	response, err := d.Client.Get(d.URL)
@@ -87,7 +90,7 @@ func (d Download) try() error {
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
 		if d.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			d.Logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 		}
 
 		return &downloadError{response.Status}
@@ -112,7 +115,7 @@ func (d Download) try() error {
 		return fmt.Errorf("Error when copying data %s (%T: %v)", d.URL, err, err)
 	}
 
-	logger.Info("Successfully downloaded \"%s\" %d bytes", d.Path, bytes)
+	d.Logger.Info("Successfully downloaded \"%s\" %d bytes", d.Path, bytes)
 
 	return nil
 }

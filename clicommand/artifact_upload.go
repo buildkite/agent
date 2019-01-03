@@ -65,20 +65,24 @@ var ArtifactUploadCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactUploadConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Setup the uploader
 		uploader := agent.ArtifactUploader{
+			Logger: l,
 			APIClient: agent.APIClient{
+				Logger:   l,
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
 			}.Create(),
@@ -89,7 +93,7 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Upload the artifacts
 		if err := uploader.Upload(); err != nil {
-			logger.Fatal("Failed to upload artifacts: %s", err)
+			l.Fatal("Failed to upload artifacts: %s", err)
 		}
 	},
 }

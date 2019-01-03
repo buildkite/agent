@@ -256,12 +256,19 @@ var BootstrapCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := BootstrapConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
+		}
+
+		// Enable debug if set
+		if cfg.Debug {
+			l.Level = logger.DEBUG
 		}
 
 		// Turn of PTY support if we're on Windows
@@ -276,7 +283,7 @@ var BootstrapCommand = cli.Command{
 			case "plugin", "checkout", "command":
 				// Valid phase
 			default:
-				logger.Fatal("Invalid phase %q", phase)
+				l.Fatal("Invalid phase %q", phase)
 			}
 		}
 

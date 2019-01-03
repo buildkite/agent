@@ -63,30 +63,33 @@ var StepUpdateCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := StepUpdateConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {
-			logger.Info("Reading value from STDIN")
+			l.Info("Reading value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
 			if err != nil {
-				logger.Fatal("Failed to read from STDIN: %s", err)
+				l.Fatal("Failed to read from STDIN: %s", err)
 			}
 			cfg.Value = string(input)
 		}
 
 		// Create the API client
 		client := agent.APIClient{
+			Logger: l,
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
 		}.Create()
@@ -111,13 +114,13 @@ var StepUpdateCommand = cli.Command{
 				s.Break()
 			}
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			}
 
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 		if err != nil {
-			logger.Fatal("Failed to change step: %s", err)
+			l.Fatal("Failed to change step: %s", err)
 		}
 	},
 }

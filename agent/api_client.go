@@ -17,6 +17,7 @@ import (
 var debug = false
 
 type APIClient struct {
+	Logger       *logger.Logger
 	Endpoint     string
 	Token        string
 	DisableHTTP2 bool
@@ -29,7 +30,7 @@ func APIClientEnableHTTPDebug() {
 func (a APIClient) Create() *api.Client {
 	u, err := url.Parse(a.Endpoint)
 	if err != nil {
-		logger.Warn("Failed to parse %q: %v", a.Endpoint, err)
+		a.Logger.Warn("Failed to parse %q: %v", a.Endpoint, err)
 	}
 
 	if u != nil && u.Scheme == `unix` {
@@ -61,7 +62,7 @@ func (a APIClient) Create() *api.Client {
 	httpClient.Timeout = 60 * time.Second
 
 	// Create the Buildkite Agent API Client
-	client := api.NewClient(httpClient)
+	client := api.NewClient(httpClient, a.Logger)
 	client.BaseURL, _ = url.Parse(a.Endpoint)
 	client.UserAgent = a.UserAgent()
 	client.DebugHTTP = debug
@@ -81,7 +82,7 @@ func (a APIClient) createFromSocket(socket string) *api.Client {
 	}
 
 	// Create the Buildkite Agent API Client
-	client := api.NewClient(httpClient)
+	client := api.NewClient(httpClient, a.Logger)
 	client.BaseURL, _ = url.Parse(`http+unix://buildkite-agent`)
 	client.UserAgent = a.UserAgent()
 	client.DebugHTTP = debug

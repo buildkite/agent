@@ -9,11 +9,15 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-func ScanLines(r io.Reader, f func(line string)) error {
+type Scanner struct {
+	Logger *logger.Logger
+}
+
+func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 	var reader = bufio.NewReader(r)
 	var appending []byte
 
-	logger.Debug("[LineScanner] Starting to read lines")
+	s.Logger.Debug("[LineScanner] Starting to read lines")
 
 	// Note that we do this manually rather than
 	// because we need to handle very long lines
@@ -22,7 +26,7 @@ func ScanLines(r io.Reader, f func(line string)) error {
 		line, isPrefix, err := reader.ReadLine()
 		if err != nil {
 			if err == io.EOF {
-				logger.Debug("[LineScanner] Encountered EOF")
+				s.Logger.Debug("[LineScanner] Encountered EOF")
 				break
 			}
 			return err
@@ -33,7 +37,7 @@ func ScanLines(r io.Reader, f func(line string)) error {
 		// until isPrefix is false (which means the long line
 		// has ended.
 		if isPrefix && appending == nil {
-			logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
+			s.Logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
 
 			// bufio.ReadLine returns a slice which is only valid until the next invocation
 			// since it points to its own internal buffer array. To accumulate the entire
@@ -51,7 +55,7 @@ func ScanLines(r io.Reader, f func(line string)) error {
 
 			// No more isPrefix! Line is finished!
 			if !isPrefix {
-				logger.Debug("[LineScanner] Finished buffering long line")
+				s.Logger.Debug("[LineScanner] Finished buffering long line")
 				line = appending
 
 				// Reset appending back to nil
@@ -65,7 +69,7 @@ func ScanLines(r io.Reader, f func(line string)) error {
 		f(string(line))
 	}
 
-	logger.Debug("[LineScanner] Finished")
+	s.Logger.Debug("[LineScanner] Finished")
 	return nil
 }
 

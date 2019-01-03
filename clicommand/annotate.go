@@ -95,17 +95,18 @@ var AnnotateCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := AnnotateConfig{}
 
 		// Load the configuration
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		if err := loader.Load(); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		var body string
 		var err error
@@ -113,12 +114,12 @@ var AnnotateCommand = cli.Command{
 		if cfg.Body != "" {
 			body = cfg.Body
 		} else if stdin.IsReadable() {
-			logger.Info("Reading annotation body from STDIN")
+			l.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN
 			stdin, err := ioutil.ReadAll(os.Stdin)
 			if err != nil {
-				logger.Fatal("Failed to read from STDIN: %s", err)
+				l.Fatal("Failed to read from STDIN: %s", err)
 			}
 
 			body = string(stdin[:])
@@ -126,6 +127,7 @@ var AnnotateCommand = cli.Command{
 
 		// Create the API client
 		client := agent.APIClient{
+			Logger: l,
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
 		}.Create()
@@ -151,7 +153,7 @@ var AnnotateCommand = cli.Command{
 
 			// Show the unexpected error
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			}
 
 			return err
@@ -159,9 +161,9 @@ var AnnotateCommand = cli.Command{
 
 		// Show a fatal error if we gave up trying to create the annotation
 		if err != nil {
-			logger.Fatal("Failed to annotate build: %s", err)
+			l.Fatal("Failed to annotate build: %s", err)
 		}
 
-		logger.Info("Successfully annotated build")
+		l.Info("Successfully annotated build")
 	},
 }

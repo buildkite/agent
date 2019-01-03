@@ -21,6 +21,12 @@ type AgentWorker struct {
 	// of the struct
 	lastPing, lastHeartbeat int64
 
+	// The logger instance to use
+	Logger *logger.Logger
+
+	// Whether to set debug in the job
+	Debug bool
+
 	// The API Client used when this agent is communicating with the API
 	APIClient *api.Client
 
@@ -71,6 +77,7 @@ func (a AgentWorker) Create() AgentWorker {
 	}
 
 	a.APIClient = APIClient{
+		Logger:       a.Logger,
 		Endpoint:     endpoint,
 		Token:        a.Agent.AccessToken,
 		DisableHTTP2: a.DisableHTTP2,
@@ -107,7 +114,7 @@ func (a *AgentWorker) Start() error {
 				// Get the last heartbeat time to the nearest microsecond
 				lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
 
-				logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+				a.Logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
 					err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
 			}
 
@@ -124,7 +131,7 @@ func (a *AgentWorker) Start() error {
 		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.AgentConfiguration.DisconnectAfterJobTimeout))
 		go func() {
 			<-a.disconnectTimeoutTimer.C
-			logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+			a.Logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
 
 			// Just double check that the agent isn't running a
 			// job. The timer is stopped just after this is
@@ -132,14 +139,14 @@ func (a *AgentWorker) Start() error {
 			// where in between accepting the job, and creating the
 			// `jobRunner`, the timer pops.
 			if a.jobRunner == nil && !a.stopping {
-				logger.Debug("[DisconnectionTimer] The agent isn't running a job, going to signal a stop")
+				a.Logger.Debug("[DisconnectionTimer] The agent isn't running a job, going to signal a stop")
 				a.Stop(true)
 			} else {
-				logger.Debug("[DisconnectionTimer] Agent is running a job, going to just ignore and let it finish it's work")
+				a.Logger.Debug("[DisconnectionTimer] Agent is running a job, going to just ignore and let it finish it's work")
 			}
 		}()
 
-		logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+		a.Logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 
 	// Continue this loop until the the ticker is stopped, and we received
@@ -175,27 +182,27 @@ func (a *AgentWorker) Stop(graceful bool) {
 
 	if graceful {
 		if a.stopping {
-			logger.Warn("Agent is already gracefully stopping...")
+			a.Logger.Warn("Agent is already gracefully stopping...")
 		} else {
 			// If we have a job, tell the user that we'll wait for
 			// it to finish before disconnecting
 			if a.jobRunner != nil {
-				logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
+				a.Logger.Info("Gracefully stopping agent. Waiting for current job to finish before disconnecting...")
 			} else {
-				logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+				a.Logger.Info("Gracefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 			}
 		}
 	} else {
 		// If there's a job running, kill it, then disconnect
 		if a.jobRunner != nil {
-			logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
+			a.Logger.Info("Forcefully stopping agent. The current job will be canceled before disconnecting...")
 
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
 			a.jobRunner.Cancel()
 		} else {
-			logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
+			a.Logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 		}
 	}
 
@@ -227,7 +234,7 @@ func (a *AgentWorker) Connect() error {
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.APIClient.Agents.Connect()
 		if err != nil {
-			logger.Warn("%s (%s)", err, s)
+			a.Logger.Warn("%s (%s)", err, s)
 		}
 
 		return err
@@ -243,7 +250,7 @@ func (a *AgentWorker) Heartbeat() error {
 	err = retry.Do(func(s *retry.Stats) error {
 		beat, _, err = a.APIClient.Heartbeats.Beat()
 		if err != nil {
-			logger.Warn("%s (%s)", err, s)
+			a.Logger.Warn("%s (%s)", err, s)
 		}
 		return err
 	}, &retry.Config{Maximum: 5, Interval: 5 * time.Second})
@@ -255,7 +262,7 @@ func (a *AgentWorker) Heartbeat() error {
 	// Track a timestamp for the successful heartbeat for better errors
 	atomic.StoreInt64(&a.lastHeartbeat, time.Now().Unix())
 
-	logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
+	a.Logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
 	return nil
 }
 
@@ -271,7 +278,7 @@ func (a *AgentWorker) Ping() {
 
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
-		logger.Warn("Failed to ping: %s (Last successful was %v ago)", err, time.Now().Sub(lastPing))
+		a.Logger.Warn("Failed to ping: %s (Last successful was %v ago)", err, time.Now().Sub(lastPing))
 
 		// When the ping fails, we wan't to reset our disconnection
 		// timer. It wouldnt' be very nice if we just killed the agent
@@ -280,7 +287,7 @@ func (a *AgentWorker) Ping() {
 			jobTimeoutSeconds := time.Second * time.Duration(a.AgentConfiguration.DisconnectAfterJobTimeout)
 			a.disconnectTimeoutTimer.Reset(jobTimeoutSeconds)
 
-			logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.AgentConfiguration.DisconnectAfterJobTimeout)
+			a.Logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.AgentConfiguration.DisconnectAfterJobTimeout)
 		}
 
 		return
@@ -294,10 +301,15 @@ func (a *AgentWorker) Ping() {
 		// Before switching to the new one, do a ping test to make sure it's
 		// valid. If it is, switch and carry on, otherwise ignore the switch
 		// for now.
-		newAPIClient := APIClient{Endpoint: ping.Endpoint, Token: a.Agent.AccessToken}.Create()
+		newAPIClient := APIClient{
+			Logger:   a.Logger,
+			Endpoint: ping.Endpoint,
+			Token:    a.Agent.AccessToken,
+		}.Create()
+
 		newPing, _, err := newAPIClient.Pings.Get()
 		if err != nil {
-			logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
+			a.Logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
 		} else {
 			// Replace the APIClient and process the new ping
 			a.APIClient = newAPIClient
@@ -308,7 +320,7 @@ func (a *AgentWorker) Ping() {
 
 	// Is there a message that should be shown in the logs?
 	if ping.Message != "" {
-		logger.Info(ping.Message)
+		a.Logger.Info(ping.Message)
 	}
 
 	// Should the agent disconnect?
@@ -328,7 +340,7 @@ func (a *AgentWorker) Ping() {
 	// Update the proc title
 	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(ping.Job.ID, "-")[0]))
 
-	logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
+	a.Logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
@@ -339,9 +351,9 @@ func (a *AgentWorker) Ping() {
 
 		if err != nil {
 			if api.IsRetryableError(err) {
-				logger.Warn("%s (%s)", err, s)
+				a.Logger.Warn("%s (%s)", err, s)
 			} else {
-				logger.Warn("Buildkite rejected the call to accept the job (%s)", err)
+				a.Logger.Warn("Buildkite rejected the call to accept the job (%s)", err)
 				s.Break()
 			}
 		}
@@ -351,7 +363,7 @@ func (a *AgentWorker) Ping() {
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
-		logger.Error("Failed to accept job")
+		a.Logger.Error("Failed to accept job")
 		return
 	}
 
@@ -364,6 +376,8 @@ func (a *AgentWorker) Ping() {
 
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = JobRunner{
+		Logger:             a.Logger,
+		Debug:              a.Debug,
 		Endpoint:           accepted.Endpoint,
 		Agent:              a.Agent,
 		AgentConfiguration: a.AgentConfiguration,
@@ -373,26 +387,26 @@ func (a *AgentWorker) Ping() {
 
 	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
 	if a.disconnectTimeoutTimer != nil {
-		logger.Debug("[DisconnectionTimer] A job was assigned and accepted, stopping timer...")
+		a.Logger.Debug("[DisconnectionTimer] A job was assigned and accepted, stopping timer...")
 		a.disconnectTimeoutTimer.Stop()
 	}
 
 	// Was there an error creating the job runner?
 	if err != nil {
-		logger.Error("Failed to initialize job: %s", err)
+		a.Logger.Error("Failed to initialize job: %s", err)
 		return
 	}
 
 	// Start running the job
 	if err = a.jobRunner.Run(); err != nil {
-		logger.Error("Failed to run job: %s", err)
+		a.Logger.Error("Failed to run job: %s", err)
 	}
 
 	// No more job, no more runner.
 	a.jobRunner = nil
 
 	if a.AgentConfiguration.DisconnectAfterJob {
-		logger.Info("Job finished. Disconnecting...")
+		a.Logger.Info("Job finished. Disconnecting...")
 
 		// We can just kill this timer now as well
 		if a.disconnectTimeoutTimer != nil {
@@ -412,7 +426,7 @@ func (a *AgentWorker) Disconnect() error {
 
 	_, err := a.APIClient.Agents.Disconnect()
 	if err != nil {
-		logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
+		a.Logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
 	}
 
 	return err

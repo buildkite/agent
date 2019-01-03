@@ -10,6 +10,9 @@ import (
 )
 
 type LogStreamer struct {
+	// The logger instance to use
+	Logger *logger.Logger
+
 	// How many log streamer workers are running at any one time
 	Concurrency int
 
@@ -116,7 +119,7 @@ func (ls *LogStreamer) Process(output string) error {
 			}
 
 			ls.queue <- &chunk
-			
+
 			// Save the new amount of bytes
 			ls.bytes += len(partialChunk)
 		}
@@ -129,11 +132,11 @@ func (ls *LogStreamer) Process(output string) error {
 
 // Waits for all the chunks to be uploaded, then shuts down all the workers
 func (ls *LogStreamer) Stop() error {
-	logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
+	ls.Logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
 
 	ls.chunkWaitGroup.Wait()
 
-	logger.Debug("[LogStreamer] Shutting down all workers")
+	ls.Logger.Debug("[LogStreamer] Shutting down all workers")
 
 	for n := 0; n < ls.Concurrency; n++ {
 		ls.queue <- nil
@@ -144,7 +147,7 @@ func (ls *LogStreamer) Stop() error {
 
 // The actual log streamer worker
 func Worker(id int, ls *LogStreamer) {
-	logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
+	ls.Logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
 	var chunk *LogStreamerChunk
 	for {
@@ -162,12 +165,12 @@ func Worker(id int, ls *LogStreamer) {
 		if err != nil {
 			atomic.AddInt32(&ls.ChunksFailedCount, 1)
 
-			logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
+			ls.Logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
 		}
 
 		// Signal to the chunkWaitGroup that this one is done
 		ls.chunkWaitGroup.Done()
 	}
 
-	logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
+	ls.Logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
 }

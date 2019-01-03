@@ -8,9 +8,13 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/buildkite/agent/logger"
 )
 
 type S3Downloader struct {
+	// The logger instance to use
+	Logger *logger.Logger
+
 	// The S3 bucket name and the path, e.g s3://my-bucket-name/foo/bar
 	Bucket string
 
@@ -30,7 +34,7 @@ type S3Downloader struct {
 
 func (d S3Downloader) Start() error {
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(d.BucketName())
+	s3Client, err := newS3Client(d.Logger, d.BucketName())
 	if err != nil {
 		return err
 	}
@@ -47,6 +51,7 @@ func (d S3Downloader) Start() error {
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{
+		Logger:      d.Logger,
 		Client:      *http.DefaultClient,
 		URL:         signedURL,
 		Path:        d.Path,

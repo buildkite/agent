@@ -27,6 +27,9 @@ type Process struct {
 	// Handler is called with each line of output
 	Handler func(string)
 
+	// The logger to use
+	Logger *logger.Logger
+
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
@@ -78,7 +81,7 @@ func (p *Process) Start() error {
 		waitGroup.Add(1)
 
 		go func() {
-			logger.Debug("[Process] Starting to copy PTY to the buffer")
+			p.Logger.Debug("[Process] Starting to copy PTY to the buffer")
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
@@ -92,9 +95,9 @@ func (p *Process) Start() error {
 			}
 
 			if err != nil {
-				logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
+				p.Logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				logger.Debug("[Process] PTY has finished being copied to the buffer")
+				p.Logger.Debug("[Process] PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
@@ -116,17 +119,19 @@ func (p *Process) Start() error {
 		close(p.started)
 	}
 
-	logger.Info("[Process] Process is running with PID: %d", p.Pid)
+	p.Logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
 	if p.Handler != nil {
 		// Add the scanner the waitGroup
 		waitGroup.Add(1)
 
+		scanner := &Scanner{Logger: p.Logger}
+
 		// Start the Scanner
 		go func() {
 			defer waitGroup.Done()
-			if err := ScanLines(lineReaderPipe, p.Handler); err != nil {
-				logger.Error("[Process] Scanner failed with %v", err)
+			if err := scanner.ScanLines(lineReaderPipe, p.Handler); err != nil {
+				p.Logger.Error("[Process] Scanner failed with %v", err)
 			}
 		}()
 	} else {
@@ -144,16 +149,16 @@ func (p *Process) Start() error {
 	close(p.done)
 
 	// Find the exit status of the script
-	p.ExitStatus = getExitStatus(waitResult)
+	p.ExitStatus = p.getExitStatus(waitResult)
 
-	logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	p.Logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	logger.Debug("[Process] Waiting for routines to finish")
+	p.Logger.Debug("[Process] Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
+		p.Logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
 	// No error occurred so we can return nil
@@ -190,16 +195,16 @@ func (p *Process) Interrupt() error {
 	defer p.mu.Unlock()
 
 	if p.command == nil || p.command.Process == nil {
-		logger.Debug("[Process] No process to interrupt yet")
+		p.Logger.Debug("[Process] No process to interrupt yet")
 		return nil
 	}
 
 	// interrupt the process (ctrl-c or SIGINT)
-	if err := interruptProcess(p.command.Process); err != nil {
-		logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
+	if err := interruptProcess(p.command.Process, p.Logger); err != nil {
+		p.Logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
 
 		// Fallback to terminating if we get an error
-		if termErr := terminateProcess(p.command.Process); termErr != nil {
+		if termErr := terminateProcess(p.command.Process, p.Logger); termErr != nil {
 			return termErr
 		}
 	}
@@ -213,16 +218,16 @@ func (p *Process) Terminate() error {
 	defer p.mu.Unlock()
 
 	if p.command == nil || p.command.Process == nil {
-		logger.Debug("[Process] No process to terminate yet")
+		p.Logger.Debug("[Process] No process to terminate yet")
 		return nil
 	}
 
-	return terminateProcess(p.command.Process)
+	return terminateProcess(p.command.Process, p.Logger)
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
 // TODO: Can this be better?
-func getExitStatus(waitResult error) string {
+func (p *Process) getExitStatus(waitResult error) string {
 	exitStatus := -1
 
 	if waitResult != nil {
@@ -230,10 +235,10 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				p.Logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		} else {
-			logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
+			p.Logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
 		}
 	} else {
 		exitStatus = 0

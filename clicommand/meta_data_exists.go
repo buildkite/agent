@@ -53,19 +53,22 @@ var MetaDataExistsCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataExistsConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
 		client := agent.APIClient{
+			Logger: l,
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
 		}.Create()
@@ -80,13 +83,13 @@ var MetaDataExistsCommand = cli.Command{
 				s.Break()
 			}
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			}
 
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 		if err != nil {
-			logger.Fatal("Failed to see if meta-data exists: %s", err)
+			l.Fatal("Failed to see if meta-data exists: %s", err)
 		}
 
 		// If the meta data didn't exist, exit with an error.

@@ -68,20 +68,24 @@ var ArtifactDownloadCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactDownloadConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Setup the downloader
 		downloader := agent.ArtifactDownloader{
+			Logger: l,
 			APIClient: agent.APIClient{
+				Logger:   l,
 				Endpoint: cfg.Endpoint,
 				Token:    cfg.AgentAccessToken,
 			}.Create(),
@@ -93,7 +97,7 @@ var ArtifactDownloadCommand = cli.Command{
 
 		// Download the artifacts
 		if err := downloader.Download(); err != nil {
-			logger.Fatal("Failed to download artifacts: %s", err)
+			l.Fatal("Failed to download artifacts: %s", err)
 		}
 	},
 }
