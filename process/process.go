@@ -200,11 +200,11 @@ func (p *Process) Interrupt() error {
 	}
 
 	// interrupt the process (ctrl-c or SIGINT)
-	if err := interruptProcess(p.command.Process); err != nil {
+	if err := interruptProcess(p.command.Process, p.Logger); err != nil {
 		p.Logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
 
 		// Fallback to terminating if we get an error
-		if termErr := terminateProcess(p.command.Process); termErr != nil {
+		if termErr := terminateProcess(p.command.Process, p.Logger); termErr != nil {
 			return termErr
 		}
 	}
@@ -222,7 +222,7 @@ func (p *Process) Terminate() error {
 		return nil
 	}
 
-	return terminateProcess(p.command.Process)
+	return terminateProcess(p.command.Process, p.Logger)
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29

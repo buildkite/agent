@@ -26,16 +26,16 @@ func createCommand(name string, arg ...string) *exec.Cmd {
 	return exec.Command(name, arg...)
 }
 
-func terminateProcess(p *os.Process) error {
-	logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
+func terminateProcess(p *os.Process, l *logger.Logger) error {
+	l.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
 	// anything in it's process tree.
 	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
 }
 
-func interruptProcess(p *os.Process) error {
-	logger.Debug("[Process] Interrupting process tree with TASKKILL.EXE PID: %d", p.Pid)
+func interruptProcess(p *os.Process, l *logger.Logger) error {
+	l.Debug("[Process] Interrupting process tree with TASKKILL.EXE PID: %d", p.Pid)
 
 	// taskkill.exe without the /F will use window signalling (WM_STOP, WM_QUIT) to kind
 	// of gracefull shutdown windows things that support it.

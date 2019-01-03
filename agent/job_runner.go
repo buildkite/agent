@@ -269,11 +269,11 @@ func (r *JobRunner) Cancel() error {
 	}
 
 	if r.process == nil {
-		logger.Error("No process to kill")
+		r.Logger.Error("No process to kill")
 		return nil
 	}
 
-	logger.Info("Canceling job %s with a grace period of %ds",
+	r.Logger.Info("Canceling job %s with a grace period of %ds",
 		r.Job.ID, r.AgentConfiguration.CancelGracePeriod)
 
 	// First we interrupt the process (ctrl-c or SIGINT)
@@ -284,7 +284,7 @@ func (r *JobRunner) Cancel() error {
 	select {
 	// Grace period for cancelling
 	case <-time.After(time.Second * time.Duration(r.AgentConfiguration.CancelGracePeriod)):
-		logger.Info("Job %s hasn't stopped in time, terminating", r.Job.ID)
+		r.Logger.Info("Job %s hasn't stopped in time, terminating", r.Job.ID)
 
 		// Terminate the process as we've exceeded our context
 		if err := r.process.Terminate(); err != nil {
