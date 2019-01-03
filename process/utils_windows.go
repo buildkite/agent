@@ -5,39 +5,58 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"syscall"
 
 	"github.com/buildkite/agent/logger"
 )
 
-// Windows signal handling isn't a thing unfortunately, so we are limited in what we
-// can do with gracefully terminating. Windows also doesn't have process hierarchies
-// in the same way that unix does, so killing a process doesn't have any effect on
-// the processes it spawned. We use TASKKILL.EXE with the /T flag to traverse processes
-// that have a matching ParentProcessID, but even then if a process in the middle
-// of the chain has died, we leave a heap of processes hanging around. Future improvements
-// might include using terminal groups or job groups, which are a modern windows thing
-// that might work for us.
+// Windows has no concept of parent/child processes or signals. The best we can do
+// is create processes inside a "console group" and then send break / ctrl-c events
+// to that group. This is superior to walking a process tree to kill each process
+// because that relies on each process in that chain still being active.
+
+// See https://docs.microsoft.com/en-us/windows/console/generateconsolectrlevent
+
+var (
+	libkernel32                  = syscall.MustLoadDLL("kernel32")
+	procSetConsoleCtrlHandler    = libkernel32.MustFindProc("SetConsoleCtrlHandler")
+	procGenerateConsoleCtrlEvent = libkernel32.MustFindProc("GenerateConsoleCtrlEvent")
+)
+
+const (
+	createNewProcessGroupFlag = 0x00000200
+)
 
 func StartPTY(c *exec.Cmd) (*os.File, error) {
 	return nil, errors.New("PTY is not supported on Windows")
 }
 
-func createCommand(name string, arg ...string) *exec.Cmd {
-	return exec.Command(name, arg...)
+func createCommand(cmd string, args ...string) *exec.Cmd {
+	execCmd := exec.Command(cmd, args...)
+	execCmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_UNICODE_ENVIRONMENT | createNewProcessGroupFlag,
+	}
+	return execCmd
 }
 
 func terminateProcess(p *os.Process, l *logger.Logger) error {
 	l.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
-	// anything in it's process tree.
+	// anything left in it's process tree.
 	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
 }
 
 func interruptProcess(p *os.Process, l *logger.Logger) error {
-	l.Debug("[Process] Interrupting process tree with TASKKILL.EXE PID: %d", p.Pid)
-
-	// taskkill.exe without the /F will use window signalling (WM_STOP, WM_QUIT) to kind
-	// of gracefull shutdown windows things that support it.
-	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
+	procSetConsoleCtrlHandler.Call(0, 1)
+	defer procSetConsoleCtrlHandler.Call(0, 0)
+	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
+	if r1 == 0 {
+		return err
+	}
+	r1, _, err = procGenerateConsoleCtrlEvent.Call(syscall.CTRL_C_EVENT, uintptr(p.Pid))
+	if r1 == 0 {
+		return err
+	}
+	return nil
 }

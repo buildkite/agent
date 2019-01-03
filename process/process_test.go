@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -93,10 +92,6 @@ func TestProcessCapturesOutputLineByLine(t *testing.T) {
 }
 
 func TestProcessInterrupts(t *testing.T) {
-	if runtime.GOOS == `windows` {
-		t.Skip("Not supported on windows")
-	}
-  
 	var lines []string
 	var mu sync.Mutex
 
