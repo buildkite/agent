@@ -26,19 +26,13 @@ const (
 	createNewProcessGroupFlag = 0x00000200
 )
 
-func StartPTY(c *exec.Cmd) (*os.File, error) {
-	return nil, errors.New("PTY is not supported on Windows")
-}
-
-func createCommand(cmd string, args ...string) *exec.Cmd {
-	execCmd := exec.Command(cmd, args...)
-	execCmd.SysProcAttr = &syscall.SysProcAttr{
+func SetupProcessGroup(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_UNICODE_ENVIRONMENT | createNewProcessGroupFlag,
 	}
-	return execCmd
 }
 
-func terminateProcess(p *os.Process, l *logger.Logger) error {
+func TerminateProcessGroup(p *os.Process, l *logger.Logger) error {
 	l.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
@@ -46,7 +40,7 @@ func terminateProcess(p *os.Process, l *logger.Logger) error {
 	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
 }
 
-func interruptProcess(p *os.Process, l *logger.Logger) error {
+func InterruptProcessGroup(p *os.Process, l *logger.Logger) error {
 	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
 	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
 	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
@@ -54,4 +48,8 @@ func interruptProcess(p *os.Process, l *logger.Logger) error {
 		return err
 	}
 	return nil
+}
+
+func GetPgid(pid int) (int, error) {
+	return 0, errors.New("Not implemented on Windows")
 }

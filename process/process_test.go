@@ -2,6 +2,7 @@ package process_test
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"reflect"
@@ -61,18 +62,13 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 }
 
 func TestProcessCapturesOutputLineByLine(t *testing.T) {
-	var lines []string
-	var mu sync.Mutex
+	var lines = &processLineHandler{}
 
 	p := process.Process{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester"},
-		Logger: logger.Discard,
-		Handler: func(line string) {
-			mu.Lock()
-			defer mu.Unlock()
-			lines = append(lines, line)
-		},
+		Script:  []string{os.Args[0]},
+		Env:     []string{"TEST_MAIN=tester"},
+		Logger:  logger.Discard,
+		Handler: lines.Handle,
 	}
 
 	if err := p.Start(); err != nil {
@@ -87,7 +83,7 @@ func TestProcessCapturesOutputLineByLine(t *testing.T) {
 		"and some alpacas",
 	}
 
-	if !reflect.DeepEqual(expected, lines) {
+	if !reflect.DeepEqual(expected, lines.Lines()) {
 		t.Fatalf("Unexpected lines: %v", lines)
 	}
 }
@@ -97,18 +93,13 @@ func TestProcessInterrupts(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	var lines []string
-	var mu sync.Mutex
+	var lines = &processLineHandler{}
 
 	p := process.Process{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester-signal"},
-		Logger: logger.Discard,
-		Handler: func(line string) {
-			mu.Lock()
-			defer mu.Unlock()
-			lines = append(lines, line)
-		},
+		Script:  []string{os.Args[0]},
+		Env:     []string{"TEST_MAIN=tester-signal"},
+		Logger:  logger.Discard,
+		Handler: lines.Handle,
 	}
 
 	var wg sync.WaitGroup
@@ -130,12 +121,30 @@ func TestProcessInterrupts(t *testing.T) {
 
 	wg.Wait()
 
-	mu.Lock()
-	defer mu.Unlock()
-
-	output := strings.Join(lines, "\n")
+	output := strings.Join(lines.Lines(), "\n")
 	if output != `SIG terminated` {
 		t.Fatalf("Bad output: %q", output)
+	}
+}
+
+func TestProcessSetsProcessGroupID(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Process groups not supported on windows")
+		return
+	}
+
+	p := process.Process{
+		Script: []string{os.Args[0]},
+		Env:    []string{"TEST_MAIN=tester-pgid"},
+		Logger: logger.Discard,
+	}
+
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	if p.ExitStatus != "0" {
+		t.Fatalf("Expected ExitStatus to be 0, got %s", p.ExitStatus)
 	}
 }
 
@@ -158,7 +167,36 @@ func TestMain(m *testing.M) {
 		fmt.Printf("SIG %v", <-signals)
 		os.Exit(0)
 
+	case "tester-pgid":
+		pid := syscall.Getpid()
+		pgid, err := process.GetPgid(pid)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if pgid != pid {
+			log.Fatalf("Bad pgid, expected %d, got %d", pid, pgid)
+		}
+		fmt.Printf("pid %d == pgid %d", pid, pgid)
+		os.Exit(0)
+
 	default:
 		os.Exit(m.Run())
 	}
+}
+
+type processLineHandler struct {
+	lines []string
+	sync.Mutex
+}
+
+func (p *processLineHandler) Handle(line string) {
+	p.Lock()
+	defer p.Unlock()
+	p.lines = append(p.lines, line)
+}
+
+func (p *processLineHandler) Lines() []string {
+	p.Lock()
+	defer p.Unlock()
+	return p.lines
 }

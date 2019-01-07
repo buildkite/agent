@@ -7,11 +7,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -54,6 +54,10 @@ type Shell struct {
 
 	// The context for the shell
 	ctx context.Context
+
+	// Currently running command
+	cmd     *command
+	cmdLock sync.Mutex
 }
 
 // New returns a new Shell
@@ -125,6 +129,16 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	// Since the path returned by LookPath is relative to the current working
 	// directory, we need to get the absolute version of that.
 	return filepath.Abs(absolutePath)
+}
+
+// Cancel cancels any running sub-processes
+func (s *Shell) Cancel() {
+	s.cmdLock.Lock()
+	defer s.cmdLock.Unlock()
+
+	if s.cmd != nil {
+		s.cmd.cancel()
+	}
 }
 
 // LockFile is a pid-based lock for cross-process locking
@@ -273,15 +287,23 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	})
 }
 
-// buildCommand returns an exec.Cmd that runs in the context of the shell
-func (s *Shell) buildCommand(name string, arg ...string) (*exec.Cmd, error) {
+type command struct {
+	*exec.Cmd
+	cancel context.CancelFunc
+}
+
+// buildCommand returns a command that runs in the context of the shell
+func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 	// Always use absolute path as Windows has a hard time finding executables in it's path
 	absPath, err := s.AbsolutePath(name)
 	if err != nil {
 		return nil, err
 	}
 
-	cmd := exec.Command(absPath, arg...)
+	// Create a sub-context so that shell.Cancel() can interrupt a running command
+	subctx, cancel := context.WithCancel(s.ctx)
+	cmd := exec.CommandContext(subctx, absPath, arg...)
+
 	cmd.Env = s.Env.ToSlice()
 	cmd.Dir = s.wd
 
@@ -290,7 +312,7 @@ func (s *Shell) buildCommand(name string, arg ...string) (*exec.Cmd, error) {
 		`PWD=`+s.wd,
 	)
 
-	return cmd, nil
+	return &command{Cmd: cmd, cancel: cancel}, nil
 }
 
 type executeFlags struct {
@@ -304,23 +326,10 @@ type executeFlags struct {
 	PTY bool
 }
 
-func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) error {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt,
-		syscall.SIGHUP,
-		syscall.SIGTERM,
-		syscall.SIGINT,
-		syscall.SIGQUIT)
-	defer signal.Stop(signals)
-
-	go func() {
-		// forward signals to the process
-		for sig := range signals {
-			if err := signalProcess(cmd, sig); err != nil {
-				s.Errorf("Error passing signal to child process: %v", err)
-			}
-		}
-	}()
+func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) error {
+	s.cmdLock.Lock()
+	s.cmd = cmd
+	s.cmdLock.Unlock()
 
 	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
 
@@ -331,10 +340,15 @@ func (s *Shell) executeCommand(cmd *exec.Cmd, w io.Writer, flags executeFlags) e
 		}()
 	}
 
+	// Must cancel the context regardless of outcome
+	defer func() {
+		cmd.cancel()
+	}()
+
 	if flags.PTY {
-		pty, err := process.StartPTY(cmd)
+		pty, err := process.StartPTY(cmd.Cmd)
 		if err != nil {
-			return fmt.Errorf("Error starting PTY: %v", err)
+			return errors.Wrapf(err, "Error starting PTY")
 		}
 
 		// Copy the pty to our buffer. This will block until it EOF's
@@ -400,6 +414,20 @@ func GetExitCode(err error) int {
 		}
 	}
 	return 1
+}
+
+// IsExitSignaled returns true if the error is an ExitError that was
+// caused by receiving a signal
+func IsExitSignaled(err error) bool {
+	if err == nil {
+		return false
+	}
+	if exitErr, ok := errors.Cause(err).(*exec.ExitError); ok {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
+			return status.Signaled()
+		}
+	}
+	return false
 }
 
 func IsExitError(err error) bool {
