@@ -1,8 +1,11 @@
 package clicommand
 
 import (
+	"context"
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
@@ -287,9 +290,13 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		// Configure the bootstraper
 		bootstrap := &bootstrap.Bootstrap{
-			Phases: cfg.Phases,
+			Context: ctx,
+			Phases:  cfg.Phases,
 			Config: bootstrap.Config{
 				Command:                      cfg.Command,
 				JobID:                        cfg.JobID,
@@ -324,6 +331,20 @@ var BootstrapCommand = cli.Command{
 				Shell:                        cfg.Shell,
 			},
 		}
+
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt,
+			syscall.SIGHUP,
+			syscall.SIGTERM,
+			syscall.SIGINT,
+			syscall.SIGQUIT)
+		defer signal.Stop(signals)
+
+		go func() {
+			for _ = range signals {
+				bootstrap.Cancel()
+			}
+		}()
 
 		// Run the bootstrap and exit with whatever it returns
 		os.Exit(bootstrap.Start())

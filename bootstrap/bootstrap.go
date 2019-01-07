@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"encoding/json"
+	"context"
 
 	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
@@ -27,6 +28,9 @@ import (
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
 // Golang for portability and testability
 type Bootstrap struct {
+	// Context is the execution context of the bootstrap
+	Context context.Context
+
 	// Config provides the bootstrap configuration
 	Config
 
@@ -51,7 +55,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
-		b.shell, err = shell.New()
+		b.shell, err = shell.NewWithContext(b.Context)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -131,6 +135,13 @@ func (b *Bootstrap) Start() (exitCode int) {
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
+}
+
+// Cancel interrupts any running shell processes and causes the bootstrap to stop
+func (b *Bootstrap) Cancel() error {
+	b.shell.Commentf("Received cancellation signal")
+	b.shell.Cancel()
+	return nil
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -825,6 +836,10 @@ func (b *Bootstrap) CheckoutPhase() error {
 				b.shell.Warningf("Checkout was interrupted by a signal")
 				s.Break()
 
+			case errors.Cause(err) == context.Canceled:
+				b.shell.Warningf("Checkout was cancelled")
+				s.Break()
+
 			default:
 				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 
@@ -835,6 +850,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 				// allow the agent to self-heal
 				_ = b.removeCheckoutDir()
 			}
+
 			return err
 		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
 		if err != nil {
@@ -1089,7 +1105,11 @@ func (b *Bootstrap) CommandPhase() error {
 	// (which is returned when the command is actually run, but fails),
 	// then we'll show it in the log.
 	if shell.IsExitError(commandExitError) {
-		b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+		if shell.IsExitSignaled(commandExitError) {
+			b.shell.Errorf("The command was interrupted by a signal")
+		} else {
+			b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+		}
 	} else if commandExitError != nil {
 		b.shell.Errorf(commandExitError.Error())
 	}
