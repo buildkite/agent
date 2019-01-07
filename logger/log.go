@@ -28,8 +28,7 @@ const (
 )
 
 var (
-	mutex  = sync.Mutex{}
-	colors bool
+	mutex = sync.Mutex{}
 )
 
 type Logger struct {
@@ -43,24 +42,20 @@ type Logger struct {
 func NewLogger() *Logger {
 	return &Logger{
 		Level:  DEBUG,
-		Colors: true,
+		Colors: ColorsAvailable(),
 		Writer: os.Stderr,
 	}
 }
 
-func SetColors(b bool) {
-	colors = b
-}
-
-func ColorsEnabled() bool {
+func ColorsAvailable() bool {
+	// Boo, no colors on Windows.
 	if runtime.GOOS == "windows" {
-		// Boo, no colors on Windows.
 		return false
 	}
 
 	// Colors can only be shown if STDOUT is a terminal
 	if terminal.IsTerminal(int(os.Stdout.Fd())) {
-		return colors
+		return true
 	}
 
 	return false

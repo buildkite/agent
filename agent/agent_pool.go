@@ -34,6 +34,7 @@ type AgentPool struct {
 	Endpoint              string
 	Debug                 bool
 	DisableHTTP2          bool
+	DisableColors         bool
 	AgentConfiguration    *AgentConfiguration
 	MetricsCollector      *metrics.Collector
 	Spawn                 int
@@ -318,8 +319,8 @@ func (r *AgentPool) ShowBanner() {
 			"                                                __/ |\n" +
 			" http://buildkite.com/agent                    |___/\n%s\n"
 
-	if logger.ColorsEnabled() {
-		fmt.Fprintf(os.Stderr, welcomeMessage, "\x1b[32m", "\x1b[0m")
+	if !r.DisableColors {
+		fmt.Fprintf(os.Stderr, welcomeMessage, "\x1b[38;5;48m", "\x1b[0m")
 	} else {
 		fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
 	}

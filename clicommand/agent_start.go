@@ -427,6 +427,7 @@ var AgentStartCommand = cli.Command{
 			Endpoint:              cfg.Endpoint,
 			Debug:                 cfg.Debug,
 			DisableHTTP2:          cfg.NoHTTP2,
+			DisableColors:         cfg.NoColor,
 			Spawn:                 cfg.Spawn,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
