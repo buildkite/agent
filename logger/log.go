@@ -28,7 +28,8 @@ const (
 )
 
 var (
-	mutex = sync.Mutex{}
+	mutex         = sync.Mutex{}
+	windowsColors bool
 )
 
 type Logger struct {
