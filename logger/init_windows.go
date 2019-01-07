@@ -3,18 +3,29 @@
 package logger
 
 import (
+	"fmt"
 	"os"
 
 	"golang.org/x/sys/windows"
 )
 
-// Recent windows versions support ANSI color output if we enable them
+// Windows 10 Build 16257 added support for ANSI color output if we enable them
 
 func init() {
+	var mode uint32
 	stdout := windows.Handle(os.Stdout.Fd())
 
-	err := windows.SetConsoleMode(stdout, windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING|windows.ENABLE_PROCESSED_OUTPUT|windows.ENABLE_WRAP_AT_EOL_OUTPUT)
-	if err == nil {
+	if err := windows.GetConsoleMode(stdout, &mode); err != nil {
+		fmt.Printf("Error getting console mode: %v\n", err)
+		return
+	}
+
+	// See https://docs.microsoft.com/en-us/windows/console/getconsolemode
+	mode = mode | windows.ENABLE_VIRTUAL_TERMINAL_PROCESSING
+
+	if err := windows.SetConsoleMode(stdout, mode); err == nil {
 		windowsColors = true
+	} else {
+		fmt.Printf("Error setting console mode: %v\n", err)
 	}
 }
