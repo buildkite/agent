@@ -28,3 +28,7 @@ func InterruptProcessGroup(p *os.Process, l *logger.Logger) error {
 	// TODO: this should be SIGINT, but will be a breaking change
 	return syscall.Kill(-p.Pid, syscall.SIGTERM)
 }
+
+func GetPgid(pid int) (int, error) {
+	return syscall.Getpgid(pid)
+}

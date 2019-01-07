@@ -1,6 +1,7 @@
 package process
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -47,4 +48,8 @@ func InterruptProcessGroup(p *os.Process, l *logger.Logger) error {
 		return err
 	}
 	return nil
+}
+
+func GetPgid(pid int) (int, error) {
+	return 0, errors.New("Not implemented on Windows")
 }

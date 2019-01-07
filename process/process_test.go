@@ -169,7 +169,7 @@ func TestMain(m *testing.M) {
 
 	case "tester-pgid":
 		pid := syscall.Getpid()
-		pgid, err := syscall.Getpgid(pid)
+		pgid, err := process.GetPgid(pid)
 		if err != nil {
 			log.Fatal(err)
 		}
