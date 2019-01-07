@@ -41,8 +41,14 @@ func (p *Process) Start() error {
 		return fmt.Errorf("Process is already running")
 	}
 
-	// Create a command with platform specific options
-	p.command = createCommand(p.Script[0], p.Script[1:]...)
+	// Create a command
+	p.command = exec.Command(p.Script[0], p.Script[1:]...)
+
+	// Setup the process to create a process group if supported
+	// See https://github.com/kr/pty/issues/35 for context
+	if !p.PTY {
+		SetupProcessGroup(p.command)
+	}
 
 	// Create channels for signalling started and done
 	p.mu.Lock()
@@ -200,11 +206,11 @@ func (p *Process) Interrupt() error {
 	}
 
 	// interrupt the process (ctrl-c or SIGINT)
-	if err := interruptProcess(p.command.Process, p.Logger); err != nil {
+	if err := InterruptProcessGroup(p.command.Process, p.Logger); err != nil {
 		p.Logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
 
 		// Fallback to terminating if we get an error
-		if termErr := terminateProcess(p.command.Process, p.Logger); termErr != nil {
+		if termErr := TerminateProcessGroup(p.command.Process, p.Logger); termErr != nil {
 			return termErr
 		}
 	}
@@ -222,7 +228,7 @@ func (p *Process) Terminate() error {
 		return nil
 	}
 
-	return terminateProcess(p.command.Process, p.Logger)
+	return TerminateProcessGroup(p.command.Process, p.Logger)
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
