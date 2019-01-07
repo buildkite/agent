@@ -49,8 +49,8 @@ func NewLogger() *Logger {
 }
 
 func ColorsAvailable() bool {
-	// Boo, no colors on Windows.
-	if runtime.GOOS == "windows" {
+	// Color support for windows is set in init
+	if runtime.GOOS == "windows" && !windowsColors {
 		return false
 	}
 
