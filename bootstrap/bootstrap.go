@@ -886,6 +886,14 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		return err
 	}
 
+	// Try and lock the directory in-case any processes remain using the directory
+	// from previous cancelled builds (looking at you windows)
+	checkoutLock, err := b.shell.LockFile(b.shell.Getwd(), time.Second * 20)
+	if err != nil {
+		return fmt.Errorf("Unable to acquire lock on checkout dir: %v", err)
+	}
+	defer checkoutLock.Unlock()
+
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
