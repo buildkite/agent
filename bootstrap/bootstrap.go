@@ -888,7 +888,10 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 
 	// Try and lock the directory in-case any processes remain using the directory
 	// from previous cancelled builds (looking at you windows)
-	checkoutLock, err := b.shell.LockFile(b.shell.Getwd(), time.Second * 20)
+	lf := b.shell.Getwd() + `.lock`
+	b.shell.Commentf("Acquiring checkout lock on %s", lf)
+
+	checkoutLock, err := b.shell.LockFile(lf, time.Second * 20)
 	if err != nil {
 		return fmt.Errorf("Unable to acquire lock on checkout dir: %v", err)
 	}
