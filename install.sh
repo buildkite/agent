@@ -39,6 +39,7 @@ else
     *x86_64*)  ARCH="amd64"   ;;
     *armv8*)   ARCH="arm64"   ;;
     *armv7*)   ARCH="armhf"   ;;
+    *armv6l*)  ARCH="arm"     ;;
     *armv6*)   ARCH="armhf"   ;;
     *arm*)     ARCH="arm"     ;;
     *ppc64le*) ARCH="ppc64le" ;;
