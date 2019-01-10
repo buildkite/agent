@@ -343,7 +343,9 @@ var BootstrapCommand = cli.Command{
 
 		var cancelled uint32
 
+		// Listen for signals in the background
 		go func() {
+			// When we get a signal, we cancel the bootstrap
 			for _ = range signals {
 				bootstrap.Cancel()
 				atomic.StoreUint32(&cancelled, 1)
@@ -354,12 +356,18 @@ var BootstrapCommand = cli.Command{
 		exitCode := bootstrap.Start()
 
 		// Cancelled with a non-zero should terminate ourselves so that
-		// the parent process gets a -1 exit code
+		// the parent process gets a -1 exit code. This seems kind of weird,
+		// but it's what bash does, so I guess that means it's the shell-ish
+		// way to do things?
 		if atomic.LoadUint32(&cancelled) == 1 {
 			p, err := os.FindProcess(os.Getpid())
 			if err != nil {
 				l.Error("Failed to find current process: %v", err)
 			}
+
+			// Remove our signal handler
+			signal.Stop(signals)
+
 			l.Debug("Terminating bootstrap after cancellation")
 			err = p.Signal(syscall.SIGKILL)
 			if err != nil {
