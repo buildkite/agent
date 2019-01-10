@@ -44,7 +44,11 @@ func (a *ArtifactDownloader) Download() error {
 	}
 
 	// Find the artifacts that we want to download
-	searcher := ArtifactSearcher{BuildID: a.BuildID, APIClient: a.APIClient}
+	searcher := ArtifactSearcher{
+		Logger:    a.Logger,
+		BuildID:   a.BuildID,
+		APIClient: a.APIClient,
+	}
 	artifacts, err := searcher.Search(a.Query, a.Step)
 	if err != nil {
 		return err
