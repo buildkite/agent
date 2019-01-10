@@ -149,6 +149,32 @@ func parseGittableURL(ref string) (*url.URL, error) {
 // https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
 var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
 
-func stripAliasesFromGitHost(host string) string {
+func resolveGitHost(host string) string {
+	// ask SSH to print its configuration for this host, honouring .ssh/config
+	output, err := sh.RunAndCapture("ssh", "-G", host)
+
+	// if we got no error, let's process the output
+	if (err == nil) {
+		// split up the ssh -G output
+		lines := strings.Split(output, "\n")
+
+		// search the ssh -G output for a "hostname" line
+		for _, line := range lines {
+			tokens := strings.SplitN(line, " ", 2)
+
+			// skip any line which isn't a key-value pair
+			if len(tokens) != 2 {
+				break
+			}
+
+			if tokens[0] == "hostname" {
+				return tokens[1]
+			}
+		}
+	}
+
+	// if we got here, either the `-G` flag is unsupported, or ssh -G
+	// didn't return a value for hostname (weird!),
+	// so we fall back to the old behaviour of just replacing strings
 	return gitHostAliasRegexp.ReplaceAllString(host, "")
 }

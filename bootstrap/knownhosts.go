@@ -142,7 +142,7 @@ func (kh *knownHosts) AddFromRepository(repository string) error {
 		return nil
 	}
 
-	host := stripAliasesFromGitHost(u.Host)
+	host := resolveGitHost(u.Host)
 
 	if err = kh.Add(host); err != nil {
 		return errors.Wrapf(err, "Failed to add `%s` to known_hosts file `%s`", host, u)

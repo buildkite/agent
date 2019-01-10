@@ -64,9 +64,9 @@ func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
 	assert.Equal(t, `git.host.de:4019`, u.Host)
 }
 
-func TestStrippingGitHostAliases(t *testing.T) {
+func TestResolvingGitHostAliases(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "github.com", stripAliasesFromGitHost("github.com-alias1"))
-	assert.Equal(t, "blargh-no-alias.com", stripAliasesFromGitHost("blargh-no-alias.com"))
+	assert.Equal(t, "github.com", resolveGitHost("github.com-alias1"))
+	assert.Equal(t, "blargh-no-alias.com", resolveGitHost("blargh-no-alias.com"))
 }
