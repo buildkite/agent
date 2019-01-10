@@ -150,6 +150,9 @@ func parseGittableURL(ref string) (*url.URL, error) {
 var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
 
 func resolveGitHost(sh *shell.Shell, host string) string {
+	var hostname string
+	var port string
+
 	// ask SSH to print its configuration for this host, honouring .ssh/config
 	output, err := sh.RunAndCapture("ssh", "-G", host)
 
@@ -158,7 +161,7 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 		// split up the ssh -G output
 		lines := strings.Split(output, "\n")
 
-		// search the ssh -G output for a "hostname" line
+		// search the ssh -G output for "hostname" and "port" lines
 		for _, line := range lines {
 			tokens := strings.SplitN(line, " ", 2)
 
@@ -167,13 +170,32 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 				break
 			}
 
+			// grab the values we care about
 			if tokens[0] == "hostname" {
-				return tokens[1]
+				hostname = tokens[1]
+			} else if tokens[0] == "port" {
+				port = tokens[1]
+			}
+
+			// if we have both values, we're done here!
+			if hostname != "" && port != "" {
+				break
 			}
 		}
 	}
 
-	// if we got here, either the `-G` flag is unsupported, or ssh -G
+	// if we got out of that with a hostname, things worked
+	if hostname != "" {
+		// if the port is the default, we can leave it off
+		if port == "22" {
+			return hostname
+		}
+
+		// otherwise, output it in hostname:port form
+		return fmt.Sprintf("%s:%s", hostname, port)
+	}
+
+	// if we got here, either the `-G` flag was unsupported, or ssh -G
 	// didn't return a value for hostname (weird!),
 	// so we fall back to the old behaviour of just replacing strings
 	return gitHostAliasRegexp.ReplaceAllString(host, "")
