@@ -452,6 +452,7 @@ var AgentStartCommand = cli.Command{
 			MetricsCollector: &metrics.Collector{
 				Datadog:     cfg.MetricsDatadog,
 				DatadogHost: cfg.MetricsDatadogHost,
+				Logger:      l,
 			},
 		}
 
