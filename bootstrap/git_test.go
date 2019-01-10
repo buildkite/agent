@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"testing"
 
+	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -67,6 +68,13 @@ func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
 func TestResolvingGitHostAliases(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "github.com", resolveGitHost("github.com-alias1"))
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost("blargh-no-alias.com"))
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sh.Logger = shell.TestingLogger{t}
+
+	assert.Equal(t, "github.com", resolveGitHost(sh, "github.com-alias1"))
+	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
 }
