@@ -16,7 +16,6 @@ func init() {
 	stdout := windows.Handle(os.Stdout.Fd())
 
 	if err := windows.GetConsoleMode(stdout, &mode); err != nil {
-		fmt.Printf("Error getting console mode: %v\n", err)
 		return
 	}
 
