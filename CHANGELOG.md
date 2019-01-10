@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.8.0](https://github.com/buildkite/agent/tree/v3.8.0) (2019-01-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.7.0...v3.8.0)
+
+### Fixed
+- Support absolute paths on Windows for config [#881](https://github.com/buildkite/agent/pull/881) (@petemounce)
+
+### Changed
+- Show log output colors on Windows 10+ [#885](https://github.com/buildkite/agent/pull/885) (@lox)
+- Better cancel signal handling and error messages in output [#860](https://github.com/buildkite/agent/pull/860) (@lox)
+- Use windows console groups for process management [#879](https://github.com/buildkite/agent/pull/879) (@lox)
+- Support vendored plugins [#878](https://github.com/buildkite/agent/pull/878) (@lox)
+- Show agent name in logger output [#880](https://github.com/buildkite/agent/pull/880) (@lox)
+- Change git-clean-flags to cleanup submodules [#875](https://github.com/buildkite/agent/pull/875) (@lox)
+
 ## [v3.7.0](https://github.com/buildkite/agent/tree/v3.7.0) (2018-12-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.6.1...v3.7.0)
 
