@@ -149,7 +149,7 @@ func parseGittableURL(ref string) (*url.URL, error) {
 // https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
 var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
 
-func resolveGitHost(host string) string {
+func resolveGitHost(sh *shell.Shell, host string) string {
 	// ask SSH to print its configuration for this host, honouring .ssh/config
 	output, err := sh.RunAndCapture("ssh", "-G", host)
 
