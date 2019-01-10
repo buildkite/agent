@@ -1,9 +1,10 @@
 package bootstrap
 
 import (
+	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/bintest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,16 +66,44 @@ func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
 	assert.Equal(t, `git.host.de:4019`, u.Host)
 }
 
-func TestResolvingGitHostAliases(t *testing.T) {
+func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
 	t.Parallel()
 
-	sh, err := shell.New()
+	sh := newTestShell(t)
+
+	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer ssh.CheckAndClose(t)
 
-	sh.Logger = shell.TestingLogger{t}
+	sh.Env.Set("PATH", filepath.Dir(ssh.Path))
+
+	ssh.
+		Expect("-G", "github.com-alias1").
+		AndWriteToStderr(`ssh: illegal option -- G
+usage: ssh [-46AaCfGgKkMNnqsTtVvXxYy] [-B bind_interface]
+           [-b bind_address] [-c cipher_spec] [-D [bind_address:]port]
+           [-E log_file] [-e escape_char] [-F configfile] [-I pkcs11]
+           [-i identity_file] [-J [user@]host[:port]] [-L address]
+           [-l login_name] [-m mac_spec] [-O ctl_cmd] [-o option] [-p port]
+           [-Q query_option] [-R address] [-S ctl_path] [-W host:port]
+           [-w local_tun[:remote_tun]] destination [command]`).
+		AndExitWith(255)
 
 	assert.Equal(t, "github.com", resolveGitHost(sh, "github.com-alias1"))
+
+	ssh.
+		Expect("-G", "blargh-no-alias.com").
+		AndWriteToStderr(`ssh: illegal option -- G
+usage: ssh [-46AaCfGgKkMNnqsTtVvXxYy] [-B bind_interface]
+           [-b bind_address] [-c cipher_spec] [-D [bind_address:]port]
+           [-E log_file] [-e escape_char] [-F configfile] [-I pkcs11]
+           [-i identity_file] [-J [user@]host[:port]] [-L address]
+           [-l login_name] [-m mac_spec] [-O ctl_cmd] [-o option] [-p port]
+           [-Q query_option] [-R address] [-S ctl_path] [-W host:port]
+           [-w local_tun[:remote_tun]] destination [command]`).
+		AndExitWith(255)
+
 	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
 }
