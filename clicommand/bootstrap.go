@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/buildkite/agent/bootstrap"
@@ -340,13 +341,32 @@ var BootstrapCommand = cli.Command{
 			syscall.SIGQUIT)
 		defer signal.Stop(signals)
 
+		var cancelled uint32
+
 		go func() {
 			for _ = range signals {
 				bootstrap.Cancel()
+				atomic.StoreUint32(&cancelled, 1)
 			}
 		}()
 
-		// Run the bootstrap and exit with whatever it returns
-		os.Exit(bootstrap.Start())
+		// Run the bootstrap and get the exit code
+		exitCode := bootstrap.Start()
+
+		// Cancelled with a non-zero should terminate ourselves so that
+		// the parent process gets a -1 exit code
+		if atomic.LoadUint32(&cancelled) == 1 {
+			p, err := os.FindProcess(os.Getpid())
+			if err != nil {
+				l.Error("Failed to find current process: %v", err)
+			}
+			l.Debug("Terminating bootstrap after cancellation")
+			err = p.Signal(syscall.SIGKILL)
+			if err != nil {
+				l.Error("Failed to signal self: %v", err)
+			}
+		}
+
+		os.Exit(exitCode)
 	},
 }
