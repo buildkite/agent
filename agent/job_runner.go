@@ -96,11 +96,10 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
-	runner.logStreamer = LogStreamer{
-		Logger:            r.Logger,
+	runner.logStreamer = NewLogStreamer(r.Logger, r.onUploadChunk, LogStreamerConfig{
+		Concurrency: 3,
 		MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, 
-		Callback:          r.onUploadChunk,
-	}.New()
+	})
 
 	// Start a proxy to give to the job for api operations
 	if experiments.IsEnabled("agent-socket") {
@@ -207,8 +206,8 @@ func (r *JobRunner) Run() error {
 	r.logStreamer.Stop()
 
 	// Warn about failed chunks
-	if r.logStreamer.ChunksFailedCount > 0 {
-		r.Logger.Warn("%d chunks failed to upload for this job", r.logStreamer.ChunksFailedCount)
+	if count := r.logStreamer.FailedChunks(); count > 0{
+		r.Logger.Warn("%d chunks failed to upload for this job", count)
 	}
 
 	// Wait for the routines that we spun up to finish
@@ -248,7 +247,7 @@ func (r *JobRunner) Run() error {
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, r.process.ExitStatus, int(r.logStreamer.ChunksFailedCount))
+	r.finishJob(finishedAt, r.process.ExitStatus, r.logStreamer.FailedChunks())
 
 	r.Logger.Info("Finished job %s", r.Job.ID)
 
