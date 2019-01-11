@@ -11,10 +11,7 @@ import (
 	storage "google.golang.org/api/storage/v1"
 )
 
-type GSDownloader struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
+type GSDownloaderConfig struct {
 	// The name of the bucket
 	Bucket string
 
@@ -32,6 +29,21 @@ type GSDownloader struct {
 	DebugHTTP bool
 }
 
+type GSDownloader struct {
+	// The config for the downloader
+	conf GSDownloaderConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+}
+
+func NewGSDownloader(l *logger.Logger, c GSDownloaderConfig) *GSDownloader {
+	return &GSDownloader{
+		logger: l,
+		conf:   c,
+	}
+}
+
 func (d GSDownloader) Start() error {
 	client, err := google.DefaultClient(context.Background(), storage.DevstorageReadOnlyScope)
 	if err != nil {
@@ -42,21 +54,21 @@ func (d GSDownloader) Start() error {
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{
-		Logger:      d.Logger,
+		Logger:      d.logger,
 		Client:      *client,
 		URL:         url,
-		Path:        d.Path,
-		Destination: d.Destination,
-		Retries:     d.Retries,
-		DebugHTTP:   d.DebugHTTP,
+		Path:        d.conf.Path,
+		Destination: d.conf.Destination,
+		Retries:     d.conf.Retries,
+		DebugHTTP:   d.conf.DebugHTTP,
 	}.Start()
 }
 
 func (d GSDownloader) BucketFileLocation() string {
 	if d.BucketPath() != "" {
-		return strings.TrimSuffix(d.BucketPath(), "/") + "/" + strings.TrimPrefix(d.Path, "/")
+		return strings.TrimSuffix(d.BucketPath(), "/") + "/" + strings.TrimPrefix(d.conf.Path, "/")
 	} else {
-		return d.Path
+		return d.conf.Path
 	}
 }
 
@@ -69,7 +81,7 @@ func (d GSDownloader) BucketName() string {
 }
 
 func (d GSDownloader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(d.Bucket, "gs://")
+	trimmed := strings.TrimPrefix(d.conf.Bucket, "gs://")
 
 	return strings.Split(trimmed, "/")
 }

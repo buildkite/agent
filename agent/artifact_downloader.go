@@ -92,14 +92,14 @@ func (a *ArtifactDownloader) Download() error {
 						DebugHTTP:   a.apiClient.DebugHTTP,
 					}.Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
-					err = GSDownloader{
-						Logger:      a.logger,
+					gsd := NewGSDownloader(a.logger, GSDownloaderConfig{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.apiClient.DebugHTTP,
-					}.Start()
+					})
+					err = gsd.Start()
 				} else {
 					err = Download{
 						Logger:      a.logger,
