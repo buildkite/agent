@@ -58,7 +58,7 @@ type JobRunner struct {
 	lineBuffer *process.LineBuffer
 
 	// The internal header time streamer
-	headerTimesStreamer *HeaderTimesStreamer
+	headerTimesStreamer *headerTimesStreamer
 
 	// The internal log streamer
 	logStreamer *LogStreamer
@@ -92,10 +92,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.APIProxy = NewAPIProxy(r.Logger, r.Endpoint, r.Agent.AccessToken)
 
 	// Create our header times struct
-	runner.headerTimesStreamer = &HeaderTimesStreamer{
-		Logger:         r.Logger,
-		UploadCallback: r.onUploadHeaderTime,
-	}
+	runner.headerTimesStreamer = newHeaderTimesStreamer(r.Logger, r.onUploadHeaderTime)
 
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
