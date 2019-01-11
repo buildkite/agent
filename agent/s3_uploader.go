@@ -15,37 +15,59 @@ import (
 	"github.com/buildkite/agent/mime"
 )
 
-type S3Uploader struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
+type S3UploaderConfig struct {
 	// The destination which includes the S3 bucket name and the path.
 	// e.g s3://my-bucket-name/foo/bar
 	Destination string
 
 	// Whether or not HTTP calls should be debugged
 	DebugHTTP bool
+}
+
+type S3Uploader struct {
+	// The configuration
+	conf S3UploaderConfig
+
+	// The logger instance to use
+	logger *logger.Logger
 
 	// The aws s3 client
 	s3Client *s3.S3
+
+	// The s3 bucket path
+	s3BucketPath string
+
+	// The s3 bucket name
+	s3BucketName string
 }
 
-func (u *S3Uploader) Setup(destination string, debugHTTP bool) error {
-	u.Destination = destination
-	u.DebugHTTP = debugHTTP
+func NewS3Uploader(l *logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
+	s3BucketName, s3BucketPath := parseS3Destination(c.Destination)
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(u.Logger, u.BucketName())
+	s3Client, err := newS3Client(l, s3BucketName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	u.s3Client = s3Client
-	return nil
+	return &S3Uploader{
+		logger: l,
+		conf: c,
+		s3Client: s3Client,
+		s3BucketName: s3BucketName,
+		s3BucketPath: s3BucketPath,
+	}, nil
+}
+
+func parseS3Destination(destination string) (name string, path string) {
+	parts := strings.Split(strings.TrimPrefix(string(destination), "s3://"), "/")
+	path = strings.Join(parts[1:len(parts)], "/")
+	name = parts[0]
+	return
 }
 
 func (u *S3Uploader) URL(artifact *api.Artifact) string {
-	baseUrl := "https://" + u.BucketName() + ".s3.amazonaws.com"
+	baseUrl := "https://" + u.s3BucketName + ".s3.amazonaws.com"
 
 	if os.Getenv("BUILDKITE_S3_ACCESS_URL") != "" {
 		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
@@ -77,7 +99,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	}
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(u.Logger, u.BucketName())
+	s3Client, err := newS3Client(u.logger, u.s3BucketName)
 	if err != nil {
 		return err
 	}
@@ -86,16 +108,16 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	uploader := s3manager.NewUploaderWithClient(s3Client)
 
 	// Open file from filesystem
-	u.Logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
+	u.logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)
 	f, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
 		return fmt.Errorf("failed to open file %q (%v)", artifact.AbsolutePath, err)
 	}
 
 	// Upload the file to S3.
-	u.Logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
+	u.logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
 	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket:      aws.String(u.BucketName()),
+		Bucket:      aws.String(u.s3BucketName),
 		Key:         aws.String(u.artifactPath(artifact)),
 		ContentType: aws.String(u.mimeType(artifact)),
 		ACL:         aws.String(permission),
@@ -106,23 +128,9 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath(), artifact.Path}
+	parts := []string{u.s3BucketPath, artifact.Path}
 
 	return strings.Join(parts, "/")
-}
-
-func (u *S3Uploader) BucketPath() string {
-	return strings.Join(u.destinationParts()[1:len(u.destinationParts())], "/")
-}
-
-func (u *S3Uploader) BucketName() string {
-	return u.destinationParts()[0]
-}
-
-func (u *S3Uploader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(u.Destination, "s3://")
-
-	return strings.Split(trimmed, "/")
 }
 
 func (u *S3Uploader) mimeType(a *api.Artifact) string {

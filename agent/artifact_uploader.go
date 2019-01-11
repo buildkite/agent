@@ -175,9 +175,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	// Determine what uploader to use
 	if a.Destination != "" {
 		if strings.HasPrefix(a.Destination, "s3://") {
-			uploader = &S3Uploader{
-				Logger: a.Logger,
-			}
+			uploader, err = NewS3Uploader(a.Logger, S3UploaderConfig{
+				Destination: a.Destination,
+				DebugHTTP:   a.APIClient.DebugHTTP,
+			})
 		} else if strings.HasPrefix(a.Destination, "gs://") {
 			uploader, err = NewGSUploader(a.Logger, GSUploaderConfig{
 				Destination: a.Destination,
