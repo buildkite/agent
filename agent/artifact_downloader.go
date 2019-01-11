@@ -84,32 +84,29 @@ func (a *ArtifactDownloader) Download() error {
 
 				// Handle downloading from S3 and GS
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
-					err = S3Downloader{
-						Logger:      a.logger,
+					err = NewS3Downloader(a.logger, S3DownloaderConfig{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.apiClient.DebugHTTP,
-					}.Start()
+					}).Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
-					gsd := NewGSDownloader(a.logger, GSDownloaderConfig{
+					err = NewGSDownloader(a.logger, GSDownloaderConfig{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.apiClient.DebugHTTP,
-					})
-					err = gsd.Start()
+					}).Start()
 				} else {
-					d := NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+					err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
 						URL:         artifact.URL,
 						Path:        artifact.Path,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.apiClient.DebugHTTP,
-					})
-					err = d.Start()
+					}).Start()
 				}
 
 				// If the downloaded encountered an error, lock
