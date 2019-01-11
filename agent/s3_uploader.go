@@ -25,6 +25,12 @@ type S3UploaderConfig struct {
 }
 
 type S3Uploader struct {
+	// The s3 bucket path set from the destination
+	BucketPath string
+
+	// The s3 bucket name set from the destination
+	BucketName string
+
 	// The configuration
 	conf S3UploaderConfig
 
@@ -33,19 +39,13 @@ type S3Uploader struct {
 
 	// The aws s3 client
 	s3Client *s3.S3
-
-	// The s3 bucket path
-	s3BucketPath string
-
-	// The s3 bucket name
-	s3BucketName string
 }
 
 func NewS3Uploader(l *logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
-	s3BucketName, s3BucketPath := parseS3Destination(c.Destination)
+	bucketName, bucketPath := parseS3Destination(c.Destination)
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(l, s3BucketName)
+	s3Client, err := newS3Client(l, bucketName)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +54,8 @@ func NewS3Uploader(l *logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 		logger: l,
 		conf: c,
 		s3Client: s3Client,
-		s3BucketName: s3BucketName,
-		s3BucketPath: s3BucketPath,
+		BucketName: bucketName,
+		BucketPath: bucketPath,
 	}, nil
 }
 
@@ -67,7 +67,7 @@ func parseS3Destination(destination string) (name string, path string) {
 }
 
 func (u *S3Uploader) URL(artifact *api.Artifact) string {
-	baseUrl := "https://" + u.s3BucketName + ".s3.amazonaws.com"
+	baseUrl := "https://" + u.BucketName + ".s3.amazonaws.com"
 
 	if os.Getenv("BUILDKITE_S3_ACCESS_URL") != "" {
 		baseUrl = os.Getenv("BUILDKITE_S3_ACCESS_URL")
@@ -99,7 +99,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	}
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(u.logger, u.s3BucketName)
+	s3Client, err := newS3Client(u.logger, u.BucketName)
 	if err != nil {
 		return err
 	}
@@ -117,7 +117,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	// Upload the file to S3.
 	u.logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
 	_, err = uploader.Upload(&s3manager.UploadInput{
-		Bucket:      aws.String(u.s3BucketName),
+		Bucket:      aws.String(u.BucketName),
 		Key:         aws.String(u.artifactPath(artifact)),
 		ContentType: aws.String(u.mimeType(artifact)),
 		ACL:         aws.String(permission),
@@ -128,7 +128,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.s3BucketPath, artifact.Path}
+	parts := []string{u.BucketPath, artifact.Path}
 
 	return strings.Join(parts, "/")
 }

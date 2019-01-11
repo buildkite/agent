@@ -34,7 +34,7 @@ func TestScanLines(t *testing.T) {
 		pw.Close()
 	}()
 
-	scanner := &process.Scanner{Logger: logger.Discard}
+	scanner := process.NewScanner(logger.Discard)
 
 	err := scanner.ScanLines(pr, func(l string) {
 		lineNumber := atomic.AddInt32(&lineCounter, 1)

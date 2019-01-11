@@ -33,13 +33,12 @@ func TestCollect(t *testing.T) {
 	volumeName := filepath.VolumeName(root)
 	rootWithoutVolume := strings.TrimPrefix(root, volumeName)
 
-	uploader := ArtifactUploader{
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
 			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
 		),
-		Logger: logger.Discard,
-	}
+	})
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
@@ -112,15 +111,14 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := ArtifactUploader{
-		Logger: logger.Discard,
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
 			filepath.Join("mkmf.log"),
 			filepath.Join("log", "mkmf.log"),
 		}, ";"),
-	}
+	})
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
@@ -136,14 +134,13 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	os.Chdir(root)
 	defer os.Chdir(wd)
 
-	uploader := ArtifactUploader{
-		Logger: logger.Discard,
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 		}, ";"),
-	}
+	})
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
