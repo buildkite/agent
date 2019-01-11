@@ -20,17 +20,16 @@ func TestAPIProxy(t *testing.T) {
 	defer ts.Close()
 
 	// create proxy to our fake api
-	proxy := NewAPIProxy(ts.URL, `llamas`)
+	proxy := NewAPIProxy(logger.Discard, ts.URL, `llamas`)
 	go proxy.Listen()
 	proxy.Wait()
 	defer proxy.Close()
 
 	// create a client to talk to our proxy api
-	client := APIClient{
-		Logger:   logger.Discard,
+	client := NewAPIClient(logger.Discard, APIClientConfig{
 		Endpoint: proxy.Endpoint(),
 		Token:    proxy.AccessToken(),
-	}.Create()
+	})
 
 	// fire a ping via the proxy
 	p, _, err := client.Pings.Get()
@@ -54,17 +53,16 @@ func TestAPIProxyFailsWithoutAccessToken(t *testing.T) {
 	defer ts.Close()
 
 	// create proxy to our fake api
-	proxy := NewAPIProxy(ts.URL, `llamas`)
+	proxy := NewAPIProxy(logger.Discard, ts.URL, `llamas`)
 	go proxy.Listen()
 	proxy.Wait()
 	defer proxy.Close()
 
 	// create a client to talk to our proxy api, but with incorrect access token
-	client := APIClient{
-		Logger:   logger.Discard,
+	client := NewAPIClient(logger.Discard, APIClientConfig{
 		Endpoint: proxy.Endpoint(),
 		Token:    `xxx`,
-	}.Create()
+	})
 
 	// fire a ping via the proxy
 	_, _, err := client.Pings.Get()
