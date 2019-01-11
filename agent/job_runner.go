@@ -83,11 +83,10 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Our own APIClient using the endpoint and the agents access token
-	runner.APIClient = APIClient{
-		Logger: r.Logger,
+	runner.APIClient = NewAPIClient(r.Logger, APIClientConfig{
 		Endpoint: r.Endpoint, 
 		Token: r.Agent.AccessToken,
-		}.Create()
+	})
 
 	// A proxy for the agent API that is expose to the bootstrap
 	runner.APIProxy = NewAPIProxy(r.Endpoint, r.Agent.AccessToken)

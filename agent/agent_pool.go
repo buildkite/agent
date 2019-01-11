@@ -47,13 +47,13 @@ func (r *AgentPool) Start() error {
 	// Show the welcome banner and config options used
 	r.ShowBanner()
 
-	// Create the agent registration API Client
-	r.APIClient = APIClient{
+	// Create an API Client using the registration token
+	// A separate client will be created in the AgentWorker with the session token
+	r.APIClient = NewAPIClient(r.Logger, APIClientConfig{
 		Endpoint:     r.Endpoint,
 		Token:        r.Token,
 		DisableHTTP2: r.DisableHTTP2,
-		Logger:       r.Logger,
-	}.Create()
+	})
 
 	var wg sync.WaitGroup
 	var errs = make(chan error, r.Spawn)

@@ -67,11 +67,10 @@ var MetaDataExistsCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.APIClient{
-			Logger: l,
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
-		}.Create()
+		})
 
 		// Find the meta data value
 		var err error

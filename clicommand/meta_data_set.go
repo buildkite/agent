@@ -84,11 +84,10 @@ var MetaDataSetCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.APIClient{
-			Logger: l,
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
-		}.Create()
+		})
 
 		// Create the meta data to set
 		metaData := &api.MetaData{

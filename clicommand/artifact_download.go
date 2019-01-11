@@ -81,14 +81,16 @@ var ArtifactDownloadCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(l, cfg)
 
+		// Create the API client
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
+		})
+
 		// Setup the downloader
 		downloader := agent.ArtifactDownloader{
-			Logger: l,
-			APIClient: agent.APIClient{
-				Logger:   l,
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			}.Create(),
+			Logger:      l,
+			APIClient:   client, 
 			Query:       cfg.Query,
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,

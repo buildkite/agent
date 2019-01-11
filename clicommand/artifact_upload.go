@@ -78,14 +78,16 @@ var ArtifactUploadCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(l, cfg)
 
+		// Create the API client
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
+		})
+
 		// Setup the uploader
 		uploader := agent.ArtifactUploader{
-			Logger: l,
-			APIClient: agent.APIClient{
-				Logger:   l,
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			}.Create(),
+			Logger:      l,
+			APIClient:   client,
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,

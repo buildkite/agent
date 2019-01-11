@@ -76,12 +76,11 @@ func (a AgentWorker) Create() AgentWorker {
 		endpoint = a.Endpoint
 	}
 
-	a.APIClient = APIClient{
-		Logger:       a.Logger,
+	a.APIClient = NewAPIClient(a.Logger, APIClientConfig{
 		Endpoint:     endpoint,
 		Token:        a.Agent.AccessToken,
 		DisableHTTP2: a.DisableHTTP2,
-	}.Create()
+	})
 
 	return a
 }
@@ -301,11 +300,10 @@ func (a *AgentWorker) Ping() {
 		// Before switching to the new one, do a ping test to make sure it's
 		// valid. If it is, switch and carry on, otherwise ignore the switch
 		// for now.
-		newAPIClient := APIClient{
-			Logger:   a.Logger,
+		newAPIClient := NewAPIClient(a.Logger, APIClientConfig{
 			Endpoint: ping.Endpoint,
 			Token:    a.Agent.AccessToken,
-		}.Create()
+		})
 
 		newPing, _, err := newAPIClient.Pings.Get()
 		if err != nil {

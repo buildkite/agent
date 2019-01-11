@@ -223,11 +223,10 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.APIClient{
-			Logger: l,
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
-		}.Create()
+		})
 
 		// Generate a UUID that will identifiy this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
