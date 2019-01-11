@@ -90,11 +90,7 @@ var ArtifactShasumCommand = cli.Command{
 		})
 
 		// Find the artifact we want to show the SHASUM for
-		searcher := agent.ArtifactSearcher{
-			Logger:    l,
-			APIClient: client,
-			BuildID:   cfg.Build,
-		}
+		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
 
 		artifacts, err := searcher.Search(cfg.Query, cfg.Step)
 		if err != nil {
