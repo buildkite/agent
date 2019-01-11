@@ -202,13 +202,12 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	}
 
 	// Create the artifacts on Buildkite
-	batchCreator := ArtifactBatchCreator{
-		APIClient:         a.APIClient,
+	batchCreator := NewArtifactBatchCreator(a.Logger, a.APIClient, ArtifactBatchCreatorConfig{
 		JobID:             a.JobID,
 		Artifacts:         artifacts,
 		UploadDestination: a.Destination,
-		Logger:            a.Logger,
-	}
+	})
+
 	artifacts, err = batchCreator.Create()
 	if err != nil {
 		return err
