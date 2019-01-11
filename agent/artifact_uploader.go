@@ -188,16 +188,15 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.Destination))
 		}
 	} else {
-		uploader = &FormUploader{
-			Logger: a.Logger,
-		}
+		uploader = NewFormUploader(a.Logger, FormUploaderConfig{
+			DebugHTTP: a.APIClient.DebugHTTP,
+		})
 	}
 
-	// Setup the uploader
-	// err := uploader.Setup(a.Destination, a.APIClient.DebugHTTP)
-	// if err != nil {
-	// 	return err
-	// }
+	// Check if creation caused an error
+	if err != nil {
+		return fmt.Errorf("Error creating uploader: %v", err)
+	}
 
 	// Set the URL's of the artifacts based on the uploader
 	for _, artifact := range artifacts {
