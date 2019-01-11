@@ -20,9 +20,7 @@ import (
 // APIProxy provides either a unix socket or a tcp socket listener with a proxy
 // that will authenticate to the Buildkite Agent API
 type APIProxy struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
+	logger           *logger.Logger
 	upstreamToken    string
 	upstreamEndpoint string
 	token            string
@@ -31,12 +29,12 @@ type APIProxy struct {
 	listenerWg       *sync.WaitGroup
 }
 
-func NewAPIProxy(endpoint string, token string) *APIProxy {
+func NewAPIProxy(l *logger.Logger, endpoint string, token string) *APIProxy {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	return &APIProxy{
-		Logger:           logger.Discard,
+		logger:           l,
 		upstreamToken:    token,
 		upstreamEndpoint: endpoint,
 		token:            fmt.Sprintf("%x", sha256.Sum256([]byte(string(time.Now().UnixNano())))),
@@ -101,7 +99,7 @@ func (p *APIProxy) listenOnUnixSocket() (net.Listener, *os.File, error) {
 	// https://troydhanson.github.io/network/Unix_domain_sockets.html
 	_ = os.Remove(socket.Name())
 
-	p.Logger.Debug("[APIProxy] Listening on unix socket %s", socket.Name())
+	p.logger.Debug("[APIProxy] Listening on unix socket %s", socket.Name())
 
 	// create a unix socket to do the listening
 	l, err := net.Listen("unix", socket.Name())
@@ -124,7 +122,7 @@ func (p *APIProxy) listenOnTCPSocket() (net.Listener, error) {
 		return nil, err
 	}
 
-	p.Logger.Debug("[APIProxy] Listening on tcp socket %s", l.Addr().String())
+	p.logger.Debug("[APIProxy] Listening on tcp socket %s", l.Addr().String())
 	return l, nil
 }
 

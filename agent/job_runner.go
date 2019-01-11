@@ -89,8 +89,7 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	})
 
 	// A proxy for the agent API that is expose to the bootstrap
-	runner.APIProxy = NewAPIProxy(r.Endpoint, r.Agent.AccessToken)
-	runner.APIProxy.Logger = r.Logger
+	runner.APIProxy = NewAPIProxy(r.Logger, r.Endpoint, r.Agent.AccessToken)
 
 	// Create our header times struct
 	runner.headerTimesStreamer = &HeaderTimesStreamer{
