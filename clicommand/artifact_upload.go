@@ -85,13 +85,11 @@ var ArtifactUploadCommand = cli.Command{
 		})
 
 		// Setup the uploader
-		uploader := agent.ArtifactUploader{
-			Logger:      l,
-			APIClient:   client,
+		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
-		}
+		})
 
 		// Upload the artifacts
 		if err := uploader.Upload(); err != nil {

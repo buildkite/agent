@@ -23,13 +23,7 @@ const (
 	ArtifactPathDelimiter = ";"
 )
 
-type ArtifactUploader struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
-	// The APIClient that will be used when uploading jobs
-	APIClient *api.Client
-
+type ArtifactUploaderConfig struct {
 	// The ID of the Job
 	JobID string
 
@@ -40,6 +34,24 @@ type ArtifactUploader struct {
 	Destination string
 }
 
+type ArtifactUploader struct {
+	// The upload config
+	conf ArtifactUploaderConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+
+	// The APIClient that will be used when uploading jobs
+	apiClient *api.Client
+}
+
+func NewArtifactUploader(l *logger.Logger, ac *api.Client, c ArtifactUploaderConfig) *ArtifactUploader {
+	return &ArtifactUploader{
+		logger: l,
+		conf:   c,
+	}
+}
+
 func (a *ArtifactUploader) Upload() error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
@@ -48,9 +60,9 @@ func (a *ArtifactUploader) Upload() error {
 	}
 
 	if len(artifacts) == 0 {
-		a.Logger.Info("No files matched paths: %s", a.Paths)
+		a.logger.Info("No files matched paths: %s", a.conf.Paths)
 	} else {
-		a.Logger.Info("Found %d files that match \"%s\"", len(artifacts), a.Paths)
+		a.logger.Info("Found %d files that match \"%s\"", len(artifacts), a.conf.Paths)
 
 		err := a.upload(artifacts)
 		if err != nil {
@@ -75,19 +87,19 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 		return nil, err
 	}
 
-	for _, globPath := range strings.Split(a.Paths, ArtifactPathDelimiter) {
+	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
 		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
 		}
 
-		a.Logger.Debug("Searching for %s", globPath)
+		a.logger.Debug("Searching for %s", globPath)
 
 		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
 		// then we will get the ErrNotExist that is handled below
 		files, err := zglob.Glob(globPath)
 		if err == os.ErrNotExist {
-			a.Logger.Info("File not found: %s", globPath)
+			a.logger.Info("File not found: %s", globPath)
 			continue
 		} else if err != nil {
 			return nil, err
@@ -102,7 +114,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 
 			// Ignore directories, we only want files
 			if isDir(absolutePath) {
-				a.Logger.Debug("Skipping directory %s", file)
+				a.logger.Debug("Skipping directory %s", file)
 				continue
 			}
 
@@ -173,23 +185,23 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	var err error
 
 	// Determine what uploader to use
-	if a.Destination != "" {
-		if strings.HasPrefix(a.Destination, "s3://") {
-			uploader, err = NewS3Uploader(a.Logger, S3UploaderConfig{
-				Destination: a.Destination,
-				DebugHTTP:   a.APIClient.DebugHTTP,
+	if a.conf.Destination != "" {
+		if strings.HasPrefix(a.conf.Destination, "s3://") {
+			uploader, err = NewS3Uploader(a.logger, S3UploaderConfig{
+				Destination: a.conf.Destination,
+				DebugHTTP:   a.apiClient.DebugHTTP,
 			})
-		} else if strings.HasPrefix(a.Destination, "gs://") {
-			uploader, err = NewGSUploader(a.Logger, GSUploaderConfig{
-				Destination: a.Destination,
-				DebugHTTP:   a.APIClient.DebugHTTP,
+		} else if strings.HasPrefix(a.conf.Destination, "gs://") {
+			uploader, err = NewGSUploader(a.logger, GSUploaderConfig{
+				Destination: a.conf.Destination,
+				DebugHTTP:   a.apiClient.DebugHTTP,
 			})
 		} else {
-			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.Destination))
+			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
 		}
 	} else {
-		uploader = NewFormUploader(a.Logger, FormUploaderConfig{
-			DebugHTTP: a.APIClient.DebugHTTP,
+		uploader = NewFormUploader(a.logger, FormUploaderConfig{
+			DebugHTTP: a.apiClient.DebugHTTP,
 		})
 	}
 
@@ -204,10 +216,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	}
 
 	// Create the artifacts on Buildkite
-	batchCreator := NewArtifactBatchCreator(a.Logger, a.APIClient, ArtifactBatchCreatorConfig{
-		JobID:             a.JobID,
+	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, ArtifactBatchCreatorConfig{
+		JobID:             a.conf.JobID,
 		Artifacts:         artifacts,
-		UploadDestination: a.Destination,
+		UploadDestination: a.conf.Destination,
 	})
 
 	artifacts, err = batchCreator.Create()
@@ -252,21 +264,21 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			if len(statesToUpload) > 0 {
 				artifactStatesUploaded += len(statesToUpload)
 				for id, state := range statesToUpload {
-					a.Logger.Debug("Artifact `%s` has state `%s`", id, state)
+					a.logger.Debug("Artifact `%s` has state `%s`", id, state)
 				}
 
 				// Update the states of the artifacts in bulk.
 				err = retry.Do(func(s *retry.Stats) error {
-					_, err = a.APIClient.Artifacts.Update(a.JobID, statesToUpload)
+					_, err = a.apiClient.Artifacts.Update(a.conf.JobID, statesToUpload)
 					if err != nil {
-						a.Logger.Warn("%s (%s)", err, s)
+						a.logger.Warn("%s (%s)", err, s)
 					}
 
 					return err
 				}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 
 				if err != nil {
-					a.Logger.Error("Error uploading artifact states: %s", err)
+					a.logger.Error("Error uploading artifact states: %s", err)
 
 					// Track the error that was raised. We need to
 					// aquire a lock since we mutate the errors
@@ -276,7 +288,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 					errorsMutex.Unlock()
 				}
 
-				a.Logger.Debug("Uploaded %d artfact states (%d/%d)", len(statesToUpload), artifactStatesUploaded, len(artifacts))
+				a.logger.Debug("Uploaded %d artfact states (%d/%d)", len(statesToUpload), artifactStatesUploaded, len(artifacts))
 			}
 
 			// Check again for states to upload in a few seconds
@@ -293,7 +305,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 		p.Spawn(func() {
 			// Show a nice message that we're starting to upload the file
-			a.Logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
+			a.logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
@@ -301,7 +313,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			err = retry.Do(func(s *retry.Stats) error {
 				err := uploader.Upload(artifact)
 				if err != nil {
-					a.Logger.Warn("%s (%s)", err, s)
+					a.logger.Warn("%s (%s)", err, s)
 				}
 
 				return err
@@ -311,7 +323,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 			// Did the upload eventually fail?
 			if err != nil {
-				a.Logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
+				a.logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 
 				// Track the error that was raised. We need to
 				// aquire a lock since we mutate the errors
