@@ -20,36 +20,55 @@ import (
 	storage "google.golang.org/api/storage/v1"
 )
 
-type GSUploader struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
+type GSUploaderConfig struct {
 	// The destination which includes the GS bucket name and the path.
 	// gs://my-bucket-name/foo/bar
 	Destination string
 
 	// Whether or not HTTP calls shoud be debugged
 	DebugHTTP bool
-
-	// The GS service
-	Service *storage.Service
 }
 
-func (u *GSUploader) Setup(destination string, debugHTTP bool) error {
-	u.Destination = destination
-	u.DebugHTTP = debugHTTP
+type GSUploader struct {
+	// The configuration
+	conf GSUploaderConfig
 
-	client, err := u.getClient(storage.DevstorageFullControlScope)
+	// The logger instance to use
+	logger *logger.Logger
+
+	// The GS service
+	service *storage.Service
+}
+
+func NewGSUploader(l *logger.Logger, conf GSUploaderConfig) (*GSUploader, error) {
+	client, err := newGoogleClient(storage.DevstorageFullControlScope)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
+		return nil, errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
 	}
 	service, err := storage.New(client)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	u.Service = service
+	return &GSUploader{
+		conf: conf,
+		logger: l,
+		service: service,
+	}, nil
+}
 
-	return nil
+func newGoogleClient(scope string) (*http.Client, error) {
+	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
+		data, err := ioutil.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
+		if err != nil {
+			return nil, err
+		}
+		conf, err := google.JWTConfigFromJSON(data, scope)
+		if err != nil {
+			return nil, err
+		}
+		return conf.Client(oauth2.NoContext), nil
+	}
+	return google.DefaultClient(context.Background(), scope)
 }
 
 func (u *GSUploader) URL(artifact *api.Artifact) string {
@@ -80,10 +99,10 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 	}
 
 	if permission == "" {
-		u.Logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
+		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
 			u.artifactPath(artifact), u.BucketName())
 	} else {
-		u.Logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
+		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
 			u.artifactPath(artifact), u.BucketName(), permission)
 	}
 	object := &storage.Object{
@@ -95,12 +114,12 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to open file \"%q\" (%v)", artifact.AbsolutePath, err))
 	}
-	call := u.Service.Objects.Insert(u.BucketName(), object)
+	call := u.service.Objects.Insert(u.BucketName(), object)
 	if permission != "" {
 		call = call.PredefinedAcl(permission)
 	}
 	if res, err := call.Media(file, googleapi.ContentType("")).Do(); err == nil {
-		u.Logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
+		u.logger.Debug("Created object %v at location %v\n\n", res.Name, res.SelfLink)
 	} else {
 		return errors.New(fmt.Sprintf("Failed to PUT file \"%s\" (%v)", u.artifactPath(artifact), err))
 	}
@@ -123,24 +142,9 @@ func (u *GSUploader) BucketName() string {
 }
 
 func (u *GSUploader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(u.Destination, "gs://")
+	trimmed := strings.TrimPrefix(u.conf.Destination, "gs://")
 
 	return strings.Split(trimmed, "/")
-}
-
-func (u *GSUploader) getClient(scope string) (*http.Client, error) {
-	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
-		data, err := ioutil.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
-		if err != nil {
-			return nil, err
-		}
-		conf, err := google.JWTConfigFromJSON(data, scope)
-		if err != nil {
-			return nil, err
-		}
-		return conf.Client(oauth2.NoContext), nil
-	}
-	return google.DefaultClient(context.Background(), scope)
 }
 
 func (u *GSUploader) mimeType(a *api.Artifact) string {

@@ -170,6 +170,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 
 func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	var uploader Uploader
+	var err error
 
 	// Determine what uploader to use
 	if a.Destination != "" {
@@ -178,9 +179,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				Logger: a.Logger,
 			}
 		} else if strings.HasPrefix(a.Destination, "gs://") {
-			uploader = &GSUploader{
-				Logger: a.Logger,
-			}
+			uploader, err = NewGSUploader(a.Logger, GSUploaderConfig{
+				Destination: a.Destination,
+				DebugHTTP:   a.APIClient.DebugHTTP,
+			})
 		} else {
 			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.Destination))
 		}
@@ -191,10 +193,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	}
 
 	// Setup the uploader
-	err := uploader.Setup(a.Destination, a.APIClient.DebugHTTP)
-	if err != nil {
-		return err
-	}
+	// err := uploader.Setup(a.Destination, a.APIClient.DebugHTTP)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// Set the URL's of the artifacts based on the uploader
 	for _, artifact := range artifacts {
