@@ -156,13 +156,12 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 	}
 
 	// The process that will run the bootstrap script
-	runner.process = &process.Process{
-		Logger:  l,
+	runner.process = process.NewProcess(l, process.ProcessConfig{
 		Script:  cmd,
 		Env:     env,
 		PTY:     conf.AgentConfiguration.RunInPty,
 		Handler: handleProcessOutput,
-	}
+	})
 
 	// Kick off our callback when the process starts
 	go func() {

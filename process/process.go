@@ -14,25 +14,33 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-type Process struct {
+type ProcessConfig struct {
 	PTY       bool
 	Timestamp bool
 	Script    []string
 	Env       []string
 
+	// Handler is called with each line of output
+	Handler func(string)
+}
+
+type Process struct {
 	// Outputs available after the process starts
 	Pid        int
 	ExitStatus string
 
-	// Handler is called with each line of output
-	Handler func(string)
-
-	// The logger to use
-	Logger *logger.Logger
-
+	conf          ProcessConfig
+	logger        *logger.Logger
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
+}
+
+func NewProcess(l *logger.Logger, c ProcessConfig) *Process {
+	return &Process{
+		logger: l,
+		conf:   c,
+	}
 }
 
 // Start executes the command and blocks until it finishes
@@ -42,11 +50,11 @@ func (p *Process) Start() error {
 	}
 
 	// Create a command
-	p.command = exec.Command(p.Script[0], p.Script[1:]...)
+	p.command = exec.Command(p.conf.Script[0], p.conf.Script[1:]...)
 
 	// Setup the process to create a process group if supported
 	// See https://github.com/kr/pty/issues/35 for context
-	if !p.PTY {
+	if !p.conf.PTY {
 		SetupProcessGroup(p.command)
 	}
 
@@ -65,14 +73,14 @@ func (p *Process) Start() error {
 	// the top of the current one so the ENV from Buildkite and the agent
 	// take precedence over the agent
 	currentEnv := os.Environ()
-	p.command.Env = append(currentEnv, p.Env...)
+	p.command.Env = append(currentEnv, p.conf.Env...)
 
 	var waitGroup sync.WaitGroup
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
 	// Toggle between running in a pty
-	if p.PTY {
+	if p.conf.PTY {
 		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
@@ -87,7 +95,7 @@ func (p *Process) Start() error {
 		waitGroup.Add(1)
 
 		go func() {
-			p.Logger.Debug("[Process] Starting to copy PTY to the buffer")
+			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
@@ -101,9 +109,9 @@ func (p *Process) Start() error {
 			}
 
 			if err != nil {
-				p.Logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
+				p.logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				p.Logger.Debug("[Process] PTY has finished being copied to the buffer")
+				p.logger.Debug("[Process] PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
@@ -125,19 +133,19 @@ func (p *Process) Start() error {
 		close(p.started)
 	}
 
-	p.Logger.Info("[Process] Process is running with PID: %d", p.Pid)
+	p.logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
-	if p.Handler != nil {
+	if p.conf.Handler != nil {
 		// Add the scanner the waitGroup
 		waitGroup.Add(1)
 
-		scanner := &Scanner{Logger: p.Logger}
+		scanner := NewScanner(p.logger)
 
 		// Start the Scanner
 		go func() {
 			defer waitGroup.Done()
-			if err := scanner.ScanLines(lineReaderPipe, p.Handler); err != nil {
-				p.Logger.Error("[Process] Scanner failed with %v", err)
+			if err := scanner.ScanLines(lineReaderPipe, p.conf.Handler); err != nil {
+				p.logger.Error("[Process] Scanner failed with %v", err)
 			}
 		}()
 	} else {
@@ -157,14 +165,14 @@ func (p *Process) Start() error {
 	// Find the exit status of the script
 	p.ExitStatus = p.getExitStatus(waitResult)
 
-	p.Logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	p.logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	p.Logger.Debug("[Process] Waiting for routines to finish")
+	p.logger.Debug("[Process] Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		p.Logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
+		p.logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
 	// No error occurred so we can return nil
@@ -201,16 +209,16 @@ func (p *Process) Interrupt() error {
 	defer p.mu.Unlock()
 
 	if p.command == nil || p.command.Process == nil {
-		p.Logger.Debug("[Process] No process to interrupt yet")
+		p.logger.Debug("[Process] No process to interrupt yet")
 		return nil
 	}
 
 	// interrupt the process (ctrl-c or SIGINT)
-	if err := InterruptProcessGroup(p.command.Process, p.Logger); err != nil {
-		p.Logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
+	if err := InterruptProcessGroup(p.command.Process, p.logger); err != nil {
+		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
 
 		// Fallback to terminating if we get an error
-		if termErr := TerminateProcessGroup(p.command.Process, p.Logger); termErr != nil {
+		if termErr := TerminateProcessGroup(p.command.Process, p.logger); termErr != nil {
 			return termErr
 		}
 	}
@@ -224,11 +232,11 @@ func (p *Process) Terminate() error {
 	defer p.mu.Unlock()
 
 	if p.command == nil || p.command.Process == nil {
-		p.Logger.Debug("[Process] No process to terminate yet")
+		p.logger.Debug("[Process] No process to terminate yet")
 		return nil
 	}
 
-	return TerminateProcessGroup(p.command.Process, p.Logger)
+	return TerminateProcessGroup(p.command.Process, p.logger)
 }
 
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
@@ -241,10 +249,10 @@ func (p *Process) getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				p.Logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				p.logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		} else {
-			p.Logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
+			p.logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
 		}
 	} else {
 		exitStatus = 0
