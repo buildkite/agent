@@ -12,13 +12,7 @@ import (
 	"github.com/buildkite/agent/pool"
 )
 
-type ArtifactDownloader struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
-	// The APIClient that will be used when uploading jobs
-	APIClient *api.Client
-
+type ArtifactDownloaderConfig struct {
 	// The ID of the Build
 	BuildID string
 
@@ -32,9 +26,24 @@ type ArtifactDownloader struct {
 	Destination string
 }
 
+type ArtifactDownloader struct {
+	// The config for downloading
+	conf ArtifactDownloaderConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+
+	// The *api.Client that will be used when uploading jobs
+	apiClient *api.Client
+}
+
+func NewArtifactDownloader(l *logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
+	return ArtifactDownloader{}
+}
+
 func (a *ArtifactDownloader) Download() error {
 	// Turn the download destination into an absolute path and confirm it exists
-	downloadDestination, _ := filepath.Abs(a.Destination)
+	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
 		return fmt.Errorf("Could not find information about destination: %s", downloadDestination)
@@ -45,11 +54,11 @@ func (a *ArtifactDownloader) Download() error {
 
 	// Find the artifacts that we want to download
 	searcher := ArtifactSearcher{
-		Logger:    a.Logger,
-		BuildID:   a.BuildID,
-		APIClient: a.APIClient,
+		Logger:    a.logger,
+		BuildID:   a.conf.BuildID,
+		APIClient: a.apiClient,
 	}
-	artifacts, err := searcher.Search(a.Query, a.Step)
+	artifacts, err := searcher.Search(a.conf.Query, a.conf.Step)
 	if err != nil {
 		return err
 	}
@@ -59,7 +68,7 @@ func (a *ArtifactDownloader) Download() error {
 	if artifactCount == 0 {
 		return errors.New("No artifacts found for downloading")
 	} else {
-		a.Logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
+		a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
 
 		p := pool.New(pool.MaxConcurrencyLimit)
 		errors := []error{}
@@ -75,30 +84,30 @@ func (a *ArtifactDownloader) Download() error {
 				// Handle downloading from S3 and GS
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
 					err = S3Downloader{
-						Logger:      a.Logger,
+						Logger:      a.logger,
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.APIClient.DebugHTTP,
+						DebugHTTP:   a.apiClient.DebugHTTP,
 					}.Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
 					err = GSDownloader{
-						Logger:      a.Logger,
+						Logger:      a.logger,
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.APIClient.DebugHTTP,
+						DebugHTTP:   a.apiClient.DebugHTTP,
 					}.Start()
 				} else {
 					err = Download{
-						Logger:      a.Logger,
+						Logger:      a.logger,
 						URL:         artifact.URL,
 						Path:        artifact.Path,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.APIClient.DebugHTTP,
+						DebugHTTP:   a.apiClient.DebugHTTP,
 					}.Start()
 				}
 
@@ -106,7 +115,7 @@ func (a *ArtifactDownloader) Download() error {
 				// the pool, collect it, then unlock the pool
 				// again.
 				if err != nil {
-					a.Logger.Error("Failed to download artifact: %s", err)
+					a.logger.Error("Failed to download artifact: %s", err)
 
 					p.Lock()
 					errors = append(errors, err)

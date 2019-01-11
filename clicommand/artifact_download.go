@@ -88,14 +88,12 @@ var ArtifactDownloadCommand = cli.Command{
 		})
 
 		// Setup the downloader
-		downloader := agent.ArtifactDownloader{
-			Logger:      l,
-			APIClient:   client, 
+		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
 			Query:       cfg.Query,
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,
 			Step:        cfg.Step,
-		}
+		})
 
 		// Download the artifacts
 		if err := downloader.Download(); err != nil {
