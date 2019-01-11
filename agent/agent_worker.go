@@ -389,15 +389,11 @@ func (a *AgentWorker) Ping() {
 	})
 
 	// Now that the job has been accepted, we can start it.
-	a.jobRunner, err = JobRunner{
-		Logger:             a.logger,
+	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, JobRunnerConfig{
 		Debug:              a.debug,
 		Endpoint:           accepted.Endpoint,
-		Agent:              a.agent,
 		AgentConfiguration: a.agentConfiguration,
-		Job:                accepted,
-		Metrics:            jobMetricsScope,
-	}.Create()
+	})
 
 	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
 	if a.disconnectTimeoutTimer != nil {
