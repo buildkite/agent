@@ -50,15 +50,13 @@ func (d S3Downloader) Start() error {
 	}
 
 	// We can now cheat and pass the URL onto our regular downloader
-	return Download{
-		Logger:      d.Logger,
-		Client:      *http.DefaultClient,
+	return NewDownload(d.Logger, http.DefaultClient, DownloadConfig{
 		URL:         signedURL,
 		Path:        d.Path,
 		Destination: d.Destination,
 		Retries:     d.Retries,
 		DebugHTTP:   d.DebugHTTP,
-	}.Start()
+	}).Start()
 }
 
 func (d S3Downloader) BucketFileLocation() string {

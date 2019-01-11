@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,14 +102,14 @@ func (a *ArtifactDownloader) Download() error {
 					})
 					err = gsd.Start()
 				} else {
-					err = Download{
-						Logger:      a.logger,
+					d := NewDownload(a.logger, http.DefaultClient, DownloadConfig{
 						URL:         artifact.URL,
 						Path:        artifact.Path,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.apiClient.DebugHTTP,
-					}.Start()
+					})
+					err = d.Start()
 				}
 
 				// If the downloaded encountered an error, lock

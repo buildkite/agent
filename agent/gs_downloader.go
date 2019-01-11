@@ -53,15 +53,13 @@ func (d GSDownloader) Start() error {
 	url := "https://www.googleapis.com/storage/v1/b/" + d.BucketName() + "/o/" + escape(d.BucketFileLocation()) + "?alt=media"
 
 	// We can now cheat and pass the URL onto our regular downloader
-	return Download{
-		Logger:      d.logger,
-		Client:      *client,
+	return NewDownload(d.logger, client, DownloadConfig{
 		URL:         url,
 		Path:        d.conf.Path,
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,
 		DebugHTTP:   d.conf.DebugHTTP,
-	}.Start()
+	}).Start()
 }
 
 func (d GSDownloader) BucketFileLocation() string {
