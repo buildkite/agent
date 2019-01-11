@@ -449,11 +449,10 @@ var AgentStartCommand = cli.Command{
 				CancelGracePeriod:         cfg.CancelGracePeriod,
 				Shell:                     cfg.Shell,
 			},
-			MetricsCollector: &metrics.Collector{
+			MetricsCollector: metrics.NewCollector(l, metrics.CollectorConfig{
 				Datadog:     cfg.MetricsDatadog,
 				DatadogHost: cfg.MetricsDatadogHost,
-				Logger:      l,
-			},
+			}),
 		}
 
 		// Store the loaded config file path on the pool and agent config so we can
