@@ -412,10 +412,12 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		// Setup the agent
-		pool := agent.AgentPool{
-			Logger:                l,
-			Token:                 cfg.Token,
+		mc := metrics.NewCollector(l, metrics.CollectorConfig{
+			Datadog:     cfg.MetricsDatadog,
+			DatadogHost: cfg.MetricsDatadogHost,
+		})
+
+		config := agent.AgentPoolConfig{
 			Name:                  cfg.Name,
 			Priority:              cfg.Priority,
 			Tags:                  cfg.Tags,
@@ -424,11 +426,14 @@ var AgentStartCommand = cli.Command{
 			TagsFromGCP:           cfg.TagsFromGCP,
 			TagsFromHost:          cfg.TagsFromHost,
 			WaitForEC2TagsTimeout: ec2TagTimeout,
-			Endpoint:              cfg.Endpoint,
 			Debug:                 cfg.Debug,
-			DisableHTTP2:          cfg.NoHTTP2,
 			DisableColors:         cfg.NoColor,
 			Spawn:                 cfg.Spawn,
+			APIClientConfig: agent.APIClientConfig{
+				Token:                 cfg.Token,
+				Endpoint:              cfg.Endpoint,
+				DisableHTTP2:          cfg.NoHTTP2,
+			},
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
@@ -449,18 +454,17 @@ var AgentStartCommand = cli.Command{
 				CancelGracePeriod:         cfg.CancelGracePeriod,
 				Shell:                     cfg.Shell,
 			},
-			MetricsCollector: metrics.NewCollector(l, metrics.CollectorConfig{
-				Datadog:     cfg.MetricsDatadog,
-				DatadogHost: cfg.MetricsDatadogHost,
-			}),
 		}
 
 		// Store the loaded config file path on the pool and agent config so we can
 		// show it when the agent starts and set an env
 		if loader.File != nil {
-			pool.ConfigFilePath = loader.File.Path
-			pool.AgentConfiguration.ConfigPath = loader.File.Path
+			config.ConfigFilePath = loader.File.Path
+			config.AgentConfiguration.ConfigPath = loader.File.Path
 		}
+
+		// Setup the agent
+		pool := agent.NewAgentPool(l, mc, config)
 
 		// Start the agent pool
 		if err := pool.Start(); err != nil {
