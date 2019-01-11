@@ -105,15 +105,12 @@ func (r *AgentPool) startWorker() error {
 
 	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
-	worker := AgentWorker{
-		Logger:             l,
-		Agent:              registered,
+	worker := NewAgentWorker(l, registered, r.metricsCollector, AgentWorkerConfig{
 		AgentConfiguration: r.conf.AgentConfiguration,
 		Debug:              r.conf.Debug,
 		Endpoint:           r.conf.APIClientConfig.Endpoint,
 		DisableHTTP2:       r.conf.APIClientConfig.DisableHTTP2,
-		MetricsCollector:   r.metricsCollector,
-	}.Create()
+	})
 
 	l.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {
@@ -156,7 +153,7 @@ func (r *AgentPool) startWorker() error {
 	}
 
 	// Now that the agent has stopped, we can disconnect it
-	l.Info("Disconnecting %s...", worker.Agent.Name)
+	l.Info("Disconnecting %s...", worker.agent.Name)
 	if err := worker.Disconnect(); err != nil {
 		return err
 	}
