@@ -13,10 +13,9 @@ import (
 func TestNormalizeWindowsDriveAbsolutePath(t *testing.T) {
 	t.Parallel()
 
-	fp, err := NormalizeFilePath("C:\\programdata\\buildkite-agent")
+	fp, err := NormalizeFilePath(`C:\programdata\buildkite-agent`)
 	assert.NoError(t, err)
-	expected := filepath.Join("C:", "programdata", "buildkite-agent")
-	assert.Equal(t, expected, fp)
+	assert.Equal(t, `C:\programdata\buildkite-agent`, fp)
 }
 
 func TestNormalizeWindowsBackslashAbsolutePath(t *testing.T) {
@@ -26,9 +25,8 @@ func TestNormalizeWindowsBackslashAbsolutePath(t *testing.T) {
 	dir, err := os.Getwd()
 	assert.NoError(t, err)
 	drive := filepath.VolumeName(dir)
-	fp, err := NormalizeFilePath("\\")
+	fp, err := NormalizeFilePath(`\`)
 
 	assert.NoError(t, err)
-	expected := filepath.Join(drive, "programdata", "buildkite-agent")
-	assert.Equal(t, expected, fp)
+	assert.Equal(t, drive+`\`, fp)
 }
