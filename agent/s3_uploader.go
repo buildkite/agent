@@ -31,18 +31,18 @@ type S3Uploader struct {
 	// The s3 bucket name set from the destination
 	BucketName string
 
+	// The s3 client to use
+	client *s3.S3
+
 	// The configuration
 	conf S3UploaderConfig
 
 	// The logger instance to use
 	logger *logger.Logger
-
-	// The aws s3 client
-	s3Client *s3.S3
 }
 
 func NewS3Uploader(l *logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
-	bucketName, bucketPath := parseS3Destination(c.Destination)
+	bucketName, bucketPath := ParseS3Destination(c.Destination)
 
 	// Initialize the s3 client, and authenticate it
 	s3Client, err := newS3Client(l, bucketName)
@@ -53,13 +53,13 @@ func NewS3Uploader(l *logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	return &S3Uploader{
 		logger: l,
 		conf: c,
-		s3Client: s3Client,
+		client: s3Client,
 		BucketName: bucketName,
 		BucketPath: bucketPath,
 	}, nil
 }
 
-func parseS3Destination(destination string) (name string, path string) {
+func ParseS3Destination(destination string) (name string, path string) {
 	parts := strings.Split(strings.TrimPrefix(string(destination), "s3://"), "/")
 	path = strings.Join(parts[1:len(parts)], "/")
 	name = parts[0]
@@ -98,14 +98,8 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 		return fmt.Errorf("Invalid S3 ACL `%s`", permission)
 	}
 
-	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(u.logger, u.BucketName)
-	if err != nil {
-		return err
-	}
-
 	// Create an uploader with the session and default options
-	uploader := s3manager.NewUploaderWithClient(s3Client)
+	uploader := s3manager.NewUploaderWithClient(u.client)
 
 	// Open file from filesystem
 	u.logger.Debug("Reading file \"%s\"", artifact.AbsolutePath)

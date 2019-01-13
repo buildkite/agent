@@ -2,40 +2,32 @@ package agent
 
 import (
 	"testing"
-
-	"github.com/buildkite/agent/logger"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestGSUploaderBucketPath(t *testing.T) {
-	t.Parallel()
-
-	gsUploader, err := NewGSUploader(logger.Discard, GSUploaderConfig{
-		Destination: "gs://my-bucket-name/foo/bar",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, gsUploader.BucketPath(), "foo/bar")
-
-	gsUploader, err = NewGSUploader(logger.Discard, GSUploaderConfig{
-		Destination: "gs://starts-with-an-s/and-this-is-its/folder",
-	})
-
-	assert.NoError(t, err)
-	assert.Equal(t, gsUploader.BucketPath(), "and-this-is-its/folder")
+func TestParseGSDestinationBucketPath(t *testing.T) {
+	for _, tc := range []struct {
+		Destination, Path string
+	}{
+		{"gs://my-bucket-name/foo/bar", "foo/bar"},
+		{"gs://starts-with-an-s/and-this-is-its/folder", "and-this-is-its/folder"},
+	} {
+		_, path := ParseGSDestination(tc.Destination)
+		if path != tc.Path {
+			t.Fatalf("Expected %q, got %q", tc.Path, path)
+		}
+	}
 }
 
-func TestGSUploaderBucketName(t *testing.T) {
-	t.Parallel()
-
-	gsUploader, err := NewGSUploader(logger.Discard, GSUploaderConfig{
-		Destination: "gs://my-bucket-name/foo/bar",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, gsUploader.BucketName(), "my-bucket-name")
-
-	gsUploader, err = NewGSUploader(logger.Discard, GSUploaderConfig{
-		Destination: "gs://starts-with-an-s",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, gsUploader.BucketName(), "starts-with-an-s")
+func TestParseGSDestinationBucketName(t *testing.T) {
+	for _, tc := range []struct {
+		Destination, Bucket string
+	}{
+		{"gs://my-bucket-name/foo/bar", "my-bucket-name"},
+		{"gs://starts-with-an-s", "starts-with-an-s"},
+	} {
+		bucket, _ := ParseGSDestination(tc.Destination)
+		if bucket != tc.Bucket {
+			t.Fatalf("Expected %q, got %q", tc.Bucket, bucket)
+		}
+	}
 }

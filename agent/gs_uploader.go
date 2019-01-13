@@ -30,6 +30,12 @@ type GSUploaderConfig struct {
 }
 
 type GSUploader struct {
+	// The gs bucket path set from the destination
+	BucketPath string
+
+	// The gs bucket name set from the destination
+	BucketName string
+
 	// The configuration
 	conf GSUploaderConfig
 
@@ -40,7 +46,7 @@ type GSUploader struct {
 	service *storage.Service
 }
 
-func NewGSUploader(l *logger.Logger, conf GSUploaderConfig) (*GSUploader, error) {
+func NewGSUploader(l *logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
 	client, err := newGoogleClient(storage.DevstorageFullControlScope)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
@@ -49,11 +55,21 @@ func NewGSUploader(l *logger.Logger, conf GSUploaderConfig) (*GSUploader, error)
 	if err != nil {
 		return nil, err
 	}
+	bucketName, bucketPath := ParseGSDestination(c.Destination)
 	return &GSUploader{
-		conf: conf,
+		BucketPath: bucketPath,
+		BucketName: bucketName,
+		conf: c,
 		logger: l,
 		service: service,
 	}, nil
+}
+
+func ParseGSDestination(destination string) (name string, path string) {
+	parts := strings.Split(strings.TrimPrefix(string(destination), "gs://"), "/")
+	path = strings.Join(parts[1:len(parts)], "/")
+	name = parts[0]
+	return
 }
 
 func newGoogleClient(scope string) (*http.Client, error) {
@@ -80,7 +96,7 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	var artifactURL = &url.URL{
 		Scheme: "https",
 		Host:   host,
-		Path:   u.BucketName() + "/" + u.artifactPath(artifact),
+		Path:   u.BucketName + "/" + u.artifactPath(artifact),
 	}
 	return artifactURL.String()
 }
@@ -100,10 +116,10 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 
 	if permission == "" {
 		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with default permission",
-			u.artifactPath(artifact), u.BucketName())
+			u.artifactPath(artifact), u.BucketName)
 	} else {
 		u.logger.Debug("Uploading \"%s\" to bucket \"%s\" with permission \"%s\"",
-			u.artifactPath(artifact), u.BucketName(), permission)
+			u.artifactPath(artifact), u.BucketName, permission)
 	}
 	object := &storage.Object{
 		Name:               u.artifactPath(artifact),
@@ -114,7 +130,7 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Failed to open file \"%q\" (%v)", artifact.AbsolutePath, err))
 	}
-	call := u.service.Objects.Insert(u.BucketName(), object)
+	call := u.service.Objects.Insert(u.BucketName, object)
 	if permission != "" {
 		call = call.PredefinedAcl(permission)
 	}
@@ -128,23 +144,9 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *GSUploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.BucketPath(), artifact.Path}
+	parts := []string{u.BucketPath, artifact.Path}
 
 	return strings.Join(parts, "/")
-}
-
-func (u *GSUploader) BucketPath() string {
-	return strings.Join(u.destinationParts()[1:len(u.destinationParts())], "/")
-}
-
-func (u *GSUploader) BucketName() string {
-	return u.destinationParts()[0]
-}
-
-func (u *GSUploader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(u.conf.Destination, "gs://")
-
-	return strings.Split(trimmed, "/")
 }
 
 func (u *GSUploader) mimeType(a *api.Artifact) string {

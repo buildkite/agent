@@ -2,35 +2,32 @@ package agent
 
 import (
 	"testing"
-
-	"github.com/buildkite/agent/logger"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestS3UploaderBucketPath(t *testing.T) {
-	s3Uploader, err := NewS3Uploader(logger.Discard, S3UploaderConfig{
-		Destination: "s3://my-bucket-name/foo/bar",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, s3Uploader.BucketPath, "foo/bar")
-
-	s3Uploader, err = NewS3Uploader(logger.Discard, S3UploaderConfig{
-		Destination: "s3://starts-with-an-s/and-this-is-its/folder",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, s3Uploader.BucketPath, "and-this-is-its/folder")
+func TestParseS3DestinationBucketPath(t *testing.T) {
+	for _, tc := range []struct {
+		Destination, Path string
+	}{
+		{"s3://my-bucket-name/foo/bar", "foo/bar"},
+		{"s3://starts-with-an-s/and-this-is-its/folder", "and-this-is-its/folder"},
+	} {
+		_, path := ParseS3Destination(tc.Destination)
+		if path != tc.Path {
+			t.Fatalf("Expected %q, got %q", tc.Path, path)
+		}
+	}
 }
 
-func TestS3UploaderBucketName(t *testing.T) {
-	s3Uploader, err := NewS3Uploader(logger.Discard, S3UploaderConfig{
-		Destination: "s3://my-bucket-name/foo/bar",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, s3Uploader.BucketName, "my-bucket-name")
-
-	s3Uploader, err = NewS3Uploader(logger.Discard, S3UploaderConfig{
-		Destination: "s3://starts-with-an-s",
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, s3Uploader.BucketName, "starts-with-an-s")
+func TestParseS3DestinationBucketName(t *testing.T) {
+	for _, tc := range []struct {
+		Destination, Bucket string
+	}{
+		{"s3://my-bucket-name/foo/bar", "my-bucket-name"},
+		{"s3://starts-with-an-s", "starts-with-an-s"},
+	} {
+		bucket, _ := ParseS3Destination(tc.Destination)
+		if bucket != tc.Bucket {
+			t.Fatalf("Expected %q, got %q", tc.Bucket, bucket)
+		}
+	}
 }
