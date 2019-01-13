@@ -22,11 +22,10 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.Process{
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester"},
-		Logger: logger.Discard,
-	}
+	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -64,12 +63,11 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 func TestProcessCapturesOutputLineByLine(t *testing.T) {
 	var lines = &processLineHandler{}
 
-	p := process.Process{
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
 		Script:  []string{os.Args[0]},
 		Env:     []string{"TEST_MAIN=tester"},
-		Logger:  logger.Discard,
 		Handler: lines.Handle,
-	}
+	})
 
 	if err := p.Start(); err != nil {
 		t.Error(err)
@@ -95,12 +93,11 @@ func TestProcessInterrupts(t *testing.T) {
 
 	var lines = &processLineHandler{}
 
-	p := process.Process{
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
 		Script:  []string{os.Args[0]},
 		Env:     []string{"TEST_MAIN=tester-signal"},
-		Logger:  logger.Discard,
 		Handler: lines.Handle,
-	}
+	})
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -133,11 +130,10 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		return
 	}
 
-	p := process.Process{
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester-pgid"},
-		Logger: logger.Discard,
-	}
+	})
 
 	if err := p.Start(); err != nil {
 		t.Fatal(err)

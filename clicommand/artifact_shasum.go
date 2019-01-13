@@ -83,16 +83,14 @@ var ArtifactShasumCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(l, cfg)
 
+		// Create the API client
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
+			Endpoint: cfg.Endpoint,
+			Token:    cfg.AgentAccessToken,
+		})
+
 		// Find the artifact we want to show the SHASUM for
-		searcher := agent.ArtifactSearcher{
-			Logger: l,
-			APIClient: agent.APIClient{
-				Logger:   l,
-				Endpoint: cfg.Endpoint,
-				Token:    cfg.AgentAccessToken,
-			}.Create(),
-			BuildID: cfg.Build,
-		}
+		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
 
 		artifacts, err := searcher.Search(cfg.Query, cfg.Step)
 		if err != nil {

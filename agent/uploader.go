@@ -5,9 +5,6 @@ import (
 )
 
 type Uploader interface {
-	// Called before anything happens.
-	Setup(string, bool) error
-
 	// The Artifact.URL property is populated with what ever is returned
 	// from this method prior to uploading.
 	URL(*api.Artifact) string

@@ -7,24 +7,34 @@ import (
 
 type ArtifactSearcher struct {
 	// The logger instance to use
-	Logger *logger.Logger
+	logger *logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	APIClient *api.Client
+	apiClient *api.Client
 
 	// The ID of the Build that these artifacts belong to
-	BuildID string
+	buildID string
+}
+
+func NewArtifactSearcher(l *logger.Logger, ac *api.Client, buildID string) *ArtifactSearcher {
+	return &ArtifactSearcher{
+		logger:    l,
+		apiClient: ac,
+		buildID:   buildID,
+	}
 }
 
 func (a *ArtifactSearcher) Search(query string, scope string) ([]*api.Artifact, error) {
 	if scope == "" {
-		a.Logger.Info("Searching for artifacts: \"%s\"", query)
+		a.logger.Info("Searching for artifacts: \"%s\"", query)
 	} else {
-		a.Logger.Info("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope)
+		a.logger.Info("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope)
 	}
 
-	options := &api.ArtifactSearchOptions{Query: query, Scope: scope}
-	artifacts, _, err := a.APIClient.Artifacts.Search(a.BuildID, options)
+	artifacts, _, err := a.apiClient.Artifacts.Search(a.buildID, &api.ArtifactSearchOptions{
+		Query: query,
+		Scope: scope,
+	})
 
 	return artifacts, err
 }

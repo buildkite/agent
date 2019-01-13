@@ -126,11 +126,10 @@ var AnnotateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.APIClient{
-			Logger: l,
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
 			Endpoint: cfg.Endpoint,
 			Token:    cfg.AgentAccessToken,
-		}.Create()
+		})
 
 		// Create the annotation we'll send to the Buildkite API
 		annotation := &api.Annotation{

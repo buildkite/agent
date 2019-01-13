@@ -11,10 +11,7 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-type S3Downloader struct {
-	// The logger instance to use
-	Logger *logger.Logger
-
+type S3DownloaderConfig struct {
 	// The S3 bucket name and the path, e.g s3://my-bucket-name/foo/bar
 	Bucket string
 
@@ -32,9 +29,24 @@ type S3Downloader struct {
 	DebugHTTP bool
 }
 
+type S3Downloader struct {
+	// The download config
+	conf S3DownloaderConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+}
+
+func NewS3Downloader(l *logger.Logger, c S3DownloaderConfig) *S3Downloader {
+	return &S3Downloader{
+		conf:   c,
+		logger: l,
+	}
+}
+
 func (d S3Downloader) Start() error {
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(d.Logger, d.BucketName())
+	s3Client, err := newS3Client(d.logger, d.BucketName())
 	if err != nil {
 		return err
 	}
@@ -50,22 +62,20 @@ func (d S3Downloader) Start() error {
 	}
 
 	// We can now cheat and pass the URL onto our regular downloader
-	return Download{
-		Logger:      d.Logger,
-		Client:      *http.DefaultClient,
+	return NewDownload(d.logger, http.DefaultClient, DownloadConfig{
 		URL:         signedURL,
-		Path:        d.Path,
-		Destination: d.Destination,
-		Retries:     d.Retries,
-		DebugHTTP:   d.DebugHTTP,
-	}.Start()
+		Path:        d.conf.Path,
+		Destination: d.conf.Destination,
+		Retries:     d.conf.Retries,
+		DebugHTTP:   d.conf.DebugHTTP,
+	}).Start()
 }
 
 func (d S3Downloader) BucketFileLocation() string {
 	if d.BucketPath() != "" {
-		return strings.TrimSuffix(d.BucketPath(), "/") + "/" + strings.TrimPrefix(d.Path, "/")
+		return strings.TrimSuffix(d.BucketPath(), "/") + "/" + strings.TrimPrefix(d.conf.Path, "/")
 	} else {
-		return d.Path
+		return d.conf.Path
 	}
 }
 
@@ -78,7 +88,7 @@ func (d S3Downloader) BucketName() string {
 }
 
 func (d S3Downloader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(d.Bucket, "s3://")
+	trimmed := strings.TrimPrefix(d.conf.Bucket, "s3://")
 
 	return strings.Split(trimmed, "/")
 }

@@ -34,7 +34,7 @@ type Loader struct {
 var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
-func Load(c *cli.Context, l*logger.Logger, cfg interface{}) error {
+func Load(c *cli.Context, l *logger.Logger, cfg interface{}) error {
 	loader := Loader{
 		CLI:    c,
 		Config: cfg,
