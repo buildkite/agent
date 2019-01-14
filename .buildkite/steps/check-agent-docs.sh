@@ -40,7 +40,7 @@ if [ ${#undocumented[@]} -eq 0 ] ; then
 else
   for env in "${undocumented[@]}" ; do
     echo "+++ 🚨 $env isn't documented"
-    git grep "$env"
+    git --no-pager grep -n "$env"
     echo
   done
 fi
