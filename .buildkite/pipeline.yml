@@ -19,6 +19,9 @@ steps:
     agents:
       queue: "windows"
 
+  - name: ":book:"
+    command: ".buildkite/steps/check-agent-docs.sh"
+
   - wait
 
   - name: ":windows: 386"
