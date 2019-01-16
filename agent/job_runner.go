@@ -549,9 +549,16 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
-// Call when a chunk is ready for upload. It retry the chunk upload with an
-// interval before giving up.
+// Call when a chunk is ready for upload.
 func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
+	// We consider logs to be an important thing, and we shouldn't give up
+	// on sending the chunk data back to Buildkite. In the event Buildkite
+	// is having downtime or there are connection problems, we'll want to
+	// hold onto chunks until it's back online to upload them.
+	//
+	// This code will retry forever until we get back a successful response
+	// from Buildkite that it's considered the chunk (a 422 will be
+	// returned if the chunk is invalid, and we shouldn't retry on that)
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := r.apiClient.Chunks.Upload(r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
@@ -560,9 +567,14 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 			Size:     chunk.Size,
 		})
 		if err != nil {
-			r.logger.Warn("%s (%s)", err, s)
+			if response != nil && response.StatusCode == 422 {
+				r.logger.Warn("Buildkite rejected the chunk upload (%s)", err)
+				s.Break()
+			} else {
+				r.logger.Warn("%s (%s)", err, s)
+			}
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+	}, &retry.Config{Forever: true, Jitter: true, Interval: 5 * time.Second})
 }
