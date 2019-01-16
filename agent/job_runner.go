@@ -557,7 +557,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	// hold onto chunks until it's back online to upload them.
 	//
 	// This code will retry forever until we get back a successful response
-	// from Buildkite that it's considered the chunk (a 422 will be
+	// from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
 	return retry.Do(func(s *retry.Stats) error {
 		response, err := r.apiClient.Chunks.Upload(r.job.ID, &api.Chunk{
@@ -567,7 +567,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 			Size:     chunk.Size,
 		})
 		if err != nil {
-			if response != nil && response.StatusCode == 422 {
+			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the chunk upload (%s)", err)
 				s.Break()
 			} else {
