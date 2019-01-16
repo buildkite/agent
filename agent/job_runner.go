@@ -560,7 +560,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	// from Buildkite that it's considered the chunk (a 422 will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
 	return retry.Do(func(s *retry.Stats) error {
-		_, err := r.apiClient.Chunks.Upload(r.job.ID, &api.Chunk{
+		response, err := r.apiClient.Chunks.Upload(r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 			Offset:   chunk.Offset,
