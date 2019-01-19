@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,8 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"encoding/json"
-	"context"
 
 	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
@@ -483,7 +483,7 @@ func (b *Bootstrap) loadPlugins() ([]*plugin.Plugin, error) {
 	return b.plugins, nil
 }
 
-func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout)  error {
+func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 	if !b.Config.PluginValidation {
 		return nil
 	}
@@ -601,9 +601,9 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 		}
 
 		checkout := &pluginCheckout{
-			Plugin: p,
+			Plugin:      p,
 			CheckoutDir: pluginLocation,
-			HooksDir: filepath.Join(pluginLocation, "hooks"),
+			HooksDir:    filepath.Join(pluginLocation, "hooks"),
 		}
 
 		// Also make sure that plugin is withing this repository

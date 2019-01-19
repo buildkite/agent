@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
-	"sync/atomic"
+	"sync"
 	"syscall"
 
 	"github.com/buildkite/agent/bootstrap"
@@ -341,35 +341,45 @@ var BootstrapCommand = cli.Command{
 			syscall.SIGQUIT)
 		defer signal.Stop(signals)
 
-		var cancelled uint32
+		var (
+			cancelled bool
+			received  os.Signal
+			signalMu  sync.Mutex
+		)
 
-		// Listen for signals in the background
+		// Listen for signals in the background and cancel the bootstrap
 		go func() {
-			// When we get a signal, we cancel the bootstrap
-			for _ = range signals {
-				bootstrap.Cancel()
-				atomic.StoreUint32(&cancelled, 1)
-			}
+			sig := <-signals
+			signalMu.Lock()
+			defer signalMu.Unlock()
+
+			// Cancel the bootstrap
+			bootstrap.Cancel()
+
+			// Track the state and signal used
+			cancelled = true
+			received = sig
+
+			// Remove our signal handler so subsequent signals kill
+			signal.Stop(signals)
 		}()
 
 		// Run the bootstrap and get the exit code
 		exitCode := bootstrap.Start()
 
-		// Cancelled with a non-zero should terminate ourselves so that
-		// the parent process gets a -1 exit code. This seems kind of weird,
-		// but it's what bash does, so I guess that means it's the shell-ish
-		// way to do things?
-		if atomic.LoadUint32(&cancelled) == 1 {
+		signalMu.Lock()
+		defer signalMu.Unlock()
+
+		// If cancelled and our child process returns a non-zero, we should terminate
+		// ourselves with the same signal so that our caller can detect and handle appropriately
+		if cancelled && runtime.GOOS != `windows` {
 			p, err := os.FindProcess(os.Getpid())
 			if err != nil {
 				l.Error("Failed to find current process: %v", err)
 			}
 
-			// Remove our signal handler
-			signal.Stop(signals)
-
-			l.Debug("Terminating bootstrap after cancellation")
-			err = p.Signal(syscall.SIGKILL)
+			l.Debug("Terminating bootstrap after cancellation with %v", received)
+			err = p.Signal(received)
 			if err != nil {
 				l.Error("Failed to signal self: %v", err)
 			}
