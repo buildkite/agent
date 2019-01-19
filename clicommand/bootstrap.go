@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"sync"
 	"syscall"
 
 	"github.com/buildkite/agent/bootstrap"
@@ -340,13 +341,50 @@ var BootstrapCommand = cli.Command{
 			syscall.SIGQUIT)
 		defer signal.Stop(signals)
 
+		var (
+			cancelled bool
+			received  os.Signal
+			signalMu  sync.Mutex
+		)
+
+		// Listen for signals in the background and cancel the bootstrap
 		go func() {
-			for _ = range signals {
-				bootstrap.Cancel()
-			}
+			sig := <-signals
+			signalMu.Lock()
+			defer signalMu.Unlock()
+
+			// Cancel the bootstrap
+			bootstrap.Cancel()
+
+			// Track the state and signal used
+			cancelled = true
+			received = sig
+
+			// Remove our signal handler so subsequent signals kill
+			signal.Stop(signals)
 		}()
 
-		// Run the bootstrap and exit with whatever it returns
-		os.Exit(bootstrap.Start())
+		// Run the bootstrap and get the exit code
+		exitCode := bootstrap.Start()
+
+		signalMu.Lock()
+		defer signalMu.Unlock()
+
+		// If cancelled and our child process returns a non-zero, we should terminate
+		// ourselves with the same signal so that our caller can detect and handle appropriately
+		if cancelled && runtime.GOOS != `windows` {
+			p, err := os.FindProcess(os.Getpid())
+			if err != nil {
+				l.Error("Failed to find current process: %v", err)
+			}
+
+			l.Debug("Terminating bootstrap after cancellation with %v", received)
+			err = p.Signal(received)
+			if err != nil {
+				l.Error("Failed to signal self: %v", err)
+			}
+		}
+
+		os.Exit(exitCode)
 	},
 }
