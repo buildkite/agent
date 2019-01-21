@@ -314,6 +314,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env[key] = value
 	}
 
+	// The agent registration token should never make it into the job environment
+	if _, exists := env[`BUILDKITE_AGENT_TOKEN`]; exists {
+		delete(env, `BUILDKITE_AGENT_TOKEN`)
+	}
+
 	// Write out the job environment to a file, in k="v" format, with newlines escaped
 	// We present only the clean environment - i.e only variables configured
 	// on the job upstream - and expose the path in another environment variable.
