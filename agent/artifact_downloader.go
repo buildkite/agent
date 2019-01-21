@@ -39,7 +39,11 @@ type ArtifactDownloader struct {
 }
 
 func NewArtifactDownloader(l *logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
-	return ArtifactDownloader{}
+	return ArtifactDownloader{
+		logger: l,
+		apiClient: ac,
+		conf: c,
+	}
 }
 
 func (a *ArtifactDownloader) Download() error {
@@ -47,7 +51,8 @@ func (a *ArtifactDownloader) Download() error {
 	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
-		return fmt.Errorf("Could not find information about destination: %s", downloadDestination)
+		return fmt.Errorf("Could not find information about destination: %s %v", 
+			downloadDestination, err)
 	}
 	if !fileInfo.IsDir() {
 		return fmt.Errorf("%s is not a directory", downloadDestination)
