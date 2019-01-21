@@ -48,6 +48,7 @@ type ArtifactUploader struct {
 func NewArtifactUploader(l *logger.Logger, ac *api.Client, c ArtifactUploaderConfig) *ArtifactUploader {
 	return &ArtifactUploader{
 		logger: l,
+		apiClient: ac,
 		conf:   c,
 	}
 }
