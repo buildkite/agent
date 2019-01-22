@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.8.4](https://github.com/buildkite/agent/tree/v3.8.4) (2019-01-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.8.3...v3.8.4)
+
+### Fixed
+- Fix and test another seg fault in the artifact searcher [#901](https://github.com/buildkite/agent/pull/901) (@lox)
+- Fix a seg-fault in the artifact uploader [#900](https://github.com/buildkite/agent/pull/900) (@lox)
+
 ## [v3.8.3](https://github.com/buildkite/agent/tree/v3.8.3) (2019-01-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.8.2...v3.8.3)
 
