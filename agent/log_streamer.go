@@ -9,18 +9,26 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-type LogStreamer struct {
+type LogStreamerConfig struct {
 	// How many log streamer workers are running at any one time
 	Concurrency int
 
 	// The maximum size of chunks
 	MaxChunkSizeBytes int
+}
+
+type LogStreamer struct {
+	// The configuration
+	conf LogStreamerConfig
+
+	// The logger instance to use
+	logger *logger.Logger
 
 	// A counter of how many chunks failed to upload
-	ChunksFailedCount int32
+	chunksFailedCount int32
 
 	// The callback called when a chunk is ready for upload
-	Callback func(chunk *LogStreamerChunk) error
+	callback func(chunk *LogStreamerChunk) error
 
 	// The queue of chunks that are needing to be uploaded
 	queue chan *LogStreamerChunk
@@ -55,24 +63,30 @@ type LogStreamerChunk struct {
 }
 
 // Creates a new instance of the log streamer
-func (ls LogStreamer) New() *LogStreamer {
-	ls.Concurrency = 3
-	ls.queue = make(chan *LogStreamerChunk, 1024)
-
-	return &ls
+func NewLogStreamer(l *logger.Logger, cb func(chunk *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
+	return &LogStreamer{
+		logger:   l,
+		conf:     c,
+		callback: cb,
+		queue:    make(chan *LogStreamerChunk, 1024),
+	}
 }
 
 // Spins up x number of log streamer workers
 func (ls *LogStreamer) Start() error {
-	if ls.MaxChunkSizeBytes == 0 {
+	if ls.conf.MaxChunkSizeBytes == 0 {
 		return errors.New("Maximum chunk size must be more than 0. No logs will be sent.")
 	}
 
-	for i := 0; i < ls.Concurrency; i++ {
+	for i := 0; i < ls.conf.Concurrency; i++ {
 		go Worker(i, ls)
 	}
 
 	return nil
+}
+
+func (ls *LogStreamer) FailedChunks() int {
+	return int(atomic.LoadInt32(&ls.chunksFailedCount))
 }
 
 // Takes the full process output, grabs the portion we don't have, and adds it
@@ -88,7 +102,7 @@ func (ls *LogStreamer) Process(output string) error {
 		blob := output[ls.bytes:bytes]
 
 		// How many chunks do we have that fit within the MaxChunkSizeBytes?
-		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(ls.MaxChunkSizeBytes)))
+		numberOfChunks := int(math.Ceil(float64(len(blob)) / float64(ls.conf.MaxChunkSizeBytes)))
 
 		// Increase the wait group by the amount of chunks we're going
 		// to add
@@ -96,13 +110,13 @@ func (ls *LogStreamer) Process(output string) error {
 
 		for i := 0; i < numberOfChunks; i++ {
 			// Find the upper limit of the blob
-			upperLimit := (i + 1) * ls.MaxChunkSizeBytes
+			upperLimit := (i + 1) * ls.conf.MaxChunkSizeBytes
 			if upperLimit > len(blob) {
 				upperLimit = len(blob)
 			}
 
 			// Grab the 100kb section of the blob
-			partialChunk := blob[i*ls.MaxChunkSizeBytes : upperLimit]
+			partialChunk := blob[i*ls.conf.MaxChunkSizeBytes : upperLimit]
 
 			// Increment the order
 			ls.order += 1
@@ -116,7 +130,7 @@ func (ls *LogStreamer) Process(output string) error {
 			}
 
 			ls.queue <- &chunk
-			
+
 			// Save the new amount of bytes
 			ls.bytes += len(partialChunk)
 		}
@@ -129,13 +143,13 @@ func (ls *LogStreamer) Process(output string) error {
 
 // Waits for all the chunks to be uploaded, then shuts down all the workers
 func (ls *LogStreamer) Stop() error {
-	logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
+	ls.logger.Debug("[LogStreamer] Waiting for all the chunks to be uploaded")
 
 	ls.chunkWaitGroup.Wait()
 
-	logger.Debug("[LogStreamer] Shutting down all workers")
+	ls.logger.Debug("[LogStreamer] Shutting down all workers")
 
-	for n := 0; n < ls.Concurrency; n++ {
+	for n := 0; n < ls.conf.Concurrency; n++ {
 		ls.queue <- nil
 	}
 
@@ -144,7 +158,7 @@ func (ls *LogStreamer) Stop() error {
 
 // The actual log streamer worker
 func Worker(id int, ls *LogStreamer) {
-	logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
+	ls.logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
 	var chunk *LogStreamerChunk
 	for {
@@ -158,16 +172,16 @@ func Worker(id int, ls *LogStreamer) {
 		}
 
 		// Upload the chunk
-		err := ls.Callback(chunk)
+		err := ls.callback(chunk)
 		if err != nil {
-			atomic.AddInt32(&ls.ChunksFailedCount, 1)
+			atomic.AddInt32(&ls.chunksFailedCount, 1)
 
-			logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
+			ls.logger.Error("Giving up on uploading chunk %d, this will result in only a partial build log on Buildkite", chunk.Order)
 		}
 
 		// Signal to the chunkWaitGroup that this one is done
 		ls.chunkWaitGroup.Done()
 	}
 
-	logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
+	ls.logger.Debug("[LogStreamer/Worker#%d] Worker has shutdown", id)
 }

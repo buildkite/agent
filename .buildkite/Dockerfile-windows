@@ -12,19 +12,17 @@ RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object Sys
 # Install Chocolatey packages
 RUN choco install -y git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install -y openssh && \
-  choco install -y golang
+  choco install golang --version 1.11.4 -my && \
+  choco install -y mingw
 
-# Hack for mounting in code later (Use G:)
-# See https://github.com/moby/moby/issues/27537#issuecomment-271546031
-VOLUME c:/data
-RUN powershell set-itemproperty -path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\DOS Devices' -Name 'G:' -Value '\??\C:\data' -Type String
+WORKDIR c:/code
 
-# Copy across the agent source
-ENV GOPATH=c:/gopath
-WORKDIR c:/gopath/src/github.com/buildkite/agent
-COPY . .
+# Cache go modules in docker cache
+COPY go.mod go.sum c:/code/
+RUN go mod download
 
-# Build agent and put binary in a dir in the PATH (remarkably hard to add to path)
-RUN go build -i -o .\buildkite-agent.exe
+# Copy the rest of the code
+COPY . c:/code/
 
-CMD ["./buildkite-agent.exe", "start"]
+# Run things in bash
+ENTRYPOINT ["BASH.EXE"]

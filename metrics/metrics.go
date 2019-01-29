@@ -20,24 +20,35 @@ const (
 )
 
 type Collector struct {
+	config CollectorConfig
+	logger *logger.Logger
+	client *statsd.Client
+}
+
+type CollectorConfig struct {
 	Datadog     bool
 	DatadogHost string
+}
 
-	client *statsd.Client
+func NewCollector(l *logger.Logger, c CollectorConfig) *Collector {
+	return &Collector{
+		config: c,
+		logger: l,
+	}
 }
 
 var portSuffixRegexp = regexp.MustCompile(`:\d+$`)
 
 func (c *Collector) Start() error {
-	if c.Datadog {
-		if !portSuffixRegexp.MatchString(c.DatadogHost) {
-			c.DatadogHost += fmt.Sprintf(":%d", defaultDogStatsdPort)
+	if c.config.Datadog {
+		if !portSuffixRegexp.MatchString(c.config.DatadogHost) {
+			c.config.DatadogHost += fmt.Sprintf(":%d", defaultDogStatsdPort)
 		}
 
-		logger.Info("Starting datadog metrics collection to %s", c.DatadogHost)
+		c.logger.Info("Starting datadog metrics collection to %s", c.config.DatadogHost)
 
 		var err error
-		c.client, err = statsd.NewBuffered(c.DatadogHost, statsdBufferLen)
+		c.client, err = statsd.NewBuffered(c.config.DatadogHost, statsdBufferLen)
 		if err != nil {
 			return err
 		}
@@ -48,8 +59,8 @@ func (c *Collector) Start() error {
 }
 
 func (c *Collector) Stop() error {
-	if c.Datadog && c.client != nil {
-		logger.Info("Stopping metrics collection")
+	if c.config.Datadog && c.client != nil {
+		c.logger.Info("Stopping metrics collection")
 		return c.client.Close()
 	}
 	return nil
@@ -74,10 +85,10 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...).StringSlice()
-	logger.Debug("Metrics timing %s=%v %v", name, value, mergedTags)
+	s.c.logger.Debug("Metrics timing %s=%v %v", name, value, mergedTags)
 
 	if err := s.c.client.Timing(name, value, mergedTags, 1); err != nil {
-		logger.Error("Metrics timing failed: %v", err)
+		s.c.logger.Error("Metrics timing failed: %v", err)
 	}
 }
 
@@ -96,10 +107,10 @@ func (s *Scope) Count(name string, value int64, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...).StringSlice()
-	logger.Debug("Metrics count %s=%v %v", name, value, mergedTags)
+	s.c.logger.Debug("Metrics count %s=%v %v", name, value, mergedTags)
 
 	if err := s.c.client.Count(name, value, mergedTags, 1); err != nil {
-		logger.Error("Metrics count failed: %v", err)
+		s.c.logger.Error("Metrics count failed: %v", err)
 	}
 }
 

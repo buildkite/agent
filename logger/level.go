@@ -3,18 +3,18 @@ package logger
 type Level int
 
 const (
-	INFO Level = iota
+	DEBUG Level = iota
 	NOTICE
-	DEBUG
+	INFO
 	ERROR
 	WARN
 	FATAL
 )
 
 var levelNames = []string{
-	"INFO",
-	"NOTICE",
 	"DEBUG",
+	"NOTICE",
+	"INFO",
 	"ERROR",
 	"WARN",
 	"FATAL",

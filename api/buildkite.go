@@ -30,6 +30,9 @@ type Client struct {
 	// HTTP client used to communicate with the API.
 	client *http.Client
 
+	// The logger used
+	logger *logger.Logger
+
 	// Base URL for API requests. Defaults to the public Buildkite Agent API.
 	// The URL should always be specified with a trailing slash.
 	BaseURL *url.URL
@@ -54,10 +57,11 @@ type Client struct {
 }
 
 // NewClient returns a new Buildkite Agent API Client.
-func NewClient(httpClient *http.Client) *Client {
+func NewClient(httpClient *http.Client, l *logger.Logger) *Client {
 	baseURL, _ := url.Parse(defaultBaseURL)
 
 	c := &Client{
+		logger:    l,
 		client:    httpClient,
 		BaseURL:   baseURL,
 		UserAgent: defaultUserAgent,
@@ -185,19 +189,19 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 			requestDump, err = httputil.DumpRequestOut(req, true)
 		}
 
-		logger.Debug("ERR: %s\n%s", err, string(requestDump))
+		c.logger.Debug("ERR: %s\n%s", err, string(requestDump))
 	}
 
 	ts := time.Now()
 
-	logger.Debug("%s %s", req.Method, req.URL)
+	c.logger.Debug("%s %s", req.Method, req.URL)
 
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug("↳ %s %s (%s %s %s)", req.Method, req.URL, resp.Proto, resp.Status, time.Now().Sub(ts))
+	c.logger.Debug("↳ %s %s (%s %s %s)", req.Method, req.URL, resp.Proto, resp.Status, time.Now().Sub(ts))
 
 	defer resp.Body.Close()
 	defer io.Copy(ioutil.Discard, resp.Body)
@@ -206,7 +210,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 
 	if c.DebugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
-		logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+		c.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 	}
 
 	err = checkResponse(resp)

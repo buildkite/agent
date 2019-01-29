@@ -9,10 +9,13 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-type HeaderTimesStreamer struct {
+type headerTimesStreamer struct {
+	// The logger instance to use
+	logger *logger.Logger
+
 	// The callback that will be called when a header time is ready for
 	// upload
-	UploadCallback func(int, int, map[string]string)
+	uploadCallback func(int, int, map[string]string)
 
 	// The times that have found while scanning lines
 	times      []string
@@ -36,11 +39,18 @@ type HeaderTimesStreamer struct {
 	cursor int
 }
 
-func (h *HeaderTimesStreamer) Start() error {
+func newHeaderTimesStreamer(l *logger.Logger, upload func(int, int, map[string]string)) *headerTimesStreamer {
+	return &headerTimesStreamer{
+		logger:         l,
+		uploadCallback: upload,
+	}
+}
+
+func (h *headerTimesStreamer) Start() error {
 	h.streaming = true
 
 	go func() {
-		logger.Debug("[HeaderTimesStreamer] Streamer has started...")
+		h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
 
 		for true {
 			// Break out of streaming if it's finished. We also
@@ -59,7 +69,7 @@ func (h *HeaderTimesStreamer) Start() error {
 			time.Sleep(1 * time.Second)
 		}
 
-		logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
+		h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
 	}()
 
 	return nil
@@ -67,13 +77,13 @@ func (h *HeaderTimesStreamer) Start() error {
 
 // Scan takes a line of log output and tracks a time if it's a header.
 // Returns true for header lines
-func (h *HeaderTimesStreamer) Scan(line string) bool {
+func (h *headerTimesStreamer) Scan(line string) bool {
 	// Keep track of how many line scans we need to do
 	h.scanWaitGroup.Add(1)
 	defer h.scanWaitGroup.Done()
 
 	if isHeader(line) {
-		logger.Debug("[HeaderTimesStreamer] Found header %q", line)
+		h.logger.Debug("[HeaderTimesStreamer] Found header %q", line)
 
 		// Aquire a lock on the times and then add the current time to
 		// our times slice.
@@ -89,7 +99,7 @@ func (h *HeaderTimesStreamer) Scan(line string) bool {
 	return false
 }
 
-func (h *HeaderTimesStreamer) Upload() {
+func (h *headerTimesStreamer) Upload() {
 	// Store the current cursor value
 	c := h.cursor
 
@@ -115,20 +125,20 @@ func (h *HeaderTimesStreamer) Upload() {
 	// Do we even have some times to upload
 	if timesToUpload > 0 {
 		// Call our callback with the times for upload
-		logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
-		h.UploadCallback(c, length, payload)
-		logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
+		h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
+		h.uploadCallback(c, length, payload)
+		h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
 
 		// Decrement the wait group for every time we've uploaded.
 		h.uploadWaitGroup.Add(timesToUpload * -1)
 	}
 }
 
-func (h *HeaderTimesStreamer) Stop() {
-	logger.Debug("[HeaderTimesStreamer] Waiting for all the lines to be scanned")
+func (h *headerTimesStreamer) Stop() {
+	h.logger.Debug("[HeaderTimesStreamer] Waiting for all the lines to be scanned")
 	h.scanWaitGroup.Wait()
 
-	logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
+	h.logger.Debug("[HeaderTimesStreamer] Waiting for all the header times to be uploaded")
 	h.uploadWaitGroup.Wait()
 
 	// Since we're modifying the waitGroup and the streaming flag, we need

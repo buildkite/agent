@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,10 +13,7 @@ import (
 	"github.com/buildkite/agent/pool"
 )
 
-type ArtifactDownloader struct {
-	// The APIClient that will be used when uploading jobs
-	APIClient *api.Client
-
+type ArtifactDownloaderConfig struct {
 	// The ID of the Build
 	BuildID string
 
@@ -27,20 +27,40 @@ type ArtifactDownloader struct {
 	Destination string
 }
 
+type ArtifactDownloader struct {
+	// The config for downloading
+	conf ArtifactDownloaderConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+
+	// The *api.Client that will be used when uploading jobs
+	apiClient *api.Client
+}
+
+func NewArtifactDownloader(l *logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
+	return ArtifactDownloader{
+		logger: l,
+		apiClient: ac,
+		conf: c,
+	}
+}
+
 func (a *ArtifactDownloader) Download() error {
 	// Turn the download destination into an absolute path and confirm it exists
-	downloadDestination, _ := filepath.Abs(a.Destination)
+	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
-		logger.Fatal("Could not find information about destination: %s", downloadDestination)
+		return fmt.Errorf("Could not find information about destination: %s %v", 
+			downloadDestination, err)
 	}
 	if !fileInfo.IsDir() {
-		logger.Fatal("%s is not a directory", downloadDestination)
+		return fmt.Errorf("%s is not a directory", downloadDestination)
 	}
 
 	// Find the artifacts that we want to download
-	searcher := ArtifactSearcher{BuildID: a.BuildID, APIClient: a.APIClient}
-	artifacts, err := searcher.Search(a.Query, a.Step)
+	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
+		Search(a.conf.Query, a.conf.Step)
 	if err != nil {
 		return err
 	}
@@ -48,9 +68,9 @@ func (a *ArtifactDownloader) Download() error {
 	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
-		logger.Fatal("No artifacts found for downloading")
+		return errors.New("No artifacts found for downloading")
 	} else {
-		logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
+		a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
 
 		p := pool.New(pool.MaxConcurrencyLimit)
 		errors := []error{}
@@ -65,36 +85,36 @@ func (a *ArtifactDownloader) Download() error {
 
 				// Handle downloading from S3 and GS
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
-					err = S3Downloader{
+					err = NewS3Downloader(a.logger, S3DownloaderConfig{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.APIClient.DebugHTTP,
-					}.Start()
+						DebugHTTP:   a.apiClient.DebugHTTP,
+					}).Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
-					err = GSDownloader{
+					err = NewGSDownloader(a.logger, GSDownloaderConfig{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.APIClient.DebugHTTP,
-					}.Start()
+						DebugHTTP:   a.apiClient.DebugHTTP,
+					}).Start()
 				} else {
-					err = Download{
+					err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
 						URL:         artifact.URL,
 						Path:        artifact.Path,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.APIClient.DebugHTTP,
-					}.Start()
+						DebugHTTP:   a.apiClient.DebugHTTP,
+					}).Start()
 				}
 
 				// If the downloaded encountered an error, lock
 				// the pool, collect it, then unlock the pool
 				// again.
 				if err != nil {
-					logger.Error("Failed to download artifact: %s", err)
+					a.logger.Error("Failed to download artifact: %s", err)
 
 					p.Lock()
 					errors = append(errors, err)
@@ -106,7 +126,7 @@ func (a *ArtifactDownloader) Download() error {
 		p.Wait()
 
 		if len(errors) > 0 {
-			logger.Fatal("There were errors with downloading some of the artifacts")
+			return fmt.Errorf("There were errors with downloading some of the artifacts")
 		}
 	}
 

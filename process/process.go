@@ -7,8 +7,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"runtime"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -16,20 +14,33 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-type Process struct {
-	Pid        int
-	PTY        bool
-	Timestamp  bool
-	Script     []string
-	Env        []string
-	ExitStatus string
+type ProcessConfig struct {
+	PTY       bool
+	Timestamp bool
+	Script    []string
+	Env       []string
 
 	// Handler is called with each line of output
 	Handler func(string)
+}
 
+type Process struct {
+	// Outputs available after the process starts
+	Pid        int
+	ExitStatus string
+
+	conf          ProcessConfig
+	logger        *logger.Logger
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
+}
+
+func NewProcess(l *logger.Logger, c ProcessConfig) *Process {
+	return &Process{
+		logger: l,
+		conf:   c,
+	}
 }
 
 // Start executes the command and blocks until it finishes
@@ -38,7 +49,14 @@ func (p *Process) Start() error {
 		return fmt.Errorf("Process is already running")
 	}
 
-	p.command = exec.Command(p.Script[0], p.Script[1:]...)
+	// Create a command
+	p.command = exec.Command(p.conf.Script[0], p.conf.Script[1:]...)
+
+	// Setup the process to create a process group if supported
+	// See https://github.com/kr/pty/issues/35 for context
+	if !p.conf.PTY {
+		SetupProcessGroup(p.command)
+	}
 
 	// Create channels for signalling started and done
 	p.mu.Lock()
@@ -55,14 +73,14 @@ func (p *Process) Start() error {
 	// the top of the current one so the ENV from Buildkite and the agent
 	// take precedence over the agent
 	currentEnv := os.Environ()
-	p.command.Env = append(currentEnv, p.Env...)
+	p.command.Env = append(currentEnv, p.conf.Env...)
 
 	var waitGroup sync.WaitGroup
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
 	// Toggle between running in a pty
-	if p.PTY {
+	if p.conf.PTY {
 		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
@@ -77,7 +95,7 @@ func (p *Process) Start() error {
 		waitGroup.Add(1)
 
 		go func() {
-			logger.Debug("[Process] Starting to copy PTY to the buffer")
+			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
@@ -91,9 +109,9 @@ func (p *Process) Start() error {
 			}
 
 			if err != nil {
-				logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
+				p.logger.Error("[Process] PTY output copy failed with error: %T: %v", err, err)
 			} else {
-				logger.Debug("[Process] PTY has finished being copied to the buffer")
+				p.logger.Debug("[Process] PTY has finished being copied to the buffer")
 			}
 
 			waitGroup.Done()
@@ -115,17 +133,19 @@ func (p *Process) Start() error {
 		close(p.started)
 	}
 
-	logger.Info("[Process] Process is running with PID: %d", p.Pid)
+	p.logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
-	if p.Handler != nil {
+	if p.conf.Handler != nil {
 		// Add the scanner the waitGroup
 		waitGroup.Add(1)
+
+		scanner := NewScanner(p.logger)
 
 		// Start the Scanner
 		go func() {
 			defer waitGroup.Done()
-			if err := ScanLines(lineReaderPipe, p.Handler); err != nil {
-				logger.Error("[Process] Scanner failed with %v", err)
+			if err := scanner.ScanLines(lineReaderPipe, p.conf.Handler); err != nil {
+				p.logger.Error("[Process] Scanner failed with %v", err)
 			}
 		}()
 	} else {
@@ -143,16 +163,16 @@ func (p *Process) Start() error {
 	close(p.done)
 
 	// Find the exit status of the script
-	p.ExitStatus = getExitStatus(waitResult)
+	p.ExitStatus = p.getExitStatus(waitResult)
 
-	logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	p.logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
-	logger.Debug("[Process] Waiting for routines to finish")
+	p.logger.Debug("[Process] Waiting for routines to finish")
 	err := timeoutWait(&waitGroup)
 	if err != nil {
-		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
+		p.logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
 	// No error occurred so we can return nil
@@ -183,57 +203,45 @@ func (p *Process) Started() <-chan struct{} {
 	return d
 }
 
-// Kill the process. If supported by the operating system it is initially signaled for termination
-// and then forcefully killed after the provided grace period.
-func (p *Process) Kill(gracePeriod time.Duration) error {
-	var err error
-	if runtime.GOOS == "windows" {
-		// Sending Interrupt on Windows is not implemented.
-		// https://golang.org/src/os/exec.go?s=3842:3884#L110
-		err = exec.Command("CMD", "/C", "TASKKILL", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
-	} else {
-		// Send a sigterm
-		err = p.signal(syscall.SIGTERM)
-	}
-	if err != nil {
-		return err
-	}
-
-	select {
-	// Was successfully terminated
-	case <-p.Done():
-		logger.Debug("[Process] Process with PID: %d has exited.", p.Pid)
-		return nil
-
-	// Forcefully kill the process after grace period expires
-	case <-time.After(gracePeriod):
-		logger.Debug("[Process] Process %d didn't terminate within %v, killing.", p.Pid, gracePeriod)
-		return p.signal(syscall.SIGKILL)
-	}
-}
-
-func (p *Process) signal(sig os.Signal) error {
+// Interrupt the process on platforms that support it, terminate otherwise
+func (p *Process) Interrupt() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	if p.command != nil && p.command.Process != nil {
-		logger.Debug("[Process] Sending signal: %s to PID: %d", sig.String(), p.Pid)
+	if p.command == nil || p.command.Process == nil {
+		p.logger.Debug("[Process] No process to interrupt yet")
+		return nil
+	}
 
-		err := p.command.Process.Signal(sig)
-		if err != nil {
-			logger.Error("[Process] Failed to send signal: %s to PID: %d (%T: %v)", sig.String(), p.Pid, err, err)
-			return err
+	// interrupt the process (ctrl-c or SIGINT)
+	if err := InterruptProcessGroup(p.command.Process, p.logger); err != nil {
+		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
+
+		// Fallback to terminating if we get an error
+		if termErr := TerminateProcessGroup(p.command.Process, p.logger); termErr != nil {
+			return termErr
 		}
-	} else {
-		logger.Debug("[Process] No process to signal yet")
 	}
 
 	return nil
 }
 
+// Terminate the process
+func (p *Process) Terminate() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.command == nil || p.command.Process == nil {
+		p.logger.Debug("[Process] No process to terminate yet")
+		return nil
+	}
+
+	return TerminateProcessGroup(p.command.Process, p.logger)
+}
+
 // https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
 // TODO: Can this be better?
-func getExitStatus(waitResult error) string {
+func (p *Process) getExitStatus(waitResult error) string {
 	exitStatus := -1
 
 	if waitResult != nil {
@@ -241,10 +249,10 @@ func getExitStatus(waitResult error) string {
 			if s, ok := err.Sys().(syscall.WaitStatus); ok {
 				exitStatus = s.ExitStatus()
 			} else {
-				logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+				p.logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
 			}
 		} else {
-			logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
+			p.logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
 		}
 	} else {
 		exitStatus = 0

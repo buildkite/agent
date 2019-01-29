@@ -8,10 +8,7 @@ import (
 	"github.com/buildkite/agent/retry"
 )
 
-type ArtifactBatchCreator struct {
-	// The APIClient that will be used when uploading jobs
-	APIClient *api.Client
-
+type ArtifactBatchCreatorConfig struct {
 	// The ID of the Job that these artifacts belong to
 	JobID string
 
@@ -22,8 +19,27 @@ type ArtifactBatchCreator struct {
 	UploadDestination string
 }
 
+type ArtifactBatchCreator struct {
+	// The creation config
+	conf ArtifactBatchCreatorConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+
+	// The APIClient that will be used when uploading jobs
+	apiClient *api.Client
+}
+
+func NewArtifactBatchCreator(l *logger.Logger, ac *api.Client, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
+	return &ArtifactBatchCreator{
+		logger:    l,
+		conf:      c,
+		apiClient: ac,
+	}
+}
+
 func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
-	length := len(a.Artifacts)
+	length := len(a.conf.Artifacts)
 	chunks := 30
 
 	// Split into the artifacts into chunks so we're not uploading a ton of
@@ -35,15 +51,15 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		}
 
 		// The artifacts that will be uploaded in this chunk
-		theseArtiacts := a.Artifacts[i:j]
+		theseArtiacts := a.conf.Artifacts[i:j]
 
 		// An ID is required so Buildkite can ensure this create
 		// operation is idompotent (if we try and upload the same ID
 		// twice, it'll just return the previous data and skip the
 		// upload)
-		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts, a.UploadDestination}
+		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts, a.conf.UploadDestination}
 
-		logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
+		a.logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
 		var creation *api.ArtifactBatchCreateResponse
 		var resp *api.Response
@@ -51,12 +67,12 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 
 		// Retry the batch upload a couple of times
 		err = retry.Do(func(s *retry.Stats) error {
-			creation, resp, err = a.APIClient.Artifacts.Create(a.JobID, batch)
+			creation, resp, err = a.apiClient.Artifacts.Create(a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 500) {
 				s.Break()
 			}
 			if err != nil {
-				logger.Warn("%s (%s)", err, s)
+				a.logger.Warn("%s (%s)", err, s)
 			}
 
 			return err
@@ -76,5 +92,5 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		}
 	}
 
-	return a.Artifacts, nil
+	return a.conf.Artifacts, nil
 }

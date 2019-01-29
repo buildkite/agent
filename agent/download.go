@@ -14,10 +14,7 @@ import (
 	"github.com/buildkite/agent/retry"
 )
 
-type Download struct {
-	// The HTTP client to use for downloading
-	Client http.Client
-
+type DownloadConfig struct {
 	// The actual URL to get the file from
 	URL string
 
@@ -34,14 +31,33 @@ type Download struct {
 	DebugHTTP bool
 }
 
+type Download struct {
+	// The download config
+	conf DownloadConfig
+
+	// The logger instance to use
+	logger *logger.Logger
+
+	// The HTTP client to use for downloading
+	client *http.Client
+}
+
+func NewDownload(l *logger.Logger, client *http.Client, c DownloadConfig) *Download {
+	return &Download{
+		logger: l,
+		client: client,
+		conf:   c,
+	}
+}
+
 func (d Download) Start() error {
 	return retry.Do(func(s *retry.Stats) error {
 		err := d.try()
 		if err != nil {
-			logger.Warn("Error trying to download %s (%s) %s", d.URL, err, s)
+			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, s)
 		}
 		return err
-	}, &retry.Config{Maximum: d.Retries, Interval: 5 * time.Second})
+	}, &retry.Config{Maximum: d.conf.Retries, Interval: 5 * time.Second})
 }
 
 func (d Download) try() error {
@@ -49,8 +65,8 @@ func (d Download) try() error {
 	// called "pkg", we should merge the two paths together. So, instead of it
 	// downloading to: destination/pkg/pkg/foo.txt, it will just download to
 	// destination/pkg/foo.txt
-	destinationPaths := strings.Split(d.Destination, string(os.PathSeparator))
-	downloadPaths := strings.Split(d.Path, string(os.PathSeparator))
+	destinationPaths := strings.Split(d.conf.Destination, string(os.PathSeparator))
+	downloadPaths := strings.Split(d.conf.Path, string(os.PathSeparator))
 
 	for i := 0; i < len(downloadPaths); i += 100 {
 		// If the last part of the destination path matches
@@ -70,24 +86,24 @@ func (d Download) try() error {
 
 	finalizedDestination := strings.Join(destinationPaths, string(os.PathSeparator))
 
-	targetFile := filepath.Join(finalizedDestination, d.Path)
+	targetFile := filepath.Join(finalizedDestination, d.conf.Path)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
-	logger.Debug("Downloading %s to %s", d.URL, targetFile)
+	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetFile)
 
 	// Start by downloading the file
-	response, err := d.Client.Get(d.URL)
+	response, err := d.client.Get(d.conf.URL)
 	if err != nil {
-		return fmt.Errorf("Error while downloading %s (%T: %v)", d.URL, err, err)
+		return fmt.Errorf("Error while downloading %s (%T: %v)", d.conf.URL, err, err)
 	}
 	defer response.Body.Close()
 
 	// Double check the status
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
-		if d.DebugHTTP {
+		if d.conf.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			d.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 		}
 
 		return &downloadError{response.Status}
@@ -109,10 +125,10 @@ func (d Download) try() error {
 	// Copy the data to the file
 	bytes, err := io.Copy(fileBuffer, response.Body)
 	if err != nil {
-		return fmt.Errorf("Error when copying data %s (%T: %v)", d.URL, err, err)
+		return fmt.Errorf("Error when copying data %s (%T: %v)", d.conf.URL, err, err)
 	}
 
-	logger.Info("Successfully downloaded \"%s\" %d bytes", d.Path, bytes)
+	d.logger.Info("Successfully downloaded \"%s\" %d bytes", d.conf.Path, bytes)
 
 	return nil
 }

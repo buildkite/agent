@@ -216,7 +216,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-clean-flags",
-			Value:  "-fxdq",
+			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
@@ -340,6 +340,8 @@ var AgentStartCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
@@ -349,15 +351,16 @@ var AgentStartCommand = cli.Command{
 			CLI:                    c,
 			Config:                 &cfg,
 			DefaultConfigFilePaths: DefaultConfigFilePaths(),
+			Logger:                 l,
 		}
 
 		// Load the configuration
 		if err := loader.Load(); err != nil {
-			logger.Fatal("%s", err)
+			l.Fatal("%s", err)
 		}
 
 		// Setup the any global configuration options
-		HandleGlobalFlags(cfg)
+		HandleGlobalFlags(l, cfg)
 
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
@@ -378,9 +381,9 @@ var AgentStartCommand = cli.Command{
 
 			switch {
 			case cfg.NoCommandEval:
-				logger.Warn(msg, `no-command-eval`)
+				l.Warn(msg, `no-command-eval`)
 			case cfg.NoLocalHooks:
-				logger.Warn(msg, `no-local-hooks`)
+				l.Warn(msg, `no-local-hooks`)
 			}
 		}
 
@@ -397,7 +400,7 @@ var AgentStartCommand = cli.Command{
 
 		// Make sure the DisconnectAfterJobTimeout value is correct
 		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
-			logger.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
+			l.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
 		}
 
 		var ec2TagTimeout time.Duration
@@ -405,13 +408,16 @@ var AgentStartCommand = cli.Command{
 			var err error
 			ec2TagTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				logger.Fatal("Failed to parse ec2 tag timeout: %v", err)
+				l.Fatal("Failed to parse ec2 tag timeout: %v", err)
 			}
 		}
 
-		// Setup the agent
-		pool := agent.AgentPool{
-			Token:                 cfg.Token,
+		mc := metrics.NewCollector(l, metrics.CollectorConfig{
+			Datadog:     cfg.MetricsDatadog,
+			DatadogHost: cfg.MetricsDatadogHost,
+		})
+
+		config := agent.AgentPoolConfig{
 			Name:                  cfg.Name,
 			Priority:              cfg.Priority,
 			Tags:                  cfg.Tags,
@@ -420,9 +426,14 @@ var AgentStartCommand = cli.Command{
 			TagsFromGCP:           cfg.TagsFromGCP,
 			TagsFromHost:          cfg.TagsFromHost,
 			WaitForEC2TagsTimeout: ec2TagTimeout,
-			Endpoint:              cfg.Endpoint,
-			DisableHTTP2:          cfg.NoHTTP2,
+			Debug:                 cfg.Debug,
+			DisableColors:         cfg.NoColor,
 			Spawn:                 cfg.Spawn,
+			APIClientConfig: agent.APIClientConfig{
+				Token:                 cfg.Token,
+				Endpoint:              cfg.Endpoint,
+				DisableHTTP2:          cfg.NoHTTP2,
+			},
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
@@ -443,22 +454,21 @@ var AgentStartCommand = cli.Command{
 				CancelGracePeriod:         cfg.CancelGracePeriod,
 				Shell:                     cfg.Shell,
 			},
-			MetricsCollector: &metrics.Collector{
-				Datadog:     cfg.MetricsDatadog,
-				DatadogHost: cfg.MetricsDatadogHost,
-			},
 		}
 
 		// Store the loaded config file path on the pool and agent config so we can
 		// show it when the agent starts and set an env
 		if loader.File != nil {
-			pool.ConfigFilePath = loader.File.Path
-			pool.AgentConfiguration.ConfigPath = loader.File.Path
+			config.ConfigFilePath = loader.File.Path
+			config.AgentConfiguration.ConfigPath = loader.File.Path
 		}
+
+		// Setup the agent
+		pool := agent.NewAgentPool(l, mc, config)
 
 		// Start the agent pool
 		if err := pool.Start(); err != nil {
-			logger.Fatal("%s", err)
+			l.Fatal("%s", err)
 		}
 	},
 }

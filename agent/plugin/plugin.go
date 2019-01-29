@@ -25,11 +25,17 @@ type Plugin struct {
 	// Any authentication attached to the repostiory
 	Authentication string
 
+	// Whether the plugin refers to a vendored path
+	Vendored bool
+
 	// Configuration for the plugin
 	Configuration map[string]interface{}
 }
 
-var locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
+var (
+	locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
+	vendoredRegex       = regexp.MustCompile(`^\.`)
+)
 
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
 	plugin := &Plugin{Configuration: config}
@@ -42,6 +48,7 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 	plugin.Scheme = u.Scheme
 	plugin.Location = u.Host + u.Path
 	plugin.Version = u.Fragment
+	plugin.Vendored = vendoredRegex.MatchString(plugin.Location)
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
 		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
@@ -122,8 +129,11 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 // Returns the name of the plugin
 func (p *Plugin) Name() string {
 	if p.Location != "" {
+		// for filepaths, we can get windows backslashes, so we normalize them
+		location := strings.Replace(p.Location, "\\", "/", -1)
+
 		// Grab the last part of the location
-		parts := strings.Split(p.Location, "/")
+		parts := strings.Split(location, "/")
 		name := parts[len(parts)-1]
 
 		// Clean up the name
@@ -139,7 +149,7 @@ func (p *Plugin) Name() string {
 	}
 }
 
-// Returns and ID for the plugin that can be used as a folder name
+// Returns an ID for the plugin that can be used as a folder name
 func (p *Plugin) Identifier() (string, error) {
 	nonIdCharacterRegex := regexp.MustCompile(`[^a-zA-Z0-9]`)
 	removeDoubleUnderscore := regexp.MustCompile(`-+`)

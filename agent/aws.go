@@ -6,7 +6,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/buildkite/agent/logger"
 )
 
 var awsSess *session.Session
@@ -33,11 +32,7 @@ func awsRegion() (string, error) {
 
 	meta := ec2metadata.New(sess)
 	if meta.Available() {
-		region, err := meta.Region()
-		if err == nil {
-			logger.Debug("Detected AWS region %s", region)
-		}
-		return region, err
+		return meta.Region()
 	}
 
 	return "", aws.ErrMissingRegion

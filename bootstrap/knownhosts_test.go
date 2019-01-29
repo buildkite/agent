@@ -1,11 +1,13 @@
 package bootstrap
 
 import (
+	"fmt"
+	"path/filepath"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/bintest"
 )
 
 func TestAddingToKnownHosts(t *testing.T) {
@@ -14,22 +16,40 @@ func TestAddingToKnownHosts(t *testing.T) {
 	var testCases = []struct {
 		Name       string
 		Repository string
+		Alias      string
 		Host       string
 	}{
-		{"git url", "git@github.com:buildkite/agent.git", "github.com"},
-		{"git url with alias", "git@github.com-alias1:buildkite/agent.git", "github.com"},
-		{"ssh url with port", "ssh://git@ssh.github.com:443/var/cache/git/project.git", "ssh.github.com:443"},
+		{"git url", "git@github.com:buildkite/agent.git", "github.com", "github.com"},
+		{"git url with alias", "git@github.com-alias1:buildkite/agent.git", "github.com-alias1", "github.com"},
+		{"ssh url with port", "ssh://git@ssh.github.com:443/var/cache/git/project.git", "ssh.github.com:443", "ssh.github.com:443"},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			sh, err := shell.New()
+			sh := newTestShell(t)
+
+			ssh, err := bintest.NewMock("ssh")
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer ssh.CheckAndClose(t)
 
-			// sh.Debug = true
-			// sh.Logger = &shell.TestingLogger{T: t}
+			path := fmt.Sprintf("%s%c%s", filepath.Dir(ssh.Path), os.PathListSeparator, os.Getenv("PATH"))
+
+			sh.Env.Set("PATH", path)
+
+			ssh.
+				Expect("-G", tc.Alias).
+				AndWriteToStderr(`unknown option -- G
+usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
+           [-D [bind_address:]port] [-E log_file] [-e escape_char]
+           [-F configfile] [-I pkcs11] [-i identity_file]
+           [-L [bind_address:]port:host:hostport] [-l login_name] [-m mac_spec]
+           [-O ctl_cmd] [-o option] [-p port]
+           [-Q cipher | cipher-auth | mac | kex | key]
+           [-R [bind_address:]port:host:hostport] [-S ctl_path] [-W host:port]
+           [-w local_tun[:remote_tun]] [user@]hostname [command]`).
+				AndExitWith(255)
 
 			f, err := ioutil.TempFile("", "known-hosts")
 			if err != nil {

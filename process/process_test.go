@@ -2,9 +2,11 @@ package process_test
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -12,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 )
 
@@ -19,21 +22,30 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.Process{
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
 		Script: []string{os.Args[0]},
 		Env:    []string{"TEST_MAIN=tester"},
-	}
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	go func() {
+		defer wg.Done()
+
 		<-p.Started()
 		atomic.AddInt32(&started, 1)
 		<-p.Done()
 		atomic.AddInt32(&done, 1)
 	}()
 
+	// wait for the process to finish
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
+
+	// wait for our go routine to finish
+	wg.Wait()
 
 	if startedVal := atomic.LoadInt32(&started); startedVal != 1 {
 		t.Fatalf("Expected started to be 1, got %d", startedVal)
@@ -49,18 +61,13 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 }
 
 func TestProcessCapturesOutputLineByLine(t *testing.T) {
-	var lines []string
-	var mu sync.Mutex
+	var lines = &processLineHandler{}
 
-	p := process.Process{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester"},
-		Handler: func(line string) {
-			mu.Lock()
-			defer mu.Unlock()
-			lines = append(lines, line)
-		},
-	}
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
+		Script:  []string{os.Args[0]},
+		Env:     []string{"TEST_MAIN=tester"},
+		Handler: lines.Handle,
+	})
 
 	if err := p.Start(); err != nil {
 		t.Error(err)
@@ -74,44 +81,66 @@ func TestProcessCapturesOutputLineByLine(t *testing.T) {
 		"and some alpacas",
 	}
 
-	if !reflect.DeepEqual(expected, lines) {
+	if !reflect.DeepEqual(expected, lines.Lines()) {
 		t.Fatalf("Unexpected lines: %v", lines)
 	}
 }
 
-func TestProcessIsKilledGracefully(t *testing.T) {
-	var lines []string
-	var mu sync.Mutex
-
-	p := process.Process{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester-signal"},
-		Handler: func(line string) {
-			mu.Lock()
-			defer mu.Unlock()
-			lines = append(lines, line)
-		},
+func TestProcessInterrupts(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Works in windows, but not in docker")
 	}
 
+	var lines = &processLineHandler{}
+
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
+		Script:  []string{os.Args[0]},
+		Env:     []string{"TEST_MAIN=tester-signal"},
+		Handler: lines.Handle,
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
 		<-p.Started()
 
 		// give the signal handler some time to install
 		time.Sleep(time.Millisecond * 50)
 
-		p.Kill(time.Millisecond * 20)
+		p.Interrupt()
 	}()
 
 	if err := p.Start(); err != nil {
 		t.Fatal(err)
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
+	wg.Wait()
 
-	output := strings.Join(lines, "\n")
+	output := strings.Join(lines.Lines(), "\n")
 	if output != `SIG terminated` {
 		t.Fatalf("Bad output: %q", output)
+	}
+}
+
+func TestProcessSetsProcessGroupID(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Process groups not supported on windows")
+		return
+	}
+
+	p := process.NewProcess(logger.Discard, process.ProcessConfig{
+		Script: []string{os.Args[0]},
+		Env:    []string{"TEST_MAIN=tester-pgid"},
+	})
+
+	if err := p.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	if p.ExitStatus != "0" {
+		t.Fatalf("Expected ExitStatus to be 0, got %s", p.ExitStatus)
 	}
 }
 
@@ -131,11 +160,39 @@ func TestMain(m *testing.M) {
 			syscall.SIGTERM,
 			syscall.SIGINT,
 		)
-		sig := <-signals
-		fmt.Printf("SIG %v", sig)
+		fmt.Printf("SIG %v", <-signals)
+		os.Exit(0)
+
+	case "tester-pgid":
+		pid := syscall.Getpid()
+		pgid, err := process.GetPgid(pid)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if pgid != pid {
+			log.Fatalf("Bad pgid, expected %d, got %d", pid, pgid)
+		}
+		fmt.Printf("pid %d == pgid %d", pid, pgid)
 		os.Exit(0)
 
 	default:
 		os.Exit(m.Run())
 	}
+}
+
+type processLineHandler struct {
+	lines []string
+	sync.Mutex
+}
+
+func (p *processLineHandler) Handle(line string) {
+	p.Lock()
+	defer p.Unlock()
+	p.lines = append(p.lines, line)
+}
+
+func (p *processLineHandler) Lines() []string {
+	p.Lock()
+	defer p.Unlock()
+	return p.lines
 }

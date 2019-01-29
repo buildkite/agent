@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.8.4](https://github.com/buildkite/agent/tree/v3.8.4) (2019-01-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.8.3...v3.8.4)
+
+### Fixed
+- Fix and test another seg fault in the artifact searcher [#901](https://github.com/buildkite/agent/pull/901) (@lox)
+- Fix a seg-fault in the artifact uploader [#900](https://github.com/buildkite/agent/pull/900) (@lox)
+
+## [v3.8.3](https://github.com/buildkite/agent/tree/v3.8.3) (2019-01-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.8.2...v3.8.3)
+
+### Fixed
+- Retry forever to upload job chunks [#898](https://github.com/buildkite/agent/pull/898) (@keithpitt)
+- Resolve ssh hostname aliases before running ssh-keyscan [#889](https://github.com/buildkite/agent/pull/889) (@ticky)
+
+## [v3.8.2](https://github.com/buildkite/agent/tree/v3.8.2) (2019-01-11)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.8.1...v3.8.2)
+
+### Changed
+- Fix another segfault in artifact download [#893](https://github.com/buildkite/agent/pull/893) (@lox)
+
+## [v3.8.1](https://github.com/buildkite/agent/tree/v3.8.1) (2019-01-11)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.8.0...v3.8.1)
+
+### Fixed
+- Fixed two segfaults caused by missing loggers [#892](https://github.com/buildkite/agent/pull/892) (@lox)
+
+## [v3.8.0](https://github.com/buildkite/agent/tree/v3.8.0) (2019-01-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.7.0...v3.8.0)
+
+### Fixed
+- Support absolute paths on Windows for config [#881](https://github.com/buildkite/agent/pull/881) (@petemounce)
+
+### Changed
+- Show log output colors on Windows 10+ [#885](https://github.com/buildkite/agent/pull/885) (@lox)
+- Better cancel signal handling and error messages in output [#860](https://github.com/buildkite/agent/pull/860) (@lox)
+- Use windows console groups for process management [#879](https://github.com/buildkite/agent/pull/879) (@lox)
+- Support vendored plugins [#878](https://github.com/buildkite/agent/pull/878) (@lox)
+- Show agent name in logger output [#880](https://github.com/buildkite/agent/pull/880) (@lox)
+- Change git-clean-flags to cleanup submodules [#875](https://github.com/buildkite/agent/pull/875) (@lox)
+
 ## [v3.7.0](https://github.com/buildkite/agent/tree/v3.7.0) (2018-12-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.6.1...v3.7.0)
 

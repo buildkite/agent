@@ -1,8 +1,12 @@
 package clicommand
 
 import (
+	"context"
 	"os"
+	"os/signal"
 	"runtime"
+	"sync"
+	"syscall"
 
 	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
@@ -179,7 +183,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-clean-flags",
-			Value:  "-fxdq",
+			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
@@ -256,12 +260,19 @@ var BootstrapCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := BootstrapConfig{}
 
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := cliconfig.Load(c, l, &cfg); err != nil {
+			l.Fatal("%s", err)
+		}
+
+		// Enable debug if set
+		if cfg.Debug {
+			l.Level = logger.DEBUG
 		}
 
 		// Turn of PTY support if we're on Windows
@@ -276,13 +287,17 @@ var BootstrapCommand = cli.Command{
 			case "plugin", "checkout", "command":
 				// Valid phase
 			default:
-				logger.Fatal("Invalid phase %q", phase)
+				l.Fatal("Invalid phase %q", phase)
 			}
 		}
 
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
 		// Configure the bootstraper
 		bootstrap := &bootstrap.Bootstrap{
-			Phases: cfg.Phases,
+			Context: ctx,
+			Phases:  cfg.Phases,
 			Config: bootstrap.Config{
 				Command:                      cfg.Command,
 				JobID:                        cfg.JobID,
@@ -318,7 +333,58 @@ var BootstrapCommand = cli.Command{
 			},
 		}
 
-		// Run the bootstrap and exit with whatever it returns
-		os.Exit(bootstrap.Start())
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt,
+			syscall.SIGHUP,
+			syscall.SIGTERM,
+			syscall.SIGINT,
+			syscall.SIGQUIT)
+		defer signal.Stop(signals)
+
+		var (
+			cancelled bool
+			received  os.Signal
+			signalMu  sync.Mutex
+		)
+
+		// Listen for signals in the background and cancel the bootstrap
+		go func() {
+			sig := <-signals
+			signalMu.Lock()
+			defer signalMu.Unlock()
+
+			// Cancel the bootstrap
+			bootstrap.Cancel()
+
+			// Track the state and signal used
+			cancelled = true
+			received = sig
+
+			// Remove our signal handler so subsequent signals kill
+			signal.Stop(signals)
+		}()
+
+		// Run the bootstrap and get the exit code
+		exitCode := bootstrap.Start()
+
+		signalMu.Lock()
+		defer signalMu.Unlock()
+
+		// If cancelled and our child process returns a non-zero, we should terminate
+		// ourselves with the same signal so that our caller can detect and handle appropriately
+		if cancelled && runtime.GOOS != `windows` {
+			p, err := os.FindProcess(os.Getpid())
+			if err != nil {
+				l.Error("Failed to find current process: %v", err)
+			}
+
+			l.Debug("Terminating bootstrap after cancellation with %v", received)
+			err = p.Signal(received)
+			if err != nil {
+				l.Error("Failed to signal self: %v", err)
+			}
+		}
+
+		os.Exit(exitCode)
 	},
 }

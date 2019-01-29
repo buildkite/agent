@@ -2,34 +2,29 @@ package process
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
-
-	"github.com/buildkite/agent/logger"
 )
 
 // Replicates how the command line tool `cat` works, but is more verbose about
 // what it does
-func Cat(path string) string {
+func Cat(path string) (string, error) {
 	files, err := filepath.Glob(path)
-
 	if err != nil {
-		logger.Debug("Failed to get list of files: %s", path)
+		return "", fmt.Errorf("Failed to get a list of files: %v", err)
+	}
 
-		return ""
-	} else {
-		var buffer bytes.Buffer
+	var buffer bytes.Buffer
 
-		for _, file := range files {
-			data, err := ioutil.ReadFile(file)
-
-			if err != nil {
-				logger.Debug("Could not read file: %s (%T: %v)", file, err, err)
-			} else {
-				buffer.WriteString(string(data))
-			}
+	for _, file := range files {
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			return "", fmt.Errorf("Could not read file: %s (%T: %v)", file, err, err)
 		}
 
-		return buffer.String()
+		buffer.WriteString(string(data))
 	}
+
+	return buffer.String(), nil
 }

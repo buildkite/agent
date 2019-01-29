@@ -16,24 +16,29 @@ import (
 
 var debug = false
 
-type APIClient struct {
+type APIClientConfig struct {
 	Endpoint     string
 	Token        string
 	DisableHTTP2 bool
+}
+
+type APIClient struct {
+	config APIClientConfig
+	logger *logger.Logger
 }
 
 func APIClientEnableHTTPDebug() {
 	debug = true
 }
 
-func (a APIClient) Create() *api.Client {
-	u, err := url.Parse(a.Endpoint)
+func NewAPIClient(l *logger.Logger, c APIClientConfig) *api.Client {
+	u, err := url.Parse(c.Endpoint)
 	if err != nil {
-		logger.Warn("Failed to parse %q: %v", a.Endpoint, err)
+		l.Warn("Failed to parse %q: %v", c.Endpoint, err)
 	}
 
 	if u != nil && u.Scheme == `unix` {
-		return a.createFromSocket(u.Path)
+		return NewAPIClientFromSocket(l, u.Path, c)
 	}
 
 	httpTransport := &http.Transport{
@@ -49,30 +54,30 @@ func (a APIClient) Create() *api.Client {
 		TLSHandshakeTimeout: 30 * time.Second,
 	}
 
-	if a.DisableHTTP2 {
+	if c.DisableHTTP2 {
 		httpTransport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
 	}
 
 	// Configure the HTTP client
 	httpClient := &http.Client{Transport: &api.AuthenticatedTransport{
-		Token:     a.Token,
+		Token:     c.Token,
 		Transport: httpTransport,
 	}}
 	httpClient.Timeout = 60 * time.Second
 
 	// Create the Buildkite Agent API Client
-	client := api.NewClient(httpClient)
-	client.BaseURL, _ = url.Parse(a.Endpoint)
-	client.UserAgent = a.UserAgent()
+	client := api.NewClient(httpClient, l)
+	client.BaseURL, _ = url.Parse(c.Endpoint)
+	client.UserAgent = userAgent()
 	client.DebugHTTP = debug
 
 	return client
 }
 
-func (a APIClient) createFromSocket(socket string) *api.Client {
+func NewAPIClientFromSocket(l *logger.Logger, socket string, c APIClientConfig) *api.Client {
 	httpClient := &http.Client{
 		Transport: &api.AuthenticatedTransport{
-			Token: a.Token,
+			Token: c.Token,
 			Transport: &socketTransport{
 				Socket:      socket,
 				DialTimeout: 30 * time.Second,
@@ -81,15 +86,15 @@ func (a APIClient) createFromSocket(socket string) *api.Client {
 	}
 
 	// Create the Buildkite Agent API Client
-	client := api.NewClient(httpClient)
+	client := api.NewClient(httpClient, l)
 	client.BaseURL, _ = url.Parse(`http+unix://buildkite-agent`)
-	client.UserAgent = a.UserAgent()
+	client.UserAgent = userAgent()
 	client.DebugHTTP = debug
 
 	return client
 }
 
-func (a APIClient) UserAgent() string {
+func userAgent() string {
 	return "buildkite-agent/" + Version() + "." + BuildVersion() + " (" + runtime.GOOS + "; " + runtime.GOARCH + ")"
 }
 

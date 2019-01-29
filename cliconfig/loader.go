@@ -21,6 +21,9 @@ type Loader struct {
 	// The struct that the config values will be loaded into
 	Config interface{}
 
+	// The logger used
+	Logger *logger.Logger
+
 	// A slice of paths to files that should be used as config files
 	DefaultConfigFilePaths []string
 
@@ -31,10 +34,13 @@ type Loader struct {
 var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
-func Load(c *cli.Context, cfg interface{}) error {
-	l := Loader{CLI: c, Config: cfg}
-
-	return l.Load()
+func Load(c *cli.Context, l *logger.Logger, cfg interface{}) error {
+	loader := Loader{
+		CLI:    c,
+		Config: cfg,
+		Logger: l,
+	}
+	return loader.Load()
 }
 
 // Loads the config from the CLI and config files that are present.
@@ -110,7 +116,7 @@ func (l *Loader) Load() error {
 			if !l.fieldValueIsEmpty(fieldName) {
 				renamedFieldCliName, _ := reflections.GetFieldTag(l.Config, renamedToFieldName, "cli")
 				if renamedFieldCliName != "" {
-					logger.Warn("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName)
+					l.Logger.Warn("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName)
 				}
 
 				value, _ := reflections.GetField(l.Config, fieldName)

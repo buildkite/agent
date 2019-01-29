@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ import (
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
 // Golang for portability and testability
 type Bootstrap struct {
+	// Context is the execution context of the bootstrap
+	Context context.Context
+
 	// Config provides the bootstrap configuration
 	Config
 
@@ -36,8 +40,11 @@ type Bootstrap struct {
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
 
-	// Plugins are checkout out in the PluginPhase
-	plugins []*pluginCheckout
+	// Plugins to use
+	plugins []*plugin.Plugin
+
+	// Plugin checkouts from the plugin phases
+	pluginCheckouts []*pluginCheckout
 
 	// Whether the checkout dir was created as part of checkout
 	createdCheckoutDir bool
@@ -48,7 +55,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
-		b.shell, err = shell.New()
+		b.shell, err = shell.NewWithContext(b.Context)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -102,6 +109,10 @@ func (b *Bootstrap) Start() (exitCode int) {
 		}
 	}
 
+	if phaseErr == nil && includePhase(`plugin`) {
+		phaseErr = b.VendoredPluginPhase()
+	}
+
 	if phaseErr == nil && includePhase(`command`) {
 		phaseErr = b.CommandPhase()
 
@@ -124,6 +135,13 @@ func (b *Bootstrap) Start() (exitCode int) {
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
+}
+
+// Cancel interrupts any running shell processes and causes the bootstrap to stop
+func (b *Bootstrap) Cancel() error {
+	b.shell.Commentf("Received cancellation signal")
+	b.shell.Cancel()
+	return nil
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -420,7 +438,7 @@ func (b *Bootstrap) tearDown() error {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-exit"); err != nil {
+	if err := b.executePluginHook("pre-exit", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -432,97 +450,193 @@ func (b *Bootstrap) tearDown() error {
 	return nil
 }
 
+func (b *Bootstrap) hasPlugins() bool {
+	if b.Config.Plugins == "" {
+		return false
+	}
+
+	return true
+}
+
+func (b *Bootstrap) loadPlugins() ([]*plugin.Plugin, error) {
+	if b.plugins != nil {
+		return b.plugins, nil
+	}
+
+	// Check if we can run plugins (disabled via --no-plugins)
+	if !b.Config.PluginsEnabled {
+		if !b.Config.LocalHooksEnabled {
+			return nil, fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+		} else if !b.Config.CommandEval {
+			return nil, fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
+		} else {
+			return nil, fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+		}
+	}
+
+	var err error
+	b.plugins, err = plugin.CreateFromJSON(b.Config.Plugins)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to parse a plugin definition")
+	}
+
+	return b.plugins, nil
+}
+
+func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
+	if !b.Config.PluginValidation {
+		return nil
+	}
+
+	if checkout.Definition == nil {
+		if b.Debug {
+			b.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.CheckoutDir)
+		}
+
+		// parse the plugin definition from the plugin checkout dir
+		var err error
+		checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
+
+		if err == plugin.ErrDefinitionNotFound {
+			b.shell.Warningf("Failed to find plugin definition for plugin %s", checkout.Plugin.Name())
+			return nil
+		} else if err != nil {
+			return err
+		}
+	}
+
+	val := &plugin.Validator{}
+	result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
+
+	if !result.Valid() {
+		b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
+		json, _ := json.Marshal(checkout.Plugin.Configuration)
+		b.shell.Commentf("Plugin configuration JSON is %s", json)
+		return result
+	}
+
+	b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
+	return nil
+}
+
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
 // checked out and made available to later phases
 func (b *Bootstrap) PluginPhase() error {
-	if b.Plugins == "" {
+	if !b.hasPlugins() {
 		return nil
 	}
 
 	b.shell.Headerf("Setting up plugins")
 
-	// Make sure we have a plugin path before trying to do anything
-	if b.PluginsPath == "" {
-		return fmt.Errorf("Can't checkout plugins without a `plugins-path`")
-	}
-
 	if b.Debug {
 		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
 	}
 
-	// Check if we can run plugins (disabled via --no-plugins)
-	if b.Plugins != "" && !b.Config.PluginsEnabled {
-		if !b.Config.LocalHooksEnabled {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
-		} else if !b.Config.CommandEval {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
-		} else {
-			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
-		}
-	}
-
-	plugins, err := plugin.CreateFromJSON(b.Plugins)
+	plugins, err := b.loadPlugins()
 	if err != nil {
-		return errors.Wrap(err, "Failed to parse plugin definition")
+		return err
 	}
 
-	b.plugins = []*pluginCheckout{}
+	checkouts := []*pluginCheckout{}
 
+	// Checkout and validate plugins that aren't vendored
 	for _, p := range plugins {
+		if p.Vendored {
+			if b.Debug {
+				b.shell.Commentf("Skipping vendored plugin %s", p.Name())
+			}
+			continue
+		}
+
 		checkout, err := b.checkoutPlugin(p)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
 		}
-		if b.Config.PluginValidation {
-			if b.Debug {
-				b.shell.Commentf("Parsing plugin definition for %s from %s", p.Name(), checkout.CheckoutDir)
-			}
-			// parse the plugin definition from the plugin checkout dir
-			checkout.Definition, err = plugin.LoadDefinitionFromDir(checkout.CheckoutDir)
-			if err == plugin.ErrDefinitionNotFound {
-				b.shell.Warningf("Failed to find plugin definition for plugin %s", p.Name())
-			} else if err != nil {
-				return err
-			}
+
+		err = b.validatePluginCheckout(checkout)
+		if err != nil {
+			return err
 		}
-		b.plugins = append(b.plugins, checkout)
+
+		checkouts = append(checkouts, checkout)
 	}
 
-	if b.Config.PluginValidation {
-		for _, checkout := range b.plugins {
-			// This is nil if the definition failed to parse or is missing
-			if checkout.Definition == nil {
-				continue
-			}
-
-			val := &plugin.Validator{}
-			result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
-
-			if !result.Valid() {
-				b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
-				json, _ := json.Marshal(checkout.Plugin.Configuration)
-				b.shell.Commentf("Plugin configuration JSON is %s", json)
-				return result
-			} else {
-				b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
-			}
-		}
-	}
+	// Store the checkouts for future use
+	b.pluginCheckouts = checkouts
 
 	// Now we can run plugin environment hooks too
-	return b.executePluginHook("environment")
+	return b.executePluginHook("environment", checkouts)
 }
 
-// Executes a named hook on all plugins that have it
-func (b *Bootstrap) executePluginHook(name string) error {
-	for _, p := range b.plugins {
+// VendoredPluginPhase is where plugins that are included in the checked out code are added
+func (b *Bootstrap) VendoredPluginPhase() error {
+	if !b.hasPlugins() {
+		return nil
+	}
+
+	b.shell.Headerf("Setting up vendored plugins")
+
+	plugins, err := b.loadPlugins()
+	if err != nil {
+		return err
+	}
+
+	vendoredCheckouts := []*pluginCheckout{}
+
+	// Validate vendored plugins
+	for _, p := range plugins {
+		if !p.Vendored {
+			continue
+		}
+
+		checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+		pluginLocation, err := filepath.Abs(filepath.Join(checkoutPath, p.Location))
+		if err != nil {
+			return errors.Wrapf(err, "Failed to resolve vendored plugin path for plugin %s", p.Name())
+		}
+
+		if !fileExists(pluginLocation) {
+			return fmt.Errorf("Vendored plugin path %s doesn't exist", p.Location)
+		}
+
+		checkout := &pluginCheckout{
+			Plugin:      p,
+			CheckoutDir: pluginLocation,
+			HooksDir:    filepath.Join(pluginLocation, "hooks"),
+		}
+
+		// Also make sure that plugin is withing this repository
+		// checkout and isn't elsewhere on the system.
+		if !strings.HasPrefix(pluginLocation, checkoutPath+string(os.PathSeparator)) {
+			return fmt.Errorf("Vendored plugin paths must be within the checked-out repository")
+		}
+
+		err = b.validatePluginCheckout(checkout)
+		if err != nil {
+			return err
+		}
+
+		vendoredCheckouts = append(vendoredCheckouts, checkout)
+	}
+
+	// Finally append our vendored checkouts to the rest for subsequent hooks
+	b.pluginCheckouts = append(b.pluginCheckouts, vendoredCheckouts...)
+
+	// Now we can run plugin environment hooks too
+	return b.executePluginHook("environment", vendoredCheckouts)
+}
+
+// Executes a named hook on plugins that have it
+func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) error {
+	for _, p := range checkouts {
 		hookPath, err := b.findHookFile(p.HooksDir, name)
 		if err != nil {
 			continue
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
-		if err := b.executeHook("plugin "+p.Label()+" "+name, hookPath, env); err != nil {
+		if err := b.executeHook("plugin "+p.Plugin.Name()+" "+name, hookPath, env); err != nil {
 			return err
 		}
 	}
@@ -531,7 +645,7 @@ func (b *Bootstrap) executePluginHook(name string) error {
 
 // If any plugin has a hook by this name
 func (b *Bootstrap) hasPluginHook(name string) bool {
-	for _, p := range b.plugins {
+	for _, p := range b.pluginCheckouts {
 		if _, err := b.findHookFile(p.HooksDir, name); err == nil {
 			return true
 		}
@@ -541,6 +655,11 @@ func (b *Bootstrap) hasPluginHook(name string) bool {
 
 // Checkout a given plugin to the plugins directory and return that directory
 func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
+	// Make sure we have a plugin path before trying to do anything
+	if b.PluginsPath == "" {
+		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
+	}
+
 	// Get the identifer for the plugin
 	id, err := p.Identifier()
 	if err != nil {
@@ -676,7 +795,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-checkout"); err != nil {
+	if err := b.executePluginHook("pre-checkout", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -698,7 +817,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
 	case b.hasPluginHook("checkout"):
-		if err := b.executePluginHook("checkout"); err != nil {
+		if err := b.executePluginHook("checkout", b.pluginCheckouts); err != nil {
 			return err
 		}
 	case b.hasGlobalHook("checkout"):
@@ -717,6 +836,10 @@ func (b *Bootstrap) CheckoutPhase() error {
 				b.shell.Warningf("Checkout was interrupted by a signal")
 				s.Break()
 
+			case errors.Cause(err) == context.Canceled:
+				b.shell.Warningf("Checkout was cancelled")
+				s.Break()
+
 			default:
 				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 
@@ -727,6 +850,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 				// allow the agent to self-heal
 				_ = b.removeCheckoutDir()
 			}
+
 			return err
 		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
 		if err != nil {
@@ -747,7 +871,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook("post-checkout"); err != nil {
+	if err := b.executePluginHook("post-checkout", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -959,7 +1083,7 @@ func (b *Bootstrap) CommandPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-command"); err != nil {
+	if err := b.executePluginHook("pre-command", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -968,7 +1092,7 @@ func (b *Bootstrap) CommandPhase() error {
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case b.hasPluginHook("command"):
-		commandExitError = b.executePluginHook("command")
+		commandExitError = b.executePluginHook("command", b.pluginCheckouts)
 	case b.hasLocalHook("command"):
 		commandExitError = b.executeLocalHook("command")
 	case b.hasGlobalHook("command"):
@@ -981,7 +1105,11 @@ func (b *Bootstrap) CommandPhase() error {
 	// (which is returned when the command is actually run, but fails),
 	// then we'll show it in the log.
 	if shell.IsExitError(commandExitError) {
-		b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+		if shell.IsExitSignaled(commandExitError) {
+			b.shell.Errorf("The command was interrupted by a signal")
+		} else {
+			b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
+		}
 	} else if commandExitError != nil {
 		b.shell.Errorf(commandExitError.Error())
 	}
@@ -1004,7 +1132,7 @@ func (b *Bootstrap) CommandPhase() error {
 		return err
 	}
 
-	if err := b.executePluginHook("post-command"); err != nil {
+	if err := b.executePluginHook("post-command", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -1149,7 +1277,7 @@ func (b *Bootstrap) uploadArtifacts() error {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-artifact"); err != nil {
+	if err := b.executePluginHook("pre-artifact", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -1176,7 +1304,7 @@ func (b *Bootstrap) uploadArtifacts() error {
 		return err
 	}
 
-	if err := b.executePluginHook("post-artifact"); err != nil {
+	if err := b.executePluginHook("post-artifact", b.pluginCheckouts); err != nil {
 		return err
 	}
 

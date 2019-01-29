@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"regexp"
+
 	// "net/http/httputil"
 	"errors"
 	"net/url"
@@ -20,15 +21,24 @@ import (
 
 var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
 
-type FormUploader struct {
-	// Whether or not HTTP calls shoud be debugged
+type FormUploaderConfig struct {
+	// Whether or not HTTP calls should be debugged
 	DebugHTTP bool
 }
 
-func (u *FormUploader) Setup(destination string, debugHTTP bool) error {
-	u.DebugHTTP = debugHTTP
+type FormUploader struct {
+	// The configuration
+	conf FormUploaderConfig
 
-	return nil
+	// The logger instance to use
+	logger *logger.Logger
+}
+
+func NewFormUploader(l *logger.Logger, c FormUploaderConfig) *FormUploader {
+	return &FormUploader{
+		logger: l,
+		conf:   c,
+	}
 }
 
 // The FormUploader doens't specify a URL, as one is provided by Buildkite
@@ -48,7 +58,7 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 	client := &http.Client{}
 
 	// Perform the request
-	logger.Debug("%s %s", request.Method, request.URL)
+	u.logger.Debug("%s %s", request.Method, request.URL)
 	response, err := client.Do(request)
 
 	// Check for errors
@@ -59,9 +69,9 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 		// this function
 		defer response.Body.Close()
 
-		if u.DebugHTTP {
+		if u.conf.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 		}
 
 		if response.StatusCode/100 != 2 {

@@ -35,13 +35,15 @@ if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
   echo "Using explicit arch '$ARCH'"
 else
   case $UNAME in
-    *amd64*)  ARCH="amd64" ;;
-    *x86_64*) ARCH="amd64" ;;
-    *armv8*)  ARCH="arm64" ;;
-    *armv7*)  ARCH="armhf" ;;
-    *armv6*)  ARCH="armhf" ;;
-    *arm*)    ARCH="arm"   ;;
-    *)        ARCH="386"   ;;
+    *amd64*)   ARCH="amd64"   ;;
+    *x86_64*)  ARCH="amd64"   ;;
+    *armv8*)   ARCH="arm64"   ;;
+    *armv7*)   ARCH="armhf"   ;;
+    *armv6l*)  ARCH="arm"     ;;
+    *armv6*)   ARCH="armhf"   ;;
+    *arm*)     ARCH="arm"     ;;
+    *ppc64le*) ARCH="ppc64le" ;;
+    *)         ARCH="386"     ;;
   esac
 fi
 
