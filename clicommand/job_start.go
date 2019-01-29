@@ -15,17 +15,17 @@ import (
 
 var JobAcceptHelpDescription = `Usage:
 
-   buildkite-agent job accept [arguments...]
+   buildkite-agent job start [arguments...]
 
 Description:
 
-   Accept a job, do the thing.
+   Start a job assigned to an agent.
 
 Example:
 
-   $ buildkite-agent job accept --job 1234 --agent-access-token foobar`
+   $ buildkite-agent job start --job 1234 --agent-access-token foobar`
 
-type JobAcceptConfig struct {
+type JobStartConfig struct {
 	JobID              string `cli:"job" validate:"required"`
 	AgentAccessToken   string `cli:"agent-access-token" validate:"required"`
 	BootstrapScript    string `cli:"bootstrap-script" normalize:"commandpath"`
@@ -51,9 +51,9 @@ type JobAcceptConfig struct {
 	DebugHTTP          bool   `cli:"debug-http"`
 }
 
-var JobAcceptCommand = cli.Command{
-	Name:        "accept",
-	Usage:       "Accept and run a Buildkite job locally uploading the logs to Buildkite.com",
+var JobStartCommand = cli.Command{
+	Name:        "start",
+	Usage:       "Start and run a Buildkite job, uploading the logs to Buildkite.com",
 	Description: JobAcceptHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
@@ -170,7 +170,7 @@ var JobAcceptCommand = cli.Command{
 		l := logger.NewLogger()
 
 		// The configuration will be loaded into this struct
-		cfg := JobAcceptConfig{}
+		cfg := JobStartConfig{}
 
 		// Setup the config loader. You'll see that we also path paths to
 		// potential config files. The loader will use the first one it finds.
@@ -239,7 +239,7 @@ var JobAcceptCommand = cli.Command{
 		// so create one here
 		//
 		// worker := agent.NewAgentWorker(l, a, m, workerConfig)
-		
+
 		client := agent.NewAPIClient(l, agent.APIClientConfig{
 			Endpoint:     a.Endpoint,
 			Token:        a.AccessToken,

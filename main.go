@@ -93,9 +93,9 @@ func main() {
 		},
 		{
 			Name:  "job",
-			Usage: "Accept and run jobs, upload the logs to Buildkite.com",
+			Usage: "Start and run jobs, upload the logs to Buildkite.com",
 			Subcommands: []cli.Command{
-				clicommand.JobAcceptCommand,
+				clicommand.JobStartCommand,
 			},
 		},
 		clicommand.BootstrapCommand,
