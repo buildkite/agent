@@ -167,12 +167,23 @@ var JobAcceptCommand = cli.Command{
 		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
+		l := logger.NewLogger()
+
 		// The configuration will be loaded into this struct
 		cfg := JobAcceptConfig{}
 
+		// Setup the config loader. You'll see that we also path paths to
+		// potential config files. The loader will use the first one it finds.
+		loader := cliconfig.Loader{
+			CLI:                    c,
+			Config:                 &cfg,
+			DefaultConfigFilePaths: DefaultConfigFilePaths(),
+			Logger:                 l,
+		}
+
 		// Load the configuration
-		if err := cliconfig.Load(c, &cfg); err != nil {
-			logger.Fatal("%s", err)
+		if err := loader.Load(); err != nil {
+			l.Fatal("%s", err)
 		}
 
 		/*
@@ -191,13 +202,19 @@ var JobAcceptCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(os.Args[0]))
 		}
 
-		a := agent.AgentWorker{
-			Endpoint: cfg.Endpoint,
-			Agent: &api.Agent{
-				Endpoint:          cfg.Endpoint,
-				AccessToken:       cfg.AgentAccessToken,
-				JobStatusInterval: 2,
-			},
+		a := &api.Agent{
+			Endpoint:          cfg.Endpoint,
+			AccessToken:       cfg.AgentAccessToken,
+			JobStatusInterval: 2,
+		}
+		
+		m := metrics.NewCollector(l, metrics.CollectorConfig{
+			Datadog:     cfg.MetricsDatadog,
+			DatadogHost: cfg.MetricsDatadogHost,
+		})
+
+		workerConfig := agent.AgentWorkerConfig{
+			Endpoint: a.Endpoint,
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:   cfg.BootstrapScript,
 				BuildPath:         cfg.BuildPath,
@@ -216,22 +233,27 @@ var JobAcceptCommand = cli.Command{
 				CancelGracePeriod: cfg.CancelGracePeriod,
 				Shell:             cfg.Shell,
 			},
-			MetricsCollector: &metrics.Collector{
-				Datadog:     cfg.MetricsDatadog,
-				DatadogHost: cfg.MetricsDatadogHost,
-			},
-		}.Create()
-
-		job := &api.Job{
-			ID: cfg.JobID,
 		}
-		job, _, err := a.APIClient.Jobs.Accept(job)
+
+		// Can't access the worker's client and didn't want to make it public,
+		// so create one here
+		//
+		// worker := agent.NewAgentWorker(l, a, m, workerConfig)
+		
+		client := agent.NewAPIClient(l, agent.APIClientConfig{
+			Endpoint:     a.Endpoint,
+			Token:        a.AccessToken,
+			DisableHTTP2: workerConfig.DisableHTTP2,
+		})
+		job, _, err := client.Jobs.Accept(&api.Job{
+			ID: cfg.JobID,
+		})
 		if err != nil {
-			logger.Fatal("couldn't accept job: %s", err)
+			l.Fatal("couldn't accept job: %s", err)
 		}
 
 		// TODO add agent_name metric
-		jobMetricsScope := a.MetricsCollector.Scope(metrics.Tags{
+		jobMetricsScope := m.Scope(metrics.Tags{
 			`pipeline`: job.Env[`BUILDKITE_PIPELINE_SLUG`],
 			`org`:      job.Env[`BUILDKITE_ORGANIZATION_SLUG`],
 			`branch`:   job.Env[`BUILDKITE_BRANCH`],
@@ -239,20 +261,17 @@ var JobAcceptCommand = cli.Command{
 		})
 
 		// Configure the job runner
-		jobRunner, err := agent.JobRunner{
-			Endpoint:           a.Endpoint,
-			Agent:              a.Agent,
-			AgentConfiguration: a.AgentConfiguration,
-			Job:                job,
-			Metrics:            jobMetricsScope,
-		}.Create()
+		jobRunner, err := agent.NewJobRunner(l, jobMetricsScope, a, job, agent.JobRunnerConfig{
+			Endpoint:           workerConfig.Endpoint,
+			AgentConfiguration: workerConfig.AgentConfiguration,
+		})
 		if err != nil {
-			logger.Fatal("couldn't create job runner: %s", err)
+			l.Fatal("couldn't create job runner: %s", err)
 		}
 
 		err = jobRunner.Run()
 		if err != nil {
-			logger.Fatal("couldn't run job: %s", err)
+			l.Fatal("couldn't run job: %s", err)
 		}
 
 		os.Exit(0)
