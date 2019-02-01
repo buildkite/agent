@@ -54,7 +54,7 @@ codename="${3:-}"
 version="${4:-}"
 push="${PUSH_IMAGE:-true}"
 
-if [[ ! "$variant" =~ ^(alpine|ubuntu)$ ]] ; then
+if [[ ! "$variant" =~ ^(alpine|ubuntu|aws)$ ]] ; then
   echo "Unknown docker variant $variant"
   exit 1
 fi
