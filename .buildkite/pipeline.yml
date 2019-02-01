@@ -154,6 +154,9 @@ steps:
   - name: ":docker: ubuntu build"
     command: ".buildkite/steps/build-docker-image.sh ubuntu"
 
+  - name: ":docker: :aws: build"
+    command: ".buildkite/steps/build-docker-image.sh aws"
+
   - name: ":debian: build"
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"

@@ -89,6 +89,9 @@ alpine)
 ubuntu)
   build_docker_image "$image_tag" "packaging/docker/ubuntu-linux"
   ;;
+aws)
+  build_docker_image "$image_tag" "packaging/docker/aws-linux"
+  ;;
 *)
   echo "Unknown variant $variant"
   exit 1
