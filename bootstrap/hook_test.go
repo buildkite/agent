@@ -130,6 +130,7 @@ func newTestShell(t *testing.T) *shell.Shell {
 			"PATHEXT=" + os.Getenv("PATHEXT"),
 			"TMP=" + os.Getenv("TMP"),
 			"TEMP=" + os.Getenv("TEMP"),
+			"ProgramData=" + os.Getenv("ProgramData"),
 		})
 	} else {
 		sh.Env = env.New()
