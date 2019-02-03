@@ -1,5 +1,5 @@
 ## Development docker image for buildkite-agent on windows
-FROM microsoft/windowsservercore:latest
+FROM mcr.microsoft.com/windows/servercore:1809
 
 ENV ChocolateyUseWindowsCompression false
 
@@ -23,6 +23,3 @@ RUN go mod download
 
 # Copy the rest of the code
 COPY . c:/code/
-
-# Run things in bash
-ENTRYPOINT ["BASH.EXE"]

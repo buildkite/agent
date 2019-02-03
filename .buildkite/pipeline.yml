@@ -10,9 +10,9 @@ steps:
         run: agent
 
   - name: ":hammer: :windows:"
-    command: ".buildkite/steps/tests.sh"
+    command: ".buildkite\\steps\\tests.sh"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#6568f6d:
         config: .buildkite/docker-compose.windows.yml
         run: agent
         tty: false
