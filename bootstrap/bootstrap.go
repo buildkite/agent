@@ -791,6 +791,11 @@ func (b *Bootstrap) createCheckoutDir() error {
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase() error {
+	if b.Config.Repository == "" {
+		b.shell.Headerf("Skipping checkout phase")
+		return nil
+	}
+
 	if err := b.executeGlobalHook("pre-checkout"); err != nil {
 		return err
 	}
