@@ -48,6 +48,9 @@ type Bootstrap struct {
 
 	// Whether the checkout dir was created as part of checkout
 	createdCheckoutDir bool
+
+	// Directories to clean up at end of bootstrap
+	cleanupDirs []string
 }
 
 // Start runs the bootstrap and returns the exit code
@@ -447,6 +450,12 @@ func (b *Bootstrap) tearDown() error {
 		return tearDownDeprecatedDockerIntegration(b.shell)
 	}
 
+	for _, dir := range b.cleanupDirs {
+		if err := os.RemoveAll(dir); err != nil {
+			b.shell.Warningf("Failed to remove dir %s: %v", dir, err)
+		}
+	}
+
 	return nil
 }
 
@@ -799,11 +808,6 @@ func (b *Bootstrap) CheckoutPhase() error {
 		return err
 	}
 
-	if b.Config.Repository == "" {
-		b.shell.Headerf("Skipping checkout phase")
-		return nil
-	}
-
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		b.shell.Headerf("Cleaning pipeline checkout")
@@ -813,6 +817,18 @@ func (b *Bootstrap) CheckoutPhase() error {
 	}
 
 	b.shell.Headerf("Preparing working directory")
+
+	// If we have a blank repository then use a temp dir for builds
+	if b.Config.Repository == "" {
+		buildDir, err := ioutil.TempDir("", "bootstrap-builds")
+		if err != nil {
+			return err
+		}
+		b.shell.Env.Set(`BUILDKITE_BUILD_CHECKOUT_PATH`, buildDir)
+
+		// Track the directory so we can remove it at the end of the bootstrap
+		b.cleanupDirs = append(b.cleanupDirs, buildDir)
+	}
 
 	// Make sure the build directory exists
 	if err := b.createCheckoutDir(); err != nil {
@@ -830,36 +846,40 @@ func (b *Bootstrap) CheckoutPhase() error {
 			return err
 		}
 	default:
-		err := retry.Do(func(s *retry.Stats) error {
-			err := b.defaultCheckoutPhase()
-			if err == nil {
-				return nil
+		if b.Config.Repository != "" {
+			err := retry.Do(func(s *retry.Stats) error {
+				err := b.defaultCheckoutPhase()
+				if err == nil {
+					return nil
+				}
+
+				switch {
+				case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
+					b.shell.Warningf("Checkout was interrupted by a signal")
+					s.Break()
+
+				case errors.Cause(err) == context.Canceled:
+					b.shell.Warningf("Checkout was cancelled")
+					s.Break()
+
+				default:
+					b.shell.Warningf("Checkout failed! %s (%s)", err, s)
+
+					// Checkout can fail because of corrupted files in the checkout
+					// which can leave the agent in a state where it keeps failing
+					// This removes the checkout dir, which means the next checkout
+					// will be a lot slower (clone vs fetch), but hopefully will
+					// allow the agent to self-heal
+					_ = b.removeCheckoutDir()
+				}
+
+				return err
+			}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+			if err != nil {
+				return err
 			}
-
-			switch {
-			case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
-				b.shell.Warningf("Checkout was interrupted by a signal")
-				s.Break()
-
-			case errors.Cause(err) == context.Canceled:
-				b.shell.Warningf("Checkout was cancelled")
-				s.Break()
-
-			default:
-				b.shell.Warningf("Checkout failed! %s (%s)", err, s)
-
-				// Checkout can fail because of corrupted files in the checkout
-				// which can leave the agent in a state where it keeps failing
-				// This removes the checkout dir, which means the next checkout
-				// will be a lot slower (clone vs fetch), but hopefully will
-				// allow the agent to self-heal
-				_ = b.removeCheckoutDir()
-			}
-
-			return err
-		}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
-		if err != nil {
-			return err
+		} else {
+			b.shell.Commentf("Skipping checkout, BUILDKITE_REPO is empty")
 		}
 	}
 
