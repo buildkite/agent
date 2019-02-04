@@ -820,7 +820,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 
 	// If we have a blank repository then use a temp dir for builds
 	if b.Config.Repository == "" {
-		buildDir, err := ioutil.TempDir("", "bootstrap-builds")
+		buildDir, err := ioutil.TempDir("", "buildkite-job-"+b.Config.JobID)
 		if err != nil {
 			return err
 		}
