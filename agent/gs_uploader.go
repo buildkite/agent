@@ -13,7 +13,6 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/mime"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/googleapi"
@@ -59,9 +58,9 @@ func NewGSUploader(l *logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
 	return &GSUploader{
 		BucketPath: bucketPath,
 		BucketName: bucketName,
-		conf: c,
-		logger: l,
-		service: service,
+		conf:       c,
+		logger:     l,
+		service:    service,
 	}, nil
 }
 
@@ -111,7 +110,7 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 		permission != "projectPrivate" &&
 		permission != "publicRead" &&
 		permission != "publicReadWrite" {
-			return fmt.Errorf("Invalid GS ACL `%s`", permission)
+		return fmt.Errorf("Invalid GS ACL `%s`", permission)
 	}
 
 	if permission == "" {
@@ -123,7 +122,7 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 	}
 	object := &storage.Object{
 		Name:               u.artifactPath(artifact),
-		ContentType:        u.mimeType(artifact),
+		ContentType:        artifact.ContentType,
 		ContentDisposition: u.contentDisposition(artifact),
 	}
 	file, err := os.Open(artifact.AbsolutePath)
@@ -147,17 +146,6 @@ func (u *GSUploader) artifactPath(artifact *api.Artifact) string {
 	parts := []string{u.BucketPath, artifact.Path}
 
 	return strings.Join(parts, "/")
-}
-
-func (u *GSUploader) mimeType(a *api.Artifact) string {
-	extension := filepath.Ext(a.Path)
-	mimeType := mime.TypeByExtension(extension)
-
-	if mimeType != "" {
-		return mimeType
-	} else {
-		return "binary/octet-stream"
-	}
 }
 
 func (u *GSUploader) contentDisposition(a *api.Artifact) string {

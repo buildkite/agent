@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -12,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/mime"
 )
 
 type S3UploaderConfig struct {
@@ -51,9 +49,9 @@ func NewS3Uploader(l *logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	}
 
 	return &S3Uploader{
-		logger: l,
-		conf: c,
-		client: s3Client,
+		logger:     l,
+		conf:       c,
+		client:     s3Client,
 		BucketName: bucketName,
 		BucketPath: bucketPath,
 	}, nil
@@ -113,7 +111,7 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:      aws.String(u.BucketName),
 		Key:         aws.String(u.artifactPath(artifact)),
-		ContentType: aws.String(u.mimeType(artifact)),
+		ContentType: aws.String(artifact.ContentType),
 		ACL:         aws.String(permission),
 		Body:        f,
 	})
@@ -125,15 +123,4 @@ func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
 	parts := []string{u.BucketPath, artifact.Path}
 
 	return strings.Join(parts, "/")
-}
-
-func (u *S3Uploader) mimeType(a *api.Artifact) string {
-	extension := filepath.Ext(a.Path)
-	mimeType := mime.TypeByExtension(extension)
-
-	if mimeType != "" {
-		return mimeType
-	} else {
-		return "binary/octet-stream"
-	}
 }
