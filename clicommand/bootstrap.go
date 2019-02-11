@@ -270,9 +270,6 @@ var BootstrapCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
-		// Remove any config env from the environment to prevent them propagating to bootstrap
-		UnsetConfigFromEnvironment(c)
-
 		// Enable debug if set
 		if cfg.Debug {
 			l.Level = logger.DEBUG
