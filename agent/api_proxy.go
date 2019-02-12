@@ -90,7 +90,15 @@ func (p *APIProxy) Listen() error {
 }
 
 func (p *APIProxy) listenOnUnixSocket() (net.Listener, *os.File, error) {
-	socket, err := ioutil.TempFile("", "agent-socket")
+	// TempDir is not guaranteed to exist
+	tempDir := os.TempDir()
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(tempDir, 0777); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	socket, err := ioutil.TempFile(tempDir, "agent-socket")
 	if err != nil {
 		return nil, nil, err
 	}
