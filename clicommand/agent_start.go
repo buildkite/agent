@@ -362,6 +362,9 @@ var AgentStartCommand = cli.Command{
 		// Setup the any global configuration options
 		HandleGlobalFlags(l, cfg)
 
+		// Remove any config env from the environment to prevent them propagating to bootstrap
+		UnsetConfigFromEnvironment(c)
+
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
@@ -430,9 +433,9 @@ var AgentStartCommand = cli.Command{
 			DisableColors:         cfg.NoColor,
 			Spawn:                 cfg.Spawn,
 			APIClientConfig: agent.APIClientConfig{
-				Token:                 cfg.Token,
-				Endpoint:              cfg.Endpoint,
-				DisableHTTP2:          cfg.NoHTTP2,
+				Token:        cfg.Token,
+				Endpoint:     cfg.Endpoint,
+				DisableHTTP2: cfg.NoHTTP2,
 			},
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,

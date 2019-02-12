@@ -1,6 +1,10 @@
 package clicommand
 
 import (
+	"os"
+	"reflect"
+	"strings"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
@@ -80,6 +84,21 @@ func HandleGlobalFlags(l *logger.Logger, cfg interface{}) {
 			for _, name := range experimentNamesSlice {
 				experiments.Enable(name)
 				l.Debug("Enabled experiment `%s`", name)
+			}
+		}
+	}
+}
+
+func UnsetConfigFromEnvironment(c *cli.Context) {
+	flags := append(c.App.Flags, c.Command.Flags...)
+	for _, fl := range flags {
+		// use golang reflection to find EnvVar values on flags
+		r := reflect.ValueOf(fl)
+		f := reflect.Indirect(r).FieldByName(`EnvVar`)
+		// split comma delimited env
+		if envVars := f.String(); envVars != `` {
+			for _, env := range strings.Split(envVars, ",") {
+				os.Unsetenv(env)
 			}
 		}
 	}
