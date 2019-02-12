@@ -2,9 +2,9 @@ package bootstrap
 
 import (
 	"fmt"
-	"path/filepath"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/bintest"

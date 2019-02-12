@@ -13,8 +13,16 @@ func TempFileWithExtension(filename string) (*os.File, error) {
 	extension := filepath.Ext(filename)
 	basename := strings.TrimSuffix(filename, extension)
 
+	// TempDir is not guaranteed to exist
+	tempDir := os.TempDir()
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(tempDir, 0777); err != nil {
+			return nil, err
+		}
+	}
+
 	// Create the file
-	tempFile, err := ioutil.TempFile("", basename+"-")
+	tempFile, err := ioutil.TempFile(tempDir, basename+"-")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create temporary file \"%s\" (%s)", filename, err)
 	}

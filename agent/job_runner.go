@@ -84,10 +84,10 @@ type JobRunner struct {
 // Initializes the job runner
 func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
-		agent: ag,
-		job: j,
-		logger: l,
-		conf: conf,
+		agent:   ag,
+		job:     j,
+		logger:  l,
+		conf:    conf,
 		metrics: scope,
 	}
 
@@ -96,7 +96,7 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 	// Our own APIClient using the endpoint and the agents access token
 	runner.apiClient = NewAPIClient(l, APIClientConfig{
 		Endpoint: runner.conf.Endpoint,
-		Token: ag.AccessToken,
+		Token:    ag.AccessToken,
 	})
 
 	// A proxy for the agent API that is expose to the bootstrap
@@ -108,7 +108,7 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 	// The log streamer that will take the output chunks, and send them to
 	// the Buildkite Agent API
 	runner.logStreamer = NewLogStreamer(l, runner.onUploadChunk, LogStreamerConfig{
-		Concurrency: 3,
+		Concurrency:       3,
 		MaxChunkSizeBytes: j.ChunksMaxSizeBytes,
 	})
 
@@ -118,8 +118,17 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 			return nil, err
 		}
 	}
+
+	// TempDir is not guaranteed to exist
+	tempDir := os.TempDir()
+	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		if err = os.MkdirAll(tempDir, 0777); err != nil {
+			return nil, err
+		}
+	}
+
 	// Prepare a file to recieve the given job environment
-	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", j.ID)); err != nil {
+	if file, err := ioutil.TempFile(tempDir, fmt.Sprintf("job-env-%s", j.ID)); err != nil {
 		return runner, err
 	} else {
 		l.Debug("[JobRunner] Created env file: %s", file.Name())
@@ -216,7 +225,7 @@ func (r *JobRunner) Run() error {
 	r.logStreamer.Stop()
 
 	// Warn about failed chunks
-	if count := r.logStreamer.FailedChunks(); count > 0{
+	if count := r.logStreamer.FailedChunks(); count > 0 {
 		r.logger.Warn("%d chunks failed to upload for this job", count)
 	}
 
