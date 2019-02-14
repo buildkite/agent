@@ -48,6 +48,7 @@ type AgentStartConfig struct {
 	BootstrapScript           string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod         int      `cli:"cancel-grace-period"`
 	BuildPath                 string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	ReposPath                 string   `cli:"repos-path" normalize:"filepath"`
 	HooksPath                 string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath               string   `cli:"plugins-path" normalize:"filepath"`
 	Shell                     string   `cli:"shell"`
@@ -233,6 +234,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_BUILD_PATH",
 		},
 		cli.StringFlag{
+			Name:   "repos-path",
+			Value:  "",
+			Usage:  "Path where source repositories will be stored",
+			EnvVar: "BUILDKITE_REPOS_PATH",
+		},
+		cli.StringFlag{
 			Name:   "hooks-path",
 			Value:  "",
 			Usage:  "Directory where the hook scripts are found",
@@ -276,7 +283,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-local-hooks",
-			Usage:  "Don't allow local hooks to be run from checked out repositories",
+			Usage:  "Don't allow local hooks to be run from checkouts",
 			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
 		},
 		cli.BoolFlag{
@@ -440,6 +447,7 @@ var AgentStartCommand = cli.Command{
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:           cfg.BootstrapScript,
 				BuildPath:                 cfg.BuildPath,
+				ReposPath:                 cfg.ReposPath,
 				HooksPath:                 cfg.HooksPath,
 				PluginsPath:               cfg.PluginsPath,
 				GitCloneFlags:             cfg.GitCloneFlags,

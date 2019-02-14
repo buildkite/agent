@@ -4,6 +4,7 @@ type AgentConfiguration struct {
 	ConfigPath                string
 	BootstrapScript           string
 	BuildPath                 string
+	ReposPath                 string
 	HooksPath                 string
 	PluginsPath               string
 	GitCloneFlags             string

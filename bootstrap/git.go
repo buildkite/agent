@@ -28,6 +28,39 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	return nil
 }
 
+func gitCloneBare(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
+	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
+	if err != nil {
+		return err
+	}
+
+	commandArgs := []string{"clone", "--bare"}
+	commandArgs = append(commandArgs, individualCloneFlags...)
+	commandArgs = append(commandArgs, "--", repository, ".")
+
+	if err = sh.Run("git", commandArgs...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func gitWorktreeAdd(sh *shell.Shell, dir string, commit string) error {
+	if err := sh.Run("git", "worktree", "add", dir, commit); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func gitShowRef(sh *shell.Shell, pattern string) error {
+	if err := sh.Run("git", "show-ref", pattern); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func gitClean(sh *shell.Shell, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
@@ -157,7 +190,7 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 	output, err := sh.RunAndCapture("ssh", "-G", host)
 
 	// if we got no error, let's process the output
-	if (err == nil) {
+	if err == nil {
 		// split up the ssh -G output
 		lines := strings.Split(output, "\n")
 

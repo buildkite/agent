@@ -103,6 +103,14 @@ func (b *Bootstrap) Start() (exitCode int) {
 		phaseErr = b.PluginPhase()
 	}
 
+	if b.canUseWorktrees() {
+		if phaseErr == nil && includePhase(`repo`) {
+			phaseErr = b.RepoPhase()
+		}
+	} else {
+		b.shell.Commentf("Skipping repo phase")
+	}
+
 	if phaseErr == nil && includePhase(`checkout`) {
 		phaseErr = b.CheckoutPhase()
 	} else {
@@ -138,6 +146,10 @@ func (b *Bootstrap) Start() (exitCode int) {
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
+}
+
+func (b *Bootstrap) canUseWorktrees() bool {
+	return b.Config.ReposPath != ""
 }
 
 // Cancel interrupts any running shell processes and causes the bootstrap to stop
@@ -339,6 +351,11 @@ func dirForAgentName(agentName string) string {
 	return badCharsPattern.ReplaceAllString(agentName, "-")
 }
 
+func dirForRepository(repository string) string {
+	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
+	return badCharsPattern.ReplaceAllString(repository, "-")
+}
+
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 	if fileExists(repository) {
@@ -392,8 +409,13 @@ func (b *Bootstrap) setUp() error {
 		if b.BuildPath == "" {
 			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
 		}
-		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
-			filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+		if b.canUseWorktrees() {
+			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+				filepath.Join(b.BuildPath, b.JobID))
+		} else {
+			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+		}
 	}
 
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
@@ -782,7 +804,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if !fileExists(checkoutPath) {
-		b.shell.Commentf("Creating \"%s\"", checkoutPath)
+		b.shell.Commentf("Creating checkout dir \"%s\"", checkoutPath)
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
 			return err
 		}
@@ -790,6 +812,203 @@ func (b *Bootstrap) createCheckoutDir() error {
 
 	if b.shell.Getwd() != checkoutPath {
 		if err := b.shell.Chdir(checkoutPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (b *Bootstrap) removeRepositoryDir() error {
+	repositoryPath, _ := b.shell.Env.Get("BUILDKITE_REPO_PATH")
+
+	b.shell.Commentf("Removing %s", repositoryPath)
+	if err := os.RemoveAll(repositoryPath); err != nil {
+		return fmt.Errorf("Failed to remove \"%s\" (%s)", repositoryPath, err)
+	}
+	return nil
+}
+
+// RepoPhase gets the code repository ready for the checkout phase. This generally means
+// either cloning it or fetching the latest
+func (b *Bootstrap) RepoPhase() error {
+	if err := b.executeGlobalHook("pre-repo"); err != nil {
+		return err
+	}
+
+	if err := b.executePluginHook("pre-repo", b.pluginCheckouts); err != nil {
+		return err
+	}
+
+	b.shell.Headerf("Preparing repository directory")
+
+	// Set a BUILDKITE_REPO_PATH unless one exists already. We do this here
+	// so that pre-repo hooks have the chance to modify BUILDKITE_REPO
+	if _, exists := b.shell.Env.Get("BUILDKITE_REPO_PATH"); !exists {
+		if b.ReposPath == "" {
+			return fmt.Errorf("Must set either a BUILDKITE_REPOS_PATH or a BUILDKITE_REPO_PATH")
+		}
+		repo, _ := b.shell.Env.Get("BUILDKITE_REPO")
+		b.shell.Env.Set("BUILDKITE_REPO_PATH", filepath.Join(b.ReposPath, dirForRepository(repo)))
+	}
+
+	// There can only be one repo hook, either plugin or global, in that order
+	switch {
+	case b.hasPluginHook("repo"):
+		if err := b.executePluginHook("repo", b.pluginCheckouts); err != nil {
+			return err
+		}
+	case b.hasGlobalHook("repo"):
+		if err := b.executeGlobalHook("repo"); err != nil {
+			return err
+		}
+	default:
+		if b.Config.Repository != "" {
+			err := retry.Do(func(s *retry.Stats) error {
+				err := b.defaultRepoPhase()
+				if err == nil {
+					return nil
+				}
+
+				switch {
+				case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
+					b.shell.Warningf("Preparing repository was interrupted by a signal")
+					s.Break()
+
+				case errors.Cause(err) == context.Canceled:
+					b.shell.Warningf("Preparing repository was cancelled")
+					s.Break()
+
+				default:
+					b.shell.Warningf("Preparing repository failed! %s (%s)", err, s)
+
+					// Checkout can fail because of corrupted files in the checkout
+					// which can leave the agent in a state where it keeps failing
+					// This removes the checkout dir, which means the next checkout
+					// will be a lot slower (clone vs fetch), but hopefully will
+					// allow the agent to self-heal
+					_ = b.removeRepositoryDir()
+				}
+
+				return err
+			}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+			if err != nil {
+				return err
+			}
+		} else {
+			b.shell.Commentf("Skipping preparing repository, BUILDKITE_REPO is empty")
+		}
+	}
+
+	// Run post-repo hooks
+	if err := b.executeGlobalHook("post-repo"); err != nil {
+		return err
+	}
+
+	if err := b.executeLocalHook("post-repo"); err != nil {
+		return err
+	}
+
+	if err := b.executePluginHook("post-repo", b.pluginCheckouts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// defaultRepoPhase is called by the RepoPhase if no global or plugin checkout
+// hook exists. It clones the BUILDKITE_REPO into the Repository path, or updates
+// it if it exists
+func (b *Bootstrap) defaultRepoPhase() error {
+	if !fileExists(b.Config.ReposPath) {
+		b.shell.Commentf("Creating repository dir \"%s\"", b.Config.ReposPath)
+		if err := os.MkdirAll(b.Config.ReposPath, 0777); err != nil {
+			return err
+		}
+	}
+
+	repoPath, _ := b.shell.Env.Get("BUILDKITE_REPO_PATH")
+
+	// Try and lock the repository directory to prevent concurrent fetches or clones
+	repoDirLock, err := b.shell.LockFile(repoPath+".lock", time.Minute*5)
+	if err != nil {
+		return err
+	}
+	defer repoDirLock.Unlock()
+
+	if b.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
+	}
+
+	// Does the repo path exist?
+	if fileExists(repoPath) {
+		if err := b.shell.Chdir(repoPath); err != nil {
+			return err
+		}
+		// Update the the origin of the repository so we can gracefully handle repository renames
+		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
+			return err
+		}
+	} else {
+		if err := gitCloneBare(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
+			return err
+		}
+		if err := b.shell.Chdir(repoPath); err != nil {
+			return err
+		}
+	}
+
+	// If a refspec is provided then use it instead.
+	// i.e. `refs/not/a/head`
+	if b.RefSpec != "" {
+		b.shell.Commentf("Fetch and checkout custom refspec")
+		if err := gitFetch(b.shell, "-v --prune", "origin", b.RefSpec); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// GitHub has a special ref which lets us fetch a pull request head, whether
+	// or not there is a current head in this repository or another which
+	// references the commit. We presume a commit sha is provided. See:
+	// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
+	if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+		b.shell.Commentf("Fetch and checkout pull request head from GitHub")
+		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+
+		if err := gitFetch(b.shell, "-v", "origin", refspec); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	// If the commit is "HEAD" then we can't do a commit-specific fetch and will
+	// need to fetch the remote head and checkout the fetched head explicitly.
+	if b.Commit == "HEAD" {
+		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
+		if err := gitFetch(b.shell, "-v --prune", "origin", b.Branch); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	// Otherwise fetch and checkout the commit directly.
+	if err := gitShowRef(b.shell, b.Commit); err == nil {
+		b.shell.Commentf("Commit %s already exists in repository", b.Commit)
+		return nil
+	}
+
+	// Some repositories don't support fetching a specific commit so we fall back
+	// to fetching all heads and tags, hoping that the commit is included.
+	if err := gitFetch(b.shell, "-v", "origin", b.Commit); err != nil {
+		// By default `git fetch origin` will only fetch tags which are
+		// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
+		// fetch all tags in addition to the default refspec, but pre 1.9.0 it
+		// excludes the default refspec.
+		gitFetchRefspec, _ := b.shell.RunAndCapture("git", "config", "remote.origin.fetch")
+		if err := gitFetch(b.shell, "-v --prune", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
 			return err
 		}
 	}
@@ -824,31 +1043,38 @@ func (b *Bootstrap) CheckoutPhase() error {
 		if err != nil {
 			return err
 		}
+		b.shell.Commentf("Using temp dir of %s", buildDir)
 		b.shell.Env.Set(`BUILDKITE_BUILD_CHECKOUT_PATH`, buildDir)
 
 		// Track the directory so we can remove it at the end of the bootstrap
 		b.cleanupDirs = append(b.cleanupDirs, buildDir)
 	}
 
-	// Make sure the build directory exists
-	if err := b.createCheckoutDir(); err != nil {
-		return err
-	}
-
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
 	case b.hasPluginHook("checkout"):
+		if err := b.createCheckoutDir(); err != nil {
+			return err
+		}
 		if err := b.executePluginHook("checkout", b.pluginCheckouts); err != nil {
 			return err
 		}
 	case b.hasGlobalHook("checkout"):
+		if err := b.createCheckoutDir(); err != nil {
+			return err
+		}
 		if err := b.executeGlobalHook("checkout"); err != nil {
 			return err
 		}
 	default:
 		if b.Config.Repository != "" {
 			err := retry.Do(func(s *retry.Stats) error {
-				err := b.defaultCheckoutPhase()
+				var err error
+				if b.canUseWorktrees() {
+					err = b.worktreeCheckoutPhase()
+				} else {
+					err = b.defaultCheckoutPhase()
+				}
 				if err == nil {
 					return nil
 				}
@@ -919,10 +1145,87 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
+// worktreeCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
+// hook exists and work tree checkouts are supported
+func (b *Bootstrap) worktreeCheckoutPhase() error {
+	repositoryPath, _ := b.shell.Env.Get("BUILDKITE_REPO_PATH")
+	if repositoryPath == "" {
+		return fmt.Errorf("BUILDKITE_REPO_PATH isn't set")
+	}
+
+	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	if err := b.shell.Chdir(repositoryPath); err != nil {
+		return err
+	}
+
+	b.shell.Commentf("Creating a worktree for %s in %s",
+		repositoryPath, checkoutPath)
+
+	if err := gitWorktreeAdd(b.shell, checkoutPath, b.Commit); err != nil {
+		return err
+	}
+
+	if err := b.shell.Chdir(checkoutPath); err != nil {
+		return err
+	}
+
+	var gitSubmodules bool
+	if !b.GitSubmodules && hasGitSubmodules(b.shell) {
+		b.shell.Warningf("This repository has submodules, but submodules are disabled at an agent level")
+	} else if b.GitSubmodules && hasGitSubmodules(b.shell) {
+		b.shell.Commentf("Git submodules detected")
+		gitSubmodules = true
+	}
+
+	if gitSubmodules {
+		// `submodule sync` will ensure the .git/config
+		// matches the .gitmodules file.  The command
+		// is only available in git version 1.8.1, so
+		// if the call fails, continue the bootstrap
+		// script, and show an informative error.
+		if err := b.shell.Run("git", "submodule", "sync", "--recursive"); err != nil {
+			gitVersionOutput, _ := b.shell.RunAndCapture("git", "--version")
+			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
+		}
+
+		if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
+			return err
+		}
+		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"); err != nil {
+			return err
+		}
+	}
+
+	if _, hasToken := b.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
+		b.shell.Warningf("Skipping sending Git information to Buildkite as $BUILDKITE_AGENT_ACCESS_TOKEN is missing")
+		return nil
+	}
+
+	// Grab author and commit information and send
+	// it back to Buildkite. But before we do,
+	// we'll check to see if someone else has done
+	// it first.
+	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
+	if err := b.shell.Run("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
+		b.shell.Commentf("Sending Git commit information back to Buildkite")
+
+		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color")
+		if err != nil {
+			return err
+		}
+
+		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
-	// Make sure the build directory exists
 	if err := b.createCheckoutDir(); err != nil {
 		return err
 	}
