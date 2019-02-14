@@ -72,6 +72,7 @@ type BootstrapConfig struct {
 	PTY                          bool     `cli:"pty"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
+	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 }
 
@@ -258,6 +259,7 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
 		DebugFlag,
+		ExperimentsFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
