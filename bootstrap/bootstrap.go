@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/shellwords"
@@ -107,8 +108,6 @@ func (b *Bootstrap) Start() (exitCode int) {
 		if phaseErr == nil && includePhase(`repo`) {
 			phaseErr = b.RepoPhase()
 		}
-	} else {
-		b.shell.Commentf("Skipping repo phase")
 	}
 
 	if phaseErr == nil && includePhase(`checkout`) {
@@ -149,7 +148,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 }
 
 func (b *Bootstrap) canUseWorktrees() bool {
-	return b.Config.ReposPath != ""
+	return experiments.IsEnabled(`worktree`) && b.Config.ReposPath != ""
 }
 
 // Cancel interrupts any running shell processes and causes the bootstrap to stop

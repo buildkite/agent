@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/shellwords"
@@ -371,6 +372,13 @@ var AgentStartCommand = cli.Command{
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
+
+		// Check repos are enabled
+		if experiments.IsEnabled(`worktree`) {
+			if cfg.ReposPath == `` {
+				l.Fatal("Must provide a repos-path in your configuration if worktrees are enabled")
+			}
+		}
 
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {

@@ -26,6 +26,12 @@ The agent socket experiment creates a local proxy for the Agent API with a singl
 
 **Status**: broadly useful, we'd like this to be the standard behaviour. 👌
 
+### `worktree`
+
+The agent creates a checkout per-pipeline and per agent on the host presently. This experiment adds a repos directory that keeps a bare git repository for the repository and then uses git work trees to provide ephemeral checkouts per-job. This results in a single repository shared between every pipeline that uses it. This can result in faster checkouts and less load on your git provider for large repositories.
+
+**Status**:  broadly useful, we'd like this to be the standard behaviour. 👌
+
 ### `msgpack`
 
 Agent registration normally uses a REST API with a JSON framing. This experiment uses [msgpack](https://msgpack.org/) with the aim of lower latency and reduced network traffic footprint.
