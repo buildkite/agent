@@ -41,6 +41,7 @@ type ArtifactUploadConfig struct {
 	Destination      string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 	Job              string `cli:"job" validate:"required"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	ContentType      string `cli:"content-type"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoColor          bool   `cli:"no-color"`
 	Debug            bool   `cli:"debug"`
@@ -57,6 +58,12 @@ var ArtifactUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the artifacts be uploaded to",
 			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.StringFlag{
+			Name:   "content-type",
+			Value:  "",
+			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
+			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
 		},
 		AgentAccessTokenFlag,
 		EndpointFlag,
@@ -89,6 +96,7 @@ var ArtifactUploadCommand = cli.Command{
 			JobID:       cfg.Job,
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
+			ContentType: cfg.ContentType,
 		})
 
 		// Upload the artifacts

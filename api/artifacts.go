@@ -40,6 +40,9 @@ type Artifact struct {
 
 	// Information on how to upload this artifact.
 	UploadInstructions *ArtifactUploadInstructions `json:"-"`
+
+	// A specific Content-Type to use on upload
+	ContentType string `json:"-"`
 }
 
 type ArtifactBatch struct {

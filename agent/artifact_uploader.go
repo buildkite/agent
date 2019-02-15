@@ -14,13 +14,15 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/mime"
 	"github.com/buildkite/agent/pool"
 	"github.com/buildkite/agent/retry"
 	zglob "github.com/mattn/go-zglob"
 )
 
 const (
-	ArtifactPathDelimiter = ";"
+	ArtifactPathDelimiter    = ";"
+	ArtifactFallbackMimeType = "binary/octet-stream"
 )
 
 type ArtifactUploaderConfig struct {
@@ -32,6 +34,9 @@ type ArtifactUploaderConfig struct {
 
 	// Where we'll be uploading artifacts
 	Destination string
+
+	// A specific Content-Type to use for all artifacts
+	ContentType string
 }
 
 type ArtifactUploader struct {
@@ -47,9 +52,9 @@ type ArtifactUploader struct {
 
 func NewArtifactUploader(l *logger.Logger, ac *api.Client, c ArtifactUploaderConfig) *ArtifactUploader {
 	return &ArtifactUploader{
-		logger: l,
+		logger:    l,
 		apiClient: ac,
-		conf:   c,
+		conf:      c,
 	}
 }
 
@@ -169,6 +174,18 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	io.Copy(hash, file)
 	checksum := fmt.Sprintf("%x", hash.Sum(nil))
 
+	// Determine the Content-Type to send
+	contentType := a.conf.ContentType
+
+	if contentType == "" {
+		extension := filepath.Ext(absolutePath)
+		contentType = mime.TypeByExtension(extension)
+
+		if contentType == "" {
+			contentType = ArtifactFallbackMimeType
+		}
+	}
+
 	// Create our new artifact data structure
 	artifact := &api.Artifact{
 		Path:         path,
@@ -176,6 +193,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 		GlobPath:     globPath,
 		FileSize:     fileInfo.Size(),
 		Sha1Sum:      checksum,
+		ContentType:  contentType,
 	}
 
 	return artifact, nil
