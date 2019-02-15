@@ -771,11 +771,25 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 func (b *Bootstrap) removeCheckoutDir() error {
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	b.shell.Commentf("Removing %s", checkoutPath)
-	if err := os.RemoveAll(checkoutPath); err != nil {
-		return fmt.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
+	// on windows, sometimes removing large dirs can fail for various reasons
+	// for instance having files open
+	// see https://github.com/golang/go/issues/20841
+	for i := 0; i < 10; i++ {
+		b.shell.Commentf("Removing %s", checkoutPath)
+		if err := os.RemoveAll(checkoutPath); err != nil {
+			b.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
+		} else {
+			if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
+				return nil
+			} else {
+				b.shell.Errorf("Failed to remove %s", checkoutPath)
+			}
+		}
+		b.shell.Commentf("Waiting 10 seconds")
+		<-time.After(time.Second * 10)
 	}
-	return nil
+
+	return fmt.Errorf("Failed to remove %s", checkoutPath)
 }
 
 func (b *Bootstrap) createCheckoutDir() error {
