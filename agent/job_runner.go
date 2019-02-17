@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -150,26 +151,42 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 	// Our log scanner currently needs a full buffer of the log output
 	runner.lineBuffer = &process.LineBuffer{}
 
-	// Called for every line of process output
-	var handleProcessOutput = func(line string) {
-		// Send to our header streamer and determine if it's a header
-		isHeader := runner.headerTimesStreamer.Scan(line)
+	pr, pw := io.Pipe()
 
-		// Optionally prefix log lines with timestamps
-		if conf.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
-			line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+	// Use a scanner to process output line by line
+	go func() {
+		scanner := process.NewScanner(l)
+
+		err := scanner.ScanLines(pr, func(line string) {
+			// Send to our header streamer and determine if it's a header
+			isHeader := runner.headerTimesStreamer.Scan(line)
+
+			// Optionally prefix log lines with timestamps
+			if conf.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
+				line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+			}
+
+			// Write the log line to the buffer
+			runner.lineBuffer.WriteLine(line)
+		})
+		if err != nil {
+			l.Error("[LineScanner] Encountered error %v", err)
 		}
+	}()
 
-		// Write the log line to the buffer
-		runner.lineBuffer.WriteLine(line)
-	}
+	// Copy the current processes ENV and merge in the new ones. We do this
+	// so the sub process gets PATH and stuff. We merge our path in over
+	// the top of the current one so the ENV from Buildkite and the agent
+	// take precedence over the agent
+	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	runner.process = process.NewProcess(l, process.ProcessConfig{
-		Script:  cmd,
-		Env:     env,
-		PTY:     conf.AgentConfiguration.RunInPty,
-		Handler: handleProcessOutput,
+	runner.process = process.NewProcess(l, process.Config{
+		Path:   cmd[0],
+		Args:   cmd[1:],
+		Env:    processEnv,
+		PTY:    conf.AgentConfiguration.RunInPty,
+		Writer: pw,
 	})
 
 	// Kick off our callback when the process starts
