@@ -1,11 +1,11 @@
 package process_test
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -22,9 +22,9 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester"},
+	p := process.NewProcess(logger.Discard, process.Config{
+		Path: os.Args[0],
+		Env:  []string{"TEST_MAIN=tester"},
 	})
 
 	var wg sync.WaitGroup
@@ -60,43 +60,17 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	}
 }
 
-func TestProcessCapturesOutputLineByLine(t *testing.T) {
-	var lines = &processLineHandler{}
-
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script:  []string{os.Args[0]},
-		Env:     []string{"TEST_MAIN=tester"},
-		Handler: lines.Handle,
-	})
-
-	if err := p.Start(); err != nil {
-		t.Error(err)
-	}
-
-	expected := []string{
-		"+++ My header",
-		"llamas",
-		"and more llamas",
-		"a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line",
-		"and some alpacas",
-	}
-
-	if !reflect.DeepEqual(expected, lines.Lines()) {
-		t.Fatalf("Unexpected lines: %v", lines)
-	}
-}
-
 func TestProcessInterrupts(t *testing.T) {
 	if runtime.GOOS == `windows` {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	var lines = &processLineHandler{}
+	b := &bytes.Buffer{}
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script:  []string{os.Args[0]},
-		Env:     []string{"TEST_MAIN=tester-signal"},
-		Handler: lines.Handle,
+	p := process.NewProcess(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=tester-signal"},
+		Writer: b,
 	})
 
 	var wg sync.WaitGroup
@@ -118,7 +92,7 @@ func TestProcessInterrupts(t *testing.T) {
 
 	wg.Wait()
 
-	output := strings.Join(lines.Lines(), "\n")
+	output := b.String()
 	if output != `SIG terminated` {
 		t.Fatalf("Bad output: %q", output)
 	}
@@ -130,9 +104,9 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		return
 	}
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester-pgid"},
+	p := process.NewProcess(logger.Discard, process.Config{
+		Path: os.Args[0],
+		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
 	if err := p.Start(); err != nil {

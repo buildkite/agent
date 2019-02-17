@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"sync"
@@ -14,14 +13,13 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
-type ProcessConfig struct {
+type Config struct {
 	PTY       bool
 	Timestamp bool
-	Script    []string
+	Path      string
+	Args      []string
 	Env       []string
-
-	// Handler is called with each line of output
-	Handler func(string)
+	Writer    io.Writer
 }
 
 type Process struct {
@@ -29,14 +27,14 @@ type Process struct {
 	Pid        int
 	ExitStatus string
 
-	conf          ProcessConfig
+	conf          Config
 	logger        *logger.Logger
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
 }
 
-func NewProcess(l *logger.Logger, c ProcessConfig) *Process {
+func NewProcess(l *logger.Logger, c Config) *Process {
 	return &Process{
 		logger: l,
 		conf:   c,
@@ -50,7 +48,7 @@ func (p *Process) Start() error {
 	}
 
 	// Create a command
-	p.command = exec.Command(p.conf.Script[0], p.conf.Script[1:]...)
+	p.command = exec.Command(p.conf.Path, p.conf.Args...)
 
 	// Setup the process to create a process group if supported
 	// See https://github.com/kr/pty/issues/35 for context
@@ -77,8 +75,6 @@ func (p *Process) Start() error {
 
 	var waitGroup sync.WaitGroup
 
-	lineReaderPipe, lineWriterPipe := io.Pipe()
-
 	// Toggle between running in a pty
 	if p.conf.PTY {
 		pty, err := StartPTY(p.command)
@@ -99,7 +95,7 @@ func (p *Process) Start() error {
 
 			// Copy the pty to our buffer. This will block until it
 			// EOF's or something breaks.
-			_, err = io.Copy(lineWriterPipe, pty)
+			_, err = io.Copy(p.conf.Writer, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
@@ -117,8 +113,8 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
-		p.command.Stdout = lineWriterPipe
-		p.command.Stderr = lineWriterPipe
+		p.command.Stdout = p.conf.Writer
+		p.command.Stderr = p.conf.Writer
 		p.command.Stdin = nil
 
 		err := p.command.Start()
@@ -135,36 +131,15 @@ func (p *Process) Start() error {
 
 	p.logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
-	if p.conf.Handler != nil {
-		// Add the scanner the waitGroup
-		waitGroup.Add(1)
-
-		scanner := NewScanner(p.logger)
-
-		// Start the Scanner
-		go func() {
-			defer waitGroup.Done()
-			if err := scanner.ScanLines(lineReaderPipe, p.conf.Handler); err != nil {
-				p.logger.Error("[Process] Scanner failed with %v", err)
-			}
-		}()
-	} else {
-		go io.Copy(ioutil.Discard, lineReaderPipe)
-	}
-
 	// Wait until the process has finished. The returned error is nil if the command runs,
 	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
 	waitResult := p.command.Wait()
-
-	// Close the line writer pipe
-	lineWriterPipe.Close()
 
 	// Signal waiting consumers in Done() by closing the done channel
 	close(p.done)
 
 	// Find the exit status of the script
-	p.ExitStatus = p.getExitStatus(waitResult)
-
+	p.ExitStatus = p.exitStatus(waitResult)
 	p.logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
@@ -239,9 +214,7 @@ func (p *Process) Terminate() error {
 	return TerminateProcessGroup(p.command.Process, p.logger)
 }
 
-// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
-// TODO: Can this be better?
-func (p *Process) getExitStatus(waitResult error) string {
+func (p *Process) exitStatus(waitResult error) string {
 	exitStatus := -1
 
 	if waitResult != nil {
