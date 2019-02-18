@@ -18,6 +18,31 @@ import (
 	"github.com/buildkite/agent/process"
 )
 
+func TestProcessOutput(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	p := process.NewProcess(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=output"},
+		Stdout: stdout,
+		Stderr: stderr,
+	})
+
+	// wait for the process to finish
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if s := stdout.String(); s != `llamas1llamas2` {
+		t.Fatalf("Bad stdout, %q", s)
+	}
+
+	if s := stderr.String(); s != `alpacas1alpacas2` {
+		t.Fatalf("Bad stderr, %q", s)
+	}
+}
+
 func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
@@ -40,7 +65,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	}()
 
 	// wait for the process to finish
-	if err := p.Start(); err != nil {
+	if err := p.Run(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +95,7 @@ func TestProcessInterrupts(t *testing.T) {
 	p := process.NewProcess(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=tester-signal"},
-		Writer: b,
+		Stdout: b,
 	})
 
 	var wg sync.WaitGroup
@@ -86,7 +111,7 @@ func TestProcessInterrupts(t *testing.T) {
 		p.Interrupt()
 	}()
 
-	if err := p.Start(); err != nil {
+	if err := p.Run(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -109,12 +134,24 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
-	if err := p.Start(); err != nil {
+	if err := p.Run(); err != nil {
 		t.Fatal(err)
 	}
 
 	if p.ExitStatus != "0" {
 		t.Fatalf("Expected ExitStatus to be 0, got %s", p.ExitStatus)
+	}
+}
+
+func BenchmarkProcess(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		proc := process.NewProcess(logger.Discard, process.Config{
+			Path: os.Args[0],
+			Env:  []string{"TEST_MAIN=output"},
+		})
+		if err := proc.Run(); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -126,6 +163,13 @@ func TestMain(m *testing.M) {
 			fmt.Printf("%s\n", line)
 			time.Sleep(time.Millisecond * 20)
 		}
+		os.Exit(0)
+
+	case "output":
+		fmt.Fprintf(os.Stdout, "llamas1")
+		fmt.Fprintf(os.Stderr, "alpacas1")
+		fmt.Fprintf(os.Stdout, "llamas2")
+		fmt.Fprintf(os.Stderr, "alpacas2")
 		os.Exit(0)
 
 	case "tester-signal":
@@ -152,21 +196,4 @@ func TestMain(m *testing.M) {
 	default:
 		os.Exit(m.Run())
 	}
-}
-
-type processLineHandler struct {
-	lines []string
-	sync.Mutex
-}
-
-func (p *processLineHandler) Handle(line string) {
-	p.Lock()
-	defer p.Unlock()
-	p.lines = append(p.lines, line)
-}
-
-func (p *processLineHandler) Lines() []string {
-	p.Lock()
-	defer p.Unlock()
-	return p.lines
 }

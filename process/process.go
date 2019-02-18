@@ -13,18 +13,23 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
+// Configuration for a Process
 type Config struct {
 	PTY       bool
 	Timestamp bool
 	Path      string
 	Args      []string
 	Env       []string
-	Writer    io.Writer
+	Stdout    io.Writer
+	Stderr    io.Writer
 }
 
+// Process is an operating system level process
 type Process struct {
-	// Outputs available after the process starts
-	Pid        int
+	// Pid of the process after it starts
+	Pid int
+
+	// ExitStatus of the process after it finishes
 	ExitStatus string
 
 	conf          Config
@@ -34,6 +39,7 @@ type Process struct {
 	started, done chan struct{}
 }
 
+// NewProcess returns a new instance of Process
 func NewProcess(l *logger.Logger, c Config) *Process {
 	return &Process{
 		logger: l,
@@ -41,8 +47,8 @@ func NewProcess(l *logger.Logger, c Config) *Process {
 	}
 }
 
-// Start executes the command and blocks until it finishes
-func (p *Process) Start() error {
+// Run the command and block until it finishes
+func (p *Process) Run() error {
 	if p.command != nil {
 		return fmt.Errorf("Process is already running")
 	}
@@ -93,9 +99,9 @@ func (p *Process) Start() error {
 		go func() {
 			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
-			// Copy the pty to our buffer. This will block until it
+			// Copy the pty to our writer. This will block until it
 			// EOF's or something breaks.
-			_, err = io.Copy(p.conf.Writer, pty)
+			_, err = io.Copy(p.conf.Stdout, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
@@ -113,8 +119,8 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
-		p.command.Stdout = p.conf.Writer
-		p.command.Stderr = p.conf.Writer
+		p.command.Stdout = p.conf.Stdout
+		p.command.Stderr = p.conf.Stderr
 		p.command.Stdin = nil
 
 		err := p.command.Start()
