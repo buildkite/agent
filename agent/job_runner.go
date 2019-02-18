@@ -186,7 +186,8 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 		Args:   cmd[1:],
 		Env:    processEnv,
 		PTY:    conf.AgentConfiguration.RunInPty,
-		Writer: pw,
+		Stdout: pw,
+		Stderr: pw,
 	})
 
 	// Kick off our callback when the process starts
@@ -221,8 +222,8 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
-	// Start the process. This will block until it finishes.
-	if err := r.process.Start(); err != nil {
+	// Run the process. This will block until it finishes.
+	if err := r.process.Run(); err != nil {
 		// Send the error as output
 		r.logStreamer.Process(fmt.Sprintf("%s", err))
 	} else {
