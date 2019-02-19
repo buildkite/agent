@@ -374,12 +374,13 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 		}
 	}
 
-	p := process.NewProcess(logger.Discard, cfg)
+	p := process.New(logger.Discard, cfg)
+
 	if err := p.Run(); err != nil {
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 
-	return nil
+	return p.WaitResult()
 }
 
 // GetExitCode extracts an exit code from an error where the platform supports it,

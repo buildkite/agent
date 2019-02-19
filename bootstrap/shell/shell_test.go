@@ -43,6 +43,32 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 }
 
+func TestRunAndCaptureWithExitCode(t *testing.T) {
+	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sshKeygen.Close()
+
+	sh := newShellForTest(t)
+
+	go func() {
+		call := <-sshKeygen.Ch
+		fmt.Fprintln(call.Stdout, "Llama drama! 🚨")
+		call.Exit(24)
+	}()
+
+	_, err = sh.RunAndCapture(sshKeygen.Path)
+	if err == nil {
+		t.Error("Expected an error, got nil")
+	}
+
+	if exitCode := shell.GetExitCode(err); exitCode != 24 {
+		t.Fatalf("Expected %d, got %d", 24, exitCode)
+	}
+
+}
+
 func TestRun(t *testing.T) {
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {

@@ -23,7 +23,7 @@ func TestProcessOutput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	p := process.NewProcess(logger.Discard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
 		Stdout: stdout,
@@ -49,7 +49,7 @@ func TestProcessOutput(t *testing.T) {
 func TestProcessOutputPTY(t *testing.T) {
 	stdout := &bytes.Buffer{}
 
-	p := process.NewProcess(logger.Discard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
 		PTY:    true,
@@ -72,7 +72,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.NewProcess(logger.Discard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path: os.Args[0],
 		Env:  []string{"TEST_MAIN=tester"},
 	})
@@ -105,10 +105,6 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 		t.Fatalf("Expected done to be 1, got %d", doneVal)
 	}
 
-	if exitStatus := p.ExitStatus; exitStatus != "0" {
-		t.Fatalf("Expected ExitStatus of 0, got %v", exitStatus)
-	}
-
 	assertProcessDoesntExist(t, p)
 }
 
@@ -116,7 +112,7 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	p := process.NewProcess(logger.Discard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:    os.Args[0],
 		Env:     []string{"TEST_MAIN=tester-signal"},
 		Context: ctx,
@@ -133,6 +129,10 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if !p.WaitStatus().Signaled() {
+		t.Fatalf("Expected signaled")
+	}
+
 	<-p.Done()
 	assertProcessDoesntExist(t, p)
 }
@@ -144,7 +144,7 @@ func TestProcessInterrupts(t *testing.T) {
 
 	b := &bytes.Buffer{}
 
-	p := process.NewProcess(logger.Discard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=tester-signal"},
 		Stdout: b,
@@ -183,7 +183,7 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		return
 	}
 
-	p := process.NewProcess(logger.Discard, process.Config{
+	p := process.New(logger.Discard, process.Config{
 		Path: os.Args[0],
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
@@ -192,27 +192,25 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if p.ExitStatus != "0" {
-		t.Fatalf("Expected ExitStatus to be 0, got %s", p.ExitStatus)
-	}
-
 	assertProcessDoesntExist(t, p)
 }
 
 func assertProcessDoesntExist(t *testing.T, p *process.Process) {
-	proc, err := os.FindProcess(p.Pid)
+	t.Helper()
+
+	proc, err := os.FindProcess(p.Pid())
 	if err != nil {
 		return
 	}
 	signalErr := proc.Signal(syscall.Signal(0))
 	if signalErr == nil {
-		t.Fatalf("Process %d exists and is running", p.Pid)
+		t.Fatalf("Process %d exists and is running", p.Pid())
 	}
 }
 
 func BenchmarkProcess(b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		proc := process.NewProcess(logger.Discard, process.Config{
+		proc := process.New(logger.Discard, process.Config{
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},
 		})

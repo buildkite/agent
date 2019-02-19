@@ -2,7 +2,6 @@ package process
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/logger"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -33,12 +33,9 @@ type Config struct {
 
 // Process is an operating system level process
 type Process struct {
-	// Pid of the process after it starts
-	Pid int
-
-	// ExitStatus of the process after it finishes
-	ExitStatus string
-
+	waitResult    error
+	status        syscall.WaitStatus
+	pid           int
 	conf          Config
 	logger        *logger.Logger
 	command       *exec.Cmd
@@ -46,12 +43,27 @@ type Process struct {
 	started, done chan struct{}
 }
 
-// NewProcess returns a new instance of Process
-func NewProcess(l *logger.Logger, c Config) *Process {
+// New returns a new instance of Process
+func New(l *logger.Logger, c Config) *Process {
 	return &Process{
 		logger: l,
 		conf:   c,
 	}
+}
+
+// Pid is the pid of the running process
+func (p *Process) Pid() int {
+	return p.pid
+}
+
+// WaitResult returns the raw error returned by Wait()
+func (p *Process) WaitResult() error {
+	return p.waitResult
+}
+
+// WaitStatus returns the status of the Wait() call
+func (p *Process) WaitStatus() syscall.WaitStatus {
+	return p.status
 }
 
 // Run the command and block until it finishes
@@ -98,14 +110,13 @@ func (p *Process) Run() error {
 
 		pty, err := StartPTY(p.command)
 		if err != nil {
-			p.ExitStatus = "1"
 			return err
 		}
 
 		// Make sure to close the pty at the end.
-		// defer func() { _ = pty.Close() }()
+		defer func() { _ = pty.Close() }()
 
-		p.Pid = p.command.Process.Pid
+		p.pid = p.command.Process.Pid
 
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
@@ -141,11 +152,10 @@ func (p *Process) Run() error {
 
 		err := p.command.Start()
 		if err != nil {
-			p.ExitStatus = "1"
 			return err
 		}
 
-		p.Pid = p.command.Process.Pid
+		p.pid = p.command.Process.Pid
 
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
@@ -168,19 +178,32 @@ func (p *Process) Run() error {
 		}()
 	}
 
-	p.logger.Info("[Process] Process is running with PID: %d", p.Pid)
+	p.logger.Info("[Process] Process is running with PID: %d", p.pid)
 
 	// Wait until the process has finished. The returned error is nil if the
 	// command runs, has no problems copying stdin, stdout, and stderr, and
 	// exits with a zero exit status.
-	waitResult := p.command.Wait()
+	p.waitResult = p.command.Wait()
 
 	// Signal waiting consumers in Done() by closing the done channel
 	close(p.done)
 
+	// Convert the wait result into a native WaitStatus
+	if p.waitResult != nil {
+		if err, ok := p.waitResult.(*exec.ExitError); ok {
+			if s, ok := err.Sys().(syscall.WaitStatus); ok {
+				p.status = s
+			} else {
+				return fmt.Errorf("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+			}
+		} else {
+			return fmt.Errorf("Unexpected error type %T", p.waitResult)
+		}
+	}
+
 	// Find the exit status of the script
-	p.ExitStatus = p.exitStatus(waitResult)
-	p.logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	p.logger.Info("Process with PID: %d finished with Exit Status: %d",
+		p.pid, p.status.ExitStatus())
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
@@ -190,7 +213,6 @@ func (p *Process) Run() error {
 		p.logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
-	// No error occurred so we can return nil
 	return nil
 }
 
@@ -230,7 +252,7 @@ func (p *Process) Interrupt() error {
 
 	// interrupt the process (ctrl-c or SIGINT)
 	if err := InterruptProcessGroup(p.command.Process, p.logger); err != nil {
-		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
+		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.pid, err)
 
 		// Fallback to terminating if we get an error
 		if termErr := TerminateProcessGroup(p.command.Process, p.logger); termErr != nil {
@@ -252,26 +274,6 @@ func (p *Process) Terminate() error {
 	}
 
 	return TerminateProcessGroup(p.command.Process, p.logger)
-}
-
-func (p *Process) exitStatus(waitResult error) string {
-	exitStatus := -1
-
-	if waitResult != nil {
-		if err, ok := waitResult.(*exec.ExitError); ok {
-			if s, ok := err.Sys().(syscall.WaitStatus); ok {
-				exitStatus = s.ExitStatus()
-			} else {
-				p.logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
-			}
-		} else {
-			p.logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
-		}
-	} else {
-		exitStatus = 0
-	}
-
-	return fmt.Sprintf("%d", exitStatus)
 }
 
 func timeoutWait(waitGroup *sync.WaitGroup) error {
