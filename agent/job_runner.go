@@ -181,7 +181,7 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	runner.process = process.NewProcess(l, process.Config{
+	runner.process = process.New(l, process.Config{
 		Path:   cmd[0],
 		Args:   cmd[1:],
 		Env:    processEnv,
@@ -267,12 +267,14 @@ func (r *JobRunner) Run() error {
 		}
 	}
 
+	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+
 	jobMetrics := r.metrics.With(metrics.Tags{
-		"exit_code": r.process.ExitStatus,
+		"exit_code": exitStatus,
 	})
 
 	// Write some metrics about the job run
-	if r.process.ExitStatus == "0" {
+	if exitStatus == "0" {
 		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
 		jobMetrics.Count(`jobs.success`, 1)
 	} else {
@@ -284,7 +286,7 @@ func (r *JobRunner) Run() error {
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, r.process.ExitStatus, r.logStreamer.FailedChunks())
+	r.finishJob(finishedAt, exitStatus, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
