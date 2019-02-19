@@ -39,7 +39,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 
 	if expected := "Llama party! 🎉"; string(actual) != expected {
-		t.Fatalf("Expected %q, got %q", expected, actual)
+		t.Errorf("Expected %q, got %q", expected, actual)
 	}
 }
 

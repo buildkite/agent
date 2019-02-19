@@ -2,6 +2,7 @@ package process_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -41,6 +42,30 @@ func TestProcessOutput(t *testing.T) {
 	if s := stderr.String(); s != `alpacas1alpacas2` {
 		t.Fatalf("Bad stderr, %q", s)
 	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessOutputPTY(t *testing.T) {
+	stdout := &bytes.Buffer{}
+
+	p := process.NewProcess(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=output"},
+		PTY:    true,
+		Stdout: stdout,
+	})
+
+	// wait for the process to finish
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if s := stdout.String(); s != `llamas1alpacas1llamas2alpacas2` {
+		t.Fatalf("Bad stdout, %q", s)
+	}
+
+	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
@@ -83,6 +108,33 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	if exitStatus := p.ExitStatus; exitStatus != "0" {
 		t.Fatalf("Expected ExitStatus of 0, got %v", exitStatus)
 	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessTerminatesWhenContextDoes(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	p := process.NewProcess(logger.Discard, process.Config{
+		Path:    os.Args[0],
+		Env:     []string{"TEST_MAIN=tester-signal"},
+		Context: ctx,
+	})
+
+	go func() {
+		<-p.Started()
+
+		time.Sleep(time.Millisecond * 50)
+		cancel()
+	}()
+
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	<-p.Done()
+	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessInterrupts(t *testing.T) {
@@ -121,6 +173,8 @@ func TestProcessInterrupts(t *testing.T) {
 	if output != `SIG terminated` {
 		t.Fatalf("Bad output: %q", output)
 	}
+
+	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessSetsProcessGroupID(t *testing.T) {
@@ -140,6 +194,19 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 
 	if p.ExitStatus != "0" {
 		t.Fatalf("Expected ExitStatus to be 0, got %s", p.ExitStatus)
+	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func assertProcessDoesntExist(t *testing.T, p *process.Process) {
+	proc, err := os.FindProcess(p.Pid)
+	if err != nil {
+		return
+	}
+	signalErr := proc.Signal(syscall.Signal(0))
+	if signalErr == nil {
+		t.Fatalf("Process %d exists and is running", p.Pid)
 	}
 }
 

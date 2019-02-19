@@ -1,6 +1,7 @@
 package process
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,10 @@ import (
 	"github.com/buildkite/agent/logger"
 )
 
+const (
+	termType = `xterm-256color`
+)
+
 // Configuration for a Process
 type Config struct {
 	PTY       bool
@@ -22,6 +27,8 @@ type Config struct {
 	Env       []string
 	Stdout    io.Writer
 	Stderr    io.Writer
+	Dir       string
+	Context   context.Context
 }
 
 // Process is an operating system level process
@@ -62,6 +69,9 @@ func (p *Process) Run() error {
 		SetupProcessGroup(p.command)
 	}
 
+	// Configure working dir
+	p.command.Dir = p.conf.Dir
+
 	// Create channels for signalling started and done
 	p.mu.Lock()
 	if p.done == nil {
@@ -83,11 +93,17 @@ func (p *Process) Run() error {
 
 	// Toggle between running in a pty
 	if p.conf.PTY {
+		// Commands like tput expect a TERM value for a PTY
+		p.command.Env = append(p.command.Env, `TERM=`+termType)
+
 		pty, err := StartPTY(p.command)
 		if err != nil {
 			p.ExitStatus = "1"
 			return err
 		}
+
+		// Make sure to close the pty at the end.
+		// defer func() { _ = pty.Close() }()
 
 		p.Pid = p.command.Process.Pid
 
@@ -135,10 +151,28 @@ func (p *Process) Run() error {
 		close(p.started)
 	}
 
+	// When the context finishes, terminate the process
+	if p.conf.Context != nil {
+		go func() {
+			select {
+			case <-p.conf.Context.Done():
+				p.logger.Debug("[Process] Context done, terminating")
+				if err := p.Terminate(); err != nil {
+					p.logger.Debug("[Process] Failed terminate: %v", err)
+				}
+				return
+
+			case <-p.Done():
+				return
+			}
+		}()
+	}
+
 	p.logger.Info("[Process] Process is running with PID: %d", p.Pid)
 
-	// Wait until the process has finished. The returned error is nil if the command runs,
-	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
+	// Wait until the process has finished. The returned error is nil if the
+	// command runs, has no problems copying stdin, stdout, and stderr, and
+	// exits with a zero exit status.
 	waitResult := p.command.Wait()
 
 	// Signal waiting consumers in Done() by closing the done channel
