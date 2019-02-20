@@ -51,7 +51,6 @@ type ArtifactoryUploader struct {
 
 func NewArtifactoryUploader(l *logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
 	repo, path := ParseArtifactoryDestination(c.Destination)
-	l.Debug("REPO : %s, PATH %s", repo, path)
 	stringURL := os.Getenv("BUILDKITE_ARTIFACTORY_URL")
 	username := os.Getenv("BUILDKITE_ARTIFACTORY_USER")
 	password := os.Getenv("BUILDKITE_ARTIFACTORY_PASSWORD")
@@ -83,8 +82,11 @@ func ParseArtifactoryDestination(destination string) (repo string, path string) 
 
 func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
 	url := u.iURL
-	url.Path += u.artifactPath(artifact)
-
+	// ensure proper URL formatting for upload
+	url.Path = strings.Join([]string{
+		strings.Trim(url.Path, "/"),
+		u.artifactPath(artifact),
+	}, "/")
 	return url.String()
 }
 
@@ -97,7 +99,7 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	}
 
 	// Upload the file to Artifactory.
-	u.logger.Debug("OH BOY Uploading \"%s\" to `%s`", u.artifactPath(artifact), u.Repository)
+	u.logger.Debug("Uploading \"%s\" to `%s`", artifact.Path, u.Repository)
 
 	req, err := http.NewRequest("PUT", u.iURL.String(), f)
 	req.SetBasicAuth(u.user, u.password)
@@ -119,7 +121,7 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 func (u *ArtifactoryUploader) artifactPath(artifact *api.Artifact) string {
 	jobID := os.Getenv("BUILDKITE_JOB_ID")
 	if jobID == "" {
-		jobID = "no_job_id"
+		jobID = "NO-JOB-ID"
 	}
 	parts := []string{u.Repository, jobID, artifact.Path}
 
