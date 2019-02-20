@@ -82,12 +82,7 @@ func ParseArtifactoryDestination(destination string) (repo string, path string) 
 }
 
 func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
-	job_id := fmt.Sprintf("/%s/", os.Getenv("BUILDKITE_JOB_ID"))
-	if job_id == "" {
-		job_id = "/no_job_id/"
-	}
 	url := u.iURL
-	url.Path += job_id
 	url.Path += u.artifactPath(artifact)
 
 	return url.String()
@@ -122,7 +117,11 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *ArtifactoryUploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.Repository, artifact.Path}
+	jobID := os.Getenv("BUILDKITE_JOB_ID")
+	if jobID == "" {
+		jobID = "no_job_id"
+	}
+	parts := []string{u.Repository, jobID, artifact.Path}
 
 	return strings.Join(parts, "/")
 }
