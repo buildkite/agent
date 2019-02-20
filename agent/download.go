@@ -21,6 +21,9 @@ type DownloadConfig struct {
 	// The root directory of the download
 	Destination string
 
+	// Optional Headers to append to the request
+	Headers map[string]string
+
 	// The relative path that should be preserved in the download folder
 	Path string
 
@@ -92,8 +95,16 @@ func (d Download) try() error {
 	// Show a nice message that we're starting to download the file
 	d.logger.Debug("Downloading %s to %s", d.conf.URL, targetFile)
 
+	request, err := http.NewRequest("GET", d.conf.URL, nil)
+	if err != nil {
+		return err
+	}
+	for k, v := range d.conf.Headers {
+		request.Header.Add(k, v)
+	}
+
 	// Start by downloading the file
-	response, err := d.client.Get(d.conf.URL)
+	response, err := d.client.Do(request)
 	if err != nil {
 		return fmt.Errorf("Error while downloading %s (%T: %v)", d.conf.URL, err, err)
 	}

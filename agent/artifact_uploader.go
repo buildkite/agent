@@ -215,6 +215,11 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				Destination: a.conf.Destination,
 				DebugHTTP:   a.apiClient.DebugHTTP,
 			})
+		} else if strings.HasPrefix(a.conf.Destination, "rt://") {
+			uploader, err = NewArtifactoryUploader(a.logger, ArtifactoryUploaderConfig{
+				Destination: a.conf.Destination,
+				DebugHTTP:   a.apiClient.DebugHTTP,
+			})
 		} else {
 			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
 		}
