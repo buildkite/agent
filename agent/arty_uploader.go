@@ -39,6 +39,9 @@ type ArtifactoryUploader struct {
 	// The configuration
 	conf ArtifactoryUploaderConfig
 
+	// Job ID
+	jobID string
+
 	// The logger instance to use
 	logger *logger.Logger
 
@@ -51,11 +54,18 @@ type ArtifactoryUploader struct {
 
 func NewArtifactoryUploader(l *logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
 	repo, path := ParseArtifactoryDestination(c.Destination)
+	jobID := os.Getenv("BUILDKITE_JOB_ID")
 	stringURL := os.Getenv("BUILDKITE_ARTIFACTORY_URL")
 	username := os.Getenv("BUILDKITE_ARTIFACTORY_USER")
 	password := os.Getenv("BUILDKITE_ARTIFACTORY_PASSWORD")
+	// authentication is not set
 	if stringURL == "" || username == "" || password == "" {
 		return nil, errors.New("Must set BUILDKITE_ARTIFACTORY_URL, BUILDKITE_ARTIFACTORY_USER, BUILDKITE_ARTIFACTORY_PASSWORD when using rt:// path")
+	}
+	// more-than-likely outside of BK pipeline, seperating the error to avoid
+	// users in pipelines to assume they must set ID explicitly.
+	if jobID == "" {
+		return nil, errors.New("BUILDKITE_JOB_ID is empty")
 	}
 	parsedURL, err := url.Parse(stringURL)
 	if err != nil {
@@ -67,6 +77,7 @@ func NewArtifactoryUploader(l *logger.Logger, c ArtifactoryUploaderConfig) (*Art
 		client:     &http.Client{},
 		iURL:       parsedURL,
 		Path:       path,
+		jobID:      jobID,
 		Repository: repo,
 		user:       username,
 		password:   password,
@@ -119,11 +130,7 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *ArtifactoryUploader) artifactPath(artifact *api.Artifact) string {
-	jobID := os.Getenv("BUILDKITE_JOB_ID")
-	if jobID == "" {
-		jobID = "NO-JOB-ID"
-	}
-	parts := []string{u.Repository, jobID, artifact.Path}
+	parts := []string{u.Repository, u.jobID, artifact.Path}
 
 	return strings.Join(parts, "/")
 }
