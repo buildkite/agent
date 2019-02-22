@@ -1,6 +1,8 @@
 package bootstrap
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"net/url"
 	"path/filepath"
@@ -157,12 +159,14 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 	output, err := sh.RunAndCapture("ssh", "-G", host)
 
 	// if we got no error, let's process the output
-	if (err == nil) {
-		// split up the ssh -G output
-		lines := strings.Split(output, "\n")
+	if err == nil {
+		// split up the ssh -G output by lines
+		scanner := bufio.NewScanner(bytes.NewBufferString(output))
 
-		// search the ssh -G output for "hostname" and "port" lines
-		for _, line := range lines {
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			// search the ssh -G output for "hostname" and "port" lines
 			tokens := strings.SplitN(line, " ", 2)
 
 			// skip any line which isn't a key-value pair
