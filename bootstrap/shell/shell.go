@@ -128,13 +128,23 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	return filepath.Abs(absolutePath)
 }
 
-// Cancel cancels any running sub-processes
-func (s *Shell) Cancel() {
+// Interrupt running command
+func (s *Shell) Interrupt() {
 	s.cmdLock.Lock()
 	defer s.cmdLock.Unlock()
 
-	if s.cmd != nil {
-		s.cmd.cancel()
+	if s.cmd != nil && s.cmd.proc != nil {
+		s.cmd.proc.Interrupt()
+	}
+}
+
+// Terminate running command
+func (s *Shell) Terminate() {
+	s.cmdLock.Lock()
+	defer s.cmdLock.Unlock()
+
+	if s.cmd != nil && s.cmd.proc != nil {
+		s.cmd.proc.Terminate()
 	}
 }
 
@@ -286,6 +296,7 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 
 type command struct {
 	process.Config
+	proc   *process.Process
 	cancel context.CancelFunc
 }
 
@@ -374,7 +385,17 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 		}
 	}
 
-	p := process.New(logger.Discard, cfg)
+	var procLogger *logger.Logger
+
+	if s.Debug {
+		procLogger = logger.NewLogger()
+	}
+
+	p := process.New(procLogger, cfg)
+
+	s.cmdLock.Lock()
+	s.cmd.proc = p
+	s.cmdLock.Unlock()
 
 	if err := p.Run(); err != nil {
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)

@@ -291,47 +291,44 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		// Configure the bootstraper
+		bootstrap := bootstrap.New(bootstrap.Config{
+			Command:                      cfg.Command,
+			JobID:                        cfg.JobID,
+			Repository:                   cfg.Repository,
+			Commit:                       cfg.Commit,
+			Branch:                       cfg.Branch,
+			Tag:                          cfg.Tag,
+			RefSpec:                      cfg.RefSpec,
+			Plugins:                      cfg.Plugins,
+			GitSubmodules:                cfg.GitSubmodules,
+			PullRequest:                  cfg.PullRequest,
+			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCleanFlags:                cfg.GitCleanFlags,
+			AgentName:                    cfg.AgentName,
+			PipelineProvider:             cfg.PipelineProvider,
+			PipelineSlug:                 cfg.PipelineSlug,
+			OrganizationSlug:             cfg.OrganizationSlug,
+			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
+			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
+			CleanCheckout:                cfg.CleanCheckout,
+			BuildPath:                    cfg.BuildPath,
+			BinPath:                      cfg.BinPath,
+			HooksPath:                    cfg.HooksPath,
+			PluginsPath:                  cfg.PluginsPath,
+			PluginValidation:             cfg.PluginValidation,
+			Debug:                        cfg.Debug,
+			RunInPty:                     runInPty,
+			CommandEval:                  cfg.CommandEval,
+			PluginsEnabled:               cfg.PluginsEnabled,
+			LocalHooksEnabled:            cfg.LocalHooksEnabled,
+			SSHKeyscan:                   cfg.SSHKeyscan,
+			Shell:                        cfg.Shell,
+			Phases:                       cfg.Phases,
+		})
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-
-		// Configure the bootstraper
-		bootstrap := &bootstrap.Bootstrap{
-			Context: ctx,
-			Phases:  cfg.Phases,
-			Config: bootstrap.Config{
-				Command:                      cfg.Command,
-				JobID:                        cfg.JobID,
-				Repository:                   cfg.Repository,
-				Commit:                       cfg.Commit,
-				Branch:                       cfg.Branch,
-				Tag:                          cfg.Tag,
-				RefSpec:                      cfg.RefSpec,
-				Plugins:                      cfg.Plugins,
-				GitSubmodules:                cfg.GitSubmodules,
-				PullRequest:                  cfg.PullRequest,
-				GitCloneFlags:                cfg.GitCloneFlags,
-				GitCleanFlags:                cfg.GitCleanFlags,
-				AgentName:                    cfg.AgentName,
-				PipelineProvider:             cfg.PipelineProvider,
-				PipelineSlug:                 cfg.PipelineSlug,
-				OrganizationSlug:             cfg.OrganizationSlug,
-				AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
-				ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
-				CleanCheckout:                cfg.CleanCheckout,
-				BuildPath:                    cfg.BuildPath,
-				BinPath:                      cfg.BinPath,
-				HooksPath:                    cfg.HooksPath,
-				PluginsPath:                  cfg.PluginsPath,
-				PluginValidation:             cfg.PluginValidation,
-				Debug:                        cfg.Debug,
-				RunInPty:                     runInPty,
-				CommandEval:                  cfg.CommandEval,
-				PluginsEnabled:               cfg.PluginsEnabled,
-				LocalHooksEnabled:            cfg.LocalHooksEnabled,
-				SSHKeyscan:                   cfg.SSHKeyscan,
-				Shell:                        cfg.Shell,
-			},
-		}
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, os.Interrupt,
@@ -365,7 +362,7 @@ var BootstrapCommand = cli.Command{
 		}()
 
 		// Run the bootstrap and get the exit code
-		exitCode := bootstrap.Start()
+		exitCode := bootstrap.Run(ctx)
 
 		signalMu.Lock()
 		defer signalMu.Unlock()

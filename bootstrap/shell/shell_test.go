@@ -66,7 +66,6 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 	if exitCode := shell.GetExitCode(err); exitCode != 24 {
 		t.Fatalf("Expected %d, got %d", 24, exitCode)
 	}
-
 }
 
 func TestRun(t *testing.T) {
@@ -102,6 +101,78 @@ func TestRun(t *testing.T) {
 
 	if expected := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
 		t.Fatalf("Expected %q, got %q", expected, actual)
+	}
+}
+
+func TestContextCancelTerminates(t *testing.T) {
+	sleepCmd, err := bintest.CompileProxy("sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sleepCmd.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sh, err := shell.NewWithContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sh.Logger = shell.DiscardLogger
+
+	go func() {
+		call := <-sleepCmd.Ch
+		time.Sleep(time.Second * 60)
+		call.Exit(0)
+	}()
+
+	cancel()
+
+	err = sh.Run(sleepCmd.Path)
+	if !shell.IsExitSignaled(err) {
+		t.Fatalf("Expected signal exit, got %#v", err)
+	}
+}
+
+func TestInterrupt(t *testing.T) {
+	sleepCmd, err := bintest.CompileProxy("sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sleepCmd.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sh, err := shell.NewWithContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sh.Logger = shell.DiscardLogger
+
+	go func() {
+		call := <-sleepCmd.Ch
+		time.Sleep(time.Second * 10)
+		call.Exit(0)
+	}()
+
+	// kill the process after 2 seconds
+	go func() {
+		<-time.After(time.Second * 2)
+		t.Error("Ran too long, should have terminated after 50ms")
+		cancel()
+	}()
+
+	// interrupt the process after 50ms
+	go func() {
+		<-time.After(time.Millisecond * 50)
+		sh.Interrupt()
+	}()
+
+	if err = sh.Run(sleepCmd.Path); err != nil {
+		t.Fatal(err)
 	}
 }
 

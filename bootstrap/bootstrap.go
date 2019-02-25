@@ -28,14 +28,8 @@ import (
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
 // Golang for portability and testability
 type Bootstrap struct {
-	// Context is the execution context of the bootstrap
-	Context context.Context
-
 	// Config provides the bootstrap configuration
 	Config
-
-	// Phases to execute, defaults to all phases
-	Phases []string
 
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
@@ -46,19 +40,27 @@ type Bootstrap struct {
 	// Plugin checkouts from the plugin phases
 	pluginCheckouts []*pluginCheckout
 
-	// Whether the checkout dir was created as part of checkout
-	createdCheckoutDir bool
-
 	// Directories to clean up at end of bootstrap
 	cleanupDirs []string
+
+	// A channel to track cancellation
+	cancelCh chan struct{}
+}
+
+// New returns a new Bootstrap instance
+func New(conf Config) *Bootstrap {
+	return &Bootstrap{
+		Config:   conf,
+		cancelCh: make(chan struct{}),
+	}
 }
 
 // Start runs the bootstrap and returns the exit code
-func (b *Bootstrap) Start() (exitCode int) {
+func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
-		b.shell, err = shell.NewWithContext(b.Context)
+		b.shell, err = shell.NewWithContext(ctx)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -67,6 +69,18 @@ func (b *Bootstrap) Start() (exitCode int) {
 		b.shell.PTY = b.Config.RunInPty
 		b.shell.Debug = b.Config.Debug
 	}
+
+	// Listen for cancellation
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-b.cancelCh:
+			b.shell.Commentf("Received cancellation signal, interrupting")
+			b.shell.Interrupt()
+		}
+	}()
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
@@ -142,8 +156,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 
 // Cancel interrupts any running shell processes and causes the bootstrap to stop
 func (b *Bootstrap) Cancel() error {
-	b.shell.Commentf("Received cancellation signal")
-	b.shell.Cancel()
+	b.cancelCh <- struct{}{}
 	return nil
 }
 
