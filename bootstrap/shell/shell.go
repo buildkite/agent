@@ -385,13 +385,7 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 		}
 	}
 
-	var procLogger *logger.Logger
-
-	if s.Debug {
-		procLogger = logger.NewLogger()
-	}
-
-	p := process.New(procLogger, cfg)
+	p := process.New(logger.Discard, cfg)
 
 	s.cmdLock.Lock()
 	s.cmd.proc = p
