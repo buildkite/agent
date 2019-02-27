@@ -54,9 +54,9 @@ go run main.go start --debug --token "abc123"
 
 ### Dependency management
 
-We're go 1.11+ and [Go Modules](https://github.com/golang/go/wiki/Modules) to manage our Go dependencies. We are keeping the dependencies vendored to remain backwards compatible with older go versions.
+We're using Go 1.12+ and [Go Modules](https://github.com/golang/go/wiki/Modules) to manage our Go dependencies. We are keeping the dependencies vendored to remain backwards compatible with older go versions.
 
-If you are using go 1.11 and have the agent in your `GOPATH`, you will need to enable modules via the environment variable:
+If you are using Go 1.11+ and have the agent in your `GOPATH`, you will need to enable modules via the environment variable:
 
 ```bash
 export GO111MODULE=on

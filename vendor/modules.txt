@@ -1,6 +1,8 @@
 # cloud.google.com/go v0.0.0-20170217213217-65216237311a
 cloud.google.com/go/compute/metadata
 cloud.google.com/go/internal
+# github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895
+github.com/DataDog/datadog-go/statsd
 # github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc
 github.com/ErikDubbelboer/gspt
 # github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5
@@ -39,7 +41,7 @@ github.com/aws/aws-sdk-go/service/sts
 github.com/aws/aws-sdk-go/private/protocol/query/queryutil
 github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
 github.com/aws/aws-sdk-go/private/protocol/query
-# github.com/buildkite/bintest v0.0.0-20180227222132-85c293267aed
+# github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0
 github.com/buildkite/bintest
 # github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c
 github.com/buildkite/interpolate
@@ -113,9 +115,9 @@ golang.org/x/oauth2/internal
 golang.org/x/oauth2/jws
 golang.org/x/oauth2/jwt
 # golang.org/x/sys v0.0.0-20180706062352-ce36f3865eeb
+golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
 golang.org/x/sys/unix
-golang.org/x/sys/windows
 # golang.org/x/text v0.3.0
 golang.org/x/text/secure/bidirule
 golang.org/x/text/unicode/bidi

@@ -1,17 +1,16 @@
-Bintest
-=======
+# Bintest
+[![Documentation](https://godoc.org/github.com/buildkite/bintest?status.svg)](http://godoc.org/github.com/buildkite/bintest)
 
 A set of tools for generating fake binaries that can be used for testing. A binary is compiled and then can be orchestrated from your test suite and later checked for assertions.
 
 Mocks can communicate and respond in real-time with the tests that are calling them, which allows for testing complicated dependencies. See https://github.com/buildkite/agent/tree/master/bootstrap/integration for how we use it to test buildkite-agent's bootstrap process.
 
-Mocks
------
+## Mocks
 
 Mocks are your typical mock object, but as an executable that your code can shell out to and then later test assertions on.
 
 ```go
-agent, err := bintest.Mock("buildkite-agent")
+agent, err := bintest.NewMock("buildkite-agent")
 if err != nil {
   t.Fatal(err)
 }
@@ -26,11 +25,10 @@ agent.
   Expect("meta-data", "set", "buildkite:git:branch", mock.MatchAny()).
   AndExitWith(0)
 
-agent.AssertExpectations(t)
+agent.CheckAndClose(t)
 ```
 
-Proxies
--------
+## Proxies
 
 Proxies are what power Mocks.
 
@@ -53,7 +51,6 @@ for call := range proxy.Ch {
 // Llama party! 🎉
 ```
 
-Credit
-------
+## Credit
 
 Inspired by [bats-mock](https://github.com/jasonkarns/bats-mock) and [go-binmock](https://github.com/pivotal-cf/go-binmock).

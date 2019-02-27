@@ -105,6 +105,9 @@ type Config struct {
 
 	// The shell used to execute commands
 	Shell string
+
+	// Phases to execute, defaults to all phases
+	Phases []string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
