@@ -171,8 +171,9 @@ func TestInterrupt(t *testing.T) {
 		sh.Interrupt()
 	}()
 
-	if err = sh.Run(sleepCmd.Path); err != nil {
-		t.Fatal(err)
+	err = sh.Run(sleepCmd.Path)
+	if err == nil {
+		t.Error("Expected an error")
 	}
 }
 
