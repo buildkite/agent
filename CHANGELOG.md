@@ -7,14 +7,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.9.0](https://github.com/buildkite/agent/tree/v3.9.0) (2019-02-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.8.4...v3.9.0)
 
-### Changed
+### Added
 - Artifactory artifact support [#924](https://github.com/buildkite/agent/pull/924) (@GaryPWhite)
 - Add a `--content-type` to `artifact upload` to allow specifying a content type [#912](https://github.com/buildkite/agent/pull/912) (@lox)
-- Make sure checkout is removed on failure [#916](https://github.com/buildkite/agent/pull/916) (@lox)
 - Filter env used for command config out of environment [#908](https://github.com/buildkite/agent/pull/908) (@lox)
-- Ensure TempDir exists [#915](https://github.com/buildkite/agent/pull/915) (@lox)
 - If BUILDKITE_REPO is empty, skip checkout [#909](https://github.com/buildkite/agent/pull/909) (@lox)
+
+### Changed
 - Terminate bootstrap with unhandled signal after cancel [#890](https://github.com/buildkite/agent/pull/890) (@lox)
+
+### Fixed
+- Make sure checkout is removed on failure [#916](https://github.com/buildkite/agent/pull/916) (@lox)
+- Ensure TempDir exists [#915](https://github.com/buildkite/agent/pull/915) (@lox)
 
 ## [v3.8.4](https://github.com/buildkite/agent/tree/v3.8.4) (2019-01-22)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.8.3...v3.8.4)
