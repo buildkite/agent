@@ -158,13 +158,6 @@ func TestInterrupt(t *testing.T) {
 		call.Exit(0)
 	}()
 
-	// kill the process after 2 seconds
-	go func() {
-		<-time.After(time.Second * 2)
-		t.Error("Ran too long, should have terminated after 50ms")
-		cancel()
-	}()
-
 	// interrupt the process after 50ms
 	go func() {
 		<-time.After(time.Millisecond * 50)

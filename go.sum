@@ -6,8 +6,8 @@ github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc h1:Qs3YRJ9WQ1+
 github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc/go.mod h1:01yGrV5aDnYieX2hSBoKGMaRiqHvnLoUy4ngWGZ/owg=
 github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5 h1:raOAL5Uz269DesNi7ejlUuwQY2fyvRrBYuzRWHkl+Wo=
 github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5/go.mod h1:mFuSZ37Z9YOHbQEwBWztmVzqXrEkub65tZoCYDt7FT0=
-github.com/buildkite/bintest v0.0.0-20180227222132-85c293267aed h1:WYisDk8AcCHDRZkONjSI5cNHI/XifpHVGaTdyvZrVjw=
-github.com/buildkite/bintest v0.0.0-20180227222132-85c293267aed/go.mod h1:2lGcuzwtlesvPHkylqPgQ0ytL6C5E6gjbb8o5ph583Y=
+github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0 h1:UYcAVM2IdwHl3wTyyB2HfZc2MEVQrUqw/OkbwHlsy30=
+github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0/go.mod h1:nElEwZWoSPGIBD8VvYabl9t5KNi7v430iDC0/gQRsYk=
 github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c h1:4b/XlGFI+q7tfsB4gDvoWeTNmG31hcr4OOFMtvZ3TOQ=
 github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c/go.mod h1:gbPR1gPu9dB96mucYIR7T3B7p/78hRVSOuzIWLHK2Y4=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=
@@ -18,8 +18,8 @@ github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/denisbrodbeck/machineid v1.0.0 h1:6tMg1EaB3r/EfIqKS0on/pvkRBZJAXH3fmSLGi8SWf0=
 github.com/denisbrodbeck/machineid v1.0.0/go.mod h1:dJUwb7PTidGDeYyUBmXZ2GphQBbjJCrnectwCyxcUSI=
-github.com/fortytw2/leaktest v1.2.0 h1:cj6GCiwJDH7l3tMHLjZDo0QqPtrXJiWSI9JgpeQKw+Q=
-github.com/fortytw2/leaktest v1.2.0/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
+github.com/fortytw2/leaktest v0.0.0-20170715211739-3b724c3d7b87 h1:vC7ihXqN2fougprHfqpv7GyEd7tUgZfmHZ5bXPiSKgE=
+github.com/fortytw2/leaktest v0.0.0-20170715211739-3b724c3d7b87/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
 github.com/go-ini/ini v1.25.4 h1:Mujh4R/dH6YL8bxuISne3xX2+qcQ9p0IxKAP6ExWoUo=
 github.com/go-ini/ini v1.25.4/go.mod h1:ByCAeIL28uOIIG0E3PJtZPDL8WnHpFKFOtgjp+3Ies8=
 github.com/golang/protobuf v1.2.0 h1:P3YflyNX/ehuJFLhxviNdFxQPkGK5cDcApsge1SqnvM=
