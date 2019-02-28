@@ -19,29 +19,31 @@ import (
 )
 
 type AgentPoolConfig struct {
-	ConfigFilePath        string
-	Name                  string
-	Priority              string
-	Tags                  []string
-	TagsFromEC2           bool
-	TagsFromEC2Tags       bool
-	TagsFromGCP           bool
-	TagsFromHost          bool
-	WaitForEC2TagsTimeout time.Duration
-	Debug                 bool
-	DisableColors         bool
-	Spawn                 int
-	AgentConfiguration    *AgentConfiguration
-	APIClientConfig       APIClientConfig
+	ConfigFilePath          string
+	Name                    string
+	Priority                string
+	Tags                    []string
+	TagsFromEC2             bool
+	TagsFromEC2Tags         bool
+	TagsFromGCP             bool
+	TagsFromGCPLabels       bool
+	TagsFromHost            bool
+	WaitForEC2TagsTimeout   time.Duration
+	WaitForGCPLabelsTimeout time.Duration
+	Debug                   bool
+	DisableColors           bool
+	Spawn                   int
+	AgentConfiguration      *AgentConfiguration
+	APIClientConfig         APIClientConfig
 }
 
 type AgentPool struct {
-	conf                  AgentPoolConfig
-	logger                *logger.Logger
-	apiClient             *api.Client
-	metricsCollector      *metrics.Collector
-	interruptCount        int
-	signalLock            sync.Mutex
+	conf             AgentPoolConfig
+	logger           *logger.Logger
+	apiClient        *api.Client
+	metricsCollector *metrics.Collector
+	interruptCount   int
+	signalLock       sync.Mutex
 }
 
 func NewAgentPool(l *logger.Logger, m *metrics.Collector, c AgentPoolConfig) *AgentPool {
@@ -71,7 +73,7 @@ func (r *AgentPool) Start() error {
 		go func() {
 			defer wg.Done()
 			if err := r.startWorker(); err != nil {
-				errs<-err
+				errs <- err
 			}
 		}()
 	}
@@ -245,6 +247,32 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 			for tag, value := range tags {
 				agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
 			}
+		}
+	}
+
+	// Attempt to add the Google Compute instance labels
+	if r.conf.TagsFromGCPLabels {
+		r.logger.Info("Fetching GCP instance labels...")
+		err := retry.Do(func(s *retry.Stats) error {
+			labels, err := GCPLabels{}.Get()
+			if err == nil && len(labels) == 0 {
+				err = errors.New("GCP instance labels are empty")
+			}
+			if err != nil {
+				r.logger.Warn("%s (%s)", err, s)
+			} else {
+				r.logger.Info("Successfully fetched GCP instance labels")
+				for label, value := range labels {
+					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", label, value))
+				}
+				s.Break()
+			}
+			return err
+		}, &retry.Config{Maximum: 5, Interval: r.conf.WaitForGCPLabelsTimeout / 5, Jitter: true})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			r.logger.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
 		}
 	}
 

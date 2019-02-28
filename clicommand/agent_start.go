@@ -55,8 +55,10 @@ type AgentStartConfig struct {
 	TagsFromEC2               bool     `cli:"tags-from-ec2"`
 	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
 	TagsFromGCP               bool     `cli:"tags-from-gcp"`
+	TagsFromGCPLabels         bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost              bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
 	GitCloneFlags             string   `cli:"git-clone-flags"`
 	GitCleanFlags             string   `cli:"git-clean-flags"`
 	NoGitSubmodules           bool     `cli:"no-git-submodules"`
@@ -199,13 +201,24 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-gcp",
-			Usage:  "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+			Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
+		},
+		cli.BoolFlag{
+			Name:   "tags-from-gcp-labels",
+			Usage:  "Include the host's Google Cloud instance labels as tags",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_LABELS",
 		},
 		cli.DurationFlag{
 			Name:   "wait-for-ec2-tags-timeout",
 			Usage:  "The amount of time to wait for tags from EC2 before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_TAGS_TIMEOUT",
+			Value:  time.Second * 10,
+		},
+		cli.DurationFlag{
+			Name:   "wait-for-gcp-labels-timeout",
+			Usage:  "The amount of time to wait for labels from GCP before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
 		},
 		cli.StringFlag{
@@ -415,23 +428,34 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		var gcpLabelsTimeout time.Duration
+		if t := cfg.WaitForGCPLabelsTimeout; t != "" {
+			var err error
+			gcpLabelsTimeout, err = time.ParseDuration(t)
+			if err != nil {
+				l.Fatal("Failed to parse gcp labels timeout: %v", err)
+			}
+		}
+
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:     cfg.MetricsDatadog,
 			DatadogHost: cfg.MetricsDatadogHost,
 		})
 
 		config := agent.AgentPoolConfig{
-			Name:                  cfg.Name,
-			Priority:              cfg.Priority,
-			Tags:                  cfg.Tags,
-			TagsFromEC2:           cfg.TagsFromEC2,
-			TagsFromEC2Tags:       cfg.TagsFromEC2Tags,
-			TagsFromGCP:           cfg.TagsFromGCP,
-			TagsFromHost:          cfg.TagsFromHost,
-			WaitForEC2TagsTimeout: ec2TagTimeout,
-			Debug:                 cfg.Debug,
-			DisableColors:         cfg.NoColor,
-			Spawn:                 cfg.Spawn,
+			Name:                    cfg.Name,
+			Priority:                cfg.Priority,
+			Tags:                    cfg.Tags,
+			TagsFromEC2:             cfg.TagsFromEC2,
+			TagsFromEC2Tags:         cfg.TagsFromEC2Tags,
+			TagsFromGCP:             cfg.TagsFromGCP,
+			TagsFromGCPLabels:       cfg.TagsFromGCPLabels,
+			TagsFromHost:            cfg.TagsFromHost,
+			WaitForEC2TagsTimeout:   ec2TagTimeout,
+			WaitForGCPLabelsTimeout: gcpLabelsTimeout,
+			Debug:                   cfg.Debug,
+			DisableColors:           cfg.NoColor,
+			Spawn:                   cfg.Spawn,
 			APIClientConfig: agent.APIClientConfig{
 				Token:        cfg.Token,
 				Endpoint:     cfg.Endpoint,
