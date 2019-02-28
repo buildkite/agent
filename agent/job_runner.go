@@ -60,8 +60,8 @@ type JobRunner struct {
 	// The internal process of the job
 	process *process.Process
 
-	// The internal line buffer of the process output
-	lineBuffer *process.LineBuffer
+	// The internal buffer of the process output
+	output *process.Buffer
 
 	// The internal header time streamer
 	headerTimesStreamer *headerTimesStreamer
@@ -148,31 +148,51 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 			conf.AgentConfiguration.BootstrapScript, err)
 	}
 
-	// Our log scanner currently needs a full buffer of the log output
-	runner.lineBuffer = &process.LineBuffer{}
+	// Our log streamer works off a buffer of output
+	runner.output = &process.Buffer{}
 
-	pr, pw := io.Pipe()
+	// The writer that output from the process goes into
+	var processWriter io.Writer
 
-	// Use a scanner to process output line by line
-	go func() {
-		scanner := process.NewScanner(l)
+	// If we have timestamp lines on, we have to buffer lines before we flush them
+	if conf.AgentConfiguration.TimestampLines {
+		var pr *io.PipeReader
+		pr, processWriter = io.Pipe()
 
-		err := scanner.ScanLines(pr, func(line string) {
-			// Send to our header streamer and determine if it's a header
-			isHeader := runner.headerTimesStreamer.Scan(line)
+		go func() {
+			// Use a scanner to process output line by line
+			err := process.NewScanner(l).ScanLines(pr, func(line string) {
+				// Send to our header streamer and determine if it's a header
+				isHeader := runner.headerTimesStreamer.Scan(line)
 
-			// Optionally prefix log lines with timestamps
-			if conf.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
-				line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+				// Optionally prefix log lines with timestamps
+				if conf.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
+					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+				}
+
+				// Write the log line to the buffer
+				runner.output.Write([]byte(line + "\n"))
+			})
+			if err != nil {
+				l.Error("[LineScanner] Encountered error %v", err)
 			}
+		}()
+	} else {
+		pr, pw := io.Pipe()
 
-			// Write the log line to the buffer
-			runner.lineBuffer.WriteLine(line)
-		})
-		if err != nil {
-			l.Error("[LineScanner] Encountered error %v", err)
-		}
-	}()
+		// Write output directly to the line buffer so we
+		processWriter = io.MultiWriter(pw, runner.output)
+
+		// Use a scanner to process output for headers only
+		go func() {
+			err := process.NewScanner(l).ScanLines(pr, func(line string) {
+				runner.headerTimesStreamer.Scan(line)
+			})
+			if err != nil {
+				l.Error("[LineScanner] Encountered error %v", err)
+			}
+		}()
+	}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -186,8 +206,8 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 		Args:   cmd[1:],
 		Env:    processEnv,
 		PTY:    conf.AgentConfiguration.RunInPty,
-		Stdout: pw,
-		Stderr: pw,
+		Stdout: processWriter,
+		Stderr: processWriter,
 	})
 
 	// Kick off our callback when the process starts
@@ -228,7 +248,7 @@ func (r *JobRunner) Run() error {
 		r.logStreamer.Process(fmt.Sprintf("%s", err))
 	} else {
 		// Add the final output to the streamer
-		r.logStreamer.Process(r.lineBuffer.Output())
+		r.logStreamer.Process(r.output.String())
 	}
 
 	// Store the finished at time
@@ -524,7 +544,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		for {
 			// Send the output of the process to the log streamer
 			// for processing
-			r.logStreamer.Process(r.lineBuffer.Output())
+			r.logStreamer.Process(r.output.String())
 
 			// Sleep for a bit, or until the job is finished
 			select {

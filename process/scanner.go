@@ -79,21 +79,18 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 	return nil
 }
 
-type LineBuffer struct {
+type Buffer struct {
 	mu  sync.RWMutex
 	buf bytes.Buffer
 }
 
-func (l *LineBuffer) WriteLine(line string) {
+func (l *Buffer) Write(b []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-
-	// Finally write the line to the writer
-	l.buf.Write([]byte(line + "\n"))
+	return l.buf.Write(b)
 }
 
-// Output returns the buffered output of the line processor
-func (l *LineBuffer) Output() string {
+func (l *Buffer) String() string {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 	return l.buf.String()
