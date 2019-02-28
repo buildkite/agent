@@ -165,8 +165,8 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 				// Send to our header streamer and determine if it's a header
 				isHeader := runner.headerTimesStreamer.Scan(line)
 
-				// Optionally prefix log lines with timestamps
-				if conf.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
+				// Prefix non-header log lines with timestamps
+				if !(isHeaderExpansion(line) || isHeader) {
 					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
 				}
 
