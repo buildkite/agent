@@ -274,8 +274,6 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 		if err != nil {
 			r.logger.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
 		}
-	} else {
-		r.logger.Info("TagsFromGCPLabels was FALSE, so skipping the new code")
 	}
 
 	var err error
