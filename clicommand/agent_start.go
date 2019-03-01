@@ -324,6 +324,7 @@ var AgentStartCommand = cli.Command{
 		NoColorFlag,
 		DebugFlag,
 		DebugHTTPFlag,
+		DebugWithoutAPIFlag,
 		/* Deprecated flags which will be removed in v4 */
 		cli.StringSliceFlag{
 			Name:   "meta-data",
