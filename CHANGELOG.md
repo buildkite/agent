@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 - Artifactory artifact support [#924](https://github.com/buildkite/agent/pull/924) (@GaryPWhite)
+- Add a `--tag-from-gcp-labels` for loading agent tags from GCP [#930](https://github.com/buildkite/agent/pull/930) (@conorgil)
 - Add a `--content-type` to `artifact upload` to allow specifying a content type [#912](https://github.com/buildkite/agent/pull/912) (@lox)
 - Filter env used for command config out of environment [#908](https://github.com/buildkite/agent/pull/908) (@lox)
 - If BUILDKITE_REPO is empty, skip checkout [#909](https://github.com/buildkite/agent/pull/909) (@lox)
@@ -17,8 +18,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Terminate bootstrap with unhandled signal after cancel [#890](https://github.com/buildkite/agent/pull/890) (@lox)
 
 ### Fixed
+- Fix a race condition in cancellation [#928](https://github.com/buildkite/agent/pull/928) (@lox)
 - Make sure checkout is removed on failure [#916](https://github.com/buildkite/agent/pull/916) (@lox)
-- Ensure TempDir exists [#915](https://github.com/buildkite/agent/pull/915) (@lox)
+- Ensure TempDir exists to avoid errors on windows [#915](https://github.com/buildkite/agent/pull/915) (@lox)
+- Flush output immediately if timestamp-lines not on [#931](https://github.com/buildkite/agent/pull/931) (@lox)
 
 ## [v3.8.4](https://github.com/buildkite/agent/tree/v3.8.4) (2019-01-22)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.8.3...v3.8.4)
