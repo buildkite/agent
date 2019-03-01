@@ -65,6 +65,9 @@ type AgentWorker struct {
 	// Tracking the auto disconnect timer
 	disconnectTimeoutTimer *time.Timer
 
+	// Track the idle disconnect timer
+	idleTimer *time.Timer
+
 	// Stop controls
 	stop      chan struct{}
 	stopping  bool
@@ -147,21 +150,28 @@ func (a *AgentWorker) Start() error {
 		go func() {
 			<-a.disconnectTimeoutTimer.C
 			a.logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
-
-			// Just double check that the agent isn't running a
-			// job. The timer is stopped just after this is
-			// assigned, but there's a potential race condition
-			// where in between accepting the job, and creating the
-			// `jobRunner`, the timer pops.
-			if a.jobRunner == nil && !a.stopping {
-				a.logger.Debug("[DisconnectionTimer] The agent isn't running a job, going to signal a stop")
-				a.Stop(true)
-			} else {
-				a.logger.Debug("[DisconnectionTimer] Agent is running a job, going to just ignore and let it finish it's work")
-			}
+			a.stopIfIdle()
 		}()
 
 		a.logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
+	}
+
+	// Setup an idle timer to disconnect after periods of idleness
+	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		a.idleTimer = time.NewTimer(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
+		go func() {
+			for {
+				select {
+				case <-a.idleTimer.C:
+					a.logger.Info("Agent has been idle for %d seconds", a.agentConfiguration.DisconnectAfterIdleTimeout)
+					a.stopIfIdle()
+
+				case <-a.stop:
+					a.logger.Debug("Stopping the idle ticker")
+					return
+				}
+			}
+		}()
 	}
 
 	// Continue this loop until the the ticker is stopped, and we received
@@ -183,8 +193,6 @@ func (a *AgentWorker) Start() error {
 			return nil
 		}
 	}
-
-	return nil
 }
 
 // Stops the agent from accepting new work and cancels any current work it's
@@ -238,6 +246,14 @@ func (a *AgentWorker) Stop(graceful bool) {
 
 	// Mark the agent as stopping
 	a.stopping = true
+}
+
+func (a *AgentWorker) stopIfIdle() {
+	if a.jobRunner == nil && !a.stopping {
+		a.Stop(true)
+	} else {
+		a.logger.Debug("Agent is running a job, going to let it finish it's work")
+	}
 }
 
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
@@ -425,6 +441,11 @@ func (a *AgentWorker) Ping() {
 
 		// Tell the agent to finish up
 		a.Stop(true)
+	}
+
+	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		a.logger.Info("Job finished. Resetting idle timer...")
+		a.idleTimer.Reset(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
 	}
 }
 

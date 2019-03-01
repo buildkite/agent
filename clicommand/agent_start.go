@@ -39,45 +39,47 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                    string   `cli:"config"`
-	Token                     string   `cli:"token" validate:"required"`
-	Name                      string   `cli:"name"`
-	Priority                  string   `cli:"priority"`
-	DisconnectAfterJob        bool     `cli:"disconnect-after-job"`
-	DisconnectAfterJobTimeout int      `cli:"disconnect-after-job-timeout"`
-	BootstrapScript           string   `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod         int      `cli:"cancel-grace-period"`
-	BuildPath                 string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                 string   `cli:"hooks-path" normalize:"filepath"`
-	PluginsPath               string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                     string   `cli:"shell"`
-	Tags                      []string `cli:"tags" normalize:"list"`
-	TagsFromEC2               bool     `cli:"tags-from-ec2"`
-	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
-	TagsFromGCP               bool     `cli:"tags-from-gcp"`
-	TagsFromGCPLabels         bool     `cli:"tags-from-gcp-labels"`
-	TagsFromHost              bool     `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
-	WaitForGCPLabelsTimeout   string   `cli:"wait-for-gcp-labels-timeout"`
-	GitCloneFlags             string   `cli:"git-clone-flags"`
-	GitCleanFlags             string   `cli:"git-clean-flags"`
-	NoGitSubmodules           bool     `cli:"no-git-submodules"`
-	NoColor                   bool     `cli:"no-color"`
-	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval             bool     `cli:"no-command-eval"`
-	NoLocalHooks              bool     `cli:"no-local-hooks"`
-	NoPlugins                 bool     `cli:"no-plugins"`
-	NoPluginValidation        bool     `cli:"no-plugin-validation"`
-	NoPTY                     bool     `cli:"no-pty"`
-	NoHTTP2                   bool     `cli:"no-http2"`
-	TimestampLines            bool     `cli:"timestamp-lines"`
-	Endpoint                  string   `cli:"endpoint" validate:"required"`
-	Debug                     bool     `cli:"debug"`
-	DebugHTTP                 bool     `cli:"debug-http"`
-	Experiments               []string `cli:"experiment" normalize:"list"`
-	MetricsDatadog            bool     `cli:"metrics-datadog"`
-	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
-	Spawn                     int      `cli:"spawn"`
+	Config                     string   `cli:"config"`
+	Token                      string   `cli:"token" validate:"required"`
+	Name                       string   `cli:"name"`
+	Priority                   string   `cli:"priority"`
+	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
+	DisconnectAfterJobTimeout  int      `cli:"disconnect-after-job-timeout"`
+	DisconnectAfterIdleTimeout int      `cli:"disconnect-after-idle-timeout"`
+	BootstrapScript            string   `cli:"bootstrap-script" normalize:"commandpath"`
+	CancelGracePeriod          int      `cli:"cancel-grace-period"`
+	BuildPath                  string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                  string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                      string   `cli:"shell"`
+	Tags                       []string `cli:"tags" normalize:"list"`
+	TagsFromEC2                bool     `cli:"tags-from-ec2"`
+	TagsFromEC2Tags            bool     `cli:"tags-from-ec2-tags"`
+	TagsFromGCP                bool     `cli:"tags-from-gcp"`
+	TagsFromGCPLabels          bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost               bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCloneFlags              string   `cli:"git-clone-flags"`
+	GitCleanFlags              string   `cli:"git-clean-flags"`
+	NoGitSubmodules            bool     `cli:"no-git-submodules"`
+	NoColor                    bool     `cli:"no-color"`
+	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval              bool     `cli:"no-command-eval"`
+	NoLocalHooks               bool     `cli:"no-local-hooks"`
+	NoPlugins                  bool     `cli:"no-plugins"`
+	NoPluginValidation         bool     `cli:"no-plugin-validation"`
+	NoPTY                      bool     `cli:"no-pty"`
+	NoHTTP2                    bool     `cli:"no-http2"`
+	TimestampLines             bool     `cli:"timestamp-lines"`
+	Endpoint                   string   `cli:"endpoint" validate:"required"`
+	Debug                      bool     `cli:"debug"`
+	DebugHTTP                  bool     `cli:"debug-http"`
+	DebugWithoutAPI            bool     `cli:"debug-without-api"`
+	Experiments                []string `cli:"experiment" normalize:"list"`
+	MetricsDatadog             bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
+	Spawn                      int      `cli:"spawn"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -165,6 +167,12 @@ var AgentStartCommand = cli.Command{
 			Value:  120,
 			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
+		},
+		cli.IntFlag{
+			Name:   "disconnect-after-idle-timeout",
+			Value:  0,
+			Usage:  "If no jobs have come in for the specified number of secconds, disconnect the agent",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
 		},
 		cli.IntFlag{
 			Name:   "cancel-grace-period",
@@ -463,24 +471,25 @@ var AgentStartCommand = cli.Command{
 				DisableHTTP2: cfg.NoHTTP2,
 			},
 			AgentConfiguration: &agent.AgentConfiguration{
-				BootstrapScript:           cfg.BootstrapScript,
-				BuildPath:                 cfg.BuildPath,
-				HooksPath:                 cfg.HooksPath,
-				PluginsPath:               cfg.PluginsPath,
-				GitCloneFlags:             cfg.GitCloneFlags,
-				GitCleanFlags:             cfg.GitCleanFlags,
-				GitSubmodules:             !cfg.NoGitSubmodules,
-				SSHKeyscan:                !cfg.NoSSHKeyscan,
-				CommandEval:               !cfg.NoCommandEval,
-				PluginsEnabled:            !cfg.NoPlugins,
-				PluginValidation:          !cfg.NoPluginValidation,
-				LocalHooksEnabled:         !cfg.NoLocalHooks,
-				RunInPty:                  !cfg.NoPTY,
-				TimestampLines:            cfg.TimestampLines,
-				DisconnectAfterJob:        cfg.DisconnectAfterJob,
-				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
-				CancelGracePeriod:         cfg.CancelGracePeriod,
-				Shell:                     cfg.Shell,
+				BootstrapScript:            cfg.BootstrapScript,
+				BuildPath:                  cfg.BuildPath,
+				HooksPath:                  cfg.HooksPath,
+				PluginsPath:                cfg.PluginsPath,
+				GitCloneFlags:              cfg.GitCloneFlags,
+				GitCleanFlags:              cfg.GitCleanFlags,
+				GitSubmodules:              !cfg.NoGitSubmodules,
+				SSHKeyscan:                 !cfg.NoSSHKeyscan,
+				CommandEval:                !cfg.NoCommandEval,
+				PluginsEnabled:             !cfg.NoPlugins,
+				PluginValidation:           !cfg.NoPluginValidation,
+				LocalHooksEnabled:          !cfg.NoLocalHooks,
+				RunInPty:                   !cfg.NoPTY,
+				TimestampLines:             cfg.TimestampLines,
+				DisconnectAfterJob:         cfg.DisconnectAfterJob,
+				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
+				DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
+				CancelGracePeriod:          cfg.CancelGracePeriod,
+				Shell:                      cfg.Shell,
 			},
 		}
 
