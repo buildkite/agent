@@ -85,6 +85,9 @@ type Config struct {
 	// Path where the builds will be run
 	BuildPath string
 
+	// Path where the repository mirrors are stored
+	ReposPath string
+
 	// Path to the buildkite-agent binary
 	BinPath string
 

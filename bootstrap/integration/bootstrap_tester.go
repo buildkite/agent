@@ -28,6 +28,7 @@ type BootstrapTester struct {
 	HomeDir    string
 	PathDir    string
 	BuildDir   string
+	ReposDir   string
 	HooksDir   string
 	PluginsDir string
 	Repo       *gitRepository
