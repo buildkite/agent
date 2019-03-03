@@ -352,6 +352,11 @@ func dirForAgentName(agentName string) string {
 	return badCharsPattern.ReplaceAllString(agentName, "-")
 }
 
+func dirForRepository(repository string) string {
+	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
+	return badCharsPattern.ReplaceAllString(repository, "-")
+}
+
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 	if fileExists(repository) {
@@ -946,9 +951,63 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
+func (b *Bootstrap) referenceRepository() (string, error) {
+	path := os.Getenv(`BUILDKITE_REPO_MIRROR_PATH`)
+	if path == "" {
+		path = filepath.Join(b.Config.ReposPath, dirForRepository(b.Repository))
+	}
+
+	// Create the base dir if it doesn't exist
+	if baseDir := filepath.Dir(path); !fileExists(baseDir) {
+		b.shell.Commentf("Creating \"%s\"", baseDir)
+		if err := os.MkdirAll(baseDir, 0777); err != nil {
+			return "", err
+		}
+	}
+
+	// Try and lock the repository dir to prevent concurrent clones
+	repoDirLock, err := b.shell.LockFile(path+".lock", time.Minute*5)
+	if err != nil {
+		return "", err
+	}
+	defer repoDirLock.Unlock()
+
+	if !fileExists(path) {
+		b.shell.Commentf("Cloning a mirror of the repository to %s", path)
+		if err := gitCloneMirror(b.shell, b.GitCloneFlags, b.Repository, path); err != nil {
+			return "", err
+		}
+	} else {
+		b.shell.Commentf("Updating existing repository mirror")
+		b.shell.Chdir(path)
+
+		// Update the the origin of the repository so we can gracefully handle repository renames
+		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
+			return "", err
+		}
+
+		// Update our mirror
+		if err := gitFetch(b.shell, "-v --prune", "origin"); err != nil {
+			return "", err
+		}
+	}
+
+	return path, nil
+}
+
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
+	var reference string
+
+	if b.Config.ReposPath != "" && b.Config.Repository != "" {
+		var err error
+		reference, err = b.referenceRepository()
+		if err != nil {
+			return err
+		}
+	}
+
 	// Make sure the build directory exists
 	if err := b.createCheckoutDir(); err != nil {
 		return err
@@ -956,6 +1015,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
+	}
+
+	gitCloneFlags := b.GitCloneFlags
+	if reference != "" {
+		gitCloneFlags += fmt.Sprintf(" --reference %q", reference)
 	}
 
 	// Does the git directory exist?
@@ -966,7 +1030,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 	} else {
-		if err := gitClone(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
+		if err := gitClone(b.shell, gitCloneFlags, b.Repository, "."); err != nil {
 			return err
 		}
 	}
@@ -1053,19 +1117,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	if gitSubmodules {
-		// submodules might need their fingerprints verified too
-		if b.SSHKeyscan {
-			b.shell.Commentf("Checking to see if submodule urls need to be added to known_hosts")
-			submoduleRepos, err := gitEnumerateSubmoduleURLs(b.shell)
-			if err != nil {
-				b.shell.Warningf("Failed to enumerate git submodules: %v", err)
-			} else {
-				for _, repository := range submoduleRepos {
-					addRepositoryHostToSSHKnownHosts(b.shell, repository)
-				}
-			}
-		}
-
 		// `submodule sync` will ensure the .git/config
 		// matches the .gitmodules file.  The command
 		// is only available in git version 1.8.1, so
@@ -1076,9 +1127,37 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 
-		if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
-			return err
+		// Checking for submodule repositories
+		submoduleRepos, err := gitEnumerateSubmoduleURLs(b.shell)
+		if err != nil {
+			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
+		} else {
+			for idx, repository := range submoduleRepos {
+				// submodules might need their fingerprints verified too
+				if b.SSHKeyscan {
+					addRepositoryHostToSSHKnownHosts(b.shell, repository)
+				}
+
+				// if we have a reference, add the submodule to it
+				if reference != "" {
+					name := fmt.Sprintf("submodule%d", idx+1)
+					if err := b.shell.Run("git", "--git-dir", reference, "remote", "add", name, repository); err != nil {
+						return err
+					}
+				}
+			}
 		}
+
+		if reference != "" {
+			if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force", "--reference", reference); err != nil {
+				return err
+			}
+		} else {
+			if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
+				return err
+			}
+		}
+
 		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"); err != nil {
 			return err
 		}

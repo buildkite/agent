@@ -66,6 +66,11 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, err
 	}
 
+	reposDir, err := ioutil.TempDir("", "bootstrap-repos")
+	if err != nil {
+		return nil, err
+	}
+
 	repo, err := createTestGitRespository()
 	if err != nil {
 		return nil, err
@@ -79,6 +84,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			"HOME=" + homeDir,
 			"BUILDKITE_BIN_PATH=" + pathDir,
 			"BUILDKITE_BUILD_PATH=" + buildDir,
+			"BUILDKITE_REPOS_PATH=" + reposDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
 			"BUILDKITE_PLUGINS_PATH=" + pluginsDir,
 			`BUILDKITE_REPO=` + repo.Path,
@@ -100,6 +106,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		BuildDir:   buildDir,
 		HooksDir:   hooksDir,
 		PluginsDir: pluginsDir,
+		ReposDir:   reposDir,
 	}
 
 	// Windows requires certain env variables to be present

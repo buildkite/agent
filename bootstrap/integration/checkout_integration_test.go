@@ -23,9 +23,12 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	}
 	defer tester.Close()
 
+	repoMirror := filepath.Join(tester.ReposDir, "localgitproject")
+
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_REPO_MIRROR_PATH=" + repoMirror,
 	}
 
 	// Actually execute git commands, but with expectations
@@ -35,7 +38,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "-v", "--", tester.Repo.Path, repoMirror},
+		{"clone", "-v", "--reference", repoMirror, "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -85,9 +89,12 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		t.Fatalf("Committing submodule failed: %s", out)
 	}
 
+	repoMirror := filepath.Join(tester.ReposDir, "localgitproject")
+
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_REPO_MIRROR_PATH=" + repoMirror,
 	}
 
 	// Actually execute git commands, but with expectations
@@ -97,14 +104,16 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "-v", "--", tester.Repo.Path, repoMirror},
+		{"clone", "-v", "--reference", repoMirror, "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
 		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
-		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
 		{"submodule", "sync", "--recursive"},
-		{"submodule", "update", "--init", "--recursive", "--force"},
+		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
+		{"--git-dir", repoMirror, "remote", "add", "submodule1", submoduleRepo.Path},
+		{"submodule", "update", "--init", "--recursive", "--force", "--reference", repoMirror},
 		{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},

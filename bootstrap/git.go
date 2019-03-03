@@ -30,6 +30,23 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	return nil
 }
 
+func gitCloneMirror(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
+	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
+	if err != nil {
+		return err
+	}
+
+	commandArgs := []string{"clone", "--mirror"}
+	commandArgs = append(commandArgs, individualCloneFlags...)
+	commandArgs = append(commandArgs, "--", repository, dir)
+
+	if err = sh.Run("git", commandArgs...); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func gitClean(sh *shell.Shell, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
