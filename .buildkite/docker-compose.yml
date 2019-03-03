@@ -4,8 +4,8 @@ services:
   agent:
     image: golang:1.12
     volumes:
-      - ../:/code:cached
-    working_dir: /code
+      - ../:/go/src/github.com/buildkite/agent:cached
+    working_dir: /go/src/github.com/buildkite/agent
     environment:
       - GOFLAGS=-mod=vendor
       - GO111MODULE=off
