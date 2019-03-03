@@ -15,3 +15,14 @@ func IsEnabled(experiment string) bool {
 		return false
 	}
 }
+
+// Enabled returns the keys of all the enabled experiments
+func Enabled() []string {
+	var enabled []string
+	for exp, ok := range experiments {
+		if ok {
+			enabled = append(enabled, exp)
+		}
+	}
+	return enabled
+}
