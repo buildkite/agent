@@ -2,12 +2,13 @@ version: '2.1'
 
 services:
   agent:
-    build:
-      dockerfile: .buildkite/Dockerfile
-      context: ../
+    image: golang:1.12
     volumes:
       - ../:/code:cached
+    working_dir: /code
     environment:
+      - GOFLAGS=-mod=vendor
+      - GO111MODULE=off
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"
