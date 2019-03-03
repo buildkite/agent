@@ -10,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/urfave/cli"
 )
@@ -270,6 +271,11 @@ var BootstrapCommand = cli.Command{
 		// Load the configuration
 		if err := cliconfig.Load(c, l, &cfg); err != nil {
 			l.Fatal("%s", err)
+		}
+
+		// Enable experiments
+		for _, name := range cfg.Experiments {
+			experiments.Enable(name)
 		}
 
 		// Enable debug if set
