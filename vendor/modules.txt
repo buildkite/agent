@@ -124,10 +124,11 @@ golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/transform
 # google.golang.org/api v0.0.0-20181016191922-cc9bd73d51b4
+google.golang.org/api/compute/v1
 google.golang.org/api/googleapi
 google.golang.org/api/storage/v1
-google.golang.org/api/googleapi/internal/uritemplates
 google.golang.org/api/gensupport
+google.golang.org/api/googleapi/internal/uritemplates
 # google.golang.org/appengine v1.2.0
 google.golang.org/appengine
 google.golang.org/appengine/datastore
