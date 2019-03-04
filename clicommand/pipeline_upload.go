@@ -247,7 +247,9 @@ var PipelineUploadCommand = cli.Command{
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+			// On a server error, it means there is downtime or other problems, we
+			// need to retry. Let's retry every 5 seconds, for a total of 5 minutes.
+		}, &retry.Config{Maximum: 60, Interval: 5 * time.Second})
 		if err != nil {
 			l.Fatal("Failed to upload and process pipeline: %s", err)
 		}
