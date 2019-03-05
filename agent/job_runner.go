@@ -595,9 +595,14 @@ func (r *JobRunner) onProcessStartCallback() {
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
 	retry.Do(func(s *retry.Stats) error {
-		_, err := r.apiClient.HeaderTimes.Save(r.job.ID, &api.HeaderTimes{Times: times})
+		response, err := r.apiClient.HeaderTimes.Save(r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
-			r.logger.Warn("%s (%s)", err, s)
+			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
+				r.logger.Warn("Buildkite rejected the header times (%s)", err)
+				s.Break()
+			} else {
+				r.logger.Warn("%s (%s)", err, s)
+			}
 		}
 
 		return err
