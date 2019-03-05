@@ -17,9 +17,5 @@ RUN choco install -y git.install -params '"/GitAndUnixToolsOnPath"' && \
 
 WORKDIR c:/code
 
-# Cache go modules in docker cache
-COPY go.mod go.sum c:/code/
-RUN go mod download
-
 # Copy the rest of the code
 COPY . c:/code/
