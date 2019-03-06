@@ -47,6 +47,10 @@ func TestProcessOutput(t *testing.T) {
 }
 
 func TestProcessOutputPTY(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("PTY not supported on windows")
+	}
+
 	stdout := &bytes.Buffer{}
 
 	p := process.New(logger.Discard, process.Config{
@@ -129,8 +133,10 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !p.WaitStatus().Signaled() {
-		t.Fatalf("Expected signaled")
+	if runtime.GOOS != `windows` {
+		if !p.WaitStatus().Signaled() {
+			t.Fatalf("Expected signaled")
+		}
 	}
 
 	<-p.Done()

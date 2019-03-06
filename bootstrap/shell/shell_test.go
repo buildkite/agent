@@ -105,6 +105,10 @@ func TestRun(t *testing.T) {
 }
 
 func TestContextCancelTerminates(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Not supported in windows")
+	}
+
 	sleepCmd, err := bintest.CompileProxy("sleep")
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +140,10 @@ func TestContextCancelTerminates(t *testing.T) {
 }
 
 func TestInterrupt(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Not supported in windows")
+	}
+
 	sleepCmd, err := bintest.CompileProxy("sleep")
 	if err != nil {
 		t.Fatal(err)

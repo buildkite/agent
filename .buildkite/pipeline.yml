@@ -18,6 +18,7 @@ steps:
         config: .buildkite/docker-compose.windows.yml
         run: agent
         tty: false
+        shell: ["bash.exe"]
     agents:
       queue: "windows"
 
