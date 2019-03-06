@@ -15,7 +15,7 @@ RUN choco install -y git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install golang --version 1.11.4 -my && \
   choco install -y mingw
 
-WORKDIR c:/code
+WORKDIR c:/Users/ContainerAdministrator/go/src/github.com/buildkite/agent
 
 # Copy the rest of the code
-COPY . c:/code/
+COPY . ./
