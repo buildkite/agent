@@ -7,6 +7,8 @@ services:
     build:
       dockerfile: .buildkite/Dockerfile-windows
       context: ../
+    volumes:
+      - ../:c:/Users/ContainerAdministrator/go/src/github.com/buildkite/agent
     tty: false
     environment:
       - BUILDKITE_BUILD_NUMBER
