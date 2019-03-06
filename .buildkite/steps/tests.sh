@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+GO111MODULE=off go get gotest.tools/gotestsum
+
 echo '+++ Running tests'
-go test -race ./... 2>&1 | sed -e 's/^---/***/'
+gotestsum --junitfile "junit-${OSTYPE}.xml" ./...
