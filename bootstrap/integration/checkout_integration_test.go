@@ -379,32 +379,24 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 func TestRepositorylessCheckout(t *testing.T) {
 	t.Parallel()
 
+	if runtime.GOOS == "windows" {
+		t.Skip("Not supported on windows")
+	} 
+
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tester.Close()
 
-	if runtime.GOOS != "windows" {
-		var script = []string{
-			"#!/bin/bash",
-			"export BUILDKITE_REPO=",
-		}
+	var script = []string{
+		"#!/bin/bash",
+		"export BUILDKITE_REPO=",
+	}
 
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"),
-			[]byte(strings.Join(script, "\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		var script = []string{
-			"@echo off",
-			"set BUILDKITE_REPO=",
-		}
-
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment.bat"),
-			[]byte(strings.Join(script, "\r\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
+	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"),
+		[]byte(strings.Join(script, "\n")), 0700); err != nil {
+		t.Fatal(err)
 	}
 
 	tester.MustMock(t, "git").Expect().NotCalled()
