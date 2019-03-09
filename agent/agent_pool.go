@@ -122,6 +122,9 @@ func (r *AgentPool) startWorker() error {
 	if r.conf.AgentConfiguration.DisconnectAfterJob {
 		l.Info("Waiting for job to be assigned...")
 		l.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.conf.AgentConfiguration.DisconnectAfterJobTimeout)
+	} else if r.conf.AgentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		l.Info("Waiting for job to be assigned...")
+		l.Info("The agent will automatically disconnect after %d seconds of inactivity", r.conf.AgentConfiguration.DisconnectAfterIdleTimeout)
 	} else {
 		l.Info("Waiting for work...")
 	}
