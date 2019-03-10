@@ -951,11 +951,9 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
-func (b *Bootstrap) referenceRepository() (string, error) {
-	path := os.Getenv(`BUILDKITE_REPO_MIRROR_PATH`)
-	if path == "" {
-		path = filepath.Join(b.Config.ReposPath, dirForRepository(b.Repository))
-	}
+// gitMirrorRepository either creates or update the git mirror repository used as a reference later
+func (b *Bootstrap) gitMirrorRepository() (string, error) {
+	path := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
 
 	// Create the base dir if it doesn't exist
 	if baseDir := filepath.Dir(path); !fileExists(baseDir) {
@@ -998,16 +996,16 @@ func (b *Bootstrap) referenceRepository() (string, error) {
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
-	var reference string
+	var mirrorDir string
 
 	// Make sure the build directory exists and that we change directory into it
 	if err := b.createCheckoutDir(); err != nil {
 		return err
 	}
 
-	if b.Config.ReposPath != "" && b.Config.Repository != "" {
+	if b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		var err error
-		reference, err = b.referenceRepository()
+		mirrorDir, err = b.gitMirrorRepository()
 		if err != nil {
 			return err
 		}
@@ -1018,8 +1016,8 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	gitCloneFlags := b.GitCloneFlags
-	if reference != "" {
-		gitCloneFlags += fmt.Sprintf(" --reference %q", reference)
+	if mirrorDir != "" {
+		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
 	}
 
 	// Does the git directory exist?
@@ -1138,18 +1136,18 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 					addRepositoryHostToSSHKnownHosts(b.shell, repository)
 				}
 
-				// if we have a reference, add the submodule to it
-				if reference != "" {
+				// if we have a git mirror, add the submodule to it
+				if mirrorDir != "" {
 					name := fmt.Sprintf("submodule%d", idx+1)
-					if err := b.shell.Run("git", "--git-dir", reference, "remote", "add", name, repository); err != nil {
+					if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "add", name, repository); err != nil {
 						return err
 					}
 				}
 			}
 		}
 
-		if reference != "" {
-			if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force", "--reference", reference); err != nil {
+		if mirrorDir != "" {
+			if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir); err != nil {
 				return err
 			}
 		} else {

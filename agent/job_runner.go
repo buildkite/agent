@@ -394,7 +394,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_BIN_PATH`,
 		`BUILDKITE_CONFIG_PATH`,
 		`BUILDKITE_BUILD_PATH`,
-		`BUILDKITE_REPOS_PATH`,
+		`BUILDKITE_GIT_MIRRORS_PATH`,
 		`BUILDKITE_HOOKS_PATH`,
 		`BUILDKITE_PLUGINS_PATH`,
 		`BUILDKITE_SSH_KEYSCAN`,
@@ -441,7 +441,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
-	env["BUILDKITE_REPOS_PATH"] = r.conf.AgentConfiguration.ReposPath
+	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)

@@ -22,17 +22,17 @@ import (
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
 type BootstrapTester struct {
-	Name       string
-	Args       []string
-	Env        []string
-	HomeDir    string
-	PathDir    string
-	BuildDir   string
-	ReposDir   string
-	HooksDir   string
-	PluginsDir string
-	Repo       *gitRepository
-	Output     string
+	Name          string
+	Args          []string
+	Env           []string
+	HomeDir       string
+	PathDir       string
+	BuildDir      string
+	GitMirrorsDir string
+	HooksDir      string
+	PluginsDir    string
+	Repo          *gitRepository
+	Output        string
 
 	cmd      *exec.Cmd
 	cmdLock  sync.Mutex
@@ -66,7 +66,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		return nil, err
 	}
 
-	reposDir, err := ioutil.TempDir("", "bootstrap-repos")
+	gitMirrorsDir, err := ioutil.TempDir("", "bootstrap-git-mirrors")
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +84,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			"HOME=" + homeDir,
 			"BUILDKITE_BIN_PATH=" + pathDir,
 			"BUILDKITE_BUILD_PATH=" + buildDir,
-			"BUILDKITE_REPOS_PATH=" + reposDir,
+			"BUILDKITE_GIT_MIRRORS_PATH=" + gitMirrorsDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
 			"BUILDKITE_PLUGINS_PATH=" + pluginsDir,
 			`BUILDKITE_REPO=` + repo.Path,
@@ -102,11 +102,11 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
 			`BUILDKITE_AGENT_ACCESS_TOKEN=test`,
 		},
-		PathDir:    pathDir,
-		BuildDir:   buildDir,
-		HooksDir:   hooksDir,
-		PluginsDir: pluginsDir,
-		ReposDir:   reposDir,
+		PathDir:       pathDir,
+		BuildDir:      buildDir,
+		HooksDir:      hooksDir,
+		PluginsDir:    pluginsDir,
+		GitMirrorsDir: gitMirrorsDir,
 	}
 
 	// Windows requires certain env variables to be present
@@ -327,6 +327,9 @@ func (b *BootstrapTester) Close() error {
 		return err
 	}
 	if err := os.RemoveAll(b.PluginsDir); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(b.GitMirrorsDir); err != nil {
 		return err
 	}
 	return nil

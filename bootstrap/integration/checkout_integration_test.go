@@ -23,12 +23,9 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	}
 	defer tester.Close()
 
-	repoMirror := filepath.Join(tester.ReposDir, "localgitproject")
-
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
-		"BUILDKITE_REPO_MIRROR_PATH=" + repoMirror,
 	}
 
 	// Actually execute git commands, but with expectations
@@ -38,8 +35,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"clone", "--mirror", "-v", "--", tester.Repo.Path, repoMirror},
-		{"clone", "-v", "--reference", repoMirror, "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
@@ -89,12 +86,9 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		t.Fatalf("Committing submodule failed: %s", out)
 	}
 
-	repoMirror := filepath.Join(tester.ReposDir, "localgitproject")
-
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
-		"BUILDKITE_REPO_MIRROR_PATH=" + repoMirror,
 	}
 
 	// Actually execute git commands, but with expectations
@@ -104,16 +98,16 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"clone", "--mirror", "-v", "--", tester.Repo.Path, repoMirror},
-		{"clone", "-v", "--reference", repoMirror, "--", tester.Repo.Path, "."},
+		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
 		{"fetch", "-v", "--prune", "origin", "master"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-		{"--git-dir", repoMirror, "remote", "add", "submodule1", submoduleRepo.Path},
-		{"submodule", "update", "--init", "--recursive", "--force", "--reference", repoMirror},
+		{"--git-dir", bintest.MatchAny(), "remote", "add", "submodule1", submoduleRepo.Path},
+		{"submodule", "update", "--init", "--recursive", "--force", "--reference", matchSubDir(tester.GitMirrorsDir)},
 		{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
@@ -390,7 +384,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported on windows")
-	} 
+	}
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -417,4 +411,23 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
+}
+
+type subDirMatcher struct {
+	dir string
+}
+
+func (mf subDirMatcher) Match(s string) (bool, string) {
+	if filepath.Dir(s) == mf.dir {
+		return true, ""
+	}
+	return false, fmt.Sprintf("%s wasn't a sub directory of %s", s, mf.dir)
+}
+
+func (mf subDirMatcher) String() string {
+	return fmt.Sprintf("subDirMatcher(%q)", mf.dir)
+}
+
+func matchSubDir(dir string) bintest.Matcher {
+	return subDirMatcher{dir: dir}
 }

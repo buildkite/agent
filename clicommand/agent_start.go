@@ -49,7 +49,6 @@ type AgentStartConfig struct {
 	BootstrapScript            string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod          int      `cli:"cancel-grace-period"`
 	BuildPath                  string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	ReposPath                  string   `cli:"repos-path" normalize:"filepath"`
 	HooksPath                  string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                string   `cli:"plugins-path" normalize:"filepath"`
 	Shell                      string   `cli:"shell"`
@@ -63,6 +62,7 @@ type AgentStartConfig struct {
 	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
 	GitCloneFlags              string   `cli:"git-clone-flags"`
 	GitCleanFlags              string   `cli:"git-clean-flags"`
+	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
 	NoColor                    bool     `cli:"no-color"`
 	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
@@ -243,6 +243,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
+			Name:   "git-mirrors-path",
+			Value:  "",
+			Usage:  "Path to where mirrors of git repositories are stored",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
 			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
@@ -253,12 +259,6 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Path to where the builds will run from",
 			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "repos-path",
-			Value:  "",
-			Usage:  "Path to where the repositories will be stored",
-			EnvVar: "BUILDKITE_REPOS_PATH",
 		},
 		cli.StringFlag{
 			Name:   "hooks-path",
@@ -480,7 +480,7 @@ var AgentStartCommand = cli.Command{
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,
-				ReposPath:                  cfg.ReposPath,
+				GitMirrorsPath:                  cfg.GitMirrorsPath,
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
 				GitCloneFlags:              cfg.GitCloneFlags,

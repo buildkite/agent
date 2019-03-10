@@ -62,9 +62,9 @@ type BootstrapConfig struct {
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
-	ReposPath                    string   `cli:"repos-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string   `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool     `cli:"command-eval"`
@@ -191,6 +191,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
+			Name:   "git-mirrors-path",
+			Value:  "",
+			Usage:  "Path to where mirrors of git repositories are stored",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.StringFlag{
 			Name:   "bin-path",
 			Value:  "",
 			Usage:  "Directory where the buildkite-agent binary lives",
@@ -201,12 +207,6 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "Directory where builds will be created",
 			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "repos-path",
-			Value:  "",
-			Usage:  "Path to where the repositories will be stored",
-			EnvVar: "BUILDKITE_REPOS_PATH",
 		},
 		cli.StringFlag{
 			Name:   "hooks-path",
@@ -328,7 +328,7 @@ var BootstrapCommand = cli.Command{
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			CleanCheckout:                cfg.CleanCheckout,
 			BuildPath:                    cfg.BuildPath,
-			ReposPath:                    cfg.ReposPath,
+			GitMirrorsPath:               cfg.GitMirrorsPath,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,
