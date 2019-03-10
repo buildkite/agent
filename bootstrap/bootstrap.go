@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/shellwords"
@@ -1002,7 +1003,8 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		return err
 	}
 
-	if b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
+	// If we can, get a mirror of the git repository to use for reference later
+	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		var err error
 		mirrorDir, err = b.gitMirrorRepository()
 		if err != nil {

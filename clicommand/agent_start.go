@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/shellwords"
@@ -394,6 +395,13 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
 
+		// Check if git-mirrors are enabled
+		if experiments.IsEnabled(`git-mirrors`) {
+			if cfg.GitMirrorsPath == `` {
+				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
+			}
+		}
+
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
@@ -480,7 +488,7 @@ var AgentStartCommand = cli.Command{
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,
-				GitMirrorsPath:                  cfg.GitMirrorsPath,
+				GitMirrorsPath:             cfg.GitMirrorsPath,
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
 				GitCloneFlags:              cfg.GitCloneFlags,
