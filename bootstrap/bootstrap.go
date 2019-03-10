@@ -1000,17 +1000,17 @@ func (b *Bootstrap) referenceRepository() (string, error) {
 func (b *Bootstrap) defaultCheckoutPhase() error {
 	var reference string
 
+	// Make sure the build directory exists and that we change directory into it
+	if err := b.createCheckoutDir(); err != nil {
+		return err
+	}
+
 	if b.Config.ReposPath != "" && b.Config.Repository != "" {
 		var err error
 		reference, err = b.referenceRepository()
 		if err != nil {
 			return err
 		}
-	}
-
-	// Make sure the build directory exists
-	if err := b.createCheckoutDir(); err != nil {
-		return err
 	}
 
 	if b.SSHKeyscan {
