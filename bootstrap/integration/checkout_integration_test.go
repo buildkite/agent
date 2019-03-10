@@ -26,6 +26,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 	}
 
@@ -37,7 +38,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "-v", "--prune", "origin", "master"},
@@ -111,7 +112,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "-v", "--mirror", "--dissociate", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
@@ -195,7 +196,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git.IgnoreUnexpectedInvocations()
 
 	if experiments.IsEnabled(`git-mirrors`) {
-		git.Expect("clone", "--mirror", "-v", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
+		git.Expect("clone", "-v", "--mirror", "--dissociate", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
 			AndExitWith(0)
 	} else {
 		git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
@@ -248,7 +249,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git.IgnoreUnexpectedInvocations()
 
 	if experiments.IsEnabled(`git-mirrors`) {
-		git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
+		git.Expect("clone", "-v", "--mirror", "--dissociate", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
 			AndExitWith(0)
 	} else {
 		git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").

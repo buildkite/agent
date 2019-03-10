@@ -973,7 +973,7 @@ func (b *Bootstrap) gitMirrorRepository() (string, error) {
 
 	if !fileExists(path) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", path)
-		if err := gitCloneMirror(b.shell, b.GitCloneMirrorFlags, b.Repository, path); err != nil {
+		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, path); err != nil {
 			return "", err
 		}
 	} else {

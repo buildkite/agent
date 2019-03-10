@@ -21,23 +21,6 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 
 	commandArgs := []string{"clone"}
 	commandArgs = append(commandArgs, individualCloneFlags...)
-	commandArgs = append(commandArgs, "--", repository, ".")
-
-	if err = sh.Run("git", commandArgs...); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func gitCloneMirror(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
-	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
-	if err != nil {
-		return err
-	}
-
-	commandArgs := []string{"clone", "--mirror"}
-	commandArgs = append(commandArgs, individualCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
