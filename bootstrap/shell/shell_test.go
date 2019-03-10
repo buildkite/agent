@@ -255,6 +255,10 @@ func TestWorkingDir(t *testing.T) {
 }
 
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Flakey on windows")
+	}
+
 	dir, err := ioutil.TempDir("", "shelltest")
 	if err != nil {
 		t.Fatal(err)
