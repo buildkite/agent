@@ -977,15 +977,14 @@ func (b *Bootstrap) gitMirrorRepository() (string, error) {
 		}
 	} else {
 		b.shell.Commentf("Updating existing repository mirror")
-		b.shell.Chdir(path)
 
 		// Update the the origin of the repository so we can gracefully handle repository renames
-		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
+		if err := b.shell.Run("git", "--git-dir", path, "remote", "set-url", "origin", b.Repository); err != nil {
 			return "", err
 		}
 
 		// Update our mirror
-		if err := gitFetch(b.shell, "-v --prune", "origin"); err != nil {
+		if err := b.shell.Run("git", "--git-dir", path, "remote", "update", "--prune"); err != nil {
 			return "", err
 		}
 	}

@@ -165,7 +165,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
+	git.Expect("clone", "--mirror", "-v", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
 		AndExitWith(0)
 
 	env := []string{
@@ -213,7 +213,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
+	git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
 		AndExitWith(0)
 
 	env := []string{
