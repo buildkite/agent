@@ -91,6 +91,9 @@ type Config struct {
 	// Path where the repository mirrors are stored
 	GitMirrorsPath string
 
+	// Seconds to wait before allowing git mirror clone lock to be acquired
+	GitMirrorsLockTimeout int
+
 	// Path to the buildkite-agent binary
 	BinPath string
 

@@ -64,6 +64,7 @@ type BootstrapConfig struct {
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -203,6 +204,12 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Path to where mirrors of git repositories are stored",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
 		},
+		cli.IntFlag{
+			Name:   "git-mirrors-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		},
 		cli.StringFlag{
 			Name:   "bin-path",
 			Value:  "",
@@ -337,6 +344,7 @@ var BootstrapCommand = cli.Command{
 			CleanCheckout:                cfg.CleanCheckout,
 			BuildPath:                    cfg.BuildPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,

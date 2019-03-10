@@ -965,7 +965,7 @@ func (b *Bootstrap) gitMirrorRepository() (string, error) {
 	}
 
 	// Try and lock the repository dir to prevent concurrent clones
-	repoDirLock, err := b.shell.LockFile(path+".lock", time.Minute*5)
+	repoDirLock, err := b.shell.LockFile(path+".lock", time.Second*time.Duration(b.GitMirrorsLockTimeout))
 	if err != nil {
 		return "", err
 	}

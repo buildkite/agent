@@ -65,6 +65,7 @@ type AgentStartConfig struct {
 	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags              string   `cli:"git-clean-flags"`
 	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
 	NoColor                    bool     `cli:"no-color"`
 	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
@@ -255,6 +256,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "Path to where mirrors of git repositories are stored",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.IntFlag{
+			Name:   "git-mirrors-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -496,6 +503,7 @@ var AgentStartCommand = cli.Command{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,
 				GitMirrorsPath:             cfg.GitMirrorsPath,
+				GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
 				GitCloneFlags:              cfg.GitCloneFlags,
