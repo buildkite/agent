@@ -62,6 +62,7 @@ type AgentStartConfig struct {
 	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
 	GitCloneFlags              string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags              string   `cli:"git-clean-flags"`
 	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
@@ -242,6 +243,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-mirror-flags",
+			Value:  "-v --mirror",
+			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
+			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "git-mirrors-path",
@@ -492,6 +499,7 @@ var AgentStartCommand = cli.Command{
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
 				GitCloneFlags:              cfg.GitCloneFlags,
+				GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
 				GitCleanFlags:              cfg.GitCleanFlags,
 				GitSubmodules:              !cfg.NoGitSubmodules,
 				SSHKeyscan:                 !cfg.NoSSHKeyscan,

@@ -64,6 +64,9 @@ type Config struct {
 	// Flags to pass to "git clone" command
 	GitCloneFlags string `env:"BUILDKITE_GIT_CLONE_FLAGS"`
 
+	// Flags to pass to "git clone" command for mirroring
+	GitCloneMirrorFlags string
+
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 

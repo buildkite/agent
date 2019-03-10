@@ -403,6 +403,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_PLUGINS_ENABLED`,
 		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
 		`BUILDKITE_GIT_CLONE_FLAGS`,
+		`BUILDKITE_GIT_CLONE_MIRROR_FLAGS`,
 		`BUILDKITE_GIT_CLEAN_FLAGS`,
 		`BUILDKITE_SHELL`,
 	}
@@ -450,6 +451,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")

@@ -61,6 +61,7 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
@@ -183,6 +184,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "-v",
 			Usage:  "Flags to pass to \"git clone\" command",
 			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-mirror-flags",
+			Value:  "-v --mirror",
+			Usage:  "Flags to pass to \"git clone\" command when mirroring",
+			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "git-clean-flags",
@@ -319,6 +326,7 @@ var BootstrapCommand = cli.Command{
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
 			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
 			AgentName:                    cfg.AgentName,
 			PipelineProvider:             cfg.PipelineProvider,
