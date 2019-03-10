@@ -998,18 +998,21 @@ func (b *Bootstrap) gitMirrorRepository() (string, error) {
 func (b *Bootstrap) defaultCheckoutPhase() error {
 	var mirrorDir string
 
-	// Make sure the build directory exists and that we change directory into it
-	if err := b.createCheckoutDir(); err != nil {
-		return err
-	}
-
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
+		b.shell.Commentf("Using git-mirrors experiment 🧪")
+		b.shell.Chdir(b.Config.GitMirrorsPath)
+
 		var err error
 		mirrorDir, err = b.gitMirrorRepository()
 		if err != nil {
 			return err
 		}
+	}
+
+	// Make sure the build directory exists and that we change directory into it
+	if err := b.createCheckoutDir(); err != nil {
+		return err
 	}
 
 	if b.SSHKeyscan {
