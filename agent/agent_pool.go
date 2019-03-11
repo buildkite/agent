@@ -51,13 +51,98 @@ func NewAgentPool(l *logger.Logger, m *metrics.Collector, c AgentPoolConfig) *Ag
 		conf:             c,
 		logger:           l,
 		metricsCollector: m,
-		apiClient:        NewAPIClient(l, c.APIClientConfig),
 	}
+}
+
+func (r *AgentPool) RegisterOnly() error {
+	r.logger.Info("Registering agent with Buildkite...")
+
+	registered, err := r.registerAgent(r.createAgentTemplate())
+	if err != nil {
+		return err
+	}
+
+	r.logger.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
+		strings.Join(registered.Tags, ", "))
+
+	// Create a prefixed logger for some context in concurrent output
+	l := r.logger.WithPrefix(registered.Name)
+
+	l.Debug("Ping interval: %ds", registered.PingInterval)
+	l.Debug("Job status interval: %ds", registered.JobStatusInterval)
+	l.Debug("Heartbeat interval: %ds", registered.HeartbeatInterval)
+	l.Info("Agent Access Token: %q", registered.AccessToken)
+
+	return nil
+}
+
+func interpolateAgentName(agentName string) string {
+	hostname, err := os.Hostname()
+	if err == nil {
+		agentName = strings.Replace(agentName, "%hostname", hostname, -1)
+	}
+	agentName = strings.Replace(agentName, "%n", "1", -1)
+	return agentName
+}
+
+func (r *AgentPool) StartWithoutRegister(agentName, accessToken string) error {
+	// Create an agent registration with placeholders
+	agent := &api.Agent{
+		AccessToken:       accessToken,
+		Name:              interpolateAgentName(agentName),
+		PingInterval:      1,
+		JobStatusInterval: 5,
+		HeartbeatInterval: 5,
+	}
+
+	// Show the welcome banner and config options used
+	r.showBanner()
+
+	// Create a prefixed logger for some context in concurrent output
+	l := r.logger.WithPrefix(agent.Name)
+
+	worker := NewAgentWorker(l, agent, r.metricsCollector, AgentWorkerConfig{
+		Endpoint:           r.conf.APIClientConfig.Endpoint,
+		DisableHTTP2:       r.conf.APIClientConfig.DisableHTTP2,
+		Debug:              r.conf.Debug,
+		AgentConfiguration: r.conf.AgentConfiguration,
+	})
+
+	l.Info("Connecting to Buildkite...")
+	if err := worker.Connect(); err != nil {
+		return err
+	}
+
+	if r.conf.AgentConfiguration.DisconnectAfterJob {
+		l.Info("Waiting for job to be assigned...")
+		l.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.conf.AgentConfiguration.DisconnectAfterJobTimeout)
+	} else if r.conf.AgentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		l.Info("Waiting for job to be assigned...")
+		l.Info("The agent will automatically disconnect after %d seconds of inactivity", r.conf.AgentConfiguration.DisconnectAfterIdleTimeout)
+	} else {
+		l.Info("Waiting for work...")
+	}
+
+	// Listen for shutdown and interrupt signals
+	r.handleSignals(l, worker)
+
+	// Starts the agent worker.
+	if err := worker.Start(); err != nil {
+		return err
+	}
+
+	// Now that the agent has stopped, we can disconnect it
+	l.Info("Disconnecting %s...", agent.Name)
+	if err := worker.Disconnect(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *AgentPool) Start() error {
 	// Show the welcome banner and config options used
-	r.ShowBanner()
+	r.showBanner()
 
 	var wg sync.WaitGroup
 	var errs = make(chan error, r.conf.Spawn)
@@ -72,7 +157,7 @@ func (r *AgentPool) Start() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := r.startWorker(); err != nil {
+			if err := r.spawnWorker(); err != nil {
 				errs <- err
 			}
 		}()
@@ -89,8 +174,8 @@ func (r *AgentPool) Start() error {
 	return <-errs
 }
 
-func (r *AgentPool) startWorker() error {
-	registered, err := r.RegisterAgent(r.CreateAgentTemplate())
+func (r *AgentPool) spawnWorker() error {
+	registered, err := r.registerAgent(r.createAgentTemplate())
 	if err != nil {
 		return err
 	}
@@ -103,7 +188,7 @@ func (r *AgentPool) startWorker() error {
 
 	l.Debug("Ping interval: %ds", registered.PingInterval)
 	l.Debug("Job status interval: %ds", registered.JobStatusInterval)
-	l.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
+	l.Debug("Heartbeat interval: %ds", registered.HeartbeatInterval)
 
 	// Now that we have a registered agent, we can connect it to the API,
 	// and start running jobs.
@@ -129,7 +214,24 @@ func (r *AgentPool) startWorker() error {
 		l.Info("Waiting for work...")
 	}
 
-	// Start a signalwatcher so we can monitor signals and handle shutdowns
+	// Listen for shutdown and interrupt signals
+	r.handleSignals(l, worker)
+
+	// Starts the agent worker.
+	if err := worker.Start(); err != nil {
+		return err
+	}
+
+	// Now that the agent has stopped, we can disconnect it
+	l.Info("Disconnecting %s...", registered.Name)
+	if err := worker.Disconnect(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *AgentPool) handleSignals(l *logger.Logger, worker *AgentWorker) {
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
 		r.signalLock.Lock()
 		defer r.signalLock.Unlock()
@@ -151,24 +253,11 @@ func (r *AgentPool) startWorker() error {
 			l.Debug("Ignoring signal `%s`", sig.String())
 		}
 	})
-
-	// Starts the agent worker.
-	if err := worker.Start(); err != nil {
-		return err
-	}
-
-	// Now that the agent has stopped, we can disconnect it
-	l.Info("Disconnecting %s...", worker.agent.Name)
-	if err := worker.Disconnect(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // Takes the options passed to the CLI, and creates an api.Agent record that
 // will be sent to the Buildkite Agent API for registration.
-func (r *AgentPool) CreateAgentTemplate() *api.Agent {
+func (r *AgentPool) createAgentTemplate() *api.Agent {
 	agent := &api.Agent{
 		Name:              r.conf.Name,
 		Priority:          r.conf.Priority,
@@ -310,13 +399,19 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 // Takes the agent template and returns a registered agent. The registered
 // agent includes the Access Token used to communicate with the Buildkite Agent
 // API
-func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
+func (r *AgentPool) registerAgent(agent *api.Agent) (*api.Agent, error) {
+	apiClient := NewAPIClient(r.logger, APIClientConfig{
+		Endpoint:     r.conf.APIClientConfig.Endpoint,
+		DisableHTTP2: r.conf.APIClientConfig.DisableHTTP2,
+		Token:        r.conf.APIClientConfig.Token,
+	})
+
 	var registered *api.Agent
 	var err error
 	var resp *api.Response
 
 	register := func(s *retry.Stats) error {
-		registered, resp, err = r.apiClient.Agents.Register(agent)
+		registered, resp, err = apiClient.Agents.Register(agent)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				r.logger.Warn("Buildkite rejected the registration (%s)", err)
@@ -337,7 +432,7 @@ func (r *AgentPool) RegisterAgent(agent *api.Agent) (*api.Agent, error) {
 
 // Shows the welcome banner and the configuration options used when starting
 // this agent.
-func (r *AgentPool) ShowBanner() {
+func (r *AgentPool) showBanner() {
 	welcomeMessage :=
 		"\n" +
 			"%s  _           _ _     _ _    _ _                                _\n" +

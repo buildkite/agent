@@ -40,7 +40,8 @@ Example:
 
 type AgentStartConfig struct {
 	Config                     string   `cli:"config"`
-	Token                      string   `cli:"token" validate:"required"`
+	Token                      string   `cli:"token"`
+	AccessToken                string   `cli:"access-token"`
 	Name                       string   `cli:"name"`
 	Priority                   string   `cli:"priority"`
 	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
@@ -80,6 +81,7 @@ type AgentStartConfig struct {
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
+	RegisterOnly               bool     `cli:"register-only"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -142,8 +144,20 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "token",
 			Value:  "",
-			Usage:  "Your account agent token",
+			Usage:  "Your account agent registration token",
 			EnvVar: "BUILDKITE_AGENT_TOKEN",
+		},
+		cli.StringFlag{
+			Name:   "access-token",
+			Value:  "",
+			Usage:  "A session token for an already registered agent session. This is for advanced use only.",
+			EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
+			Hidden: true,
+		},
+		cli.BoolFlag{
+			Name:   "register-only",
+			Usage:  "Rather than starting the agent, just register a new session and exit",
+			Hidden: true,
 		},
 		cli.StringFlag{
 			Name:   "name",
@@ -387,6 +401,10 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
 
+		if cfg.Token == "" && cfg.AccessToken == "" {
+			l.Fatal("Must provide an agent registration token to start")
+		}
+
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
@@ -503,9 +521,19 @@ var AgentStartCommand = cli.Command{
 		// Setup the agent
 		pool := agent.NewAgentPool(l, mc, config)
 
-		// Start the agent pool
-		if err := pool.Start(); err != nil {
-			l.Fatal("%s", err)
+		if cfg.RegisterOnly {
+			if err := pool.RegisterOnly(); err != nil {
+				l.Fatal("%s", err)
+			}
+		} else if cfg.AccessToken != "" {
+			if err := pool.StartWithoutRegister(cfg.Name, cfg.AccessToken); err != nil {
+				l.Fatal("%s", err)
+			}
+		} else {
+			// Start the agent pool
+			if err := pool.Start(); err != nil {
+				l.Fatal("%s", err)
+			}
 		}
 	},
 }

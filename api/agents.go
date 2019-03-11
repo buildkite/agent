@@ -20,7 +20,7 @@ type Agent struct {
 	Endpoint          string   `json:"endpoint" msgpack:"endpoint"`
 	PingInterval      int      `json:"ping_interval" msgpack:"ping_interval"`
 	JobStatusInterval int      `json:"job_status_interval" msgpack:"job_status_interval"`
-	HearbeatInterval  int      `json:"heartbeat_interval" msgpack:"heartbeat_interval"`
+	HeartbeatInterval  int      `json:"heartbeat_interval" msgpack:"heartbeat_interval"`
 	OS                string   `json:"os" msgpack:"os"`
 	Arch              string   `json:"arch" msgpack:"arch"`
 	ScriptEvalEnabled bool     `json:"script_eval_enabled" msgpack:"script_eval_enabled"`

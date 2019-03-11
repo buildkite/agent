@@ -121,7 +121,7 @@ func (a *AgentWorker) Start() error {
 
 	// Create the intervals we'll be using
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
-	heartbeatInterval := time.Second * time.Duration(a.agent.HearbeatInterval)
+	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
 
 	// Setup and start the heartbeater
 	go func() {
@@ -263,9 +263,14 @@ func (a *AgentWorker) Connect() error {
 	a.UpdateProcTitle("connecting")
 
 	return retry.Do(func(s *retry.Stats) error {
-		_, err := a.apiClient.Agents.Connect()
+		resp, err := a.apiClient.Agents.Connect()
 		if err != nil {
-			a.logger.Warn("%s (%s)", err, s)
+			if resp != nil && resp.StatusCode == 401 {
+				a.logger.Warn("Buildkite rejected the connect (%s)", err)
+				s.Break()
+			} else {
+				a.logger.Warn("%s (%s)", err, s)
+			}
 		}
 
 		return err
