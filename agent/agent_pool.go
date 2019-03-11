@@ -98,33 +98,23 @@ func (r *AgentPool) StartWithoutRegister(agentName, accessToken string) error {
 	// Show the welcome banner and config options used
 	r.showBanner()
 
-	// Create a prefixed logger for some context in concurrent output
-	l := r.logger.WithPrefix(agent.Name)
-
-	worker := NewAgentWorker(l, agent, r.metricsCollector, AgentWorkerConfig{
+	worker := NewAgentWorker(r.logger, agent, r.metricsCollector, AgentWorkerConfig{
 		Endpoint:           r.conf.APIClientConfig.Endpoint,
 		DisableHTTP2:       r.conf.APIClientConfig.DisableHTTP2,
 		Debug:              r.conf.Debug,
 		AgentConfiguration: r.conf.AgentConfiguration,
 	})
 
-	l.Info("Connecting to Buildkite...")
+	r.logger.Debug("Skipping agent registration as an access token was provided")
+	r.logger.Info("Connecting to Buildkite...")
 	if err := worker.Connect(); err != nil {
 		return err
 	}
 
-	if r.conf.AgentConfiguration.DisconnectAfterJob {
-		l.Info("Waiting for job to be assigned...")
-		l.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.conf.AgentConfiguration.DisconnectAfterJobTimeout)
-	} else if r.conf.AgentConfiguration.DisconnectAfterIdleTimeout > 0 {
-		l.Info("Waiting for job to be assigned...")
-		l.Info("The agent will automatically disconnect after %d seconds of inactivity", r.conf.AgentConfiguration.DisconnectAfterIdleTimeout)
-	} else {
-		l.Info("Waiting for work...")
-	}
+	r.showWaitingForWork(r.logger)
 
 	// Listen for shutdown and interrupt signals
-	r.handleSignals(l, worker)
+	r.handleSignals(r.logger, worker)
 
 	// Starts the agent worker.
 	if err := worker.Start(); err != nil {
@@ -132,7 +122,7 @@ func (r *AgentPool) StartWithoutRegister(agentName, accessToken string) error {
 	}
 
 	// Now that the agent has stopped, we can disconnect it
-	l.Info("Disconnecting %s...", agent.Name)
+	r.logger.Info("Disconnecting...")
 	if err := worker.Disconnect(); err != nil {
 		return err
 	}
@@ -204,15 +194,7 @@ func (r *AgentPool) spawnWorker() error {
 		return err
 	}
 
-	if r.conf.AgentConfiguration.DisconnectAfterJob {
-		l.Info("Waiting for job to be assigned...")
-		l.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.conf.AgentConfiguration.DisconnectAfterJobTimeout)
-	} else if r.conf.AgentConfiguration.DisconnectAfterIdleTimeout > 0 {
-		l.Info("Waiting for job to be assigned...")
-		l.Info("The agent will automatically disconnect after %d seconds of inactivity", r.conf.AgentConfiguration.DisconnectAfterIdleTimeout)
-	} else {
-		l.Info("Waiting for work...")
-	}
+	r.showWaitingForWork(l)
 
 	// Listen for shutdown and interrupt signals
 	r.handleSignals(l, worker)
@@ -481,5 +463,17 @@ func (r *AgentPool) showBanner() {
 
 	if r.conf.AgentConfiguration.DisconnectAfterJob {
 		r.logger.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.conf.AgentConfiguration.DisconnectAfterJobTimeout)
+	}
+}
+
+func (r *AgentPool) showWaitingForWork(l *logger.Logger) {
+	if r.conf.AgentConfiguration.DisconnectAfterJob {
+		l.Info("Waiting for job to be assigned...")
+		l.Info("The agent will automatically disconnect after %d seconds if no job is assigned", r.conf.AgentConfiguration.DisconnectAfterJobTimeout)
+	} else if r.conf.AgentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		l.Info("Waiting for job to be assigned...")
+		l.Info("The agent will automatically disconnect after %d seconds of inactivity", r.conf.AgentConfiguration.DisconnectAfterIdleTimeout)
+	} else {
+		l.Info("Waiting for work...")
 	}
 }
