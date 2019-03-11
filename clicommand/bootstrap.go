@@ -188,7 +188,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-clone-mirror-flags",
-			Value:  "-v --mirror --dissociate",
+			Value:  "-v --mirror",
 			Usage:  "Flags to pass to \"git clone\" command when mirroring",
 			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		},

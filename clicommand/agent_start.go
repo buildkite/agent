@@ -247,7 +247,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-clone-mirror-flags",
-			Value:  "-v --mirror --dissociate",
+			Value:  "-v --mirror",
 			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
 			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		},
