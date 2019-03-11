@@ -952,45 +952,83 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
-// gitMirrorRepository either creates or update the git mirror repository used as a reference later
-func (b *Bootstrap) gitMirrorRepository() (string, error) {
-	path := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
+func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
+	if err := sh.Run("git", "--git-dir", gitDir, "cat-file", "-e", commit); err == nil {
+		return true
+	}
+	return false
+}
 
-	// Create the base dir if it doesn't exist
-	if baseDir := filepath.Dir(path); !fileExists(baseDir) {
+func (b *Bootstrap) updateGitMirror() (string, error) {
+	// Create a unique directory for the repository mirror
+	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
+
+	// Create the mirrors path if it doesn't exist
+	if baseDir := filepath.Dir(mirrorDir); !fileExists(baseDir) {
 		b.shell.Commentf("Creating \"%s\"", baseDir)
 		if err := os.MkdirAll(baseDir, 0777); err != nil {
 			return "", err
 		}
 	}
 
-	// Try and lock the repository dir to prevent concurrent clones
-	repoDirLock, err := b.shell.LockFile(path+".lock", time.Second*time.Duration(b.GitMirrorsLockTimeout))
+	b.shell.Chdir(b.Config.GitMirrorsPath)
+
+	lockTimeout := time.Second * time.Duration(b.GitMirrorsLockTimeout)
+
+	// If we don't have a mirror, we need to clone it
+	if !fileExists(mirrorDir) {
+		// Lock the mirror dir to prevent concurrent clones
+		mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
+		if err != nil {
+			return "", err
+		}
+		defer mirrorCloneLock.Unlock()
+
+		// Check again in case we acquired the lock after another process cloned it
+		if !fileExists(mirrorDir) {
+			b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
+			if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
+				return "", err
+			}
+
+			return mirrorDir, nil
+		}
+
+		mirrorCloneLock.Unlock()
+	}
+
+	// Check if the mirror has a commit, this is atomic so should be safe to do
+	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
+		b.shell.Commentf("Commit %s exists in mirror", b.Commit)
+		return mirrorDir, nil
+	}
+
+	// Lock the mirror dir to prevent concurrent updates
+	mirrorUpdateLock, err := b.shell.LockFile(mirrorDir+".updatelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}
-	defer repoDirLock.Unlock()
+	defer mirrorUpdateLock.Unlock()
 
-	if !fileExists(path) {
-		b.shell.Commentf("Cloning a mirror of the repository to %q", path)
-		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, path); err != nil {
-			return "", err
-		}
-	} else {
-		b.shell.Commentf("Updating existing repository mirror")
-
-		// Update the the origin of the repository so we can gracefully handle repository renames
-		if err := b.shell.Run("git", "--git-dir", path, "remote", "set-url", "origin", b.Repository); err != nil {
-			return "", err
-		}
-
-		// Update our mirror
-		if err := b.shell.Run("git", "--git-dir", path, "remote", "update", "--prune"); err != nil {
-			return "", err
-		}
+	// Check again after we get a lock, in case the other process has already updated
+	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
+		b.shell.Commentf("Commit %s exists in mirror", b.Commit)
+		return mirrorDir, nil
 	}
 
-	return path, nil
+	b.shell.Commentf("Updating existing repository mirror")
+
+	// Update the the origin of the repository so we can gracefully handle repository renames
+	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
+		return "", err
+	}
+
+	// Update our mirror
+	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "update", "--prune"); err != nil {
+		return "", err
+	}
+
+	return mirrorDir, nil
 }
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
@@ -1001,10 +1039,9 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
-		b.shell.Chdir(b.Config.GitMirrorsPath)
 
 		var err error
-		mirrorDir, err = b.gitMirrorRepository()
+		mirrorDir, err = b.updateGitMirror()
 		if err != nil {
 			return err
 		}
