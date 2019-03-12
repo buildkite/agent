@@ -1041,6 +1041,10 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
+	if b.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
+	}
+
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
@@ -1057,10 +1061,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// Make sure the build directory exists and that we change directory into it
 	if err := b.createCheckoutDir(); err != nil {
 		return err
-	}
-
-	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
 	gitCloneFlags := b.GitCloneFlags
