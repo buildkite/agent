@@ -61,7 +61,10 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -184,10 +187,28 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
 		},
 		cli.StringFlag{
+			Name:   "git-clone-mirror-flags",
+			Value:  "-v --mirror",
+			Usage:  "Flags to pass to \"git clone\" command when mirroring",
+			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		},
+		cli.StringFlag{
 			Name:   "git-clean-flags",
 			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-mirrors-path",
+			Value:  "",
+			Usage:  "Path to where mirrors of git repositories are stored",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.IntFlag{
+			Name:   "git-mirrors-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		},
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -312,6 +333,7 @@ var BootstrapCommand = cli.Command{
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
 			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
 			AgentName:                    cfg.AgentName,
 			PipelineProvider:             cfg.PipelineProvider,
@@ -321,6 +343,8 @@ var BootstrapCommand = cli.Command{
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			CleanCheckout:                cfg.CleanCheckout,
 			BuildPath:                    cfg.BuildPath,
+			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,

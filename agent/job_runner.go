@@ -394,6 +394,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_BIN_PATH`,
 		`BUILDKITE_CONFIG_PATH`,
 		`BUILDKITE_BUILD_PATH`,
+		`BUILDKITE_GIT_MIRRORS_PATH`,
 		`BUILDKITE_HOOKS_PATH`,
 		`BUILDKITE_PLUGINS_PATH`,
 		`BUILDKITE_SSH_KEYSCAN`,
@@ -402,6 +403,8 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_PLUGINS_ENABLED`,
 		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
 		`BUILDKITE_GIT_CLONE_FLAGS`,
+		`BUILDKITE_GIT_CLONE_MIRROR_FLAGS`,
+		`BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT`,
 		`BUILDKITE_GIT_CLEAN_FLAGS`,
 		`BUILDKITE_SHELL`,
 	}
@@ -440,6 +443,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
+	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
@@ -448,7 +452,9 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
+	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.GitMirrorsLockTimeout)
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 

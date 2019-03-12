@@ -81,8 +81,15 @@ func (p *Process) Run() error {
 		SetupProcessGroup(p.command)
 	}
 
-	// Configure working dir
-	p.command.Dir = p.conf.Dir
+	// Configure working dir and fail if it doesn't exist, otherwise
+	// we get confusing errors about fork/exec failing because the file
+	// doesn't exist
+	if p.conf.Dir != "" {
+		if _, err := os.Stat(p.conf.Dir); os.IsNotExist(err) {
+			return fmt.Errorf("Process working directory %q doesn't exist", p.conf.Dir)
+		}
+		p.command.Dir = p.conf.Dir
+	}
 
 	// Create channels for signalling started and done
 	p.mu.Lock()

@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/shellwords"
@@ -61,7 +62,10 @@ type AgentStartConfig struct {
 	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
 	GitCloneFlags              string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags              string   `cli:"git-clean-flags"`
+	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
 	NoColor                    bool     `cli:"no-color"`
 	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
@@ -242,6 +246,24 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
+			Name:   "git-clone-mirror-flags",
+			Value:  "-v --mirror",
+			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
+			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-mirrors-path",
+			Value:  "",
+			Usage:  "Path to where mirrors of git repositories are stored",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.IntFlag{
+			Name:   "git-mirrors-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		},
+		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
 			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
@@ -387,6 +409,13 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
 
+		// Check if git-mirrors are enabled
+		if experiments.IsEnabled(`git-mirrors`) {
+			if cfg.GitMirrorsPath == `` {
+				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
+			}
+		}
+
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
@@ -473,9 +502,12 @@ var AgentStartCommand = cli.Command{
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,
+				GitMirrorsPath:             cfg.GitMirrorsPath,
+				GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
 				HooksPath:                  cfg.HooksPath,
 				PluginsPath:                cfg.PluginsPath,
 				GitCloneFlags:              cfg.GitCloneFlags,
+				GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
 				GitCleanFlags:              cfg.GitCleanFlags,
 				GitSubmodules:              !cfg.NoGitSubmodules,
 				SSHKeyscan:                 !cfg.NoSSHKeyscan,

@@ -5,8 +5,11 @@ type AgentConfiguration struct {
 	BootstrapScript            string
 	BuildPath                  string
 	HooksPath                  string
+	GitMirrorsPath             string
+	GitMirrorsLockTimeout      int
 	PluginsPath                string
 	GitCloneFlags              string
+	GitCloneMirrorFlags        string
 	GitCleanFlags              string
 	GitSubmodules              bool
 	SSHKeyscan                 bool

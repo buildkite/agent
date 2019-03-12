@@ -21,7 +21,7 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 
 	commandArgs := []string{"clone"}
 	commandArgs = append(commandArgs, individualCloneFlags...)
-	commandArgs = append(commandArgs, "--", repository, ".")
+	commandArgs = append(commandArgs, "--", repository, dir)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
 		return err

@@ -18,6 +18,14 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `git-mirrors`
+
+Maintain a single bare git mirror with for each repository on a host that is shared amongst multiple agents and pipelines. Checkouts reference the git mirror using `git clone --reference`, as do submodules.
+
+You must set a `git-mirrors-path` in your config for this to work.
+
+**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
+
 ### `agent-socket`
 
 The agent currently exposes a per-session token to jobs called `BUILDKITE_AGENT_ACCESS_TOKEN`. This token can be used for pipeline uploads, meta-data get/set and artifact access within the job. Leaking it in logging can be dangerous, as anyone with that token can access whatever your agent could.

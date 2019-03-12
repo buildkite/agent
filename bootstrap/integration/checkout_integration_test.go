@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/bintest"
 )
 
@@ -25,6 +26,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 	}
 
@@ -34,14 +36,26 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	git.ExpectAll([][]interface{}{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "--prune", "origin", "master"},
-		{"checkout", "-f", "FETCH_HEAD"},
-		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
-	})
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.ExpectAll([][]interface{}{
+			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "--prune", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		})
+	} else {
+		git.ExpectAll([][]interface{}{
+			{"clone", "-v", "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "--prune", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		})
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
@@ -96,20 +110,38 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// But assert which ones are called
-	git.ExpectAll([][]interface{}{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
-		{"fetch", "-v", "--prune", "origin", "master"},
-		{"checkout", "-f", "FETCH_HEAD"},
-		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-		{"submodule", "sync", "--recursive"},
-		{"submodule", "update", "--init", "--recursive", "--force"},
-		{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
-		{"clean", "-fdq"},
-		{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
-	})
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.ExpectAll([][]interface{}{
+			{"clone", "-v", "--mirror", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+			{"fetch", "-v", "--prune", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"submodule", "sync", "--recursive"},
+			{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
+			{"submodule", "update", "--init", "--recursive", "--force"},
+			{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
+			{"clean", "-fdq"},
+			{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		})
+	} else {
+		git.ExpectAll([][]interface{}{
+			{"clone", "-v", "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+			{"fetch", "-v", "--prune", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"submodule", "sync", "--recursive"},
+			{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
+			{"submodule", "update", "--init", "--recursive", "--force"},
+			{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
+			{"clean", "-fdq"},
+			{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		})
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
@@ -162,8 +194,13 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
-		AndExitWith(0)
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.Expect("clone", "-v", "--mirror", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
+			AndExitWith(0)
+	} else {
+		git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
+			AndExitWith(0)
+	}
 
 	env := []string{
 		`BUILDKITE_REPO=git@github.com:buildkite/agent.git`,
@@ -210,8 +247,13 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
-		AndExitWith(0)
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.Expect("clone", "-v", "--mirror", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
+			AndExitWith(0)
+	} else {
+		git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
+			AndExitWith(0)
+	}
 
 	env := []string{
 		`BUILDKITE_REPO=https://github.com/buildkite/bash-example.git`,
@@ -381,7 +423,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		t.Skip("Not supported on windows")
-	} 
+	}
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -408,4 +450,23 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
+}
+
+type subDirMatcher struct {
+	dir string
+}
+
+func (mf subDirMatcher) Match(s string) (bool, string) {
+	if filepath.Dir(s) == mf.dir {
+		return true, ""
+	}
+	return false, fmt.Sprintf("%s wasn't a sub directory of %s", s, mf.dir)
+}
+
+func (mf subDirMatcher) String() string {
+	return fmt.Sprintf("subDirMatcher(%q)", mf.dir)
+}
+
+func matchSubDir(dir string) bintest.Matcher {
+	return subDirMatcher{dir: dir}
 }

@@ -17,21 +17,24 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/agent/experiments"
+
 	"github.com/buildkite/bintest"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
 type BootstrapTester struct {
-	Name       string
-	Args       []string
-	Env        []string
-	HomeDir    string
-	PathDir    string
-	BuildDir   string
-	HooksDir   string
-	PluginsDir string
-	Repo       *gitRepository
-	Output     string
+	Name          string
+	Args          []string
+	Env           []string
+	HomeDir       string
+	PathDir       string
+	BuildDir      string
+	GitMirrorsDir string
+	HooksDir      string
+	PluginsDir    string
+	Repo          *gitRepository
+	Output        string
 
 	cmd      *exec.Cmd
 	cmdLock  sync.Mutex
@@ -99,6 +102,21 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		BuildDir:   buildDir,
 		HooksDir:   hooksDir,
 		PluginsDir: pluginsDir,
+	}
+
+	// Support testing experiments
+	if exp := experiments.Enabled(); len(exp) > 0 {
+		bt.Env = append(bt.Env, `BUILDKITE_AGENT_EXPERIMENT=`+strings.Join(exp, ","))
+
+		if experiments.IsEnabled(`git-mirrors`) {
+			gitMirrorsDir, err := ioutil.TempDir("", "bootstrap-git-mirrors")
+			if err != nil {
+				return nil, err
+			}
+
+			bt.GitMirrorsDir = gitMirrorsDir
+			bt.Env = append(bt.Env, "BUILDKITE_GIT_MIRRORS_PATH="+gitMirrorsDir)
+		}
 	}
 
 	// Windows requires certain env variables to be present
@@ -320,6 +338,11 @@ func (b *BootstrapTester) Close() error {
 	}
 	if err := os.RemoveAll(b.PluginsDir); err != nil {
 		return err
+	}
+	if b.GitMirrorsDir != "" {
+		if err := os.RemoveAll(b.GitMirrorsDir); err != nil {
+			return err
+		}
 	}
 	return nil
 }
