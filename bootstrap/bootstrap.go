@@ -1178,30 +1178,16 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		if err != nil {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			for idx, repository := range submoduleRepos {
+			for _, repository := range submoduleRepos {
 				// submodules might need their fingerprints verified too
 				if b.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(b.shell, repository)
 				}
-
-				// if we have a git mirror, add the submodule to it
-				if mirrorDir != "" {
-					name := fmt.Sprintf("submodule%d", idx+1)
-					if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "add", name, repository); err != nil {
-						return err
-					}
-				}
 			}
 		}
 
-		if mirrorDir != "" {
-			if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir); err != nil {
-				return err
-			}
-		} else {
-			if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
-				return err
-			}
+		if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
+			return err
 		}
 
 		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"); err != nil {
