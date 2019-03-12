@@ -953,10 +953,19 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 }
 
 func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
-	if err := sh.Run("git", "--git-dir", gitDir, "cat-file", "-e", commit); err == nil {
-		return true
+	// Resolve commit to an actual commit object
+	output, err := sh.RunAndCapture("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}")
+	if err != nil {
+		return false
 	}
-	return false
+
+	// Filter out commitish things like HEAD et al
+	if strings.TrimSpace(output) != commit {
+		return false
+	}
+
+	// Otherwise it's a commit in the repo
+	return true
 }
 
 func (b *Bootstrap) updateGitMirror() (string, error) {
@@ -975,31 +984,29 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 
 	lockTimeout := time.Second * time.Duration(b.GitMirrorsLockTimeout)
 
+	// Lock the mirror dir to prevent concurrent clones
+	mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
+	if err != nil {
+		return "", err
+	}
+	defer mirrorCloneLock.Unlock()
+
 	// If we don't have a mirror, we need to clone it
 	if !fileExists(mirrorDir) {
-		// Lock the mirror dir to prevent concurrent clones
-		mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
-		if err != nil {
+		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
+		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
 			return "", err
 		}
-		defer mirrorCloneLock.Unlock()
 
-		// Check again in case we acquired the lock after another process cloned it
-		if !fileExists(mirrorDir) {
-			b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-			if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
-				return "", err
-			}
-
-			return mirrorDir, nil
-		}
-
-		mirrorCloneLock.Unlock()
+		return mirrorDir, nil
 	}
+
+	// If it exists, immediately release the clone lock
+	mirrorCloneLock.Unlock()
 
 	// Check if the mirror has a commit, this is atomic so should be safe to do
 	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
-		b.shell.Commentf("Commit %s exists in mirror", b.Commit)
+		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
 		return mirrorDir, nil
 	}
 
@@ -1012,11 +1019,11 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 
 	// Check again after we get a lock, in case the other process has already updated
 	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
-		b.shell.Commentf("Commit %s exists in mirror", b.Commit)
+		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
 		return mirrorDir, nil
 	}
 
-	b.shell.Commentf("Updating existing repository mirror")
+	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
 
 	// Update the the origin of the repository so we can gracefully handle repository renames
 	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
