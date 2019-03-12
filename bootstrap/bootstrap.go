@@ -984,6 +984,10 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 
 	lockTimeout := time.Second * time.Duration(b.GitMirrorsLockTimeout)
 
+	if b.Debug {
+		b.shell.Commentf("Acquiring mirror repository clone lock")
+	}
+
 	// Lock the mirror dir to prevent concurrent clones
 	mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
 	if err != nil {
@@ -1008,6 +1012,10 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
 		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
 		return mirrorDir, nil
+	}
+
+	if b.Debug {
+		b.shell.Commentf("Acquiring mirror repository update lock")
 	}
 
 	// Lock the mirror dir to prevent concurrent updates
