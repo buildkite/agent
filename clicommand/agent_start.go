@@ -144,12 +144,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_CONFIG",
 		},
 		cli.StringFlag{
-			Name:   "token",
-			Value:  "",
-			Usage:  "Your account agent token",
-			EnvVar: "BUILDKITE_AGENT_TOKEN",
-		},
-		cli.StringFlag{
 			Name:   "name",
 			Value:  "",
 			Usage:  "The name of the agent",
@@ -328,11 +322,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
 		},
 		cli.BoolFlag{
-			Name:   "no-http2",
-			Usage:  "Disable HTTP2 when communicating with the Agent API.",
-			EnvVar: "BUILDKITE_NO_HTTP2",
-		},
-		cli.BoolFlag{
 			Name:   "metrics-datadog",
 			Usage:  "Send metrics to DogStatsD for Datadog",
 			EnvVar: "BUILDKITE_METRICS_DATADOG",
@@ -349,13 +338,20 @@ var AgentStartCommand = cli.Command{
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
-		ExperimentsFlag,
+
+		// API Flags
+		AgentRegisterTokenFlag,
 		EndpointFlag,
-		NoColorFlag,
-		DebugFlag,
+		NoHTTP2Flag,
 		DebugHTTPFlag,
 		DebugWithoutAPIFlag,
-		/* Deprecated flags which will be removed in v4 */
+
+		// Global flags
+		ExperimentsFlag,
+		NoColorFlag,
+		DebugFlag,
+
+		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
 			Name:   "meta-data",
 			Value:  &cli.StringSlice{},
@@ -494,11 +490,7 @@ var AgentStartCommand = cli.Command{
 			Debug:                   cfg.Debug,
 			DisableColors:           cfg.NoColor,
 			Spawn:                   cfg.Spawn,
-			APIClientConfig: agent.APIClientConfig{
-				Token:        cfg.Token,
-				Endpoint:     cfg.Endpoint,
-				DisableHTTP2: cfg.NoHTTP2,
-			},
+			APIClientConfig:         loadAPIClientConfig(cfg, `Token`),
 			AgentConfiguration: &agent.AgentConfiguration{
 				BootstrapScript:            cfg.BootstrapScript,
 				BuildPath:                  cfg.BuildPath,

@@ -26,13 +26,18 @@ Example:
    $ buildkite-agent meta-data exists "foo"`
 
 type MetaDataExistsConfig struct {
-	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Job              string `cli:"job" validate:"required"`
+	Key string `cli:"arg:0" label:"meta-data key" validate:"required"`
+	Job string `cli:"job" validate:"required"`
+
+	// Global flags
+	Debug   bool `cli:"debug"`
+	NoColor bool `cli:"no-color"`
+
+	// API config
+	DebugHTTP        bool   `cli:"debug-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-	DebugHTTP        bool   `cli:"debug-http"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var MetaDataExistsCommand = cli.Command{
@@ -46,11 +51,16 @@ var MetaDataExistsCommand = cli.Command{
 			Usage:  "Which job should the meta-data be checked for",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
+
+		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -67,10 +77,7 @@ var MetaDataExistsCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, agent.APIClientConfig{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		})
+		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Find the meta data value
 		var err error
