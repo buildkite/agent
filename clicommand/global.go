@@ -23,11 +23,24 @@ var AgentAccessTokenFlag = cli.StringFlag{
 	EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 }
 
+var AgentRegisterTokenFlag = cli.StringFlag{
+	Name:   "token",
+	Value:  "",
+	Usage:  "Your account agent token",
+	EnvVar: "BUILDKITE_AGENT_TOKEN",
+}
+
 var EndpointFlag = cli.StringFlag{
 	Name:   "endpoint",
 	Value:  DefaultEndpoint,
 	Usage:  "The Agent API endpoint",
 	EnvVar: "BUILDKITE_AGENT_ENDPOINT",
+}
+
+var NoHTTP2Flag = cli.BoolFlag{
+	Name:   "no-http2",
+	Usage:  "Disable HTTP2 when communicating with the Agent API.",
+	EnvVar: "BUILDKITE_NO_HTTP2",
 }
 
 var DebugFlag = cli.BoolFlag{
@@ -74,12 +87,6 @@ func HandleGlobalFlags(l *logger.Logger, cfg interface{}) {
 		l.Level = logger.INFO
 	}
 
-	// Enable HTTP debugging
-	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
-	if debugHTTP == true && err == nil {
-		agent.APIClientEnableHTTPDebug()
-	}
-
 	// Turn off color if a NoColor option is present
 	noColor, err := reflections.GetField(cfg, "NoColor")
 	if noColor == true && err == nil {
@@ -114,4 +121,31 @@ func UnsetConfigFromEnvironment(c *cli.Context) {
 			}
 		}
 	}
+}
+
+func loadAPIClientConfig(cfg interface{}, tokenField string) agent.APIClientConfig {
+	// Enable HTTP debugging
+	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
+	if debugHTTP == true && err == nil {
+		agent.APIClientEnableHTTPDebug()
+	}
+
+	var a agent.APIClientConfig
+
+	endpoint, err := reflections.GetField(cfg, "Endpoint")
+	if endpoint != "" && err == nil {
+		a.Endpoint = endpoint.(string)
+	}
+
+	token, err := reflections.GetField(cfg, tokenField)
+	if token != "" && err == nil {
+		a.Token = token.(string)
+	}
+
+	noHTTP2, err := reflections.GetField(cfg, "NoHTTP2")
+	if err == nil {
+		a.DisableHTTP2 = noHTTP2.(bool)
+	}
+
+	return a
 }

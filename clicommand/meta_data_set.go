@@ -31,14 +31,19 @@ Example:
    $ ./script/meta-data-generator | buildkite-agent meta-data set "foo"`
 
 type MetaDataSetConfig struct {
-	Key              string `cli:"arg:0" label:"meta-data key" validate:"required"`
-	Value            string `cli:"arg:1" label:"meta-data value"`
-	Job              string `cli:"job" validate:"required"`
+	Key   string `cli:"arg:0" label:"meta-data key" validate:"required"`
+	Value string `cli:"arg:1" label:"meta-data value"`
+	Job   string `cli:"job" validate:"required"`
+
+	// Global flags
+	Debug   bool `cli:"debug"`
+	NoColor bool `cli:"no-color"`
+
+	// API config
+	DebugHTTP        bool   `cli:"debug-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-	DebugHTTP        bool   `cli:"debug-http"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var MetaDataSetCommand = cli.Command{
@@ -52,11 +57,16 @@ var MetaDataSetCommand = cli.Command{
 			Usage:  "Which job should the meta-data be set on",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
+
+		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -84,10 +94,7 @@ var MetaDataSetCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, agent.APIClientConfig{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		})
+		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Create the meta data to set
 		metaData := &api.MetaData{
