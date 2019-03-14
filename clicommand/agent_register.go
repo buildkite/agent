@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/agent"
-	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/urfave/cli"
 )
@@ -152,39 +151,20 @@ var AgentRegisterCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := AgentRegisterConfig{}
 
-		// Setup the config loader. You'll see that we also path paths to
-		// potential config files. The loader will use the first one it finds.
-		loader := cliconfig.Loader{
-			CLI:                    c,
-			Config:                 &cfg,
-			DefaultConfigFilePaths: DefaultConfigFilePaths(),
-			Logger:                 l,
-		}
-
 		// Load the configuration
-		if err := loader.Load(); err != nil {
+		_, err := LoadConfigAndGlobalFlags(l, c, &cfg)
+		if err != nil {
 			l.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
-
-		var ec2TagTimeout time.Duration
-		if t := cfg.WaitForEC2TagsTimeout; t != "" {
-			var err error
-			ec2TagTimeout, err = time.ParseDuration(t)
-			if err != nil {
-				l.Fatal("Failed to parse ec2 tag timeout: %v", err)
-			}
+		ec2TagTimeout, err := parseNilableDuration(cfg.WaitForEC2TagsTimeout)
+		if err != nil {
+			l.Fatal("Failed to parse ec2 tag timeout: %v", err)
 		}
 
-		var gcpLabelsTimeout time.Duration
-		if t := cfg.WaitForGCPLabelsTimeout; t != "" {
-			var err error
-			gcpLabelsTimeout, err = time.ParseDuration(t)
-			if err != nil {
-				l.Fatal("Failed to parse gcp labels timeout: %v", err)
-			}
+		gcpLabelsTimeout, err := parseNilableDuration(cfg.WaitForGCPLabelsTimeout)
+		if err != nil {
+			l.Fatal("Failed to parse gcp labels timeout: %v", err)
 		}
 
 		// Create the API client for registering

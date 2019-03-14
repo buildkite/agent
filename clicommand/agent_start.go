@@ -3,13 +3,11 @@ package clicommand
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
@@ -96,45 +94,6 @@ type AgentStartConfig struct {
 	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
 	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
-}
-
-func DefaultShell() string {
-	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
-	switch runtime.GOOS {
-	case "windows":
-		return `C:\Windows\System32\CMD.exe /S /C`
-	case "freebsd", "openbsd", "netbsd":
-		return `/usr/local/bin/bash -e -c`
-	default:
-		return `/bin/bash -e -c`
-	}
-}
-
-func DefaultConfigFilePaths() (paths []string) {
-	// Toggle beetwen windows an *nix paths
-	if runtime.GOOS == "windows" {
-		paths = []string{
-			"C:\\buildkite-agent\\buildkite-agent.cfg",
-			"$USERPROFILE\\AppData\\Local\\buildkite-agent\\buildkite-agent.cfg",
-			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
-		}
-	} else {
-		paths = []string{
-			"$HOME/.buildkite-agent/buildkite-agent.cfg",
-			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
-			"/etc/buildkite-agent/buildkite-agent.cfg",
-		}
-	}
-
-	// Also check to see if there's a buildkite-agent.cfg in the folder
-	// that the binary is running in.
-	pathToBinary, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err == nil {
-		pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
-		paths = append([]string{pathToRelativeConfig}, paths...)
-	}
-
-	return
 }
 
 var AgentStartCommand = cli.Command{
@@ -390,22 +349,11 @@ var AgentStartCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
-		// Setup the config loader. You'll see that we also path paths to
-		// potential config files. The loader will use the first one it finds.
-		loader := cliconfig.Loader{
-			CLI:                    c,
-			Config:                 &cfg,
-			DefaultConfigFilePaths: DefaultConfigFilePaths(),
-			Logger:                 l,
-		}
-
 		// Load the configuration
-		if err := loader.Load(); err != nil {
+		configFile, err := LoadConfigAndGlobalFlags(l, c, &cfg)
+		if err != nil {
 			l.Fatal("%s", err)
 		}
-
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
@@ -458,22 +406,14 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
 		}
 
-		var ec2TagTimeout time.Duration
-		if t := cfg.WaitForEC2TagsTimeout; t != "" {
-			var err error
-			ec2TagTimeout, err = time.ParseDuration(t)
-			if err != nil {
-				l.Fatal("Failed to parse ec2 tag timeout: %v", err)
-			}
+		ec2TagTimeout, err := parseNilableDuration(cfg.WaitForEC2TagsTimeout)
+		if err != nil {
+			l.Fatal("Failed to parse ec2 tag timeout: %v", err)
 		}
 
-		var gcpLabelsTimeout time.Duration
-		if t := cfg.WaitForGCPLabelsTimeout; t != "" {
-			var err error
-			gcpLabelsTimeout, err = time.ParseDuration(t)
-			if err != nil {
-				l.Fatal("Failed to parse gcp labels timeout: %v", err)
-			}
+		gcpLabelsTimeout, err := parseNilableDuration(cfg.WaitForGCPLabelsTimeout)
+		if err != nil {
+			l.Fatal("Failed to parse gcp labels timeout: %v", err)
 		}
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
@@ -507,8 +447,8 @@ var AgentStartCommand = cli.Command{
 			Shell:                      cfg.Shell,
 		}
 
-		if loader.File != nil {
-			agentConf.ConfigPath = loader.File.Path
+		if configFile != "" {
+			agentConf.ConfigPath = configFile
 		}
 
 		apiClientConf := loadAPIClientConfig(cfg, `Token`)

@@ -2,10 +2,14 @@ package clicommand
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/oleiade/reflections"
@@ -123,6 +127,45 @@ func UnsetConfigFromEnvironment(c *cli.Context) {
 	}
 }
 
+func DefaultShell() string {
+	// https://github.com/golang/go/blob/master/src/go/build/syslist.go#L7
+	switch runtime.GOOS {
+	case "windows":
+		return `C:\Windows\System32\CMD.exe /S /C`
+	case "freebsd", "openbsd", "netbsd":
+		return `/usr/local/bin/bash -e -c`
+	default:
+		return `/bin/bash -e -c`
+	}
+}
+
+func DefaultConfigFilePaths() (paths []string) {
+	// Toggle beetwen windows an *nix paths
+	if runtime.GOOS == "windows" {
+		paths = []string{
+			"C:\\buildkite-agent\\buildkite-agent.cfg",
+			"$USERPROFILE\\AppData\\Local\\buildkite-agent\\buildkite-agent.cfg",
+			"$USERPROFILE\\AppData\\Local\\BuildkiteAgent\\buildkite-agent.cfg",
+		}
+	} else {
+		paths = []string{
+			"$HOME/.buildkite-agent/buildkite-agent.cfg",
+			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
+			"/etc/buildkite-agent/buildkite-agent.cfg",
+		}
+	}
+
+	// Also check to see if there's a buildkite-agent.cfg in the folder
+	// that the binary is running in.
+	pathToBinary, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err == nil {
+		pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
+		paths = append([]string{pathToRelativeConfig}, paths...)
+	}
+
+	return
+}
+
 func loadAPIClientConfig(cfg interface{}, tokenField string) agent.APIClientConfig {
 	// Enable HTTP debugging
 	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
@@ -148,4 +191,41 @@ func loadAPIClientConfig(cfg interface{}, tokenField string) agent.APIClientConf
 	}
 
 	return a
+}
+
+func LoadConfigAndGlobalFlags(l *logger.Logger, c *cli.Context, cfg interface{}) (string, error) {
+	// Setup the config loader. You'll see that we also path paths to
+	// potential config files. The loader will use the first one it finds.
+	loader := cliconfig.Loader{
+		CLI:                    c,
+		Config:                 cfg,
+		DefaultConfigFilePaths: DefaultConfigFilePaths(),
+		Logger:                 l,
+	}
+
+	// Load the configuration
+	if err := loader.Load(); err != nil {
+		return "", err
+	}
+
+	// Setup the any global configuration options
+	HandleGlobalFlags(l, cfg)
+
+	if loader.File != nil {
+		return loader.File.Path, nil
+	}
+
+	return "", nil
+}
+
+func parseNilableDuration(ds string) (time.Duration, error) {
+	var d time.Duration
+	if ds != "" {
+		var err error
+		d, err = time.ParseDuration(ds)
+		if err != nil {
+			return d, err
+		}
+	}
+	return d, nil
 }
