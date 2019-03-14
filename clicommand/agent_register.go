@@ -39,6 +39,7 @@ type AgentRegisterConfig struct {
 	TagsFromHost            bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout   string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForGCPLabelsTimeout string   `cli:"wait-for-gcp-labels-timeout"`
+	NoCommandEval           bool     `cli:"no-command-eval"`
 
 	// Global flags
 	Debug           bool     `cli:"debug"`
@@ -127,6 +128,11 @@ var AgentRegisterCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
 		},
+		cli.BoolFlag{
+			Name:   "no-command-eval",
+			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
+			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -184,8 +190,8 @@ var AgentRegisterCommand = cli.Command{
 		// Create the API client for registering
 		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `Token`))
 
-		// Create an agent registrar
-		reg := agent.NewRegistrar(l, client, agent.RegistrarConfig{
+		// Create a template for agent registration
+		agentTpl := agent.CreateAgentTemplate(l, agent.AgentTemplateConfig{
 			Name:                    cfg.Name,
 			Priority:                cfg.Priority,
 			Tags:                    cfg.Tags,
@@ -196,7 +202,11 @@ var AgentRegisterCommand = cli.Command{
 			TagsFromHost:            cfg.TagsFromHost,
 			WaitForEC2TagsTimeout:   ec2TagTimeout,
 			WaitForGCPLabelsTimeout: gcpLabelsTimeout,
+			ScriptEvalEnabled:       !cfg.NoCommandEval,
 		})
+
+		// Create a registrator for registering agents
+		reg := agent.NewRegistrator(l, client, agentTpl)
 
 		ag, err := reg.Register()
 		if err != nil {

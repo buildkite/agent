@@ -11,7 +11,7 @@ import (
 // AgentPool registers and spawns multiple parallel agent workers
 // and manages their execution lifecycles
 type AgentPool struct {
-	reg            *Registrar
+	reg            *Registrator
 	logger         *logger.Logger
 	workerFunc     func(*api.Agent) *AgentWorker
 	interruptCount int
@@ -19,7 +19,7 @@ type AgentPool struct {
 }
 
 // NewAgentPool returns a new AgentPool
-func NewAgentPool(l *logger.Logger, r *Registrar, f func(*api.Agent) *AgentWorker) *AgentPool {
+func NewAgentPool(l *logger.Logger, r *Registrator, f func(*api.Agent) *AgentWorker) *AgentPool {
 	return &AgentPool{
 		logger:     l,
 		reg:        r,

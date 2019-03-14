@@ -516,8 +516,8 @@ var AgentStartCommand = cli.Command{
 		// Create the API client
 		client := agent.NewAPIClient(l, apiClientConf)
 
-		// Create a Registrar for registering agents
-		reg := agent.NewRegistrar(l, client, agent.RegistrarConfig{
+		// Create a template for agent registration
+		agentTpl := agent.CreateAgentTemplate(l, agent.AgentTemplateConfig{
 			Name:                    cfg.Name,
 			Priority:                cfg.Priority,
 			Tags:                    cfg.Tags,
@@ -530,6 +530,9 @@ var AgentStartCommand = cli.Command{
 			WaitForGCPLabelsTimeout: gcpLabelsTimeout,
 			ScriptEvalEnabled:       !cfg.NoCommandEval,
 		})
+
+		// Create a registrator for registering agents
+		reg := agent.NewRegistrator(l, client, agentTpl)
 
 		// Setup the agent pool that spawns agent workers
 		pool := agent.NewAgentPool(l, reg, func(reg *api.Agent) *agent.AgentWorker {

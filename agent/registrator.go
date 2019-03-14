@@ -15,43 +15,27 @@ import (
 	"github.com/denisbrodbeck/machineid"
 )
 
-type RegistrarConfig struct {
-	Name                    string
-	Priority                string
-	Tags                    []string
-	TagsFromEC2             bool
-	TagsFromEC2Tags         bool
-	TagsFromGCP             bool
-	TagsFromGCPLabels       bool
-	TagsFromHost            bool
-	WaitForEC2TagsTimeout   time.Duration
-	WaitForGCPLabelsTimeout time.Duration
-	ScriptEvalEnabled       bool
-}
-
-type Registrar struct {
-	conf      RegistrarConfig
+type Registrator struct {
+	agent     *api.Agent
 	logger    *logger.Logger
 	apiClient *api.Client
 }
 
-func NewRegistrar(l *logger.Logger, ac *api.Client, c RegistrarConfig) *Registrar {
-	return &Registrar{
-		conf:      c,
+func NewRegistrator(l *logger.Logger, ac *api.Client, a *api.Agent) *Registrator {
+	return &Registrator{
+		agent:     a,
 		logger:    l,
 		apiClient: ac,
 	}
 }
 
-func (r *Registrar) Register() (*api.Agent, error) {
-	agent := r.createAgentTemplate()
-
+func (r *Registrator) Register() (*api.Agent, error) {
 	var registered *api.Agent
 	var err error
 	var resp *api.Response
 
 	register := func(s *retry.Stats) error {
-		registered, resp, err = r.apiClient.Agents.Register(agent)
+		registered, resp, err = r.apiClient.Agents.Register(r.agent)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				r.logger.Warn("Buildkite rejected the registration (%s)", err)
@@ -83,14 +67,27 @@ func (r *Registrar) Register() (*api.Agent, error) {
 	return registered, err
 }
 
-// Creates an api.Agent record that will be sent to the
-// Buildkite Agent API for registration.
-func (r *Registrar) createAgentTemplate() *api.Agent {
+type AgentTemplateConfig struct {
+	Name                    string
+	Priority                string
+	Tags                    []string
+	TagsFromEC2             bool
+	TagsFromEC2Tags         bool
+	TagsFromGCP             bool
+	TagsFromGCPLabels       bool
+	TagsFromHost            bool
+	WaitForEC2TagsTimeout   time.Duration
+	WaitForGCPLabelsTimeout time.Duration
+	ScriptEvalEnabled       bool
+}
+
+// Creates an api.Agent record that will be sent to the Buildkite Agent API for registration.
+func CreateAgentTemplate(l *logger.Logger, conf AgentTemplateConfig) *api.Agent {
 	agent := &api.Agent{
-		Name:              r.conf.Name,
-		Priority:          r.conf.Priority,
-		Tags:              r.conf.Tags,
-		ScriptEvalEnabled: r.conf.ScriptEvalEnabled,
+		Name:              conf.Name,
+		Priority:          conf.Priority,
+		Tags:              conf.Tags,
+		ScriptEvalEnabled: conf.ScriptEvalEnabled,
 		Version:           Version(),
 		Build:             BuildVersion(),
 		PID:               os.Getpid(),
@@ -99,21 +96,21 @@ func (r *Registrar) createAgentTemplate() *api.Agent {
 
 	// get a unique identifier for the underlying host
 	if machineID, err := machineid.ProtectedID("buildkite-agent"); err != nil {
-		r.logger.Warn("Failed to find unique machine-id: %v", err)
+		l.Warn("Failed to find unique machine-id: %v", err)
 	} else {
 		agent.MachineID = machineID
 	}
 
 	// Attempt to add the EC2 tags
-	if r.conf.TagsFromEC2 {
-		r.logger.Info("Fetching EC2 meta-data...")
+	if conf.TagsFromEC2 {
+		l.Info("Fetching EC2 meta-data...")
 
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2MetaData{}.Get()
 			if err != nil {
-				r.logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			} else {
-				r.logger.Info("Successfully fetched EC2 meta-data")
+				l.Info("Successfully fetched EC2 meta-data")
 				for tag, value := range tags {
 					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
 				}
@@ -125,13 +122,13 @@ func (r *Registrar) createAgentTemplate() *api.Agent {
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			r.logger.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the EC2 tags
-	if r.conf.TagsFromEC2Tags {
-		r.logger.Info("Fetching EC2 tags...")
+	if conf.TagsFromEC2Tags {
+		l.Info("Fetching EC2 tags...")
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
@@ -140,29 +137,29 @@ func (r *Registrar) createAgentTemplate() *api.Agent {
 				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
-				r.logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			} else {
-				r.logger.Info("Successfully fetched EC2 tags")
+				l.Info("Successfully fetched EC2 tags")
 				for tag, value := range tags {
 					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
 				}
 				s.Break()
 			}
 			return err
-		}, &retry.Config{Maximum: 5, Interval: r.conf.WaitForEC2TagsTimeout / 5, Jitter: true})
+		}, &retry.Config{Maximum: 5, Interval: conf.WaitForEC2TagsTimeout / 5, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			r.logger.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
+			l.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
 		}
 	}
 
 	// Attempt to add the Google Cloud meta-data
-	if r.conf.TagsFromGCP {
+	if conf.TagsFromGCP {
 		tags, err := GCPMetaData{}.Get()
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
-			r.logger.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
 		} else {
 			for tag, value := range tags {
 				agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", tag, value))
@@ -171,28 +168,28 @@ func (r *Registrar) createAgentTemplate() *api.Agent {
 	}
 
 	// Attempt to add the Google Compute instance labels
-	if r.conf.TagsFromGCPLabels {
-		r.logger.Info("Fetching GCP instance labels...")
+	if conf.TagsFromGCPLabels {
+		l.Info("Fetching GCP instance labels...")
 		err := retry.Do(func(s *retry.Stats) error {
 			labels, err := GCPLabels{}.Get()
 			if err == nil && len(labels) == 0 {
 				err = errors.New("GCP instance labels are empty")
 			}
 			if err != nil {
-				r.logger.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, s)
 			} else {
-				r.logger.Info("Successfully fetched GCP instance labels")
+				l.Info("Successfully fetched GCP instance labels")
 				for label, value := range labels {
 					agent.Tags = append(agent.Tags, fmt.Sprintf("%s=%s", label, value))
 				}
 				s.Break()
 			}
 			return err
-		}, &retry.Config{Maximum: 5, Interval: r.conf.WaitForGCPLabelsTimeout / 5, Jitter: true})
+		}, &retry.Config{Maximum: 5, Interval: conf.WaitForGCPLabelsTimeout / 5, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			r.logger.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
+			l.Error(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
 		}
 	}
 
@@ -201,17 +198,17 @@ func (r *Registrar) createAgentTemplate() *api.Agent {
 	// Add the hostname
 	agent.Hostname, err = os.Hostname()
 	if err != nil {
-		r.logger.Warn("Failed to find hostname: %s", err)
+		l.Warn("Failed to find hostname: %s", err)
 	}
 
 	// Add the OS dump
-	agent.OS, err = system.VersionDump(r.logger)
+	agent.OS, err = system.VersionDump(l)
 	if err != nil {
-		r.logger.Warn("Failed to find OS information: %s", err)
+		l.Warn("Failed to find OS information: %s", err)
 	}
 
 	// Attempt to add the host tags
-	if r.conf.TagsFromHost {
+	if conf.TagsFromHost {
 		agent.Tags = append(agent.Tags,
 			fmt.Sprintf("hostname=%s", agent.Hostname),
 			fmt.Sprintf("os=%s", runtime.GOOS),
