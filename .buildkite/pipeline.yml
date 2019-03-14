@@ -154,6 +154,15 @@ steps:
 
   - wait
 
+  - name: ":hammer: bk cli"
+    command: ".buildkite/steps/test-bk.sh"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - wait
+
   - name: ":mag:"
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
