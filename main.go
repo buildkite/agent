@@ -58,6 +58,7 @@ func main() {
 	app.Version = agent.Version()
 	app.Commands = []cli.Command{
 		clicommand.AgentStartCommand,
+		clicommand.AgentRegisterCommand,
 		clicommand.AnnotateCommand,
 		{
 			Name:  "artifact",
