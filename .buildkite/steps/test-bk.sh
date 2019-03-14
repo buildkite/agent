@@ -11,5 +11,5 @@ buildkite-agent artifact download pkg/buildkite-agent-linux-amd64 .
 mv pkg/buildkite-agent-linux-amd64 pkg/buildkite-agent
 chmod +x pkg/buildkite-agent
 
-export PATH="$PWD/pkg"
+export PATH="$PWD/pkg:$PATH"
 ./bk run .buildkite/pipeline.bk-test.yml
