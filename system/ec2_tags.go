@@ -1,20 +1,13 @@
-package agent
+package system
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-type EC2Tags struct {
-}
-
-func (e EC2Tags) Get() (map[string]string, error) {
-	sess, err := awsSession()
-	if err != nil {
-		return nil, err
-	}
-
+func EC2Tags(sess *session.Session) (map[string]string, error) {
 	tags := make(map[string]string)
 	ec2metadataClient := ec2metadata.New(sess)
 

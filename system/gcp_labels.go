@@ -1,4 +1,4 @@
-package agent
+package system
 
 import (
 	"context"
@@ -7,11 +7,7 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-type GCPLabels struct {
-}
-
-func (e GCPLabels) Get() (map[string]string, error) {
-
+func GCPLabels() (map[string]string, error) {
 	ctx := context.Background()
 	client, err := google.DefaultClient(ctx, compute.CloudPlatformScope)
 	if err != nil {
@@ -25,7 +21,7 @@ func (e GCPLabels) Get() (map[string]string, error) {
 
 	// Grab the current instance's metadata as a convenience
 	// to obtain the projectId, zone, and instanceId.
-	metadata, err := GCPMetaData{}.Get()
+	metadata, err := GCPMetaData()
 	if err != nil {
 		return nil, err
 	}

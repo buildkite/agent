@@ -1,4 +1,4 @@
-package agent
+package system
 
 import (
 	"errors"
@@ -7,10 +7,7 @@ import (
 	"cloud.google.com/go/compute/metadata"
 )
 
-type GCPMetaData struct {
-}
-
-func (e GCPMetaData) Get() (map[string]string, error) {
+func GCPMetaData() (map[string]string, error) {
 	result := make(map[string]string)
 
 	instanceId, err := metadata.Get("instance/id")
@@ -19,7 +16,7 @@ func (e GCPMetaData) Get() (map[string]string, error) {
 	}
 	result["gcp:instance-id"] = instanceId
 
-	machineType, err := machineType()
+	machineType, err := gcpMachineType()
 	if err != nil {
 		return result, err
 	}
@@ -43,7 +40,7 @@ func (e GCPMetaData) Get() (map[string]string, error) {
 	}
 	result["gcp:zone"] = zone
 
-	region, err := parseRegionFromZone(zone)
+	region, err := parseGCPRegionFromZone(zone)
 	if err != nil {
 		return result, err
 	}
@@ -52,7 +49,7 @@ func (e GCPMetaData) Get() (map[string]string, error) {
 	return result, nil
 }
 
-func machineType() (string, error) {
+func gcpMachineType() (string, error) {
 	machType, err := metadata.Get("instance/machine-type")
 	// machType is of the form "projects/<projNum>/machineTypes/<machType>".
 	if err != nil {
@@ -65,7 +62,7 @@ func machineType() (string, error) {
 	return machType[index+1:], nil
 }
 
-func parseRegionFromZone(zone string) (string, error) {
+func parseGCPRegionFromZone(zone string) (string, error) {
 	// zone is of the form "<region>-<letter>".
 	index := strings.LastIndex(zone, "-")
 	if index == -1 {

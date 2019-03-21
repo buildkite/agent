@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/process"
 )
 
-// Returns a dump of the raw operating system information
+// VersionDump returns a string representing the operating system
 func VersionDump(l *logger.Logger) (string, error) {
 	if runtime.GOOS == "darwin" {
 		return process.Run(l, "sw_vers")
