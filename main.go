@@ -15,7 +15,7 @@ var AppHelpTemplate = `Usage:
 
 Available commands are:
 
-  {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+  {{range .VisibleCommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}
 Use "{{.Name}} <command> --help" for more information about a command.
 
@@ -27,7 +27,7 @@ var SubcommandHelpTemplate = `Usage:
 
 Available commands are:
 
-   {{range .Commands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+   {{range .VisibleCommands}}{{.Name}}{{with .ShortName}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
    {{end}}{{if .VisibleFlags}}
 Options:
 
