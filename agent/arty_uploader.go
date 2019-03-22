@@ -92,7 +92,7 @@ func ParseArtifactoryDestination(destination string) (repo string, path string) 
 }
 
 func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
-	url := u.iURL
+	url := *u.iURL
 	// ensure proper URL formatting for upload
 	url.Path = strings.Join([]string{
 		strings.Trim(url.Path, "/"),
