@@ -102,8 +102,13 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if changes.Dir != expected {
-		t.Fatalf("Expected working dir of %q, got %q", expected, changes.Dir)
+	changesDir, err := filepath.EvalSymlinks(changes.Dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if changesDir != expected {
+		t.Fatalf("Expected working dir of %q, got %q", expected, changesDir)
 	}
 }
 

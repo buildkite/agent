@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
@@ -24,10 +25,6 @@ import (
 
 var (
 	lockRetryDuration = time.Second
-)
-
-const (
-	termType = `xterm-256color`
 )
 
 // Shell represents a virtual shell, handles logging, executing commands and
@@ -131,13 +128,23 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 	return filepath.Abs(absolutePath)
 }
 
-// Cancel cancels any running sub-processes
-func (s *Shell) Cancel() {
+// Interrupt running command
+func (s *Shell) Interrupt() {
 	s.cmdLock.Lock()
 	defer s.cmdLock.Unlock()
 
-	if s.cmd != nil {
-		s.cmd.cancel()
+	if s.cmd != nil && s.cmd.proc != nil {
+		s.cmd.proc.Interrupt()
+	}
+}
+
+// Terminate running command
+func (s *Shell) Terminate() {
+	s.cmdLock.Lock()
+	defer s.cmdLock.Unlock()
+
+	if s.cmd != nil && s.cmd.proc != nil {
+		s.cmd.proc.Terminate()
 	}
 }
 
@@ -288,31 +295,38 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 }
 
 type command struct {
-	*exec.Cmd
+	process.Config
+	proc   *process.Process
 	cancel context.CancelFunc
 }
 
-// buildCommand returns a command that runs in the context of the shell
+// buildCommand returns a command that can later be executed
 func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
-	// Always use absolute path as Windows has a hard time finding executables in it's path
+	// Always use absolute path as Windows has a hard time
+	// finding executables in it's path
 	absPath, err := s.AbsolutePath(name)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create a sub-context so that shell.Cancel() can interrupt a running command
-	subctx, cancel := context.WithCancel(s.ctx)
-	cmd := exec.CommandContext(subctx, absPath, arg...)
+	cfg := process.Config{
+		Path: absPath,
+		Args: arg,
+		Env:  s.Env.ToSlice(),
+		Dir:  s.wd,
+	}
 
-	cmd.Env = s.Env.ToSlice()
-	cmd.Dir = s.wd
+	// Create a sub-context so that shell.Cancel() can interrupt
+	// a running command
+	subctx, cancel := context.WithCancel(s.ctx)
+	cfg.Context = subctx
 
 	// Add env that commands expect a shell to set
-	cmd.Env = append(cmd.Env,
+	cfg.Env = append(cfg.Env,
 		`PWD=`+s.wd,
 	)
 
-	return &command{Cmd: cmd, cancel: cancel}, nil
+	return &command{Config: cfg, cancel: cancel}, nil
 }
 
 type executeFlags struct {
@@ -331,7 +345,7 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 	s.cmd = cmd
 	s.cmdLock.Unlock()
 
-	cmdStr := process.FormatCommand(cmd.Path, cmd.Args[1:])
+	cmdStr := process.FormatCommand(cmd.Path, cmd.Args)
 
 	if s.Debug {
 		t := time.Now()
@@ -345,54 +359,43 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 		cmd.cancel()
 	}()
 
+	cfg := cmd.Config
+
+	// Modify process config based on execution flags
 	if flags.PTY {
-		pty, err := process.StartPTY(cmd.Cmd)
-		if err != nil {
-			return errors.Wrapf(err, "Error starting PTY")
-		}
-
-		// Copy the pty to our buffer. This will block until it EOF's
-		// or something breaks.
-		_, err = io.Copy(w, pty)
-		if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
-			// We can safely ignore this error, because it's just the PTY telling us
-			// that it closed successfully.
-			// See https://github.com/buildkite/agent/pull/34#issuecomment-46080419
-		}
-
-		// Commands like tput expect a TERM value for a PTY
-		cmd.Env = append(cmd.Env, `TERM=`+termType)
+		cfg.PTY = true
+		cfg.Stdout = w
 	} else {
-		cmd.Stdout = nil
-		cmd.Stderr = nil
-		cmd.Stdin = nil
-
+		// Show stdout if requested or via debug
 		if flags.Stdout {
-			cmd.Stdout = w
+			cfg.Stdout = w
 		} else if s.Debug {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
 			defer stdOutStreamer.Close()
-			cmd.Stdout = stdOutStreamer
+			cfg.Stdout = stdOutStreamer
 		}
 
+		// Show stderr if requested or via debug
 		if flags.Stderr {
-			cmd.Stderr = w
+			cfg.Stderr = w
 		} else if s.Debug {
 			stdErrStreamer := NewLoggerStreamer(s.Logger)
 			defer stdErrStreamer.Close()
-			cmd.Stderr = stdErrStreamer
-		}
-
-		if err := cmd.Start(); err != nil {
-			return errors.Wrapf(err, "Error starting `%s`", cmdStr)
+			cfg.Stderr = stdErrStreamer
 		}
 	}
 
-	if err := cmd.Wait(); err != nil {
+	p := process.New(logger.Discard, cfg)
+
+	s.cmdLock.Lock()
+	s.cmd.proc = p
+	s.cmdLock.Unlock()
+
+	if err := p.Run(); err != nil {
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 
-	return nil
+	return p.WaitResult()
 }
 
 // GetExitCode extracts an exit code from an error where the platform supports it,

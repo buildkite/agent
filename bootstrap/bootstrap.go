@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/agent/plugin"
 	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/shellwords"
@@ -28,14 +29,8 @@ import (
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
 // Golang for portability and testability
 type Bootstrap struct {
-	// Context is the execution context of the bootstrap
-	Context context.Context
-
 	// Config provides the bootstrap configuration
 	Config
-
-	// Phases to execute, defaults to all phases
-	Phases []string
 
 	// Shell is the shell environment for the bootstrap
 	shell *shell.Shell
@@ -46,19 +41,27 @@ type Bootstrap struct {
 	// Plugin checkouts from the plugin phases
 	pluginCheckouts []*pluginCheckout
 
-	// Whether the checkout dir was created as part of checkout
-	createdCheckoutDir bool
-
 	// Directories to clean up at end of bootstrap
 	cleanupDirs []string
+
+	// A channel to track cancellation
+	cancelCh chan struct{}
+}
+
+// New returns a new Bootstrap instance
+func New(conf Config) *Bootstrap {
+	return &Bootstrap{
+		Config:   conf,
+		cancelCh: make(chan struct{}),
+	}
 }
 
 // Start runs the bootstrap and returns the exit code
-func (b *Bootstrap) Start() (exitCode int) {
+func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
-		b.shell, err = shell.NewWithContext(b.Context)
+		b.shell, err = shell.NewWithContext(ctx)
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -67,6 +70,18 @@ func (b *Bootstrap) Start() (exitCode int) {
 		b.shell.PTY = b.Config.RunInPty
 		b.shell.Debug = b.Config.Debug
 	}
+
+	// Listen for cancellation
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-b.cancelCh:
+			b.shell.Commentf("Received cancellation signal, interrupting")
+			b.shell.Interrupt()
+		}
+	}()
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
@@ -142,8 +157,7 @@ func (b *Bootstrap) Start() (exitCode int) {
 
 // Cancel interrupts any running shell processes and causes the bootstrap to stop
 func (b *Bootstrap) Cancel() error {
-	b.shell.Commentf("Received cancellation signal")
-	b.shell.Cancel()
+	b.cancelCh <- struct{}{}
 	return nil
 }
 
@@ -337,6 +351,11 @@ func fileExists(filename string) bool {
 func dirForAgentName(agentName string) string {
 	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
 	return badCharsPattern.ReplaceAllString(agentName, "-")
+}
+
+func dirForRepository(repository string) string {
+	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
+	return badCharsPattern.ReplaceAllString(repository, "-")
 }
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
@@ -933,16 +952,128 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
+func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
+	// Resolve commit to an actual commit object
+	output, err := sh.RunAndCapture("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}")
+	if err != nil {
+		return false
+	}
+
+	// Filter out commitish things like HEAD et al
+	if strings.TrimSpace(output) != commit {
+		return false
+	}
+
+	// Otherwise it's a commit in the repo
+	return true
+}
+
+func (b *Bootstrap) updateGitMirror() (string, error) {
+	// Create a unique directory for the repository mirror
+	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
+
+	// Create the mirrors path if it doesn't exist
+	if baseDir := filepath.Dir(mirrorDir); !fileExists(baseDir) {
+		b.shell.Commentf("Creating \"%s\"", baseDir)
+		if err := os.MkdirAll(baseDir, 0777); err != nil {
+			return "", err
+		}
+	}
+
+	b.shell.Chdir(b.Config.GitMirrorsPath)
+
+	lockTimeout := time.Second * time.Duration(b.GitMirrorsLockTimeout)
+
+	if b.Debug {
+		b.shell.Commentf("Acquiring mirror repository clone lock")
+	}
+
+	// Lock the mirror dir to prevent concurrent clones
+	mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
+	if err != nil {
+		return "", err
+	}
+	defer mirrorCloneLock.Unlock()
+
+	// If we don't have a mirror, we need to clone it
+	if !fileExists(mirrorDir) {
+		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
+		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
+			return "", err
+		}
+
+		return mirrorDir, nil
+	}
+
+	// If it exists, immediately release the clone lock
+	mirrorCloneLock.Unlock()
+
+	// Check if the mirror has a commit, this is atomic so should be safe to do
+	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
+		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
+		return mirrorDir, nil
+	}
+
+	if b.Debug {
+		b.shell.Commentf("Acquiring mirror repository update lock")
+	}
+
+	// Lock the mirror dir to prevent concurrent updates
+	mirrorUpdateLock, err := b.shell.LockFile(mirrorDir+".updatelock", lockTimeout)
+	if err != nil {
+		return "", err
+	}
+	defer mirrorUpdateLock.Unlock()
+
+	// Check again after we get a lock, in case the other process has already updated
+	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
+		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
+		return mirrorDir, nil
+	}
+
+	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
+
+	// Update the the origin of the repository so we can gracefully handle repository renames
+	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
+		return "", err
+	}
+
+	// Update our mirror
+	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "update", "--prune"); err != nil {
+		return "", err
+	}
+
+	return mirrorDir, nil
+}
+
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (b *Bootstrap) defaultCheckoutPhase() error {
-	// Make sure the build directory exists
+	if b.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
+	}
+
+	var mirrorDir string
+
+	// If we can, get a mirror of the git repository to use for reference later
+	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
+		b.shell.Commentf("Using git-mirrors experiment 🧪")
+
+		var err error
+		mirrorDir, err = b.updateGitMirror()
+		if err != nil {
+			return err
+		}
+	}
+
+	// Make sure the build directory exists and that we change directory into it
 	if err := b.createCheckoutDir(); err != nil {
 		return err
 	}
 
-	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
+	gitCloneFlags := b.GitCloneFlags
+	if mirrorDir != "" {
+		gitCloneFlags += fmt.Sprintf(" --reference %q", mirrorDir)
 	}
 
 	// Does the git directory exist?
@@ -953,7 +1084,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 	} else {
-		if err := gitClone(b.shell, b.GitCloneFlags, b.Repository, "."); err != nil {
+		if err := gitClone(b.shell, gitCloneFlags, b.Repository, "."); err != nil {
 			return err
 		}
 	}
@@ -1040,19 +1171,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	if gitSubmodules {
-		// submodules might need their fingerprints verified too
-		if b.SSHKeyscan {
-			b.shell.Commentf("Checking to see if submodule urls need to be added to known_hosts")
-			submoduleRepos, err := gitEnumerateSubmoduleURLs(b.shell)
-			if err != nil {
-				b.shell.Warningf("Failed to enumerate git submodules: %v", err)
-			} else {
-				for _, repository := range submoduleRepos {
-					addRepositoryHostToSSHKnownHosts(b.shell, repository)
-				}
-			}
-		}
-
 		// `submodule sync` will ensure the .git/config
 		// matches the .gitmodules file.  The command
 		// is only available in git version 1.8.1, so
@@ -1063,9 +1181,23 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 
+		// Checking for submodule repositories
+		submoduleRepos, err := gitEnumerateSubmoduleURLs(b.shell)
+		if err != nil {
+			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
+		} else {
+			for _, repository := range submoduleRepos {
+				// submodules might need their fingerprints verified too
+				if b.SSHKeyscan {
+					addRepositoryHostToSSHKnownHosts(b.shell, repository)
+				}
+			}
+		}
+
 		if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
 			return err
 		}
+
 		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"); err != nil {
 			return err
 		}

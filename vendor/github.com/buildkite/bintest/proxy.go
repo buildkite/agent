@@ -170,20 +170,16 @@ func (p *Proxy) newCall(pid int, args []string, env []string, dir string) *Call 
 }
 
 // Close the proxy and remove the temp directory
-func (p *Proxy) Close() (err error) {
-	close(p.Ch)
+func (p *Proxy) Close() error {
+	p.Server.deregisterProxy(p)
 
-	defer func() {
-		if p.tempDir != "" {
-			if removeErr := os.RemoveAll(p.tempDir); removeErr != nil {
-				err = removeErr
-			}
+	if p.tempDir != "" {
+		if removeErr := os.RemoveAll(p.tempDir); removeErr != nil {
+			return removeErr
 		}
-	}()
-	defer func() {
-		p.Server.deregisterProxy(p)
-	}()
-	return err
+	}
+
+	return nil
 }
 
 // Call is created for every call to the proxied binary

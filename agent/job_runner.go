@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -59,8 +60,8 @@ type JobRunner struct {
 	// The internal process of the job
 	process *process.Process
 
-	// The internal line buffer of the process output
-	lineBuffer *process.LineBuffer
+	// The internal buffer of the process output
+	output *process.Buffer
 
 	// The internal header time streamer
 	headerTimesStreamer *headerTimesStreamer
@@ -147,29 +148,66 @@ func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.
 			conf.AgentConfiguration.BootstrapScript, err)
 	}
 
-	// Our log scanner currently needs a full buffer of the log output
-	runner.lineBuffer = &process.LineBuffer{}
+	// Our log streamer works off a buffer of output
+	runner.output = &process.Buffer{}
 
-	// Called for every line of process output
-	var handleProcessOutput = func(line string) {
-		// Send to our header streamer and determine if it's a header
-		isHeader := runner.headerTimesStreamer.Scan(line)
+	// The writer that output from the process goes into
+	var processWriter io.Writer
 
-		// Optionally prefix log lines with timestamps
-		if conf.AgentConfiguration.TimestampLines && !(isHeaderExpansion(line) || isHeader) {
-			line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
-		}
+	// If we have timestamp lines on, we have to buffer lines before we flush them
+	if conf.AgentConfiguration.TimestampLines {
+		var pr *io.PipeReader
+		pr, processWriter = io.Pipe()
 
-		// Write the log line to the buffer
-		runner.lineBuffer.WriteLine(line)
+		go func() {
+			// Use a scanner to process output line by line
+			err := process.NewScanner(l).ScanLines(pr, func(line string) {
+				// Send to our header streamer and determine if it's a header
+				isHeader := runner.headerTimesStreamer.Scan(line)
+
+				// Prefix non-header log lines with timestamps
+				if !(isHeaderExpansion(line) || isHeader) {
+					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+				}
+
+				// Write the log line to the buffer
+				runner.output.Write([]byte(line + "\n"))
+			})
+			if err != nil {
+				l.Error("[LineScanner] Encountered error %v", err)
+			}
+		}()
+	} else {
+		pr, pw := io.Pipe()
+
+		// Write output directly to the line buffer so we
+		processWriter = io.MultiWriter(pw, runner.output)
+
+		// Use a scanner to process output for headers only
+		go func() {
+			err := process.NewScanner(l).ScanLines(pr, func(line string) {
+				runner.headerTimesStreamer.Scan(line)
+			})
+			if err != nil {
+				l.Error("[LineScanner] Encountered error %v", err)
+			}
+		}()
 	}
 
+	// Copy the current processes ENV and merge in the new ones. We do this
+	// so the sub process gets PATH and stuff. We merge our path in over
+	// the top of the current one so the ENV from Buildkite and the agent
+	// take precedence over the agent
+	processEnv := append(os.Environ(), env...)
+
 	// The process that will run the bootstrap script
-	runner.process = process.NewProcess(l, process.ProcessConfig{
-		Script:  cmd,
-		Env:     env,
-		PTY:     conf.AgentConfiguration.RunInPty,
-		Handler: handleProcessOutput,
+	runner.process = process.New(l, process.Config{
+		Path:   cmd[0],
+		Args:   cmd[1:],
+		Env:    processEnv,
+		PTY:    conf.AgentConfiguration.RunInPty,
+		Stdout: processWriter,
+		Stderr: processWriter,
 	})
 
 	// Kick off our callback when the process starts
@@ -204,13 +242,13 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
-	// Start the process. This will block until it finishes.
-	if err := r.process.Start(); err != nil {
+	// Run the process. This will block until it finishes.
+	if err := r.process.Run(); err != nil {
 		// Send the error as output
 		r.logStreamer.Process(fmt.Sprintf("%s", err))
 	} else {
 		// Add the final output to the streamer
-		r.logStreamer.Process(r.lineBuffer.Output())
+		r.logStreamer.Process(r.output.String())
 	}
 
 	// Store the finished at time
@@ -249,12 +287,14 @@ func (r *JobRunner) Run() error {
 		}
 	}
 
+	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+
 	jobMetrics := r.metrics.With(metrics.Tags{
-		"exit_code": r.process.ExitStatus,
+		"exit_code": exitStatus,
 	})
 
 	// Write some metrics about the job run
-	if r.process.ExitStatus == "0" {
+	if exitStatus == "0" {
 		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
 		jobMetrics.Count(`jobs.success`, 1)
 	} else {
@@ -266,7 +306,7 @@ func (r *JobRunner) Run() error {
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, r.process.ExitStatus, r.logStreamer.FailedChunks())
+	r.finishJob(finishedAt, exitStatus, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
@@ -354,6 +394,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_BIN_PATH`,
 		`BUILDKITE_CONFIG_PATH`,
 		`BUILDKITE_BUILD_PATH`,
+		`BUILDKITE_GIT_MIRRORS_PATH`,
 		`BUILDKITE_HOOKS_PATH`,
 		`BUILDKITE_PLUGINS_PATH`,
 		`BUILDKITE_SSH_KEYSCAN`,
@@ -362,6 +403,8 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_PLUGINS_ENABLED`,
 		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
 		`BUILDKITE_GIT_CLONE_FLAGS`,
+		`BUILDKITE_GIT_CLONE_MIRROR_FLAGS`,
+		`BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT`,
 		`BUILDKITE_GIT_CLEAN_FLAGS`,
 		`BUILDKITE_SHELL`,
 	}
@@ -400,6 +443,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Add options from the agent configuration
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
+	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
@@ -408,8 +452,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
+	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.GitMirrorsLockTimeout)
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
+	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 
@@ -504,7 +551,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		for {
 			// Send the output of the process to the log streamer
 			// for processing
-			r.logStreamer.Process(r.lineBuffer.Output())
+			r.logStreamer.Process(r.output.String())
 
 			// Sleep for a bit, or until the job is finished
 			select {
@@ -554,9 +601,14 @@ func (r *JobRunner) onProcessStartCallback() {
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
 	retry.Do(func(s *retry.Stats) error {
-		_, err := r.apiClient.HeaderTimes.Save(r.job.ID, &api.HeaderTimes{Times: times})
+		response, err := r.apiClient.HeaderTimes.Save(r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
-			r.logger.Warn("%s (%s)", err, s)
+			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
+				r.logger.Warn("Buildkite rejected the header times (%s)", err)
+				s.Break()
+			} else {
+				r.logger.Warn("%s (%s)", err, s)
+			}
 		}
 
 		return err

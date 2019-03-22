@@ -69,6 +69,13 @@ func (l *Logger) WithPrefix(prefix string) *Logger {
 	return &clone
 }
 
+// WithLevel returns a copy of the logger with the provided level
+func (l *Logger) WithLevel(level Level) *Logger {
+	clone := *l
+	clone.Level = level
+	return &clone
+}
+
 func (l *Logger) Debug(format string, v ...interface{}) {
 	if l.Level == DEBUG {
 		l.log(DEBUG, format, v...)

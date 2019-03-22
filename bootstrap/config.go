@@ -64,6 +64,9 @@ type Config struct {
 	// Flags to pass to "git clone" command
 	GitCloneFlags string `env:"BUILDKITE_GIT_CLONE_FLAGS"`
 
+	// Flags to pass to "git clone" command for mirroring
+	GitCloneMirrorFlags string
+
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 
@@ -85,6 +88,12 @@ type Config struct {
 	// Path where the builds will be run
 	BuildPath string
 
+	// Path where the repository mirrors are stored
+	GitMirrorsPath string
+
+	// Seconds to wait before allowing git mirror clone lock to be acquired
+	GitMirrorsLockTimeout int
+
 	// Path to the buildkite-agent binary
 	BinPath string
 
@@ -105,6 +114,9 @@ type Config struct {
 
 	// The shell used to execute commands
 	Shell string
+
+	// Phases to execute, defaults to all phases
+	Phases []string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

@@ -4,20 +4,31 @@ env:
 steps:
   - name: ":hammer: :linux:"
     command: ".buildkite/steps/tests.sh"
+    artifact_paths: junit-*.xml
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
   - name: ":hammer: :windows:"
     command: ".buildkite\\steps\\tests.sh"
+    artifact_paths: junit-*.xml
     plugins:
-      docker-compose#6568f6d:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.windows.yml
         run: agent
         tty: false
+        shell: ["bash.exe"]
     agents:
       queue: "windows"
+
+  - wait: ~
+    continue_on_failure: true
+
+  - label: ":junit:"
+    plugins:
+      - junit-annotate#v1.6.0:
+          artifacts: junit-*.xml
 
   - wait
 
@@ -25,7 +36,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh windows 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -33,7 +44,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh windows amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -41,7 +52,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh linux amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -49,7 +60,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh linux 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -57,7 +68,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh linux arm"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -65,7 +76,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh linux armhf"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -73,7 +84,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh linux arm64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -81,7 +92,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh linux ppc64le"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -89,7 +100,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh darwin 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 
@@ -97,7 +108,7 @@ steps:
     command: ".buildkite/steps/build-binary.sh darwin amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#v2.6.0:
+      docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
 

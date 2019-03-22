@@ -37,15 +37,20 @@ Example:
    $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID`
 
 type ArtifactUploadConfig struct {
-	UploadPaths      string `cli:"arg:0" label:"upload paths" validate:"required"`
-	Destination      string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
-	Job              string `cli:"job" validate:"required"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	ContentType      string `cli:"content-type"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
+	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
+	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
+	Job         string `cli:"job" validate:"required"`
+	ContentType string `cli:"content-type"`
+
+	// Global flags
+	Debug   bool `cli:"debug"`
+	NoColor bool `cli:"no-color"`
+
+	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var ArtifactUploadCommand = cli.Command{
@@ -65,11 +70,16 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
 		},
+
+		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -86,10 +96,7 @@ var ArtifactUploadCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, agent.APIClientConfig{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		})
+		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{

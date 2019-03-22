@@ -13,10 +13,10 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
-	"github.com/buildkite/agent/env"
 	"github.com/urfave/cli"
 )
 
@@ -47,16 +47,21 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath         string `cli:"arg:0" label:"upload paths"`
-	Replace          bool   `cli:"replace"`
-	Job              string `cli:"job"`
+	FilePath        string `cli:"arg:0" label:"upload paths"`
+	Replace         bool   `cli:"replace"`
+	Job             string `cli:"job"`
+	DryRun          bool   `cli:"dry-run"`
+	NoInterpolation bool   `cli:"no-interpolation"`
+
+	// Global flags
+	Debug   bool `cli:"debug"`
+	NoColor bool `cli:"no-color"`
+
+	// API config
+	DebugHTTP        bool   `cli:"debug-http"`
 	AgentAccessToken string `cli:"agent-access-token"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
-	DryRun           bool   `cli:"dry-run"`
-	NoColor          bool   `cli:"no-color"`
-	NoInterpolation  bool   `cli:"no-interpolation"`
-	Debug            bool   `cli:"debug"`
-	DebugHTTP        bool   `cli:"debug-http"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var PipelineUploadCommand = cli.Command{
@@ -85,11 +90,16 @@ var PipelineUploadCommand = cli.Command{
 			Usage:  "Skip variable interpolation the pipeline when uploaded",
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
+
+		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -223,10 +233,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, agent.APIClientConfig{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		})
+		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Generate a UUID that will identifiy this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
@@ -247,7 +254,9 @@ var PipelineUploadCommand = cli.Command{
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second})
+			// On a server error, it means there is downtime or other problems, we
+			// need to retry. Let's retry every 5 seconds, for a total of 5 minutes.
+		}, &retry.Config{Maximum: 60, Interval: 5 * time.Second})
 		if err != nil {
 			l.Fatal("Failed to upload and process pipeline: %s", err)
 		}

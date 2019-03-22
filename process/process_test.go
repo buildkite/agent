@@ -1,11 +1,12 @@
 package process_test
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -18,13 +19,66 @@ import (
 	"github.com/buildkite/agent/process"
 )
 
+func TestProcessOutput(t *testing.T) {
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+
+	p := process.New(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=output"},
+		Stdout: stdout,
+		Stderr: stderr,
+	})
+
+	// wait for the process to finish
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if s := stdout.String(); s != `llamas1llamas2` {
+		t.Fatalf("Bad stdout, %q", s)
+	}
+
+	if s := stderr.String(); s != `alpacas1alpacas2` {
+		t.Fatalf("Bad stderr, %q", s)
+	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessOutputPTY(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("PTY not supported on windows")
+	}
+
+	stdout := &bytes.Buffer{}
+
+	p := process.New(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=output"},
+		PTY:    true,
+		Stdout: stdout,
+	})
+
+	// wait for the process to finish
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	if s := stdout.String(); s != `llamas1alpacas1llamas2alpacas2` {
+		t.Fatalf("Bad stdout, %q", s)
+	}
+
+	assertProcessDoesntExist(t, p)
+}
+
 func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester"},
+	p := process.New(logger.Discard, process.Config{
+		Path: os.Args[0],
+		Env:  []string{"TEST_MAIN=tester"},
 	})
 
 	var wg sync.WaitGroup
@@ -40,7 +94,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	}()
 
 	// wait for the process to finish
-	if err := p.Start(); err != nil {
+	if err := p.Run(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -55,35 +109,38 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 		t.Fatalf("Expected done to be 1, got %d", doneVal)
 	}
 
-	if exitStatus := p.ExitStatus; exitStatus != "0" {
-		t.Fatalf("Expected ExitStatus of 0, got %v", exitStatus)
-	}
+	assertProcessDoesntExist(t, p)
 }
 
-func TestProcessCapturesOutputLineByLine(t *testing.T) {
-	var lines = &processLineHandler{}
+func TestProcessTerminatesWhenContextDoes(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script:  []string{os.Args[0]},
-		Env:     []string{"TEST_MAIN=tester"},
-		Handler: lines.Handle,
+	p := process.New(logger.Discard, process.Config{
+		Path:    os.Args[0],
+		Env:     []string{"TEST_MAIN=tester-signal"},
+		Context: ctx,
 	})
 
-	if err := p.Start(); err != nil {
-		t.Error(err)
+	go func() {
+		<-p.Started()
+
+		time.Sleep(time.Millisecond * 50)
+		cancel()
+	}()
+
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
 	}
 
-	expected := []string{
-		"+++ My header",
-		"llamas",
-		"and more llamas",
-		"a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line a very long line",
-		"and some alpacas",
+	if runtime.GOOS != `windows` {
+		if !p.WaitStatus().Signaled() {
+			t.Fatalf("Expected signaled")
+		}
 	}
 
-	if !reflect.DeepEqual(expected, lines.Lines()) {
-		t.Fatalf("Unexpected lines: %v", lines)
-	}
+	<-p.Done()
+	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessInterrupts(t *testing.T) {
@@ -91,12 +148,12 @@ func TestProcessInterrupts(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	var lines = &processLineHandler{}
+	b := &bytes.Buffer{}
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script:  []string{os.Args[0]},
-		Env:     []string{"TEST_MAIN=tester-signal"},
-		Handler: lines.Handle,
+	p := process.New(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=tester-signal"},
+		Stdout: b,
 	})
 
 	var wg sync.WaitGroup
@@ -112,16 +169,18 @@ func TestProcessInterrupts(t *testing.T) {
 		p.Interrupt()
 	}()
 
-	if err := p.Start(); err != nil {
+	if err := p.Run(); err != nil {
 		t.Fatal(err)
 	}
 
 	wg.Wait()
 
-	output := strings.Join(lines.Lines(), "\n")
+	output := b.String()
 	if output != `SIG terminated` {
 		t.Fatalf("Bad output: %q", output)
 	}
+
+	assertProcessDoesntExist(t, p)
 }
 
 func TestProcessSetsProcessGroupID(t *testing.T) {
@@ -130,17 +189,40 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		return
 	}
 
-	p := process.NewProcess(logger.Discard, process.ProcessConfig{
-		Script: []string{os.Args[0]},
-		Env:    []string{"TEST_MAIN=tester-pgid"},
+	p := process.New(logger.Discard, process.Config{
+		Path: os.Args[0],
+		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
-	if err := p.Start(); err != nil {
+	if err := p.Run(); err != nil {
 		t.Fatal(err)
 	}
 
-	if p.ExitStatus != "0" {
-		t.Fatalf("Expected ExitStatus to be 0, got %s", p.ExitStatus)
+	assertProcessDoesntExist(t, p)
+}
+
+func assertProcessDoesntExist(t *testing.T, p *process.Process) {
+	t.Helper()
+
+	proc, err := os.FindProcess(p.Pid())
+	if err != nil {
+		return
+	}
+	signalErr := proc.Signal(syscall.Signal(0))
+	if signalErr == nil {
+		t.Fatalf("Process %d exists and is running", p.Pid())
+	}
+}
+
+func BenchmarkProcess(b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		proc := process.New(logger.Discard, process.Config{
+			Path: os.Args[0],
+			Env:  []string{"TEST_MAIN=output"},
+		})
+		if err := proc.Run(); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -152,6 +234,13 @@ func TestMain(m *testing.M) {
 			fmt.Printf("%s\n", line)
 			time.Sleep(time.Millisecond * 20)
 		}
+		os.Exit(0)
+
+	case "output":
+		fmt.Fprintf(os.Stdout, "llamas1")
+		fmt.Fprintf(os.Stderr, "alpacas1")
+		fmt.Fprintf(os.Stdout, "llamas2")
+		fmt.Fprintf(os.Stderr, "alpacas2")
 		os.Exit(0)
 
 	case "tester-signal":
@@ -178,21 +267,4 @@ func TestMain(m *testing.M) {
 	default:
 		os.Exit(m.Run())
 	}
-}
-
-type processLineHandler struct {
-	lines []string
-	sync.Mutex
-}
-
-func (p *processLineHandler) Handle(line string) {
-	p.Lock()
-	defer p.Unlock()
-	p.lines = append(p.lines, line)
-}
-
-func (p *processLineHandler) Lines() []string {
-	p.Lock()
-	defer p.Unlock()
-	return p.lines
 }

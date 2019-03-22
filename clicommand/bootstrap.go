@@ -10,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/urfave/cli"
 )
@@ -60,7 +61,10 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
+	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -72,6 +76,7 @@ type BootstrapConfig struct {
 	PTY                          bool     `cli:"pty"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
+	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 }
 
@@ -182,10 +187,28 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
 		},
 		cli.StringFlag{
+			Name:   "git-clone-mirror-flags",
+			Value:  "-v --mirror",
+			Usage:  "Flags to pass to \"git clone\" command when mirroring",
+			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		},
+		cli.StringFlag{
 			Name:   "git-clean-flags",
 			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-mirrors-path",
+			Value:  "",
+			Usage:  "Path to where mirrors of git repositories are stored",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.IntFlag{
+			Name:   "git-mirrors-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		},
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -258,6 +281,7 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
 		DebugFlag,
+		ExperimentsFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -268,6 +292,11 @@ var BootstrapCommand = cli.Command{
 		// Load the configuration
 		if err := cliconfig.Load(c, l, &cfg); err != nil {
 			l.Fatal("%s", err)
+		}
+
+		// Enable experiments
+		for _, name := range cfg.Experiments {
+			experiments.Enable(name)
 		}
 
 		// Enable debug if set
@@ -291,47 +320,47 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		// Configure the bootstraper
+		bootstrap := bootstrap.New(bootstrap.Config{
+			Command:                      cfg.Command,
+			JobID:                        cfg.JobID,
+			Repository:                   cfg.Repository,
+			Commit:                       cfg.Commit,
+			Branch:                       cfg.Branch,
+			Tag:                          cfg.Tag,
+			RefSpec:                      cfg.RefSpec,
+			Plugins:                      cfg.Plugins,
+			GitSubmodules:                cfg.GitSubmodules,
+			PullRequest:                  cfg.PullRequest,
+			GitCloneFlags:                cfg.GitCloneFlags,
+			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                cfg.GitCleanFlags,
+			AgentName:                    cfg.AgentName,
+			PipelineProvider:             cfg.PipelineProvider,
+			PipelineSlug:                 cfg.PipelineSlug,
+			OrganizationSlug:             cfg.OrganizationSlug,
+			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
+			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
+			CleanCheckout:                cfg.CleanCheckout,
+			BuildPath:                    cfg.BuildPath,
+			GitMirrorsPath:               cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
+			BinPath:                      cfg.BinPath,
+			HooksPath:                    cfg.HooksPath,
+			PluginsPath:                  cfg.PluginsPath,
+			PluginValidation:             cfg.PluginValidation,
+			Debug:                        cfg.Debug,
+			RunInPty:                     runInPty,
+			CommandEval:                  cfg.CommandEval,
+			PluginsEnabled:               cfg.PluginsEnabled,
+			LocalHooksEnabled:            cfg.LocalHooksEnabled,
+			SSHKeyscan:                   cfg.SSHKeyscan,
+			Shell:                        cfg.Shell,
+			Phases:                       cfg.Phases,
+		})
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-
-		// Configure the bootstraper
-		bootstrap := &bootstrap.Bootstrap{
-			Context: ctx,
-			Phases:  cfg.Phases,
-			Config: bootstrap.Config{
-				Command:                      cfg.Command,
-				JobID:                        cfg.JobID,
-				Repository:                   cfg.Repository,
-				Commit:                       cfg.Commit,
-				Branch:                       cfg.Branch,
-				Tag:                          cfg.Tag,
-				RefSpec:                      cfg.RefSpec,
-				Plugins:                      cfg.Plugins,
-				GitSubmodules:                cfg.GitSubmodules,
-				PullRequest:                  cfg.PullRequest,
-				GitCloneFlags:                cfg.GitCloneFlags,
-				GitCleanFlags:                cfg.GitCleanFlags,
-				AgentName:                    cfg.AgentName,
-				PipelineProvider:             cfg.PipelineProvider,
-				PipelineSlug:                 cfg.PipelineSlug,
-				OrganizationSlug:             cfg.OrganizationSlug,
-				AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
-				ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
-				CleanCheckout:                cfg.CleanCheckout,
-				BuildPath:                    cfg.BuildPath,
-				BinPath:                      cfg.BinPath,
-				HooksPath:                    cfg.HooksPath,
-				PluginsPath:                  cfg.PluginsPath,
-				PluginValidation:             cfg.PluginValidation,
-				Debug:                        cfg.Debug,
-				RunInPty:                     runInPty,
-				CommandEval:                  cfg.CommandEval,
-				PluginsEnabled:               cfg.PluginsEnabled,
-				LocalHooksEnabled:            cfg.LocalHooksEnabled,
-				SSHKeyscan:                   cfg.SSHKeyscan,
-				Shell:                        cfg.Shell,
-			},
-		}
 
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, os.Interrupt,
@@ -365,7 +394,7 @@ var BootstrapCommand = cli.Command{
 		}()
 
 		// Run the bootstrap and get the exit code
-		exitCode := bootstrap.Start()
+		exitCode := bootstrap.Run(ctx)
 
 		signalMu.Lock()
 		defer signalMu.Unlock()

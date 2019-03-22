@@ -37,14 +37,19 @@ Example:
    You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 type ArtifactShasumConfig struct {
-	Query            string `cli:"arg:0" label:"artifact search query" validate:"required"`
-	Step             string `cli:"step"`
-	Build            string `cli:"build" validate:"required"`
+	Query string `cli:"arg:0" label:"artifact search query" validate:"required"`
+	Step  string `cli:"step"`
+	Build string `cli:"build" validate:"required"`
+
+	// Global flags
+	Debug   bool `cli:"debug"`
+	NoColor bool `cli:"no-color"`
+
+	// API config
+	DebugHTTP        bool   `cli:"debug-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-	DebugHTTP        bool   `cli:"debug-http"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var ArtifactShasumCommand = cli.Command{
@@ -63,11 +68,16 @@ var ArtifactShasumCommand = cli.Command{
 			EnvVar: "BUILDKITE_BUILD_ID",
 			Usage:  "The build that the artifacts were uploaded to",
 		},
+
+		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -84,10 +94,7 @@ var ArtifactShasumCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, agent.APIClientConfig{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		})
+		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)

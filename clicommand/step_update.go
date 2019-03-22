@@ -29,15 +29,20 @@ Example:
    $ ./script/label-generator | buildkite-agent step update "label"`
 
 type StepUpdateConfig struct {
-	Attribute        string `cli:"arg:0" label:"attribute" validate:"required"`
-	Value            string `cli:"arg:1" label:"value"`
-	Append           bool   `cli:"append"`
-	Job              string `cli:"job" validate:"required"`
+	Attribute string `cli:"arg:0" label:"attribute" validate:"required"`
+	Value     string `cli:"arg:1" label:"value"`
+	Append    bool   `cli:"append"`
+	Job       string `cli:"job" validate:"required"`
+
+	// Global flags
+	Debug   bool `cli:"debug"`
+	NoColor bool `cli:"no-color"`
+
+	// API config
+	DebugHTTP        bool   `cli:"debug-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoColor          bool   `cli:"no-color"`
-	Debug            bool   `cli:"debug"`
-	DebugHTTP        bool   `cli:"debug-http"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var StepUpdateCommand = cli.Command{
@@ -56,11 +61,16 @@ var StepUpdateCommand = cli.Command{
 			Usage:  "Append to current attribute instead of replacing it",
 			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
 		},
+
+		// API Flags
 		AgentAccessTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
 	},
 	Action: func(c *cli.Context) {
 		l := logger.NewLogger()
@@ -88,10 +98,7 @@ var StepUpdateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, agent.APIClientConfig{
-			Endpoint: cfg.Endpoint,
-			Token:    cfg.AgentAccessToken,
-		})
+		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Generate a UUID that will identifiy this change. We do this
 		// outside of the retry loop because we want this UUID to be

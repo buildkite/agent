@@ -40,9 +40,9 @@ type ArtifactDownloader struct {
 
 func NewArtifactDownloader(l *logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
 	return ArtifactDownloader{
-		logger: l,
+		logger:    l,
 		apiClient: ac,
-		conf: c,
+		conf:      c,
 	}
 }
 
@@ -51,7 +51,7 @@ func (a *ArtifactDownloader) Download() error {
 	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
-		return fmt.Errorf("Could not find information about destination: %s %v", 
+		return fmt.Errorf("Could not find information about destination: %s %v",
 			downloadDestination, err)
 	}
 	if !fileInfo.IsDir() {
@@ -83,7 +83,7 @@ func (a *ArtifactDownloader) Download() error {
 			p.Spawn(func() {
 				var err error
 
-				// Handle downloading from S3 and GS
+				// Handle downloading from S3, GS, or RT
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
 					err = NewS3Downloader(a.logger, S3DownloaderConfig{
 						Path:        artifact.Path,
@@ -96,6 +96,14 @@ func (a *ArtifactDownloader) Download() error {
 					err = NewGSDownloader(a.logger, GSDownloaderConfig{
 						Path:        artifact.Path,
 						Bucket:      artifact.UploadDestination,
+						Destination: downloadDestination,
+						Retries:     5,
+						DebugHTTP:   a.apiClient.DebugHTTP,
+					}).Start()
+				} else if strings.HasPrefix(artifact.UploadDestination, "rt://") {
+					err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
+						Path:        artifact.Path,
+						Repository:  artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.apiClient.DebugHTTP,

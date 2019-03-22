@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/shellwords"
@@ -39,43 +40,50 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                    string   `cli:"config"`
-	Token                     string   `cli:"token" validate:"required"`
-	Name                      string   `cli:"name"`
-	Priority                  string   `cli:"priority"`
-	DisconnectAfterJob        bool     `cli:"disconnect-after-job"`
-	DisconnectAfterJobTimeout int      `cli:"disconnect-after-job-timeout"`
-	BootstrapScript           string   `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod         int      `cli:"cancel-grace-period"`
-	BuildPath                 string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                 string   `cli:"hooks-path" normalize:"filepath"`
-	PluginsPath               string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                     string   `cli:"shell"`
-	Tags                      []string `cli:"tags" normalize:"list"`
-	TagsFromEC2               bool     `cli:"tags-from-ec2"`
-	TagsFromEC2Tags           bool     `cli:"tags-from-ec2-tags"`
-	TagsFromGCP               bool     `cli:"tags-from-gcp"`
-	TagsFromHost              bool     `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout     string   `cli:"wait-for-ec2-tags-timeout"`
-	GitCloneFlags             string   `cli:"git-clone-flags"`
-	GitCleanFlags             string   `cli:"git-clean-flags"`
-	NoGitSubmodules           bool     `cli:"no-git-submodules"`
-	NoColor                   bool     `cli:"no-color"`
-	NoSSHKeyscan              bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval             bool     `cli:"no-command-eval"`
-	NoLocalHooks              bool     `cli:"no-local-hooks"`
-	NoPlugins                 bool     `cli:"no-plugins"`
-	NoPluginValidation        bool     `cli:"no-plugin-validation"`
-	NoPTY                     bool     `cli:"no-pty"`
-	NoHTTP2                   bool     `cli:"no-http2"`
-	TimestampLines            bool     `cli:"timestamp-lines"`
-	Endpoint                  string   `cli:"endpoint" validate:"required"`
-	Debug                     bool     `cli:"debug"`
-	DebugHTTP                 bool     `cli:"debug-http"`
-	Experiments               []string `cli:"experiment" normalize:"list"`
-	MetricsDatadog            bool     `cli:"metrics-datadog"`
-	MetricsDatadogHost        string   `cli:"metrics-datadog-host"`
-	Spawn                     int      `cli:"spawn"`
+	Config                     string   `cli:"config"`
+	Token                      string   `cli:"token" validate:"required"`
+	Name                       string   `cli:"name"`
+	Priority                   string   `cli:"priority"`
+	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
+	DisconnectAfterJobTimeout  int      `cli:"disconnect-after-job-timeout"`
+	DisconnectAfterIdleTimeout int      `cli:"disconnect-after-idle-timeout"`
+	BootstrapScript            string   `cli:"bootstrap-script" normalize:"commandpath"`
+	CancelGracePeriod          int      `cli:"cancel-grace-period"`
+	BuildPath                  string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                  string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                      string   `cli:"shell"`
+	Tags                       []string `cli:"tags" normalize:"list"`
+	TagsFromEC2                bool     `cli:"tags-from-ec2"`
+	TagsFromEC2Tags            bool     `cli:"tags-from-ec2-tags"`
+	TagsFromGCP                bool     `cli:"tags-from-gcp"`
+	TagsFromGCPLabels          bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost               bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCloneFlags              string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags              string   `cli:"git-clean-flags"`
+	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
+	NoGitSubmodules            bool     `cli:"no-git-submodules"`
+	NoColor                    bool     `cli:"no-color"`
+	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval              bool     `cli:"no-command-eval"`
+	NoLocalHooks               bool     `cli:"no-local-hooks"`
+	NoPlugins                  bool     `cli:"no-plugins"`
+	NoPluginValidation         bool     `cli:"no-plugin-validation"`
+	NoPTY                      bool     `cli:"no-pty"`
+	NoHTTP2                    bool     `cli:"no-http2"`
+	TimestampLines             bool     `cli:"timestamp-lines"`
+	Endpoint                   string   `cli:"endpoint" validate:"required"`
+	Debug                      bool     `cli:"debug"`
+	DebugHTTP                  bool     `cli:"debug-http"`
+	DebugWithoutAPI            bool     `cli:"debug-without-api"`
+	Experiments                []string `cli:"experiment" normalize:"list"`
+	MetricsDatadog             bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
+	Spawn                      int      `cli:"spawn"`
 
 	/* Deprecated */
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
@@ -136,12 +144,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_CONFIG",
 		},
 		cli.StringFlag{
-			Name:   "token",
-			Value:  "",
-			Usage:  "Your account agent token",
-			EnvVar: "BUILDKITE_AGENT_TOKEN",
-		},
-		cli.StringFlag{
 			Name:   "name",
 			Value:  "",
 			Usage:  "The name of the agent",
@@ -163,6 +165,12 @@ var AgentStartCommand = cli.Command{
 			Value:  120,
 			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
+		},
+		cli.IntFlag{
+			Name:   "disconnect-after-idle-timeout",
+			Value:  0,
+			Usage:  "If no jobs have come in for the specified number of secconds, disconnect the agent",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
 		},
 		cli.IntFlag{
 			Name:   "cancel-grace-period",
@@ -199,13 +207,24 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-gcp",
-			Usage:  "Include the host's Google Cloud meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+			Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
+		},
+		cli.BoolFlag{
+			Name:   "tags-from-gcp-labels",
+			Usage:  "Include the host's Google Cloud instance labels as tags",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_LABELS",
 		},
 		cli.DurationFlag{
 			Name:   "wait-for-ec2-tags-timeout",
 			Usage:  "The amount of time to wait for tags from EC2 before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_TAGS_TIMEOUT",
+			Value:  time.Second * 10,
+		},
+		cli.DurationFlag{
+			Name:   "wait-for-gcp-labels-timeout",
+			Usage:  "The amount of time to wait for labels from GCP before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
 		},
 		cli.StringFlag{
@@ -219,6 +238,24 @@ var AgentStartCommand = cli.Command{
 			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-clone-mirror-flags",
+			Value:  "-v --mirror",
+			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
+			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-mirrors-path",
+			Value:  "",
+			Usage:  "Path to where mirrors of git repositories are stored",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+		},
+		cli.IntFlag{
+			Name:   "git-mirrors-lock-timeout",
+			Value:  300,
+			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -285,11 +322,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
 		},
 		cli.BoolFlag{
-			Name:   "no-http2",
-			Usage:  "Disable HTTP2 when communicating with the Agent API.",
-			EnvVar: "BUILDKITE_NO_HTTP2",
-		},
-		cli.BoolFlag{
 			Name:   "metrics-datadog",
 			Usage:  "Send metrics to DogStatsD for Datadog",
 			EnvVar: "BUILDKITE_METRICS_DATADOG",
@@ -306,12 +338,20 @@ var AgentStartCommand = cli.Command{
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
-		ExperimentsFlag,
+
+		// API Flags
+		AgentRegisterTokenFlag,
 		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+		DebugWithoutAPIFlag,
+
+		// Global flags
+		ExperimentsFlag,
 		NoColorFlag,
 		DebugFlag,
-		DebugHTTPFlag,
-		/* Deprecated flags which will be removed in v4 */
+
+		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
 			Name:   "meta-data",
 			Value:  &cli.StringSlice{},
@@ -365,6 +405,13 @@ var AgentStartCommand = cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
 
+		// Check if git-mirrors are enabled
+		if experiments.IsEnabled(`git-mirrors`) {
+			if cfg.GitMirrorsPath == `` {
+				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
+			}
+		}
+
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
 			cfg.NoPTY = true
@@ -415,47 +462,58 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		var gcpLabelsTimeout time.Duration
+		if t := cfg.WaitForGCPLabelsTimeout; t != "" {
+			var err error
+			gcpLabelsTimeout, err = time.ParseDuration(t)
+			if err != nil {
+				l.Fatal("Failed to parse gcp labels timeout: %v", err)
+			}
+		}
+
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
 			Datadog:     cfg.MetricsDatadog,
 			DatadogHost: cfg.MetricsDatadogHost,
 		})
 
 		config := agent.AgentPoolConfig{
-			Name:                  cfg.Name,
-			Priority:              cfg.Priority,
-			Tags:                  cfg.Tags,
-			TagsFromEC2:           cfg.TagsFromEC2,
-			TagsFromEC2Tags:       cfg.TagsFromEC2Tags,
-			TagsFromGCP:           cfg.TagsFromGCP,
-			TagsFromHost:          cfg.TagsFromHost,
-			WaitForEC2TagsTimeout: ec2TagTimeout,
-			Debug:                 cfg.Debug,
-			DisableColors:         cfg.NoColor,
-			Spawn:                 cfg.Spawn,
-			APIClientConfig: agent.APIClientConfig{
-				Token:        cfg.Token,
-				Endpoint:     cfg.Endpoint,
-				DisableHTTP2: cfg.NoHTTP2,
-			},
+			Name:                    cfg.Name,
+			Priority:                cfg.Priority,
+			Tags:                    cfg.Tags,
+			TagsFromEC2:             cfg.TagsFromEC2,
+			TagsFromEC2Tags:         cfg.TagsFromEC2Tags,
+			TagsFromGCP:             cfg.TagsFromGCP,
+			TagsFromGCPLabels:       cfg.TagsFromGCPLabels,
+			TagsFromHost:            cfg.TagsFromHost,
+			WaitForEC2TagsTimeout:   ec2TagTimeout,
+			WaitForGCPLabelsTimeout: gcpLabelsTimeout,
+			Debug:                   cfg.Debug,
+			DisableColors:           cfg.NoColor,
+			Spawn:                   cfg.Spawn,
+			APIClientConfig:         loadAPIClientConfig(cfg, `Token`),
 			AgentConfiguration: &agent.AgentConfiguration{
-				BootstrapScript:           cfg.BootstrapScript,
-				BuildPath:                 cfg.BuildPath,
-				HooksPath:                 cfg.HooksPath,
-				PluginsPath:               cfg.PluginsPath,
-				GitCloneFlags:             cfg.GitCloneFlags,
-				GitCleanFlags:             cfg.GitCleanFlags,
-				GitSubmodules:             !cfg.NoGitSubmodules,
-				SSHKeyscan:                !cfg.NoSSHKeyscan,
-				CommandEval:               !cfg.NoCommandEval,
-				PluginsEnabled:            !cfg.NoPlugins,
-				PluginValidation:          !cfg.NoPluginValidation,
-				LocalHooksEnabled:         !cfg.NoLocalHooks,
-				RunInPty:                  !cfg.NoPTY,
-				TimestampLines:            cfg.TimestampLines,
-				DisconnectAfterJob:        cfg.DisconnectAfterJob,
-				DisconnectAfterJobTimeout: cfg.DisconnectAfterJobTimeout,
-				CancelGracePeriod:         cfg.CancelGracePeriod,
-				Shell:                     cfg.Shell,
+				BootstrapScript:            cfg.BootstrapScript,
+				BuildPath:                  cfg.BuildPath,
+				GitMirrorsPath:             cfg.GitMirrorsPath,
+				GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
+				HooksPath:                  cfg.HooksPath,
+				PluginsPath:                cfg.PluginsPath,
+				GitCloneFlags:              cfg.GitCloneFlags,
+				GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
+				GitCleanFlags:              cfg.GitCleanFlags,
+				GitSubmodules:              !cfg.NoGitSubmodules,
+				SSHKeyscan:                 !cfg.NoSSHKeyscan,
+				CommandEval:                !cfg.NoCommandEval,
+				PluginsEnabled:             !cfg.NoPlugins,
+				PluginValidation:           !cfg.NoPluginValidation,
+				LocalHooksEnabled:          !cfg.NoLocalHooks,
+				RunInPty:                   !cfg.NoPTY,
+				TimestampLines:             cfg.TimestampLines,
+				DisconnectAfterJob:         cfg.DisconnectAfterJob,
+				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
+				DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
+				CancelGracePeriod:          cfg.CancelGracePeriod,
+				Shell:                      cfg.Shell,
 			},
 		}
 

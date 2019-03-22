@@ -7,11 +7,14 @@ services:
     build:
       dockerfile: .buildkite/Dockerfile-windows
       context: ../
+    volumes:
+      - ../:c:/Users/ContainerAdministrator/go/src/github.com/buildkite/agent
     tty: false
     environment:
       - BUILDKITE_BUILD_NUMBER
       - "BUILDKITE_BUILD_PATH=c:\\buildkite\\builds"
-      - GO111MODULE=on
+      - GOFLAGS=-mod=vendor
+      - GO111MODULE=off
 
 networks:
   default:

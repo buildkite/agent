@@ -39,7 +39,32 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 	}
 
 	if expected := "Llama party! 🎉"; string(actual) != expected {
-		t.Fatalf("Expected %q, got %q", expected, actual)
+		t.Errorf("Expected %q, got %q", expected, actual)
+	}
+}
+
+func TestRunAndCaptureWithExitCode(t *testing.T) {
+	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sshKeygen.Close()
+
+	sh := newShellForTest(t)
+
+	go func() {
+		call := <-sshKeygen.Ch
+		fmt.Fprintln(call.Stdout, "Llama drama! 🚨")
+		call.Exit(24)
+	}()
+
+	_, err = sh.RunAndCapture(sshKeygen.Path)
+	if err == nil {
+		t.Error("Expected an error, got nil")
+	}
+
+	if exitCode := shell.GetExitCode(err); exitCode != 24 {
+		t.Fatalf("Expected %d, got %d", 24, exitCode)
 	}
 }
 
@@ -76,6 +101,80 @@ func TestRun(t *testing.T) {
 
 	if expected := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
 		t.Fatalf("Expected %q, got %q", expected, actual)
+	}
+}
+
+func TestContextCancelTerminates(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Not supported in windows")
+	}
+
+	sleepCmd, err := bintest.CompileProxy("sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sleepCmd.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sh, err := shell.NewWithContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sh.Logger = shell.DiscardLogger
+
+	go func() {
+		call := <-sleepCmd.Ch
+		time.Sleep(time.Second * 60)
+		call.Exit(0)
+	}()
+
+	cancel()
+
+	err = sh.Run(sleepCmd.Path)
+	if !shell.IsExitSignaled(err) {
+		t.Fatalf("Expected signal exit, got %#v", err)
+	}
+}
+
+func TestInterrupt(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Not supported in windows")
+	}
+
+	sleepCmd, err := bintest.CompileProxy("sleep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sleepCmd.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sh, err := shell.NewWithContext(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sh.Logger = shell.DiscardLogger
+
+	go func() {
+		call := <-sleepCmd.Ch
+		time.Sleep(time.Second * 10)
+		call.Exit(0)
+	}()
+
+	// interrupt the process after 50ms
+	go func() {
+		<-time.After(time.Millisecond * 50)
+		sh.Interrupt()
+	}()
+
+	err = sh.Run(sleepCmd.Path)
+	if err == nil {
+		t.Error("Expected an error")
 	}
 }
 
@@ -156,6 +255,10 @@ func TestWorkingDir(t *testing.T) {
 }
 
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Flakey on windows")
+	}
+
 	dir, err := ioutil.TempDir("", "shelltest")
 	if err != nil {
 		t.Fatal(err)

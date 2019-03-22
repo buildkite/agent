@@ -1,10 +1,9 @@
 package process
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"sync"
@@ -12,50 +11,84 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/logger"
+	"github.com/pkg/errors"
 )
 
-type ProcessConfig struct {
+const (
+	termType = `xterm-256color`
+)
+
+// Configuration for a Process
+type Config struct {
 	PTY       bool
 	Timestamp bool
-	Script    []string
+	Path      string
+	Args      []string
 	Env       []string
-
-	// Handler is called with each line of output
-	Handler func(string)
+	Stdout    io.Writer
+	Stderr    io.Writer
+	Dir       string
+	Context   context.Context
 }
 
+// Process is an operating system level process
 type Process struct {
-	// Outputs available after the process starts
-	Pid        int
-	ExitStatus string
-
-	conf          ProcessConfig
+	waitResult    error
+	status        syscall.WaitStatus
+	pid           int
+	conf          Config
 	logger        *logger.Logger
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
 }
 
-func NewProcess(l *logger.Logger, c ProcessConfig) *Process {
+// New returns a new instance of Process
+func New(l *logger.Logger, c Config) *Process {
 	return &Process{
 		logger: l,
 		conf:   c,
 	}
 }
 
-// Start executes the command and blocks until it finishes
-func (p *Process) Start() error {
+// Pid is the pid of the running process
+func (p *Process) Pid() int {
+	return p.pid
+}
+
+// WaitResult returns the raw error returned by Wait()
+func (p *Process) WaitResult() error {
+	return p.waitResult
+}
+
+// WaitStatus returns the status of the Wait() call
+func (p *Process) WaitStatus() syscall.WaitStatus {
+	return p.status
+}
+
+// Run the command and block until it finishes
+func (p *Process) Run() error {
 	if p.command != nil {
 		return fmt.Errorf("Process is already running")
 	}
 
 	// Create a command
-	p.command = exec.Command(p.conf.Script[0], p.conf.Script[1:]...)
+	p.command = exec.Command(p.conf.Path, p.conf.Args...)
 
 	// Setup the process to create a process group if supported
 	// See https://github.com/kr/pty/issues/35 for context
 	if !p.conf.PTY {
 		SetupProcessGroup(p.command)
+	}
+
+	// Configure working dir and fail if it doesn't exist, otherwise
+	// we get confusing errors about fork/exec failing because the file
+	// doesn't exist
+	if p.conf.Dir != "" {
+		if _, err := os.Stat(p.conf.Dir); os.IsNotExist(err) {
+			return fmt.Errorf("Process working directory %q doesn't exist", p.conf.Dir)
+		}
+		p.command.Dir = p.conf.Dir
 	}
 
 	// Create channels for signalling started and done
@@ -77,17 +110,20 @@ func (p *Process) Start() error {
 
 	var waitGroup sync.WaitGroup
 
-	lineReaderPipe, lineWriterPipe := io.Pipe()
-
 	// Toggle between running in a pty
 	if p.conf.PTY {
+		// Commands like tput expect a TERM value for a PTY
+		p.command.Env = append(p.command.Env, `TERM=`+termType)
+
 		pty, err := StartPTY(p.command)
 		if err != nil {
-			p.ExitStatus = "1"
 			return err
 		}
 
-		p.Pid = p.command.Process.Pid
+		// Make sure to close the pty at the end.
+		defer func() { _ = pty.Close() }()
+
+		p.pid = p.command.Process.Pid
 
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
@@ -97,9 +133,9 @@ func (p *Process) Start() error {
 		go func() {
 			p.logger.Debug("[Process] Starting to copy PTY to the buffer")
 
-			// Copy the pty to our buffer. This will block until it
+			// Copy the pty to our writer. This will block until it
 			// EOF's or something breaks.
-			_, err = io.Copy(lineWriterPipe, pty)
+			_, err = io.Copy(p.conf.Stdout, pty)
 			if e, ok := err.(*os.PathError); ok && e.Err == syscall.EIO {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
@@ -117,55 +153,64 @@ func (p *Process) Start() error {
 			waitGroup.Done()
 		}()
 	} else {
-		p.command.Stdout = lineWriterPipe
-		p.command.Stderr = lineWriterPipe
+		p.command.Stdout = p.conf.Stdout
+		p.command.Stderr = p.conf.Stderr
 		p.command.Stdin = nil
 
 		err := p.command.Start()
 		if err != nil {
-			p.ExitStatus = "1"
 			return err
 		}
 
-		p.Pid = p.command.Process.Pid
+		p.pid = p.command.Process.Pid
 
 		// Signal waiting consumers in Started() by closing the started channel
 		close(p.started)
 	}
 
-	p.logger.Info("[Process] Process is running with PID: %d", p.Pid)
-
-	if p.conf.Handler != nil {
-		// Add the scanner the waitGroup
-		waitGroup.Add(1)
-
-		scanner := NewScanner(p.logger)
-
-		// Start the Scanner
+	// When the context finishes, terminate the process
+	if p.conf.Context != nil {
 		go func() {
-			defer waitGroup.Done()
-			if err := scanner.ScanLines(lineReaderPipe, p.conf.Handler); err != nil {
-				p.logger.Error("[Process] Scanner failed with %v", err)
+			select {
+			case <-p.conf.Context.Done():
+				p.logger.Debug("[Process] Context done, terminating")
+				if err := p.Terminate(); err != nil {
+					p.logger.Debug("[Process] Failed terminate: %v", err)
+				}
+				return
+
+			case <-p.Done():
+				return
 			}
 		}()
-	} else {
-		go io.Copy(ioutil.Discard, lineReaderPipe)
 	}
 
-	// Wait until the process has finished. The returned error is nil if the command runs,
-	// has no problems copying stdin, stdout, and stderr, and exits with a zero exit status.
-	waitResult := p.command.Wait()
+	p.logger.Info("[Process] Process is running with PID: %d", p.pid)
 
-	// Close the line writer pipe
-	lineWriterPipe.Close()
+	// Wait until the process has finished. The returned error is nil if the
+	// command runs, has no problems copying stdin, stdout, and stderr, and
+	// exits with a zero exit status.
+	p.waitResult = p.command.Wait()
 
 	// Signal waiting consumers in Done() by closing the done channel
 	close(p.done)
 
-	// Find the exit status of the script
-	p.ExitStatus = p.getExitStatus(waitResult)
+	// Convert the wait result into a native WaitStatus
+	if p.waitResult != nil {
+		if err, ok := p.waitResult.(*exec.ExitError); ok {
+			if s, ok := err.Sys().(syscall.WaitStatus); ok {
+				p.status = s
+			} else {
+				return fmt.Errorf("Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
+			}
+		} else {
+			return fmt.Errorf("Unexpected error type %T", p.waitResult)
+		}
+	}
 
-	p.logger.Info("Process with PID: %d finished with Exit Status: %s", p.Pid, p.ExitStatus)
+	// Find the exit status of the script
+	p.logger.Info("Process with PID: %d finished with Exit Status: %d",
+		p.pid, p.status.ExitStatus())
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
@@ -175,7 +220,6 @@ func (p *Process) Start() error {
 		p.logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
 
-	// No error occurred so we can return nil
 	return nil
 }
 
@@ -215,7 +259,7 @@ func (p *Process) Interrupt() error {
 
 	// interrupt the process (ctrl-c or SIGINT)
 	if err := InterruptProcessGroup(p.command.Process, p.logger); err != nil {
-		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.Pid, err)
+		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.pid, err)
 
 		// Fallback to terminating if we get an error
 		if termErr := TerminateProcessGroup(p.command.Process, p.logger); termErr != nil {
@@ -237,28 +281,6 @@ func (p *Process) Terminate() error {
 	}
 
 	return TerminateProcessGroup(p.command.Process, p.logger)
-}
-
-// https://github.com/hnakamur/commango/blob/fe42b1cf82bf536ce7e24dceaef6656002e03743/os/executil/executil.go#L29
-// TODO: Can this be better?
-func (p *Process) getExitStatus(waitResult error) string {
-	exitStatus := -1
-
-	if waitResult != nil {
-		if err, ok := waitResult.(*exec.ExitError); ok {
-			if s, ok := err.Sys().(syscall.WaitStatus); ok {
-				exitStatus = s.ExitStatus()
-			} else {
-				p.logger.Error("[Process] Unimplemented for system where exec.ExitError.Sys() is not syscall.WaitStatus.")
-			}
-		} else {
-			p.logger.Error("[Process] Unexpected error type in getExitStatus: %#v", waitResult)
-		}
-	} else {
-		exitStatus = 0
-	}
-
-	return fmt.Sprintf("%d", exitStatus)
 }
 
 func timeoutWait(waitGroup *sync.WaitGroup) error {

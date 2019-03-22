@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/clicommand"
+	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/bintest"
 	"github.com/urfave/cli"
 )
@@ -31,6 +32,12 @@ func TestMain(m *testing.M) {
 
 	if os.Getenv(`BINTEST_DEBUG`) == "1" {
 		bintest.Debug = true
+	}
+
+	// Support running the test suite against a given experiment
+	if exp := os.Getenv(`TEST_EXPERIMENT`); exp != "" {
+		experiments.Enable(exp)
+		fmt.Printf("!!! Enabling experiment %q for test suite\n", exp)
 	}
 
 	// Start a server to share
