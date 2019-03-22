@@ -41,7 +41,6 @@ Example:
 
 type AgentStartConfig struct {
 	Config                     string   `cli:"config"`
-	Token                      string   `cli:"token" validate:"required"`
 	Name                       string   `cli:"name"`
 	Priority                   string   `cli:"priority"`
 	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
@@ -67,25 +66,30 @@ type AgentStartConfig struct {
 	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
-	NoColor                    bool     `cli:"no-color"`
 	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval              bool     `cli:"no-command-eval"`
 	NoLocalHooks               bool     `cli:"no-local-hooks"`
 	NoPlugins                  bool     `cli:"no-plugins"`
 	NoPluginValidation         bool     `cli:"no-plugin-validation"`
 	NoPTY                      bool     `cli:"no-pty"`
-	NoHTTP2                    bool     `cli:"no-http2"`
 	TimestampLines             bool     `cli:"timestamp-lines"`
-	Endpoint                   string   `cli:"endpoint" validate:"required"`
-	Debug                      bool     `cli:"debug"`
-	DebugHTTP                  bool     `cli:"debug-http"`
-	DebugWithoutAPI            bool     `cli:"debug-without-api"`
-	Experiments                []string `cli:"experiment" normalize:"list"`
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
 
-	/* Deprecated */
+	// Global flags
+	Debug           bool     `cli:"debug"`
+	DebugWithoutAPI bool     `cli:"debug-without-api"`
+	NoColor         bool     `cli:"no-color"`
+	Experiments     []string `cli:"experiment" normalize:"list"`
+
+	// API config
+	DebugHTTP bool   `cli:"debug-http"`
+	Token     string `cli:"token" validate:"required"`
+	Endpoint  string `cli:"endpoint" validate:"required"`
+	NoHTTP2   bool   `cli:"no-http2"`
+
+	// Deprecated
 	NoSSHFingerprintVerification bool     `cli:"no-automatic-ssh-fingerprint-verification" deprecated-and-renamed-to:"NoSSHKeyscan"`
 	MetaData                     []string `cli:"meta-data" deprecated-and-renamed-to:"Tags"`
 	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
@@ -476,9 +480,46 @@ var AgentStartCommand = cli.Command{
 			DatadogHost: cfg.MetricsDatadogHost,
 		})
 
-		config := agent.AgentPoolConfig{
-			Name:                    cfg.Name,
-			Priority:                cfg.Priority,
+		// AgentConfiguration is the runtime configuration for an agent
+		agentConf := agent.AgentConfiguration{
+			BootstrapScript:            cfg.BootstrapScript,
+			BuildPath:                  cfg.BuildPath,
+			GitMirrorsPath:             cfg.GitMirrorsPath,
+			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
+			HooksPath:                  cfg.HooksPath,
+			PluginsPath:                cfg.PluginsPath,
+			GitCloneFlags:              cfg.GitCloneFlags,
+			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
+			GitCleanFlags:              cfg.GitCleanFlags,
+			GitSubmodules:              !cfg.NoGitSubmodules,
+			SSHKeyscan:                 !cfg.NoSSHKeyscan,
+			CommandEval:                !cfg.NoCommandEval,
+			PluginsEnabled:             !cfg.NoPlugins,
+			PluginValidation:           !cfg.NoPluginValidation,
+			LocalHooksEnabled:          !cfg.NoLocalHooks,
+			RunInPty:                   !cfg.NoPTY,
+			TimestampLines:             cfg.TimestampLines,
+			DisconnectAfterJob:         cfg.DisconnectAfterJob,
+			DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
+			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
+			CancelGracePeriod:          cfg.CancelGracePeriod,
+			Shell:                      cfg.Shell,
+		}
+
+		if loader.File != nil {
+			agentConf.ConfigPath = loader.File.Path
+		}
+
+		// Show the welcome banner
+		agent.ShowBanner(l, agentConf)
+
+		apiClientConf := loadAPIClientConfig(cfg, `Token`)
+
+		// Create the API client
+		client := agent.NewAPIClient(l, apiClientConf)
+
+		// Fetch the tags for the agent
+		tags := agent.FetchTags(l, agent.FetchTagsConfig{
 			Tags:                    cfg.Tags,
 			TagsFromEC2:             cfg.TagsFromEC2,
 			TagsFromEC2Tags:         cfg.TagsFromEC2Tags,
@@ -487,45 +528,41 @@ var AgentStartCommand = cli.Command{
 			TagsFromHost:            cfg.TagsFromHost,
 			WaitForEC2TagsTimeout:   ec2TagTimeout,
 			WaitForGCPLabelsTimeout: gcpLabelsTimeout,
-			Debug:                   cfg.Debug,
-			DisableColors:           cfg.NoColor,
-			Spawn:                   cfg.Spawn,
-			APIClientConfig:         loadAPIClientConfig(cfg, `Token`),
-			AgentConfiguration: &agent.AgentConfiguration{
-				BootstrapScript:            cfg.BootstrapScript,
-				BuildPath:                  cfg.BuildPath,
-				GitMirrorsPath:             cfg.GitMirrorsPath,
-				GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
-				HooksPath:                  cfg.HooksPath,
-				PluginsPath:                cfg.PluginsPath,
-				GitCloneFlags:              cfg.GitCloneFlags,
-				GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
-				GitCleanFlags:              cfg.GitCleanFlags,
-				GitSubmodules:              !cfg.NoGitSubmodules,
-				SSHKeyscan:                 !cfg.NoSSHKeyscan,
-				CommandEval:                !cfg.NoCommandEval,
-				PluginsEnabled:             !cfg.NoPlugins,
-				PluginValidation:           !cfg.NoPluginValidation,
-				LocalHooksEnabled:          !cfg.NoLocalHooks,
-				RunInPty:                   !cfg.NoPTY,
-				TimestampLines:             cfg.TimestampLines,
-				DisconnectAfterJob:         cfg.DisconnectAfterJob,
-				DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
-				DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
-				CancelGracePeriod:          cfg.CancelGracePeriod,
-				Shell:                      cfg.Shell,
-			},
+		})
+
+		var workers []*agent.AgentWorker
+
+		for i := 1; i <= cfg.Spawn; i++ {
+			if cfg.Spawn == 1 {
+				l.Info("Registering agent with Buildkite...")
+			} else {
+				l.Info("Registering agent %d of %d with Buildkite...", i, cfg.Spawn)
+			}
+
+			// Register the agent with the buildkite API
+			ag, err := agent.Register(l, client, agent.AgentTemplate{
+				Name:              cfg.Name,
+				Priority:          cfg.Priority,
+				Tags:              tags,
+				ScriptEvalEnabled: !cfg.NoCommandEval,
+			})
+			if err != nil {
+				l.Fatal("%s", err)
+			}
+
+			// Create an agent worker to run the agent
+			worker := agent.NewAgentWorker(l.WithPrefix(ag.Name), ag, mc, agent.AgentWorkerConfig{
+				AgentConfiguration: agentConf,
+				Debug:              cfg.Debug,
+				Endpoint:           apiClientConf.Endpoint,
+				DisableHTTP2:       apiClientConf.DisableHTTP2,
+			})
+
+			workers = append(workers, worker)
 		}
 
-		// Store the loaded config file path on the pool and agent config so we can
-		// show it when the agent starts and set an env
-		if loader.File != nil {
-			config.ConfigFilePath = loader.File.Path
-			config.AgentConfiguration.ConfigPath = loader.File.Path
-		}
-
-		// Setup the agent
-		pool := agent.NewAgentPool(l, mc, config)
+		// Setup the agent pool that spawns agent workers
+		pool := agent.NewAgentPool(l, workers)
 
 		// Start the agent pool
 		if err := pool.Start(); err != nil {

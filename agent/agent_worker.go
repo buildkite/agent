@@ -25,7 +25,7 @@ type AgentWorkerConfig struct {
 	DisableHTTP2 bool
 
 	// The configuration of the agent from the CLI
-	AgentConfiguration *AgentConfiguration
+	AgentConfiguration AgentConfiguration
 }
 
 type AgentWorker struct {
@@ -42,7 +42,7 @@ type AgentWorker struct {
 	logger *logger.Logger
 
 	// The configuration of the agent from the CLI
-	agentConfiguration *AgentConfiguration
+	agentConfiguration AgentConfiguration
 
 	// The registered agent API record
 	agent *api.Agent
@@ -174,6 +174,16 @@ func (a *AgentWorker) Start() error {
 		}()
 	}
 
+	if a.agentConfiguration.DisconnectAfterJob {
+		a.logger.Info("Waiting for job to be assigned...")
+		a.logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", a.agentConfiguration.DisconnectAfterJobTimeout)
+	} else if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		a.logger.Info("Waiting for job to be assigned...")
+		a.logger.Info("The agent will automatically disconnect after %d seconds of inactivity", a.agentConfiguration.DisconnectAfterIdleTimeout)
+	} else {
+		a.logger.Info("Waiting for work...")
+	}
+
 	// Continue this loop until the the ticker is stopped, and we received
 	// a message on the stop channel.
 	for {
@@ -259,6 +269,8 @@ func (a *AgentWorker) stopIfIdle() {
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
 func (a *AgentWorker) Connect() error {
+	a.logger.Info("Connecting to Buildkite...")
+
 	// Update the proc title
 	a.UpdateProcTitle("connecting")
 
@@ -452,6 +464,8 @@ func (a *AgentWorker) Ping() {
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
 // because we want to disconnect as fast as possible.
 func (a *AgentWorker) Disconnect() error {
+	a.logger.Info("Disconnecting...")
+
 	// Update the proc title
 	a.UpdateProcTitle("disconnecting")
 
