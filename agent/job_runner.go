@@ -25,7 +25,7 @@ type JobRunnerConfig struct {
 	Endpoint string
 
 	// The configuration of the agent from the CLI
-	AgentConfiguration *AgentConfiguration
+	AgentConfiguration AgentConfiguration
 
 	// Whether to set debug in the job
 	Debug bool

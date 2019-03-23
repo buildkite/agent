@@ -1,5 +1,7 @@
 package agent
 
+// AgentConfiguration is the run-time configuration for an agent that
+// has been loaded from the config file and command-line params
 type AgentConfiguration struct {
 	ConfigPath                 string
 	BootstrapScript            string
@@ -18,6 +20,7 @@ type AgentConfiguration struct {
 	PluginValidation           bool
 	LocalHooksEnabled          bool
 	RunInPty                   bool
+	DisableColors              bool
 	TimestampLines             bool
 	DisconnectAfterJob         bool
 	DisconnectAfterJobTimeout  int
