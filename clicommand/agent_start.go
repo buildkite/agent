@@ -64,6 +64,7 @@ type AgentStartConfig struct {
 	GitCloneFlags              string   `cli:"git-clone-flags"`
 	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags              string   `cli:"git-clean-flags"`
+	GitFetchFlags              string   `cli:"git-fetch-flags"`
 	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
@@ -242,6 +243,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+		},
+		cli.StringFlag{
+			Name:   "git-fetch-flags",
+			Value:  "-v",
+			Usage:  "Flags to pass to \"git fetch\" command",
+			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-mirror-flags",
@@ -490,6 +497,7 @@ var AgentStartCommand = cli.Command{
 			GitCloneFlags:              cfg.GitCloneFlags,
 			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
 			GitCleanFlags:              cfg.GitCleanFlags,
+			GitFetchFlags:              cfg.GitFetchFlags,
 			GitSubmodules:              !cfg.NoGitSubmodules,
 			SSHKeyscan:                 !cfg.NoSSHKeyscan,
 			CommandEval:                !cfg.NoCommandEval,

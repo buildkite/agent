@@ -61,6 +61,7 @@ type BootstrapConfig struct {
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
+	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
@@ -199,6 +200,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
 		},
 		cli.StringFlag{
+			Name:   "git-fetch-flags",
+			Value:  "",
+			Usage:  "Flags to pass to \"git fetch\" command",
+			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+		},
+		cli.StringFlag{
 			Name:   "git-mirrors-path",
 			Value:  "",
 			Usage:  "Path to where mirrors of git repositories are stored",
@@ -333,6 +340,7 @@ var BootstrapCommand = cli.Command{
 			GitSubmodules:                cfg.GitSubmodules,
 			PullRequest:                  cfg.PullRequest,
 			GitCloneFlags:                cfg.GitCloneFlags,
+			GitFetchFlags:                cfg.GitFetchFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
 			AgentName:                    cfg.AgentName,
