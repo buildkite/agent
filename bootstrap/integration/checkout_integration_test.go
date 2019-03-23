@@ -28,6 +28,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 	}
 
 	// Actually execute git commands, but with expectations
@@ -102,6 +103,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 	}
 
 	// Actually execute git commands, but with expectations
@@ -139,6 +141,61 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"submodule", "foreach", "--recursive", "git", "reset", "--hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git", "clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		})
+	}
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(1)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
+		AndExitWith(0)
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--depth=1",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=--depth=1",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.ExpectAll([][]interface{}{
+			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "--depth=1", "--prune", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		})
+	} else {
+		git.ExpectAll([][]interface{}{
+			{"clone", "--depth=1", "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "--depth=1", "--prune", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
 			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
 		})
 	}
