@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.10.1](https://github.com/buildkite/agent/tree/v3.10.1) (2019-03-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.0...v3.10.1)
+
+### Fixed
+- Fix long urls for artifactory integration [#955](https://github.com/buildkite/agent/pull/955) (@GaryPWhite)
+
 ## [v3.10.0](https://github.com/buildkite/agent/tree/v3.10.0) (2019-03-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.9.1...v3.10.0)
 
