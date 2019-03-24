@@ -156,6 +156,8 @@ steps:
 
   - name: ":hammer: bk cli"
     command: ".buildkite/steps/test-bk.sh"
+    soft_fail:
+      - exit_status: '*'
     plugins:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
