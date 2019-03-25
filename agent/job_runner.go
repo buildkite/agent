@@ -25,7 +25,7 @@ type JobRunnerConfig struct {
 	Endpoint string
 
 	// The configuration of the agent from the CLI
-	AgentConfiguration *AgentConfiguration
+	AgentConfiguration AgentConfiguration
 
 	// Whether to set debug in the job
 	Debug bool
@@ -39,7 +39,7 @@ type JobRunner struct {
 	logger *logger.Logger
 
 	// The registered agent API record running this job
-	agent *api.Agent
+	agent *api.AgentRegisterResponse
 
 	// The job being run
 	job *api.Job
@@ -83,7 +83,7 @@ type JobRunner struct {
 }
 
 // Initializes the job runner
-func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.Agent, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
 		agent:   ag,
 		job:     j,

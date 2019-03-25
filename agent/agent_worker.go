@@ -25,7 +25,7 @@ type AgentWorkerConfig struct {
 	DisableHTTP2 bool
 
 	// The configuration of the agent from the CLI
-	AgentConfiguration *AgentConfiguration
+	AgentConfiguration AgentConfiguration
 }
 
 type AgentWorker struct {
@@ -42,10 +42,10 @@ type AgentWorker struct {
 	logger *logger.Logger
 
 	// The configuration of the agent from the CLI
-	agentConfiguration *AgentConfiguration
+	agentConfiguration AgentConfiguration
 
 	// The registered agent API record
-	agent *api.Agent
+	agent *api.AgentRegisterResponse
 
 	// Metric collection for the agent
 	metricsCollector *metrics.Collector
@@ -79,7 +79,7 @@ type AgentWorker struct {
 }
 
 // Creates the agent worker and initializes it's API Client
-func NewAgentWorker(l *logger.Logger, a *api.Agent, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
+func NewAgentWorker(l *logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
 	var endpoint string
 	if a.Endpoint != "" {
 		endpoint = a.Endpoint
@@ -121,7 +121,7 @@ func (a *AgentWorker) Start() error {
 
 	// Create the intervals we'll be using
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
-	heartbeatInterval := time.Second * time.Duration(a.agent.HearbeatInterval)
+	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
 
 	// Setup and start the heartbeater
 	go func() {
@@ -172,6 +172,16 @@ func (a *AgentWorker) Start() error {
 				}
 			}
 		}()
+	}
+
+	if a.agentConfiguration.DisconnectAfterJob {
+		a.logger.Info("Waiting for job to be assigned...")
+		a.logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", a.agentConfiguration.DisconnectAfterJobTimeout)
+	} else if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		a.logger.Info("Waiting for job to be assigned...")
+		a.logger.Info("The agent will automatically disconnect after %d seconds of inactivity", a.agentConfiguration.DisconnectAfterIdleTimeout)
+	} else {
+		a.logger.Info("Waiting for work...")
 	}
 
 	// Continue this loop until the the ticker is stopped, and we received
@@ -259,6 +269,8 @@ func (a *AgentWorker) stopIfIdle() {
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
 func (a *AgentWorker) Connect() error {
+	a.logger.Info("Connecting to Buildkite...")
+
 	// Update the proc title
 	a.UpdateProcTitle("connecting")
 
@@ -452,6 +464,8 @@ func (a *AgentWorker) Ping() {
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
 // because we want to disconnect as fast as possible.
 func (a *AgentWorker) Disconnect() error {
+	a.logger.Info("Disconnecting...")
+
 	// Update the proc title
 	a.UpdateProcTitle("disconnecting")
 
