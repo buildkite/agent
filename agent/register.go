@@ -4,6 +4,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -13,63 +14,34 @@ import (
 	"github.com/denisbrodbeck/machineid"
 )
 
-// AgentTemplate represents an Agent to be registered
-type AgentTemplate struct {
-	Name              string
-	Priority          string
-	Tags              []string
-	ScriptEvalEnabled bool
-}
+var (
+	hostname      string
+	machineID     string
+	osVersionDump string
+	cacheOnce     sync.Once
+)
 
-// Build an api.Agent out of the Template populated with system info
-func (a AgentTemplate) Build(l *logger.Logger) *api.Agent {
-	agent := &api.Agent{
-		Name:              a.Name,
-		Priority:          a.Priority,
-		Tags:              a.Tags,
-		ScriptEvalEnabled: a.ScriptEvalEnabled,
-		Version:           Version(),
-		Build:             BuildVersion(),
-		PID:               os.Getpid(),
-		Arch:              runtime.GOARCH,
-	}
-
-	// get a unique identifier for the underlying host
-	machineID, err := machineid.ProtectedID("buildkite-agent")
-	if err != nil {
-		l.Warn("Failed to find unique machine-id: %v", err)
-	} else {
-		agent.MachineID = machineID
-	}
-
-	// Add the hostname
-	agent.Hostname, err = os.Hostname()
-	if err != nil {
-		l.Warn("Failed to find hostname: %s", err)
-	}
-
-	// Add the OS dump
-	agent.OS, err = system.VersionDump(l)
-	if err != nil {
-		l.Warn("Failed to find OS information: %s", err)
-	}
-
-	return agent
-}
-
-// Register takes an AgentTemplate and registers it with the Buildkite API
-func Register(l *logger.Logger, ac *api.Client, tpl AgentTemplate) (*api.Agent, error) {
-	var registered *api.Agent
+// Register takes an api.Agent and registers it with the Buildkite API
+// and populates the result of the register call
+func Register(l *logger.Logger, ac *api.Client, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
+	var registered *api.AgentRegisterResponse
 	var err error
 	var resp *api.Response
 
-	// Build the template into an Agent record that is filled out in the register call
-	agent := tpl.Build(l)
+	// Set up some slightly expensive system info once
+	cacheOnce.Do(func() { cacheRegisterSystemInfo(l) })
 
-	l.Info("Registering agent with Buildkite...")
+	// Set some static things to set on the register request
+	req.Version = Version()
+	req.Build = BuildVersion()
+	req.PID = os.Getpid()
+	req.Arch = runtime.GOARCH
+	req.MachineID = machineID
+	req.Hostname = hostname
+	req.OS = osVersionDump
 
 	register := func(s *retry.Stats) error {
-		registered, resp, err = ac.Agents.Register(agent)
+		registered, resp, err = ac.Agents.Register(&req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				l.Warn("Buildkite rejected the registration (%s)", err)
@@ -90,7 +62,7 @@ func Register(l *logger.Logger, ac *api.Client, tpl AgentTemplate) (*api.Agent, 
 
 		l.Debug("Ping interval: %ds", registered.PingInterval)
 		l.Debug("Job status interval: %ds", registered.JobStatusInterval)
-		l.Debug("Heartbeat interval: %ds", registered.HearbeatInterval)
+		l.Debug("Heartbeat interval: %ds", registered.HeartbeatInterval)
 
 		if registered.Endpoint != "" {
 			l.Debug("Endpoint: %s", registered.Endpoint)
@@ -98,4 +70,23 @@ func Register(l *logger.Logger, ac *api.Client, tpl AgentTemplate) (*api.Agent, 
 	}
 
 	return registered, err
+}
+
+func cacheRegisterSystemInfo(l *logger.Logger) {
+	var err error
+
+	machineID, err = machineid.ProtectedID("buildkite-agent")
+	if err != nil {
+		l.Warn("Failed to find unique machine-id: %v", err)
+	}
+
+	hostname, err = os.Hostname()
+	if err != nil {
+		l.Warn("Failed to find hostname: %s", err)
+	}
+
+	osVersionDump, err = system.VersionDump(l)
+	if err != nil {
+		l.Warn("Failed to find OS information: %s", err)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
@@ -518,17 +519,30 @@ var AgentStartCommand = cli.Command{
 		// Create the API client
 		client := agent.NewAPIClient(l, apiClientConf)
 
-		// Fetch the tags for the agent
-		tags := agent.FetchTags(l, agent.FetchTagsConfig{
-			Tags:                    cfg.Tags,
-			TagsFromEC2:             cfg.TagsFromEC2,
-			TagsFromEC2Tags:         cfg.TagsFromEC2Tags,
-			TagsFromGCP:             cfg.TagsFromGCP,
-			TagsFromGCPLabels:       cfg.TagsFromGCPLabels,
-			TagsFromHost:            cfg.TagsFromHost,
-			WaitForEC2TagsTimeout:   ec2TagTimeout,
-			WaitForGCPLabelsTimeout: gcpLabelsTimeout,
-		})
+		// The registration request for all agents
+		registerReq := api.AgentRegisterRequest{
+			Name:              cfg.Name,
+			Priority:          cfg.Priority,
+			ScriptEvalEnabled: !cfg.NoCommandEval,
+			Tags: agent.FetchTags(l, agent.FetchTagsConfig{
+				Tags:                    cfg.Tags,
+				TagsFromEC2:             cfg.TagsFromEC2,
+				TagsFromEC2Tags:         cfg.TagsFromEC2Tags,
+				TagsFromGCP:             cfg.TagsFromGCP,
+				TagsFromGCPLabels:       cfg.TagsFromGCPLabels,
+				TagsFromHost:            cfg.TagsFromHost,
+				WaitForEC2TagsTimeout:   ec2TagTimeout,
+				WaitForGCPLabelsTimeout: gcpLabelsTimeout,
+			}),
+		}
+
+		// The common configuration for all workers
+		workerConf := agent.AgentWorkerConfig{
+			AgentConfiguration: agentConf,
+			Debug:              cfg.Debug,
+			Endpoint:           apiClientConf.Endpoint,
+			DisableHTTP2:       apiClientConf.DisableHTTP2,
+		}
 
 		var workers []*agent.AgentWorker
 
@@ -540,25 +554,14 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := agent.Register(l, client, agent.AgentTemplate{
-				Name:              cfg.Name,
-				Priority:          cfg.Priority,
-				Tags:              tags,
-				ScriptEvalEnabled: !cfg.NoCommandEval,
-			})
+			ag, err := agent.Register(l, client, registerReq)
 			if err != nil {
 				l.Fatal("%s", err)
 			}
 
 			// Create an agent worker to run the agent
-			worker := agent.NewAgentWorker(l.WithPrefix(ag.Name), ag, mc, agent.AgentWorkerConfig{
-				AgentConfiguration: agentConf,
-				Debug:              cfg.Debug,
-				Endpoint:           apiClientConf.Endpoint,
-				DisableHTTP2:       apiClientConf.DisableHTTP2,
-			})
-
-			workers = append(workers, worker)
+			workers = append(workers,
+				agent.NewAgentWorker(l.WithPrefix(ag.Name), ag, mc, workerConf))
 		}
 
 		// Setup the agent pool that spawns agent workers

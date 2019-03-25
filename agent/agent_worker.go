@@ -45,7 +45,7 @@ type AgentWorker struct {
 	agentConfiguration AgentConfiguration
 
 	// The registered agent API record
-	agent *api.Agent
+	agent *api.AgentRegisterResponse
 
 	// Metric collection for the agent
 	metricsCollector *metrics.Collector
@@ -79,7 +79,7 @@ type AgentWorker struct {
 }
 
 // Creates the agent worker and initializes it's API Client
-func NewAgentWorker(l *logger.Logger, a *api.Agent, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
+func NewAgentWorker(l *logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
 	var endpoint string
 	if a.Endpoint != "" {
 		endpoint = a.Endpoint
@@ -121,7 +121,7 @@ func (a *AgentWorker) Start() error {
 
 	// Create the intervals we'll be using
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
-	heartbeatInterval := time.Second * time.Duration(a.agent.HearbeatInterval)
+	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
 
 	// Setup and start the heartbeater
 	go func() {
