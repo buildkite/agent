@@ -112,7 +112,7 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	// Upload the file to Artifactory.
 	u.logger.Debug("Uploading \"%s\" to `%s`", artifact.Path, u.Repository)
 
-	req, err := http.NewRequest("PUT", u.iURL.String(), f)
+	req, err := http.NewRequest("PUT", u.URL(artifact), f)
 	req.SetBasicAuth(u.user, u.password)
 	if err != nil {
 		return err
