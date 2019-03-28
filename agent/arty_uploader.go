@@ -1,10 +1,16 @@
 package agent
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -110,13 +116,31 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	}
 
 	// Upload the file to Artifactory.
-	u.logger.Debug("Uploading \"%s\" to `%s`", artifact.Path, u.Repository)
+	u.logger.Debug("Uploading \"%s\" to `%s`", artifact.Path, u.URL(artifact))
 
 	req, err := http.NewRequest("PUT", u.URL(artifact), f)
 	req.SetBasicAuth(u.user, u.password)
 	if err != nil {
 		return err
 	}
+
+	md5Checksum, err := checksumFile(md5.New(), artifact.AbsolutePath)
+	if err != nil {
+		return err
+	}
+	req.Header.Add(`X-Checksum-MD5`, md5Checksum)
+
+	sha1Checksum, err := checksumFile(sha1.New(), artifact.AbsolutePath)
+	if err != nil {
+		return err
+	}
+	req.Header.Add(`X-Checksum-SHA1`, sha1Checksum)
+
+	sha256Checksum, err := checksumFile(sha256.New(), artifact.AbsolutePath)
+	if err != nil {
+		return err
+	}
+	req.Header.Add(`X-Checksum-SHA256`, sha256Checksum)
 
 	res, err := u.client.Do(req)
 	if err != nil {
@@ -127,6 +151,34 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	}
 
 	return nil
+}
+
+func checksumFile(hasher hash.Hash, path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
+}
+
+func sha1File(path string) ([]byte, error) {
+	hasher := sha1.New()
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	if _, err := io.Copy(hasher, f); err != nil {
+		return nil, err
+	}
+
+	return hasher.Sum(nil), nil
 }
 
 func (u *ArtifactoryUploader) artifactPath(artifact *api.Artifact) string {
