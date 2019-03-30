@@ -31,10 +31,10 @@ type FormUploader struct {
 	conf FormUploaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 }
 
-func NewFormUploader(l *logger.Logger, c FormUploaderConfig) *FormUploader {
+func NewFormUploader(l logger.Logger, c FormUploaderConfig) *FormUploader {
 	return &FormUploader{
 		logger: l,
 		conf:   c,

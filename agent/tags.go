@@ -24,7 +24,7 @@ type FetchTagsConfig struct {
 }
 
 // FetchTags loads tags from a variety of sources
-func FetchTags(l *logger.Logger, conf FetchTagsConfig) []string {
+func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
 
 	// Load tags from host

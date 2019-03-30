@@ -74,7 +74,7 @@ var ExperimentsFlag = cli.StringSliceFlag{
 	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
-func HandleGlobalFlags(l *logger.Logger, cfg interface{}) {
+func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 	// Enable debugging, but disable the api client
 	debugWithoutAPI, err := reflections.GetField(cfg, "DebugWithoutAPI")
 	if debugWithoutAPI == true && err == nil {
@@ -84,15 +84,15 @@ func HandleGlobalFlags(l *logger.Logger, cfg interface{}) {
 	// Enable debugging if a Debug option is present
 	debug, _ := reflections.GetField(cfg, "Debug")
 	if debug == false && debugWithoutAPI == false {
-		l.Level = logger.INFO
+		l = l.WithLevel(logger.INFO)
 	}
 
 	// Turn off color if a NoColor option is present
 	noColor, err := reflections.GetField(cfg, "NoColor")
-	if noColor == true && err == nil {
-		l.Colors = false
+	if textLogger, ok := l.(*logger.TextLogger); ok && noColor == true && err == nil {
+		textLogger.Colors = false
 	} else {
-		l.Colors = true
+		textLogger.Colors = true
 	}
 
 	// Enable experiments

@@ -36,7 +36,7 @@ type JobRunner struct {
 	conf JobRunnerConfig
 
 	// The logger to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The registered agent API record running this job
 	agent *api.AgentRegisterResponse
@@ -83,7 +83,7 @@ type JobRunner struct {
 }
 
 // Initializes the job runner
-func NewJobRunner(l *logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
 		agent:   ag,
 		job:     j,

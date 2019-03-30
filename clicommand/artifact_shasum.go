@@ -80,7 +80,7 @@ var ArtifactShasumCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewLogger()
+		l := logger.NewTextLogger()
 
 		// The configuration will be loaded into this struct
 		cfg := ArtifactShasumConfig{}

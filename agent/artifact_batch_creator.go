@@ -24,13 +24,13 @@ type ArtifactBatchCreator struct {
 	conf ArtifactBatchCreatorConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
 	apiClient *api.Client
 }
 
-func NewArtifactBatchCreator(l *logger.Logger, ac *api.Client, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
+func NewArtifactBatchCreator(l logger.Logger, ac *api.Client, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
 	return &ArtifactBatchCreator{
 		logger:    l,
 		conf:      c,

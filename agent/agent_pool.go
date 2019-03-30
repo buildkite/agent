@@ -11,12 +11,12 @@ import (
 
 // AgentPool manages multiple parallel AgentWorkers
 type AgentPool struct {
-	logger  *logger.Logger
+	logger  logger.Logger
 	workers []*AgentWorker
 }
 
 // NewAgentPool returns a new AgentPool
-func NewAgentPool(l *logger.Logger, workers []*AgentWorker) *AgentPool {
+func NewAgentPool(l logger.Logger, workers []*AgentWorker) *AgentPool {
 	return &AgentPool{
 		logger:  l,
 		workers: workers,
@@ -109,7 +109,7 @@ func (r *AgentPool) watchWorkers() {
 }
 
 // ShowBanner prints a welcome banner and the configuration options
-func ShowBanner(l *logger.Logger, conf AgentConfiguration) {
+func ShowBanner(l logger.Logger, conf AgentConfiguration) {
 	welcomeMessage :=
 		"\n" +
 			"%s  _           _ _     _ _    _ _                                _\n" +

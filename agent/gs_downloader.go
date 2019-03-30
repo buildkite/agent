@@ -34,10 +34,10 @@ type GSDownloader struct {
 	conf GSDownloaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 }
 
-func NewGSDownloader(l *logger.Logger, c GSDownloaderConfig) *GSDownloader {
+func NewGSDownloader(l logger.Logger, c GSDownloaderConfig) *GSDownloader {
 	return &GSDownloader{
 		logger: l,
 		conf:   c,

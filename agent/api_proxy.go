@@ -20,7 +20,7 @@ import (
 // APIProxy provides either a unix socket or a tcp socket listener with a proxy
 // that will authenticate to the Buildkite Agent API
 type APIProxy struct {
-	logger           *logger.Logger
+	logger           logger.Logger
 	upstreamToken    string
 	upstreamEndpoint string
 	token            string
@@ -29,7 +29,7 @@ type APIProxy struct {
 	listenerWg       *sync.WaitGroup
 }
 
-func NewAPIProxy(l *logger.Logger, endpoint string, token string) *APIProxy {
+func NewAPIProxy(l logger.Logger, endpoint string, token string) *APIProxy {
 	var wg sync.WaitGroup
 	wg.Add(1)
 

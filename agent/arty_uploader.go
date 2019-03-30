@@ -43,7 +43,7 @@ type ArtifactoryUploader struct {
 	jobID string
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// Artifactory username
 	user string
@@ -52,7 +52,7 @@ type ArtifactoryUploader struct {
 	password string
 }
 
-func NewArtifactoryUploader(l *logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
+func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
 	repo, path := ParseArtifactoryDestination(c.Destination)
 	jobID := os.Getenv("BUILDKITE_JOB_ID")
 	stringURL := os.Getenv("BUILDKITE_ARTIFACTORY_URL")

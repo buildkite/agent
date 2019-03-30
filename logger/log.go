@@ -32,7 +32,20 @@ var (
 	windowsColors bool
 )
 
-type Logger struct {
+type Logger interface {
+	Debug(format string, v ...interface{})
+	Error(format string, v ...interface{})
+	Fatal(format string, v ...interface{})
+	Notice(format string, v ...interface{})
+	Warn(format string, v ...interface{})
+	Info(format string, v ...interface{})
+
+	WithPrefix(prefix string) Logger
+	WithLevel(level Level) Logger
+	GetLevel() Level
+}
+
+type TextLogger struct {
 	Level  Level
 	Colors bool
 	Prefix string
@@ -40,8 +53,8 @@ type Logger struct {
 	ExitFn func()
 }
 
-func NewLogger() *Logger {
-	return &Logger{
+func NewTextLogger() Logger {
+	return &TextLogger{
 		Level:  DEBUG,
 		Colors: ColorsAvailable(),
 		Writer: os.Stderr,
@@ -63,53 +76,57 @@ func ColorsAvailable() bool {
 }
 
 // WithPrefix returns a copy of the logger with the provided prefix
-func (l *Logger) WithPrefix(prefix string) *Logger {
+func (l *TextLogger) WithPrefix(prefix string) Logger {
 	clone := *l
 	clone.Prefix = prefix
 	return &clone
 }
 
 // WithLevel returns a copy of the logger with the provided level
-func (l *Logger) WithLevel(level Level) *Logger {
+func (l *TextLogger) WithLevel(level Level) Logger {
 	clone := *l
 	clone.Level = level
 	return &clone
 }
 
-func (l *Logger) Debug(format string, v ...interface{}) {
+func (l *TextLogger) Debug(format string, v ...interface{}) {
 	if l.Level == DEBUG {
 		l.log(DEBUG, format, v...)
 	}
 }
 
-func (l *Logger) Error(format string, v ...interface{}) {
+func (l *TextLogger) Error(format string, v ...interface{}) {
 	l.log(ERROR, format, v...)
 }
 
-func (l *Logger) Fatal(format string, v ...interface{}) {
+func (l *TextLogger) Fatal(format string, v ...interface{}) {
 	l.log(FATAL, format, v...)
 	os.Exit(1)
 }
 
-func (l *Logger) Notice(format string, v ...interface{}) {
+func (l *TextLogger) Notice(format string, v ...interface{}) {
 	if l.Level <= NOTICE {
 		l.log(NOTICE, format, v...)
 	}
 }
 
-func (l *Logger) Info(format string, v ...interface{}) {
+func (l *TextLogger) Info(format string, v ...interface{}) {
 	if l.Level <= INFO {
 		l.log(INFO, format, v...)
 	}
 }
 
-func (l *Logger) Warn(format string, v ...interface{}) {
+func (l *TextLogger) Warn(format string, v ...interface{}) {
 	if l.Level <= WARN {
 		l.log(WARN, format, v...)
 	}
 }
 
-func (l *Logger) log(level Level, format string, v ...interface{}) {
+func (l *TextLogger) GetLevel() Level {
+	return l.Level
+}
+
+func (l *TextLogger) log(level Level, format string, v ...interface{}) {
 	message := fmt.Sprintf(format, v...)
 	now := time.Now().Format(DateFormat)
 	line := ""
@@ -152,6 +169,6 @@ func (l *Logger) log(level Level, format string, v ...interface{}) {
 	mutex.Unlock()
 }
 
-var Discard = &Logger{
+var Discard = &TextLogger{
 	Writer: ioutil.Discard,
 }
