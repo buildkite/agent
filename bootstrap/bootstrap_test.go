@@ -3,7 +3,8 @@ package bootstrap
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 var agentNameTests = []struct {
@@ -19,6 +20,6 @@ func TestDirForAgentName(t *testing.T) {
 	t.Parallel()
 
 	for _, test := range agentNameTests {
-		assert.Equal(t, test.expected, dirForAgentName(test.agentName))
+		assert.Check(t, is.Equal(test.expected, dirForAgentName(test.agentName)))
 	}
 }

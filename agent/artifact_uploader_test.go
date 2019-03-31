@@ -9,7 +9,8 @@ import (
 
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
@@ -45,7 +46,7 @@ func TestCollect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, len(artifacts), 4)
+	assert.Check(t, is.Equal(len(artifacts), 4))
 
 	var testCases = []struct {
 		Name         string
@@ -96,11 +97,11 @@ func TestCollect(t *testing.T) {
 				t.Fatalf("Failed to find artifact %q", tc.Name)
 			}
 
-			assert.Equal(t, tc.Path, a.Path)
-			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
-			assert.Equal(t, tc.GlobPath, a.GlobPath)
-			assert.Equal(t, tc.FileSize, int(a.FileSize))
-			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
+			assert.Check(t, is.Equal(tc.Path, a.Path))
+			assert.Check(t, is.Equal(tc.AbsolutePath, a.AbsolutePath))
+			assert.Check(t, is.Equal(tc.GlobPath, a.GlobPath))
+			assert.Check(t, is.Equal(tc.FileSize, int(a.FileSize)))
+			assert.Check(t, is.Equal(tc.Sha1Sum, a.Sha1Sum))
 		})
 	}
 }
@@ -125,7 +126,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	assert.Equal(t, len(artifacts), 0)
+	assert.Check(t, is.Equal(len(artifacts), 0))
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {

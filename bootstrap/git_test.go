@@ -5,7 +5,8 @@ import (
 	"testing"
 
 	"github.com/buildkite/bintest"
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func TestParsingGittableRepositoryFromFilesPaths(t *testing.T) {
@@ -15,15 +16,15 @@ func TestParsingGittableRepositoryFromFilesPaths(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `file:///home/vagrant/repo`, u.String())
-	assert.Empty(t, u.Host)
+	assert.Check(t, is.Equal(`file:///home/vagrant/repo`, u.String()))
+	assert.Check(t, is.Len(u.Host, 0))
 
 	u, err = parseGittableURL(`file:///C:/Users/vagrant/repo`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `file:///C:/Users/vagrant/repo`, u.String())
-	assert.Empty(t, u.Host)
+	assert.Check(t, is.Equal(`file:///C:/Users/vagrant/repo`, u.String()))
+	assert.Check(t, is.Len(u.Host, 0))
 }
 
 func TestParsingGittableRepositoryFromGitURLs(t *testing.T) {
@@ -33,8 +34,8 @@ func TestParsingGittableRepositoryFromGitURLs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `ssh://git@github.com/buildkite/agent.git`, u.String())
-	assert.Equal(t, `github.com`, u.Host)
+	assert.Check(t, is.Equal(`ssh://git@github.com/buildkite/agent.git`, u.String()))
+	assert.Check(t, is.Equal(`github.com`, u.Host))
 }
 
 func TestParsingGittableRepositoryFromGitURLsWithAliases(t *testing.T) {
@@ -44,8 +45,8 @@ func TestParsingGittableRepositoryFromGitURLsWithAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `ssh://git@github.com-alias1/buildkite/agent.git`, u.String())
-	assert.Equal(t, `github.com-alias1`, u.Host)
+	assert.Check(t, is.Equal(`ssh://git@github.com-alias1/buildkite/agent.git`, u.String()))
+	assert.Check(t, is.Equal(`github.com-alias1`, u.Host))
 }
 
 func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
@@ -55,15 +56,15 @@ func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `ssh://git@scm.xxx:7999/yyy/zzz.git`, u.String())
-	assert.Equal(t, `scm.xxx:7999`, u.Host)
+	assert.Check(t, is.Equal(`ssh://git@scm.xxx:7999/yyy/zzz.git`, u.String()))
+	assert.Check(t, is.Equal(`scm.xxx:7999`, u.Host))
 
 	u, err = parseGittableURL(`ssh://root@git.host.de:4019/var/cache/git/project.git`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `ssh://root@git.host.de:4019/var/cache/git/project.git`, u.String())
-	assert.Equal(t, `git.host.de:4019`, u.Host)
+	assert.Check(t, is.Equal(`ssh://root@git.host.de:4019/var/cache/git/project.git`, u.String()))
+	assert.Check(t, is.Equal(`git.host.de:4019`, u.Host))
 }
 
 func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
@@ -151,7 +152,7 @@ streamlocalbindmask 0177
 syslogfacility USER`).
 		AndExitWith(0)
 
-	assert.Equal(t, "github.com", resolveGitHost(sh, "github.com-alias1"))
+	assert.Check(t, is.Equal("github.com", resolveGitHost(sh, "github.com-alias1")))
 
 	ssh.
 		Expect("-G", "blargh-no-alias.com").
@@ -225,7 +226,7 @@ streamlocalbindmask 0177
 syslogfacility USER`).
 		AndExitWith(0)
 
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
+	assert.Check(t, is.Equal("blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com")))
 
 	ssh.
 		Expect("-G", "cool-alias").
@@ -299,7 +300,7 @@ streamlocalbindmask 0177
 syslogfacility USER`).
 		AndExitWith(0)
 
-	assert.Equal(t, "rad-git-host.com:443", resolveGitHost(sh, "cool-alias"))
+	assert.Check(t, is.Equal("rad-git-host.com:443", resolveGitHost(sh, "cool-alias")))
 }
 
 func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
@@ -328,7 +329,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
            [-w local_tun[:remote_tun]] [user@]hostname [command]`).
 		AndExitWith(255)
 
-	assert.Equal(t, "github.com", resolveGitHost(sh, "github.com-alias1"))
+	assert.Check(t, is.Equal("github.com", resolveGitHost(sh, "github.com-alias1")))
 
 	ssh.
 		Expect("-G", "blargh-no-alias.com").
@@ -343,5 +344,5 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
            [-w local_tun[:remote_tun]] [user@]hostname [command]`).
 		AndExitWith(255)
 
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
+	assert.Check(t, is.Equal("blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com")))
 }

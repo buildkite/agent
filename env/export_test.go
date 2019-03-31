@@ -4,7 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func TestFromExportHandlesNewlines(t *testing.T) {
@@ -153,7 +154,7 @@ func TestFromExportFromWindows(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\r\n"))
 
-	if !assert.Equal(t, env.Length(), 6) {
+	if !assert.Check(t, is.Equal(env.Length(), 6)) {
 		t.FailNow()
 	}
 
@@ -183,7 +184,7 @@ func TestFromExportFromWindowsWithLeadingAndTrailingSpaces(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\r\n"))
 
-	if !assert.Equal(t, env.Length(), 6) {
+	if !assert.Check(t, is.Equal(env.Length(), 6)) {
 		t.FailNow()
 	}
 
@@ -198,7 +199,7 @@ func TestFromExportFromWindowsWithLeadingAndTrailingSpaces(t *testing.T) {
 func assertEqualEnv(t *testing.T, key string, expected string, env *Environment) {
 	t.Helper()
 	v, _ := env.Get(key)
-	if !assert.Equal(t, expected, v) {
+	if !assert.Check(t, is.Equal(expected, v)) {
 		t.FailNow()
 	}
 }

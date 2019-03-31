@@ -7,15 +7,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func TestNormalizeWindowsDriveAbsolutePath(t *testing.T) {
 	t.Parallel()
 
 	fp, err := NormalizeFilePath(`C:\programdata\buildkite-agent`)
-	assert.NoError(t, err)
-	assert.Equal(t, `C:\programdata\buildkite-agent`, fp)
+
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(`C:\programdata\buildkite-agent`, fp))
 }
 
 func TestNormalizeWindowsBackslashAbsolutePath(t *testing.T) {
@@ -27,6 +29,6 @@ func TestNormalizeWindowsBackslashAbsolutePath(t *testing.T) {
 	drive := filepath.VolumeName(dir)
 	fp, err := NormalizeFilePath(`\`)
 
-	assert.NoError(t, err)
-	assert.Equal(t, drive+`\`, fp)
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(drive+`\`, fp))
 }

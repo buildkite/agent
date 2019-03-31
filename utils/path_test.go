@@ -6,52 +6,53 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func TestNormalizingHomeDirectories(t *testing.T) {
 	t.Parallel()
 
 	usr, err := user.Current()
-	assert.NoError(t, err)
+	assert.Check(t, err)
 
 	fp, err := NormalizeFilePath(filepath.Join(`~`, `.ssh`))
-	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(usr.HomeDir, `.ssh`), fp)
-	assert.True(t, filepath.IsAbs(fp))
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(filepath.Join(usr.HomeDir, `.ssh`), fp))
+	assert.Check(t, filepath.IsAbs(fp))
 }
 
 func TestNormalizingFilePaths(t *testing.T) {
 	t.Parallel()
 
 	workingDir, err := os.Getwd()
-	assert.NoError(t, err)
+	assert.Check(t, err)
 
 	fp, err := NormalizeFilePath(filepath.Join(`.`, `builds`))
-	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(workingDir, `builds`), fp)
-	assert.True(t, filepath.IsAbs(fp))
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(filepath.Join(workingDir, `builds`), fp))
+	assert.Check(t, filepath.IsAbs(fp))
 }
 
 func TestNormalizingEmptyPaths(t *testing.T) {
 	t.Parallel()
 
 	fp, err := NormalizeFilePath("")
-	assert.NoError(t, err)
-	assert.Equal(t, "", fp)
+	assert.Check(t, err)
+	assert.Check(t, is.Equal("", fp))
 }
 
 func TestNormalizingCommands(t *testing.T) {
 	t.Parallel()
 
 	usr, err := user.Current()
-	assert.NoError(t, err)
+	assert.Check(t, err)
 
 	c, err := NormalizeCommand(filepath.Join(`~/`, `buildkite-agent`, `bootstrap.sh`))
-	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(usr.HomeDir, `buildkite-agent`, `bootstrap.sh`), c)
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(filepath.Join(usr.HomeDir, `buildkite-agent`, `bootstrap.sh`), c))
 
 	c, err = NormalizeCommand("cat test.log")
-	assert.NoError(t, err)
-	assert.Equal(t, c, "cat test.log")
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(c, "cat test.log"))
 }

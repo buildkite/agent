@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	"github.com/qri-io/jsonschema"
-	"github.com/stretchr/testify/assert"
+	"gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 var testPluginDef = `
@@ -32,9 +33,9 @@ configuration:
 func TestDefinitionParsesYaml(t *testing.T) {
 	def, err := ParseDefinition([]byte(testPluginDef))
 
-	assert.NoError(t, err)
-	assert.Equal(t, def.Name, `test-plugin`)
-	assert.Equal(t, def.Requirements, []string{`docker`, `docker-compose`})
+	assert.Check(t, err)
+	assert.Check(t, is.Equal(def.Name, `test-plugin`))
+	assert.Check(t, is.DeepEqual(def.Requirements, []string{`docker`, `docker-compose`}))
 }
 
 func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
@@ -50,10 +51,10 @@ func TestDefinitionValidationFailsIfDependenciesNotMet(t *testing.T) {
 
 	res := validator.Validate(def, nil)
 
-	assert.False(t, res.Valid())
-	assert.Equal(t, res.Errors, []string{
+	assert.Check(t, !res.Valid())
+	assert.Check(t, is.DeepEqual(res.Errors, []string{
 		`Required command "llamas" isn't in PATH`,
-	})
+	}))
 }
 
 func TestDefinitionValidatesConfiguration(t *testing.T) {
@@ -82,8 +83,8 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 		"llamas": "always",
 	})
 
-	assert.False(t, res.Valid())
-	assert.Equal(t, res.Errors, []string{
+	assert.Check(t, !res.Valid())
+	assert.Check(t, is.DeepEqual(res.Errors, []string{
 		`/: {"llamas":"always"} "alpacas" value is required`,
-	})
+	}))
 }
