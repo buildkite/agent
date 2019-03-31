@@ -49,14 +49,17 @@ github.com/buildkite/interpolate
 github.com/buildkite/shellwords
 # github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3
 github.com/buildkite/yaml
-# github.com/davecgh/go-spew v1.1.0
-github.com/davecgh/go-spew/spew
 # github.com/denisbrodbeck/machineid v1.0.0
 github.com/denisbrodbeck/machineid
 # github.com/go-ini/ini v1.25.4
 github.com/go-ini/ini
 # github.com/golang/protobuf v1.2.0
 github.com/golang/protobuf/proto
+# github.com/google/go-cmp v0.2.0
+github.com/google/go-cmp/cmp
+github.com/google/go-cmp/cmp/internal/diff
+github.com/google/go-cmp/cmp/internal/function
+github.com/google/go-cmp/cmp/internal/value
 # github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 github.com/google/go-querystring/query
 # github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e
@@ -80,16 +83,12 @@ github.com/pborman/uuid
 github.com/petermattis/goid
 # github.com/pkg/errors v0.8.0
 github.com/pkg/errors
-# github.com/pmezard/go-difflib v1.0.0
-github.com/pmezard/go-difflib/difflib
 # github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2
 github.com/qri-io/jsonpointer
 # github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
 github.com/qri-io/jsonschema
 # github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5
 github.com/sasha-s/go-deadlock
-# github.com/stretchr/testify v0.0.0-20170130113145-4d4bfba8f1d1
-github.com/stretchr/testify/assert
 # github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
 github.com/urfave/cli
 # golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
@@ -156,3 +155,9 @@ google.golang.org/grpc/transport
 # gopkg.in/vmihailenco/msgpack.v2 v2.9.1
 gopkg.in/vmihailenco/msgpack.v2
 gopkg.in/vmihailenco/msgpack.v2/codes
+# gotest.tools v2.2.0+incompatible
+gotest.tools/assert
+gotest.tools/assert/cmp
+gotest.tools/internal/format
+gotest.tools/internal/source
+gotest.tools/internal/difflib
