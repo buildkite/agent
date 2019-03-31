@@ -17,7 +17,7 @@ RUN apk add --no-cache \
       tzdata \
     && \
     pip install --upgrade pip && \
-    pip install docker-compose
+    pip install --quiet docker-compose~=1.23.0
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
