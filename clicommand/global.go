@@ -77,10 +77,12 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 
 	// Turn off color if a NoColor option is present
 	noColor, err := reflections.GetField(cfg, "NoColor")
-	if textLogger, ok := l.(*logger.TextLogger); ok && noColor == true && err == nil {
-		textLogger.Colors = false
-	} else {
-		textLogger.Colors = true
+	if textLogger, ok := l.(*logger.TextLogger); ok {
+		if noColor == true && err == nil {
+			textLogger.Colors = false
+		} else {
+			textLogger.Colors = true
+		}
 	}
 
 	// Enable experiments

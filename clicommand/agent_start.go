@@ -77,6 +77,7 @@ type AgentStartConfig struct {
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
+	LogFormat                  string   `cli:"log-format"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -336,6 +337,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
+		cli.StringFlag{
+			Name:   "log-format",
+			Usage:  "The format to use for the logger output",
+			EnvVar: "BUILDKITE_LOG_FORMAT",
+			Value:  "text",
+		},
 		cli.IntFlag{
 			Name:   "spawn",
 			Usage:  "The number of agents to spawn in parallel",
@@ -383,8 +390,6 @@ var AgentStartCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewTextLogger()
-
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
@@ -394,12 +399,30 @@ var AgentStartCommand = cli.Command{
 			CLI:                    c,
 			Config:                 &cfg,
 			DefaultConfigFilePaths: DefaultConfigFilePaths(),
-			Logger:                 l,
 		}
 
 		// Load the configuration
-		if err := loader.Load(); err != nil {
-			l.Fatal("%s", err)
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
+		var l logger.Logger
+
+		switch cfg.LogFormat {
+		case `text`:
+			l = logger.NewTextLogger()
+		case `json`:
+			l = logger.NewJSONLogger()
+		default:
+			fmt.Printf("Unknown log-format of %q, try text or json\n", cfg.LogFormat)
+			os.Exit(1)
+		}
+
+		// Show warnings now we have a logger
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Setup the any global configuration options
@@ -559,7 +582,7 @@ var AgentStartCommand = cli.Command{
 
 			// Create an agent worker to run the agent
 			workers = append(workers,
-				agent.NewAgentWorker(l.WithPrefix(ag.Name), ag, mc, workerConf))
+				agent.NewAgentWorker(l.WithFields(logger.AgentNameField(ag.Name)), ag, mc, workerConf))
 		}
 
 		// Setup the agent pool that spawns agent workers
