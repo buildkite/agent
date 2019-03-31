@@ -39,7 +39,7 @@ type AgentWorker struct {
 	apiClient *api.Client
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The configuration of the agent from the CLI
 	agentConfiguration AgentConfiguration
@@ -79,7 +79,7 @@ type AgentWorker struct {
 }
 
 // Creates the agent worker and initializes it's API Client
-func NewAgentWorker(l *logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
+func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
 	var endpoint string
 	if a.Endpoint != "" {
 		endpoint = a.Endpoint

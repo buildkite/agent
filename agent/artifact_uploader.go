@@ -44,13 +44,13 @@ type ArtifactUploader struct {
 	conf ArtifactUploaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
 	apiClient *api.Client
 }
 
-func NewArtifactUploader(l *logger.Logger, ac *api.Client, c ArtifactUploaderConfig) *ArtifactUploader {
+func NewArtifactUploader(l logger.Logger, ac *api.Client, c ArtifactUploaderConfig) *ArtifactUploader {
 	return &ArtifactUploader{
 		logger:    l,
 		apiClient: ac,

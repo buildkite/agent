@@ -7,7 +7,7 @@ import (
 
 type ArtifactSearcher struct {
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
 	apiClient *api.Client
@@ -16,7 +16,7 @@ type ArtifactSearcher struct {
 	buildID string
 }
 
-func NewArtifactSearcher(l *logger.Logger, ac *api.Client, buildID string) *ArtifactSearcher {
+func NewArtifactSearcher(l logger.Logger, ac *api.Client, buildID string) *ArtifactSearcher {
 	return &ArtifactSearcher{
 		logger:    l,
 		apiClient: ac,

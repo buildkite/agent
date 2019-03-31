@@ -27,7 +27,7 @@ type APIClientConfig struct {
 
 type APIClient struct {
 	config APIClientConfig
-	logger *logger.Logger
+	logger logger.Logger
 }
 
 func APIClientEnableHTTPDebug() {
@@ -38,8 +38,8 @@ func APIClientDisableDebug() {
 	disableDebug = true
 }
 
-func NewAPIClient(l *logger.Logger, c APIClientConfig) *api.Client {
-	if disableDebug == true && l.Level == logger.DEBUG {
+func NewAPIClient(l logger.Logger, c APIClientConfig) *api.Client {
+	if disableDebug == true && l.GetLevel() == logger.DEBUG {
 		l = l.WithLevel(logger.INFO)
 	}
 
@@ -85,7 +85,7 @@ func NewAPIClient(l *logger.Logger, c APIClientConfig) *api.Client {
 	return client
 }
 
-func NewAPIClientFromSocket(l *logger.Logger, socket string, c APIClientConfig) *api.Client {
+func NewAPIClientFromSocket(l logger.Logger, socket string, c APIClientConfig) *api.Client {
 	httpClient := &http.Client{
 		Transport: &api.AuthenticatedTransport{
 			Token: c.Token,

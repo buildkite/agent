@@ -34,10 +34,10 @@ type S3Downloader struct {
 	conf S3DownloaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 }
 
-func NewS3Downloader(l *logger.Logger, c S3DownloaderConfig) *S3Downloader {
+func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
 	return &S3Downloader{
 		conf:   c,
 		logger: l,
