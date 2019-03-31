@@ -11,6 +11,7 @@ require (
 	github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3
 	github.com/davecgh/go-spew v1.1.0 // indirect
 	github.com/denisbrodbeck/machineid v1.0.0
+	github.com/google/go-cmp v0.2.0 // indirect
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e // indirect
 	github.com/gopherjs/gopherjs v0.0.0-20181004151105-1babbf986f6f // indirect
@@ -29,7 +30,6 @@ require (
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d // indirect
 	github.com/smartystreets/goconvey v0.0.0-20180222194500-ef6db91d284a // indirect
-	github.com/stretchr/testify v0.0.0-20170130113145-4d4bfba8f1d1
 	github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
 	golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
 	golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
@@ -40,4 +40,5 @@ require (
 	google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/vmihailenco/msgpack.v2 v2.9.1
+	gotest.tools v2.2.0+incompatible // indirect
 )
