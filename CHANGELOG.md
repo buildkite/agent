@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.10.2](https://github.com/buildkite/agent/tree/v3.10.2) (2019-03-31)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.1...v3.10.2)
+
+### Fixed
+- Update artifatory uploader to use the correct PUT url [#960](https://github.com/buildkite/agent/pull/960) (@GaryPWhite)
+
+### Changed
+- Refactor: Move logger.Logger to an interface [#962](https://github.com/buildkite/agent/pull/962) (@lox)
+- Refactor: Move AgentWorker construction and registration out of AgentPool [#956](https://github.com/buildkite/agent/pull/956) (@lox)
+
 ## [v3.10.1](https://github.com/buildkite/agent/tree/v3.10.1) (2019-03-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.10.0...v3.10.1)
 
