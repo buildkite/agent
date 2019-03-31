@@ -19,6 +19,7 @@ const (
 	green     = "38;5;48"
 	yellow    = "33"
 	gray      = "38;5;251"
+	graybold  = "1;38;5;251"
 	lightgray = "38;5;243"
 	cyan      = "1;36"
 )
@@ -42,104 +43,112 @@ type Logger interface {
 
 	WithFields(fields ...Field) Logger
 	SetLevel(level Level)
-	GetLevel() Level
+	Level() Level
 }
 
-type TextLogger struct {
-	Level  Level
-	Colors bool
-	Writer io.Writer
-	ExitFn func()
-	Fields Fields
+type ConsoleLogger struct {
+	level   Level
+	exitFn  func(int)
+	fields  Fields
+	printer Printer
 }
 
-func NewTextLogger() Logger {
-	return &TextLogger{
-		Level:  NOTICE,
-		Colors: ColorsAvailable(),
-		Writer: os.Stderr,
-		Fields: Fields{},
+func NewConsoleLogger(printer Printer, exitFn func(int)) Logger {
+	return &ConsoleLogger{
+		level:   DEBUG,
+		fields:  Fields{},
+		printer: printer,
+		exitFn:  exitFn,
 	}
-}
-
-func ColorsAvailable() bool {
-	// Color support for windows is set in init
-	if runtime.GOOS == "windows" && !windowsColors {
-		return false
-	}
-
-	// Colors can only be shown if STDOUT is a terminal
-	if terminal.IsTerminal(int(os.Stdout.Fd())) {
-		return true
-	}
-
-	return false
 }
 
 // WithFields returns a copy of the logger with the provided fields
-func (l *TextLogger) WithFields(fields ...Field) Logger {
+func (l *ConsoleLogger) WithFields(fields ...Field) Logger {
 	clone := *l
-	clone.Fields.Add(fields...)
+	clone.fields.Add(fields...)
 	return &clone
 }
 
 // SetLevel sets the level for the logger
-func (l *TextLogger) SetLevel(level Level) {
-	l.Level = level
+func (l *ConsoleLogger) SetLevel(level Level) {
+	l.level = level
 }
 
-func (l *TextLogger) Debug(format string, v ...interface{}) {
-	if l.Level == DEBUG {
-		l.PrintLine(DEBUG, format, v...)
+func (l *ConsoleLogger) Debug(format string, v ...interface{}) {
+	if l.level == DEBUG {
+		l.printer.Print(DEBUG, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *TextLogger) Error(format string, v ...interface{}) {
-	l.PrintLine(ERROR, format, v...)
+func (l *ConsoleLogger) Error(format string, v ...interface{}) {
+	l.printer.Print(ERROR, fmt.Sprintf(format, v...), l.fields)
 }
 
-func (l *TextLogger) Fatal(format string, v ...interface{}) {
-	l.PrintLine(FATAL, format, v...)
-	os.Exit(1)
+func (l *ConsoleLogger) Fatal(format string, v ...interface{}) {
+	l.printer.Print(FATAL, fmt.Sprintf(format, v...), l.fields)
+	l.exitFn(1)
 }
 
-func (l *TextLogger) Notice(format string, v ...interface{}) {
-	if l.Level <= NOTICE {
-		l.PrintLine(NOTICE, format, v...)
+func (l *ConsoleLogger) Notice(format string, v ...interface{}) {
+	if l.level <= NOTICE {
+		l.printer.Print(NOTICE, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *TextLogger) Info(format string, v ...interface{}) {
-	if l.Level <= INFO {
-		l.PrintLine(INFO, format, v...)
+func (l *ConsoleLogger) Info(format string, v ...interface{}) {
+	if l.level <= INFO {
+		l.printer.Print(INFO, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *TextLogger) Warn(format string, v ...interface{}) {
-	if l.Level <= WARN {
-		l.PrintLine(WARN, format, v...)
+func (l *ConsoleLogger) Warn(format string, v ...interface{}) {
+	if l.level <= WARN {
+		l.printer.Print(WARN, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *TextLogger) GetLevel() Level {
-	return l.Level
+func (l *ConsoleLogger) Level() Level {
+	return l.level
 }
 
-func (l *TextLogger) PrintLine(level Level, format string, v ...interface{}) {
-	message := fmt.Sprintf(format, v...)
+type Presenter interface {
+	IsVisible(f Field) bool
+	IsPrefix(f Field) bool
+}
+
+type DefaultPresenter struct{}
+
+func (p *DefaultPresenter) IsVisible(f Field) bool { return true }
+func (p *DefaultPresenter) IsPrefix(f Field) bool  { return true }
+
+type Printer interface {
+	Print(level Level, msg string, fields Fields)
+}
+
+type TextPrinter struct {
+	Colors    bool
+	Writer    io.Writer
+	Presenter Presenter
+}
+
+func NewTextPrinter(w io.Writer) *TextPrinter {
+	return &TextPrinter{
+		Writer: w,
+		Colors: ColorsSupported(),
+	}
+}
+
+func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 	now := time.Now().Format(DateFormat)
 
 	var prefix string
 	var line string
-	var fields []string
-
-	if fields := l.Fields.Get(`agent_name`); len(fields) > 0 {
-		prefix = fields[0].Value()
-	}
+	var fieldStrs []string
 
 	if l.Colors {
 		levelColor := green
 		messageColor := nocolor
+		fieldColor := graybold
 
 		switch level {
 		case DEBUG:
@@ -158,31 +167,28 @@ func (l *TextLogger) PrintLine(level Level, format string, v ...interface{}) {
 
 		if prefix != "" {
 			line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m \x1b[%sm%s\x1b[0m",
-				levelColor, now, level, lightgray, prefix, messageColor, message)
+				levelColor, now, level, lightgray, prefix, messageColor, msg)
 		} else {
 			line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m",
-				levelColor, now, level, messageColor, message)
+				fieldColor, now, level, messageColor, msg)
 		}
 
-		for _, field := range l.Fields {
-			if field.Key() == `agent_name` {
-				continue
-			}
-			fields = append(fields, fmt.Sprintf("\x1b[%sm%s=\x1b[0m\x1b[%sm%s\x1b[0m",
-				lightgray, field.Key(), lightgray, field.Value()))
+		for _, field := range fields {
+			fieldStrs = append(fieldStrs, fmt.Sprintf("\x1b[%sm%s=\x1b[0m\x1b[%sm%s\x1b[0m",
+				lightgray, field.Key(), messageColor, field.String()))
 		}
 	} else {
 		if prefix != "" {
-			line = fmt.Sprintf("%s %-6s %s %s", now, level, prefix, message)
+			line = fmt.Sprintf("%s %-6s %s %s", now, level, prefix, msg)
 		} else {
-			line = fmt.Sprintf("%s %-6s %s", now, level, message)
+			line = fmt.Sprintf("%s %-6s %s", now, level, msg)
 		}
 
-		for _, field := range l.Fields {
+		for _, field := range fields {
 			if field.Key() == `agent_name` {
 				continue
 			}
-			fields = append(fields, fmt.Sprintf("%s=%s", field.Key(), field.Value()))
+			fieldStrs = append(fieldStrs, fmt.Sprintf("%s=%s", field.Key(), field.String()))
 		}
 	}
 
@@ -190,91 +196,56 @@ func (l *TextLogger) PrintLine(level Level, format string, v ...interface{}) {
 	mutex.Lock()
 	fmt.Fprint(l.Writer, line)
 	if len(fields) > 0 {
-		fmt.Fprintf(l.Writer, " %s", strings.Join(fields, " "))
+		fmt.Fprintf(l.Writer, " %s", strings.Join(fieldStrs, " "))
 	}
 	fmt.Fprint(l.Writer, "\n")
 	mutex.Unlock()
 }
 
-var Discard = &TextLogger{
-	Writer: ioutil.Discard,
+func ColorsSupported() bool {
+	// Color support for windows is set in init
+	if runtime.GOOS == "windows" && !windowsColors {
+		return false
+	}
+
+	// Colors can only be shown if STDOUT is a terminal
+	if terminal.IsTerminal(int(os.Stdout.Fd())) {
+		return true
+	}
+
+	return false
 }
 
-type JSONLogger struct {
-	Level  Level
-	Writer io.Writer
-	ExitFn func()
-	Fields Fields
+type JSONPrinter struct {
+	Writer    io.Writer
+	Presenter Presenter
 }
 
-func NewJSONLogger() Logger {
-	return &JSONLogger{
-		Level:  DEBUG,
-		Writer: os.Stderr,
-		Fields: Fields{},
+func NewJSONPrinter(w io.Writer) *JSONPrinter {
+	return &JSONPrinter{
+		Writer: w,
 	}
 }
 
-func (l *JSONLogger) WithFields(fields ...Field) Logger {
-	clone := *l
-	clone.Fields.Add(fields...)
-	return &clone
-}
-
-func (l *JSONLogger) SetLevel(level Level) {
-	l.Level = level
-}
-
-func (l *JSONLogger) Debug(format string, v ...interface{}) {
-	if l.Level == DEBUG {
-		l.PrintLine(DEBUG, format, v...)
-	}
-}
-
-func (l *JSONLogger) Error(format string, v ...interface{}) {
-	l.PrintLine(ERROR, format, v...)
-}
-
-func (l *JSONLogger) Fatal(format string, v ...interface{}) {
-	l.PrintLine(FATAL, format, v...)
-	os.Exit(1)
-}
-
-func (l *JSONLogger) Notice(format string, v ...interface{}) {
-	if l.Level <= NOTICE {
-		l.PrintLine(NOTICE, format, v...)
-	}
-}
-
-func (l *JSONLogger) Info(format string, v ...interface{}) {
-	if l.Level <= INFO {
-		l.PrintLine(INFO, format, v...)
-	}
-}
-
-func (l *JSONLogger) Warn(format string, v ...interface{}) {
-	if l.Level <= WARN {
-		l.PrintLine(WARN, format, v...)
-	}
-}
-
-func (l *JSONLogger) GetLevel() Level {
-	return l.Level
-}
-
-func (l *JSONLogger) PrintLine(level Level, format string, v ...interface{}) {
+func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf(`"ts":%q,`, time.Now().Format(time.RFC3339)))
 	b.WriteString(fmt.Sprintf(`"level":%q,`, level.String()))
-	b.WriteString(fmt.Sprintf(`"msg":%q,`, fmt.Sprintf(format, v...)))
+	b.WriteString(fmt.Sprintf(`"msg":%q,`, msg))
 
-	for _, field := range l.Fields {
-		b.WriteString(fmt.Sprintf(`%q:%q,`, field.Key(), field.Value()))
+	for _, field := range fields {
+		b.WriteString(fmt.Sprintf(`%q:%q,`, field.Key(), field.String()))
 	}
 
 	// Make sure we're only outputting a line one at a time
 	mutex.Lock()
-	fmt.Fprintf(l.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ","))
+	fmt.Fprintf(p.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ","))
 	mutex.Unlock()
+}
+
+var Discard = &ConsoleLogger{
+	printer: &TextPrinter{
+		Writer: ioutil.Discard,
+	},
 }

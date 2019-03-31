@@ -284,10 +284,10 @@ var BootstrapCommand = cli.Command{
 		ExperimentsFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewTextLogger()
-
 		// The configuration will be loaded into this struct
 		cfg := BootstrapConfig{}
+
+		l := CreateLogger(&cfg)
 
 		// Load the configuration
 		if err := cliconfig.Load(c, l, &cfg); err != nil {

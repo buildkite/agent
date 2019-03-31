@@ -1,8 +1,13 @@
 package logger
 
+import (
+	"fmt"
+	"time"
+)
+
 type Field interface {
 	Key() string
-	Value() string
+	String() string
 }
 
 type Fields []Field
@@ -21,16 +26,40 @@ func (f *Fields) Get(key string) []Field {
 	return fields
 }
 
-type agentNameField string
-
-func (a agentNameField) Key() string {
-	return `agent_name`
+type GenericField struct {
+	key    string
+	value  interface{}
+	format string
 }
 
-func (a agentNameField) Value() string {
-	return string(a)
+func (f GenericField) Key() string {
+	return f.key
 }
 
-func AgentNameField(name string) Field {
-	return agentNameField(name)
+func (f GenericField) String() string {
+	return fmt.Sprintf(f.format, f.value)
+}
+
+func StringField(key, value string) Field {
+	return GenericField{
+		key:    key,
+		value:  value,
+		format: "%s",
+	}
+}
+
+func IntField(key string, value int) Field {
+	return GenericField{
+		key:    key,
+		value:  value,
+		format: "%d",
+	}
+}
+
+func DurationField(key string, value time.Duration) Field {
+	return GenericField{
+		key:    key,
+		value:  value,
+		format: "%v",
+	}
 }

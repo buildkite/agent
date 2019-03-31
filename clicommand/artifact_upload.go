@@ -3,7 +3,6 @@ package clicommand
 import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/cliconfig"
-	"github.com/buildkite/agent/logger"
 	"github.com/urfave/cli"
 )
 
@@ -82,10 +81,10 @@ var ArtifactUploadCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewTextLogger()
-
 		// The configuration will be loaded into this struct
 		cfg := ArtifactUploadConfig{}
+
+		l := CreateLogger(&cfg)
 
 		// Load the configuration
 		if err := cliconfig.Load(c, l, &cfg); err != nil {

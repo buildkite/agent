@@ -14,7 +14,6 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/buildkite/agent/stdin"
 	"github.com/urfave/cli"
@@ -102,10 +101,10 @@ var PipelineUploadCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewTextLogger()
-
 		// The configuration will be loaded into this struct
 		cfg := PipelineUploadConfig{}
+
+		l := CreateLogger(&cfg)
 
 		// Load the configuration
 		if err := cliconfig.Load(c, l, &cfg); err != nil {

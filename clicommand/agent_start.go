@@ -408,17 +408,7 @@ var AgentStartCommand = cli.Command{
 			os.Exit(1)
 		}
 
-		var l logger.Logger
-
-		switch cfg.LogFormat {
-		case `text`:
-			l = logger.NewTextLogger()
-		case `json`:
-			l = logger.NewJSONLogger()
-		default:
-			fmt.Printf("Unknown log-format of %q, try text or json\n", cfg.LogFormat)
-			os.Exit(1)
-		}
+		l := CreateLogger(cfg)
 
 		// Show warnings now we have a logger
 		for _, warning := range warnings {
@@ -632,7 +622,8 @@ var AgentStartCommand = cli.Command{
 
 			// Create an agent worker to run the agent
 			workers = append(workers,
-				agent.NewAgentWorker(l.WithFields(logger.AgentNameField(ag.Name)), ag, mc, workerConf))
+				agent.NewAgentWorker(
+					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, workerConf))
 		}
 
 		// Setup the agent pool that spawns agent workers
