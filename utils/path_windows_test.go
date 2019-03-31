@@ -25,7 +25,8 @@ func TestNormalizeWindowsBackslashAbsolutePath(t *testing.T) {
 
 	// A naked backslash on Windows resolves to root of current working directory's drive.
 	dir, err := os.Getwd()
-	assert.NoError(t, err)
+	assert.Check(t, err)
+
 	drive := filepath.VolumeName(dir)
 	fp, err := NormalizeFilePath(`\`)
 
