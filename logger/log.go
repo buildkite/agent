@@ -111,24 +111,13 @@ func (l *ConsoleLogger) Level() Level {
 	return l.level
 }
 
-type Presenter interface {
-	IsVisible(f Field) bool
-	IsPrefix(f Field) bool
-}
-
-type DefaultPresenter struct{}
-
-func (p *DefaultPresenter) IsVisible(f Field) bool { return true }
-func (p *DefaultPresenter) IsPrefix(f Field) bool  { return true }
-
 type Printer interface {
 	Print(level Level, msg string, fields Fields)
 }
 
 type TextPrinter struct {
-	Colors    bool
-	Writer    io.Writer
-	Presenter Presenter
+	Colors bool
+	Writer io.Writer
 }
 
 func NewTextPrinter(w io.Writer) *TextPrinter {
@@ -207,8 +196,7 @@ func ColorsSupported() bool {
 }
 
 type JSONPrinter struct {
-	Writer    io.Writer
-	Presenter Presenter
+	Writer io.Writer
 }
 
 func NewJSONPrinter(w io.Writer) *JSONPrinter {

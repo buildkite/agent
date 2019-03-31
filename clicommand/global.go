@@ -162,14 +162,3 @@ func loadAPIClientConfig(cfg interface{}, tokenField string) agent.APIClientConf
 
 	return a
 }
-
-type loggerPresenter struct {
-}
-
-func (lp *loggerPresenter) IsVisible(f logger.Field) bool {
-	return true
-}
-
-func (lp *loggerPresenter) IsPrefix(f logger.Field) bool {
-	return f.Key() == `agent_name`
-}
