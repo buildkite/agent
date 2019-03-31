@@ -10,7 +10,6 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
