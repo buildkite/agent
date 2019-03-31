@@ -532,8 +532,58 @@ var AgentStartCommand = cli.Command{
 			agentConf.ConfigPath = loader.File.Path
 		}
 
-		// Show the welcome banner
-		agent.ShowBanner(l, agentConf)
+		if cfg.LogFormat == `text` {
+			welcomeMessage :=
+				"\n" +
+					"%s  _           _ _     _ _    _ _                                _\n" +
+					" | |         (_) |   | | |  (_) |                              | |\n" +
+					" | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
+					" | '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
+					" | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
+					" |_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
+					"                                                __/ |\n" +
+					" http://buildkite.com/agent                    |___/\n%s\n"
+
+			if !cfg.NoColor {
+				fmt.Fprintf(os.Stderr, welcomeMessage, "\x1b[38;5;48m", "\x1b[0m")
+			} else {
+				fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
+			}
+		}
+
+		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
+		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
+		l.Notice("For questions and support, email us at: hello@buildkite.com")
+
+		if agentConf.ConfigPath != "" {
+			l.Info("Configuration loaded from: %s", agentConf.ConfigPath)
+		}
+
+		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
+		l.Debug("Build path: %s", agentConf.BuildPath)
+		l.Debug("Hooks directory: %s", agentConf.HooksPath)
+		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
+
+		if !agentConf.SSHKeyscan {
+			l.Info("Automatic ssh-keyscan has been disabled")
+		}
+
+		if !agentConf.CommandEval {
+			l.Info("Evaluating console commands has been disabled")
+		}
+
+		if !agentConf.PluginsEnabled {
+			l.Info("Plugins have been disabled")
+		}
+
+		if !agentConf.RunInPty {
+			l.Info("Running builds within a pseudoterminal (PTY) has been disabled")
+		}
+
+		if agentConf.DisconnectAfterJob {
+			l.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds",
+				agentConf.DisconnectAfterJobTimeout)
+		}
 
 		apiClientConf := loadAPIClientConfig(cfg, `Token`)
 

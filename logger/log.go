@@ -266,6 +266,7 @@ func (l *JSONLogger) PrintLine(level Level, format string, v ...interface{}) {
 	var b strings.Builder
 
 	b.WriteString(fmt.Sprintf(`"ts":%q,`, time.Now().Format(time.RFC3339)))
+	b.WriteString(fmt.Sprintf(`"level":%q,`, level.String()))
 	b.WriteString(fmt.Sprintf(`"msg":%q,`, fmt.Sprintf(format, v...)))
 
 	for _, field := range l.Fields {
