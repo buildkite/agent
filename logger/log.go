@@ -141,7 +141,6 @@ func NewTextPrinter(w io.Writer) *TextPrinter {
 func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 	now := time.Now().Format(DateFormat)
 
-	var prefix string
 	var line string
 	var fieldStrs []string
 
@@ -165,24 +164,15 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 			messageColor = red
 		}
 
-		if prefix != "" {
-			line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m \x1b[%sm%s\x1b[0m",
-				levelColor, now, level, lightgray, prefix, messageColor, msg)
-		} else {
-			line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m",
-				fieldColor, now, level, messageColor, msg)
-		}
+		line = fmt.Sprintf("\x1b[%sm%s %-6s\x1b[0m \x1b[%sm%s\x1b[0m",
+			levelColor, now, level, messageColor, msg)
 
 		for _, field := range fields {
 			fieldStrs = append(fieldStrs, fmt.Sprintf("\x1b[%sm%s=\x1b[0m\x1b[%sm%s\x1b[0m",
-				lightgray, field.Key(), messageColor, field.String()))
+				fieldColor, field.Key(), messageColor, field.String()))
 		}
 	} else {
-		if prefix != "" {
-			line = fmt.Sprintf("%s %-6s %s %s", now, level, prefix, msg)
-		} else {
-			line = fmt.Sprintf("%s %-6s %s", now, level, msg)
-		}
+		line = fmt.Sprintf("%s %-6s %s", now, level, msg)
 
 		for _, field := range fields {
 			if field.Key() == `agent_name` {
