@@ -29,8 +29,6 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 
 	// Load tags from host
 	if conf.TagsFromHost {
-		var tags []string
-
 		hostname, err := os.Hostname()
 		if err != nil {
 			l.Warn("Failed to find hostname: %v", err)
