@@ -25,6 +25,31 @@ type FetchTagsConfig struct {
 
 // FetchTags loads tags from a variety of sources
 func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
+	f := &tagFetcher{
+		ec2Metadata: func() (map[string]string, error) {
+			return EC2MetaData{}.Get()
+		},
+		ec2Tags: func() (map[string]string, error) {
+			return EC2Tags{}.Get()
+		},
+		gcpMetadata: func() (map[string]string, error) {
+			return GCPMetaData{}.Get()
+		},
+		gcpLabels: func() (map[string]string, error) {
+			return GCPLabels{}.Get()
+		},
+	}
+	return f.Fetch(l, conf)
+}
+
+type tagFetcher struct {
+	ec2Metadata func() (map[string]string, error)
+	ec2Tags     func() (map[string]string, error)
+	gcpMetadata func() (map[string]string, error)
+	gcpLabels   func() (map[string]string, error)
+}
+
+func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
 
 	// Load tags from host
@@ -48,11 +73,11 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 	}
 
 	// Attempt to add the EC2 tags
-	if conf.TagsFromEC2 && awsSess != nil {
+	if conf.TagsFromEC2 {
 		l.Info("Fetching EC2 meta-data...")
 
 		err := retry.Do(func(s *retry.Stats) error {
-			ec2Tags, err := EC2MetaData{}.Get()
+			ec2Tags, err := t.ec2Metadata()
 			if err != nil {
 				l.Warn("%s (%s)", err, s)
 			} else {
@@ -73,10 +98,10 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 	}
 
 	// Attempt to add the EC2 tags
-	if conf.TagsFromEC2Tags && awsSess != nil {
+	if conf.TagsFromEC2Tags {
 		l.Info("Fetching EC2 tags...")
 		err := retry.Do(func(s *retry.Stats) error {
-			ec2Tags, err := EC2Tags{}.Get()
+			ec2Tags, err := t.ec2Tags()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
 			// to be applied to instances. This error will cause retries.
 			if err == nil && len(tags) == 0 {
@@ -102,7 +127,7 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 
 	// Attempt to add the Google Cloud meta-data
 	if conf.TagsFromGCP {
-		gcpTags, err := GCPMetaData{}.Get()
+		gcpTags, err := t.gcpMetadata()
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
 			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
@@ -117,7 +142,7 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 	if conf.TagsFromGCPLabels {
 		l.Info("Fetching GCP instance labels...")
 		err := retry.Do(func(s *retry.Stats) error {
-			labels, err := GCPLabels{}.Get()
+			labels, err := t.gcpLabels()
 			if err == nil && len(labels) == 0 {
 				err = errors.New("GCP instance labels are empty")
 			}
