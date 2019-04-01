@@ -11,9 +11,7 @@ import (
 )
 
 func TestFetchingTags(t *testing.T) {
-	l := logger.NewTextLogger()
-
-	tags := FetchTags(l, FetchTagsConfig{
+	tags := FetchTags(logger.Discard, FetchTagsConfig{
 		Tags: []string{"llamas", "rock"},
 	})
 
@@ -25,31 +23,9 @@ func TestFetchingTags(t *testing.T) {
 }
 
 func TestFetchingTagsWithHostTags(t *testing.T) {
-	l := logger.NewTextLogger()
-
-	tags := FetchTags(l, FetchTagsConfig{
+	tags := FetchTags(logger.Discard, FetchTagsConfig{
 		Tags:         []string{"llamas", "rock"},
 		TagsFromHost: true,
-	})
-
-	assert.Contains(t, tags, "llamas")
-	assert.Contains(t, tags, "rock")
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Contains(t, tags, "hostname="+hostname)
-	assert.Contains(t, tags, "os="+runtime.GOOS)
-}
-
-func TestFetchingTagsWithEC2Metadata(t *testing.T) {
-	l := logger.NewTextLogger()
-
-	tags := FetchTags(l, FetchTagsConfig{
-		Tags:        []string{"llamas", "rock"},
-		TagsFromEC2: true,
 	})
 
 	assert.Contains(t, tags, "llamas")
