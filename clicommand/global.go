@@ -79,6 +79,11 @@ func CreateLogger(cfg interface{}) logger.Logger {
 		case `text`:
 			printer := logger.NewTextPrinter(os.Stdout)
 
+			// Show agent fields as a prefix
+			printer.IsPrefixFn = func(field logger.Field) bool {
+				return field.Key() == `agent`
+			}
+
 			// Turn off color if a NoColor option is present
 			noColor, err := reflections.GetField(cfg, "NoColor")
 			if noColor == true && err == nil {

@@ -546,7 +546,7 @@ var AgentStartCommand = cli.Command{
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
 		if agentConf.ConfigPath != "" {
-			l.Info("Configuration loaded from: %s", agentConf.ConfigPath)
+			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Info("Configuration loaded")
 		}
 
 		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
