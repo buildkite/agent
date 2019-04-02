@@ -74,7 +74,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 	logFormat := `text`
 
 	// Check the LogFormat config field
-	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err != nil {
+	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err == nil {
 		if logFormatString, ok := logFormatCfg.(string); ok {
 			logFormat = logFormatString
 		}
