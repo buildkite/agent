@@ -101,6 +101,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		apiClient:          apiClient,
 		debug:              c.Debug,
 		agentConfiguration: c.AgentConfiguration,
+		stop:               make(chan struct{}),
 	}
 }
 
@@ -123,26 +124,29 @@ func (a *AgentWorker) Start() error {
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
 
+	// Create the ticker
+	a.ticker = time.NewTicker(pingInterval)
+
 	// Setup and start the heartbeater
 	go func() {
-		// Keep the heartbeat running as long as the agent is
-		for a.running {
-			err := a.Heartbeat()
-			if err != nil {
-				// Get the last heartbeat time to the nearest microsecond
-				lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
+		for {
+			select {
+			case <-time.After(heartbeatInterval):
+				err := a.Heartbeat()
+				if err != nil {
+					// Get the last heartbeat time to the nearest microsecond
+					lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
 
-				a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
-					err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
+					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+						err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
+				}
+
+			case <-a.stop:
+				a.logger.Debug("Stopping heartbeats")
+				return
 			}
-
-			time.Sleep(heartbeatInterval)
 		}
 	}()
-
-	// Create the ticker and stop channels
-	a.ticker = time.NewTicker(pingInterval)
-	a.stop = make(chan struct{})
 
 	// Setup a timer to automatically disconnect if no job has started
 	if a.agentConfiguration.DisconnectAfterJob {
@@ -250,9 +254,7 @@ func (a *AgentWorker) Stop(graceful bool) {
 
 	// If we have a ticker, stop it, and send a signal to the stop channel,
 	// which will cause the agent worker to stop looping immediatly.
-	if a.ticker != nil {
-		close(a.stop)
-	}
+	close(a.stop)
 
 	// Mark the agent as stopping
 	a.stopping = true
