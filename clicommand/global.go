@@ -71,34 +71,39 @@ var ExperimentsFlag = cli.StringSliceFlag{
 
 func CreateLogger(cfg interface{}) logger.Logger {
 	var l logger.Logger
+	logFormat := `text`
 
-	// Change the format if one is provided
-	logFormat, _ := reflections.GetField(cfg, "LogFormat")
-	if logFormat != "" {
-		switch logFormat {
-		case `text`:
-			printer := logger.NewTextPrinter(os.Stdout)
-
-			// Show agent fields as a prefix
-			printer.IsPrefixFn = func(field logger.Field) bool {
-				return field.Key() == `agent`
-			}
-
-			// Turn off color if a NoColor option is present
-			noColor, err := reflections.GetField(cfg, "NoColor")
-			if noColor == true && err == nil {
-				printer.Colors = false
-			} else {
-				printer.Colors = true
-			}
-
-			l = logger.NewConsoleLogger(printer, os.Exit)
-		case `json`:
-			l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
-		default:
-			fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
-			os.Exit(1)
+	// Check the LogFormat config field
+	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err != nil {
+		if logFormatString, ok := logFormatCfg.(string); ok {
+			logFormat = logFormatString
 		}
+	}
+
+	// Create a logger based on the type
+	switch logFormat {
+	case `text`, ``:
+		printer := logger.NewTextPrinter(os.Stdout)
+
+		// Show agent fields as a prefix
+		printer.IsPrefixFn = func(field logger.Field) bool {
+			return field.Key() == `agent`
+		}
+
+		// Turn off color if a NoColor option is present
+		noColor, err := reflections.GetField(cfg, "NoColor")
+		if noColor == true && err == nil {
+			printer.Colors = false
+		} else {
+			printer.Colors = true
+		}
+
+		l = logger.NewConsoleLogger(printer, os.Exit)
+	case `json`:
+		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
+	default:
+		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
+		os.Exit(1)
 	}
 
 	return l
