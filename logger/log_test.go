@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func TestLevelLogger(t *testing.T) {
+func TestTextLogger(t *testing.T) {
 	b := &bytes.Buffer{}
-	l := NewLogger()
+	l := NewTextLogger().(*TextLogger)
 	l.Level = INFO
 	l.Colors = false
 	l.Writer = b

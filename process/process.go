@@ -37,14 +37,14 @@ type Process struct {
 	status        syscall.WaitStatus
 	pid           int
 	conf          Config
-	logger        *logger.Logger
+	logger        logger.Logger
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
 }
 
 // New returns a new instance of Process
-func New(l *logger.Logger, c Config) *Process {
+func New(l logger.Logger, c Config) *Process {
 	return &Process{
 		logger: l,
 		conf:   c,

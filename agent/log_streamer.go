@@ -22,7 +22,7 @@ type LogStreamer struct {
 	conf LogStreamerConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// A counter of how many chunks failed to upload
 	chunksFailedCount int32
@@ -63,7 +63,7 @@ type LogStreamerChunk struct {
 }
 
 // Creates a new instance of the log streamer
-func NewLogStreamer(l *logger.Logger, cb func(chunk *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
+func NewLogStreamer(l logger.Logger, cb func(chunk *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
 	return &LogStreamer{
 		logger:   l,
 		conf:     c,

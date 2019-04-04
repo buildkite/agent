@@ -34,10 +34,10 @@ type ArtifactoryDownloader struct {
 	conf ArtifactoryDownloaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 }
 
-func NewArtifactoryDownloader(l *logger.Logger, c ArtifactoryDownloaderConfig) *ArtifactoryDownloader {
+func NewArtifactoryDownloader(l logger.Logger, c ArtifactoryDownloaderConfig) *ArtifactoryDownloader {
 	return &ArtifactoryDownloader{
 		conf:   c,
 		logger: l,

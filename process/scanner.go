@@ -10,10 +10,10 @@ import (
 )
 
 type Scanner struct {
-	logger *logger.Logger
+	logger logger.Logger
 }
 
-func NewScanner(l *logger.Logger) *Scanner {
+func NewScanner(l logger.Logger) *Scanner {
 	return &Scanner{
 		logger: l,
 	}

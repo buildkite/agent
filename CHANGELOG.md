@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.10.4](https://github.com/buildkite/agent/tree/v3.10.4) (2019-04-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.3...v3.10.4)
+
+### Fixed
+- Fix bug where logger was defaulting to debug [#974](https://github.com/buildkite/agent/pull/974) (@lox)
+- Fix race condition between stop/cancel and register [#971](https://github.com/buildkite/agent/pull/971) (@lox)
+
+## [v3.10.3](https://github.com/buildkite/agent/tree/v3.10.3) (2019-04-02)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.2...v3.10.3)
+
+### Fixed
+- Fix bug where ec2 tags aren't added correctly [#970](https://github.com/buildkite/agent/pull/970) (@lox)
+- Fix bug where host tags overwrite other tags [#969](https://github.com/buildkite/agent/pull/969) (@lox)
+
+## [v3.10.2](https://github.com/buildkite/agent/tree/v3.10.2) (2019-03-31)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.1...v3.10.2)
+
+### Fixed
+- Update artifatory uploader to use the correct PUT url [#960](https://github.com/buildkite/agent/pull/960) (@GaryPWhite)
+
+### Changed
+- Refactor: Move logger.Logger to an interface [#962](https://github.com/buildkite/agent/pull/962) (@lox)
+- Refactor: Move AgentWorker construction and registration out of AgentPool [#956](https://github.com/buildkite/agent/pull/956) (@lox)
+
+## [v3.10.1](https://github.com/buildkite/agent/tree/v3.10.1) (2019-03-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.0...v3.10.1)
+
+### Fixed
+- Fix long urls for artifactory integration [#955](https://github.com/buildkite/agent/pull/955) (@GaryPWhite)
+
 ## [v3.10.0](https://github.com/buildkite/agent/tree/v3.10.0) (2019-03-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.9.1...v3.10.0)
 

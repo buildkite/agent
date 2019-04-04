@@ -39,13 +39,13 @@ type GSUploader struct {
 	conf GSUploaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The GS service
 	service *storage.Service
 }
 
-func NewGSUploader(l *logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
+func NewGSUploader(l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
 	client, err := newGoogleClient(storage.DevstorageFullControlScope)
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
