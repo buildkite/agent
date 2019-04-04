@@ -71,8 +71,8 @@ var ExperimentsFlag = cli.StringSliceFlag{
 func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 	// Enable debugging if a Debug option is present
 	debug, _ := reflections.GetField(cfg, "Debug")
-	if debug == false {
-		l = l.WithLevel(logger.INFO)
+	if debug.(bool) {
+		l.SetLevel(logger.DEBUG)
 	}
 
 	// Turn off color if a NoColor option is present

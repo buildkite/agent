@@ -301,7 +301,7 @@ var BootstrapCommand = cli.Command{
 
 		// Enable debug if set
 		if cfg.Debug {
-			l = l.WithLevel(logger.DEBUG)
+			l.SetLevel(logger.DEBUG)
 		}
 
 		// Turn of PTY support if we're on Windows
