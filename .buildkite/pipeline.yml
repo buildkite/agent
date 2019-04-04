@@ -5,8 +5,11 @@ steps:
   - name: ":docker: Prebuild"
     plugins:
       - docker-compose#v3.0.0:
-          build: agent
+          config: .buildkite/docker-compose.yml
           image-repository: 445615400570.dkr.ecr.us-east-1.amazonaws.com/agent-ci
+          build: agent
+    agents:
+      queue: "elastic-builders"
 
   - name: ":hammer: :linux:"
     command: ".buildkite/steps/tests.sh"
