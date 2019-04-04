@@ -41,7 +41,7 @@ type Logger interface {
 	Info(format string, v ...interface{})
 
 	WithPrefix(prefix string) Logger
-	WithLevel(level Level) Logger
+	SetLevel(level Level)
 	GetLevel() Level
 }
 
@@ -55,7 +55,7 @@ type TextLogger struct {
 
 func NewTextLogger() Logger {
 	return &TextLogger{
-		Level:  DEBUG,
+		Level:  NOTICE,
 		Colors: ColorsAvailable(),
 		Writer: os.Stderr,
 	}
@@ -82,11 +82,9 @@ func (l *TextLogger) WithPrefix(prefix string) Logger {
 	return &clone
 }
 
-// WithLevel returns a copy of the logger with the provided level
-func (l *TextLogger) WithLevel(level Level) Logger {
-	clone := *l
-	clone.Level = level
-	return &clone
+// SetLevel sets the level for the logger
+func (l *TextLogger) SetLevel(level Level) {
+	l.Level = level
 }
 
 func (l *TextLogger) Debug(format string, v ...interface{}) {
