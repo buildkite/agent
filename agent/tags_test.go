@@ -59,9 +59,8 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 		TagsFromEC2Tags: true,
 	})
 
-	if !reflect.DeepEqual(tags, []string{"llamas", "rock", "aws:instance-id=i-blahblah", "aws:instance-type=t2.small", "custom_tag=true"}) {
-		t.Fatalf("bad tags: %#v", tags)
-	}
+	assert.ElementsMatch(t, tags,
+		[]string{"llamas", "rock", "aws:instance-id=i-blahblah", "aws:instance-type=t2.small", "custom_tag=true"})
 }
 
 func TestFetchingTagsFromGCP(t *testing.T) {
@@ -85,7 +84,6 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 		TagsFromGCPLabels: true,
 	})
 
-	if !reflect.DeepEqual(tags, []string{"llamas", "rock", "gcp:instance-id=my-instance", "gcp:zone=blah", "custom_tag=true"}) {
-		t.Fatalf("bad tags: %#v", tags)
-	}
+	assert.ElementsMatch(t, tags,
+		[]string{"llamas", "rock", "gcp:instance-id=my-instance", "gcp:zone=blah", "custom_tag=true"})
 }
