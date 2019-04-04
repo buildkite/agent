@@ -43,7 +43,7 @@ type ArtifactoryUploader struct {
 	jobID string
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// Artifactory username
 	user string
@@ -52,7 +52,7 @@ type ArtifactoryUploader struct {
 	password string
 }
 
-func NewArtifactoryUploader(l *logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
+func NewArtifactoryUploader(l logger.Logger, c ArtifactoryUploaderConfig) (*ArtifactoryUploader, error) {
 	repo, path := ParseArtifactoryDestination(c.Destination)
 	jobID := os.Getenv("BUILDKITE_JOB_ID")
 	stringURL := os.Getenv("BUILDKITE_ARTIFACTORY_URL")
@@ -112,7 +112,7 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	// Upload the file to Artifactory.
 	u.logger.Debug("Uploading \"%s\" to `%s`", artifact.Path, u.Repository)
 
-	req, err := http.NewRequest("PUT", u.iURL.String(), f)
+	req, err := http.NewRequest("PUT", u.URL(artifact), f)
 	req.SetBasicAuth(u.user, u.password)
 	if err != nil {
 		return err

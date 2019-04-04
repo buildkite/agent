@@ -14,7 +14,7 @@ import (
 )
 
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
-	ag := &api.Agent{
+	ag := &api.AgentRegisterResponse{
 		AccessToken: "llamasrock",
 	}
 
@@ -26,7 +26,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 		},
 	}
 
-	cfg := &agent.AgentConfiguration{}
+	cfg := agent.AgentConfiguration{}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
 		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != `llamasrock` {
@@ -38,7 +38,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 }
 
 func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
-	ag := &api.Agent{
+	ag := &api.AgentRegisterResponse{
 		AccessToken: "llamasrock",
 	}
 
@@ -51,7 +51,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 		},
 	}
 
-	cfg := &agent.AgentConfiguration{
+	cfg := agent.AgentConfiguration{
 		CommandEval: true,
 	}
 
@@ -65,7 +65,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 
 }
 
-func runJob(t *testing.T, ag *api.Agent, j *api.Job, cfg *agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
+func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
 	// create a mock agent API
 	server := createTestAgentEndpoint(t, `my-job-id`)
 	defer server.Close()

@@ -21,7 +21,7 @@ const (
 
 type Collector struct {
 	config CollectorConfig
-	logger *logger.Logger
+	logger logger.Logger
 	client *statsd.Client
 }
 
@@ -30,7 +30,7 @@ type CollectorConfig struct {
 	DatadogHost string
 }
 
-func NewCollector(l *logger.Logger, c CollectorConfig) *Collector {
+func NewCollector(l logger.Logger, c CollectorConfig) *Collector {
 	return &Collector{
 		config: c,
 		logger: l,

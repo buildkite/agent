@@ -11,7 +11,7 @@ import (
 
 type headerTimesStreamer struct {
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The callback that will be called when a header time is ready for
 	// upload
@@ -39,7 +39,7 @@ type headerTimesStreamer struct {
 	cursor int
 }
 
-func newHeaderTimesStreamer(l *logger.Logger, upload func(int, int, map[string]string)) *headerTimesStreamer {
+func newHeaderTimesStreamer(l logger.Logger, upload func(int, int, map[string]string)) *headerTimesStreamer {
 	return &headerTimesStreamer{
 		logger:         l,
 		uploadCallback: upload,

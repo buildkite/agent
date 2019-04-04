@@ -55,12 +55,6 @@ var DebugHTTPFlag = cli.BoolFlag{
 	EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
 }
 
-var DebugWithoutAPIFlag = cli.BoolFlag{
-	Name:   "debug-without-api",
-	Usage:  "Enable debug mode, except for the API client",
-	Hidden: true,
-}
-
 var NoColorFlag = cli.BoolFlag{
 	Name:   "no-color",
 	Usage:  "Don't show colors in logging",
@@ -74,25 +68,19 @@ var ExperimentsFlag = cli.StringSliceFlag{
 	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
-func HandleGlobalFlags(l *logger.Logger, cfg interface{}) {
-	// Enable debugging, but disable the api client
-	debugWithoutAPI, err := reflections.GetField(cfg, "DebugWithoutAPI")
-	if debugWithoutAPI == true && err == nil {
-		agent.APIClientDisableDebug()
-	}
-
+func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 	// Enable debugging if a Debug option is present
 	debug, _ := reflections.GetField(cfg, "Debug")
-	if debug == false && debugWithoutAPI == false {
-		l.Level = logger.INFO
+	if debug.(bool) {
+		l.SetLevel(logger.DEBUG)
 	}
 
 	// Turn off color if a NoColor option is present
 	noColor, err := reflections.GetField(cfg, "NoColor")
-	if noColor == true && err == nil {
-		l.Colors = false
+	if textLogger, ok := l.(*logger.TextLogger); ok && noColor == true && err == nil {
+		textLogger.Colors = false
 	} else {
-		l.Colors = true
+		textLogger.Colors = true
 	}
 
 	// Enable experiments

@@ -32,7 +32,7 @@ func SetupProcessGroup(cmd *exec.Cmd) {
 	}
 }
 
-func TerminateProcessGroup(p *os.Process, l *logger.Logger) error {
+func TerminateProcessGroup(p *os.Process, l logger.Logger) error {
 	l.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
@@ -40,7 +40,7 @@ func TerminateProcessGroup(p *os.Process, l *logger.Logger) error {
 	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
 }
 
-func InterruptProcessGroup(p *os.Process, l *logger.Logger) error {
+func InterruptProcessGroup(p *os.Process, l logger.Logger) error {
 	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
 	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
 	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))

@@ -32,13 +32,13 @@ type ArtifactDownloader struct {
 	conf ArtifactDownloaderConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The *api.Client that will be used when uploading jobs
 	apiClient *api.Client
 }
 
-func NewArtifactDownloader(l *logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
+func NewArtifactDownloader(l logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
 	return ArtifactDownloader{
 		logger:    l,
 		apiClient: ac,

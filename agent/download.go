@@ -39,13 +39,13 @@ type Download struct {
 	conf DownloadConfig
 
 	// The logger instance to use
-	logger *logger.Logger
+	logger logger.Logger
 
 	// The HTTP client to use for downloading
 	client *http.Client
 }
 
-func NewDownload(l *logger.Logger, client *http.Client, c DownloadConfig) *Download {
+func NewDownload(l logger.Logger, client *http.Client, c DownloadConfig) *Download {
 	return &Download{
 		logger: l,
 		client: client,
