@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 - Fix bug where logger was defaulting to debug [#974](https://github.com/buildkite/agent/pull/974) (@lox)
 - Fix race condition between stop/cancel and register [#971](https://github.com/buildkite/agent/pull/971) (@lox)
+- Fix incorrect artifactory upload url [#977](https://github.com/buildkite/agent/pull/977) (@GaryPWhite)
 
 ## [v3.10.3](https://github.com/buildkite/agent/tree/v3.10.3) (2019-04-02)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.10.2...v3.10.3)
