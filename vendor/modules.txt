@@ -49,7 +49,7 @@ github.com/buildkite/interpolate
 github.com/buildkite/shellwords
 # github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3
 github.com/buildkite/yaml
-# github.com/davecgh/go-spew v1.1.0
+# github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
 # github.com/denisbrodbeck/machineid v1.0.0
 github.com/denisbrodbeck/machineid
@@ -88,7 +88,7 @@ github.com/qri-io/jsonpointer
 github.com/qri-io/jsonschema
 # github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5
 github.com/sasha-s/go-deadlock
-# github.com/stretchr/testify v0.0.0-20170130113145-4d4bfba8f1d1
+# github.com/stretchr/testify v1.3.0
 github.com/stretchr/testify/assert
 # github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
 github.com/urfave/cli
