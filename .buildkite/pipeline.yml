@@ -11,6 +11,8 @@ steps:
     agents:
       queue: "elastic-builders"
 
+  - wait
+
   - name: ":hammer: :linux:"
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
