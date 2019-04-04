@@ -79,10 +79,9 @@ type AgentStartConfig struct {
 	Spawn                      int      `cli:"spawn"`
 
 	// Global flags
-	Debug           bool     `cli:"debug"`
-	DebugWithoutAPI bool     `cli:"debug-without-api"`
-	NoColor         bool     `cli:"no-color"`
-	Experiments     []string `cli:"experiment" normalize:"list"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -349,7 +348,6 @@ var AgentStartCommand = cli.Command{
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
-		DebugWithoutAPIFlag,
 
 		// Global flags
 		ExperimentsFlag,
