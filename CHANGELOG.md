@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.10.4](https://github.com/buildkite/agent/tree/v3.10.4) (2019-04-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.3...v3.10.4)
+
+### Fixed
+- Fix bug where logger was defaulting to debug [#974](https://github.com/buildkite/agent/pull/974) (@lox)
+- Fix race condition between stop/cancel and register [#971](https://github.com/buildkite/agent/pull/971) (@lox)
+
 ## [v3.10.3](https://github.com/buildkite/agent/tree/v3.10.3) (2019-04-02)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.10.2...v3.10.3)
 
