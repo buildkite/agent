@@ -2,7 +2,9 @@ version: '2.1'
 
 services:
   agent:
-    image: golang:1.12
+    build:
+      dockerfile: .buildkite/Dockerfile
+      context: ../
     volumes:
       - ../:/go/src/github.com/buildkite/agent:cached
     working_dir: /go/src/github.com/buildkite/agent
