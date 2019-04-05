@@ -15,7 +15,11 @@ RUN choco install -ry git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install golang --version 1.12 -mry && \
   choco install -ry mingw
 
+ENV GOFLAGS=-mod=vendor \
+    GO111MODULE=off
+
 WORKDIR c:/Users/ContainerAdministrator/go/src/github.com/buildkite/agent
 
 # Copy the rest of the code
 COPY . ./
+RUN go install -i github.com/buildkite/agent

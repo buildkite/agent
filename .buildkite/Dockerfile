@@ -5,6 +5,5 @@ ENV GOFLAGS=-mod=vendor \
 
 WORKDIR /go/src/github.com/buildkite/agent
 
-# prime the object cache
 ADD . .
 RUN go install -i github.com/buildkite/agent

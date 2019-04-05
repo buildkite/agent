@@ -13,8 +13,6 @@ services:
     environment:
       - BUILDKITE_BUILD_NUMBER
       - "BUILDKITE_BUILD_PATH=c:\\buildkite\\builds"
-      - GOFLAGS=-mod=vendor
-      - GO111MODULE=off
 
 networks:
   default:
