@@ -9,8 +9,6 @@ services:
       - ../:/go/src/github.com/buildkite/agent:cached
     working_dir: /go/src/github.com/buildkite/agent
     environment:
-      - GOFLAGS=-mod=vendor
-      - GO111MODULE=off
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"

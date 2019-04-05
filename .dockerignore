@@ -1,6 +1,4 @@
-Dockerfile
-Dockerfile*
-docker-compose*
-.vagrant
-packaging
-.gomodules
+/.vagrant
+/packaging
+/.git
+/test/
