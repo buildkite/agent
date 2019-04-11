@@ -1100,11 +1100,13 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		return err
 	}
 
+	gitFetchFlags := b.GitFetchFlags
+
 	// If a refspec is provided then use it instead.
 	// i.e. `refs/not/a/head`
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(b.shell, "-v --prune", "origin", b.RefSpec); err != nil {
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
 			return err
 		}
 
@@ -1120,7 +1122,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		b.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 
-		if err := gitFetch(b.shell, "-v", "origin", refspec); err != nil {
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", refspec); err != nil {
 			return err
 		}
 
@@ -1135,7 +1137,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// need to fetch the remote head and checkout the fetched head explicitly.
 	} else if b.Commit == "HEAD" {
 		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(b.shell, "-v --prune", "origin", b.Branch); err != nil {
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
 			return err
 		}
 
@@ -1147,13 +1149,13 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// support fetching a specific commit so we fall back to fetching all heads
 		// and tags, hoping that the commit is included.
 	} else {
-		if err := gitFetch(b.shell, "-v", "origin", b.Commit); err != nil {
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Commit); err != nil {
 			// By default `git fetch origin` will only fetch tags which are
 			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 			// fetch all tags in addition to the default refspec, but pre 1.9.0 it
 			// excludes the default refspec.
 			gitFetchRefspec, _ := b.shell.RunAndCapture("git", "config", "remote.origin.fetch")
-			if err := gitFetch(b.shell, "-v --prune", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
+			if err := gitFetch(b.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
 				return err
 			}
 		}

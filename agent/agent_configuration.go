@@ -13,6 +13,7 @@ type AgentConfiguration struct {
 	GitCloneFlags              string
 	GitCloneMirrorFlags        string
 	GitCleanFlags              string
+	GitFetchFlags              string
 	GitSubmodules              bool
 	SSHKeyscan                 bool
 	CommandEval                bool

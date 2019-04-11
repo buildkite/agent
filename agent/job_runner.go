@@ -403,6 +403,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_PLUGINS_ENABLED`,
 		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
 		`BUILDKITE_GIT_CLONE_FLAGS`,
+		`BUILDKITE_GIT_FETCH_FLAGS`,
 		`BUILDKITE_GIT_CLONE_MIRROR_FLAGS`,
 		`BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT`,
 		`BUILDKITE_GIT_CLEAN_FLAGS`,
@@ -452,6 +453,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
+	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
 	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
 	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.GitMirrorsLockTimeout)
