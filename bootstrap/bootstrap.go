@@ -1106,7 +1106,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// i.e. `refs/not/a/head`
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(b.shell, gitFetchFlags+" --prune", "origin", b.RefSpec); err != nil {
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
 			return err
 		}
 
@@ -1137,7 +1137,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		// need to fetch the remote head and checkout the fetched head explicitly.
 	} else if b.Commit == "HEAD" {
 		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(b.shell, gitFetchFlags+" --prune", "origin", b.Branch); err != nil {
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
 			return err
 		}
 
@@ -1155,7 +1155,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			// fetch all tags in addition to the default refspec, but pre 1.9.0 it
 			// excludes the default refspec.
 			gitFetchRefspec, _ := b.shell.RunAndCapture("git", "config", "remote.origin.fetch")
-			if err := gitFetch(b.shell, gitFetchFlags+" --prune", "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
+			if err := gitFetch(b.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
 				return err
 			}
 		}
