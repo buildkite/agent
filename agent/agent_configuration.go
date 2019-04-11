@@ -21,7 +21,6 @@ type AgentConfiguration struct {
 	PluginValidation           bool
 	LocalHooksEnabled          bool
 	RunInPty                   bool
-	DisableColors              bool
 	TimestampLines             bool
 	DisconnectAfterJob         bool
 	DisconnectAfterJobTimeout  int

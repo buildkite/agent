@@ -35,16 +35,20 @@ var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
 // A shortcut for loading a config from the CLI
 func Load(c *cli.Context, l logger.Logger, cfg interface{}) error {
-	loader := Loader{
-		CLI:    c,
-		Config: cfg,
-		Logger: l,
+	loader := Loader{CLI: c, Config: cfg}
+	warnings, err := loader.Load()
+	if err != nil {
+		return err
 	}
-	return loader.Load()
+	for _, warning := range warnings {
+		l.Warn("%s", warning)
+	}
+	return nil
 }
 
-// Loads the config from the CLI and config files that are present.
-func (l *Loader) Load() error {
+// Loads the config from the CLI and config files that are present and returns
+// any warnings or errors
+func (l *Loader) Load() (warnings []string, err error) {
 	// Try and find a config file, either passed in the command line using
 	// --config, or in one of the default configuration file paths.
 	if l.CLI.String("config") != "" {
@@ -56,7 +60,7 @@ func (l *Loader) Load() error {
 			l.File = &file
 		} else {
 			absolutePath, _ := file.AbsolutePath()
-			return fmt.Errorf("A configuration file could not be found at: %q", absolutePath)
+			return warnings, fmt.Errorf("A configuration file could not be found at: %q", absolutePath)
 		}
 	} else if len(l.DefaultConfigFilePaths) > 0 {
 		for _, path := range l.DefaultConfigFilePaths {
@@ -75,7 +79,7 @@ func (l *Loader) Load() error {
 	if l.File != nil {
 		// Attempt to load the config file we've found
 		if err := l.File.Load(); err != nil {
-			return err
+			return warnings, err
 		}
 	}
 
@@ -94,7 +98,7 @@ func (l *Loader) Load() error {
 			// Load the value from the CLI Context
 			err := l.setFieldValueFromCLI(fieldName, cliName)
 			if err != nil {
-				return err
+				return warnings, err
 			}
 		}
 
@@ -104,7 +108,7 @@ func (l *Loader) Load() error {
 			// Apply the normalization
 			err := l.normalizeField(fieldName, normalization)
 			if err != nil {
-				return err
+				return warnings, err
 			}
 		}
 
@@ -116,7 +120,8 @@ func (l *Loader) Load() error {
 			if !l.fieldValueIsEmpty(fieldName) {
 				renamedFieldCliName, _ := reflections.GetFieldTag(l.Config, renamedToFieldName, "cli")
 				if renamedFieldCliName != "" {
-					l.Logger.Warn("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName)
+					warnings = append(warnings,
+						fmt.Sprintf("The config option `%s` has been renamed to `%s`. Please update your configuration.", cliName, renamedFieldCliName))
 				}
 
 				value, _ := reflections.GetField(l.Config, fieldName)
@@ -124,14 +129,14 @@ func (l *Loader) Load() error {
 				// Error if they specify the deprecated version and the new version
 				if !l.fieldValueIsEmpty(renamedToFieldName) {
 					renamedFieldValue, _ := reflections.GetField(l.Config, renamedToFieldName)
-					return fmt.Errorf("Can't set config option `%s=%v` because `%s=%v` has already been set", cliName, value, renamedFieldCliName, renamedFieldValue)
+					return warnings, fmt.Errorf("Can't set config option `%s=%v` because `%s=%v` has already been set", cliName, value, renamedFieldCliName, renamedFieldValue)
 				}
 
 				// Set the proper config based on the deprecated value
 				if value != nil {
 					err := reflections.SetField(l.Config, renamedToFieldName, value)
 					if err != nil {
-						return fmt.Errorf("Could not set value `%s` to field `%s` (%s)", value, renamedToFieldName, err)
+						return warnings, fmt.Errorf("Could not set value `%s` to field `%s` (%s)", value, renamedToFieldName, err)
 					}
 				}
 			}
@@ -143,7 +148,7 @@ func (l *Loader) Load() error {
 			// If the deprecated field's value isn't empty, then we
 			// return the deprecation error message.
 			if !l.fieldValueIsEmpty(fieldName) {
-				return fmt.Errorf(deprecationError)
+				return warnings, fmt.Errorf(deprecationError)
 			}
 		}
 
@@ -167,12 +172,12 @@ func (l *Loader) Load() error {
 			// error.
 			err := l.validateField(fieldName, label, validationRules)
 			if err != nil {
-				return err
+				return warnings, err
 			}
 		}
 	}
 
-	return nil
+	return warnings, nil
 }
 
 func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {

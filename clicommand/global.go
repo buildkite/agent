@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -68,19 +69,53 @@ var ExperimentsFlag = cli.StringSliceFlag{
 	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
+func CreateLogger(cfg interface{}) logger.Logger {
+	var l logger.Logger
+	logFormat := `text`
+
+	// Check the LogFormat config field
+	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err == nil {
+		if logFormatString, ok := logFormatCfg.(string); ok {
+			logFormat = logFormatString
+		}
+	}
+
+	// Create a logger based on the type
+	switch logFormat {
+	case `text`, ``:
+		printer := logger.NewTextPrinter(os.Stdout)
+
+		// Show agent fields as a prefix
+		printer.IsPrefixFn = func(field logger.Field) bool {
+			return field.Key() == `agent`
+		}
+
+		// Turn off color if a NoColor option is present
+		noColor, err := reflections.GetField(cfg, "NoColor")
+		if noColor == true && err == nil {
+			printer.Colors = false
+		} else {
+			printer.Colors = true
+		}
+
+		l = logger.NewConsoleLogger(printer, os.Exit)
+	case `json`:
+		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
+	default:
+		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
+		os.Exit(1)
+	}
+
+	return l
+}
+
 func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 	// Enable debugging if a Debug option is present
 	debug, _ := reflections.GetField(cfg, "Debug")
-	if debug.(bool) {
+	if debug == true {
 		l.SetLevel(logger.DEBUG)
-	}
-
-	// Turn off color if a NoColor option is present
-	noColor, err := reflections.GetField(cfg, "NoColor")
-	if textLogger, ok := l.(*logger.TextLogger); ok && noColor == true && err == nil {
-		textLogger.Colors = false
 	} else {
-		textLogger.Colors = true
+		l.SetLevel(logger.NOTICE)
 	}
 
 	// Enable experiments

@@ -24,11 +24,6 @@ type APIClientConfig struct {
 	DisableHTTP2 bool
 }
 
-type APIClient struct {
-	config APIClientConfig
-	logger logger.Logger
-}
-
 func APIClientEnableHTTPDebug() {
 	debugHTTP = true
 }

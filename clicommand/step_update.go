@@ -8,7 +8,6 @@ import (
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
-	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
 	"github.com/urfave/cli"
 )
@@ -73,10 +72,10 @@ var StepUpdateCommand = cli.Command{
 		DebugFlag,
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewTextLogger()
-
 		// The configuration will be loaded into this struct
 		cfg := StepUpdateConfig{}
+
+		l := CreateLogger(&cfg)
 
 		// Load the configuration
 		if err := cliconfig.Load(c, l, &cfg); err != nil {

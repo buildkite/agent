@@ -78,6 +78,7 @@ type AgentStartConfig struct {
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
+	LogFormat                  string   `cli:"log-format"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -343,6 +344,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
+		cli.StringFlag{
+			Name:   "log-format",
+			Usage:  "The format to use for the logger output",
+			EnvVar: "BUILDKITE_LOG_FORMAT",
+			Value:  "text",
+		},
 		cli.IntFlag{
 			Name:   "spawn",
 			Usage:  "The number of agents to spawn in parallel",
@@ -390,8 +397,6 @@ var AgentStartCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
-		l := logger.NewTextLogger()
-
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
@@ -401,12 +406,20 @@ var AgentStartCommand = cli.Command{
 			CLI:                    c,
 			Config:                 &cfg,
 			DefaultConfigFilePaths: DefaultConfigFilePaths(),
-			Logger:                 l,
 		}
 
 		// Load the configuration
-		if err := loader.Load(); err != nil {
-			l.Fatal("%s", err)
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
+		l := CreateLogger(cfg)
+
+		// Show warnings now we have a logger
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Setup the any global configuration options
@@ -517,8 +530,58 @@ var AgentStartCommand = cli.Command{
 			agentConf.ConfigPath = loader.File.Path
 		}
 
-		// Show the welcome banner
-		agent.ShowBanner(l, agentConf)
+		if cfg.LogFormat == `text` {
+			welcomeMessage :=
+				"\n" +
+					"%s  _           _ _     _ _    _ _                                _\n" +
+					" | |         (_) |   | | |  (_) |                              | |\n" +
+					" | |__  _   _ _| | __| | | ___| |_ ___    __ _  __ _  ___ _ __ | |_\n" +
+					" | '_ \\| | | | | |/ _` | |/ / | __/ _ \\  / _` |/ _` |/ _ \\ '_ \\| __|\n" +
+					" | |_) | |_| | | | (_| |   <| | ||  __/ | (_| | (_| |  __/ | | | |_\n" +
+					" |_.__/ \\__,_|_|_|\\__,_|_|\\_\\_|\\__\\___|  \\__,_|\\__, |\\___|_| |_|\\__|\n" +
+					"                                                __/ |\n" +
+					" http://buildkite.com/agent                    |___/\n%s\n"
+
+			if !cfg.NoColor {
+				fmt.Fprintf(os.Stderr, welcomeMessage, "\x1b[38;5;48m", "\x1b[0m")
+			} else {
+				fmt.Fprintf(os.Stderr, welcomeMessage, "", "")
+			}
+		}
+
+		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
+		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
+		l.Notice("For questions and support, email us at: hello@buildkite.com")
+
+		if agentConf.ConfigPath != "" {
+			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Info("Configuration loaded")
+		}
+
+		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
+		l.Debug("Build path: %s", agentConf.BuildPath)
+		l.Debug("Hooks directory: %s", agentConf.HooksPath)
+		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
+
+		if !agentConf.SSHKeyscan {
+			l.Info("Automatic ssh-keyscan has been disabled")
+		}
+
+		if !agentConf.CommandEval {
+			l.Info("Evaluating console commands has been disabled")
+		}
+
+		if !agentConf.PluginsEnabled {
+			l.Info("Plugins have been disabled")
+		}
+
+		if !agentConf.RunInPty {
+			l.Info("Running builds within a pseudoterminal (PTY) has been disabled")
+		}
+
+		if agentConf.DisconnectAfterJob {
+			l.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds",
+				agentConf.DisconnectAfterJobTimeout)
+		}
 
 		apiClientConf := loadAPIClientConfig(cfg, `Token`)
 
@@ -567,7 +630,8 @@ var AgentStartCommand = cli.Command{
 
 			// Create an agent worker to run the agent
 			workers = append(workers,
-				agent.NewAgentWorker(l.WithPrefix(ag.Name), ag, mc, workerConf))
+				agent.NewAgentWorker(
+					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, workerConf))
 		}
 
 		// Setup the agent pool that spawns agent workers
