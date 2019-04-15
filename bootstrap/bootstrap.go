@@ -114,7 +114,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	//  Execute the bootstrap phases in order
 	var phaseErr error
 
-	if includePhase(`plugin`) {
+	if b.hasPlugins() && includePhase(`plugin`) {
 		phaseErr = b.parsePlugins()
 
 		if phaseErr == nil {
@@ -131,7 +131,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	if phaseErr == nil && includePhase(`plugin`) {
+	if phaseErr == nil && b.hasPlugins() && includePhase(`plugin`) {
 		phaseErr = b.VendoredPluginPhase()
 	}
 
