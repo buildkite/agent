@@ -115,7 +115,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	var phaseErr error
 
 	if b.hasPlugins() && includePhase(`plugin`) {
-		phaseErr = b.parsePlugins()
+		phaseErr = b.preparePlugins()
 
 		if phaseErr == nil {
 			phaseErr = b.PluginPhase()
@@ -490,9 +490,10 @@ func (b *Bootstrap) hasPlugins() bool {
 	return true
 }
 
-func (b *Bootstrap) parsePlugins() error {
+func (b *Bootstrap) preparePlugins() error {
+	b.shell.Headerf("Preparing plugins")
+
 	if b.Debug {
-		b.shell.Headerf("Parsing plugins")
 		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
 	}
 
