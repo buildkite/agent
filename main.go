@@ -1,5 +1,9 @@
 package main
 
+// see https://blog.golang.org/generate
+//go:generate go run mime/generate.go
+//go:generate go fmt mime/mime.go
+
 import (
 	"fmt"
 	"os"
