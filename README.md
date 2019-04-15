@@ -48,8 +48,14 @@ brew install go
 git clone https://github.com/buildkite/agent.git
 cd agent
 
+# Create the builds directory
+mkdir /tmp/buildkite-builds
+
+# Build the agent
+go build -i -o /usr/local/bin/buildkite-agent .
+
 # Start the agent
-go run main.go start --debug --token "abc123"
+buildkite-agent start --debug --build-path=/tmp/buildkite-builds --token "abc"
 ```
 
 ### Dependency management
