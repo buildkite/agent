@@ -114,7 +114,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	//  Execute the bootstrap phases in order
 	var phaseErr error
 
-	if b.hasPlugins() && includePhase(`plugin`) {
+	if includePhase(`plugin`) {
 		phaseErr = b.preparePlugins()
 
 		if phaseErr == nil {
@@ -131,7 +131,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	if phaseErr == nil && b.hasPlugins() && includePhase(`plugin`) {
+	if phaseErr == nil && includePhase(`plugin`) {
 		phaseErr = b.VendoredPluginPhase()
 	}
 
@@ -491,6 +491,10 @@ func (b *Bootstrap) hasPlugins() bool {
 }
 
 func (b *Bootstrap) preparePlugins() error {
+	if !b.hasPlugins() {
+		return nil
+	}
+
 	b.shell.Headerf("Preparing plugins")
 
 	if b.Debug {
@@ -601,7 +605,7 @@ func (b *Bootstrap) PluginPhase() error {
 // VendoredPluginPhase is where plugins that are included in the
 // checked out code are added
 func (b *Bootstrap) VendoredPluginPhase() error {
-	if len(b.plugins) == 0 {
+	if !b.hasPlugins() {
 		return nil
 	}
 
