@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
@@ -500,34 +501,33 @@ var AgentStartCommand = cli.Command{
 		})
 
 		// AgentConfiguration is the runtime configuration for an agent
-		agentConf := agent.AgentConfiguration{
-			BootstrapScript:            cfg.BootstrapScript,
-			BuildPath:                  cfg.BuildPath,
-			GitMirrorsPath:             cfg.GitMirrorsPath,
-			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
-			HooksPath:                  cfg.HooksPath,
-			PluginsPath:                cfg.PluginsPath,
-			GitCloneFlags:              cfg.GitCloneFlags,
-			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
-			GitCleanFlags:              cfg.GitCleanFlags,
-			GitFetchFlags:              cfg.GitFetchFlags,
-			GitSubmodules:              !cfg.NoGitSubmodules,
-			SSHKeyscan:                 !cfg.NoSSHKeyscan,
-			CommandEval:                !cfg.NoCommandEval,
-			PluginsEnabled:             !cfg.NoPlugins,
-			PluginValidation:           !cfg.NoPluginValidation,
-			LocalHooksEnabled:          !cfg.NoLocalHooks,
-			RunInPty:                   !cfg.NoPTY,
-			TimestampLines:             cfg.TimestampLines,
-			DisconnectAfterJob:         cfg.DisconnectAfterJob,
-			DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
-			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
-			CancelGracePeriod:          cfg.CancelGracePeriod,
-			Shell:                      cfg.Shell,
+		jobRunnerConf := agent.JobRunnerConfig{
+			Config: bootstrap.Config{
+				BuildPath:             cfg.BuildPath,
+				GitMirrorsPath:        cfg.GitMirrorsPath,
+				GitMirrorsLockTimeout: cfg.GitMirrorsLockTimeout,
+				HooksPath:             cfg.HooksPath,
+				PluginsPath:           cfg.PluginsPath,
+				GitCloneFlags:         cfg.GitCloneFlags,
+				GitCloneMirrorFlags:   cfg.GitCloneMirrorFlags,
+				GitCleanFlags:         cfg.GitCleanFlags,
+				GitFetchFlags:         cfg.GitFetchFlags,
+				GitSubmodules:         !cfg.NoGitSubmodules,
+				SSHKeyscan:            !cfg.NoSSHKeyscan,
+				CommandEval:           !cfg.NoCommandEval,
+				PluginsEnabled:        !cfg.NoPlugins,
+				PluginValidation:      !cfg.NoPluginValidation,
+				LocalHooksEnabled:     !cfg.NoLocalHooks,
+				RunInPty:              !cfg.NoPTY,
+				Shell:                 cfg.Shell,
+			},
+			BootstrapScript:   cfg.BootstrapScript,
+			TimestampLines:    cfg.TimestampLines,
+			CancelGracePeriod: cfg.CancelGracePeriod,
 		}
 
 		if loader.File != nil {
-			agentConf.ConfigPath = loader.File.Path
+			jobRunnerConf.ConfigPath = loader.File.Path
 		}
 
 		if cfg.LogFormat == `text` {
@@ -553,34 +553,29 @@ var AgentStartCommand = cli.Command{
 		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
-		if agentConf.ConfigPath != "" {
-			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Info("Configuration loaded")
+		if jobRunnerConf.ConfigPath != "" {
+			l.WithFields(logger.StringField(`path`, jobRunnerConf.ConfigPath)).Info("Configuration loaded")
 		}
 
-		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
-		l.Debug("Build path: %s", agentConf.BuildPath)
-		l.Debug("Hooks directory: %s", agentConf.HooksPath)
-		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
+		l.Debug("Bootstrap command: %s", jobRunnerConf.BootstrapScript)
+		l.Debug("Build path: %s", jobRunnerConf.BuildPath)
+		l.Debug("Hooks directory: %s", jobRunnerConf.HooksPath)
+		l.Debug("Plugins directory: %s", jobRunnerConf.PluginsPath)
 
-		if !agentConf.SSHKeyscan {
+		if !jobRunnerConf.SSHKeyscan {
 			l.Info("Automatic ssh-keyscan has been disabled")
 		}
 
-		if !agentConf.CommandEval {
+		if !jobRunnerConf.CommandEval {
 			l.Info("Evaluating console commands has been disabled")
 		}
 
-		if !agentConf.PluginsEnabled {
+		if !jobRunnerConf.PluginsEnabled {
 			l.Info("Plugins have been disabled")
 		}
 
-		if !agentConf.RunInPty {
+		if !jobRunnerConf.RunInPty {
 			l.Info("Running builds within a pseudoterminal (PTY) has been disabled")
-		}
-
-		if agentConf.DisconnectAfterJob {
-			l.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds",
-				agentConf.DisconnectAfterJobTimeout)
 		}
 
 		apiClientConf := loadAPIClientConfig(cfg, `Token`)
@@ -607,10 +602,13 @@ var AgentStartCommand = cli.Command{
 
 		// The common configuration for all workers
 		workerConf := agent.AgentWorkerConfig{
-			AgentConfiguration: agentConf,
-			Debug:              cfg.Debug,
-			Endpoint:           apiClientConf.Endpoint,
-			DisableHTTP2:       apiClientConf.DisableHTTP2,
+			Debug:                      cfg.Debug,
+			Endpoint:                   apiClientConf.Endpoint,
+			DisableHTTP2:               apiClientConf.DisableHTTP2,
+			DisconnectAfterJob:         cfg.DisconnectAfterJob,
+			DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
+			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
+			JobRunnerConfig:            jobRunnerConf,
 		}
 
 		var workers []*agent.AgentWorker

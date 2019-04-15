@@ -8,6 +8,7 @@ import (
 
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/bintest"
@@ -26,7 +27,7 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 		},
 	}
 
-	cfg := agent.AgentConfiguration{}
+	cfg := agent.JobRunnerConfig{}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
 		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != `llamasrock` {
@@ -51,8 +52,10 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 		},
 	}
 
-	cfg := agent.AgentConfiguration{
-		CommandEval: true,
+	cfg := agent.JobRunnerConfig{
+		Config: bootstrap.Config{
+			CommandEval: true,
+		},
 	}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
@@ -65,10 +68,13 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 
 }
 
-func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
+func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.JobRunnerConfig, bootstrap func(c *bintest.Call)) {
 	// create a mock agent API
 	server := createTestAgentEndpoint(t, `my-job-id`)
 	defer server.Close()
+
+	// set the server into the register response
+	ag.Endpoint = server.URL
 
 	// set up a mock bootstrap that the runner will call
 	bs, err := bintest.NewMock("buildkite-agent-bootstrap")
@@ -89,10 +95,7 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 	// set the bootstrap into the config
 	cfg.BootstrapScript = bs.Path
 
-	jr, err := agent.NewJobRunner(l, scope, ag, j, agent.JobRunnerConfig{
-		Endpoint:           server.URL,
-		AgentConfiguration: cfg,
-	})
+	jr, err := agent.NewJobRunner(l, scope, ag, j, cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
