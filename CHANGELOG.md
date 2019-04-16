@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.11.0](https://github.com/buildkite/agent/tree/v3.11.0) (2019-04-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.10.4...v3.11.0)
+
+### Changed
+- Combine apache and nginx sources for mime types. [#988](https://github.com/buildkite/agent/pull/988) (@blueimp)
+- Support log output in json [#966](https://github.com/buildkite/agent/pull/966) (@lox)
+- Add git-fetch-flags [#957](https://github.com/buildkite/agent/pull/957) (@lox)
+
 ## [v3.10.4](https://github.com/buildkite/agent/tree/v3.10.4) (2019-04-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.10.3...v3.10.4)
 
