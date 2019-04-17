@@ -104,7 +104,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			ec2Tags, err := t.ec2Tags()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
 			// to be applied to instances. This error will cause retries.
-			if err == nil && len(tags) == 0 {
+			if err == nil && len(ec2Tags) == 0 {
 				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
