@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [v3.11.0](https://github.com/buildkite/agent/tree/v3.11.0) (2019-04-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.10.4...v3.11.0)
 
+### Fixed
+
+- Allow applying ec2 tags when config tags are empty [#990](https://github.com/buildkite/agent/pull/990) (@vanstee)
+- Upload Artifactory artifacts to correct path [#989](https://github.com/buildkite/agent/pull/989) (@GaryPWhite)
+
 ### Changed
 - Combine apache and nginx sources for mime types. [#988](https://github.com/buildkite/agent/pull/988) (@blueimp)
 - Support log output in json [#966](https://github.com/buildkite/agent/pull/966) (@lox)
