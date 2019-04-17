@@ -121,7 +121,7 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 }
 
 func (u *ArtifactoryUploader) artifactPath(artifact *api.Artifact) string {
-	parts := []string{u.Repository, artifact.Path}
+	parts := []string{u.Repository, u.Path, artifact.Path}
 
 	return strings.Join(parts, "/")
 }
