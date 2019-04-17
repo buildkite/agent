@@ -63,6 +63,23 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 		[]string{"llamas", "rock", "aws:instance-id=i-blahblah", "aws:instance-type=t2.small", "custom_tag=true"})
 }
 
+func TestFetchingTagsFromEC2Tags(t *testing.T) {
+	fetcher := &tagFetcher{
+		ec2Tags: func() (map[string]string, error) {
+			return map[string]string{
+				`custom_tag`: "true",
+			}, nil
+		},
+	}
+
+	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
+		TagsFromEC2Tags: true,
+	})
+
+	assert.ElementsMatch(t, tags,
+		[]string{"custom_tag=true"})
+}
+
 func TestFetchingTagsFromGCP(t *testing.T) {
 	fetcher := &tagFetcher{
 		gcpMetadata: func() (map[string]string, error) {
