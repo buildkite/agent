@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/bootstrap"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
@@ -20,12 +21,25 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
+// JobRunnerConfig embeds the bootstrap.Config that is passed to the bootstrap
+// along with some extra config that is used by the runner
 type JobRunnerConfig struct {
-	// The endpoint that should be used when communicating with the API
-	Endpoint string
+	bootstrap.Config
 
-	// The configuration of the agent from the CLI
-	AgentConfiguration AgentConfiguration
+	// The path that the config file was loaded from
+	ConfigPath string
+
+	// The path to the command to execute as the bootstrap
+	BootstrapScript string
+
+	// How long to give cancellation to run before forceful termination
+	CancelGracePeriod int
+
+	// Whether to prefix output lines with a timestamp (also forces lines buffering)
+	TimestampLines bool
+
+	// The configuration to pass to the bootstrap subprocess
+	BootstrapConfig bootstrap.Config
 
 	// Whether to set debug in the job
 	Debug bool
@@ -43,6 +57,9 @@ type JobRunner struct {
 
 	// The job being run
 	job *api.Job
+
+	// The endpoint from the AgentRegisterResponse
+	endpoint string
 
 	// The APIClient that will be used when updating the job
 	apiClient *api.Client
@@ -85,23 +102,24 @@ type JobRunner struct {
 // Initializes the job runner
 func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
-		agent:   ag,
-		job:     j,
-		logger:  l,
-		conf:    conf,
-		metrics: scope,
+		agent:    ag,
+		job:      j,
+		logger:   l,
+		conf:     conf,
+		metrics:  scope,
+		endpoint: ag.Endpoint,
 	}
 
 	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Our own APIClient using the endpoint and the agents access token
 	runner.apiClient = NewAPIClient(l, APIClientConfig{
-		Endpoint: runner.conf.Endpoint,
+		Endpoint: ag.Endpoint,
 		Token:    ag.AccessToken,
 	})
 
 	// A proxy for the agent API that is expose to the bootstrap
-	runner.apiProxy = NewAPIProxy(l, conf.Endpoint, ag.AccessToken)
+	runner.apiProxy = NewAPIProxy(l, ag.Endpoint, ag.AccessToken)
 
 	// Create our header times struct
 	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
@@ -142,10 +160,10 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	// The bootstrap-script gets parsed based on the operating system
-	cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
+	cmd, err := shellwords.Split(conf.BootstrapScript)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v",
-			conf.AgentConfiguration.BootstrapScript, err)
+			conf.BootstrapScript, err)
 	}
 
 	// Our log streamer works off a buffer of output
@@ -155,7 +173,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	var processWriter io.Writer
 
 	// If we have timestamp lines on, we have to buffer lines before we flush them
-	if conf.AgentConfiguration.TimestampLines {
+	if conf.TimestampLines {
 		var pr *io.PipeReader
 		pr, processWriter = io.Pipe()
 
@@ -205,7 +223,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		Path:   cmd[0],
 		Args:   cmd[1:],
 		Env:    processEnv,
-		PTY:    conf.AgentConfiguration.RunInPty,
+		PTY:    conf.RunInPty,
 		Stdout: processWriter,
 		Stderr: processWriter,
 	})
@@ -327,7 +345,7 @@ func (r *JobRunner) Cancel() error {
 	}
 
 	r.logger.Info("Canceling job %s with a grace period of %ds",
-		r.job.ID, r.conf.AgentConfiguration.CancelGracePeriod)
+		r.job.ID, r.conf.CancelGracePeriod)
 
 	// First we interrupt the process (ctrl-c or SIGINT)
 	if err := r.process.Interrupt(); err != nil {
@@ -336,7 +354,7 @@ func (r *JobRunner) Cancel() error {
 
 	select {
 	// Grace period for cancelling
-	case <-time.After(time.Second * time.Duration(r.conf.AgentConfiguration.CancelGracePeriod)):
+	case <-time.After(time.Second * time.Duration(r.conf.CancelGracePeriod)):
 		r.logger.Info("Job %s hasn't stopped in time, terminating", r.job.ID)
 
 		// Terminate the process as we've exceeded our context
@@ -428,7 +446,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_AGENT_ENDPOINT"] = r.apiProxy.Endpoint()
 		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.apiProxy.AccessToken()
 	} else {
-		env["BUILDKITE_AGENT_ENDPOINT"] = r.conf.Endpoint
+		env["BUILDKITE_AGENT_ENDPOINT"] = r.endpoint
 		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.agent.AccessToken
 	}
 
@@ -442,25 +460,25 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_BIN_PATH"] = dir
 
 	// Add options from the agent configuration
-	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
-	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
-	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
-	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
-	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
-	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitSubmodules)
-	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
-	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
-	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
-	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
-	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.AgentConfiguration.GitCloneMirrorFlags
-	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.AgentConfiguration.GitCleanFlags
-	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.GitMirrorsLockTimeout)
-	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
+	env["BUILDKITE_CONFIG_PATH"] = r.conf.ConfigPath
+	env["BUILDKITE_BUILD_PATH"] = r.conf.BuildPath
+	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.GitMirrorsPath
+	env["BUILDKITE_HOOKS_PATH"] = r.conf.HooksPath
+	env["BUILDKITE_PLUGINS_PATH"] = r.conf.PluginsPath
+	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.SSHKeyscan)
+	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.conf.GitSubmodules)
+	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.CommandEval)
+	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.PluginsEnabled)
+	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.LocalHooksEnabled)
+	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.GitCloneFlags
+	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.GitFetchFlags
+	env["BUILDKITE_GIT_CLONE_MIRROR_FLAGS"] = r.conf.GitCloneMirrorFlags
+	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.conf.GitCleanFlags
+	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.GitMirrorsLockTimeout)
+	env["BUILDKITE_SHELL"] = r.conf.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 
-	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
+	enablePluginValidation := r.conf.PluginValidation
 
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
