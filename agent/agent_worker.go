@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -127,6 +128,10 @@ func (a *AgentWorker) Start() error {
 	// Create the ticker
 	a.ticker = time.NewTicker(pingInterval)
 
+	// Use a context to run heartbeats for as long as the agent runs for
+	heartbeatCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Setup and start the heartbeater
 	go func() {
 		for {
@@ -141,7 +146,7 @@ func (a *AgentWorker) Start() error {
 						err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
 				}
 
-			case <-a.stop:
+			case <-heartbeatCtx.Done():
 				a.logger.Debug("Stopping heartbeats")
 				return
 			}
