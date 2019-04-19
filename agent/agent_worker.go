@@ -141,6 +141,11 @@ func (a *AgentWorker) Start() error {
 		for {
 			select {
 			case <-time.After(heartbeatInterval):
+				if !a.running {
+					a.logger.Debug("Stopping heartbeats")
+					return
+				}
+
 				err := a.Heartbeat()
 				if err != nil {
 					// Get the last heartbeat time to the nearest microsecond
@@ -149,10 +154,6 @@ func (a *AgentWorker) Start() error {
 					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
 						err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
 				}
-
-			case <-a.stop:
-				a.logger.Debug("Stopping heartbeats")
-				return
 			}
 		}
 	}()
