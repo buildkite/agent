@@ -23,8 +23,8 @@ steps:
       set -x
       buildkite-agent meta-data exists --debug --debug-http "family"
       buildkite-agent meta-data get --debug --debug-http "family"
-      family=$(buildkite-agent meta-data get "family")
-      [[ \${family} == "camelids" ]]
+      # family=$(buildkite-agent meta-data get "family")
+      # [[ \${family} == "camelids" ]]
   - wait
   - label: "upload artifact"
     command: |
