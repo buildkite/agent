@@ -83,7 +83,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 	// Create a logger based on the type
 	switch logFormat {
 	case `text`, ``:
-		printer := logger.NewTextPrinter(os.Stdout)
+		printer := logger.NewTextPrinter(os.Stderr)
 
 		// Show agent fields as a prefix
 		printer.IsPrefixFn = func(field logger.Field) bool {
