@@ -24,17 +24,8 @@ type AgentWorkerConfig struct {
 	// Whether to disable http for the API
 	DisableHTTP2 bool
 
-	// Whether to disconnect after running a single job
-	DisconnectAfterJob bool
-
-	// How long to wait for a job (if DisconnectAfterJob is set) before timing out
-	DisconnectAfterJobTimeout int
-
-	// How long to remain idle before disconnecting
-	DisconnectAfterIdleTimeout int
-
-	// The config to pass to the JobRunnerConfig
-	JobRunnerConfig JobRunnerConfig
+	// The configuration of the agent from the CLI
+	AgentConfiguration AgentConfiguration
 }
 
 type AgentWorker struct {
@@ -44,14 +35,14 @@ type AgentWorker struct {
 	// of the struct
 	lastPing, lastHeartbeat int64
 
-	// The config for the AgentWorker
-	conf AgentWorkerConfig
-
 	// The API Client used when this agent is communicating with the API
 	apiClient *api.Client
 
 	// The logger instance to use
 	logger logger.Logger
+
+	// The configuration of the agent from the CLI
+	agentConfiguration AgentConfiguration
 
 	// The registered agent API record
 	agent *api.AgentRegisterResponse
@@ -104,13 +95,13 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 	})
 
 	return &AgentWorker{
-		logger:           l,
-		conf:             c,
-		agent:            a,
-		metricsCollector: m,
-		apiClient:        apiClient,
-		debug:            c.Debug,
-		stop:             make(chan struct{}),
+		logger:             l,
+		agent:              a,
+		metricsCollector:   m,
+		apiClient:          apiClient,
+		debug:              c.Debug,
+		agentConfiguration: c.AgentConfiguration,
+		stop:               make(chan struct{}),
 	}
 }
 
@@ -158,25 +149,25 @@ func (a *AgentWorker) Start() error {
 	}()
 
 	// Setup a timer to automatically disconnect if no job has started
-	if a.conf.DisconnectAfterJob {
-		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.conf.DisconnectAfterJobTimeout))
+	if a.agentConfiguration.DisconnectAfterJob {
+		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterJobTimeout))
 		go func() {
 			<-a.disconnectTimeoutTimer.C
-			a.logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.conf.DisconnectAfterJobTimeout)
+			a.logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
 			a.stopIfIdle()
 		}()
 
-		a.logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.conf.DisconnectAfterJobTimeout)
+		a.logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
 	}
 
 	// Setup an idle timer to disconnect after periods of idleness
-	if a.conf.DisconnectAfterIdleTimeout > 0 {
-		a.idleTimer = time.NewTimer(time.Second * time.Duration(a.conf.DisconnectAfterIdleTimeout))
+	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
+		a.idleTimer = time.NewTimer(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
 		go func() {
 			for {
 				select {
 				case <-a.idleTimer.C:
-					a.logger.Info("Agent has been idle for %d seconds", a.conf.DisconnectAfterIdleTimeout)
+					a.logger.Info("Agent has been idle for %d seconds", a.agentConfiguration.DisconnectAfterIdleTimeout)
 					a.stopIfIdle()
 
 				case <-a.stop:
@@ -187,12 +178,12 @@ func (a *AgentWorker) Start() error {
 		}()
 	}
 
-	if a.conf.DisconnectAfterJob {
+	if a.agentConfiguration.DisconnectAfterJob {
 		a.logger.Info("Waiting for job to be assigned...")
-		a.logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", a.conf.DisconnectAfterJobTimeout)
-	} else if a.conf.DisconnectAfterIdleTimeout > 0 {
+		a.logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", a.agentConfiguration.DisconnectAfterJobTimeout)
+	} else if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
 		a.logger.Info("Waiting for job to be assigned...")
-		a.logger.Info("The agent will automatically disconnect after %d seconds of inactivity", a.conf.DisconnectAfterIdleTimeout)
+		a.logger.Info("The agent will automatically disconnect after %d seconds of inactivity", a.agentConfiguration.DisconnectAfterIdleTimeout)
 	} else {
 		a.logger.Info("Waiting for work...")
 	}
@@ -338,10 +329,10 @@ func (a *AgentWorker) Ping() {
 		// timer. It wouldnt' be very nice if we just killed the agent
 		// because Buildkite was having some connection issues.
 		if a.disconnectTimeoutTimer != nil {
-			jobTimeoutSeconds := time.Second * time.Duration(a.conf.DisconnectAfterJobTimeout)
+			jobTimeoutSeconds := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterJobTimeout)
 			a.disconnectTimeoutTimer.Reset(jobTimeoutSeconds)
 
-			a.logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.conf.DisconnectAfterJobTimeout)
+			a.logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.agentConfiguration.DisconnectAfterJobTimeout)
 		}
 
 		return
@@ -428,7 +419,11 @@ func (a *AgentWorker) Ping() {
 	})
 
 	// Now that the job has been accepted, we can start it.
-	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, a.conf.JobRunnerConfig)
+	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, JobRunnerConfig{
+		Debug:              a.debug,
+		Endpoint:           accepted.Endpoint,
+		AgentConfiguration: a.agentConfiguration,
+	})
 
 	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
 	if a.disconnectTimeoutTimer != nil {
@@ -450,7 +445,7 @@ func (a *AgentWorker) Ping() {
 	// No more job, no more runner.
 	a.jobRunner = nil
 
-	if a.conf.DisconnectAfterJob {
+	if a.agentConfiguration.DisconnectAfterJob {
 		a.logger.Info("Job finished. Disconnecting...")
 
 		// We can just kill this timer now as well
@@ -462,9 +457,9 @@ func (a *AgentWorker) Ping() {
 		a.Stop(true)
 	}
 
-	if a.conf.DisconnectAfterIdleTimeout > 0 {
+	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
 		a.logger.Info("Job finished. Resetting idle timer...")
-		a.idleTimer.Reset(time.Second * time.Duration(a.conf.DisconnectAfterIdleTimeout))
+		a.idleTimer.Reset(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
 	}
 }
 
