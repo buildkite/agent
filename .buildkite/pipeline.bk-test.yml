@@ -20,11 +20,12 @@ steps:
   - wait
   - label: "get metadata"
     command: |
-      set -x
-      buildkite-agent meta-data exists --debug --debug-http "family"
-      buildkite-agent meta-data get --debug --debug-http "family"
-      # family=$(buildkite-agent meta-data get "family")
-      # [[ \${family} == "camelids" ]]
+      buildkite-agent meta-data exists "family"
+      family=$(buildkite-agent meta-data get "family")
+      if [[ \${family} != "camelids" ]] ; then
+        printf "unexpected family: %q\n" "\$family"
+        exit 1
+      fi
   - wait
   - label: "upload artifact"
     command: |
@@ -35,7 +36,10 @@ steps:
   - label: "download artifact"
     command: |
       shasum=$(buildkite-agent artifact shasum llamas.txt)
-      [[ \$shasum == "22596363b3de40b06f981fb85d82312e8c0ed511" ]]
+      if [[ \$shasum != "22596363b3de40b06f981fb85d82312e8c0ed511" ]] ; then
+        printf "unexpected shasum: %q\n" "\$shasum"
+        exit 1
+      fi
       buildkite-agent artifact download llamas.txt .
       cat llamas.txt
       grep "hello world" llamas.txt
