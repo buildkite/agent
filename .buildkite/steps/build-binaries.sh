@@ -28,6 +28,6 @@ archs=(
 )
 
 rm -rf pkg
-gox -output "pkg/buildkite-agent-{{.OS}}-{{.Arch}}" -osarch "${archs[*]}" .
+gox -parallel=5 -output "pkg/buildkite-agent-{{.OS}}-{{.Arch}}" -osarch "${archs[*]}" .
 
 
