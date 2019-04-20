@@ -11,5 +11,6 @@ services:
       - GO111MODULE=off
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
+      - BUILDKITE_BRANCH
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
