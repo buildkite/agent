@@ -1,9 +1,10 @@
 #!/bin/bash
-set -euo pipefail
+set -euxo pipefail
 
+bk_cli_version=0.5.0
 
 echo "--- :package: Downloading bk binary"
-curl -Lfs -o bk https://github.com/buildkite/cli/releases/download/v0.4.1/bk-linux-amd64-0.4.1
+curl -Lfs -o bk "https://github.com/buildkite/cli/releases/download/v${bk_cli_version}/bk-linux-amd64-${bk_cli_version}"
 chmod +x ./bk
 
 echo "--- :package: Downloading built binary"
