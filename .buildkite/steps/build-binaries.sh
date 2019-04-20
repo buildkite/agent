@@ -6,10 +6,9 @@ GO111MODULE=off go get github.com/mitchellh/gox
 # Disable CGO completely
 export CGO_ENABLED=0
 
-# mkdir -p $BUILD_PATH
-# go build -v -ldflags "-X github.com/buildkite/agent/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
+ldflags="-X github.com/buildkite/agent/agent.buildVersion=$BUILD_VERSION"
 
-archs=(
+gox_archs=(
   windows/386
   windows/amd64
   linux/amd64
@@ -28,6 +27,9 @@ archs=(
 )
 
 rm -rf pkg
-gox -parallel=5 -output "pkg/buildkite-agent-{{.OS}}-{{.Arch}}" -osarch "${archs[*]}" .
 
+# Build what we can with gox
+gox -ldflags="$ldflags" -parallel=5 -output "pkg/buildkite-agent-{{.OS}}-{{.Arch}}" -osarch "${gox_archs[*]}" .
 
+# Build the rest directly with golang
+GOOS="linux" GOARCH="arm" GOARM="7" go build -ldflags "${ldflags}" -o "pkg/buildkite-agent-linux-armhf"
