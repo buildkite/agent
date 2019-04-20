@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.11.2](https://github.com/buildkite/agent/tree/v3.11.2) (2019-04-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.11.1...v3.11.2)
+
+### Changed
+- Send logging to stderr again [#996](https://github.com/buildkite/agent/pull/996) (@lox)
+
 ## [v3.11.1](https://github.com/buildkite/agent/tree/v3.11.1) (2019-04-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.11.0...v3.11.1)
 
