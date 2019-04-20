@@ -4,11 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.11.1](https://github.com/buildkite/agent/tree/v3.11.1) (2019-04-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.11.0...v3.11.1)
+
+### Fixed
+- Ensure heartbeats run until agent is stopped [#992](https://github.com/buildkite/agent/pull/992) (@lox)
+- Revert "Refactor AgentConfiguration into JobRunnerConfig" to fix error accepting jobs[#993](https://github.com/buildkite/agent/pull/993) (@lox)
+
 ## [v3.11.0](https://github.com/buildkite/agent/tree/v3.11.0) (2019-04-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.10.4...v3.11.0)
 
 ### Fixed
-
 - Allow applying ec2 tags when config tags are empty [#990](https://github.com/buildkite/agent/pull/990) (@vanstee)
 - Upload Artifactory artifacts to correct path [#989](https://github.com/buildkite/agent/pull/989) (@GaryPWhite)
 
