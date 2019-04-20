@@ -32,8 +32,8 @@ steps:
 
   - wait
 
-  - name: "Build"
-    command: ".buildkite/steps/build-binary.sh windows 386"
+  - name: "🛠"
+    command: ".buildkite/steps/build-binaries.sh"
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v3.0.0:
