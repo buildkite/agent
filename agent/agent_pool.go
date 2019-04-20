@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/signalwatcher"
 )
 
 // AgentPool manages multiple parallel AgentWorkers
@@ -77,34 +79,44 @@ func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
 }
 
 func (r *AgentPool) watchWorkers() {
-	var signalLock sync.Mutex
-	var interruptCount int
+	// Start a signalwatcher so we can monitor signals and handle shutdowns
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT)
+	defer signal.Stop(signals)
 
-	signalwatcher.Watch(func(sig signalwatcher.Signal) {
-		signalLock.Lock()
-		defer signalLock.Unlock()
+	go func() {
+		var interruptCount int
 
-		if sig == signalwatcher.QUIT {
-			r.logger.Debug("Received signal `%s`", sig.String())
-			for _, worker := range r.workers {
-				worker.Stop(false)
-			}
-		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
-			r.logger.Debug("Received signal `%s`", sig.String())
-			if interruptCount == 0 {
-				interruptCount++
-				r.logger.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
-				for _, worker := range r.workers {
-					worker.Stop(true)
-				}
-			} else {
-				r.logger.Info("Forcefully stopping running jobs and stopping the agent(s)")
+		for sig := range signals {
+			r.logger.Debug("Received signal `%v`", sig)
+
+			switch sig {
+			case syscall.SIGQUIT:
+				r.logger.Debug("Received signal `%s`", sig.String())
 				for _, worker := range r.workers {
 					worker.Stop(false)
 				}
+			case syscall.SIGTERM, syscall.SIGINT:
+				r.logger.Debug("Received signal `%s`", sig.String())
+				if interruptCount == 0 {
+					interruptCount++
+					r.logger.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
+					for _, worker := range r.workers {
+						worker.Stop(true)
+					}
+				} else {
+					r.logger.Info("Forcefully stopping running jobs and stopping the agent(s)")
+					for _, worker := range r.workers {
+						worker.Stop(false)
+					}
+				}
+			default:
+				r.logger.Debug("Ignoring signal `%s`", sig.String())
 			}
-		} else {
-			r.logger.Debug("Ignoring signal `%s`", sig.String())
 		}
-	})
+	}()
 }
