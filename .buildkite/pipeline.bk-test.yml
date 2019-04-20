@@ -20,8 +20,8 @@ steps:
   - wait
   - label: "get metadata"
     command: |
-      buildkite-agent --debug --debug-http meta-data exists "family"
-      buildkite-agent  --debug --debug-http meta-data get "family"
+      buildkite-agent meta-data exists --debug --debug-http "family"
+      buildkite-agent meta-data get --debug --debug-http "family"
       family=$(buildkite-agent meta-data get "family")
       [[ \${family} == "camelids" ]]
   - wait
