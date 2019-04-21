@@ -530,11 +530,11 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 
 	// If the agent has been stopped, send a signal reason of `agent_stop` to distinguish between
 	// user-generated cancels and those due to the agent getting an operating system signal. If
-	// the job was signalled because it exceeded the cancel grace period, then the reason is `cancel_timeout`
+	// the job was signalled because it was cancelled then the reason is `cancel`.
 	if r.stopped {
 		r.job.SignalReason = `agent_stop`
 	} else if r.cancelled {
-		r.job.SignalReason = `cancel_timeout`
+		r.job.SignalReason = `cancel`
 	}
 
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
