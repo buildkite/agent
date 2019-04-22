@@ -66,8 +66,9 @@ type AgentWorker struct {
 	// Tracking the auto disconnect timer
 	disconnectTimeoutTimer *time.Timer
 
-	// Track the idle disconnect timer
-	idleTimer *time.Timer
+	// Track the idle disconnect timer and a cross-agent monitor
+	idleTimer   *time.Timer
+	idleMonitor *IdleMonitor
 
 	// Stop controls
 	stop      chan struct{}
@@ -107,7 +108,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 }
 
 // Starts the agent worker
-func (a *AgentWorker) Start() error {
+func (a *AgentWorker) Start(idle *IdleMonitor) error {
 	a.metrics = a.metricsCollector.Scope(metrics.Tags{
 		"agent_name": a.agent.Name,
 	})
@@ -165,6 +166,8 @@ func (a *AgentWorker) Start() error {
 		a.logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
 	}
 
+	a.idleMonitor = idle
+
 	// Setup an idle timer to disconnect after periods of idleness
 	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
 		a.idleTimer = time.NewTimer(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
@@ -172,8 +175,25 @@ func (a *AgentWorker) Start() error {
 			for {
 				select {
 				case <-a.idleTimer.C:
-					a.logger.Info("Agent has been idle for %d seconds", a.agentConfiguration.DisconnectAfterIdleTimeout)
-					a.stopIfIdle()
+					// Mark this agent as idle in the shared idle monitor
+					a.idleMonitor.MarkIdle(a.agent.Name)
+
+					// Only terminate if all agents in the pool are idle, otherwise extend the timer
+					if a.idleMonitor.Idle() {
+						a.logger.Info("Agent has been idle for %d seconds",
+							a.agentConfiguration.DisconnectAfterIdleTimeout)
+						a.stopIfIdle()
+					} else {
+						// Extend the timer by the smaller of 10% of the idle timer or 60 seconds
+						extendDuration := (time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)) / 10
+						if extendDuration > (time.Second * 60) {
+							extendDuration = time.Second * 60
+						}
+
+						a.logger.Debug("Agent has been idle for %d seconds, but other agents are active so extending for %v",
+							a.agentConfiguration.DisconnectAfterIdleTimeout, extendDuration)
+						a.idleTimer.Reset(extendDuration)
+					}
 
 				case <-a.stop:
 					a.logger.Debug("Stopping the idle ticker")
@@ -465,6 +485,7 @@ func (a *AgentWorker) Ping() {
 	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
 		a.logger.Info("Job finished. Resetting idle timer...")
 		a.idleTimer.Reset(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
+		a.idleMonitor.MarkBusy(a.agent.Name)
 	}
 }
 
@@ -486,4 +507,35 @@ func (a *AgentWorker) Disconnect() error {
 
 func (a *AgentWorker) UpdateProcTitle(action string) {
 	proctitle.Replace(fmt.Sprintf("buildkite-agent v%s [%s]", Version(), action))
+}
+
+type IdleMonitor struct {
+	sync.Mutex
+	totalAgents int
+	idle        map[string]struct{}
+}
+
+func NewIdleMonitor(totalAgents int) *IdleMonitor {
+	return &IdleMonitor{
+		totalAgents: totalAgents,
+		idle:        map[string]struct{}{},
+	}
+}
+
+func (i *IdleMonitor) Idle() bool {
+	i.Lock()
+	defer i.Unlock()
+	return len(i.idle) == i.totalAgents
+}
+
+func (i *IdleMonitor) MarkIdle(agent string) {
+	i.Lock()
+	defer i.Unlock()
+	i.idle[agent] = struct{}{}
+}
+
+func (i *IdleMonitor) MarkBusy(agent string) {
+	i.Lock()
+	defer i.Unlock()
+	delete(i.idle, agent)
 }
