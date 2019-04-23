@@ -176,7 +176,7 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 				select {
 				case <-a.idleTimer.C:
 					// Mark this agent as idle in the shared idle monitor
-					a.idleMonitor.MarkIdle(a.agent.Name)
+					a.idleMonitor.MarkIdle(a.agent.UUID)
 
 					// Only terminate if all agents in the pool are idle, otherwise extend the timer
 					if a.idleMonitor.Idle() {
@@ -528,14 +528,14 @@ func (i *IdleMonitor) Idle() bool {
 	return len(i.idle) == i.totalAgents
 }
 
-func (i *IdleMonitor) MarkIdle(agent string) {
+func (i *IdleMonitor) MarkIdle(agentUUID string) {
 	i.Lock()
 	defer i.Unlock()
-	i.idle[agent] = struct{}{}
+	i.idle[agentUUID] = struct{}{}
 }
 
-func (i *IdleMonitor) MarkBusy(agent string) {
+func (i *IdleMonitor) MarkBusy(agentUUID string) {
 	i.Lock()
 	defer i.Unlock()
-	delete(i.idle, agent)
+	delete(i.idle, agentUUID)
 }
