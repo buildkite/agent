@@ -27,6 +27,9 @@ func (r *AgentPool) Start() error {
 	var spawn int = len(r.workers)
 	var errs = make(chan error, spawn)
 
+	// Co-ordinate idle state across agents
+	idleMonitor := NewIdleMonitor(len(r.workers))
+
 	// Spawn goroutines for each parallel worker
 	for _, worker := range r.workers {
 		wg.Add(1)
@@ -34,7 +37,7 @@ func (r *AgentPool) Start() error {
 		go func(worker *AgentWorker) {
 			defer wg.Done()
 
-			if err := r.runWorker(worker); err != nil {
+			if err := r.runWorker(worker, idleMonitor); err != nil {
 				errs <- err
 			}
 		}(worker)
@@ -54,14 +57,14 @@ func (r *AgentPool) Start() error {
 	return <-errs
 }
 
-func (r *AgentPool) runWorker(worker *AgentWorker) error {
+func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
 	// Connect the worker to the API
 	if err := worker.Connect(); err != nil {
 		return err
 	}
 
 	// Starts the agent worker and wait for it to finish
-	if err := worker.Start(); err != nil {
+	if err := worker.Start(im); err != nil {
 		return err
 	}
 
