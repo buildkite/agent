@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.11.3](https://github.com/buildkite/agent/tree/v3.11.3) (2019-05-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.11.2...v3.11.3)
+
+### Fixed
+- Prevent host tags from overwriting aws/gcp tags [#1002](https://github.com/buildkite/agent/pull/1002) (@lox)
+
+### Changed
+- Replace signalwatcher package with os/signal [#998](https://github.com/buildkite/agent/pull/998) (@lox)
+- Only trigger idle disconnect if all workers are idle [#999](https://github.com/buildkite/agent/pull/999) (@lox)
+
 ## [v3.11.2](https://github.com/buildkite/agent/tree/v3.11.2) (2019-04-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.11.1...v3.11.2)
 
