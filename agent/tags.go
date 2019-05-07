@@ -68,8 +68,6 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		if machineID != "" {
 			tags = append(tags, fmt.Sprintf("machine-id=%s", machineID))
 		}
-
-		return tags
 	}
 
 	// Attempt to add the EC2 tags
