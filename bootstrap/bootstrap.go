@@ -1370,10 +1370,12 @@ func (b *Bootstrap) defaultCommandPhase() error {
 
 		cmdToExec = batchScript
 	} else if commandIsScript {
-		// Make script executable
-		if err = addExecutePermissionToFile(pathToCommand); err != nil {
-			b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
-			return err
+		if b.Config.CommandEval {
+			// Make script executable
+			if err = addExecutePermissionToFile(pathToCommand); err != nil {
+				b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
+				return err
+			}
 		}
 
 		// Make the path relative to the shell working dir
