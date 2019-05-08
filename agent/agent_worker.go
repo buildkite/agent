@@ -485,7 +485,7 @@ func (a *AgentWorker) Ping() {
 	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
 		a.logger.Info("Job finished. Resetting idle timer...")
 		a.idleTimer.Reset(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
-		a.idleMonitor.MarkBusy(a.agent.Name)
+		a.idleMonitor.MarkBusy(a.agent.UUID)
 	}
 }
 
