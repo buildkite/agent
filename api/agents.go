@@ -29,7 +29,7 @@ type AgentRegisterRequest struct {
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
 type AgentRegisterResponse struct {
-	UUID              string   `json:"uuid" msgpack:"uuid"`
+	UUID              string   `json:"id" msgpack:"id"`
 	Name              string   `json:"name" msgpack:"name"`
 	AccessToken       string   `json:"access_token" msgpack:"access_token"`
 	Endpoint          string   `json:"endpoint" msgpack:"endpoint"`
