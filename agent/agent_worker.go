@@ -217,7 +217,36 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 	// a message on the stop channel.
 	for {
 		if !a.stopping {
-			a.Ping()
+			// Check with buildkite if there is work to be done
+			if ping := a.Ping(); ping != nil {
+				// Is there a message that should be shown in the logs?
+				if ping.Message != "" {
+					a.logger.Info(ping.Message)
+				}
+
+				// Otherwise perform the relevant action
+				switch {
+				// Agent disconnect
+				case ping.Action == "disconnect":
+					a.Stop(false)
+
+				case ping.Job != nil:
+					// Accept the job first
+					accepted, err := a.Accept(ping.Job)
+					if err != nil {
+						a.logger.Error("Failed to accept job: %v", err)
+					}
+
+					// Run the job
+					if err := a.runJob(accepted); err != nil {
+						a.logger.Error("%v", err)
+					}
+
+				// If we don't have a job, there's nothing to do!
+				case ping.Job == nil:
+					a.UpdateProcTitle("idle")
+				}
+			}
 		}
 
 		select {
@@ -262,7 +291,9 @@ func (a *AgentWorker) Stop(graceful bool) {
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
-			a.jobRunner.Cancel()
+			if err := a.jobRunner.Cancel(); err != nil {
+				a.logger.Error("Failed to cancel: %v", err)
+			}
 		} else {
 			a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 		}
@@ -337,7 +368,7 @@ func (a *AgentWorker) Heartbeat() error {
 }
 
 // Performs a ping, which returns what action the agent should take next.
-func (a *AgentWorker) Ping() {
+func (a *AgentWorker) Ping() *api.Ping {
 	// Update the proc title
 	a.UpdateProcTitle("pinging")
 
@@ -360,7 +391,7 @@ func (a *AgentWorker) Ping() {
 			a.logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.agentConfiguration.DisconnectAfterJobTimeout)
 		}
 
-		return
+		return nil
 	} else {
 		// Track a timestamp for the successful ping for better errors
 		atomic.StoreInt64(&a.lastPing, time.Now().Unix())
@@ -387,36 +418,22 @@ func (a *AgentWorker) Ping() {
 		}
 	}
 
-	// Is there a message that should be shown in the logs?
-	if ping.Message != "" {
-		a.logger.Info(ping.Message)
-	}
+	return ping
+}
 
-	// Should the agent disconnect?
-	if ping.Action == "disconnect" {
-		a.Stop(false)
-		return
-	}
-
-	// If we don't have a job, there's nothing to do!
-	if ping.Job == nil {
-		// Update the proc title
-		a.UpdateProcTitle("idle")
-
-		return
-	}
-
+func (a *AgentWorker) Accept(job *api.Job) (*api.Job, error) {
 	// Update the proc title
-	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(ping.Job.ID, "-")[0]))
+	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(job.ID, "-")[0]))
 
-	a.logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
+	a.logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
 	// re-ping, and try the whole process again.
 	var accepted *api.Job
-	retry.Do(func(s *retry.Stats) error {
-		accepted, _, err = a.apiClient.Jobs.Accept(ping.Job)
+	err := retry.Do(func(s *retry.Stats) error {
+		var err error
+		accepted, _, err = a.apiClient.Jobs.Accept(job)
 
 		if err != nil {
 			if api.IsRetryableError(err) {
@@ -432,10 +449,13 @@ func (a *AgentWorker) Ping() {
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
-		a.logger.Error("Failed to accept job")
-		return
+		return nil, fmt.Errorf("Failed to accept job")
 	}
 
+	return accepted, err
+}
+
+func (a *AgentWorker) runJob(accepted *api.Job) error {
 	jobMetricsScope := a.metrics.With(metrics.Tags{
 		`pipeline`: accepted.Env[`BUILDKITE_PIPELINE_SLUG`],
 		`org`:      accepted.Env[`BUILDKITE_ORGANIZATION_SLUG`],
@@ -444,6 +464,7 @@ func (a *AgentWorker) Ping() {
 	})
 
 	// Now that the job has been accepted, we can start it.
+	var err error
 	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, JobRunnerConfig{
 		Debug:              a.debug,
 		Endpoint:           accepted.Endpoint,
@@ -458,13 +479,12 @@ func (a *AgentWorker) Ping() {
 
 	// Was there an error creating the job runner?
 	if err != nil {
-		a.logger.Error("Failed to initialize job: %s", err)
-		return
+		return fmt.Errorf("Failed to initialize job: %s", err)
 	}
 
 	// Start running the job
 	if err = a.jobRunner.Run(); err != nil {
-		a.logger.Error("Failed to run job: %s", err)
+		return fmt.Errorf("Failed to run job: %s", err)
 	}
 
 	// No more job, no more runner.
@@ -487,6 +507,8 @@ func (a *AgentWorker) Ping() {
 		a.idleTimer.Reset(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
 		a.idleMonitor.MarkBusy(a.agent.UUID)
 	}
+
+	return nil
 }
 
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
