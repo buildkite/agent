@@ -57,9 +57,6 @@ type AgentWorker struct {
 	// Whether to enable debug
 	debug bool
 
-	// Whether or not the agent is running
-	running bool
-
 	// Used by the Start call to control the looping of the pings
 	ticker *time.Ticker
 
@@ -118,9 +115,6 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 		return err
 	}
 	defer a.metricsCollector.Stop()
-
-	// Mark the agent as running
-	a.running = true
 
 	// Create the intervals we'll be using
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
@@ -225,10 +219,6 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 			continue
 		case <-a.stop:
 			a.ticker.Stop()
-
-			// Mark the agent as not running anymore
-			a.running = false
-
 			return nil
 		}
 	}
