@@ -45,7 +45,6 @@ type AgentStartConfig struct {
 	Name                       string   `cli:"name"`
 	Priority                   string   `cli:"priority"`
 	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
-	DisconnectAfterJobTimeout  int      `cli:"disconnect-after-job-timeout"`
 	DisconnectAfterIdleTimeout int      `cli:"disconnect-after-idle-timeout"`
 	BootstrapScript            string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod          int      `cli:"cancel-grace-period"`
@@ -97,6 +96,7 @@ type AgentStartConfig struct {
 	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
 	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
+	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
 func DefaultShell() string {
@@ -167,15 +167,9 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
 		},
 		cli.IntFlag{
-			Name:   "disconnect-after-job-timeout",
-			Value:  120,
-			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
-			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
-		},
-		cli.IntFlag{
 			Name:   "disconnect-after-idle-timeout",
 			Value:  0,
-			Usage:  "If no jobs have come in for the specified number of secconds, disconnect the agent",
+			Usage:  "If no jobs have come in for the specified number of seconds, disconnect the agent",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
 		},
 		cli.IntFlag{
@@ -395,6 +389,12 @@ var AgentStartCommand = cli.Command{
 			Hidden: true,
 			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
 		},
+		cli.IntFlag{
+			Name:   "disconnect-after-job-timeout",
+			Hidden: true,
+			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
+			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
+		},
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -471,9 +471,9 @@ var AgentStartCommand = cli.Command{
 			cfg.Shell = DefaultShell()
 		}
 
-		// Make sure the DisconnectAfterJobTimeout value is correct
-		if cfg.DisconnectAfterJob && cfg.DisconnectAfterJobTimeout < 120 {
-			l.Fatal("The timeout for `disconnect-after-job` must be at least 120 seconds")
+		// Handle deprecated DisconnectAfterJobTimeout
+		if cfg.DisconnectAfterJobTimeout > 0 {
+			cfg.DisconnectAfterIdleTimeout = cfg.DisconnectAfterJobTimeout
 		}
 
 		var ec2TagTimeout time.Duration
@@ -520,7 +520,6 @@ var AgentStartCommand = cli.Command{
 			RunInPty:                   !cfg.NoPTY,
 			TimestampLines:             cfg.TimestampLines,
 			DisconnectAfterJob:         cfg.DisconnectAfterJob,
-			DisconnectAfterJobTimeout:  cfg.DisconnectAfterJobTimeout,
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			Shell:                      cfg.Shell,
@@ -579,8 +578,11 @@ var AgentStartCommand = cli.Command{
 		}
 
 		if agentConf.DisconnectAfterJob {
-			l.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds",
-				agentConf.DisconnectAfterJobTimeout)
+			l.Info("Agents will disconnect after a job run has completed")
+		}
+
+		if agentConf.DisconnectAfterIdleTimeout > 0 {
+			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
 		apiClientConf := loadAPIClientConfig(cfg, `Token`)

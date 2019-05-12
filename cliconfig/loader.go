@@ -148,7 +148,8 @@ func (l *Loader) Load() (warnings []string, err error) {
 			// If the deprecated field's value isn't empty, then we
 			// return the deprecation error message.
 			if !l.fieldValueIsEmpty(fieldName) {
-				return warnings, fmt.Errorf(deprecationError)
+				warnings = append(warnings,
+					fmt.Sprintf("The config option `%s` has been deprecated: %s", cliName, deprecationError))
 			}
 		}
 
@@ -309,6 +310,8 @@ func (l Loader) fieldValueIsEmpty(fieldName string) bool {
 		return v.Len() == 0
 	} else if fieldKind == reflect.Bool {
 		return value == false
+	} else if fieldKind == reflect.Int {
+		return value == 0
 	} else {
 		panic(fmt.Sprintf("Can't determine empty-ness for field type %s", fieldKind))
 	}
