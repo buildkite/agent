@@ -23,7 +23,6 @@ type AgentConfiguration struct {
 	RunInPty                   bool
 	TimestampLines             bool
 	DisconnectAfterJob         bool
-	DisconnectAfterJobTimeout  int
 	DisconnectAfterIdleTimeout int
 	CancelGracePeriod          int
 	Shell                      string

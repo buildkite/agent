@@ -57,12 +57,6 @@ type AgentWorker struct {
 	// Whether to enable debug
 	debug bool
 
-	// Used by the Start call to control the looping of the pings
-	ticker *time.Ticker
-
-	// Tracking the auto disconnect timer
-	disconnectTimeoutTimer *time.Timer
-
 	// Track the idle disconnect timer and a cross-agent monitor
 	idleTimer   *time.Timer
 	idleMonitor *IdleMonitor
@@ -121,7 +115,8 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
 
 	// Create the ticker
-	a.ticker = time.NewTicker(pingInterval)
+	pingTicker := time.NewTicker(pingInterval)
+	defer pingTicker.Stop()
 
 	// Use a context to run heartbeats for as long as the agent runs for
 	heartbeatCtx, cancel := context.WithCancel(context.Background())
@@ -147,18 +142,6 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 			}
 		}
 	}()
-
-	// Setup a timer to automatically disconnect if no job has started
-	if a.agentConfiguration.DisconnectAfterJob {
-		a.disconnectTimeoutTimer = time.NewTimer(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterJobTimeout))
-		go func() {
-			<-a.disconnectTimeoutTimer.C
-			a.logger.Debug("[DisconnectionTimer] Reached %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
-			a.stopIfIdle()
-		}()
-
-		a.logger.Debug("[DisconnectionTimer] Started for %d seconds...", a.agentConfiguration.DisconnectAfterJobTimeout)
-	}
 
 	a.idleMonitor = idle
 
@@ -197,28 +180,18 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 		}()
 	}
 
-	if a.agentConfiguration.DisconnectAfterJob {
-		a.logger.Info("Waiting for job to be assigned...")
-		a.logger.Info("The agent will automatically disconnect after %d seconds if no job is assigned", a.agentConfiguration.DisconnectAfterJobTimeout)
-	} else if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
-		a.logger.Info("Waiting for job to be assigned...")
-		a.logger.Info("The agent will automatically disconnect after %d seconds of inactivity", a.agentConfiguration.DisconnectAfterIdleTimeout)
-	} else {
-		a.logger.Info("Waiting for work...")
-	}
+	a.logger.Info("Waiting for work...")
 
-	// Continue this loop until the the ticker is stopped, and we received
-	// a message on the stop channel.
+	// Continue this loop until the closing of the stop channel signals termination
 	for {
 		if !a.stopping {
 			a.Ping()
 		}
 
 		select {
-		case <-a.ticker.C:
+		case <-pingTicker.C:
 			continue
 		case <-a.stop:
-			a.ticker.Stop()
 			return nil
 		}
 	}
@@ -267,8 +240,8 @@ func (a *AgentWorker) Stop(graceful bool) {
 	// Update the proc title
 	a.UpdateProcTitle("stopping")
 
-	// If we have a ticker, stop it, and send a signal to the stop channel,
-	// which will cause the agent worker to stop looping immediatly.
+	// Use the closure of the stop channel as a signal to the main run loop in Start()
+	// to stop looping and terminate
 	close(a.stop)
 
 	// Mark the agent as stopping
@@ -340,21 +313,11 @@ func (a *AgentWorker) Ping() {
 		// ping again after the interval.
 		a.logger.Warn("Failed to ping: %s (Last successful was %v ago)", err, time.Now().Sub(lastPing))
 
-		// When the ping fails, we wan't to reset our disconnection
-		// timer. It wouldnt' be very nice if we just killed the agent
-		// because Buildkite was having some connection issues.
-		if a.disconnectTimeoutTimer != nil {
-			jobTimeoutSeconds := time.Second * time.Duration(a.agentConfiguration.DisconnectAfterJobTimeout)
-			a.disconnectTimeoutTimer.Reset(jobTimeoutSeconds)
-
-			a.logger.Debug("[DisconnectionTimer] Reset back to %d seconds because of ping failure...", a.agentConfiguration.DisconnectAfterJobTimeout)
-		}
-
 		return
-	} else {
-		// Track a timestamp for the successful ping for better errors
-		atomic.StoreInt64(&a.lastPing, time.Now().Unix())
 	}
+
+	// Track a timestamp for the successful ping for better errors
+	atomic.StoreInt64(&a.lastPing, time.Now().Unix())
 
 	// Should we switch endpoints?
 	if ping.Endpoint != "" && ping.Endpoint != a.agent.Endpoint {
@@ -440,12 +403,6 @@ func (a *AgentWorker) Ping() {
 		AgentConfiguration: a.agentConfiguration,
 	})
 
-	// Woo! We've got a job, and successfully accepted it, let's kill our auto-disconnect timer
-	if a.disconnectTimeoutTimer != nil {
-		a.logger.Debug("[DisconnectionTimer] A job was assigned and accepted, stopping timer...")
-		a.disconnectTimeoutTimer.Stop()
-	}
-
 	// Was there an error creating the job runner?
 	if err != nil {
 		a.logger.Error("Failed to initialize job: %s", err)
@@ -462,11 +419,6 @@ func (a *AgentWorker) Ping() {
 
 	if a.agentConfiguration.DisconnectAfterJob {
 		a.logger.Info("Job finished. Disconnecting...")
-
-		// We can just kill this timer now as well
-		if a.disconnectTimeoutTimer != nil {
-			a.disconnectTimeoutTimer.Stop()
-		}
 
 		// Tell the agent to finish up
 		a.Stop(true)
