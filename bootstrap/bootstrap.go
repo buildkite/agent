@@ -1370,6 +1370,28 @@ func (b *Bootstrap) defaultCommandPhase() error {
 
 		cmdToExec = batchScript
 	} else if commandIsScript {
+		// If we're running without CommandEval, the usual reason is we're
+		// trying to protect the agent from malicious activity from outside
+		// (including from the master).
+		//
+		// Because without this guard, we'll try to make the named file +x,
+		// and then attempt to run it, irrespective of any git attributes,
+		// should the queue source/master be compromised, this then becomes a
+		// vector through which a no-command-eval agent could potentially be
+		// made to run code not desired or vetted by the operator.
+		//
+		// Such undesired payloads could be delivered by hiding that payload in
+		// non-executable objects in the repo (such as through partial shell
+		// fragments, or other material not intended to be run on it's own),
+		// or by obfuscating binary executable code into other types of binaries.
+		//
+		// This also closes the risk factor with agents where you
+		// may have a dangerous script committed, but not executable (maybe
+		// because its part of a deployment process), but you don't want that
+		// script to ever be executed on the buildkite agent itself!  With
+		// command-eval agents, such risks are everpresent since the master
+		// can tell the agent to do anything anyway, but no-command-eval agents
+		// shouldn't be vulnerable to this!
 		if b.Config.CommandEval {
 			// Make script executable
 			if err = addExecutePermissionToFile(pathToCommand); err != nil {
