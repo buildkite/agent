@@ -57,10 +57,6 @@ type AgentWorker struct {
 	// Whether to enable debug
 	debug bool
 
-	// Track the idle disconnect timer and a cross-agent monitor
-	idleTimer   *time.Timer
-	idleMonitor *IdleMonitor
-
 	// Stop controls
 	stop      chan struct{}
 	stopping  bool
@@ -99,7 +95,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 }
 
 // Starts the agent worker
-func (a *AgentWorker) Start(idle *IdleMonitor) error {
+func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 	a.metrics = a.metricsCollector.Scope(metrics.Tags{
 		"agent_name": a.agent.Name,
 	})
@@ -143,49 +139,53 @@ func (a *AgentWorker) Start(idle *IdleMonitor) error {
 		}
 	}()
 
-	a.idleMonitor = idle
-
-	// Setup an idle timer to disconnect after periods of idleness
-	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
-		a.idleTimer = time.NewTimer(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
-		go func() {
-			for {
-				select {
-				case <-a.idleTimer.C:
-					// Mark this agent as idle in the shared idle monitor
-					a.idleMonitor.MarkIdle(a.agent.UUID)
-
-					// Only terminate if all agents in the pool are idle, otherwise extend the timer
-					if a.idleMonitor.Idle() {
-						a.logger.Info("Agent has been idle for %d seconds",
-							a.agentConfiguration.DisconnectAfterIdleTimeout)
-						a.stopIfIdle()
-					} else {
-						// Extend the timer by the smaller of 10% of the idle timer or 60 seconds
-						extendDuration := (time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout)) / 10
-						if extendDuration > (time.Second * 60) {
-							extendDuration = time.Second * 60
-						}
-
-						a.logger.Debug("Agent has been idle for %d seconds, but other agents are active so extending for %v",
-							a.agentConfiguration.DisconnectAfterIdleTimeout, extendDuration)
-						a.idleTimer.Reset(extendDuration)
-					}
-
-				case <-a.stop:
-					a.logger.Debug("Stopping the idle ticker")
-					return
-				}
-			}
-		}()
-	}
-
+	lastActionTime := time.Now()
 	a.logger.Info("Waiting for work...")
 
 	// Continue this loop until the closing of the stop channel signals termination
 	for {
 		if !a.stopping {
-			a.Ping()
+			job, err := a.Ping()
+			if err != nil {
+				a.logger.Warn("%v", err)
+			} else if job != nil {
+				// Let other agents know this agent is now busy and
+				// not to idle terminate
+				idleMonitor.MarkBusy(a.agent.UUID)
+
+				// Runs the job, only errors if something goes wrong
+				if runErr := a.AcceptAndRun(job); runErr != nil {
+					a.logger.Error("%v", runErr)
+				} else {
+					if a.agentConfiguration.DisconnectAfterJob {
+						a.logger.Info("Job finished. Disconnecting...")
+						return nil
+					}
+					lastActionTime = time.Now()
+				}
+			}
+
+			// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
+			if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
+				idleDeadline := lastActionTime.Add(time.Second *
+					time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
+
+				if time.Now().After(idleDeadline) {
+					// Let other agents know this agent is now idle and termination
+					// is possible
+					idleMonitor.MarkIdle(a.agent.UUID)
+
+					// But only terminate if everyone else is also idle
+					if idleMonitor.Idle() {
+						a.logger.Info("All agents have been idle for %d seconds. Disconnecting...",
+							a.agentConfiguration.DisconnectAfterIdleTimeout)
+						return nil
+					} else {
+						a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
+							time.Now().Sub(lastActionTime).Seconds())
+					}
+				}
+			}
 		}
 
 		select {
@@ -248,14 +248,6 @@ func (a *AgentWorker) Stop(graceful bool) {
 	a.stopping = true
 }
 
-func (a *AgentWorker) stopIfIdle() {
-	if a.jobRunner == nil && !a.stopping {
-		a.Stop(true)
-	} else {
-		a.logger.Debug("Agent is running a job, going to let it finish it's work")
-	}
-}
-
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
 func (a *AgentWorker) Connect() error {
@@ -299,8 +291,9 @@ func (a *AgentWorker) Heartbeat() error {
 	return nil
 }
 
-// Performs a ping, which returns what action the agent should take next.
-func (a *AgentWorker) Ping() {
+// Performs a ping that checks Buildkite for a job or action to take
+// Returns a job, or nil if none is found
+func (a *AgentWorker) Ping() (*api.Job, error) {
 	// Update the proc title
 	a.UpdateProcTitle("pinging")
 
@@ -311,9 +304,7 @@ func (a *AgentWorker) Ping() {
 
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
-		a.logger.Warn("Failed to ping: %s (Last successful was %v ago)", err, time.Now().Sub(lastPing))
-
-		return
+		return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", err, time.Now().Sub(lastPing))
 	}
 
 	// Track a timestamp for the successful ping for better errors
@@ -348,29 +339,32 @@ func (a *AgentWorker) Ping() {
 	// Should the agent disconnect?
 	if ping.Action == "disconnect" {
 		a.Stop(false)
-		return
+		return nil, nil
 	}
 
 	// If we don't have a job, there's nothing to do!
 	if ping.Job == nil {
 		// Update the proc title
 		a.UpdateProcTitle("idle")
-
-		return
+		return nil, nil
 	}
 
-	// Update the proc title
-	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(ping.Job.ID, "-")[0]))
+	return ping.Job, nil
+}
 
-	a.logger.Info("Assigned job %s. Accepting...", ping.Job.ID)
+// Accepts a job and runs it, only returns an error if something goes wrong
+func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
+	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(job.ID, "-")[0]))
+
+	a.logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
 	// re-ping, and try the whole process again.
 	var accepted *api.Job
-	retry.Do(func(s *retry.Stats) error {
-		accepted, _, err = a.apiClient.Jobs.Accept(ping.Job)
-
+	err := retry.Do(func(s *retry.Stats) error {
+		var err error
+		accepted, _, err = a.apiClient.Jobs.Accept(job)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, s)
@@ -385,8 +379,7 @@ func (a *AgentWorker) Ping() {
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {
-		a.logger.Error("Failed to accept job")
-		return
+		return fmt.Errorf("Failed to accept job: %v", err)
 	}
 
 	jobMetricsScope := a.metrics.With(metrics.Tags{
@@ -395,6 +388,11 @@ func (a *AgentWorker) Ping() {
 		`branch`:   accepted.Env[`BUILDKITE_BRANCH`],
 		`source`:   accepted.Env[`BUILDKITE_SOURCE`],
 	})
+
+	defer func() {
+		// No more job, no more runner.
+		a.jobRunner = nil
+	}()
 
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, JobRunnerConfig{
@@ -405,30 +403,15 @@ func (a *AgentWorker) Ping() {
 
 	// Was there an error creating the job runner?
 	if err != nil {
-		a.logger.Error("Failed to initialize job: %s", err)
-		return
+		return fmt.Errorf("Failed to initialize job: %v", err)
 	}
 
 	// Start running the job
 	if err = a.jobRunner.Run(); err != nil {
-		a.logger.Error("Failed to run job: %s", err)
+		return fmt.Errorf("Failed to run job: %v", err)
 	}
 
-	// No more job, no more runner.
-	a.jobRunner = nil
-
-	if a.agentConfiguration.DisconnectAfterJob {
-		a.logger.Info("Job finished. Disconnecting...")
-
-		// Tell the agent to finish up
-		a.Stop(true)
-	}
-
-	if a.agentConfiguration.DisconnectAfterIdleTimeout > 0 {
-		a.logger.Info("Job finished. Resetting idle timer...")
-		a.idleTimer.Reset(time.Second * time.Duration(a.agentConfiguration.DisconnectAfterIdleTimeout))
-		a.idleMonitor.MarkBusy(a.agent.UUID)
-	}
+	return nil
 }
 
 // Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
