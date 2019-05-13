@@ -51,7 +51,8 @@ func (r *AgentPool) Start() error {
 	}()
 
 	// Listen for process signals
-	r.watchWorkers()
+	signals := r.watchWorkers()
+	defer signal.Stop(signals)
 
 	r.logger.Info("Started %d Agent(s)", spawn)
 	r.logger.Info("You can press Ctrl-C to stop the agents")
@@ -78,15 +79,13 @@ func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
 	return nil
 }
 
-func (r *AgentPool) watchWorkers() {
-	// Start a signalwatcher so we can monitor signals and handle shutdowns
+func (r *AgentPool) watchWorkers() chan os.Signal {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
 		syscall.SIGTERM,
 		syscall.SIGINT,
 		syscall.SIGQUIT)
-	defer signal.Stop(signals)
 
 	go func() {
 		var interruptCount int
@@ -119,4 +118,6 @@ func (r *AgentPool) watchWorkers() {
 			}
 		}
 	}()
+
+	return signals
 }
