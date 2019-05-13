@@ -90,10 +90,14 @@ func (u *GSUploader) URL(artifact *api.Artifact) string {
 	host := "storage.googleapis.com"
 	path := fmt.Sprintf("%s/%s", u.BucketName, u.artifactPath(artifact))
 
-	// When overriding the default GCS host to go through a proxy, we should use the path passed in directly - it's not safe to assume that a proxy's URL path follows the same path format as GCS.
-	if os.Getenv("BUILDKITE_GCS_ACCESS_HOST") != "" {
-		host = os.Getenv("BUILDKITE_GCS_ACCESS_HOST")
-		path = u.artifactPath(artifact)
+	// Override the default host if required.
+	if envHost, ok := os.LookupEnv("BUILDKITE_GCS_ACCESS_HOST"); ok {
+		host = envHost
+	}
+
+	// If this is set, we trust the user to supply a valid path prefix, and don't use a default GCS path
+	if prefix, ok := os.LookupEnv("BUILDKITE_GCS_PATH_PREFIX"); ok {
+		path = fmt.Sprintf("%s%s", prefix, u.artifactPath(artifact))
 	}
 
 	var artifactURL = &url.URL{
