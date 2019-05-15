@@ -87,7 +87,7 @@ func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
 	// ensure proper URL formatting for upload
 	url.Path = strings.Join([]string{
 		strings.Trim(url.Path, "/"),
-		u.artifactPath(artifact),
+		strings.Replace(u.artifactPath(artifact), "\\", "/", -1),
 	}, "/")
 	return url.String()
 }
