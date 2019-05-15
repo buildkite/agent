@@ -1,24 +1,17 @@
 package agent
 
 import (
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
-
-	"github.com/buildkite/agent/logger"
 )
 
 // AgentPool manages multiple parallel AgentWorkers
 type AgentPool struct {
-	logger  logger.Logger
 	workers []*AgentWorker
 }
 
 // NewAgentPool returns a new AgentPool
-func NewAgentPool(l logger.Logger, workers []*AgentWorker) *AgentPool {
+func NewAgentPool(workers []*AgentWorker) *AgentPool {
 	return &AgentPool{
-		logger:  l,
 		workers: workers,
 	}
 }
@@ -50,13 +43,6 @@ func (r *AgentPool) Start() error {
 		close(errs)
 	}()
 
-	// Listen for process signals
-	signals := r.watchWorkers()
-	defer signal.Stop(signals)
-
-	r.logger.Info("Started %d Agent(s)", spawn)
-	r.logger.Info("You can press Ctrl-C to stop the agents")
-
 	return <-errs
 }
 
@@ -79,45 +65,8 @@ func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
 	return nil
 }
 
-func (r *AgentPool) watchWorkers() chan os.Signal {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt,
-		syscall.SIGHUP,
-		syscall.SIGTERM,
-		syscall.SIGINT,
-		syscall.SIGQUIT)
-
-	go func() {
-		var interruptCount int
-
-		for sig := range signals {
-			r.logger.Debug("Received signal `%v`", sig)
-
-			switch sig {
-			case syscall.SIGQUIT:
-				r.logger.Debug("Received signal `%s`", sig.String())
-				for _, worker := range r.workers {
-					worker.Stop(false)
-				}
-			case syscall.SIGTERM, syscall.SIGINT:
-				r.logger.Debug("Received signal `%s`", sig.String())
-				if interruptCount == 0 {
-					interruptCount++
-					r.logger.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
-					for _, worker := range r.workers {
-						worker.Stop(true)
-					}
-				} else {
-					r.logger.Info("Forcefully stopping running jobs and stopping the agent(s)")
-					for _, worker := range r.workers {
-						worker.Stop(false)
-					}
-				}
-			default:
-				r.logger.Debug("Ignoring signal `%s`", sig.String())
-			}
-		}
-	}()
-
-	return signals
+func (r *AgentPool) Stop(graceful bool) {
+	for _, worker := range r.workers {
+		worker.Stop(graceful)
+	}
 }
