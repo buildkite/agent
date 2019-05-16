@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/agent/api"
@@ -85,10 +87,10 @@ func ParseArtifactoryDestination(destination string) (repo string, path string) 
 func (u *ArtifactoryUploader) URL(artifact *api.Artifact) string {
 	url := *u.iURL
 	// ensure proper URL formatting for upload
-	url.Path = strings.Join([]string{
-		strings.Trim(url.Path, "/"),
-		strings.Replace(u.artifactPath(artifact), "\\", "/", -1),
-	}, "/")
+	url.Path = path.Join(
+		url.Path,
+		filepath.ToSlash(u.artifactPath(artifact)),
+	)
 	return url.String()
 }
 
