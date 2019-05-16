@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/agent/logger"
@@ -78,7 +79,7 @@ func (d ArtifactoryDownloader) Start() error {
 
 func (d ArtifactoryDownloader) RepositoryFileLocation() string {
 	if d.RepositoryPath() != "" {
-		return strings.TrimSuffix(d.RepositoryPath(), "/") + "/" + strings.TrimPrefix(d.conf.Path, "/")
+		return strings.TrimSuffix(d.RepositoryPath(), "/") + "/" + strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/")
 	} else {
 		return d.conf.Path
 	}
