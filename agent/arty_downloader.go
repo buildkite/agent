@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+<<<<<<< HEAD
 	"path"
+=======
+>>>>>>> 45ad5d0c7b4032e08718813b97b812d1dba5b3ba
 	"path/filepath"
 	"strings"
 
@@ -80,7 +83,11 @@ func (d ArtifactoryDownloader) Start() error {
 
 func (d ArtifactoryDownloader) RepositoryFileLocation() string {
 	if d.RepositoryPath() != "" {
+<<<<<<< HEAD
 		return path.Join(strings.TrimSuffix(d.RepositoryPath(), "/"),"/" , strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/"))
+=======
+		return strings.TrimSuffix(d.RepositoryPath(), "/") + "/" + strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/")
+>>>>>>> 45ad5d0c7b4032e08718813b97b812d1dba5b3ba
 	} else {
 		return d.conf.Path
 	}
