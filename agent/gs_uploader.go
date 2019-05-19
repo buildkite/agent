@@ -87,15 +87,28 @@ func newGoogleClient(scope string) (*http.Client, error) {
 }
 
 func (u *GSUploader) URL(artifact *api.Artifact) string {
+	// Set host and pathPrefix to default values
 	host := "storage.googleapis.com"
-	if os.Getenv("BUILDKITE_GCS_ACCESS_HOST") != "" {
-		host = os.Getenv("BUILDKITE_GCS_ACCESS_HOST")
+	pathPrefix := u.BucketName
+
+	// Override default host if required.
+	if envHost, ok := os.LookupEnv("BUILDKITE_GCS_ACCESS_HOST"); ok {
+		host = envHost
 	}
+
+	// If this is set, we trust the user to supply a valid path prefix, instead of using the default GCS path
+	if prefix, ok := os.LookupEnv("BUILDKITE_GCS_PATH_PREFIX"); ok {
+		pathPrefix = prefix
+	}
+
+	// Build the path from the prefix and the artifactPath
+	// Also ensure that we always have exactly one / between prefix and artifactPath
+	path := fmt.Sprintf("%s/%s", strings.TrimSuffix(pathPrefix, "/"), u.artifactPath(artifact))
 
 	var artifactURL = &url.URL{
 		Scheme: "https",
 		Host:   host,
-		Path:   u.BucketName + "/" + u.artifactPath(artifact),
+		Path:   path,
 	}
 	return artifactURL.String()
 }
