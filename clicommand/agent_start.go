@@ -3,8 +3,10 @@ package clicommand
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/agent"
@@ -637,11 +639,55 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Setup the agent pool that spawns agent workers
-		pool := agent.NewAgentPool(l, workers)
+		pool := agent.NewAgentPool(workers)
+
+		// Handle process signals
+		signals := handlePoolSignals(l, pool)
+		defer close(signals)
+
+		l.Info("Starting %d Agent(s)", cfg.Spawn)
+		l.Info("You can press Ctrl-C to stop the agents")
 
 		// Start the agent pool
 		if err := pool.Start(); err != nil {
 			l.Fatal("%s", err)
 		}
 	},
+}
+
+func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt,
+		syscall.SIGHUP,
+		syscall.SIGTERM,
+		syscall.SIGINT,
+		syscall.SIGQUIT)
+
+	go func() {
+		var interruptCount int
+
+		for sig := range signals {
+			l.Debug("Received signal `%v`", sig)
+
+			switch sig {
+			case syscall.SIGQUIT:
+				l.Debug("Received signal `%s`", sig.String())
+				pool.Stop(false)
+			case syscall.SIGTERM, syscall.SIGINT:
+				l.Debug("Received signal `%s`", sig.String())
+				if interruptCount == 0 {
+					interruptCount++
+					l.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
+					pool.Stop(true)
+				} else {
+					l.Info("Forcefully stopping running jobs and stopping the agent(s)")
+					pool.Stop(false)
+				}
+			default:
+				l.Debug("Ignoring signal `%s`", sig.String())
+			}
+		}
+	}()
+
+	return signals
 }
