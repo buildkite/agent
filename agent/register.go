@@ -23,7 +23,7 @@ var (
 
 // Register takes an api.Agent and registers it with the Buildkite API
 // and populates the result of the register call
-func Register(l logger.Logger, ac *api.Client, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
+func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
 	var registered *api.AgentRegisterResponse
 	var err error
 	var resp *api.Response
@@ -41,7 +41,7 @@ func Register(l logger.Logger, ac *api.Client, req api.AgentRegisterRequest) (*a
 	req.OS = osVersionDump
 
 	register := func(s *retry.Stats) error {
-		registered, resp, err = ac.Agents.Register(&req)
+		registered, resp, err = ac.Register(&req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				l.Warn("Buildkite rejected the registration (%s)", err)

@@ -26,7 +26,7 @@ func APIClientEnableHTTPDebug() {
 	debugHTTP = true
 }
 
-func NewAPIClient(l logger.Logger, c APIClientConfig) *api.Client {
+func NewAPIClient(l logger.Logger, c APIClientConfig) APIClient {
 	httpTransport := &http.Transport{
 		Proxy:              http.ProxyFromEnvironment,
 		DisableCompression: false,
@@ -57,10 +57,11 @@ func NewAPIClient(l logger.Logger, c APIClientConfig) *api.Client {
 	}
 
 	// Create the Buildkite Agent API Client
-	client := api.NewClient(httpClient, l)
-	client.BaseURL = u
-	client.UserAgent = userAgent()
-	client.DebugHTTP = debugHTTP
+	client := api.NewClient(httpClient, l, api.ClientConfig{
+		BaseURL:   u,
+		UserAgent: userAgent(),
+		DebugHTTP: debugHTTP,
+	})
 
 	return client
 }

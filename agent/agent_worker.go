@@ -37,7 +37,7 @@ type AgentWorker struct {
 	lastPing, lastHeartbeat int64
 
 	// The API Client used when this agent is communicating with the API
-	apiClient *api.Client
+	apiClient APIClient
 
 	// The logger instance to use
 	logger logger.Logger
@@ -257,7 +257,7 @@ func (a *AgentWorker) Connect() error {
 	a.UpdateProcTitle("connecting")
 
 	return retry.Do(func(s *retry.Stats) error {
-		_, err := a.apiClient.Agents.Connect()
+		_, err := a.apiClient.Connect()
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, s)
 		}
@@ -273,7 +273,7 @@ func (a *AgentWorker) Heartbeat() error {
 
 	// Retry the heartbeat a few times
 	err = retry.Do(func(s *retry.Stats) error {
-		beat, _, err = a.apiClient.Heartbeats.Beat()
+		beat, _, err = a.apiClient.Heartbeat()
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, s)
 		}
@@ -297,7 +297,7 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 	// Update the proc title
 	a.UpdateProcTitle("pinging")
 
-	ping, _, err := a.apiClient.Pings.Get()
+	ping, _, err := a.apiClient.Ping()
 	if err != nil {
 		// Get the last ping time to the nearest microsecond
 		lastPing := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
@@ -320,7 +320,7 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 			Token:    a.agent.AccessToken,
 		})
 
-		newPing, _, err := newAPIClient.Pings.Get()
+		newPing, _, err := newAPIClient.Ping()
 		if err != nil {
 			a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
 		} else {
@@ -364,7 +364,7 @@ func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
 	var accepted *api.Job
 	err := retry.Do(func(s *retry.Stats) error {
 		var err error
-		accepted, _, err = a.apiClient.Jobs.Accept(job)
+		accepted, _, err = a.apiClient.AcceptJob(job)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, s)
@@ -422,7 +422,7 @@ func (a *AgentWorker) Disconnect() error {
 	// Update the proc title
 	a.UpdateProcTitle("disconnecting")
 
-	_, err := a.apiClient.Agents.Disconnect()
+	_, err := a.apiClient.Disconnect()
 	if err != nil {
 		a.logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
 	}

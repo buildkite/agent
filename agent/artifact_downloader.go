@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/pool"
 )
@@ -25,6 +24,9 @@ type ArtifactDownloaderConfig struct {
 
 	// Where we'll be downloading artifacts to
 	Destination string
+
+	// Whether to show HTTP debugging
+	DebugHTTP bool
 }
 
 type ArtifactDownloader struct {
@@ -34,11 +36,11 @@ type ArtifactDownloader struct {
 	// The logger instance to use
 	logger logger.Logger
 
-	// The *api.Client that will be used when uploading jobs
-	apiClient *api.Client
+	// The APIClient that will be used when uploading jobs
+	apiClient APIClient
 }
 
-func NewArtifactDownloader(l logger.Logger, ac *api.Client, c ArtifactDownloaderConfig) ArtifactDownloader {
+func NewArtifactDownloader(l logger.Logger, ac APIClient, c ArtifactDownloaderConfig) ArtifactDownloader {
 	return ArtifactDownloader{
 		logger:    l,
 		apiClient: ac,
@@ -90,7 +92,7 @@ func (a *ArtifactDownloader) Download() error {
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.apiClient.DebugHTTP,
+						DebugHTTP:   a.conf.DebugHTTP,
 					}).Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
 					err = NewGSDownloader(a.logger, GSDownloaderConfig{
@@ -98,7 +100,7 @@ func (a *ArtifactDownloader) Download() error {
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.apiClient.DebugHTTP,
+						DebugHTTP:   a.conf.DebugHTTP,
 					}).Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "rt://") {
 					err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
@@ -106,7 +108,7 @@ func (a *ArtifactDownloader) Download() error {
 						Repository:  artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.apiClient.DebugHTTP,
+						DebugHTTP:   a.conf.DebugHTTP,
 					}).Start()
 				} else {
 					err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
@@ -114,7 +116,7 @@ func (a *ArtifactDownloader) Download() error {
 						Path:        artifact.Path,
 						Destination: downloadDestination,
 						Retries:     5,
-						DebugHTTP:   a.apiClient.DebugHTTP,
+						DebugHTTP:   a.conf.DebugHTTP,
 					}).Start()
 				}
 

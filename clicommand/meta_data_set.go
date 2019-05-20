@@ -103,7 +103,7 @@ var MetaDataSetCommand = cli.Command{
 
 		// Set the meta data
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.MetaData.Set(cfg.Job, metaData)
+			resp, err := client.SetMetaData(cfg.Job, metaData)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}

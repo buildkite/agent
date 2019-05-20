@@ -1,5 +1,7 @@
 package api
 
+//go:generate interfacer -for github.com/buildkite/agent/api.Client -as agent.APIClient -o ../agent/api_iface.go
+
 import (
 	"bytes"
 	"encoding/json"

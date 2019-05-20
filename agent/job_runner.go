@@ -45,7 +45,7 @@ type JobRunner struct {
 	job *api.Job
 
 	// The APIClient that will be used when updating the job
-	apiClient *api.Client
+	apiClient APIClient
 
 	// A scope for metrics within a job
 	metrics *metrics.Scope
@@ -466,7 +466,7 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
 	return retry.Do(func(s *retry.Stats) error {
-		_, err := r.apiClient.Jobs.Start(r.job)
+		_, err := r.apiClient.StartJob(r.job)
 
 		if err != nil {
 			if api.IsRetryableError(err) {
@@ -489,7 +489,7 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 	r.job.ChunksFailedCount = failedChunkCount
 
 	return retry.Do(func(s *retry.Stats) error {
-		response, err := r.apiClient.Jobs.Finish(r.job)
+		response, err := r.apiClient.FinishJob(r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully tried to finish the job, but Buildkite
@@ -555,7 +555,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		for {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
-			jobState, _, err := r.apiClient.Jobs.GetState(r.job.ID)
+			jobState, _, err := r.apiClient.GetJobState(r.job.ID)
 			if err != nil {
 				// We don't really care if it fails, we'll just
 				// try again soon anyway
@@ -578,7 +578,7 @@ func (r *JobRunner) onProcessStartCallback() {
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
 	retry.Do(func(s *retry.Stats) error {
-		response, err := r.apiClient.HeaderTimes.Save(r.job.ID, &api.HeaderTimes{Times: times})
+		response, err := r.apiClient.SaveHeaderTimes(r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the header times (%s)", err)
@@ -603,7 +603,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	// from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
 	return retry.Do(func(s *retry.Stats) error {
-		response, err := r.apiClient.Chunks.Upload(r.job.ID, &api.Chunk{
+		response, err := r.apiClient.UploadChunk(r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 			Offset:   chunk.Offset,

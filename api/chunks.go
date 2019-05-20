@@ -16,7 +16,7 @@ type Chunk struct {
 
 // Uploads the chunk to the Buildkite Agent API. This request sends the
 // compressed log directly as a request body.
-func (c *Client) UploadChunks(jobId string, chunk *Chunk) (*Response, error) {
+func (c *Client) UploadChunk(jobId string, chunk *Chunk) (*Response, error) {
 	// Create a compressed buffer of the log content
 	body := &bytes.Buffer{}
 	gzipper := gzip.NewWriter(body)

@@ -147,8 +147,8 @@ var AnnotateCommand = cli.Command{
 
 		// Retry the annotation a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			// Attempt ot create the annotation
-			resp, err := client.Annotations.Create(cfg.Job, annotation)
+			// Attempt to create the annotation
+			resp, err := client.Annotate(cfg.Job, annotation)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
