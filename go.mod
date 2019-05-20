@@ -28,7 +28,6 @@ require (
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d // indirect
 	github.com/smartystreets/goconvey v0.0.0-20180222194500-ef6db91d284a // indirect
-	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/stretchr/testify v1.3.0
 	github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
 	golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
@@ -39,5 +38,4 @@ require (
 	google.golang.org/appengine v1.2.0 // indirect
 	google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/vmihailenco/msgpack.v2 v2.9.1
 )
