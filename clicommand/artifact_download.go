@@ -99,6 +99,7 @@ var ArtifactDownloadCommand = cli.Command{
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,
 			Step:        cfg.Step,
+			DebugHTTP:   cfg.DebugHTTP,
 		})
 
 		// Download the artifacts

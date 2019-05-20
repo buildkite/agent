@@ -83,7 +83,7 @@ var MetaDataExistsCommand = cli.Command{
 		var exists *api.MetaDataExists
 		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			exists, resp, err = client.MetaData.Exists(cfg.Job, cfg.Key)
+			exists, resp, err = client.ExistsMetaData(cfg.Job, cfg.Key)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}

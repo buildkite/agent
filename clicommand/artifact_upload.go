@@ -103,6 +103,7 @@ var ArtifactUploadCommand = cli.Command{
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
 			ContentType: cfg.ContentType,
+			DebugHTTP:   cfg.DebugHTTP,
 		})
 
 		// Upload the artifacts

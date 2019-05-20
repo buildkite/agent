@@ -32,7 +32,7 @@ func TestAPIProxy(t *testing.T) {
 	})
 
 	// fire a ping via the proxy
-	p, _, err := client.Pings.Get()
+	p, _, err := client.Ping()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestAPIProxyFailsWithoutAccessToken(t *testing.T) {
 	})
 
 	// fire a ping via the proxy
-	_, _, err := client.Pings.Get()
+	_, _, err := client.Ping()
 	if err == nil {
 		t.Fatalf("Expected an error without an access token")
 	}
