@@ -33,7 +33,14 @@ Example:
    Or upload directly to Google Cloud Storage:
 
    $ export BUILDKITE_GS_ACL=private
-   $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID`
+   $ buildkite-agent artifact upload "log/**/*.log" gs://name-of-your-gs-bucket/$BUILDKITE_JOB_ID
+
+   Or upload directly to Artifactory:
+
+   $ export BUILDKITE_ARTIFACTORY_URL=http://my-artifactory-instance.com/artifactory
+   $ export BUILDKITE_ARTIFACTORY_USER=carol-danvers
+   $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
+   $ buildkite-agent artifact upload "log/**/*.log" $BUILDKITE_ARTIFACTORY_URL`
 
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
