@@ -47,9 +47,6 @@ type JobRunner struct {
 	// The APIClient that will be used when updating the job
 	apiClient *api.Client
 
-	// The APIProxy that will be exposed to the job bootstrap
-	apiProxy *APIProxy
-
 	// A scope for metrics within a job
 	metrics *metrics.Scope
 
@@ -100,9 +97,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		Token:    ag.AccessToken,
 	})
 
-	// A proxy for the agent API that is expose to the bootstrap
-	runner.apiProxy = NewAPIProxy(l, conf.Endpoint, ag.AccessToken)
-
 	// Create our header times struct
 	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
 
@@ -112,13 +106,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		Concurrency:       3,
 		MaxChunkSizeBytes: j.ChunksMaxSizeBytes,
 	})
-
-	// Start a proxy to give to the job for api operations
-	if experiments.IsEnabled("agent-socket") {
-		if err := runner.apiProxy.Listen(); err != nil {
-			return nil, err
-		}
-	}
 
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
@@ -280,13 +267,6 @@ func (r *JobRunner) Run() error {
 		r.logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
-	// Destroy the proxy
-	if experiments.IsEnabled("agent-socket") {
-		if err := r.apiProxy.Close(); err != nil {
-			r.logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
-		}
-	}
-
 	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
 
 	jobMetrics := r.metrics.With(metrics.Tags{
@@ -424,13 +404,8 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
-	if experiments.IsEnabled("agent-socket") {
-		env["BUILDKITE_AGENT_ENDPOINT"] = r.apiProxy.Endpoint()
-		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.apiProxy.AccessToken()
-	} else {
-		env["BUILDKITE_AGENT_ENDPOINT"] = r.conf.Endpoint
-		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.agent.AccessToken
-	}
+	env["BUILDKITE_AGENT_ENDPOINT"] = r.conf.Endpoint
+	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.agent.AccessToken
 
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", r.conf.Debug)
