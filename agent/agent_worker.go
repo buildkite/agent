@@ -19,12 +19,6 @@ type AgentWorkerConfig struct {
 	// Whether to set debug in the job
 	Debug bool
 
-	// The endpoint that should be used when communicating with the API
-	Endpoint string
-
-	// Whether to disable http for the API
-	DisableHTTP2 bool
-
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 }
@@ -68,26 +62,12 @@ type AgentWorker struct {
 }
 
 // Creates the agent worker and initializes it's API Client
-func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, c AgentWorkerConfig) *AgentWorker {
-	var endpoint string
-	if a.Endpoint != "" {
-		endpoint = a.Endpoint
-	} else {
-		endpoint = c.Endpoint
-	}
-
-	// Create an APIClient with the agent's access token
-	apiClient := NewAPIClient(l, APIClientConfig{
-		Endpoint:     endpoint,
-		Token:        a.AccessToken,
-		DisableHTTP2: c.DisableHTTP2,
-	})
-
+func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
 	return &AgentWorker{
 		logger:             l,
 		agent:              a,
 		metricsCollector:   m,
-		apiClient:          apiClient,
+		apiClient:          apiClient.FromAgentRegisterResponse(a),
 		debug:              c.Debug,
 		agentConfiguration: c.AgentConfiguration,
 		stop:               make(chan struct{}),
@@ -312,14 +292,10 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 	// Should we switch endpoints?
 	if ping.Endpoint != "" && ping.Endpoint != a.agent.Endpoint {
+		newAPIClient := a.apiClient.FromPing(ping)
+
 		// Before switching to the new one, do a ping test to make sure it's
 		// valid. If it is, switch and carry on, otherwise ignore the switch
-		// for now.
-		newAPIClient := NewAPIClient(a.logger, APIClientConfig{
-			Endpoint: ping.Endpoint,
-			Token:    a.agent.AccessToken,
-		})
-
 		newPing, _, err := newAPIClient.Ping()
 		if err != nil {
 			a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
@@ -395,9 +371,8 @@ func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
 	}()
 
 	// Now that the job has been accepted, we can start it.
-	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, JobRunnerConfig{
+	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, a.apiClient, JobRunnerConfig{
 		Debug:              a.debug,
-		Endpoint:           accepted.Endpoint,
 		AgentConfiguration: a.agentConfiguration,
 	})
 

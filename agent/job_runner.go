@@ -21,9 +21,6 @@ import (
 )
 
 type JobRunnerConfig struct {
-	// The endpoint that should be used when communicating with the API
-	Endpoint string
-
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 
@@ -80,22 +77,17 @@ type JobRunner struct {
 }
 
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
-		agent:   ag,
-		job:     j,
-		logger:  l,
-		conf:    conf,
-		metrics: scope,
+		agent:     ag,
+		job:       j,
+		logger:    l,
+		conf:      conf,
+		metrics:   scope,
+		apiClient: apiClient,
 	}
 
 	runner.context, runner.contextCancel = context.WithCancel(context.Background())
-
-	// Our own APIClient using the endpoint and the agents access token
-	runner.apiClient = NewAPIClient(l, APIClientConfig{
-		Endpoint: runner.conf.Endpoint,
-		Token:    ag.AccessToken,
-	})
 
 	// Create our header times struct
 	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
@@ -404,8 +396,10 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
-	env["BUILDKITE_AGENT_ENDPOINT"] = r.conf.Endpoint
-	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.agent.AccessToken
+	// Add the API configuration
+	apiConfig := r.apiClient.Config()
+	env["BUILDKITE_AGENT_ENDPOINT"] = apiConfig.Endpoint
+	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = apiConfig.Token
 
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", r.conf.Debug)

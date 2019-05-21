@@ -46,7 +46,7 @@ type ArtifactBatch struct {
 }
 
 type ArtifactUploadInstructions struct {
-	Data   map[string]string `json: "data"`
+	Data   map[string]string `json:"data"`
 	Action struct {
 		URL       string `json:"url,omitempty"`
 		Method    string `json:"method"`

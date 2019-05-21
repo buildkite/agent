@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -97,7 +96,7 @@ var StepUpdateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Generate a UUID that will identifiy this change. We do this
 		// outside of the retry loop because we want this UUID to be

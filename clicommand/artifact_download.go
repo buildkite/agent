@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/urfave/cli"
 )
@@ -91,7 +92,7 @@ var ArtifactDownloadCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Setup the downloader
 		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{

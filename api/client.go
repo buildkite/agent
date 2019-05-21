@@ -1,14 +1,16 @@
 package api
 
-//go:generate interfacer -for github.com/buildkite/agent/api.Client -as agent.APIClient -o ../agent/api_iface.go
+//go:generate interfacer -for github.com/buildkite/agent/api.Client -as agent.APIClient -o ../agent/api.go
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -21,27 +23,36 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://agent.buildkite.com/"
+	defaultEndpoint  = "https://agent.buildkite.com/"
 	defaultUserAgent = "buildkite-agent/api"
 )
 
-// ClientConfig is configuration for Client
-type ClientConfig struct {
-	// Base URL for API requests. Defaults to the public Buildkite Agent API.
+// Config is configuration for the API Client
+type Config struct {
+	// Endpoint for API requests. Defaults to the public Buildkite Agent API.
 	// The URL should always be specified with a trailing slash.
-	BaseURL *url.URL
+	Endpoint string
+
+	// The authentication token to use, either a registration or access token
+	Token string
 
 	// User agent used when communicating with the Buildkite Agent API.
 	UserAgent string
 
+	// If true, only HTTP2 is disabled
+	DisableHTTP2 bool
+
 	// If true, requests and responses will be dumped and set to the logger
 	DebugHTTP bool
+
+	// The http client used, leave nil for the default
+	HTTPClient *http.Client
 }
 
 // A Client manages communication with the Buildkite Agent API.
 type Client struct {
 	// The client configuration
-	conf ClientConfig
+	conf Config
 
 	// HTTP client used to communicate with the API.
 	client *http.Client
@@ -51,13 +62,41 @@ type Client struct {
 }
 
 // NewClient returns a new Buildkite Agent API Client.
-func NewClient(httpClient *http.Client, l logger.Logger, conf ClientConfig) *Client {
-	if conf.BaseURL == nil {
-		conf.BaseURL, _ = url.Parse(defaultBaseURL)
+func NewClient(l logger.Logger, conf Config) *Client {
+	if conf.Endpoint == "" {
+		conf.Endpoint = defaultEndpoint
 	}
 
 	if conf.UserAgent == "" {
 		conf.UserAgent = defaultUserAgent
+	}
+
+	httpClient := conf.HTTPClient
+	if conf.HTTPClient == nil {
+		t := &http.Transport{
+			Proxy:              http.ProxyFromEnvironment,
+			DisableCompression: false,
+			DisableKeepAlives:  false,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 30 * time.Second,
+		}
+
+		if conf.DisableHTTP2 {
+			t.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+		}
+
+		httpClient = &http.Client{
+			Timeout: 60 * time.Second,
+			Transport: &authenticatedTransport{
+				Token:    conf.Token,
+				Delegate: t,
+			},
+		}
 	}
 
 	return &Client{
@@ -67,13 +106,46 @@ func NewClient(httpClient *http.Client, l logger.Logger, conf ClientConfig) *Cli
 	}
 }
 
+// Config returns the internal configuration for the Client
+func (c *Client) Config() Config {
+	return c.conf
+}
+
+// FromAgentRegisterResponse returns a new instance using the access token and endpoint
+// from the registration response
+func (c *Client) FromAgentRegisterResponse(resp *AgentRegisterResponse) *Client {
+	conf := c.conf
+
+	// Override the registration token with the access token
+	conf.Token = resp.AccessToken
+
+	// If Buildkite told us to use a new Endpoint, respect that
+	if resp.Endpoint != "" {
+		conf.Endpoint = resp.Endpoint
+	}
+
+	return NewClient(c.logger, conf)
+}
+
+// FromPing returns a new instance using a new endpoint from a ping response
+func (c *Client) FromPing(resp *Ping) *Client {
+	conf := c.conf
+
+	// If Buildkite told us to use a new Endpoint, respect that
+	if resp.Endpoint != "" {
+		conf.Endpoint = resp.Endpoint
+	}
+
+	return NewClient(c.logger, conf)
+}
+
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
 // in which case it is resolved relative to the BaseURL of the Client.
 // Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
 func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Request, error) {
-	u := joinURL(c.conf.BaseURL.String(), urlStr)
+	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
 	if body != nil {
@@ -102,7 +174,7 @@ func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Requ
 // of the Client. Relative URLs should always be specified without a preceding
 // slash.
 func (c *Client) newFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
-	u := joinURL(c.conf.BaseURL.String(), urlStr)
+	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	req, err := http.NewRequest(method, u, body)
 	if err != nil {
@@ -252,6 +324,6 @@ func addOptions(s string, opt interface{}) (string, error) {
 	return u.String(), nil
 }
 
-func joinURL(endpoint string, path string) string {
+func joinURLPath(endpoint string, path string) string {
 	return strings.TrimRight(endpoint, "/") + "/" + strings.TrimLeft(path, "/")
 }

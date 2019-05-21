@@ -7,7 +7,6 @@ import (
 
 	"github.com/buildkite/agent/stdin"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -135,7 +134,7 @@ var AnnotateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Create the annotation we'll send to the Buildkite API
 		annotation := &api.Annotation{

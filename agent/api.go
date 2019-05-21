@@ -10,11 +10,14 @@ import (
 type APIClient interface {
 	AcceptJob(*api.Job) (*api.Job, *api.Response, error)
 	Annotate(string, *api.Annotation) (*api.Response, error)
+	Config() api.Config
 	Connect() (*api.Response, error)
 	CreateArtifacts(string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
 	Disconnect() (*api.Response, error)
 	ExistsMetaData(string, string) (*api.MetaDataExists, *api.Response, error)
 	FinishJob(*api.Job) (*api.Response, error)
+	FromAgentRegisterResponse(*api.AgentRegisterResponse) *api.Client
+	FromPing(*api.Ping) *api.Client
 	GetJobState(string) (*api.JobState, *api.Response, error)
 	GetMetaData(string, string) (*api.MetaData, *api.Response, error)
 	Heartbeat() (*api.Heartbeat, *api.Response, error)
