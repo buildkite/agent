@@ -2,10 +2,12 @@ package agent
 
 import (
 	"fmt"
-	"github.com/buildkite/agent/logger"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/logger"
 )
 
 func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
@@ -27,7 +29,7 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ac := NewAPIClient(logger.Discard, APIClientConfig{
+	ac := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    `llamasforever`,
 	})
