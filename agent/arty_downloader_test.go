@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestArtifactoryDowloaderRepositoryPath(t *testing.T) {
+func TestArtifactoryDownloaderRepositoryPath(t *testing.T) {
 	t.Parallel()
 
 	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
@@ -21,7 +21,7 @@ func TestArtifactoryDowloaderRepositoryPath(t *testing.T) {
 	assert.Equal(t, rtUploader.RepositoryPath(), "and-this-is-its/folder")
 }
 
-func TestArtifactoryDowloaderRepositoryName(t *testing.T) {
+func TestArtifactoryDownloaderRepositoryName(t *testing.T) {
 	t.Parallel()
 
 	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
@@ -35,18 +35,18 @@ func TestArtifactoryDowloaderRepositoryName(t *testing.T) {
 	assert.Equal(t, rtUploader.RepositoryName(), "starts-with-an-s")
 }
 
-func TestArtifactoryDowloaderRepositoryFileLocation(t *testing.T) {
+func TestArtifactoryDownloaderRepositoryFileLocation(t *testing.T) {
 	t.Parallel()
 
 	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/rt/folder",
 		Path:       "here/please/right/now/",
 	})
-	assert.Equal(t, rtUploader.RepositoryFileLocation(), "rt/folder/here/please/right/now/")
+	assert.Equal(t, rtUploader.RepositoryFileLocation(), "rt/folder/here/please/right/now")
 
 	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/rt/folder",
 		Path:       "",
 	})
-	assert.Equal(t, rtUploader.RepositoryFileLocation(), "rt/folder/")
+	assert.Equal(t, rtUploader.RepositoryFileLocation(), "rt/folder")
 }
