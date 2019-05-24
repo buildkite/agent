@@ -37,6 +37,9 @@ type ArtifactUploaderConfig struct {
 
 	// A specific Content-Type to use for all artifacts
 	ContentType string
+
+	// Whether to show HTTP debugging
+	DebugHTTP bool
 }
 
 type ArtifactUploader struct {
@@ -47,10 +50,10 @@ type ArtifactUploader struct {
 	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	apiClient *api.Client
+	apiClient APIClient
 }
 
-func NewArtifactUploader(l logger.Logger, ac *api.Client, c ArtifactUploaderConfig) *ArtifactUploader {
+func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig) *ArtifactUploader {
 	return &ArtifactUploader{
 		logger:    l,
 		apiClient: ac,
@@ -208,24 +211,24 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		if strings.HasPrefix(a.conf.Destination, "s3://") {
 			uploader, err = NewS3Uploader(a.logger, S3UploaderConfig{
 				Destination: a.conf.Destination,
-				DebugHTTP:   a.apiClient.DebugHTTP,
+				DebugHTTP:   a.conf.DebugHTTP,
 			})
 		} else if strings.HasPrefix(a.conf.Destination, "gs://") {
 			uploader, err = NewGSUploader(a.logger, GSUploaderConfig{
 				Destination: a.conf.Destination,
-				DebugHTTP:   a.apiClient.DebugHTTP,
+				DebugHTTP:   a.conf.DebugHTTP,
 			})
 		} else if strings.HasPrefix(a.conf.Destination, "rt://") {
 			uploader, err = NewArtifactoryUploader(a.logger, ArtifactoryUploaderConfig{
 				Destination: a.conf.Destination,
-				DebugHTTP:   a.apiClient.DebugHTTP,
+				DebugHTTP:   a.conf.DebugHTTP,
 			})
 		} else {
 			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
 		}
 	} else {
 		uploader = NewFormUploader(a.logger, FormUploaderConfig{
-			DebugHTTP: a.apiClient.DebugHTTP,
+			DebugHTTP: a.conf.DebugHTTP,
 		})
 	}
 
@@ -293,7 +296,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 				// Update the states of the artifacts in bulk.
 				err = retry.Do(func(s *retry.Stats) error {
-					_, err = a.apiClient.Artifacts.Update(a.conf.JobID, statesToUpload)
+					_, err = a.apiClient.UpdateArtifacts(a.conf.JobID, statesToUpload)
 					if err != nil {
 						a.logger.Warn("%s (%s)", err, s)
 					}

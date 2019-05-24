@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -93,7 +92,7 @@ var MetaDataSetCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Create the meta data to set
 		metaData := &api.MetaData{
@@ -103,7 +102,7 @@ var MetaDataSetCommand = cli.Command{
 
 		// Set the meta data
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.MetaData.Set(cfg.Job, metaData)
+			resp, err := client.SetMetaData(cfg.Job, metaData)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}

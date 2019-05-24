@@ -232,7 +232,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Generate a UUID that will identifiy this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
@@ -241,7 +241,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
+			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, s)
 

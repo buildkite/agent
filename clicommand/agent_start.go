@@ -587,10 +587,8 @@ var AgentStartCommand = cli.Command{
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
-		apiClientConf := loadAPIClientConfig(cfg, `Token`)
-
 		// Create the API client
-		client := agent.NewAPIClient(l, apiClientConf)
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
 
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
@@ -607,14 +605,6 @@ var AgentStartCommand = cli.Command{
 				WaitForEC2TagsTimeout:   ec2TagTimeout,
 				WaitForGCPLabelsTimeout: gcpLabelsTimeout,
 			}),
-		}
-
-		// The common configuration for all workers
-		workerConf := agent.AgentWorkerConfig{
-			AgentConfiguration: agentConf,
-			Debug:              cfg.Debug,
-			Endpoint:           apiClientConf.Endpoint,
-			DisableHTTP2:       apiClientConf.DisableHTTP2,
 		}
 
 		var workers []*agent.AgentWorker
@@ -635,7 +625,10 @@ var AgentStartCommand = cli.Command{
 			// Create an agent worker to run the agent
 			workers = append(workers,
 				agent.NewAgentWorker(
-					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, workerConf))
+					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
+						AgentConfiguration: agentConf,
+						Debug:              cfg.Debug,
+					}))
 		}
 
 		// Setup the agent pool that spawns agent workers

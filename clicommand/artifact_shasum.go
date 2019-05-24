@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/urfave/cli"
 )
@@ -93,7 +94,7 @@ var ArtifactShasumCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)

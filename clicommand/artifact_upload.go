@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/urfave/cli"
 )
@@ -95,7 +96,7 @@ var ArtifactUploadCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
@@ -103,6 +104,7 @@ var ArtifactUploadCommand = cli.Command{
 			Paths:       cfg.UploadPaths,
 			Destination: cfg.Destination,
 			ContentType: cfg.ContentType,
+			DebugHTTP:   cfg.DebugHTTP,
 		})
 
 		// Upload the artifacts

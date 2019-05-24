@@ -7,7 +7,6 @@ import (
 
 	"github.com/buildkite/agent/stdin"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -135,7 +134,7 @@ var AnnotateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Create the annotation we'll send to the Buildkite API
 		annotation := &api.Annotation{
@@ -147,8 +146,8 @@ var AnnotateCommand = cli.Command{
 
 		// Retry the annotation a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			// Attempt ot create the annotation
-			resp, err := client.Annotations.Create(cfg.Job, annotation)
+			// Attempt to create the annotation
+			resp, err := client.Annotate(cfg.Job, annotation)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {

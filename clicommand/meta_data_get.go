@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -81,14 +80,14 @@ var MetaDataGetCommand = cli.Command{
 		HandleGlobalFlags(l, cfg)
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Find the meta data value
 		var metaData *api.MetaData
 		var err error
 		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			metaData, resp, err = client.MetaData.Get(cfg.Job, cfg.Key)
+			metaData, resp, err = client.GetMetaData(cfg.Job, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				s.Break()

@@ -89,8 +89,12 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 	// set the bootstrap into the config
 	cfg.BootstrapScript = bs.Path
 
-	jr, err := agent.NewJobRunner(l, scope, ag, j, agent.JobRunnerConfig{
-		Endpoint:           server.URL,
+	client := api.NewClient(l, api.Config{
+		Endpoint: server.URL,
+		Token:    ag.AccessToken,
+	})
+
+	jr, err := agent.NewJobRunner(l, scope, ag, j, client, agent.JobRunnerConfig{
 		AgentConfiguration: cfg,
 	})
 	if err != nil {

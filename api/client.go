@@ -1,16 +1,18 @@
 package api
 
+//go:generate interfacer -for github.com/buildkite/agent/api.Client -as agent.APIClient -o ../agent/api.go
+
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/textproto"
 	"net/url"
 	"reflect"
 	"strings"
@@ -21,64 +23,120 @@ import (
 )
 
 const (
-	defaultBaseURL   = "https://agent.buildkite.com/"
+	defaultEndpoint  = "https://agent.buildkite.com/"
 	defaultUserAgent = "buildkite-agent/api"
 )
 
+// Config is configuration for the API Client
+type Config struct {
+	// Endpoint for API requests. Defaults to the public Buildkite Agent API.
+	// The URL should always be specified with a trailing slash.
+	Endpoint string
+
+	// The authentication token to use, either a registration or access token
+	Token string
+
+	// User agent used when communicating with the Buildkite Agent API.
+	UserAgent string
+
+	// If true, only HTTP2 is disabled
+	DisableHTTP2 bool
+
+	// If true, requests and responses will be dumped and set to the logger
+	DebugHTTP bool
+
+	// The http client used, leave nil for the default
+	HTTPClient *http.Client
+}
+
 // A Client manages communication with the Buildkite Agent API.
 type Client struct {
+	// The client configuration
+	conf Config
+
 	// HTTP client used to communicate with the API.
 	client *http.Client
 
 	// The logger used
 	logger logger.Logger
-
-	// Base URL for API requests. Defaults to the public Buildkite Agent API.
-	// The URL should always be specified with a trailing slash.
-	BaseURL *url.URL
-
-	// User agent used when communicating with the Buildkite Agent API.
-	UserAgent string
-
-	// If true, requests and responses will be dumped and set to the logger
-	DebugHTTP bool
-
-	// Services used for talking to different parts of the Buildkite Agent API.
-	Agents      *AgentsService
-	Pings       *PingsService
-	Jobs        *JobsService
-	Chunks      *ChunksService
-	MetaData    *MetaDataService
-	HeaderTimes *HeaderTimesService
-	Artifacts   *ArtifactsService
-	Pipelines   *PipelinesService
-	Heartbeats  *HeartbeatsService
-	Annotations *AnnotationsService
 }
 
 // NewClient returns a new Buildkite Agent API Client.
-func NewClient(httpClient *http.Client, l logger.Logger) *Client {
-	baseURL, _ := url.Parse(defaultBaseURL)
-
-	c := &Client{
-		logger:    l,
-		client:    httpClient,
-		BaseURL:   baseURL,
-		UserAgent: defaultUserAgent,
+func NewClient(l logger.Logger, conf Config) *Client {
+	if conf.Endpoint == "" {
+		conf.Endpoint = defaultEndpoint
 	}
 
-	c.Agents = &AgentsService{c}
-	c.Pings = &PingsService{c}
-	c.Jobs = &JobsService{c}
-	c.Chunks = &ChunksService{c}
-	c.MetaData = &MetaDataService{c}
-	c.HeaderTimes = &HeaderTimesService{c}
-	c.Artifacts = &ArtifactsService{c}
-	c.Pipelines = &PipelinesService{c}
-	c.Heartbeats = &HeartbeatsService{c}
-	c.Annotations = &AnnotationsService{c}
+	if conf.UserAgent == "" {
+		conf.UserAgent = defaultUserAgent
+	}
 
-	return c
+	httpClient := conf.HTTPClient
+	if conf.HTTPClient == nil {
+		t := &http.Transport{
+			Proxy:              http.ProxyFromEnvironment,
+			DisableCompression: false,
+			DisableKeepAlives:  false,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:        100,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 30 * time.Second,
+		}
+
+		if conf.DisableHTTP2 {
+			t.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+		}
+
+		httpClient = &http.Client{
+			Timeout: 60 * time.Second,
+			Transport: &authenticatedTransport{
+				Token:    conf.Token,
+				Delegate: t,
+			},
+		}
+	}
+
+	return &Client{
+		logger: l,
+		client: httpClient,
+		conf:   conf,
+	}
+}
+
+// Config returns the internal configuration for the Client
+func (c *Client) Config() Config {
+	return c.conf
+}
+
+// FromAgentRegisterResponse returns a new instance using the access token and endpoint
+// from the registration response
+func (c *Client) FromAgentRegisterResponse(resp *AgentRegisterResponse) *Client {
+	conf := c.conf
+
+	// Override the registration token with the access token
+	conf.Token = resp.AccessToken
+
+	// If Buildkite told us to use a new Endpoint, respect that
+	if resp.Endpoint != "" {
+		conf.Endpoint = resp.Endpoint
+	}
+
+	return NewClient(c.logger, conf)
+}
+
+// FromPing returns a new instance using a new endpoint from a ping response
+func (c *Client) FromPing(resp *Ping) *Client {
+	conf := c.conf
+
+	// If Buildkite told us to use a new Endpoint, respect that
+	if resp.Endpoint != "" {
+		conf.Endpoint = resp.Endpoint
+	}
+
+	return NewClient(c.logger, conf)
 }
 
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
@@ -86,8 +144,8 @@ func NewClient(httpClient *http.Client, l logger.Logger) *Client {
 // Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
-func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Request, error) {
-	u := joinURL(c.BaseURL.String(), urlStr)
+func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Request, error) {
+	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
 	if body != nil {
@@ -102,7 +160,7 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
-	req.Header.Add("User-Agent", c.UserAgent)
+	req.Header.Add("User-Agent", c.conf.UserAgent)
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
@@ -115,16 +173,16 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 // provided in urlStr, in which case it is resolved relative to the UploadURL
 // of the Client. Relative URLs should always be specified without a preceding
 // slash.
-func (c *Client) NewFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
-	u := joinURL(c.BaseURL.String(), urlStr)
+func (c *Client) newFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
+	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	req, err := http.NewRequest(method, u, body)
 	if err != nil {
 		return nil, err
 	}
 
-	if c.UserAgent != "" {
-		req.Header.Add("User-Agent", c.UserAgent)
+	if c.conf.UserAgent != "" {
+		req.Header.Add("User-Agent", c.conf.UserAgent)
 	}
 
 	return req, nil
@@ -147,10 +205,10 @@ func newResponse(r *http.Response) *Response {
 // error if an API error has occurred.  If v implements the io.Writer
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
-func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
+func (c *Client) doRequest(req *http.Request, v interface{}) (*Response, error) {
 	var err error
 
-	if c.DebugHTTP {
+	if c.conf.DebugHTTP {
 		// If the request is a multi-part form, then it's probably a
 		// file upload, in which case we don't want to spewing out the
 		// file contents into the debug log (especially if it's been
@@ -185,7 +243,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 
 	response := newResponse(resp)
 
-	if c.DebugHTTP {
+	if c.conf.DebugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
 		c.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
 	}
@@ -266,24 +324,6 @@ func addOptions(s string, opt interface{}) (string, error) {
 	return u.String(), nil
 }
 
-// Copied from http://golang.org/src/mime/multipart/writer.go
-var quoteEscaper = strings.NewReplacer("\\", "\\\\", `"`, "\\\"")
-
-func escapeQuotes(s string) string {
-	return quoteEscaper.Replace(s)
-}
-
-// createFormFileWithContentType is a copy of the CreateFormFile method, except
-// you can change the content type it uses (by default you can't)
-func createFormFileWithContentType(w *multipart.Writer, fieldname, filename, contentType string) (io.Writer, error) {
-	h := make(textproto.MIMEHeader)
-	h.Set("Content-Disposition",
-		fmt.Sprintf(`form-data; name="%s"; filename="%s"`,
-			escapeQuotes(fieldname), escapeQuotes(filename)))
-	h.Set("Content-Type", contentType)
-	return w.CreatePart(h)
-}
-
-func joinURL(endpoint string, path string) string {
+func joinURLPath(endpoint string, path string) string {
 	return strings.TrimRight(endpoint, "/") + "/" + strings.TrimLeft(path, "/")
 }

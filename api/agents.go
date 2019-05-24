@@ -1,11 +1,5 @@
 package api
 
-// AgentsService handles communication with the agent related methods of the
-// Buildkite Agent API.
-type AgentsService struct {
-	client *Client
-}
-
 // AgentRegisterRequest is a call to register on the Buildkite Agent API
 type AgentRegisterRequest struct {
 	Name              string   `json:"name"`
@@ -35,14 +29,14 @@ type AgentRegisterResponse struct {
 
 // Registers the agent against the Buildkite Agent API. The client for this
 // call must be authenticated using an Agent Registration Token
-func (as *AgentsService) Register(regReq *AgentRegisterRequest) (*AgentRegisterResponse, *Response, error) {
-	req, err := as.client.NewRequest("POST", "register", regReq)
+func (c *Client) Register(regReq *AgentRegisterRequest) (*AgentRegisterResponse, *Response, error) {
+	req, err := c.newRequest("POST", "register", regReq)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	a := new(AgentRegisterResponse)
-	resp, err := as.client.Do(req, a)
+	resp, err := c.doRequest(req, a)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -51,21 +45,21 @@ func (as *AgentsService) Register(regReq *AgentRegisterRequest) (*AgentRegisterR
 }
 
 // Connects the agent to the Buildkite Agent API
-func (as *AgentsService) Connect() (*Response, error) {
-	req, err := as.client.NewRequest("POST", "connect", nil)
+func (c *Client) Connect() (*Response, error) {
+	req, err := c.newRequest("POST", "connect", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return as.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }
 
 // Disconnects the agent to the Buildkite Agent API
-func (as *AgentsService) Disconnect() (*Response, error) {
-	req, err := as.client.NewRequest("POST", "disconnect", nil)
+func (c *Client) Disconnect() (*Response, error) {
+	req, err := c.newRequest("POST", "disconnect", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return as.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }

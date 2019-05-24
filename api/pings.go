@@ -1,11 +1,5 @@
 package api
 
-// PingsService handles communication with the ping related methods of the
-// Buildkite Agent API.
-type PingsService struct {
-	client *Client
-}
-
 // Ping represents a Buildkite Agent API Ping
 type Ping struct {
 	Action   string `json:"action,omitempty"`
@@ -15,14 +9,14 @@ type Ping struct {
 }
 
 // Pings the API and returns any work the client needs to perform
-func (ps *PingsService) Get() (*Ping, *Response, error) {
-	req, err := ps.client.NewRequest("GET", "ping", nil)
+func (c *Client) Ping() (*Ping, *Response, error) {
+	req, err := c.newRequest("GET", "ping", nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	ping := new(Ping)
-	resp, err := ps.client.Do(req, ping)
+	resp, err := c.doRequest(req, ping)
 	if err != nil {
 		return nil, resp, err
 	}

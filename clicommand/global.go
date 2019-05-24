@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/oleiade/reflections"
@@ -146,29 +147,31 @@ func UnsetConfigFromEnvironment(c *cli.Context) {
 	}
 }
 
-func loadAPIClientConfig(cfg interface{}, tokenField string) agent.APIClientConfig {
+func loadAPIClientConfig(cfg interface{}, tokenField string) api.Config {
+	conf := api.Config{
+		UserAgent: agent.UserAgent(),
+	}
+
 	// Enable HTTP debugging
 	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
 	if debugHTTP == true && err == nil {
-		agent.APIClientEnableHTTPDebug()
+		conf.DebugHTTP = true
 	}
-
-	var a agent.APIClientConfig
 
 	endpoint, err := reflections.GetField(cfg, "Endpoint")
 	if endpoint != "" && err == nil {
-		a.Endpoint = endpoint.(string)
+		conf.Endpoint = endpoint.(string)
 	}
 
 	token, err := reflections.GetField(cfg, tokenField)
 	if token != "" && err == nil {
-		a.Token = token.(string)
+		conf.Token = token.(string)
 	}
 
 	noHTTP2, err := reflections.GetField(cfg, "NoHTTP2")
 	if err == nil {
-		a.DisableHTTP2 = noHTTP2.(bool)
+		conf.DisableHTTP2 = noHTTP2.(bool)
 	}
 
-	return a
+	return conf
 }
