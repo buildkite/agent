@@ -718,17 +718,29 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		HooksDir:    filepath.Join(directory, "hooks"),
 	}
 
+	// It'd be nice to show the current commit of the plugin, so
+	// let's figure that out.
+	headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "HEAD")
+
+	// Verify plugin digest
+	if p.Digest != "" {
+		b.shell.Commentf("Verifying plugin digest equals %s", p.Digest)
+		if headCommit != p.Digest {
+			if p.Version != "" {
+				return nil, fmt.Errorf("Plugin digest mismatch. Expected git tag %s to have SHA1 of %s, found %s", p.Version, p.Digest, headCommit)
+			} else {
+				return nil, fmt.Errorf("Plugin digest mismatch. Expected git SHA1 of %s, found %s", p.Digest, headCommit)
+			}		
+		}
+	}	
+
 	// Has it already been checked out?
 	if fileExists(pluginGitDirectory) {
-		// It'd be nice to show the current commit of the plugin, so
-		// let's figure that out.
-		headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "--short=7", "HEAD")
 		if err != nil {
 			b.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
 		} else {
 			b.shell.Commentf("Plugin %q already checked out (%s)", p.Label(), strings.TrimSpace(headCommit))
 		}
-
 		return checkout, nil
 	}
 

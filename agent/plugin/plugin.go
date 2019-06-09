@@ -19,6 +19,9 @@ type Plugin struct {
 	// The version of the plugin that should be running
 	Version string
 
+	// The digest of the plugin that should match the checkout
+	Digest string
+
 	// The clone method
 	Scheme string
 
@@ -34,6 +37,7 @@ type Plugin struct {
 
 var (
 	vendoredRegex = regexp.MustCompile(`^\.`)
+	versionRegex  = regexp.MustCompile(`([^@]*)(?:@git-sha1:(.*))?`)
 )
 
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
@@ -46,8 +50,16 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 
 	plugin.Scheme = u.Scheme
 	plugin.Location = u.Host + u.Path
-	plugin.Version = u.Fragment
 	plugin.Vendored = vendoredRegex.MatchString(plugin.Location)
+
+	versionGroups := versionRegex.FindStringSubmatch(u.Fragment)
+	if versionGroups != nil {
+		plugin.Version = versionGroups[1]
+		plugin.Digest = versionGroups[2]
+	} else {
+		plugin.Version = ""
+		plugin.Digest = ""
+	}
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
 		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
