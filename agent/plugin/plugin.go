@@ -33,8 +33,7 @@ type Plugin struct {
 }
 
 var (
-	locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
-	vendoredRegex       = regexp.MustCompile(`^\.`)
+	vendoredRegex = regexp.MustCompile(`^\.`)
 )
 
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
