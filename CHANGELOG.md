@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.13.0](https://github.com/buildkite/agent/tree/v3.13.0) (2019-06-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.12.0...v3.13.0)
+
+### Changed
+- Quote command to git submodule foreach to fix error with git 2.20.0 [#1029](https://github.com/buildkite/agent/pull/1029) (@lox)
+- Refactor api package to an interface [#1020](https://github.com/buildkite/agent/pull/1020) (@lox)
+
 ## [v3.12.0](https://github.com/buildkite/agent/tree/v3.12.0) (2019-05-22)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.11.5...v3.12.0)
 
