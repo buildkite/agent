@@ -49,7 +49,7 @@ func TestIsStdinIsNotReadableByDefault(t *testing.T) {
 func TestIsStdinIsReadableWithAPipe(t *testing.T) {
 	var cmd *exec.Cmd
 	if runtime.GOOS == `windows` {
-		cmd = exec.Command("cmd", "/c", `echo output | `+os.Args[0])
+		cmd = exec.Command("cmd", "/c", `echo output ^| `+os.Args[0])
 	} else {
 		cmd = exec.Command("/bin/sh", "-c", `echo output | `+os.Args[0])
 	}
