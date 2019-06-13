@@ -26,4 +26,5 @@ type AgentConfiguration struct {
 	DisconnectAfterIdleTimeout int
 	CancelGracePeriod          int
 	Shell                      string
+	Profile                    string
 }

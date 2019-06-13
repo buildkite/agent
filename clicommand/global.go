@@ -51,6 +51,12 @@ var DebugFlag = cli.BoolFlag{
 	EnvVar: "BUILDKITE_AGENT_DEBUG",
 }
 
+var ProfileFlag = cli.StringFlag{
+	Name:   "profile",
+	Usage:  "Enable a profiling mode, either cpu, memory, mutex or block",
+	EnvVar: "BUILDKITE_AGENT_PROFILE",
+}
+
 var DebugHTTPFlag = cli.BoolFlag{
 	Name:   "debug-http",
 	Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log",
@@ -110,7 +116,16 @@ func CreateLogger(cfg interface{}) logger.Logger {
 	return l
 }
 
-func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
+func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
+	// Enable profiling a profiling mode if Profile is present
+	modeField, _ := reflections.GetField(cfg, "Profile")
+	if mode, ok := modeField.(string); ok && mode != "" {
+		return Profile(l, mode)
+	}
+	return func() {}
+}
+
+func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 	// Enable debugging if a Debug option is present
 	debug, _ := reflections.GetField(cfg, "Debug")
 	if debug == true {
@@ -130,6 +145,9 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 			}
 		}
 	}
+
+	// Handle profiling flag
+	return HandleProfileFlag(l, cfg)
 }
 
 func UnsetConfigFromEnvironment(c *cli.Context) {
