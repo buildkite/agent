@@ -42,8 +42,9 @@ type ArtifactShasumConfig struct {
 	Build string `cli:"build" validate:"required"`
 
 	// Global flags
-	Debug   bool `cli:"debug"`
-	NoColor bool `cli:"no-color"`
+	Debug   bool   `cli:"debug"`
+	NoColor bool   `cli:"no-color"`
+	Profile string `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -78,6 +79,7 @@ var ArtifactShasumCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -90,8 +92,9 @@ var ArtifactShasumCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))

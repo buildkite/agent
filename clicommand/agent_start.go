@@ -85,6 +85,7 @@ type AgentStartConfig struct {
 	Debug       bool     `cli:"debug"`
 	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -363,6 +364,7 @@ var AgentStartCommand = cli.Command{
 		ExperimentsFlag,
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -424,8 +426,9 @@ var AgentStartCommand = cli.Command{
 			l.Warn("%s", warning)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)

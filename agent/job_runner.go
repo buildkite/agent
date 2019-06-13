@@ -429,6 +429,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 
+	// Whether to enable profiling in the bootstrap
+	if r.conf.AgentConfiguration.Profile != "" {
+		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile
+	}
+
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
