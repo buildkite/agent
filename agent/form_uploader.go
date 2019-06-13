@@ -49,7 +49,7 @@ func (u *FormUploader) URL(artifact *api.Artifact) string {
 
 func (u *FormUploader) Upload(artifact *api.Artifact) error {
 	// Create a HTTP request for uploading the file
-	request, err := createUploadRequest(artifact)
+	request, err := createUploadRequest(u.logger, artifact)
 	if err != nil {
 		return err
 	}
@@ -91,15 +91,16 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 }
 
 // Creates a new file upload http request with optional extra params
-func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
+func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request, error) {
 	file, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
+	// Use a pipe for the body to avoid buffering the entire file in memory
+	// See https://blog.depado.eu/post/bufferless-multipart-post-in-go
+	pipeR, pipeW := io.Pipe()
+	writer := multipart.NewWriter(pipeW)
 
 	// Set the post data for the request
 	for key, val := range artifact.UploadInstructions.Data {
@@ -117,20 +118,18 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
 	// order, and the file needs to be the last one other it doesn't work.
-	part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, artifact.Path)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = io.Copy(part, file)
-	if err != nil {
-		return nil, err
-	}
-
-	err = writer.Close()
-	if err != nil {
-		return nil, err
-	}
+	go func() {
+		defer pipeW.Close()
+		part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, artifact.Path)
+		if err != nil {
+			return
+		}
+		defer file.Close()
+		if _, err = io.Copy(part, file); err != nil {
+			return
+		}
+		_ = writer.Close()
+	}()
 
 	// Create the URL that we'll send data to
 	uri, err := url.Parse(artifact.UploadInstructions.Action.URL)
@@ -141,7 +140,7 @@ func createUploadRequest(artifact *api.Artifact) (*http.Request, error) {
 	uri.Path = artifact.UploadInstructions.Action.Path
 
 	// Create the request
-	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), body)
+	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), pipeR)
 	if err != nil {
 		return nil, err
 	}
