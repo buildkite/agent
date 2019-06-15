@@ -722,6 +722,10 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// let's figure that out.
 	headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "HEAD")
 
+	if b.RequirePluginDigests && (p.DigestType == "" || p.DigestValue == "") {
+		return nil, fmt.Errorf("Agent configuration requires plugin digests, but no digest found for %s", p.Name())
+	}
+
 	// Verify plugin digest
 	if p.DigestType == "git-sha1" {
 		if headCommit != p.DigestValue {

@@ -85,6 +85,9 @@ type Config struct {
 	// Whether to validate plugin configuration
 	PluginValidation bool
 
+	// Whether there must be a valid digest to use a plugin
+	RequirePluginDigests bool
+
 	// Are local hooks enabled?
 	LocalHooksEnabled bool
 
