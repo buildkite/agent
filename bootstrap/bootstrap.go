@@ -723,14 +723,14 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "HEAD")
 
 	// Verify plugin digest
-	if p.Digest != "" {
-		if headCommit != p.Digest {
+	if p.DigestType == "git-sha1" {
+		if headCommit != p.DigestValue {
 			if p.Version != "" {
-				return nil, fmt.Errorf("Plugin digest mismatch. Expected git tag %s to have SHA1 of %s, found %s", p.Version, p.Digest, headCommit)
+				return nil, fmt.Errorf("Plugin digest mismatch. Expected git tag %s to have SHA1 of %s, found %s", p.Version, p.DigestValue, headCommit)
 			}
-			return nil, fmt.Errorf("Plugin digest mismatch. Expected git SHA1 of %s, found %s", p.Digest, headCommit)
+			return nil, fmt.Errorf("Plugin digest mismatch. Expected git SHA1 of %s, found %s", p.DigestValue, headCommit)
 		}
-		b.shell.Commentf("Plugin digest matches %s", p.Digest)
+		b.shell.Commentf("Plugin digest matches %s", p.DigestValue)
 	}
 
 	// Has it already been checked out?

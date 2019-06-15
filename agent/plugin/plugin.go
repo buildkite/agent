@@ -19,8 +19,11 @@ type Plugin struct {
 	// The version of the plugin that should be running
 	Version string
 
-	// The digest of the plugin that should match the checkout
-	Digest string
+	// The digest type, e.g. "git-sha1"
+	DigestType string
+
+	// The digest value of the plugin
+	DigestValue string
 
 	// The clone method
 	Scheme string
@@ -37,7 +40,7 @@ type Plugin struct {
 
 var (
 	vendoredRegex = regexp.MustCompile(`^\.`)
-	versionRegex  = regexp.MustCompile(`([^@]*)(?:@git-sha1:(.*))?`)
+	versionRegex  = regexp.MustCompile(`([^@]*)(?:@(.*):(.*))?`)
 )
 
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
@@ -55,14 +58,20 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 	versionGroups := versionRegex.FindStringSubmatch(u.Fragment)
 	if versionGroups != nil {
 		plugin.Version = versionGroups[1]
-		plugin.Digest = versionGroups[2]
+		plugin.DigestType = versionGroups[2]
+		plugin.DigestValue = versionGroups[3]
 	} else {
 		plugin.Version = ""
-		plugin.Digest = ""
+		plugin.DigestType = ""
+		plugin.DigestValue = ""
 	}
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
 		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
+	}
+
+	if plugin.DigestType != "" && plugin.DigestType != "git-sha1" {
+		return nil, fmt.Errorf("Unsupported plugin digest type \"%s\" in \"%s\"", plugin.DigestType, u.Fragment)
 	}
 
 	if u.User != nil {
