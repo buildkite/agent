@@ -724,15 +724,14 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 
 	// Verify plugin digest
 	if p.Digest != "" {
-		b.shell.Commentf("Verifying plugin digest equals %s", p.Digest)
 		if headCommit != p.Digest {
 			if p.Version != "" {
 				return nil, fmt.Errorf("Plugin digest mismatch. Expected git tag %s to have SHA1 of %s, found %s", p.Version, p.Digest, headCommit)
-			} else {
-				return nil, fmt.Errorf("Plugin digest mismatch. Expected git SHA1 of %s, found %s", p.Digest, headCommit)
-			}		
+			}
+			return nil, fmt.Errorf("Plugin digest mismatch. Expected git SHA1 of %s, found %s", p.Digest, headCommit)
 		}
-	}	
+		b.shell.Commentf("Plugin digest matches %s", p.Digest)
+	}
 
 	// Has it already been checked out?
 	if fileExists(pluginGitDirectory) {
