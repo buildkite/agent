@@ -18,6 +18,12 @@ func TestFormUploading(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case `/buildkiteartifacts.com`:
+			if req.ContentLength <= 0 {
+				t.Error("Expected a Content-Length header")
+				http.Error(rw, "Bad requests", http.StatusBadRequest)
+				return
+			}
+
 			err := req.ParseMultipartForm(5 * 1024 * 1024)
 			if err != nil {
 				t.Error(err)
