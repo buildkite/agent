@@ -92,7 +92,8 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 
 // Creates a new file upload http request with optional extra params
 func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request, error) {
-	file, err := os.Open(artifact.AbsolutePath)
+	// Check the file exists
+	_, err := os.Stat(artifact.AbsolutePath)
 	if err != nil {
 		return nil, err
 	}
@@ -101,34 +102,49 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 	// See https://blog.depado.eu/post/bufferless-multipart-post-in-go
 	pipeR, pipeW := io.Pipe()
 	writer := multipart.NewWriter(pipeW)
+	errCh := make(chan error)
 
-	// Set the post data for the request
-	for key, val := range artifact.UploadInstructions.Data {
-		// Replace the magical ${artifact:path} variable with the
-		// artifact's path
-		newVal := ArtifactPathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
-
-		// Write the new value to the form
-		err = writer.WriteField(key, newVal)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// It's important that we add the form field last because when
-	// uploading to an S3 form, they are really nit-picky about the field
-	// order, and the file needs to be the last one other it doesn't work.
 	go func() {
 		defer pipeW.Close()
+		defer close(errCh)
+
+		// Set the post data for the request
+		for key, val := range artifact.UploadInstructions.Data {
+			// Replace the magical ${artifact:path} variable with the
+			// artifact's path
+			newVal := ArtifactPathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
+
+			// Write the new value to the form
+			err = writer.WriteField(key, newVal)
+			if err != nil {
+				errCh <- err
+				return
+			}
+		}
+		// It's important that we add the form field last because when
+		// uploading to an S3 form, they are really nit-picky about the field
+		// order, and the file needs to be the last one other it doesn't work.
 		part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, artifact.Path)
 		if err != nil {
 			return
 		}
-		defer file.Close()
-		if _, err = io.Copy(part, file); err != nil {
+
+		file, err := os.Open(artifact.AbsolutePath)
+		if err != nil {
+			errCh <- err
 			return
 		}
-		_ = writer.Close()
+		defer file.Close()
+
+		if _, err = io.Copy(part, file); err != nil {
+			errCh <- err
+			return
+		}
+
+		if err := writer.Close(); err != nil {
+			errCh <- err
+			return
+		}
 	}()
 
 	// Create the URL that we'll send data to
