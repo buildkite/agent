@@ -92,15 +92,13 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 
 // Creates a new file upload http request with optional extra params
 func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request, error) {
-	file, err := os.Open(artifact.AbsolutePath)
+	// Check the file exists
+	_, err := os.Stat(artifact.AbsolutePath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use a pipe for the body to avoid buffering the entire file in memory
-	// See https://blog.depado.eu/post/bufferless-multipart-post-in-go
-	pipeR, pipeW := io.Pipe()
-	writer := multipart.NewWriter(pipeW)
+	streamer := newMultipartStreamer()
 
 	// Set the post data for the request
 	for key, val := range artifact.UploadInstructions.Data {
@@ -109,7 +107,7 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 		newVal := ArtifactPathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
 
 		// Write the new value to the form
-		err = writer.WriteField(key, newVal)
+		err = streamer.WriteField(key, newVal)
 		if err != nil {
 			return nil, err
 		}
@@ -118,18 +116,9 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
 	// order, and the file needs to be the last one other it doesn't work.
-	go func() {
-		defer pipeW.Close()
-		part, err := writer.CreateFormFile(artifact.UploadInstructions.Action.FileInput, artifact.Path)
-		if err != nil {
-			return
-		}
-		defer file.Close()
-		if _, err = io.Copy(part, file); err != nil {
-			return
-		}
-		_ = writer.Close()
-	}()
+	if err := streamer.WriteFile(artifact.UploadInstructions.Action.FileInput, artifact.Path); err != nil {
+		return nil, err
+	}
 
 	// Create the URL that we'll send data to
 	uri, err := url.Parse(artifact.UploadInstructions.Action.URL)
@@ -140,13 +129,94 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 	uri.Path = artifact.UploadInstructions.Action.Path
 
 	// Create the request
-	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), pipeR)
+	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), streamer.Reader())
 	if err != nil {
 		return nil, err
 	}
 
-	// Finally add the multipart content type to the request
-	req.Header.Add("Content-Type", writer.FormDataContentType())
+	// Setup the content type and length that s3 requires
+	req.Header.Add("Content-Type", streamer.ContentType)
+	req.ContentLength = streamer.Len()
 
 	return req, nil
+}
+
+// A wrapper around the complexities of streaming a multipart file and fields to
+// an http endpoint that infuriatingly requires a Content-Length
+// Derived from https://github.com/technoweenie/multipartstreamer
+type multipartStreamer struct {
+	ContentType   string
+	bodyBuffer    *bytes.Buffer
+	bodyWriter    *multipart.Writer
+	closeBuffer   *bytes.Buffer
+	reader        io.ReadCloser
+	contentLength int64
+}
+
+// newMultipartStreamer initializes a new MultipartStreamer.
+func newMultipartStreamer() *multipartStreamer {
+	m := &multipartStreamer{
+		bodyBuffer: new(bytes.Buffer),
+	}
+
+	m.bodyWriter = multipart.NewWriter(m.bodyBuffer)
+	boundary := m.bodyWriter.Boundary()
+	m.ContentType = "multipart/form-data; boundary=" + boundary
+
+	closeBoundary := fmt.Sprintf("\r\n--%s--\r\n", boundary)
+	m.closeBuffer = bytes.NewBufferString(closeBoundary)
+
+	return m
+}
+
+// WriteField writes a form field to the multipart.Writer.
+func (m *multipartStreamer) WriteField(key, value string) error {
+	return m.bodyWriter.WriteField(key, value)
+}
+
+// WriteFile writes the multi-part preamble which will be followed by file data
+// This can only be called once and must be the last thing written to the streamer
+func (m *multipartStreamer) WriteFile(key, filename string) error {
+	if m.reader != nil {
+		return errors.New("WriteFile can't be called multiple times")
+	}
+
+	fh, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+
+	stat, err := fh.Stat()
+	if err != nil {
+		return err
+	}
+
+	// Set up a reader that combines the body, the file and the closer in a stream
+	m.reader = &multipartReadCloser{
+		Reader: io.MultiReader(m.bodyBuffer, fh, m.closeBuffer),
+		fh:     fh,
+	}
+	m.contentLength = stat.Size()
+
+	_, err = m.bodyWriter.CreateFormFile(key, filename)
+	return err
+}
+
+// Len calculates the byte size of the multipart content.
+func (m *multipartStreamer) Len() int64 {
+	return m.contentLength + int64(m.bodyBuffer.Len()) + int64(m.closeBuffer.Len())
+}
+
+// Reader gets an io.ReadCloser for passing to an http.Request.
+func (m *multipartStreamer) Reader() io.ReadCloser {
+	return m.reader
+}
+
+type multipartReadCloser struct {
+	io.Reader
+	fh *os.File
+}
+
+func (mrc *multipartReadCloser) Close() error {
+	return mrc.fh.Close()
 }
