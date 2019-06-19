@@ -5,11 +5,9 @@ import (
 	_ "crypto/sha512" // import sha512 to make sha512 ssl certs work
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/http/httputil"
-	"path/filepath"
 	"regexp"
 
 	// "net/http/httputil"
@@ -151,7 +149,7 @@ type multipartStreamer struct {
 	bodyBuffer    *bytes.Buffer
 	bodyWriter    *multipart.Writer
 	closeBuffer   *bytes.Buffer
-	reader        io.Reader
+	reader        io.ReadCloser
 	contentLength int64
 }
 
@@ -176,18 +174,13 @@ func (m *multipartStreamer) WriteField(key, value string) error {
 	return m.bodyWriter.WriteField(key, value)
 }
 
-// WriteReader adds an io.Reader to get the content of a file.  The reader is
-// not accessed until the multipart.Reader is copied to some output writer.
-func (m *multipartStreamer) WriteReader(key, filename string, size int64, reader io.Reader) (err error) {
-	m.reader = reader
-	m.contentLength = size
-
-	_, err = m.bodyWriter.CreateFormFile(key, filename)
-	return
-}
-
-// WriteFile is a shortcut for adding a local file as an io.Reader.
+// WriteFile writes the multi-part preamble which will be followed by file data
+// This can only be called once and must be the last thing written to the streamer
 func (m *multipartStreamer) WriteFile(key, filename string) error {
+	if m.reader != nil {
+		return errors.New("WriteFile can't be called multiple times")
+	}
+
 	fh, err := os.Open(filename)
 	if err != nil {
 		return err
@@ -198,7 +191,15 @@ func (m *multipartStreamer) WriteFile(key, filename string) error {
 		return err
 	}
 
-	return m.WriteReader(key, filepath.Base(filename), stat.Size(), fh)
+	// Set up a reader that combines the body, the file and the closer in a stream
+	m.reader = &multipartReadCloser{
+		Reader: io.MultiReader(m.bodyBuffer, fh, m.closeBuffer),
+		fh:     fh,
+	}
+	m.contentLength = stat.Size()
+
+	_, err = m.bodyWriter.CreateFormFile(key, filename)
+	return err
 }
 
 // Len calculates the byte size of the multipart content.
@@ -208,6 +209,14 @@ func (m *multipartStreamer) Len() int64 {
 
 // Reader gets an io.ReadCloser for passing to an http.Request.
 func (m *multipartStreamer) Reader() io.ReadCloser {
-	reader := io.MultiReader(m.bodyBuffer, m.reader, m.closeBuffer)
-	return ioutil.NopCloser(reader)
+	return m.reader
+}
+
+type multipartReadCloser struct {
+	io.Reader
+	fh *os.File
+}
+
+func (mrc *multipartReadCloser) Close() error {
+	return mrc.fh.Close()
 }
