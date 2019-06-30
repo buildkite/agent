@@ -104,8 +104,13 @@ var MetaDataKeysCommand = cli.Command{
 			l.Fatal("Failed to find meta-data keys: %s", err)
 		}
 
-		for _, key := range keys {
-			fmt.Printf("%s%s", cfg.Delimiter, key)
+		last := len(keys) - 1
+
+		for idx, key := range keys {
+			fmt.Printf("%s", key)
+			if idx != last {
+				fmt.Printf("%s", cfg.Delimiter)
+			}
 		}
 	},
 }
