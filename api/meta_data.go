@@ -64,3 +64,20 @@ func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Res
 
 	return e, resp, err
 }
+
+func (c *Client) MetaDataKeys(jobId string) ([]string, *Response, error) {
+	u := fmt.Sprintf("jobs/%s/data/keys", jobId)
+
+	req, err := c.newRequest("POST", u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	keys := []string{}
+	resp, err := c.doRequest(req, &keys)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return keys, resp, err
+}

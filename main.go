@@ -79,6 +79,7 @@ func main() {
 				clicommand.MetaDataSetCommand,
 				clicommand.MetaDataGetCommand,
 				clicommand.MetaDataExistsCommand,
+				clicommand.MetaDataKeysCommand,
 			},
 		},
 		{
