@@ -16,15 +16,15 @@ var MetaDataKeysHelpDescription = `Usage:
 
 Description:
 
-   Lists all meta-data keys that have been previously set, delimited by a newline.
+   Lists all meta-data keys that have been previously set, delimited by a newline
+   and terminated with a trailing newline.
 
 Example:
 
    $ buildkite-agent meta-data keys`
 
 type MetaDataKeysConfig struct {
-	Job       string `cli:"job" validate:"required"`
-	Delimiter string `cli:"delimiter"`
+	Job string `cli:"job" validate:"required"`
 
 	// Global flags
 	Debug   bool   `cli:"debug"`
@@ -48,12 +48,6 @@ var MetaDataKeysCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the meta-data be checked for",
 			EnvVar: "BUILDKITE_JOB_ID",
-		},
-		cli.StringFlag{
-			Name:   "delimiter",
-			Value:  "\n",
-			Usage:  "The delimiter to use between meta-data keys",
-			EnvVar: "BUILDKITE_META_DATA_KEYS_DELIMITER",
 		},
 
 		// API Flags
@@ -104,13 +98,8 @@ var MetaDataKeysCommand = cli.Command{
 			l.Fatal("Failed to find meta-data keys: %s", err)
 		}
 
-		last := len(keys) - 1
-
-		for idx, key := range keys {
-			fmt.Printf("%s", key)
-			if idx != last {
-				fmt.Printf("%s", cfg.Delimiter)
-			}
+		for _, key := range keys {
+			fmt.Printf("%s\n", key)
 		}
 	},
 }
