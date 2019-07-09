@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.13.1](https://github.com/buildkite/agent/tree/v3.13.1) (2019-07-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.13.0...v3.13.1)
+
+### Changed
+- Add meta-data keys command [#1039](https://github.com/buildkite/agent/pull/1039) (@lox)
+- Fix bug where file upload hangs and add a test [#1036](https://github.com/buildkite/agent/pull/1036) (@lox)
+- Fix memory leak in artifact uploading with FormUploader [#1033](https://github.com/buildkite/agent/pull/1033) (@lox)
+- Add profile option to all cli commands [#1032](https://github.com/buildkite/agent/pull/1032) (@lox)
+
 ## [v3.13.0](https://github.com/buildkite/agent/tree/v3.13.0) (2019-06-12)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.12.0...v3.13.0)
 
