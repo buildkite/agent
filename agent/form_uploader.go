@@ -116,7 +116,7 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
 	// order, and the file needs to be the last one other it doesn't work.
-	if err := streamer.WriteFile(artifact.UploadInstructions.Action.FileInput, artifact.Path); err != nil {
+	if err := streamer.WriteFile(artifact.UploadInstructions.Action.FileInput, artifact.AbsolutePath); err != nil {
 		return nil, err
 	}
 
