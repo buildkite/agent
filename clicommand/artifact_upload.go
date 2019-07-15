@@ -41,7 +41,7 @@ Example:
    $ export BUILDKITE_ARTIFACTORY_URL=http://my-artifactory-instance.com/artifactory
    $ export BUILDKITE_ARTIFACTORY_USER=carol-danvers
    $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
-   $ buildkite-agent artifact upload "log/**/*.log" $BUILDKITE_ARTIFACTORY_URL`
+   $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID`
 
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
