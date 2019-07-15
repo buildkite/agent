@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/buildkite/agent/api"
@@ -11,6 +12,8 @@ import (
 )
 
 func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
+	defer os.Remove("llamas.txt")
+
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case `/builds/my-build/artifacts/search`:
