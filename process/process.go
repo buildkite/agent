@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -18,17 +20,55 @@ const (
 	termType = `xterm-256color`
 )
 
+type Signal int
+
+const (
+	SIGHUP  Signal = 1
+	SIGINT  Signal = 2
+	SIGQUIT Signal = 3
+	SIGUSR1 Signal = 10
+	SIGUSR2 Signal = 12
+	SIGTERM Signal = 15
+)
+
+var signalMap = map[string]Signal{
+	`SIGHUP`:  SIGHUP,
+	`SIGINT`:  SIGINT,
+	`SIGQUIT`: SIGQUIT,
+	`SIGUSR1`: SIGUSR1,
+	`SIGUSR2`: SIGUSR2,
+	`SIGTERM`: SIGTERM,
+}
+
+func (s Signal) String() string {
+	for k, sig := range signalMap {
+		if sig == s {
+			return k
+		}
+	}
+	return strconv.FormatInt(int64(s), 10)
+}
+
+func ParseSignal(sig string) (Signal, error) {
+	s, ok := signalMap[strings.ToUpper(sig)]
+	if !ok {
+		return Signal(0), fmt.Errorf("Unknown signal %q", sig)
+	}
+	return s, nil
+}
+
 // Configuration for a Process
 type Config struct {
-	PTY       bool
-	Timestamp bool
-	Path      string
-	Args      []string
-	Env       []string
-	Stdout    io.Writer
-	Stderr    io.Writer
-	Dir       string
-	Context   context.Context
+	PTY             bool
+	Timestamp       bool
+	Path            string
+	Args            []string
+	Env             []string
+	Stdout          io.Writer
+	Stderr          io.Writer
+	Dir             string
+	Context         context.Context
+	InterruptSignal Signal
 }
 
 // Process is an operating system level process
@@ -78,7 +118,7 @@ func (p *Process) Run() error {
 	// Setup the process to create a process group if supported
 	// See https://github.com/kr/pty/issues/35 for context
 	if !p.conf.PTY {
-		SetupProcessGroup(p.command)
+		p.setupProcessGroup()
 	}
 
 	// Configure working dir and fail if it doesn't exist, otherwise
@@ -258,11 +298,11 @@ func (p *Process) Interrupt() error {
 	}
 
 	// interrupt the process (ctrl-c or SIGINT)
-	if err := InterruptProcessGroup(p.command.Process, p.logger); err != nil {
+	if err := p.interruptProcessGroup(); err != nil {
 		p.logger.Error("[Process] Failed to interrupt process %d: %v", p.pid, err)
 
 		// Fallback to terminating if we get an error
-		if termErr := TerminateProcessGroup(p.command.Process, p.logger); termErr != nil {
+		if termErr := p.terminateProcessGroup(); termErr != nil {
 			return termErr
 		}
 	}
@@ -280,7 +320,7 @@ func (p *Process) Terminate() error {
 		return nil
 	}
 
-	return TerminateProcessGroup(p.command.Process, p.logger)
+	return p.terminateProcessGroup()
 }
 
 func timeoutWait(waitGroup *sync.WaitGroup) error {

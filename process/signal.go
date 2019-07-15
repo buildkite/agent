@@ -3,30 +3,34 @@
 package process
 
 import (
-	"os"
-	"os/exec"
 	"syscall"
-
-	"github.com/buildkite/agent/logger"
 )
 
-func SetupProcessGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-		Pgid:    0,
+func (p *Process) setupProcessGroup() {
+	// See https://github.com/kr/pty/issues/35 for context
+	if !p.conf.PTY {
+		p.command.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+			Pgid:    0,
+		}
 	}
 }
 
-func TerminateProcessGroup(p *os.Process, l logger.Logger) error {
-	l.Debug("[Process] Sending signal SIGKILL to PGID: %d", p.Pid)
-	return syscall.Kill(-p.Pid, syscall.SIGKILL)
+func (p *Process) terminateProcessGroup() error {
+	p.logger.Debug("[Process] Sending signal SIGKILL to PGID: %d", p.Pid)
+	return syscall.Kill(-p.pid, syscall.SIGKILL)
 }
 
-func InterruptProcessGroup(p *os.Process, l logger.Logger) error {
-	l.Debug("[Process] Sending signal SIGTERM to PGID: %d", p.Pid)
+func (p *Process) interruptProcessGroup() error {
+	intSignal := p.conf.InterruptSignal
 
 	// TODO: this should be SIGINT, but will be a breaking change
-	return syscall.Kill(-p.Pid, syscall.SIGTERM)
+	if intSignal == Signal(0) {
+		intSignal = SIGTERM
+	}
+
+	p.logger.Debug("[Process] Sending signal %s to PGID: %d", intSignal, p.Pid)
+	return syscall.Kill(-p.pid, syscall.Signal(intSignal))
 }
 
 func GetPgid(pid int) (int, error) {
