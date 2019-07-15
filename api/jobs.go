@@ -4,12 +4,6 @@ import (
 	"fmt"
 )
 
-// JobsService handles communication with the job related methods of the
-// Buildkite Agent API.
-type JobsService struct {
-	client *Client
-}
-
 // Job represents a Buildkite Agent API Job
 type Job struct {
 	ID                 string            `json:"id,omitempty"`
@@ -37,17 +31,17 @@ type jobFinishRequest struct {
 	ChunksFailedCount int    `json:"chunks_failed_count"`
 }
 
-// Fetches a job
-func (js *JobsService) GetState(id string) (*JobState, *Response, error) {
+// GetJobState returns the state of a given job
+func (c *Client) GetJobState(id string) (*JobState, *Response, error) {
 	u := fmt.Sprintf("jobs/%s", id)
 
-	req, err := js.client.NewRequest("GET", u, nil)
+	req, err := c.newRequest("GET", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	s := new(JobState)
-	resp, err := js.client.Do(req, s)
+	resp, err := c.doRequest(req, s)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -55,19 +49,19 @@ func (js *JobsService) GetState(id string) (*JobState, *Response, error) {
 	return s, resp, err
 }
 
-// Accepts the passed in job. Returns the job with it's finalized set of
+// AcceptJob accepts the passed in job. Returns the job with it's finalized set of
 // environment variables (when a job is accepted, the agents environment is
 // applied to the job)
-func (js *JobsService) Accept(job *Job) (*Job, *Response, error) {
+func (c *Client) AcceptJob(job *Job) (*Job, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/accept", job.ID)
 
-	req, err := js.client.NewRequest("PUT", u, nil)
+	req, err := c.newRequest("PUT", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	j := new(Job)
-	resp, err := js.client.Do(req, j)
+	resp, err := c.doRequest(req, j)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -75,25 +69,25 @@ func (js *JobsService) Accept(job *Job) (*Job, *Response, error) {
 	return j, resp, err
 }
 
-// Starts the passed in job
-func (js *JobsService) Start(job *Job) (*Response, error) {
+// StartJob starts the passed in job
+func (c *Client) StartJob(job *Job) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/start", job.ID)
 
-	req, err := js.client.NewRequest("PUT", u, &jobStartRequest{
+	req, err := c.newRequest("PUT", u, &jobStartRequest{
 		StartedAt: job.StartedAt,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return js.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }
 
-// Finishes the passed in job
-func (js *JobsService) Finish(job *Job) (*Response, error) {
+// FinishJob finishes the passed in job
+func (c *Client) FinishJob(job *Job) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/finish", job.ID)
 
-	req, err := js.client.NewRequest("PUT", u, &jobFinishRequest{
+	req, err := c.newRequest("PUT", u, &jobFinishRequest{
 		FinishedAt:        job.FinishedAt,
 		ExitStatus:        job.ExitStatus,
 		ChunksFailedCount: job.ChunksFailedCount,
@@ -102,17 +96,25 @@ func (js *JobsService) Finish(job *Job) (*Response, error) {
 		return nil, err
 	}
 
-	return js.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }
 
-// Updates a step
-func (js *JobsService) StepUpdate(jobId string, stepUpdate *StepUpdate) (*Response, error) {
+// StepUpdate represents a change request to a step
+type StepUpdate struct {
+	UUID      string `json:"uuid,omitempty"`
+	Attribute string `json:"attribute,omitempty"`
+	Value     string `json:"value,omitempty"`
+	Append    bool   `json:"append,omitempty"`
+}
+
+// StepUpdate updates a step
+func (c *Client) StepUpdate(jobId string, stepUpdate *StepUpdate) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/step_update", jobId)
 
-	req, err := js.client.NewRequest("PUT", u, stepUpdate)
+	req, err := c.newRequest("PUT", u, stepUpdate)
 	if err != nil {
 		return nil, err
 	}
 
-	return js.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }

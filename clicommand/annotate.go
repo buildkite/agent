@@ -7,7 +7,6 @@ import (
 
 	"github.com/buildkite/agent/stdin"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -56,8 +55,9 @@ type AnnotateConfig struct {
 	Job     string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug   bool `cli:"debug"`
-	NoColor bool `cli:"no-color"`
+	Debug   bool   `cli:"debug"`
+	NoColor bool   `cli:"no-color"`
+	Profile string `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -102,6 +102,7 @@ var AnnotateCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -114,8 +115,9 @@ var AnnotateCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		var body string
 		var err error
@@ -135,7 +137,7 @@ var AnnotateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Create the annotation we'll send to the Buildkite API
 		annotation := &api.Annotation{
@@ -147,8 +149,8 @@ var AnnotateCommand = cli.Command{
 
 		// Retry the annotation a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			// Attempt ot create the annotation
-			resp, err := client.Annotations.Create(cfg.Job, annotation)
+			// Attempt to create the annotation
+			resp, err := client.Annotate(cfg.Job, annotation)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {

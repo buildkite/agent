@@ -53,8 +53,9 @@ type PipelineUploadConfig struct {
 	NoInterpolation bool   `cli:"no-interpolation"`
 
 	// Global flags
-	Debug   bool `cli:"debug"`
-	NoColor bool `cli:"no-color"`
+	Debug   bool   `cli:"debug"`
+	NoColor bool   `cli:"no-color"`
+	Profile string `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -99,6 +100,7 @@ var PipelineUploadCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -111,8 +113,9 @@ var PipelineUploadCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		// Find the pipeline file either from STDIN or the first
 		// argument
@@ -232,7 +235,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Generate a UUID that will identifiy this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
@@ -241,7 +244,7 @@ var PipelineUploadCommand = cli.Command{
 
 		// Retry the pipeline upload a few times before giving up
 		err = retry.Do(func(s *retry.Stats) error {
-			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
+			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, s)
 

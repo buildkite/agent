@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.13.1](https://github.com/buildkite/agent/tree/v3.13.1) (2019-07-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.13.0...v3.13.1)
+
+### Changed
+- Add meta-data keys command [#1039](https://github.com/buildkite/agent/pull/1039) (@lox)
+- Fix bug where file upload hangs and add a test [#1036](https://github.com/buildkite/agent/pull/1036) (@lox)
+- Fix memory leak in artifact uploading with FormUploader [#1033](https://github.com/buildkite/agent/pull/1033) (@lox)
+- Add profile option to all cli commands [#1032](https://github.com/buildkite/agent/pull/1032) (@lox)
+
+## [v3.13.0](https://github.com/buildkite/agent/tree/v3.13.0) (2019-06-12)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.12.0...v3.13.0)
+
+### Changed
+- Quote command to git submodule foreach to fix error with git 2.20.0 [#1029](https://github.com/buildkite/agent/pull/1029) (@lox)
+- Refactor api package to an interface [#1020](https://github.com/buildkite/agent/pull/1020) (@lox)
+
+## [v3.12.0](https://github.com/buildkite/agent/tree/v3.12.0) (2019-05-22)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.11.5...v3.12.0)
+
+### Added
+- Add checksums for artifactory uploaded artifacts [#961](https://github.com/buildkite/agent/pull/961) (@lox)
+- Add BUILDKITE_GCS_PATH_PREFIX for the path of GCS artifacts [#1000](https://github.com/buildkite/agent/pull/1000) (@DoomGerbil)
+
+### Changed
+- Don't force set the executable bit on scripts to be set [#1001](https://github.com/buildkite/agent/pull/1001) (@kuroneko)
+- Deprecate disconnect-after-job-timeout [#1009](https://github.com/buildkite/agent/pull/1009) (@lox)
+- Update Ubuntu docker image to docker-compose 1.24 [#1005](https://github.com/buildkite/agent/pull/1005) (@pecigonzalo)
+- Update Artifactory path parsing to support windows [#1013](https://github.com/buildkite/agent/pull/1013) (@GaryPWhite)
+- Refactor: Move signal handling out of AgentPool and into start command [#1012](https://github.com/buildkite/agent/pull/1012) (@lox)
+- Refactor: Simplify how we handle idle timeouts [#1010](https://github.com/buildkite/agent/pull/1010) (@lox)
+- Remove api socket proxy experiment [#1019](https://github.com/buildkite/agent/pull/1019) (@lox)
+- Remove msgpack experiment [#1015](https://github.com/buildkite/agent/pull/1015) (@lox)
+
 ## [v3.11.5](https://github.com/buildkite/agent/tree/v3.11.5) (2019-05-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.11.4...v3.11.5)
 

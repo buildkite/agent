@@ -4,12 +4,6 @@ import (
 	"fmt"
 )
 
-// MetaDataService handles communication with the meta data related methods of
-// the Buildkite Agent API.
-type MetaDataService struct {
-	client *Client
-}
-
 // MetaData represents a Buildkite Agent API MetaData
 type MetaData struct {
 	Key   string `json:"key,omitempty"`
@@ -23,28 +17,28 @@ type MetaDataExists struct {
 }
 
 // Sets the meta data value
-func (ps *MetaDataService) Set(jobId string, metaData *MetaData) (*Response, error) {
+func (c *Client) SetMetaData(jobId string, metaData *MetaData) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/set", jobId)
 
-	req, err := ps.client.NewRequest("POST", u, metaData)
+	req, err := c.newRequest("POST", u, metaData)
 	if err != nil {
 		return nil, err
 	}
 
-	return ps.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }
 
 // Gets the meta data value
-func (ps *MetaDataService) Get(jobId string, key string) (*MetaData, *Response, error) {
+func (c *Client) GetMetaData(jobId string, key string) (*MetaData, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/get", jobId)
 	m := &MetaData{Key: key}
 
-	req, err := ps.client.NewRequest("POST", u, m)
+	req, err := c.newRequest("POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	resp, err := ps.client.Do(req, m)
+	resp, err := c.doRequest(req, m)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -53,20 +47,37 @@ func (ps *MetaDataService) Get(jobId string, key string) (*MetaData, *Response, 
 }
 
 // Returns true if the meta data key has been set, false if it hasn't.
-func (ps *MetaDataService) Exists(jobId string, key string) (*MetaDataExists, *Response, error) {
+func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/exists", jobId)
 	m := &MetaData{Key: key}
 
-	req, err := ps.client.NewRequest("POST", u, m)
+	req, err := c.newRequest("POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	e := new(MetaDataExists)
-	resp, err := ps.client.Do(req, e)
+	resp, err := c.doRequest(req, e)
 	if err != nil {
 		return nil, resp, err
 	}
 
 	return e, resp, err
+}
+
+func (c *Client) MetaDataKeys(jobId string) ([]string, *Response, error) {
+	u := fmt.Sprintf("jobs/%s/data/keys", jobId)
+
+	req, err := c.newRequest("POST", u, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	keys := []string{}
+	resp, err := c.doRequest(req, &keys)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return keys, resp, err
 }

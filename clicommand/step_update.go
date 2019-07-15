@@ -5,7 +5,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/retry"
@@ -34,8 +33,9 @@ type StepUpdateConfig struct {
 	Job       string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug   bool `cli:"debug"`
-	NoColor bool `cli:"no-color"`
+	Debug   bool   `cli:"debug"`
+	NoColor bool   `cli:"no-color"`
+	Profile string `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -70,6 +70,7 @@ var StepUpdateCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -82,8 +83,9 @@ var StepUpdateCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		// Read the value from STDIN if argument omitted entirely
 		if len(c.Args()) < 2 {
@@ -97,7 +99,7 @@ var StepUpdateCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Generate a UUID that will identifiy this change. We do this
 		// outside of the retry loop because we want this UUID to be
@@ -114,7 +116,7 @@ var StepUpdateCommand = cli.Command{
 
 		// Post the change
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.Jobs.StepUpdate(cfg.Job, update)
+			resp, err := client.StepUpdate(cfg.Job, update)
 			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}

@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/urfave/cli"
 )
@@ -39,8 +40,9 @@ type ArtifactDownloadConfig struct {
 	Build       string `cli:"build" validate:"required"`
 
 	// Global flags
-	Debug   bool `cli:"debug"`
-	NoColor bool `cli:"no-color"`
+	Debug   bool   `cli:"debug"`
+	NoColor bool   `cli:"no-color"`
+	Profile string `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -75,6 +77,7 @@ var ArtifactDownloadCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -87,11 +90,12 @@ var ArtifactDownloadCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		// Create the API client
-		client := agent.NewAPIClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Setup the downloader
 		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
@@ -99,6 +103,7 @@ var ArtifactDownloadCommand = cli.Command{
 			Destination: cfg.Destination,
 			BuildID:     cfg.Build,
 			Step:        cfg.Step,
+			DebugHTTP:   cfg.DebugHTTP,
 		})
 
 		// Download the artifacts

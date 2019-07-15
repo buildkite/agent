@@ -85,6 +85,7 @@ type AgentStartConfig struct {
 	Debug       bool     `cli:"debug"`
 	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP bool   `cli:"debug-http"`
@@ -363,6 +364,7 @@ var AgentStartCommand = cli.Command{
 		ExperimentsFlag,
 		NoColorFlag,
 		DebugFlag,
+		ProfileFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -424,8 +426,9 @@ var AgentStartCommand = cli.Command{
 			l.Warn("%s", warning)
 		}
 
-		// Setup the any global configuration options
-		HandleGlobalFlags(l, cfg)
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		UnsetConfigFromEnvironment(c)
@@ -587,10 +590,8 @@ var AgentStartCommand = cli.Command{
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
-		apiClientConf := loadAPIClientConfig(cfg, `Token`)
-
 		// Create the API client
-		client := agent.NewAPIClient(l, apiClientConf)
+		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
 
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
@@ -607,14 +608,6 @@ var AgentStartCommand = cli.Command{
 				WaitForEC2TagsTimeout:   ec2TagTimeout,
 				WaitForGCPLabelsTimeout: gcpLabelsTimeout,
 			}),
-		}
-
-		// The common configuration for all workers
-		workerConf := agent.AgentWorkerConfig{
-			AgentConfiguration: agentConf,
-			Debug:              cfg.Debug,
-			Endpoint:           apiClientConf.Endpoint,
-			DisableHTTP2:       apiClientConf.DisableHTTP2,
 		}
 
 		var workers []*agent.AgentWorker
@@ -635,7 +628,10 @@ var AgentStartCommand = cli.Command{
 			// Create an agent worker to run the agent
 			workers = append(workers,
 				agent.NewAgentWorker(
-					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, workerConf))
+					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
+						AgentConfiguration: agentConf,
+						Debug:              cfg.Debug,
+					}))
 		}
 
 		// Setup the agent pool that spawns agent workers

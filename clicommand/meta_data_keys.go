@@ -1,7 +1,7 @@
 package clicommand
 
 import (
-	"os"
+	"fmt"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -10,21 +10,20 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataExistsHelpDescription = `Usage:
+var MetaDataKeysHelpDescription = `Usage:
 
-   buildkite-agent meta-data exists <key> [arguments...]
+   buildkite-agent meta-data keys [arguments...]
 
 Description:
 
-   The command exits with a status of 0 if the key has been set, or it will
-   exit with a status of 100 if the key doesn't exist.
+   Lists all meta-data keys that have been previously set, delimited by a newline
+   and terminated with a trailing newline.
 
 Example:
 
-   $ buildkite-agent meta-data exists "foo"`
+   $ buildkite-agent meta-data keys`
 
-type MetaDataExistsConfig struct {
-	Key string `cli:"arg:0" label:"meta-data key" validate:"required"`
+type MetaDataKeysConfig struct {
 	Job string `cli:"job" validate:"required"`
 
 	// Global flags
@@ -39,10 +38,10 @@ type MetaDataExistsConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-var MetaDataExistsCommand = cli.Command{
-	Name:        "exists",
-	Usage:       "Check to see if the meta data key exists for a build",
-	Description: MetaDataExistsHelpDescription,
+var MetaDataKeysCommand = cli.Command{
+	Name:        "keys",
+	Usage:       "Lists all meta-data keys that have been previously set",
+	Description: MetaDataKeysHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",
@@ -64,7 +63,7 @@ var MetaDataExistsCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
-		cfg := MetaDataExistsConfig{}
+		cfg := MetaDataKeysConfig{}
 
 		l := CreateLogger(&cfg)
 
@@ -80,12 +79,12 @@ var MetaDataExistsCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Find the meta data value
+		// Find the meta data keys
 		var err error
-		var exists *api.MetaDataExists
+		var keys []string
 		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			exists, resp, err = client.ExistsMetaData(cfg.Job, cfg.Key)
+			keys, resp, err = client.MetaDataKeys(cfg.Job)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}
@@ -96,12 +95,11 @@ var MetaDataExistsCommand = cli.Command{
 			return err
 		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 		if err != nil {
-			l.Fatal("Failed to see if meta-data exists: %s", err)
+			l.Fatal("Failed to find meta-data keys: %s", err)
 		}
 
-		// If the meta data didn't exist, exit with an error.
-		if !exists.Exists {
-			os.Exit(100)
+		for _, key := range keys {
+			fmt.Printf("%s\n", key)
 		}
 	},
 }

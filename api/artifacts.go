@@ -4,12 +4,6 @@ import (
 	"fmt"
 )
 
-// ArtifactsService handles communication with the artifact related methods of
-// the Buildkite Artifact API.
-type ArtifactsService struct {
-	client *Client
-}
-
 // Artifact represents an artifact on the Buildkite Agent API
 type Artifact struct {
 	// The ID of the artifact. The ID is assigned to it after a successful
@@ -52,7 +46,7 @@ type ArtifactBatch struct {
 }
 
 type ArtifactUploadInstructions struct {
-	Data   map[string]string `json: "data"`
+	Data   map[string]string `json:"data"`
 	Action struct {
 		URL       string `json:"url,omitempty"`
 		Method    string `json:"method"`
@@ -83,17 +77,17 @@ type ArtifactBatchUpdateRequest struct {
 	Artifacts []*ArtifactBatchUpdateArtifact `json:"artifacts"`
 }
 
-// Accepts a slice of artifacts, and creates them on Buildkite as a batch.
-func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
+// CreateArtifacts takes a slice of artifacts, and creates them on Buildkite as a batch.
+func (c *Client) CreateArtifacts(jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 
-	req, err := as.client.NewRequest("POST", u, batch)
+	req, err := c.newRequest("POST", u, batch)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	createResponse := new(ArtifactBatchCreateResponse)
-	resp, err := as.client.Do(req, createResponse)
+	resp, err := c.doRequest(req, createResponse)
 	if err != nil {
 		return nil, resp, err
 	}
@@ -101,8 +95,8 @@ func (as *ArtifactsService) Create(jobId string, batch *ArtifactBatch) (*Artifac
 	return createResponse, resp, err
 }
 
-// Updates a paticular artifact
-func (as *ArtifactsService) Update(jobId string, artifactStates map[string]string) (*Response, error) {
+// Updates a particular artifact
+func (c *Client) UpdateArtifacts(jobId string, artifactStates map[string]string) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 	payload := ArtifactBatchUpdateRequest{}
 
@@ -110,12 +104,12 @@ func (as *ArtifactsService) Update(jobId string, artifactStates map[string]strin
 		payload.Artifacts = append(payload.Artifacts, &ArtifactBatchUpdateArtifact{id, state})
 	}
 
-	req, err := as.client.NewRequest("PUT", u, payload)
+	req, err := c.newRequest("PUT", u, payload)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := as.client.Do(req, nil)
+	resp, err := c.doRequest(req, nil)
 	if err != nil {
 		return resp, err
 	}
@@ -123,21 +117,21 @@ func (as *ArtifactsService) Update(jobId string, artifactStates map[string]strin
 	return resp, err
 }
 
-// Searches Buildkite for a set of artifacts
-func (as *ArtifactsService) Search(buildId string, opt *ArtifactSearchOptions) ([]*Artifact, *Response, error) {
+// SearchArtifacts searches Buildkite for a set of artifacts
+func (c *Client) SearchArtifacts(buildId string, opt *ArtifactSearchOptions) ([]*Artifact, *Response, error) {
 	u := fmt.Sprintf("builds/%s/artifacts/search", buildId)
 	u, err := addOptions(u, opt)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	req, err := as.client.NewRequest("GET", u, nil)
+	req, err := c.newRequest("GET", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	a := []*Artifact{}
-	resp, err := as.client.Do(req, &a)
+	resp, err := c.doRequest(req, &a)
 	if err != nil {
 		return nil, resp, err
 	}

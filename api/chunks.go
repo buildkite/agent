@@ -6,12 +6,6 @@ import (
 	"fmt"
 )
 
-// ChunksService handles communication with the chunk related methods of the
-// Buildkite Agent API.
-type ChunksService struct {
-	client *Client
-}
-
 // Chunk represents a Buildkite Agent API Chunk
 type Chunk struct {
 	Data     string
@@ -22,7 +16,7 @@ type Chunk struct {
 
 // Uploads the chunk to the Buildkite Agent API. This request sends the
 // compressed log directly as a request body.
-func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
+func (c *Client) UploadChunk(jobId string, chunk *Chunk) (*Response, error) {
 	// Create a compressed buffer of the log content
 	body := &bytes.Buffer{}
 	gzipper := gzip.NewWriter(body)
@@ -33,7 +27,7 @@ func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 
 	// Pass most params as query
 	u := fmt.Sprintf("jobs/%s/chunks?sequence=%d&offset=%d&size=%d", jobId, chunk.Sequence, chunk.Offset, chunk.Size)
-	req, err := cs.client.NewFormRequest("POST", u, body)
+	req, err := c.newFormRequest("POST", u, body)
 	if err != nil {
 		return nil, err
 	}
@@ -42,5 +36,5 @@ func (cs *ChunksService) Upload(jobId string, chunk *Chunk) (*Response, error) {
 	req.Header.Add("Content-Type", "text/plain")
 	req.Header.Add("Content-Encoding", "gzip")
 
-	return cs.client.Do(req, nil)
+	return c.doRequest(req, nil)
 }

@@ -79,6 +79,7 @@ type BootstrapConfig struct {
 	Shell                        string   `cli:"shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
+	Profile                      string   `cli:"profile"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -289,6 +290,7 @@ var BootstrapCommand = cli.Command{
 		},
 		DebugFlag,
 		ExperimentsFlag,
+		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -310,6 +312,10 @@ var BootstrapCommand = cli.Command{
 		if cfg.Debug {
 			l.SetLevel(logger.DEBUG)
 		}
+
+		// Handle profiling flag
+		done := HandleProfileFlag(l, cfg)
+		defer done()
 
 		// Turn of PTY support if we're on Windows
 		runInPty := cfg.PTY

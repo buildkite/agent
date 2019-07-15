@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/agent"
+	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/oleiade/reflections"
@@ -48,6 +49,12 @@ var DebugFlag = cli.BoolFlag{
 	Name:   "debug",
 	Usage:  "Enable debug mode",
 	EnvVar: "BUILDKITE_AGENT_DEBUG",
+}
+
+var ProfileFlag = cli.StringFlag{
+	Name:   "profile",
+	Usage:  "Enable a profiling mode, either cpu, memory, mutex or block",
+	EnvVar: "BUILDKITE_AGENT_PROFILE",
 }
 
 var DebugHTTPFlag = cli.BoolFlag{
@@ -109,7 +116,16 @@ func CreateLogger(cfg interface{}) logger.Logger {
 	return l
 }
 
-func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
+func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
+	// Enable profiling a profiling mode if Profile is present
+	modeField, _ := reflections.GetField(cfg, "Profile")
+	if mode, ok := modeField.(string); ok && mode != "" {
+		return Profile(l, mode)
+	}
+	return func() {}
+}
+
+func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 	// Enable debugging if a Debug option is present
 	debug, _ := reflections.GetField(cfg, "Debug")
 	if debug == true {
@@ -129,6 +145,9 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) {
 			}
 		}
 	}
+
+	// Handle profiling flag
+	return HandleProfileFlag(l, cfg)
 }
 
 func UnsetConfigFromEnvironment(c *cli.Context) {
@@ -146,29 +165,31 @@ func UnsetConfigFromEnvironment(c *cli.Context) {
 	}
 }
 
-func loadAPIClientConfig(cfg interface{}, tokenField string) agent.APIClientConfig {
+func loadAPIClientConfig(cfg interface{}, tokenField string) api.Config {
+	conf := api.Config{
+		UserAgent: agent.UserAgent(),
+	}
+
 	// Enable HTTP debugging
 	debugHTTP, err := reflections.GetField(cfg, "DebugHTTP")
 	if debugHTTP == true && err == nil {
-		agent.APIClientEnableHTTPDebug()
+		conf.DebugHTTP = true
 	}
-
-	var a agent.APIClientConfig
 
 	endpoint, err := reflections.GetField(cfg, "Endpoint")
 	if endpoint != "" && err == nil {
-		a.Endpoint = endpoint.(string)
+		conf.Endpoint = endpoint.(string)
 	}
 
 	token, err := reflections.GetField(cfg, tokenField)
 	if token != "" && err == nil {
-		a.Token = token.(string)
+		conf.Token = token.(string)
 	}
 
 	noHTTP2, err := reflections.GetField(cfg, "NoHTTP2")
 	if err == nil {
-		a.DisableHTTP2 = noHTTP2.(bool)
+		conf.DisableHTTP2 = noHTTP2.(bool)
 	}
 
-	return a
+	return conf
 }

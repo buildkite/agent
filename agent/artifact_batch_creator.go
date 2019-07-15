@@ -27,10 +27,10 @@ type ArtifactBatchCreator struct {
 	logger logger.Logger
 
 	// The APIClient that will be used when uploading jobs
-	apiClient *api.Client
+	apiClient APIClient
 }
 
-func NewArtifactBatchCreator(l logger.Logger, ac *api.Client, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
+func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c ArtifactBatchCreatorConfig) *ArtifactBatchCreator {
 	return &ArtifactBatchCreator{
 		logger:    l,
 		conf:      c,
@@ -67,7 +67,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 
 		// Retry the batch upload a couple of times
 		err = retry.Do(func(s *retry.Stats) error {
-			creation, resp, err = a.apiClient.Artifacts.Create(a.conf.JobID, batch)
+			creation, resp, err = a.apiClient.CreateArtifacts(a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 500) {
 				s.Break()
 			}

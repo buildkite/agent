@@ -115,7 +115,11 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	var phaseErr error
 
 	if includePhase(`plugin`) {
-		phaseErr = b.PluginPhase()
+		phaseErr = b.preparePlugins()
+
+		if phaseErr == nil {
+			phaseErr = b.PluginPhase()
+		}
 	}
 
 	if phaseErr == nil && includePhase(`checkout`) {
@@ -486,29 +490,39 @@ func (b *Bootstrap) hasPlugins() bool {
 	return true
 }
 
-func (b *Bootstrap) loadPlugins() ([]*plugin.Plugin, error) {
-	if b.plugins != nil {
-		return b.plugins, nil
+func (b *Bootstrap) preparePlugins() error {
+	if !b.hasPlugins() {
+		return nil
+	}
+
+	b.shell.Headerf("Preparing plugins")
+
+	if b.Debug {
+		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
 	}
 
 	// Check if we can run plugins (disabled via --no-plugins)
 	if !b.Config.PluginsEnabled {
 		if !b.Config.LocalHooksEnabled {
-			return nil, fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
+			return fmt.Errorf("Plugins have been disabled on this agent with `--no-local-hooks`")
 		} else if !b.Config.CommandEval {
-			return nil, fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
+			return fmt.Errorf("Plugins have been disabled on this agent with `--no-command-eval`")
 		} else {
-			return nil, fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
+			return fmt.Errorf("Plugins have been disabled on this agent with `--no-plugins`")
 		}
 	}
 
 	var err error
 	b.plugins, err = plugin.CreateFromJSON(b.Config.Plugins)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to parse a plugin definition")
+		return errors.Wrap(err, "Failed to parse a plugin definition")
 	}
 
-	return b.plugins, nil
+	if b.Debug {
+		b.shell.Commentf("Parsed %d plugins", len(b.plugins))
+	}
+
+	return nil
 }
 
 func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
@@ -550,25 +564,17 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
 // checked out and made available to later phases
 func (b *Bootstrap) PluginPhase() error {
-	if !b.hasPlugins() {
+	if len(b.plugins) == 0 {
+		if b.Debug {
+			b.shell.Commentf("Skipping plugin phase")
+		}
 		return nil
-	}
-
-	b.shell.Headerf("Setting up plugins")
-
-	if b.Debug {
-		b.shell.Commentf("Plugin JSON is %s", b.Plugins)
-	}
-
-	plugins, err := b.loadPlugins()
-	if err != nil {
-		return err
 	}
 
 	checkouts := []*pluginCheckout{}
 
 	// Checkout and validate plugins that aren't vendored
-	for _, p := range plugins {
+	for _, p := range b.plugins {
 		if p.Vendored {
 			if b.Debug {
 				b.shell.Commentf("Skipping vendored plugin %s", p.Name())
@@ -596,23 +602,17 @@ func (b *Bootstrap) PluginPhase() error {
 	return b.executePluginHook("environment", checkouts)
 }
 
-// VendoredPluginPhase is where plugins that are included in the checked out code are added
+// VendoredPluginPhase is where plugins that are included in the
+// checked out code are added
 func (b *Bootstrap) VendoredPluginPhase() error {
 	if !b.hasPlugins() {
 		return nil
 	}
 
-	b.shell.Headerf("Setting up vendored plugins")
-
-	plugins, err := b.loadPlugins()
-	if err != nil {
-		return err
-	}
-
 	vendoredCheckouts := []*pluginCheckout{}
 
 	// Validate vendored plugins
-	for _, p := range plugins {
+	for _, p := range b.plugins {
 		if !p.Vendored {
 			continue
 		}
@@ -1200,7 +1200,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 
-		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git", "reset", "--hard"); err != nil {
+		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
 			return err
 		}
 	}

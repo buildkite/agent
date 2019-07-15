@@ -21,9 +21,6 @@ import (
 )
 
 type JobRunnerConfig struct {
-	// The endpoint that should be used when communicating with the API
-	Endpoint string
-
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 
@@ -45,10 +42,7 @@ type JobRunner struct {
 	job *api.Job
 
 	// The APIClient that will be used when updating the job
-	apiClient *api.Client
-
-	// The APIProxy that will be exposed to the job bootstrap
-	apiProxy *APIProxy
+	apiClient APIClient
 
 	// A scope for metrics within a job
 	metrics *metrics.Scope
@@ -83,25 +77,17 @@ type JobRunner struct {
 }
 
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
-		agent:   ag,
-		job:     j,
-		logger:  l,
-		conf:    conf,
-		metrics: scope,
+		agent:     ag,
+		job:       j,
+		logger:    l,
+		conf:      conf,
+		metrics:   scope,
+		apiClient: apiClient,
 	}
 
 	runner.context, runner.contextCancel = context.WithCancel(context.Background())
-
-	// Our own APIClient using the endpoint and the agents access token
-	runner.apiClient = NewAPIClient(l, APIClientConfig{
-		Endpoint: runner.conf.Endpoint,
-		Token:    ag.AccessToken,
-	})
-
-	// A proxy for the agent API that is expose to the bootstrap
-	runner.apiProxy = NewAPIProxy(l, conf.Endpoint, ag.AccessToken)
 
 	// Create our header times struct
 	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
@@ -112,13 +98,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		Concurrency:       3,
 		MaxChunkSizeBytes: j.ChunksMaxSizeBytes,
 	})
-
-	// Start a proxy to give to the job for api operations
-	if experiments.IsEnabled("agent-socket") {
-		if err := runner.apiProxy.Listen(); err != nil {
-			return nil, err
-		}
-	}
 
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
@@ -280,13 +259,6 @@ func (r *JobRunner) Run() error {
 		r.logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
-	// Destroy the proxy
-	if experiments.IsEnabled("agent-socket") {
-		if err := r.apiProxy.Close(); err != nil {
-			r.logger.Warn("[JobRunner] Failed to close API proxy: %v", err)
-		}
-	}
-
 	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
 
 	jobMetrics := r.metrics.With(metrics.Tags{
@@ -424,13 +396,10 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_IGNORED_ENV"] = strings.Join(ignoredEnv, ",")
 	}
 
-	if experiments.IsEnabled("agent-socket") {
-		env["BUILDKITE_AGENT_ENDPOINT"] = r.apiProxy.Endpoint()
-		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.apiProxy.AccessToken()
-	} else {
-		env["BUILDKITE_AGENT_ENDPOINT"] = r.conf.Endpoint
-		env["BUILDKITE_AGENT_ACCESS_TOKEN"] = r.agent.AccessToken
-	}
+	// Add the API configuration
+	apiConfig := r.apiClient.Config()
+	env["BUILDKITE_AGENT_ENDPOINT"] = apiConfig.Endpoint
+	env["BUILDKITE_AGENT_ACCESS_TOKEN"] = apiConfig.Token
 
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", r.conf.Debug)
@@ -459,6 +428,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"] = fmt.Sprintf("%d", r.conf.AgentConfiguration.GitMirrorsLockTimeout)
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
+
+	// Whether to enable profiling in the bootstrap
+	if r.conf.AgentConfiguration.Profile != "" {
+		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile
+	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 
@@ -491,7 +465,7 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
 	return retry.Do(func(s *retry.Stats) error {
-		_, err := r.apiClient.Jobs.Start(r.job)
+		_, err := r.apiClient.StartJob(r.job)
 
 		if err != nil {
 			if api.IsRetryableError(err) {
@@ -514,7 +488,7 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChu
 	r.job.ChunksFailedCount = failedChunkCount
 
 	return retry.Do(func(s *retry.Stats) error {
-		response, err := r.apiClient.Jobs.Finish(r.job)
+		response, err := r.apiClient.FinishJob(r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully tried to finish the job, but Buildkite
@@ -580,7 +554,7 @@ func (r *JobRunner) onProcessStartCallback() {
 		for {
 			// Re-get the job and check it's status to see if it's been
 			// cancelled
-			jobState, _, err := r.apiClient.Jobs.GetState(r.job.ID)
+			jobState, _, err := r.apiClient.GetJobState(r.job.ID)
 			if err != nil {
 				// We don't really care if it fails, we'll just
 				// try again soon anyway
@@ -603,7 +577,7 @@ func (r *JobRunner) onProcessStartCallback() {
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
 	retry.Do(func(s *retry.Stats) error {
-		response, err := r.apiClient.HeaderTimes.Save(r.job.ID, &api.HeaderTimes{Times: times})
+		response, err := r.apiClient.SaveHeaderTimes(r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the header times (%s)", err)
@@ -628,7 +602,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	// from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
 	return retry.Do(func(s *retry.Stats) error {
-		response, err := r.apiClient.Chunks.Upload(r.job.ID, &api.Chunk{
+		response, err := r.apiClient.UploadChunk(r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 			Offset:   chunk.Offset,
