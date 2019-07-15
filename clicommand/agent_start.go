@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/experiments"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
+	"github.com/buildkite/agent/process"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
 )
@@ -80,6 +81,7 @@ type AgentStartConfig struct {
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
 	LogFormat                  string   `cli:"log-format"`
+	CancelSignal               string   `cli:"cancel-signal"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -353,6 +355,12 @@ var AgentStartCommand = cli.Command{
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
+		cli.StringFlag{
+			Name:   "cancel-signal",
+			Usage:  "The signal to use for cancellation",
+			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
+			Value:  "SIGTERM",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -590,6 +598,11 @@ var AgentStartCommand = cli.Command{
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
+		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
+		if err != nil {
+			l.Fatal("Failed to parse cancel-signal: %v", err)
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
 
@@ -630,6 +643,7 @@ var AgentStartCommand = cli.Command{
 				agent.NewAgentWorker(
 					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
 						AgentConfiguration: agentConf,
+						CancelSignal:       cancelSig,
 						Debug:              cfg.Debug,
 					}))
 		}

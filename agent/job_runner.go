@@ -24,6 +24,9 @@ type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 
+	// What signal to use for worker cancellation
+	CancelSignal process.Signal
+
 	// Whether to set debug in the job
 	Debug bool
 }
@@ -181,12 +184,13 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	// The process that will run the bootstrap script
 	runner.process = process.New(l, process.Config{
-		Path:   cmd[0],
-		Args:   cmd[1:],
-		Env:    processEnv,
-		PTY:    conf.AgentConfiguration.RunInPty,
-		Stdout: processWriter,
-		Stderr: processWriter,
+		Path:            cmd[0],
+		Args:            cmd[1:],
+		Env:             processEnv,
+		PTY:             conf.AgentConfiguration.RunInPty,
+		Stdout:          processWriter,
+		Stderr:          processWriter,
+		InterruptSignal: conf.CancelSignal,
 	})
 
 	// Kick off our callback when the process starts
