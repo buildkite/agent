@@ -92,12 +92,6 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 
 // Creates a new file upload http request with optional extra params
 func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request, error) {
-	// Check the file exists
-	_, err := os.Stat(artifact.AbsolutePath)
-	if err != nil {
-		return nil, err
-	}
-
 	streamer := newMultipartStreamer()
 
 	// Set the post data for the request
@@ -107,22 +101,28 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 		newVal := ArtifactPathVariableRegex.ReplaceAllLiteralString(val, artifact.Path)
 
 		// Write the new value to the form
-		err = streamer.WriteField(key, newVal)
-		if err != nil {
+		if err := streamer.WriteField(key, newVal); err != nil {
 			return nil, err
 		}
+	}
+
+	fh, err := os.Open(artifact.AbsolutePath)
+	if err != nil {
+		return nil, err
 	}
 
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
 	// order, and the file needs to be the last one other it doesn't work.
-	if err := streamer.WriteFile(artifact.UploadInstructions.Action.FileInput, artifact.AbsolutePath); err != nil {
+	if err := streamer.WriteFile(artifact.UploadInstructions.Action.FileInput, artifact.Path, fh); err != nil {
+		fh.Close()
 		return nil, err
 	}
 
 	// Create the URL that we'll send data to
 	uri, err := url.Parse(artifact.UploadInstructions.Action.URL)
 	if err != nil {
+		fh.Close()
 		return nil, err
 	}
 
@@ -131,6 +131,7 @@ func createUploadRequest(l logger.Logger, artifact *api.Artifact) (*http.Request
 	// Create the request
 	req, err := http.NewRequest(artifact.UploadInstructions.Action.Method, uri.String(), streamer.Reader())
 	if err != nil {
+		fh.Close()
 		return nil, err
 	}
 
@@ -176,19 +177,9 @@ func (m *multipartStreamer) WriteField(key, value string) error {
 
 // WriteFile writes the multi-part preamble which will be followed by file data
 // This can only be called once and must be the last thing written to the streamer
-func (m *multipartStreamer) WriteFile(key, filename string) error {
+func (m *multipartStreamer) WriteFile(key, artifactPath string, fh http.File) error {
 	if m.reader != nil {
 		return errors.New("WriteFile can't be called multiple times")
-	}
-
-	fh, err := os.Open(filename)
-	if err != nil {
-		return err
-	}
-
-	stat, err := fh.Stat()
-	if err != nil {
-		return err
 	}
 
 	// Set up a reader that combines the body, the file and the closer in a stream
@@ -196,9 +187,15 @@ func (m *multipartStreamer) WriteFile(key, filename string) error {
 		Reader: io.MultiReader(m.bodyBuffer, fh, m.closeBuffer),
 		fh:     fh,
 	}
+
+	stat, err := fh.Stat()
+	if err != nil {
+		return err
+	}
+
 	m.contentLength = stat.Size()
 
-	_, err = m.bodyWriter.CreateFormFile(key, filename)
+	_, err = m.bodyWriter.CreateFormFile(key, artifactPath)
 	return err
 }
 
@@ -214,7 +211,7 @@ func (m *multipartStreamer) Reader() io.ReadCloser {
 
 type multipartReadCloser struct {
 	io.Reader
-	fh *os.File
+	fh http.File
 }
 
 func (mrc *multipartReadCloser) Close() error {

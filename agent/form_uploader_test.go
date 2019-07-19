@@ -121,3 +121,47 @@ func TestFormUploading(t *testing.T) {
 		runtest(wd)
 	}
 }
+
+func TestFormUploadFileMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		t.Errorf("Unknown path %s %s", req.Method, req.URL.Path)
+		http.Error(rw, "Not found", http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	temp, err := ioutil.TempDir("", "agent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(temp)
+
+	abspath := filepath.Join(temp, "llamas.txt")
+
+	uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
+	artifact := &api.Artifact{
+		ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
+		Path:         "llamas.txt",
+		AbsolutePath: abspath,
+		GlobPath:     "llamas.txt",
+		ContentType:  "text/plain",
+		UploadInstructions: &api.ArtifactUploadInstructions{
+			Data: map[string]string{
+				"path": "${artifact:path}",
+			},
+			Action: struct {
+				URL       string "json:\"url,omitempty\""
+				Method    string "json:\"method\""
+				Path      string "json:\"path\""
+				FileInput string "json:\"file_input\""
+			}{
+				URL:       server.URL,
+				Method:    "POST",
+				Path:      "buildkiteartifacts.com",
+				FileInput: "file",
+			}},
+	}
+
+	if err := uploader.Upload(artifact); !os.IsNotExist(err) {
+		t.Errorf("Expected error no such file or directory, got %q", err)
+	}
+}
