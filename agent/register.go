@@ -56,7 +56,7 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 
 	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
 	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 10 * time.Second})
-	if err != nil {
+	if err == nil {
 		l.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
 			strings.Join(registered.Tags, ", "))
 
