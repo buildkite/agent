@@ -39,7 +39,7 @@ func TestFormUploading(t *testing.T) {
 				return
 			}
 
-			file, _, err := req.FormFile("file")
+			file, fh, err := req.FormFile("file")
 			if err != nil {
 				t.Error(err)
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
@@ -54,6 +54,12 @@ func TestFormUploading(t *testing.T) {
 			if b.String() != "llamas" {
 				t.Errorf("Bad file content %q", b.String())
 				http.Error(rw, "Bad file content", http.StatusInternalServerError)
+				return
+			}
+
+			if fh.Filename != "llamas.txt" {
+				t.Errorf("Bad filename content %q", fh.Filename)
+				http.Error(rw, "Bad filename content", http.StatusInternalServerError)
 				return
 			}
 
