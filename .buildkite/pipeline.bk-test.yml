@@ -8,29 +8,51 @@ steps:
 
   - label: "test env"
     env:
-      - LOCAL_ENV=alpacas
-      - ENV_ORDER=local
+      LOCAL_ENV: alpacas
+      ENV_ORDER: local
     command: |
       [[ "\${GLOBAL_ENV?}" == "llamas" ]]
       [[ "\${LOCAL_ENV?}" == "alpacas" ]]
       [[ "\${ENV_ORDER?}" == "local" ]]
+
   - label: "set metadata"
     command: |
       buildkite-agent meta-data set "family" "camelids"
+
   - wait
+
   - label: "get metadata"
     command: |
       buildkite-agent meta-data exists "family"
       family=$(buildkite-agent meta-data get "family")
       [[ \${family} == "camelids" ]]
+
   - wait
-  - label: "upload artifact"
+
+  - label: "upload relative artifact"
     command: |
       echo "hello world" > llamas.txt
       buildkite-agent artifact upload llamas.txt
       rm llamas.txt
+
+  - label: "upload absolute artifact"
+    command: |
+      echo "hello world" > /tmp/llamas.txt
+      buildkite-agent artifact upload /tmp/llamas.txt
+      rm /tmp/llamas.txt
+
   - wait
-  - label: "download artifact"
+
+  - label: "download absolute artifact"
+    command: |
+      shasum=$(buildkite-agent artifact shasum tmp/llamas.txt)
+      [[ \$shasum == "22596363b3de40b06f981fb85d82312e8c0ed511" ]]
+      buildkite-agent artifact download tmp/llamas.txt .
+      cat tmp/llamas.txt
+      grep "hello world" tmp/llamas.txt
+      rm -rf tmp/
+
+  - label: "download relative artifact"
     command: |
       shasum=$(buildkite-agent artifact shasum llamas.txt)
       [[ \$shasum == "22596363b3de40b06f981fb85d82312e8c0ed511" ]]
