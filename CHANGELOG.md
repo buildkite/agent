@@ -4,13 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [v3.13.2](https://github.com/buildkite/agent/tree/v3.13.2) (2019-07-16)
+## [v3.13.2](https://github.com/buildkite/agent/tree/v3.13.2) (2019-07-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.13.1...v3.13.2)
 
 ### Changed
-- Add Artifactory vars to artifact upload --help [#1042](https://github.com/buildkite/agent/pull/1042) (@harrietgrace)
-- Fix buildkite-agent upload with absolute path [#1044](https://github.com/buildkite/agent/pull/1044) (@petercgrant)
-- Make plugin parsing less verbose [#984](https://github.com/buildkite/agent/pull/984) (@lox)
+- Fix panic on incorrect token [#1046](https://github.com/buildkite/agent/pull/1046) (@lox)
+- Add artifactory vars to artifact upload --help output [#1042](https://github.com/buildkite/agent/pull/1042) (@harrietgrace)
+- Fix buildkite-agent upload with absolute path (regression in v3.11.1) [#1044](https://github.com/buildkite/agent/pull/1044) (@petercgrant)
+- Don't show vendored plugin header if none are present [#984](https://github.com/buildkite/agent/pull/984) (@lox)
 
 ## [v3.13.1](https://github.com/buildkite/agent/tree/v3.13.1) (2019-07-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.13.0...v3.13.1)
