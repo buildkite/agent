@@ -8,6 +8,8 @@ github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5 h1:raOAL5Uz269DesNi
 github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5/go.mod h1:mFuSZ37Z9YOHbQEwBWztmVzqXrEkub65tZoCYDt7FT0=
 github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0 h1:UYcAVM2IdwHl3wTyyB2HfZc2MEVQrUqw/OkbwHlsy30=
 github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0/go.mod h1:nElEwZWoSPGIBD8VvYabl9t5KNi7v430iDC0/gQRsYk=
+github.com/buildkite/conditional v0.0.0-20190617003428-af638d0b1550 h1:sSFAiwlKvXpHRsqbYYo/y3MXgxoLeMmGErVpmPIFXc0=
+github.com/buildkite/conditional v0.0.0-20190617003428-af638d0b1550/go.mod h1:Lf4PgCBXe72UhbYDnznCqw4iK0iAV4aK8Td9aCSmdJs=
 github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c h1:4b/XlGFI+q7tfsB4gDvoWeTNmG31hcr4OOFMtvZ3TOQ=
 github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c/go.mod h1:gbPR1gPu9dB96mucYIR7T3B7p/78hRVSOuzIWLHK2Y4=
 github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 h1:hiVSLk7s3yFKFOHF/huoShLqrj13RMguWX2yzfvy7es=

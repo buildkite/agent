@@ -41,6 +41,13 @@ github.com/aws/aws-sdk-go/private/protocol/xml/xmlutil
 github.com/aws/aws-sdk-go/private/protocol/query
 # github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0
 github.com/buildkite/bintest
+# github.com/buildkite/conditional v0.0.0-20190617003428-af638d0b1550
+github.com/buildkite/conditional/ast
+github.com/buildkite/conditional/evaluator
+github.com/buildkite/conditional/lexer
+github.com/buildkite/conditional/object
+github.com/buildkite/conditional/parser
+github.com/buildkite/conditional/token
 # github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c
 github.com/buildkite/interpolate
 # github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
