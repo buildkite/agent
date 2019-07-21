@@ -526,10 +526,6 @@ func (b *Bootstrap) preparePlugins() error {
 }
 
 func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
-	if !b.Config.PluginValidation {
-		return nil
-	}
-
 	if checkout.Definition == nil {
 		if b.Debug {
 			b.shell.Commentf("Parsing plugin definition for %s from %s", checkout.Plugin.Name(), checkout.CheckoutDir)
@@ -550,14 +546,18 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 	val := &plugin.Validator{}
 	result := val.Validate(checkout.Definition, checkout.Plugin.Configuration)
 
-	if !result.Valid() {
-		b.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
+	// For now just show warnings
+	if b.Config.PluginValidation && !result.Valid() {
+		b.shell.Headerf("⚠️ Plugin validation failed for %q", checkout.Plugin.Name())
 		json, _ := json.Marshal(checkout.Plugin.Configuration)
-		b.shell.Commentf("Plugin configuration JSON is %s", json)
-		return result
+
+		if b.Debug {
+			b.shell.Commentf("Plugin configuration JSON is %s", json)
+		}
+
+		b.shell.Errorf("%v", result)
 	}
 
-	b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
 	return nil
 }
 

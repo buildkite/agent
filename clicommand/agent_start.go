@@ -315,7 +315,7 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Don't allow this agent to load plugins",
 			EnvVar: "BUILDKITE_NO_PLUGINS",
 		},
-		cli.BoolTFlag{
+		cli.BoolFlag{
 			Name:   "no-plugin-validation",
 			Usage:  "Don't validate plugin configuration and requirements",
 			EnvVar: "BUILDKITE_NO_PLUGIN_VALIDATION",
