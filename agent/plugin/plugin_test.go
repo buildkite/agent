@@ -50,14 +50,16 @@ func TestCreateFromJSON(t *testing.T) {
 				Version:        `a34fa34`,
 				Scheme:         `ssh`,
 				Authentication: "git:foo",
+				Configuration:  map[string]interface{}{},
 			}},
 		},
 		{
 			`["file://github.com/buildkite-plugins/docker-compose#a34fa34"]`,
 			[]*Plugin{&Plugin{
-				Location: `github.com/buildkite-plugins/docker-compose`,
-				Version:  `a34fa34`,
-				Scheme:   `file`,
+				Location:      `github.com/buildkite-plugins/docker-compose`,
+				Version:       `a34fa34`,
+				Scheme:        `file`,
+				Configuration: map[string]interface{}{},
 			}},
 		},
 		{
@@ -66,15 +68,16 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      `github.com/buildkite-unofficial/ping`,
 				Version:       `master`,
 				Scheme:        ``,
-				Configuration: nil,
+				Configuration: map[string]interface{}{},
 			}},
 		},
 		{
 			`[{"./.buildkite/plugins/llamas":{}}]`,
 			[]*Plugin{&Plugin{
-				Location: `./.buildkite/plugins/llamas`,
-				Scheme:   `file`,
-				Vendored: true,
+				Location:      `./.buildkite/plugins/llamas`,
+				Scheme:        ``,
+				Vendored:      true,
+				Configuration: map[string]interface{}{},
 			}},
 		},
 	} {
@@ -87,7 +90,7 @@ func TestCreateFromJSON(t *testing.T) {
 				tt.Error(err)
 			}
 
-			assert.Equal(tt, plugins, tc.plugins)
+			assert.Equal(tt, tc.plugins, plugins)
 		})
 	}
 }
