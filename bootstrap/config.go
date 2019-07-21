@@ -85,6 +85,9 @@ type Config struct {
 	// Whether to validate plugin configuration
 	PluginValidation bool
 
+	// A conditional to apply to what plugins are loaded
+	PluginCondition string
+
 	// Are local hooks enabled?
 	LocalHooksEnabled bool
 

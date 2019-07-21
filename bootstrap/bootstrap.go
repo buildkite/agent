@@ -513,13 +513,37 @@ func (b *Bootstrap) preparePlugins() error {
 	}
 
 	var err error
-	b.plugins, err = plugin.CreateFromJSON(b.Config.Plugins)
+	plugins, err := plugin.CreateFromJSON(b.Config.Plugins)
 	if err != nil {
 		return errors.Wrap(err, "Failed to parse a plugin definition")
 	}
 
 	if b.Debug {
 		b.shell.Commentf("Parsed %d plugins", len(b.plugins))
+	}
+
+	if b.PluginCondition != "" {
+		b.shell.Commentf("Applying condition %q to %d plugins", b.PluginCondition, len(plugins))
+		condition, err := plugin.ParseCondition(b.PluginCondition)
+		if err != nil {
+			return err
+		}
+
+		allowed := []*plugin.Plugin{}
+		for _, p := range plugins {
+			match, err := condition.Match(p)
+			if err != nil {
+				return err
+			}
+			if match {
+				allowed = append(allowed, p)
+			} else {
+				return fmt.Errorf("Plugin %s doesn't match condition %q", p.Name(), b.PluginCondition)
+			}
+		}
+		b.plugins = allowed
+	} else {
+		b.plugins = plugins
 	}
 
 	return nil

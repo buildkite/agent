@@ -19,6 +19,7 @@ type AgentConfiguration struct {
 	CommandEval                bool
 	PluginsEnabled             bool
 	PluginValidation           bool
+	PluginCondition            string
 	LocalHooksEnabled          bool
 	RunInPty                   bool
 	TimestampLines             bool
