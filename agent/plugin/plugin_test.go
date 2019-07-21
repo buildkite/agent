@@ -12,61 +12,118 @@ import (
 func TestCreateFromJSON(t *testing.T) {
 	t.Parallel()
 
-	var plugins []*Plugin
-	var err error
+	for _, tc := range []struct {
+		jsonText string
+		plugins  []*Plugin
+	}{
+		{
+			`[{"https://github.com/buildkite-plugins/docker-compose#a34fa34":{"container":"app"}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `github.com/buildkite-plugins/docker-compose`,
+				Version:       `a34fa34`,
+				Scheme:        `https`,
+				Configuration: map[string]interface{}{"container": "app"},
+			}},
+		},
+		{
+			`[{"github.com/buildkite-plugins/docker-compose#a34fa34":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `github.com/buildkite-plugins/docker-compose`,
+				Version:       `a34fa34`,
+				Scheme:        ``,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{
+			`[{"http://github.com/buildkite-plugins/docker-compose#a34fa34":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `github.com/buildkite-plugins/docker-compose`,
+				Version:       `a34fa34`,
+				Scheme:        `http`,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{
+			`["ssh://git:foo@github.com/buildkite-plugins/docker-compose#a34fa34"]`,
+			[]*Plugin{&Plugin{
+				Location:       `github.com/buildkite-plugins/docker-compose`,
+				Version:        `a34fa34`,
+				Scheme:         `ssh`,
+				Authentication: "git:foo",
+				Configuration:  map[string]interface{}{},
+			}},
+		},
+		{
+			`["file://github.com/buildkite-plugins/docker-compose#a34fa34"]`,
+			[]*Plugin{&Plugin{
+				Location:      `github.com/buildkite-plugins/docker-compose`,
+				Version:       `a34fa34`,
+				Scheme:        `file`,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{
+			`["github.com/buildkite-unofficial/ping#master"]`,
+			[]*Plugin{&Plugin{
+				Location:      `github.com/buildkite-unofficial/ping`,
+				Version:       `master`,
+				Scheme:        ``,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{
+			`[{"./.buildkite/plugins/llamas":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `./.buildkite/plugins/llamas`,
+				Scheme:        ``,
+				Vendored:      true,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+	} {
+		tc := tc
+		t.Run(tc.jsonText, func(tt *testing.T) {
+			tt.Parallel()
 
-	plugins, err = CreateFromJSON(`[{"http://github.com/buildkite/plugins/docker-compose#a34fa34":{"container":"app"}}, "github.com/buildkite/plugins/ping#master"]`)
-	assert.Equal(t, len(plugins), 2)
-	assert.Nil(t, err)
+			plugins, err := CreateFromJSON(tc.jsonText)
+			if err != nil {
+				tt.Error(err)
+			}
 
-	assert.Equal(t, plugins[0].Location, "github.com/buildkite/plugins/docker-compose")
-	assert.Equal(t, plugins[0].Version, "a34fa34")
-	assert.Equal(t, plugins[0].Scheme, "http")
-	assert.Equal(t, plugins[0].Configuration, map[string]interface{}{"container": "app"})
-
-	assert.Equal(t, plugins[1].Location, "github.com/buildkite/plugins/ping")
-	assert.Equal(t, plugins[1].Version, "master")
-	assert.Equal(t, plugins[1].Scheme, "")
-	assert.Equal(t, plugins[1].Configuration, map[string]interface{}{})
-
-	plugins, err = CreateFromJSON(`["ssh://git:foo@github.com/buildkite/plugins/docker-compose#a34fa34"]`)
-	assert.Equal(t, len(plugins), 1)
-	assert.Nil(t, err)
-
-	assert.Equal(t, plugins[0].Location, "github.com/buildkite/plugins/docker-compose")
-	assert.Equal(t, plugins[0].Version, "a34fa34")
-	assert.Equal(t, plugins[0].Scheme, "ssh")
-	assert.Equal(t, plugins[0].Authentication, "git:foo")
-
-	plugins, err = CreateFromJSON(`blah`)
-	assert.Equal(t, len(plugins), 0)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "invalid character 'b' looking for beginning of value")
-
-	plugins, err = CreateFromJSON(`{"foo": "bar"}`)
-	assert.Equal(t, len(plugins), 0)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "JSON structure was not an array")
-
-	plugins, err = CreateFromJSON(`["github.com/buildkite/plugins/ping#master#lololo"]`)
-	assert.Equal(t, len(plugins), 0)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "Too many #'s in \"github.com/buildkite/plugins/ping#master#lololo\"")
+			assert.Equal(tt, tc.plugins, plugins)
+		})
+	}
 }
 
-func TestCreateFromJSONForVendoredPlugins(t *testing.T) {
+func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 	t.Parallel()
 
-	plugins, err := CreateFromJSON(`[{"./.buildkite/plugins/llamas":{}}]`)
-	assert.Equal(t, len(plugins), 1)
-	assert.Nil(t, err)
+	for _, tc := range []struct {
+		jsonText string
+		err      string
+	}{
+		{
+			`blah`,
+			"invalid character 'b' looking for beginning of value",
+		},
+		{
+			`{"foo": "bar"}`,
+			"JSON structure was not an array",
+		},
+		{
+			`["github.com/buildkite-plugins/ping#master#lololo"]`,
+			"Too many #'s in \"github.com/buildkite-plugins/ping#master#lololo\"",
+		},
+	} {
+		tc := tc
+		t.Run("", func(tt *testing.T) {
+			tt.Parallel()
 
-	assert.Equal(t, "./.buildkite/plugins/llamas", plugins[0].Location)
-
-	assert.True(t, plugins[0].Vendored)
-	assert.Equal(t, "", plugins[0].Version)
-	assert.Equal(t, "", plugins[0].Scheme)
-	assert.Equal(t, map[string]interface{}{}, plugins[0].Configuration)
+			plugins, err := CreateFromJSON(tc.jsonText)
+			assert.Equal(t, 0, len(plugins))
+			assert.Error(t, err, tc.err)
+		})
+	}
 }
 
 func TestPluginNameParsedFromLocation(t *testing.T) {
