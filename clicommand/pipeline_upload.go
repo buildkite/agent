@@ -35,6 +35,9 @@ Description:
    - .buildkite/pipeline.yml
    - .buildkite/pipeline.yaml
    - .buildkite/pipeline.json
+   - buildkite/pipeline.yml
+   - buildkite/pipeline.yaml
+   - buildkite/pipeline.json
 
    You can also pipe build pipelines to the command allowing you to create
    scripts that generate dynamic pipelines.
@@ -149,6 +152,9 @@ var PipelineUploadCommand = cli.Command{
 				filepath.FromSlash(".buildkite/pipeline.yml"),
 				filepath.FromSlash(".buildkite/pipeline.yaml"),
 				filepath.FromSlash(".buildkite/pipeline.json"),
+				filepath.FromSlash("buildkite/pipeline.yml"),
+				filepath.FromSlash("buildkite/pipeline.yaml"),
+				filepath.FromSlash("buildkite/pipeline.json"),
 			}
 
 			// Collect all the files that exist
