@@ -1089,7 +1089,8 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		}
 	}
 
-	// Git clean prior to checkout
+	// Git clean prior to checkout, we do this even if submodules have been
+	// disabled to ensure previous submodules are cleaned up
 	if hasGitSubmodules(b.shell) {
 		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
 			return err
