@@ -667,6 +667,12 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 		if err := b.executeHook("plugin "+p.Plugin.Name()+" "+name, hookPath, env); err != nil {
 			return err
 		}
+
+		// Even if multiple plugins provide a "command" hook, we'll only execute the first one
+		// found, in order to avoid executing the same command multiple times.
+		if name == "command" {
+			break
+		}
 	}
 	return nil
 }
