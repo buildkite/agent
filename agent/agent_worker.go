@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
+	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/proctitle"
 	"github.com/buildkite/agent/retry"
 )
@@ -18,6 +19,9 @@ import (
 type AgentWorkerConfig struct {
 	// Whether to set debug in the job
 	Debug bool
+
+	// What signal to use for worker cancellation
+	CancelSignal process.Signal
 
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
@@ -51,6 +55,9 @@ type AgentWorker struct {
 	// Whether to enable debug
 	debug bool
 
+	// The signal to use for cancellation
+	cancelSig process.Signal
+
 	// Stop controls
 	stop      chan struct{}
 	stopping  bool
@@ -71,6 +78,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		debug:              c.Debug,
 		agentConfiguration: c.AgentConfiguration,
 		stop:               make(chan struct{}),
+		cancelSig:          c.CancelSignal,
 	}
 }
 
@@ -373,6 +381,7 @@ func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
 	// Now that the job has been accepted, we can start it.
 	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, a.apiClient, JobRunnerConfig{
 		Debug:              a.debug,
+		CancelSignal:       a.cancelSig,
 		AgentConfiguration: a.agentConfiguration,
 	})
 

@@ -166,7 +166,10 @@ func TestProcessInterrupts(t *testing.T) {
 		// give the signal handler some time to install
 		time.Sleep(time.Millisecond * 50)
 
-		p.Interrupt()
+		err := p.Interrupt()
+		if err != nil {
+			t.Error(err)
+		}
 	}()
 
 	if err := p.Run(); err != nil {
@@ -177,6 +180,50 @@ func TestProcessInterrupts(t *testing.T) {
 
 	output := b.String()
 	if output != `SIG terminated` {
+		t.Fatalf("Bad output: %q", output)
+	}
+
+	assertProcessDoesntExist(t, p)
+}
+
+func TestProcessInterruptsWithCustomSignal(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Works in windows, but not in docker")
+	}
+
+	b := &bytes.Buffer{}
+
+	p := process.New(logger.Discard, process.Config{
+		Path:            os.Args[0],
+		Env:             []string{"TEST_MAIN=tester-signal"},
+		Stdout:          b,
+		InterruptSignal: process.SIGINT,
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		<-p.Started()
+
+		// give the signal handler some time to install
+		time.Sleep(time.Millisecond * 50)
+
+		err := p.Interrupt()
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	wg.Wait()
+
+	output := b.String()
+	if output != `SIG interrupt` {
 		t.Fatalf("Bad output: %q", output)
 	}
 

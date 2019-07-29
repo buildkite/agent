@@ -2,12 +2,9 @@ package process
 
 import (
 	"errors"
-	"os"
 	"os/exec"
 	"strconv"
 	"syscall"
-
-	"github.com/buildkite/agent/logger"
 )
 
 // Windows has no concept of parent/child processes or signals. The best we can do
@@ -26,24 +23,24 @@ const (
 	createNewProcessGroupFlag = 0x00000200
 )
 
-func SetupProcessGroup(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{
+func (p *Process) setupProcessGroup() {
+	p.command.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_UNICODE_ENVIRONMENT | createNewProcessGroupFlag,
 	}
 }
 
-func TerminateProcessGroup(p *os.Process, l logger.Logger) error {
-	l.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
+func (p *Process) terminateProcessGroup() error {
+	p.logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
 	// anything left in it's process tree.
-	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.Pid)).Run()
+	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.pid)).Run()
 }
 
-func InterruptProcessGroup(p *os.Process, l logger.Logger) error {
+func (p *Process) interruptProcessGroup() error {
 	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
 	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
-	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.Pid))
+	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.pid))
 	if r1 == 0 {
 		return err
 	}
