@@ -10,6 +10,27 @@ import (
 type GCPMetaData struct {
 }
 
+// Provided for consistency with the EC2 Metadata (and potential future?) implementation
+func NewGCPMetaData() (*GCPMetaData, error) {
+	return &GCPMetaData{}, nil
+}
+
+// Takes a map of tags and meta-data paths to get, returns a map of tags and fetched values.
+func (e GCPMetaData) GetPaths(paths map[string]string) (map[string]string, error) {
+	result := make(map[string]string)
+
+	for key, path := range paths {
+		value, err := metadata.Get(path)
+		if err != nil {
+			return nil, err
+		} else {
+			result[key] = value
+		}
+	}
+
+	return result, nil
+}
+
 func (e GCPMetaData) Get() (map[string]string, error) {
 	result := make(map[string]string)
 

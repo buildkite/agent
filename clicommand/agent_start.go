@@ -56,9 +56,11 @@ type AgentStartConfig struct {
 	PluginsPath                string   `cli:"plugins-path" normalize:"filepath"`
 	Shell                      string   `cli:"shell"`
 	Tags                       []string `cli:"tags" normalize:"list"`
-	TagsFromEC2                bool     `cli:"tags-from-ec2"`
+	TagsFromEC2MetaData        bool     `cli:"tags-from-ec2-meta-data"`
+	TagsFromEC2MetaDataPaths   []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
 	TagsFromEC2Tags            bool     `cli:"tags-from-ec2-tags"`
-	TagsFromGCP                bool     `cli:"tags-from-gcp"`
+	TagsFromGCPMetaData        bool     `cli:"tags-from-gcp-meta-data"`
+	TagsFromGCPMetaDataPaths   []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
 	TagsFromGCPLabels          bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost               bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
@@ -101,6 +103,8 @@ type AgentStartConfig struct {
 	MetaDataEC2                  bool     `cli:"meta-data-ec2" deprecated-and-renamed-to:"TagsFromEC2"`
 	MetaDataEC2Tags              bool     `cli:"meta-data-ec2-tags" deprecated-and-renamed-to:"TagsFromEC2Tags"`
 	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
+	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
+	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
@@ -200,20 +204,34 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Include tags from the host (hostname, machine-id, os)",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
 		},
-		cli.BoolFlag{
-			Name:   "tags-from-ec2",
-			Usage:  "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
+		cli.StringSliceFlag{
+			Name:   "tags-from-ec2-meta-data",
+			Value:  &cli.StringSlice{},
+			Usage:  "Include the default set of host EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA",
+		},
+		cli.StringSliceFlag{
+			Name:   "tags-from-ec2-meta-data-paths",
+			Value:  &cli.StringSlice{},
+			Usage:  "Include additional tags fetched from EC2 meta-data via tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA_PATHS",
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-ec2-tags",
 			Usage:  "Include the host's EC2 tags as tags",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
-		cli.BoolFlag{
-			Name:   "tags-from-gcp",
-			Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
+		cli.StringSliceFlag{
+			Name:   "tags-from-gcp-meta-data",
+			Value:  &cli.StringSlice{},
+			Usage:  "Include the default set of host Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA",
+		},
+		cli.StringSliceFlag{
+			Name:   "tags-from-gcp-meta-data-paths",
+			Value:  &cli.StringSlice{},
+			Usage:  "Include additional tags fetched from Google Cloud instance meta-data via tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA_PATHS",
 		},
 		cli.BoolFlag{
 			Name:   "tags-from-gcp-labels",
@@ -400,6 +418,16 @@ var AgentStartCommand = cli.Command{
 			Name:   "no-automatic-ssh-fingerprint-verification",
 			Hidden: true,
 			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
+		},
+		cli.BoolFlag{
+			Name:   "tags-from-ec2",
+			Usage:  "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
+		},
+		cli.BoolFlag{
+			Name:   "tags-from-gcp",
+			Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
 		},
 		cli.IntFlag{
 			Name:   "disconnect-after-job-timeout",
@@ -612,14 +640,16 @@ var AgentStartCommand = cli.Command{
 			Priority:          cfg.Priority,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
 			Tags: agent.FetchTags(l, agent.FetchTagsConfig{
-				Tags:                    cfg.Tags,
-				TagsFromEC2:             cfg.TagsFromEC2,
-				TagsFromEC2Tags:         cfg.TagsFromEC2Tags,
-				TagsFromGCP:             cfg.TagsFromGCP,
-				TagsFromGCPLabels:       cfg.TagsFromGCPLabels,
-				TagsFromHost:            cfg.TagsFromHost,
-				WaitForEC2TagsTimeout:   ec2TagTimeout,
-				WaitForGCPLabelsTimeout: gcpLabelsTimeout,
+				Tags:                     cfg.Tags,
+				TagsFromEC2MetaData:      (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
+				TagsFromEC2MetaDataPaths: cfg.TagsFromEC2MetaDataPaths,
+				TagsFromEC2Tags:          cfg.TagsFromEC2Tags,
+				TagsFromGCPMetaData:      (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
+				TagsFromGCPMetaDataPaths: cfg.TagsFromGCPMetaDataPaths,
+				TagsFromGCPLabels:        cfg.TagsFromGCPLabels,
+				TagsFromHost:             cfg.TagsFromHost,
+				WaitForEC2TagsTimeout:    ec2TagTimeout,
+				WaitForGCPLabelsTimeout:  gcpLabelsTimeout,
 			}),
 		}
 

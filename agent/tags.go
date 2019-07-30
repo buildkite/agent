@@ -3,8 +3,11 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/logger"
@@ -13,27 +16,36 @@ import (
 )
 
 type FetchTagsConfig struct {
-	Tags                    []string
-	TagsFromEC2             bool
-	TagsFromEC2Tags         bool
-	TagsFromGCP             bool
-	TagsFromGCPLabels       bool
-	TagsFromHost            bool
-	WaitForEC2TagsTimeout   time.Duration
-	WaitForGCPLabelsTimeout time.Duration
+	Tags []string
+
+	TagsFromEC2MetaData      bool
+	TagsFromEC2MetaDataPaths []string
+	TagsFromEC2Tags          bool
+	TagsFromGCPMetaData      bool
+	TagsFromGCPMetaDataPaths []string
+	TagsFromGCPLabels        bool
+	TagsFromHost             bool
+	WaitForEC2TagsTimeout    time.Duration
+	WaitForGCPLabelsTimeout  time.Duration
 }
 
 // FetchTags loads tags from a variety of sources
 func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 	f := &tagFetcher{
-		ec2Metadata: func() (map[string]string, error) {
+		ec2MetaDataDefault: func() (map[string]string, error) {
 			return EC2MetaData{}.Get()
+		},
+		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
+			return EC2MetaData{}.GetPaths(paths)
 		},
 		ec2Tags: func() (map[string]string, error) {
 			return EC2Tags{}.Get()
 		},
-		gcpMetadata: func() (map[string]string, error) {
+		gcpMetaDataDefault: func() (map[string]string, error) {
 			return GCPMetaData{}.Get()
+		},
+		gcpMetaDataPaths: func(paths map[string]string) (map[string]string, error) {
+			return GCPMetaData{}.GetPaths(paths)
 		},
 		gcpLabels: func() (map[string]string, error) {
 			return GCPLabels{}.Get()
@@ -43,10 +55,12 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 }
 
 type tagFetcher struct {
-	ec2Metadata func() (map[string]string, error)
-	ec2Tags     func() (map[string]string, error)
-	gcpMetadata func() (map[string]string, error)
-	gcpLabels   func() (map[string]string, error)
+	ec2MetaDataDefault func() (map[string]string, error)
+	ec2MetaDataPaths   func(map[string]string) (map[string]string, error)
+	ec2Tags            func() (map[string]string, error)
+	gcpMetaDataDefault func() (map[string]string, error)
+	gcpMetaDataPaths   func(map[string]string) (map[string]string, error)
+	gcpLabels          func() (map[string]string, error)
 }
 
 func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
@@ -70,12 +84,12 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		}
 	}
 
-	// Attempt to add the EC2 tags
-	if conf.TagsFromEC2 {
+	// Attempt to add the default EC2 meta-data tags
+	if conf.TagsFromEC2MetaData && awsSess != nil {
 		l.Info("Fetching EC2 meta-data...")
 
 		err := retry.Do(func(s *retry.Stats) error {
-			ec2Tags, err := t.ec2Metadata()
+			ec2Tags, err := t.ec2MetaDataDefault()
 			if err != nil {
 				l.Warn("%s (%s)", err, s)
 			} else {
@@ -95,9 +109,28 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		}
 	}
 
+	// Attempt to add the EC2 meta-data fetched from user-default path suffixes
+	if len(conf.TagsFromEC2MetaDataPaths) > 0 {
+		paths, err := parseTagValuePathPairs(conf.TagsFromEC2MetaDataPaths)
+		if err != nil {
+			l.Error(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
+		}
+
+		ec2Tags, err := t.ec2MetaDataPaths(paths)
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+		} else {
+			for tag, value := range ec2Tags {
+				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+			}
+		}
+	}
+
 	// Attempt to add the EC2 tags
 	if conf.TagsFromEC2Tags {
 		l.Info("Fetching EC2 tags...")
+
 		err := retry.Do(func(s *retry.Stats) error {
 			ec2Tags, err := t.ec2Tags()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
@@ -123,9 +156,27 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		}
 	}
 
+	// Attempt to add the default GCP meta-data tags
+	if conf.TagsFromGCPMetaData {
+		gcpTags, err := t.gcpMetaDataDefault()
+		if err != nil {
+			// Don't blow up if we can't find them, just show a nasty error.
+			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+		} else {
+			for tag, value := range gcpTags {
+				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+			}
+		}
+	}
+
 	// Attempt to add the Google Cloud meta-data
-	if conf.TagsFromGCP {
-		gcpTags, err := t.gcpMetadata()
+	if len(conf.TagsFromGCPMetaDataPaths) > 0 {
+		paths, err := parseTagValuePathPairs(conf.TagsFromGCPMetaDataPaths)
+		if err != nil {
+			l.Error(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
+		}
+
+		gcpTags, err := t.gcpMetaDataPaths(paths)
 		if err != nil {
 			// Don't blow up if we can't find them, just show a nasty error.
 			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
@@ -163,4 +214,39 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	}
 
 	return tags
+}
+
+// TODO: Seems maybe el crapola, dunno will ask lox
+func parseTagValuePathPairs(paths []string) (map[string]string, error) {
+	result := make(map[string]string)
+
+	for _, pair := range paths {
+		// Sanity check the format of each pair to ensure that it’s parseable
+		index := strings.LastIndex(pair, "=")
+		if index == -1 || index == 0 || index == len(pair)-1 {
+			return result, errors.New(fmt.Sprintf("`%s` cannot be parsed, format should be `tag=metadata/path`", pair))
+		}
+
+		x := strings.Split(pair, "=")
+		// TODO: Should we just let people have stupid keys? Probably?
+		key := strings.ToLower(strings.Trim(x[0], " "))
+
+		uri, err := url.Parse(x[1])
+		if err != nil {
+			return result, err
+		}
+
+		meta_data_path := filepath.Clean(uri.Path)
+
+		if filepath.IsAbs(meta_data_path) {
+			meta_data_path, err = filepath.Rel("/", meta_data_path)
+			if err != nil {
+				return result, err
+			}
+		}
+
+		result[key] = meta_data_path
+	}
+
+	return result, nil
 }
