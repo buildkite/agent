@@ -3,12 +3,17 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/agent/env"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/agent/process"
@@ -254,6 +259,57 @@ func (a *AgentWorker) Connect() error {
 	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
 }
 
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
+}
+
+func (a *AgentWorker) findHook(name string) (error, string) {
+	hookDir := a.agentConfiguration.HooksPath
+
+	// check for windows types first
+	if runtime.GOOS == "windows" {
+		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD"); err == nil {
+			return nil, p
+		}
+	}
+
+	// otherwise chech for the default shell script
+	if p := filepath.Join(hookDir, name); fileExists(p) {
+		return nil, p
+	}
+
+	return os.ErrNotExist, ""
+}
+
+func (a *AgentWorker) runHeartbeatHook(beat *api.Heartbeat) error {
+	hookName := "heartbeat"
+
+	err, hookPath := a.findHook(hookName)
+	if err == os.ErrNotExist {
+		a.logger.Debug("Skipping %s hook, no hook script found", hookName)
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	s, err := shell.New()
+	if err != nil {
+		return err
+	}
+
+	e := env.New()
+	e.Set("BUILDKITE_HEARTBEAT_SENT", beat.SentAt)
+	e.Set("BUILDKITE_HEARTBEAT_RECEIVED", beat.ReceivedAt)
+
+	err = s.RunScript(hookPath, e)
+	if err != nil {
+		a.logger.Warn("%s hook script failed: %s", hookName, err)
+	}
+
+	return nil
+}
+
 // Performs a heatbeat
 func (a *AgentWorker) Heartbeat() error {
 	var beat *api.Heartbeat
@@ -276,6 +332,9 @@ func (a *AgentWorker) Heartbeat() error {
 	atomic.StoreInt64(&a.lastHeartbeat, time.Now().Unix())
 
 	a.logger.Debug("Heartbeat sent at %s and received at %s", beat.SentAt, beat.ReceivedAt)
+
+	a.runHeartbeatHook(beat)
+
 	return nil
 }
 
