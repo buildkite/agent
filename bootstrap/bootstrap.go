@@ -1200,7 +1200,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 
-		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
+		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "\"git reset --hard\""); err != nil {
 			return err
 		}
 	}
