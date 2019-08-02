@@ -1104,7 +1104,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 
 	// If a refspec is provided then use it instead.
 	// i.e. `refs/not/a/head`
-	if b.RefSpec != "" {
+	if b.RefSpec != "" && strings.ToLower(b.RefSpec) != "head" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
 		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
 			return err
