@@ -91,7 +91,7 @@ func main() {
 		},
 		{
 			Name:  "step",
-			Usage: "Make changes to a step",
+			Usage: "Make changes to a step (this includes any jobs that were created from the step)",
 			Subcommands: []cli.Command{
 				clicommand.StepUpdateCommand,
 			},
