@@ -97,4 +97,4 @@ Many thanks to our fine contributors! @adill, @airhorns, @alexjurkiewicz, @bendr
 
 ## Copyright
 
-Copyright (c) 2014-2017 Buildkite Pty Ltd. See [LICENSE](./LICENSE.txt) for details.
+Copyright (c) 2014-2019 Buildkite Pty Ltd. See [LICENSE](./LICENSE.txt) for details.
