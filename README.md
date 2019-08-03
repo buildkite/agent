@@ -7,19 +7,20 @@ The buildkite-agent is a small, reliable, and cross-platform build runner that m
 Full documentation is available at [buildkite.com/docs/agent](https://buildkite.com/docs/agent)
 
 ```
-$ buildkite-agent --help
 Usage:
 
   buildkite-agent <command> [arguments...]
 
 Available commands are:
 
-  start		Starts a Buildkite agent
-  artifact	Upload/download artifacts from Buildkite jobs
-  meta-data	Get/set data from Buildkite jobs
-  pipeline	Make changes to the pipeline of the currently running build
-  bootstrap	Run a Buildkite job locally
-  help, h	Shows a list of commands or help for one command
+  start      Starts a Buildkite agent
+  annotate   Annotate the build page within the Buildkite UI with text from within a Buildkite job
+  artifact   Upload/download artifacts from Buildkite jobs
+  meta-data  Get/set data from Buildkite jobs
+  pipeline   Make changes to the pipeline of the currently running build
+  step       Make changes to a step (this includes any jobs that were created from the step)
+  bootstrap  Run a Buildkite job locally
+  help       Shows a list of commands or help for one command
 
 Use "buildkite-agent <command> --help" for more information about a command.
 ```
@@ -48,14 +49,15 @@ brew install go
 git clone https://github.com/buildkite/agent.git
 cd agent
 
-# Create the builds directory
+# Create a temporary builds directory
 mkdir /tmp/buildkite-builds
 
-# Build the agent
+# Build an agent binary and start the agent
 go build -i -o /usr/local/bin/buildkite-agent .
-
-# Start the agent
 buildkite-agent start --debug --build-path=/tmp/buildkite-builds --token "abc"
+
+# Or, run the agent directly and skip the build step
+go run *.go start --debug --build-path=/tmp/buildkite-builds --token "abc"
 ```
 
 ### Dependency management
