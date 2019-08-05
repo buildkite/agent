@@ -99,6 +99,26 @@ func (c *Client) FinishJob(job *Job) (*Response, error) {
 	return c.doRequest(req, nil)
 }
 
+// JobUpdate represents a change request to a job
+type JobUpdate struct {
+	UUID      string `json:"uuid,omitempty"`
+	Attribute string `json:"attribute,omitempty"`
+	Value     string `json:"value,omitempty"`
+	Append    bool   `json:"append,omitempty"`
+}
+
+// JobUpdate updates a job
+func (c *Client) JobUpdate(jobId string, jobUpdate *JobUpdate) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s", jobId)
+
+	req, err := c.newRequest("PUT", u, jobUpdate)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}
+
 // StepUpdate represents a change request to a step
 type StepUpdate struct {
 	UUID      string `json:"uuid,omitempty"`

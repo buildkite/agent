@@ -96,6 +96,13 @@ func main() {
 				clicommand.StepUpdateCommand,
 			},
 		},
+		{
+			Name:  "job",
+			Usage: "Make changes to a paticular job",
+			Subcommands: []cli.Command{
+				clicommand.JobUpdateCommand,
+			},
+		},
 		clicommand.BootstrapCommand,
 	}
 
