@@ -5,57 +5,64 @@ import (
 )
 
 type EC2MetaData struct {
-	Client *ec2metadata.EC2Metadata
-}
-
-func NewEC2MetaData() (*EC2MetaData, error) {
-	sess, err := awsSession()
-	if err != nil {
-		return &EC2MetaData{}, err
-	}
-
-	return &EC2MetaData{
-		Client: ec2metadata.New(sess),
-	}, nil
 }
 
 // Takes a map of tags and meta-data paths to get, returns a map of tags and fetched values.
 func (e EC2MetaData) GetPaths(paths map[string]string) (map[string]string, error) {
-	result := make(map[string]string)
+	metaData := make(map[string]string)
+
+	c, err := newAWSClient()
+	if err != nil {
+		return metaData, err
+	}
 
 	for key, path := range paths {
-		value, err := e.Client.GetMetadata(path)
+		value, err := c.GetMetadata(path)
 		if err != nil {
 			return nil, err
 		} else {
-			result[key] = value
+			metaData[key] = value
 		}
 	}
 
-	return result, nil
+	return metaData, nil
 }
 
 func (e EC2MetaData) Get() (map[string]string, error) {
 	metaData := make(map[string]string)
 
-	instanceId, err := e.Client.GetMetadata("instance-id")
+	c, err := newAWSClient()
+	if err != nil {
+		return metaData, err
+	}
+
+	instanceId, err := c.GetMetadata("instance-id")
 	if err != nil {
 		return metaData, err
 	}
 
 	metaData["aws:instance-id"] = string(instanceId)
 
-	instanceType, err := e.Client.GetMetadata("instance-type")
+	instanceType, err := c.GetMetadata("instance-type")
 	if err != nil {
 		return metaData, err
 	}
 	metaData["aws:instance-type"] = string(instanceType)
 
-	amiId, err := e.Client.GetMetadata("ami-id")
+	amiId, err := c.GetMetadata("ami-id")
 	if err != nil {
 		return metaData, err
 	}
 	metaData["aws:ami-id"] = string(amiId)
 
 	return metaData, nil
+}
+
+func newAWSClient() (*ec2metadata.EC2Metadata, error) {
+	sess, err := awsSession()
+	if err != nil {
+		return &ec2metadata.EC2Metadata{}, err
+	}
+
+	return ec2metadata.New(sess), nil
 }

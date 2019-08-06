@@ -40,7 +40,7 @@ func TestFetchingTagsWithHostTags(t *testing.T) {
 
 func TestFetchingTagsFromEC2(t *testing.T) {
 	fetcher := &tagFetcher{
-		ec2Metadata: func() (map[string]string, error) {
+		ec2MetaDataDefault: func() (map[string]string, error) {
 			return map[string]string{
 				`aws:instance-id`:   "i-blahblah",
 				`aws:instance-type`: "t2.small",
@@ -54,9 +54,9 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 	}
 
 	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
-		Tags:            []string{"llamas", "rock"},
-		TagsFromEC2:     true,
-		TagsFromEC2Tags: true,
+		Tags:                []string{"llamas", "rock"},
+		TagsFromEC2MetaData: true,
+		TagsFromEC2Tags:     true,
 	})
 
 	assert.ElementsMatch(t, tags,
@@ -82,7 +82,7 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 
 func TestFetchingTagsFromGCP(t *testing.T) {
 	fetcher := &tagFetcher{
-		gcpMetadata: func() (map[string]string, error) {
+		gcpMetaDataDefault: func() (map[string]string, error) {
 			return map[string]string{
 				`gcp:instance-id`: "my-instance",
 				`gcp:zone`:        "blah",
@@ -96,9 +96,9 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 	}
 
 	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
-		Tags:              []string{"llamas", "rock"},
-		TagsFromGCP:       true,
-		TagsFromGCPLabels: true,
+		Tags:                []string{"llamas", "rock"},
+		TagsFromGCPMetaData: true,
+		TagsFromGCPLabels:   true,
 	})
 
 	assert.ElementsMatch(t, tags,
@@ -107,8 +107,12 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 
 func TestFetchingTagsFromAllSources(t *testing.T) {
 	fetcher := &tagFetcher{
-		gcpMetadata: func() (map[string]string, error) {
+		gcpMetaDataDefault: func() (map[string]string, error) {
 			return map[string]string{`gcp_metadata`: "true"}, nil
+		},
+		gcpMetaDataPaths: func(paths map[string]string) (map[string]string, error) {
+			assert.Equal(t, paths, map[string]string{"tag": "some/gcp/value"})
+			return map[string]string{`gcp_metadata_paths`: "true"}, nil
 		},
 		gcpLabels: func() (map[string]string, error) {
 			return map[string]string{`gcp_labels`: "true"}, nil
@@ -116,18 +120,24 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		ec2Tags: func() (map[string]string, error) {
 			return map[string]string{`ec2_tags`: "true"}, nil
 		},
-		ec2Metadata: func() (map[string]string, error) {
+		ec2MetaDataDefault: func() (map[string]string, error) {
 			return map[string]string{`ec2_metadata`: "true"}, nil
+		},
+		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
+			assert.Equal(t, paths, map[string]string{"tag": "some/ec2/value"})
+			return map[string]string{`ec2_metadata_paths`: "true"}, nil
 		},
 	}
 
 	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
-		Tags:              []string{"llamas", "rock"},
-		TagsFromGCP:       true,
-		TagsFromGCPLabels: true,
-		TagsFromHost:      true,
-		TagsFromEC2:       true,
-		TagsFromEC2Tags:   true,
+		Tags:                     []string{"llamas", "rock"},
+		TagsFromGCPMetaData:      true,
+		TagsFromGCPMetaDataPaths: []string{"tag=some/gcp/value"},
+		TagsFromGCPLabels:        true,
+		TagsFromHost:             true,
+		TagsFromEC2MetaData:      true,
+		TagsFromEC2MetaDataPaths: []string{"tag=some/ec2/value"},
+		TagsFromEC2Tags:          true,
 	})
 
 	hostname, err := os.Hostname()
@@ -138,9 +148,11 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 	assert.Contains(t, tags, "llamas")
 	assert.Contains(t, tags, "rock")
 	assert.Contains(t, tags, "gcp_metadata=true")
+	assert.Contains(t, tags, "gcp_metadata_paths=true")
 	assert.Contains(t, tags, "gcp_labels=true")
 	assert.Contains(t, tags, "ec2_tags=true")
 	assert.Contains(t, tags, "ec2_metadata=true")
+	assert.Contains(t, tags, "ec2_metadata_paths=true")
 	assert.Contains(t, tags, "hostname="+hostname)
 	assert.Contains(t, tags, "os="+runtime.GOOS)
 }

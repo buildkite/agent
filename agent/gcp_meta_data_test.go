@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestGCPMetaDataGetSuffixes(t *testing.T) {
+func TestGCPMetaDataGetPaths(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 
@@ -34,7 +34,7 @@ func TestGCPMetaDataGetSuffixes(t *testing.T) {
 	defer os.Setenv("GCE_METADATA_HOST", old)
 	os.Setenv("GCE_METADATA_HOST", url.Host)
 
-	values, err := GCPMetaData{}.GetSuffixes(map[string]string{
+	values, err := GCPMetaData{}.GetPaths(map[string]string{
 		"truth":     "value",
 		"scary":     "nested/paths/work",
 		"weird key": "value",

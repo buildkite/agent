@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -85,7 +84,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	}
 
 	// Attempt to add the default EC2 meta-data tags
-	if conf.TagsFromEC2MetaData && awsSess != nil {
+	if conf.TagsFromEC2MetaData {
 		l.Info("Fetching EC2 meta-data...")
 
 		err := retry.Do(func(s *retry.Stats) error {
@@ -236,16 +235,7 @@ func parseTagValuePathPairs(paths []string) (map[string]string, error) {
 			return result, err
 		}
 
-		meta_data_path := filepath.Clean(uri.Path)
-
-		if filepath.IsAbs(meta_data_path) {
-			meta_data_path, err = filepath.Rel("/", meta_data_path)
-			if err != nil {
-				return result, err
-			}
-		}
-
-		result[key] = meta_data_path
+		result[key] = strings.TrimPrefix(uri.Path, "/")
 	}
 
 	return result, nil
