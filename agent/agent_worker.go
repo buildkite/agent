@@ -114,7 +114,7 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 				err := a.Heartbeat()
 				if err != nil {
 					// Get the last heartbeat time to the nearest microsecond
-					lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastPing), 0)
+					lastHeartbeat := time.Unix(atomic.LoadInt64(&a.lastHeartbeat), 0)
 
 					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
 						err, heartbeatInterval, time.Now().Sub(lastHeartbeat))
