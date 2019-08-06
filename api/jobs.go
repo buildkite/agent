@@ -128,8 +128,8 @@ type StepUpdate struct {
 }
 
 // StepUpdate updates a step
-func (c *Client) StepUpdate(jobId string, stepUpdate *StepUpdate) (*Response, error) {
-	u := fmt.Sprintf("jobs/%s/step_update", jobId)
+func (c *Client) StepUpdate(stepId string, stepUpdate *StepUpdate) (*Response, error) {
+	u := fmt.Sprintf("steps/%s", stepId)
 
 	req, err := c.newRequest("PUT", u, stepUpdate)
 	if err != nil {

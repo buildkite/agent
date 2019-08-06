@@ -17,7 +17,14 @@ var StepUpdateHelpDescription = `Usage:
 
 Description:
 
-   Update an attribute of a step associated with a job
+   Update an attribute of a step in a build.
+
+   By default the command will target the currently running step using the
+   value from $BUILDKITE_STEP_ID. You can update a different step by passing a
+   different UUID (or step key) to the --step flag.
+
+   If you want to target an individual job created from a step (or the
+   currently running job), then use the "buildkite-agent job update" command.
 
 Example:
 
@@ -30,7 +37,7 @@ type StepUpdateConfig struct {
 	Attribute string `cli:"arg:0" label:"attribute" validate:"required"`
 	Value     string `cli:"arg:1" label:"value"`
 	Append    bool   `cli:"append"`
-	Job       string `cli:"job" validate:"required"`
+	Step      string `cli:"step" validate:"required"`
 
 	// Global flags
 	Debug   bool   `cli:"debug"`
@@ -50,10 +57,10 @@ var StepUpdateCommand = cli.Command{
 	Description: StepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "job",
+			Name:   "step",
 			Value:  "",
-			Usage:  "Target the step of a specific job in the build",
-			EnvVar: "BUILDKITE_JOB_ID",
+			Usage:  "Which step should be updated",
+			EnvVar: "BUILDKITE_STEP_ID",
 		},
 		cli.BoolFlag{
 			Name:   "append",
@@ -116,7 +123,7 @@ var StepUpdateCommand = cli.Command{
 
 		// Post the change
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.StepUpdate(cfg.Job, update)
+			resp, err := client.StepUpdate(cfg.Step, update)
 			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}
