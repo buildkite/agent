@@ -1110,10 +1110,6 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 
-		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
-			return err
-		}
-
 		// GitHub has a special ref which lets us fetch a pull request head, whether
 		// or not there is a current head in this repository or another which
 		// references the commit. We presume a commit sha is provided. See:
@@ -1129,19 +1125,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		gitFetchHead, _ := b.shell.RunAndCapture("git", "rev-parse", "FETCH_HEAD")
 		b.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
-		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
-			return err
-		}
-
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 	} else if b.Commit == "HEAD" {
 		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
 		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
-			return err
-		}
-
-		if err := b.shell.Run("git", "checkout", "-f", "FETCH_HEAD"); err != nil {
 			return err
 		}
 
@@ -1159,6 +1147,13 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 				return err
 			}
 		}
+	}
+
+	if b.Commit == "HEAD" {
+		if err := b.shell.Run("git", "checkout", "-f", "FETCH_HEAD"); err != nil {
+			return err
+		}
+	} else {
 		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
 			return err
 		}
