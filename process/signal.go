@@ -17,7 +17,7 @@ func (p *Process) setupProcessGroup() {
 }
 
 func (p *Process) terminateProcessGroup() error {
-	p.logger.Debug("[Process] Sending signal SIGKILL to PGID: %d", p.Pid)
+	p.logger.Debug("[Process] Sending signal SIGKILL to PGID: %d", p.pid)
 	return syscall.Kill(-p.pid, syscall.SIGKILL)
 }
 
@@ -29,7 +29,7 @@ func (p *Process) interruptProcessGroup() error {
 		intSignal = SIGTERM
 	}
 
-	p.logger.Debug("[Process] Sending signal %s to PGID: %d", intSignal, p.Pid)
+	p.logger.Debug("[Process] Sending signal %s to PGID: %d", intSignal, p.pid)
 	return syscall.Kill(-p.pid, syscall.Signal(intSignal))
 }
 
