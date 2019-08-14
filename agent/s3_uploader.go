@@ -133,7 +133,7 @@ func (u *S3Uploader) resolvePermission() (string, error) {
 	case "private", "public-read", "public-read-write", "authenticated-read", "bucket-owner-read", "bucket-owner-full-control":
 		return permission, nil
 	default:
-		return permission, fmt.Errorf("Invalid S3 ACL value: `%s`", permission)
+		return "", fmt.Errorf("Invalid S3 ACL value: `%s`", permission)
 	}
 }
 
