@@ -3,6 +3,7 @@ package clicommand
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -215,6 +216,8 @@ var PipelineUploadCommand = cli.Command{
 		if err != nil {
 			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
 		}
+
+		log.Printf("%#v %#v", result, err)
 
 		// In dry-run mode we just output the generated pipeline to stdout
 		if cfg.DryRun {
