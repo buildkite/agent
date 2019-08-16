@@ -180,7 +180,7 @@ var AgentStartCommand = cli.Command{
 		cli.IntFlag{
 			Name:   "cancel-grace-period",
 			Value:  10,
-			Usage:  "The number of seconds running processes are given to gracefully terminate before they are killed when a job is cancelled",
+			Usage:  "The number of seconds a canceled or timed out job is given to gracefully terminate and upload its artifacts",
 			EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
 		},
 		cli.StringFlag{
