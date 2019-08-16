@@ -47,7 +47,7 @@ var NoHTTP2Flag = cli.BoolFlag{
 
 var DebugFlag = cli.BoolFlag{
 	Name:   "debug",
-	Usage:  "Enable debug mode",
+	Usage:  "Enable debug logging output",
 	EnvVar: "BUILDKITE_AGENT_DEBUG",
 }
 
@@ -76,7 +76,26 @@ var ExperimentsFlag = cli.StringSliceFlag{
 	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
+var LogFormatFlag = cli.StringFlag{
+	Name:   "log-format",
+	Usage:  "The format to use for the logger output",
+	EnvVar: "BUILDKITE_LOG_FORMAT",
+	Value:  "text",
+}
+
+var SilentFlag = cli.BoolFlag{
+	Name:   "silent",
+	Usage:  "Suppress all logging output",
+	EnvVar: "BUILDKITE_AGENT_DEBUG",
+}
+
 func CreateLogger(cfg interface{}) logger.Logger {
+	// If silent, just return a discard logger
+	silent, _ := reflections.GetField(cfg, "Silent")
+	if silent == true {
+		return logger.Discard
+	} 
+
 	var l logger.Logger
 	logFormat := `text`
 

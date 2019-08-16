@@ -80,11 +80,12 @@ type AgentStartConfig struct {
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
-	LogFormat                  string   `cli:"log-format"`
 	CancelSignal               string   `cli:"cancel-signal"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
+	Silent      bool     `cli:"silent"`
+	LogFormat   string   `cli:"log-format"`
 	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
 	Profile     string   `cli:"profile"`
@@ -343,12 +344,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
-		cli.StringFlag{
-			Name:   "log-format",
-			Usage:  "The format to use for the logger output",
-			EnvVar: "BUILDKITE_LOG_FORMAT",
-			Value:  "text",
-		},
 		cli.IntFlag{
 			Name:   "spawn",
 			Usage:  "The number of agents to spawn in parallel",
@@ -372,7 +367,9 @@ var AgentStartCommand = cli.Command{
 		ExperimentsFlag,
 		NoColorFlag,
 		DebugFlag,
+		SilentFlag,
 		ProfileFlag,
+		LogFormatFlag,
 
 		// Deprecated flags which will be removed in v4
 		cli.StringSliceFlag{
@@ -542,7 +539,7 @@ var AgentStartCommand = cli.Command{
 			agentConf.ConfigPath = loader.File.Path
 		}
 
-		if cfg.LogFormat == `text` {
+		if cfg.LogFormat == `text` && !cfg.Silent {
 			welcomeMessage :=
 				"\n" +
 					"%s  _           _ _     _ _    _ _                                _\n" +
