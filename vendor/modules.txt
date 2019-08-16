@@ -88,8 +88,9 @@ github.com/qri-io/jsonpointer
 github.com/qri-io/jsonschema
 # github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5
 github.com/sasha-s/go-deadlock
-# github.com/stretchr/testify v1.3.0
+# github.com/stretchr/testify v1.4.0
 github.com/stretchr/testify/assert
+github.com/stretchr/testify/require
 # github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
 github.com/urfave/cli
 # golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
@@ -152,3 +153,5 @@ google.golang.org/grpc/peer
 google.golang.org/grpc/stats
 google.golang.org/grpc/tap
 google.golang.org/grpc/transport
+# gopkg.in/yaml.v2 v2.2.2
+gopkg.in/yaml.v2
