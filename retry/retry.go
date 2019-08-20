@@ -82,7 +82,7 @@ func Do(callback func(*Stats) error, config *Config) error {
 
 		// update interval if exponential backoff is being used
 		if config.BackoffStrategy == exponentialBackoff {
-			stats.Interval = time.Duration(math.Pow(2, float64(stats.Attempt)))
+			stats.Interval = time.Duration(1000 * 1000 * 1000 * math.Pow(2, float64(stats.Attempt)))
 		}
 
 		if config.Jitter {

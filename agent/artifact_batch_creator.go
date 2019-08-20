@@ -17,6 +17,9 @@ type ArtifactBatchCreatorConfig struct {
 
 	// Where the artifacts are being uploaded to on the command line
 	UploadDestination string
+
+	// backoff strategy between retries
+	BackoffStrategy string
 }
 
 type ArtifactBatchCreator struct {
@@ -76,7 +79,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second, BackoffStrategy: a.conf.BackoffStrategy})
 
 		// Did the batch creation eventually fail?
 		if err != nil {

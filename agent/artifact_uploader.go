@@ -250,6 +250,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		JobID:             a.conf.JobID,
 		Artifacts:         artifacts,
 		UploadDestination: a.conf.Destination,
+		BackoffStrategy:   a.conf.BackoffStrategy,
 	})
 
 	artifacts, err = batchCreator.Create()
