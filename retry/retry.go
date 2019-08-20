@@ -3,8 +3,14 @@ package retry
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
+)
+
+const (
+	linearBackoff      = "linear"
+	exponentialBackoff = "exponential"
 )
 
 type Stats struct {
@@ -15,10 +21,11 @@ type Stats struct {
 }
 
 type Config struct {
-	Maximum  int
-	Interval time.Duration
-	Forever  bool
-	Jitter   bool
+	Maximum         int
+	Interval        time.Duration
+	Forever         bool
+	Jitter          bool
+	BackoffStrategy string
 }
 
 // A human readable representation often useful for debugging.
@@ -72,6 +79,11 @@ func Do(callback func(*Stats) error, config *Config) error {
 		// Preconfigure the interval that will be used (so that we have
 		// access to it in the callback)
 		stats.Interval = config.Interval
+
+		if config.BackoffStrategy == exponentialBackoff {
+			stats.Interval = time.Duration(math.Pow(2, float64(stats.Attempt)))
+		}
+
 		if config.Jitter {
 			stats.Interval = stats.Interval + (time.Duration(1000*random.Float32()) * time.Millisecond)
 		}

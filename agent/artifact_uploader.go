@@ -40,6 +40,9 @@ type ArtifactUploaderConfig struct {
 
 	// Whether to show HTTP debugging
 	DebugHTTP bool
+
+	// How to vary backoff between failed attempts
+	BackoffStrategy string
 }
 
 type ArtifactUploader struct {
@@ -344,7 +347,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				}
 
 				return err
-			}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+			}, &retry.Config{Maximum: 10, Interval: 5 * time.Second, BackoffStrategy: a.conf.BackoffStrategy})
 
 			var state string
 

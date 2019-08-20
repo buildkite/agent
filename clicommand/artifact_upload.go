@@ -44,10 +44,11 @@ Example:
    $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID`
 
 type ArtifactUploadConfig struct {
-	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
-	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
-	Job         string `cli:"job" validate:"required"`
-	ContentType string `cli:"content-type"`
+	UploadPaths   string `cli:"arg:0" label:"upload paths" validate:"required"`
+	Destination   string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
+	Job           string `cli:"job" validate:"required"`
+	ContentType   string `cli:"content-type"`
+	BackoffStrategy string `cli:"backoff-strategy"`
 
 	// Global flags
 	Debug   bool   `cli:"debug"`
@@ -78,6 +79,11 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
 		},
+		cli.StringFlag{
+			Name: "backoff-strategy",
+			Value: "linear",
+			Usage: "How to vary backoff between retries on failed attempts. "
+		}
 
 		// API Flags
 		AgentAccessTokenFlag,
@@ -110,11 +116,12 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
-			JobID:       cfg.Job,
-			Paths:       cfg.UploadPaths,
-			Destination: cfg.Destination,
-			ContentType: cfg.ContentType,
-			DebugHTTP:   cfg.DebugHTTP,
+			JobID:         cfg.Job,
+			Paths:         cfg.UploadPaths,
+			Destination:   cfg.Destination,
+			ContentType:   cfg.ContentType,
+			DebugHTTP:     cfg.DebugHTTP,
+			BackoffStrategy: cfg.BackoffStrategy,
 		})
 
 		// Upload the artifacts
