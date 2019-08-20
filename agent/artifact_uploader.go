@@ -305,7 +305,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 					}
 
 					return err
-				}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+				}, &retry.Config{Maximum: 10, Interval: 5 * time.Second, BackoffStrategy: a.conf.BackoffStrategy})
 
 				if err != nil {
 					a.logger.Error("Error uploading artifact states: %s", err)
@@ -339,7 +339,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
-			// a couple of times before giving up.
+			// upto 10 times and give up.
 			err = retry.Do(func(s *retry.Stats) error {
 				err := uploader.Upload(artifact)
 				if err != nil {

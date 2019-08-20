@@ -80,6 +80,7 @@ func Do(callback func(*Stats) error, config *Config) error {
 		// access to it in the callback)
 		stats.Interval = config.Interval
 
+		// update interval if exponential backoff is being used
 		if config.BackoffStrategy == exponentialBackoff {
 			stats.Interval = time.Duration(math.Pow(2, float64(stats.Attempt)))
 		}
