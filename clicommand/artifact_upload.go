@@ -79,9 +79,9 @@ var ArtifactUploadCommand = cli.Command{
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
 		},
-		cli.StringSliceFlag{
+		cli.StringFlag{
 			Name:  "backoff-strategy",
-			Value: &cli.StringSlice{"linear", "exponential-backoff"},
+			Value: "linear",
 			Usage: "How to vary backoff between retries on failed attempts. ",
 		},
 
