@@ -47,7 +47,7 @@ type StepUpdateConfig struct {
 
 var StepUpdateCommand = cli.Command{
 	Name:        "update",
-	Usage:       "Change an attribute on a step",
+	Usage:       "Change the value of an attribute",
 	Description: StepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
