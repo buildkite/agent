@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.14.0](https://github.com/buildkite/agent/tree/v3.14.0) (2019-08-16)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.13.2...v3.14.0)
+
+### Fixed
+- Fix progress group id in debug output [#1074](https://github.com/buildkite/agent/pull/1074) (@lox)
+- Avoid os.Exit in pipeline upload command [#1070](https://github.com/buildkite/agent/pull/1070) (@lox)
+- Reword the cancel-grace-timeout config option [#1071](https://github.com/buildkite/agent/pull/1071) (@toolmantim)
+- Correctly log last successful heartbeat time. [#1065](https://github.com/buildkite/agent/pull/1065) (@philwo)
+- Add a test that BUILDKITE_GIT_SUBMODULES is handled [#1054](https://github.com/buildkite/agent/pull/1054) (@lox)
+
+### Changed
+- Added feature to enable encryption at rest for artifacts in S3. [#1072](https://github.com/buildkite/agent/pull/1072) (@wolfeidau)
+- If commit is HEAD, always use FETCH_HEAD in agent checkout [#1064](https://github.com/buildkite/agent/pull/1064) (@matthewd)
+- Updated `--help` output in the README and include more stuff in the "Development" section [#1061](https://github.com/buildkite/agent/pull/1061) (@keithpitt)
+- Allow signal agent sends to bootstrap on cancel to be customized [#1041](https://github.com/buildkite/agent/pull/1041) (@lox)
+- buildkite/pipeline.yaml etc in pipeline upload default search [#1051](https://github.com/buildkite/agent/pull/1051) (@pda)
+- Move plugin tests to table-driven tests [#1048](https://github.com/buildkite/agent/pull/1048) (@lox)
+
 ## [v3.13.2](https://github.com/buildkite/agent/tree/v3.13.2) (2019-07-20)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.13.1...v3.13.2)
 
