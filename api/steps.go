@@ -4,27 +4,27 @@ import (
 	"fmt"
 )
 
-// StepGetRequest represents a request for information about a step
-type StepGetRequest struct {
+// StepExportRequest represents a request for information about a step
+type StepExportRequest struct {
 	Attribute string `json:"attribute,omitempty"`
 	Build     string `json:"build_id,omitempty"`
 	Format    string `json:"format,omitempty"`
 }
 
-type StepGetResponse struct {
-	Value string `json:"value"`
+type StepExportResponse struct {
+	Output string `json:"output"`
 }
 
-// StepGet gets an attribute from step
-func (c *Client) StepGet(stepIdOrKey string, stepGetRequest *StepGetRequest) (*StepGetResponse, *Response, error) {
-	u := fmt.Sprintf("steps/%s/get", stepIdOrKey)
+// StepExport gets an attribute from step
+func (c *Client) StepExport(stepIdOrKey string, stepGetRequest *StepExportRequest) (*StepExportResponse, *Response, error) {
+	u := fmt.Sprintf("steps/%s/export", stepIdOrKey)
 
 	req, err := c.newRequest("POST", u, stepGetRequest)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	r := new(StepGetResponse)
+	r := new(StepExportResponse)
 	resp, err := c.doRequest(req, r)
 	if err != nil {
 		return nil, resp, err

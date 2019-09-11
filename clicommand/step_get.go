@@ -68,7 +68,7 @@ var StepGetCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "format",
 			Value:  "",
-			Usage:  "The format to output the attribute value in (currently only json is supported)",
+			Usage:  "The format to output the attribute value in (currently only JSON is supported)",
 			EnvVar: "BUILDKITE_STEP_GET_FORMAT",
 		},
 
@@ -102,7 +102,7 @@ var StepGetCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Create the request
-		stepGetRequest := &api.StepGetRequest{
+		stepExportRequest := &api.StepExportRequest{
 			Build:     cfg.Build,
 			Attribute: cfg.Attribute,
 			Format:    cfg.Format,
@@ -111,9 +111,9 @@ var StepGetCommand = cli.Command{
 		// Find the step attribute
 		var err error
 		var resp *api.Response
-		var stepGetResponse *api.StepGetResponse
+		var stepExportResponse *api.StepExportResponse
 		err = retry.Do(func(s *retry.Stats) error {
-			stepGetResponse, resp, err = client.StepGet(cfg.StepOrKey, stepGetRequest)
+			stepExportResponse, resp, err = client.StepExport(cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				s.Break()
@@ -132,6 +132,6 @@ var StepGetCommand = cli.Command{
 		}
 
 		// Output the value to STDOUT
-		fmt.Print(stepGetResponse.Value)
+		fmt.Print(stepExportResponse.Output)
 	},
 }
