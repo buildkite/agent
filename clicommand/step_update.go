@@ -17,7 +17,7 @@ var StepUpdateHelpDescription = `Usage:
 
 Description:
 
-   Update an attribute of a step associated with a job
+   Update an attribute of a step in the build
 
 Example:
 
@@ -30,7 +30,8 @@ type StepUpdateConfig struct {
 	Attribute string `cli:"arg:0" label:"attribute" validate:"required"`
 	Value     string `cli:"arg:1" label:"value"`
 	Append    bool   `cli:"append"`
-	Job       string `cli:"job" validate:"required"`
+	StepOrKey string `cli:"step" validate:"required"`
+	Build     string `cli:"build"`
 
 	// Global flags
 	Debug   bool   `cli:"debug"`
@@ -46,14 +47,20 @@ type StepUpdateConfig struct {
 
 var StepUpdateCommand = cli.Command{
 	Name:        "update",
-	Usage:       "Change an attribute on a step",
+	Usage:       "Change the value of an attribute",
 	Description: StepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
-			Name:   "job",
+			Name:   "step",
 			Value:  "",
-			Usage:  "Target the step of a specific job in the build",
-			EnvVar: "BUILDKITE_JOB_ID",
+			Usage:  "The step to update. Can be either it's ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_STEP_ID",
+		},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "The build to look for the step in. Only required when targeting a step using it's key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_BUILD_ID",
 		},
 		cli.BoolFlag{
 			Name:   "append",
@@ -104,19 +111,20 @@ var StepUpdateCommand = cli.Command{
 		// Generate a UUID that will identifiy this change. We do this
 		// outside of the retry loop because we want this UUID to be
 		// the same for each attempt at updating the step.
-		uuid := api.NewUUID()
+		idempotencyUUID := api.NewUUID()
 
 		// Create the value to update
 		update := &api.StepUpdate{
-			UUID:      uuid,
-			Attribute: cfg.Attribute,
-			Value:     cfg.Value,
-			Append:    cfg.Append,
+			IdempotencyUUID: idempotencyUUID,
+			Build:           cfg.Build,
+			Attribute:       cfg.Attribute,
+			Value:           cfg.Value,
+			Append:          cfg.Append,
 		}
 
 		// Post the change
 		err := retry.Do(func(s *retry.Stats) error {
-			resp, err := client.StepUpdate(cfg.Job, update)
+			resp, err := client.StepUpdate(cfg.StepOrKey, update)
 			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
 				s.Break()
 			}
