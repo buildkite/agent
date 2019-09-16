@@ -136,10 +136,11 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// The writer that output from the process goes into
 	var processWriter io.Writer
 
+	pr, pw := io.Pipe()
+
 	// If we have timestamp lines on, we have to buffer lines before we flush them
 	if conf.AgentConfiguration.TimestampLines {
-		var pr *io.PipeReader
-		pr, processWriter = io.Pipe()
+		processWriter = pw
 
 		go func() {
 			// Use a scanner to process output line by line
@@ -153,15 +154,13 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				}
 
 				// Write the log line to the buffer
-				runner.output.Write([]byte(line + "\n"))
+				_, _ = runner.output.Write([]byte(line + "\n"))
 			})
 			if err != nil {
 				l.Error("[LineScanner] Encountered error %v", err)
 			}
 		}()
 	} else {
-		pr, pw := io.Pipe()
-
 		// Write output directly to the line buffer so we
 		processWriter = io.MultiWriter(pw, runner.output)
 
@@ -175,6 +174,14 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 			}
 		}()
 	}
+
+	// Close the writer end of the pipe when the process finishes
+	go func() {
+		<-runner.process.Done()
+		if err := pw.Close(); err != nil {
+			l.Error("%v", err)
+		}
+	}()
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
