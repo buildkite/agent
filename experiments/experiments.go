@@ -2,7 +2,7 @@ package experiments
 
 var experiments = make(map[string]bool)
 
-// Enable a paticular experiment in the agent
+// Enable a particular experiment in the agent
 func Enable(experiment string) {
 	experiments[experiment] = true
 }
