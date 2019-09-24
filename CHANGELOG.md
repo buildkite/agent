@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.15.0](https://github.com/buildkite/agent/tree/v3.15.0) (2019-09-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.14.0...v3.15.0)
+
+### Changed
+- Let the agent serve a status page via HTTP. [#1066](https://github.com/buildkite/agent/pull/1066) (@philwo)
+- Only execute the "command" hook once. [#1055](https://github.com/buildkite/agent/pull/1055) (@philwo)
+- Fix goroutine leak and memory leak after job finishes [#1084](https://github.com/buildkite/agent/pull/1084) (@lox)
+- Allow gs_downloader to use GS_APPLICATION_CREDENTIALS [#1086](https://github.com/buildkite/agent/pull/1086) (@GaryPWhite)
+- Updates to `step update` and added `step get` [#1083](https://github.com/buildkite/agent/pull/1083) (@keithpitt)
+
 ## [v3.14.0](https://github.com/buildkite/agent/tree/v3.14.0) (2019-08-16)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.13.2...v3.14.0)
 
