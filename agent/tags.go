@@ -113,7 +113,6 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		paths, err := parseTagValuePathPairs(conf.TagsFromEC2MetaDataPaths)
 		if err != nil {
 			l.Error(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
-			return err
 		}
 
 		ec2Tags, err := t.ec2MetaDataPaths(paths)
@@ -174,7 +173,6 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		paths, err := parseTagValuePathPairs(conf.TagsFromGCPMetaDataPaths)
 		if err != nil {
 			l.Error(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
-			return err
 		}
 
 		gcpTags, err := t.gcpMetaDataPaths(paths)
