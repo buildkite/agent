@@ -30,7 +30,7 @@ func (p *Process) setupProcessGroup() {
 }
 
 func (p *Process) terminateProcessGroup() error {
-	p.logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.Pid)
+	p.logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
 	// anything left in it's process tree.

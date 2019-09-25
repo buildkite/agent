@@ -79,21 +79,10 @@ func (u *S3Uploader) URL(artifact *api.Artifact) string {
 }
 
 func (u *S3Uploader) Upload(artifact *api.Artifact) error {
-	permission := "public-read"
-	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
-	} else if os.Getenv("AWS_S3_ACL") != "" {
-		permission = os.Getenv("AWS_S3_ACL")
-	}
 
-	// The dirtiest validation method ever...
-	if permission != "private" &&
-		permission != "public-read" &&
-		permission != "public-read-write" &&
-		permission != "authenticated-read" &&
-		permission != "bucket-owner-read" &&
-		permission != "bucket-owner-full-control" {
-		return fmt.Errorf("Invalid S3 ACL `%s`", permission)
+	permission, err := u.resolvePermission()
+	if err != nil {
+		return err
 	}
 
 	// Create an uploader with the session and default options
@@ -108,13 +97,20 @@ func (u *S3Uploader) Upload(artifact *api.Artifact) error {
 
 	// Upload the file to S3.
 	u.logger.Debug("Uploading \"%s\" to bucket with permission `%s`", u.artifactPath(artifact), permission)
-	_, err = uploader.Upload(&s3manager.UploadInput{
+
+	params := &s3manager.UploadInput{
 		Bucket:      aws.String(u.BucketName),
 		Key:         aws.String(u.artifactPath(artifact)),
 		ContentType: aws.String(artifact.ContentType),
 		ACL:         aws.String(permission),
 		Body:        f,
-	})
+	}
+	// if enabled we assign the sse configuration
+	if u.serverSideEncryptionEnabled() {
+		params.ServerSideEncryption = aws.String("AES256")
+	}
+
+	_, err = uploader.Upload(params)
 
 	return err
 }
@@ -123,4 +119,31 @@ func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
 	parts := []string{u.BucketPath, artifact.Path}
 
 	return strings.Join(parts, "/")
+}
+
+func (u *S3Uploader) resolvePermission() (string, error) {
+	permission := "public-read"
+	if os.Getenv("BUILDKITE_S3_ACL") != "" {
+		permission = os.Getenv("BUILDKITE_S3_ACL")
+	} else if os.Getenv("AWS_S3_ACL") != "" {
+		permission = os.Getenv("AWS_S3_ACL")
+	}
+
+	switch permission {
+	case "private", "public-read", "public-read-write", "authenticated-read", "bucket-owner-read", "bucket-owner-full-control":
+		return permission, nil
+	default:
+		return "", fmt.Errorf("Invalid S3 ACL value: `%s`", permission)
+	}
+}
+
+// is encryption at rest enabled for artifacts to satisfy basic security requirements
+func (u *S3Uploader) serverSideEncryptionEnabled() bool {
+	sse := os.Getenv("BUILDKITE_S3_SSE_ENABLED")
+	switch {
+	case strings.ToLower(sse) == "true":
+		return true
+	default:
+		return false
+	}
 }

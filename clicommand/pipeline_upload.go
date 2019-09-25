@@ -227,7 +227,7 @@ var PipelineUploadCommand = cli.Command{
 				l.Fatal("%#v", err)
 			}
 
-			os.Exit(0)
+			return
 		}
 
 		// Check we have a job id set if not in dry run

@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -79,6 +80,7 @@ type AgentStartConfig struct {
 	NoPluginValidation         bool     `cli:"no-plugin-validation"`
 	NoPTY                      bool     `cli:"no-pty"`
 	TimestampLines             bool     `cli:"timestamp-lines"`
+	HealthCheckAddr            string   `cli:"health-check-addr"`
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
 	Spawn                      int      `cli:"spawn"`
@@ -184,7 +186,7 @@ var AgentStartCommand = cli.Command{
 		cli.IntFlag{
 			Name:   "cancel-grace-period",
 			Value:  10,
-			Usage:  "The number of seconds running processes are given to gracefully terminate before they are killed when a job is cancelled",
+			Usage:  "The number of seconds a canceled or timed out job is given to gracefully terminate and upload its artifacts",
 			EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
 		},
 		cli.StringFlag{
@@ -314,6 +316,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "timestamp-lines",
 			Usage:  "Prepend timestamps on each line of output.",
 			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
+		},
+		cli.StringFlag{
+			Name:   "health-check-addr",
+			Usage:  "Start an HTTP server on this addr:port that returns whether the agent is healthy, disabled by default",
+			EnvVar: "BUILDKITE_AGENT_HEALTH_CHECK_ADDR",
 		},
 		cli.BoolFlag{
 			Name:   "no-pty",
@@ -675,6 +682,7 @@ var AgentStartCommand = cli.Command{
 						AgentConfiguration: agentConf,
 						CancelSignal:       cancelSig,
 						Debug:              cfg.Debug,
+						SpawnIndex:         i,
 					}))
 		}
 
@@ -687,6 +695,25 @@ var AgentStartCommand = cli.Command{
 
 		l.Info("Starting %d Agent(s)", cfg.Spawn)
 		l.Info("You can press Ctrl-C to stop the agents")
+
+		// Determine the health check listening address and port for this agent
+		if cfg.HealthCheckAddr != "" {
+			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/" {
+					http.NotFound(w, r)
+				} else {
+					fmt.Fprintf(w, "OK: Buildkite agent is running")
+				}
+			})
+
+			go func() {
+				l.Notice("Starting HTTP health check server on %v", cfg.HealthCheckAddr)
+				err := http.ListenAndServe(cfg.HealthCheckAddr, nil)
+				if err != nil {
+					l.Error("Could not start health check server: %v", err)
+				}
+			}()
+		}
 
 		// Start the agent pool
 		if err := pool.Start(); err != nil {

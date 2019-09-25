@@ -91,8 +91,9 @@ func main() {
 		},
 		{
 			Name:  "step",
-			Usage: "Make changes to a step (this includes any jobs that were created from the step)",
+			Usage: "Get or update an attribute of a build step",
 			Subcommands: []cli.Command{
+				clicommand.StepGetCommand,
 				clicommand.StepUpdateCommand,
 			},
 		},

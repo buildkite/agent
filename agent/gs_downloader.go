@@ -1,13 +1,11 @@
 package agent
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/buildkite/agent/logger"
-	"golang.org/x/oauth2/google"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -45,7 +43,7 @@ func NewGSDownloader(l logger.Logger, c GSDownloaderConfig) *GSDownloader {
 }
 
 func (d GSDownloader) Start() error {
-	client, err := google.DefaultClient(context.Background(), storage.DevstorageReadOnlyScope)
+	client, err := newGoogleClient(storage.DevstorageReadOnlyScope)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Error creating Google Cloud Storage client: %v", err))
 	}
