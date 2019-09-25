@@ -217,7 +217,6 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	return tags
 }
 
-// TODO: Seems maybe el crapola, dunno will ask lox
 func parseTagValuePathPairs(paths []string) (map[string]string, error) {
 	result := make(map[string]string)
 
@@ -229,8 +228,7 @@ func parseTagValuePathPairs(paths []string) (map[string]string, error) {
 		}
 
 		x := strings.Split(pair, "=")
-		// TODO: Should we just let people have stupid keys? Probably?
-		key := strings.ToLower(strings.Trim(x[0], " "))
+		key := strings.ToLower(strings.TrimSpace(x[0]))
 
 		uri, err := url.Parse(x[1])
 		if err != nil {
