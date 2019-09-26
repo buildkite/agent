@@ -71,17 +71,24 @@ func ParseGSDestination(destination string) (name string, path string) {
 	return
 }
 
+func clientFromJSON(data []byte, scope string) (*http.Client, error) {
+	conf, err := google.JWTConfigFromJSON(data, scope)
+	if err != nil {
+		return nil, err
+	}
+	return conf.Client(oauth2.NoContext), nil
+}
+
 func newGoogleClient(scope string) (*http.Client, error) {
-	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
+	if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON") != "" {
+		data := []byte(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS_JSON"))
+		return clientFromJSON(data, scope)
+	} else if os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS") != "" {
 		data, err := ioutil.ReadFile(os.Getenv("BUILDKITE_GS_APPLICATION_CREDENTIALS"))
 		if err != nil {
 			return nil, err
 		}
-		conf, err := google.JWTConfigFromJSON(data, scope)
-		if err != nil {
-			return nil, err
-		}
-		return conf.Client(oauth2.NoContext), nil
+		return clientFromJSON(data, scope)
 	}
 	return google.DefaultClient(context.Background(), scope)
 }
