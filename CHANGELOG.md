@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.15.1](https://github.com/buildkite/agent/tree/v3.15.1) (2019-09-30)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.15.0...v3.15.1)
+
+### Fixed
+- Fix a race condition that causes panics on job accept [#1095](https://github.com/buildkite/agent/pull/1095) (@lox)
+
 ## [v3.15.0](https://github.com/buildkite/agent/tree/v3.15.0) (2019-09-17)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.14.0...v3.15.0)
 
