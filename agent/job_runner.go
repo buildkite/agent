@@ -175,14 +175,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}()
 	}
 
-	// Close the writer end of the pipe when the process finishes
-	go func() {
-		<-runner.process.Done()
-		if err := pw.Close(); err != nil {
-			l.Error("%v", err)
-		}
-	}()
-
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
 	// the top of the current one so the ENV from Buildkite and the agent
@@ -199,6 +191,14 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		Stderr:          processWriter,
 		InterruptSignal: conf.CancelSignal,
 	})
+
+	// Close the writer end of the pipe when the process finishes
+	go func() {
+		<-runner.process.Done()
+		if err := pw.Close(); err != nil {
+			l.Error("%v", err)
+		}
+	}()
 
 	// Kick off our callback when the process starts
 	go func() {
