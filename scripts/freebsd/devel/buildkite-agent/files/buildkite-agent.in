@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# $FreeBSD$
+#
+# PROVIDE: buildkite-agent
+# REQUIRE: NETWORKING FILESYSTEMS
+
+. /etc/rc.subr
+
+name="buildkite_agent"
+rcvar="buildkite_agent_enable"
+desc="Launch the Buildkite agent"
+start_cmd="buildkite_agent_start"
+stop_cmd="buildkite_agent_stop"
+
+load_rc_config $name
+
+: ${buildkite_agent_enable:=NO}
+: ${buildkite_agent_idle_timeout:=0}
+
+buildkite_agent_start()
+{
+  daemon \
+      -u buildkite-agent \
+      -o /var/log/buildkite-agent.log \
+      -P /var/run/buildkite-agent.pid \
+      %%PREFIX%%/bin/buildkite-agent start \
+        --config %%ETCDIR%%/buildkite-agent.cfg \
+        --disconnect-after-idle-timeout ${buildkite_agent_idle_timeout}
+}
+
+buildkite_agent_stop()
+{
+  kill $(cat /var/run/buildkite-agent.pid)
+}
+
+run_rc_command "$1"

@@ -1,0 +1,6 @@
+The Buildkite agent is now installed!
+
+To finish configuration, you must copy the buildkite-agent.cfg.sample
+in %%ETCDIR%% to buildkite-agent.cfg and add an
+agent token. More information about Buildkite agent tokens is available
+at https://buildkite.com/docs/agent/v3/tokens.
