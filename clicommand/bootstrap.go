@@ -66,6 +66,7 @@ type BootstrapConfig struct {
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsFetchOnly          bool     `cli:"git-mirrors-fetch-only"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -359,6 +360,7 @@ var BootstrapCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
+			GitMirrorsFetchOnly:          cfg.GitMirrorsFetchOnly,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,

@@ -70,6 +70,7 @@ type AgentStartConfig struct {
 	GitFetchFlags              string   `cli:"git-fetch-flags"`
 	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsFetchOnly        bool     `cli:"git-mirrors-fetch-only"`
 	NoGitSubmodules            bool     `cli:"no-git-submodules"`
 	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval              bool     `cli:"no-command-eval"`
@@ -525,6 +526,7 @@ var AgentStartCommand = cli.Command{
 			BuildPath:                  cfg.BuildPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
+			GitMirrorsFetchOnly:        cfg.GitMirrorsFetchOnly,
 			HooksPath:                  cfg.HooksPath,
 			PluginsPath:                cfg.PluginsPath,
 			GitCloneFlags:              cfg.GitCloneFlags,

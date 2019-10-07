@@ -9,6 +9,7 @@ type AgentConfiguration struct {
 	HooksPath                  string
 	GitMirrorsPath             string
 	GitMirrorsLockTimeout      int
+	GitMirrorsFetchOnly        bool
 	PluginsPath                string
 	GitCloneFlags              string
 	GitCloneMirrorFlags        string

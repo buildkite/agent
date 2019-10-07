@@ -70,6 +70,9 @@ type Config struct {
 	// Flags to pass to "git clone" command for mirroring
 	GitCloneMirrorFlags string
 
+	// Use "git fetch" rather than "git remote update" -- wise if you have a large number of branches
+	GitMirrorsFetchOnly bool
+
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 

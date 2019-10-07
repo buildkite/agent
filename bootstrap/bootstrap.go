@@ -1045,8 +1045,15 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 
 	// Update our mirror
-	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "update", "--prune"); err != nil {
-		return "", err
+	if b.GitMirrorsFetchOnly {
+		gitFetchFlags := fmt.Sprintf("--git-dir '%s' %s", mirrorDir, b.GitFetchFlags)
+		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
+			return "", err
+		}
+	} else {
+		if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "update", "--prune"); err != nil {
+			return "", err
+		}
 	}
 
 	return mirrorDir, nil
