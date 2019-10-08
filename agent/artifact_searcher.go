@@ -24,7 +24,7 @@ func NewArtifactSearcher(l logger.Logger, ac APIClient, buildID string) *Artifac
 	}
 }
 
-func (a *ArtifactSearcher) Search(query string, scope string) ([]*api.Artifact, error) {
+func (a *ArtifactSearcher) Search(query string, scope string, includeRetriedJobs bool) ([]*api.Artifact, error) {
 	if scope == "" {
 		a.logger.Info("Searching for artifacts: \"%s\"", query)
 	} else {
@@ -32,8 +32,9 @@ func (a *ArtifactSearcher) Search(query string, scope string) ([]*api.Artifact, 
 	}
 
 	artifacts, _, err := a.apiClient.SearchArtifacts(a.buildID, &api.ArtifactSearchOptions{
-		Query: query,
-		Scope: scope,
+		Query:              query,
+		Scope:              scope,
+		IncludeRetriedJobs: includeRetriedJobs,
 	})
 
 	return artifacts, err

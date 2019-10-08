@@ -64,8 +64,9 @@ type ArtifactBatchCreateResponse struct {
 // ArtifactSearchOptions specifies the optional parameters to the
 // ArtifactsService.Search method.
 type ArtifactSearchOptions struct {
-	Query string `url:"query,omitempty"`
-	Scope string `url:"scope,omitempty"`
+	Query              string `url:"query,omitempty"`
+	Scope              string `url:"scope,omitempty"`
+	IncludeRetriedJobs bool   `url:"include_retried_jobs,omitempty"`
 }
 
 type ArtifactBatchUpdateArtifact struct {

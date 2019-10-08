@@ -34,10 +34,11 @@ Example:
    You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 type ArtifactDownloadConfig struct {
-	Query       string `cli:"arg:0" label:"artifact search query" validate:"required"`
-	Destination string `cli:"arg:1" label:"artifact download path" validate:"required"`
-	Step        string `cli:"step"`
-	Build       string `cli:"build" validate:"required"`
+	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
+	Destination        string `cli:"arg:1" label:"artifact download path" validate:"required"`
+	Step               string `cli:"step"`
+	Build              string `cli:"build" validate:"required"`
+	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
 
 	// Global flags
 	Debug   bool   `cli:"debug"`
@@ -66,6 +67,11 @@ var ArtifactDownloadCommand = cli.Command{
 			Value:  "",
 			EnvVar: "BUILDKITE_BUILD_ID",
 			Usage:  "The build that the artifacts were uploaded to",
+		},
+		cli.BoolFlag{
+			Name:   "include-retried-jobs",
+			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
+			Usage:  "Include artifacts from retried jobs in the search",
 		},
 
 		// API Flags
@@ -99,11 +105,12 @@ var ArtifactDownloadCommand = cli.Command{
 
 		// Setup the downloader
 		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
-			Query:       cfg.Query,
-			Destination: cfg.Destination,
-			BuildID:     cfg.Build,
-			Step:        cfg.Step,
-			DebugHTTP:   cfg.DebugHTTP,
+			Query:              cfg.Query,
+			Destination:        cfg.Destination,
+			BuildID:            cfg.Build,
+			Step:               cfg.Step,
+			IncludeRetriedJobs: cfg.IncludeRetriedJobs,
+			DebugHTTP:          cfg.DebugHTTP,
 		})
 
 		// Download the artifacts
