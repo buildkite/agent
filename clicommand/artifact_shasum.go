@@ -37,9 +37,10 @@ Example:
    You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 type ArtifactShasumConfig struct {
-	Query string `cli:"arg:0" label:"artifact search query" validate:"required"`
-	Step  string `cli:"step"`
-	Build string `cli:"build" validate:"required"`
+	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
+	Step               string `cli:"step"`
+	Build              string `cli:"build" validate:"required"`
+	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
 
 	// Global flags
 	Debug   bool   `cli:"debug"`
@@ -68,6 +69,11 @@ var ArtifactShasumCommand = cli.Command{
 			Value:  "",
 			EnvVar: "BUILDKITE_BUILD_ID",
 			Usage:  "The build that the artifacts were uploaded to",
+		},
+		cli.BoolFlag{
+			Name:   "include-retried-jobs",
+			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
+			Usage:  "Include artifacts from retried jobs in the search",
 		},
 
 		// API Flags
@@ -102,7 +108,7 @@ var ArtifactShasumCommand = cli.Command{
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
 
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step)
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs)
 		if err != nil {
 			l.Fatal("Failed to find artifacts: %s", err)
 		}

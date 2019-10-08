@@ -22,6 +22,9 @@ type ArtifactDownloaderConfig struct {
 	// Which step should we look at for the jobs
 	Step string
 
+	// Whether to include artifacts from retried jobs in the search
+	IncludeRetriedJobs bool
+
 	// Where we'll be downloading artifacts to
 	Destination string
 
@@ -62,7 +65,7 @@ func (a *ArtifactDownloader) Download() error {
 
 	// Find the artifacts that we want to download
 	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
-		Search(a.conf.Query, a.conf.Step)
+		Search(a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs)
 	if err != nil {
 		return err
 	}
