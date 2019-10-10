@@ -138,8 +138,25 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	pr, pw := io.Pipe()
 
-	// If we have timestamp lines on, we have to buffer lines before we flush them
-	if conf.AgentConfiguration.TimestampLines {
+	if experiments.IsEnabled(`ansi-timestamps`) {
+		// If we have ansi-timestamps, we can skip line timestamps AND header times
+
+		go func() {
+			// Use a scanner to process output line by line
+			err := process.NewScanner(l).ScanLines(pr, func(line string) {
+				// Add an ANSI suffix with the timestamp
+				tsline := fmt.Sprintf("%s\x1b_bk;t=%d\x07",
+					line, time.Now().UnixNano()/int64(time.Millisecond))
+
+				// Write the log line to the buffer
+				_, _ = runner.output.Write([]byte(tsline + "\n"))
+			})
+			if err != nil {
+				l.Error("[LineScanner] Encountered error %v", err)
+			}
+		}()
+	} else if conf.AgentConfiguration.TimestampLines {
+		// If we have timestamp lines on, we have to buffer lines before we flush them
 		processWriter = pw
 
 		go func() {
