@@ -8,7 +8,7 @@ import "runtime"
 //
 // On CI, the binaries are always build with the buildVersion variable set.
 
-var baseVersion string = "3.15.1"
+var baseVersion string = "3.15.2"
 var buildVersion string = ""
 
 func Version() string {

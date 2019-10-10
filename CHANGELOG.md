@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.15.2](https://github.com/buildkite/agent/tree/v3.15.2) (2019-10-10)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.15.1...v3.15.2)
+
+### Added
+- Support GS credentials via BUILDKITE_GS_APPLICATION_CREDENTIALS [#1093](https://github.com/buildkite/agent/pull/1093) (@GaryPWhite)
+- Add --include-retried-jobs to artifact download/shasum [#1101](https://github.com/buildkite/agent/pull/1101) (@toolmantim)
+
 ## [v3.15.1](https://github.com/buildkite/agent/tree/v3.15.1) (2019-09-30)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.15.0...v3.15.1)
 
