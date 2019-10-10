@@ -904,6 +904,20 @@ func (b *Bootstrap) CheckoutPhase() error {
 				default:
 					b.shell.Warningf("Checkout failed! %s (%s)", err, s)
 
+					// Specifically handle git errors
+					if ge, ok := err.(*gitError); ok {
+						switch ge.Type {
+						// These types can fail because of corrupted checkouts
+						case gitErrorClone:
+						case gitErrorClean:
+						case gitErrorCleanSubmodules:
+							// do nothing, this will fall through to destroy the checkout
+
+						default:
+							return err
+						}
+					}
+
 					// Checkout can fail because of corrupted files in the checkout
 					// which can leave the agent in a state where it keeps failing
 					// This removes the checkout dir, which means the next checkout
@@ -1157,11 +1171,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	if b.Commit == "HEAD" {
-		if err := b.shell.Run("git", "checkout", "-f", "FETCH_HEAD"); err != nil {
+		if err := gitCheckout(b.shell, `-f`, `FETCH_HEAD`); err != nil {
 			return err
 		}
 	} else {
-		if err := b.shell.Run("git", "checkout", "-f", b.Commit); err != nil {
+		if err := gitCheckout(b.shell, `-f`, b.Commit); err != nil {
 			return err
 		}
 	}
