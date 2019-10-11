@@ -3,8 +3,6 @@ cloud.google.com/go/compute/metadata
 cloud.google.com/go/internal
 # github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895
 github.com/DataDog/datadog-go/statsd
-# github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc
-github.com/ErikDubbelboer/gspt
 # github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5
 github.com/aws/aws-sdk-go/aws
 github.com/aws/aws-sdk-go/aws/credentials

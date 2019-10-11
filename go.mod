@@ -3,7 +3,6 @@ module github.com/buildkite/agent
 require (
 	cloud.google.com/go v0.0.0-20170217213217-65216237311a
 	github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895
-	github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc
 	github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5
 	github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0
 	github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c
