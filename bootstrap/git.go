@@ -35,7 +35,7 @@ func gitCheckout(sh *shell.Shell, gitCheckoutFlags, reference string) error {
 
 	commandArgs := []string{"checkout"}
 	commandArgs = append(commandArgs, individualCheckoutFlags...)
-	commandArgs = append(commandArgs, "--", reference)
+	commandArgs = append(commandArgs, reference)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
 		if strings.HasPrefix(err.Error(), `fatal: reference is not a tree: `) {
