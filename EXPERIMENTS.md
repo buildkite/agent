@@ -25,3 +25,9 @@ Maintain a single bare git mirror with for each repository on a host that is sha
 You must set a `git-mirrors-path` in your config for this to work.
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
+
+### `ansi-timestamps`
+
+Outputs inline ANSI timestamps for each line of log output which enables toggle-able timestamps in the Buildkite UI.
+
+**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍

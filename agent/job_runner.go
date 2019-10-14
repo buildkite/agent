@@ -138,8 +138,16 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	pr, pw := io.Pipe()
 
-	// If we have timestamp lines on, we have to buffer lines before we flush them
-	if conf.AgentConfiguration.TimestampLines {
+	if experiments.IsEnabled(`ansi-timestamps`) {
+		// If we have ansi-timestamps, we can skip line timestamps AND header times
+		// this is the future of timestamping
+		processWriter = process.NewPrefixer(runner.output, func() string {
+			return fmt.Sprintf("\x1b_bk;t=%d\x07",
+				time.Now().UnixNano()/int64(time.Millisecond))
+		})
+	} else if conf.AgentConfiguration.TimestampLines {
+		// If we have timestamp lines on, we have to buffer lines before we flush them
+		// because we need to know if the line is a header or not. It's a bummer.
 		processWriter = pw
 
 		go func() {
@@ -157,7 +165,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				_, _ = runner.output.Write([]byte(line + "\n"))
 			})
 			if err != nil {
-				l.Error("[LineScanner] Encountered error %v", err)
+				l.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
 	} else {
@@ -170,7 +178,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				runner.headerTimesStreamer.Scan(line)
 			})
 			if err != nil {
-				l.Error("[LineScanner] Encountered error %v", err)
+				l.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
 	}
