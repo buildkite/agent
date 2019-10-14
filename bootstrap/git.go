@@ -13,6 +13,40 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
+const (
+	gitErrorCheckout = iota
+	gitErrorCheckoutReferenceIsNotATree
+	gitErrorClone
+	gitErrorFetch
+	gitErrorClean
+	gitErrorCleanSubmodules
+)
+
+type gitError struct {
+	error
+	Type int
+}
+
+func gitCheckout(sh *shell.Shell, gitCheckoutFlags, reference string) error {
+	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
+	if err != nil {
+		return err
+	}
+
+	commandArgs := []string{"checkout"}
+	commandArgs = append(commandArgs, individualCheckoutFlags...)
+	commandArgs = append(commandArgs, reference)
+
+	if err = sh.Run("git", commandArgs...); err != nil {
+		if strings.HasPrefix(err.Error(), `fatal: reference is not a tree: `) {
+			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
+		}
+		return &gitError{error: err, Type: gitErrorCheckout}
+	}
+
+	return nil
+}
+
 func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
 	if err != nil {
@@ -24,7 +58,7 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	commandArgs = append(commandArgs, "--", repository, dir)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
-		return err
+		return &gitError{error: err, Type: gitErrorClone}
 	}
 
 	return nil
@@ -40,7 +74,7 @@ func gitClean(sh *shell.Shell, gitCleanFlags string) error {
 	commandArgs = append(commandArgs, individualCleanFlags...)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
-		return err
+		return &gitError{error: err, Type: gitErrorClean}
 	}
 
 	return nil
@@ -56,7 +90,7 @@ func gitCleanSubmodules(sh *shell.Shell, gitCleanFlags string) error {
 	commandArgs := append([]string{"submodule", "foreach", "--recursive"}, gitCleanCommand)
 
 	if err = sh.Run("git", commandArgs...); err != nil {
-		return err
+		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
 	return nil
@@ -81,7 +115,7 @@ func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...stri
 	}
 
 	if err = sh.Run("git", commandArgs...); err != nil {
-		return err
+		return &gitError{error: err, Type: gitErrorFetch}
 	}
 
 	return nil
