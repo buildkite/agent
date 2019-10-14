@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/metrics"
 	"github.com/buildkite/agent/process"
-	"github.com/buildkite/agent/proctitle"
 	"github.com/buildkite/agent/retry"
 )
 
@@ -256,9 +254,6 @@ func (a *AgentWorker) Stop(graceful bool) {
 		return
 	}
 
-	// Update the proc title
-	a.UpdateProcTitle("stopping")
-
 	// Use the closure of the stop channel as a signal to the main run loop in Start()
 	// to stop looping and terminate
 	close(a.stop)
@@ -271,9 +266,6 @@ func (a *AgentWorker) Stop(graceful bool) {
 // fails.
 func (a *AgentWorker) Connect() error {
 	a.logger.Info("Connecting to Buildkite...")
-
-	// Update the proc title
-	a.UpdateProcTitle("connecting")
 
 	return retry.Do(func(s *retry.Stats) error {
 		_, err := a.apiClient.Connect()
@@ -318,9 +310,6 @@ func (a *AgentWorker) Heartbeat() error {
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
 func (a *AgentWorker) Ping() (*api.Job, error) {
-	// Update the proc title
-	a.UpdateProcTitle("pinging")
-
 	ping, _, err := a.apiClient.Ping()
 	if err != nil {
 		// Get the last ping time to the nearest microsecond
@@ -367,8 +356,6 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 	// If we don't have a job, there's nothing to do!
 	if ping.Job == nil {
-		// Update the proc title
-		a.UpdateProcTitle("idle")
 		return nil, nil
 	}
 
@@ -377,8 +364,6 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 // Accepts a job and runs it, only returns an error if something goes wrong
 func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
-	a.UpdateProcTitle(fmt.Sprintf("job %s", strings.Split(job.ID, "-")[0]))
-
 	a.logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
@@ -442,19 +427,12 @@ func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
 func (a *AgentWorker) Disconnect() error {
 	a.logger.Info("Disconnecting...")
 
-	// Update the proc title
-	a.UpdateProcTitle("disconnecting")
-
 	_, err := a.apiClient.Disconnect()
 	if err != nil {
 		a.logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
 	}
 
 	return err
-}
-
-func (a *AgentWorker) UpdateProcTitle(action string) {
-	proctitle.Replace(fmt.Sprintf("buildkite-agent v%s [%s]", Version(), action))
 }
 
 type IdleMonitor struct {
