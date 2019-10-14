@@ -12,7 +12,7 @@ RUN powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((New-Object Sys
 # Install Chocolatey packages
 RUN choco install -ry git.install -params '"/GitAndUnixToolsOnPath"' && \
   choco install -ry openssh && \
-  choco install golang --version 1.12 -mry && \
+  choco install golang --version 1.13 -mry && \
   choco install -ry mingw
 
 WORKDIR c:/Users/ContainerAdministrator/go/src/github.com/buildkite/agent
