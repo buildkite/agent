@@ -161,7 +161,7 @@ func TestPluginConditionFailsBootstrap(t *testing.T) {
 
 	env := []string{
 		`BUILDKITE_PLUGINS=` + json,
-		`BUILDKITE_PLUGIN_CONDITION=false`,
+		`BUILDKITE_ALLOW_PLUGIN_IF=false`,
 	}
 
 	pluginMock.Expect("testing").NotCalled()
