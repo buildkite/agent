@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.16.0](https://github.com/buildkite/agent/tree/v3.16.0) (2019-10-14)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.15.2...v3.16.0)
+
+### Added
+- Add ANSI timestamp output experiment [#1103](https://github.com/buildkite/agent/pull/1103) (@lox)
+
+### Changed
+- Bump golang build version to 1.13 [#1107](https://github.com/buildkite/agent/pull/1107) (@lox)
+- Drop support for setting process title [#1106](https://github.com/buildkite/agent/pull/1106) (@lox)
+
+### Fixed
+- Avoid destroying the checkout on specific git errors [#1104](https://github.com/buildkite/agent/pull/1104) (@lox)
+
 ## [v3.15.2](https://github.com/buildkite/agent/tree/v3.15.2) (2019-10-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.15.1...v3.15.2)
 
