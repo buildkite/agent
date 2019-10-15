@@ -375,12 +375,6 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
 			Value:  "SIGTERM",
 		},
-		cli.StringFlag{
-			Name:   "plugin-condition",
-			Usage:  "Apply a conditional filter to plugins to restrict those this agent can use",
-			EnvVar: "BUILDKITE_PLUGIN_CONDITION",
-			Value:  "",
-		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
