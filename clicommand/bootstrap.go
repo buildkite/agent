@@ -73,7 +73,7 @@ type BootstrapConfig struct {
 	CommandEval                  bool     `cli:"command-eval"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
 	PluginValidation             bool     `cli:"plugin-validation"`
-	PluginCondition              string   `cli:"plugin-condition"`
+	AllowPluginIf                string   `cli:"allow-plugin-if"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
 	PTY                          bool     `cli:"pty"`
 	Debug                        bool     `cli:"debug"`
@@ -259,9 +259,9 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_PLUGIN_VALIDATION",
 		},
 		cli.StringFlag{
-			Name:   "plugin-condition",
-			Usage:  "Apply a conditional filter to plugins to restrict those this agent can use",
-			EnvVar: "BUILDKITE_PLUGIN_CONDITION",
+			Name:   "allow-plugin-if",
+			Usage:  "Apply a conditional to specify plugins that the agent can use",
+			EnvVar: "BUILDKITE_ALLOW_PLUGIN_IF",
 			Value:  "",
 		},
 		cli.BoolTFlag{
@@ -370,7 +370,7 @@ var BootstrapCommand = cli.Command{
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,
 			PluginValidation:             cfg.PluginValidation,
-			PluginCondition:              cfg.PluginCondition,
+			AllowPluginIf:                cfg.AllowPluginIf,
 			Debug:                        cfg.Debug,
 			RunInPty:                     runInPty,
 			CommandEval:                  cfg.CommandEval,

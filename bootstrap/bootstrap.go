@@ -522,9 +522,9 @@ func (b *Bootstrap) preparePlugins() error {
 		b.shell.Commentf("Parsed %d plugins", len(b.plugins))
 	}
 
-	if b.PluginCondition != "" {
-		b.shell.Commentf("Applying condition %q to %d plugins", b.PluginCondition, len(plugins))
-		condition, err := plugin.ParseCondition(b.PluginCondition)
+	if b.AllowPluginIf != "" {
+		b.shell.Commentf("Applying condition %q to %d plugins", b.AllowPluginIf, len(plugins))
+		condition, err := plugin.ParseCondition(b.AllowPluginIf)
 		if err != nil {
 			return err
 		}
@@ -538,7 +538,7 @@ func (b *Bootstrap) preparePlugins() error {
 			if match {
 				allowed = append(allowed, p)
 			} else {
-				return fmt.Errorf("Plugin %s doesn't match condition %q", p.Name(), b.PluginCondition)
+				return fmt.Errorf("Plugin %s doesn't match condition %q", p.Name(), b.AllowPluginIf)
 			}
 		}
 		b.plugins = allowed

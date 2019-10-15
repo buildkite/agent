@@ -439,7 +439,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitSubmodules)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.CommandEval)
 	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.PluginsEnabled)
-	env["BUILDKITE_PLUGIN_CONDITION"] = fmt.Sprintf("%s", r.conf.AgentConfiguration.PluginCondition)
+	env["BUILDKITE_ALLOW_PLUGIN_IF"] = fmt.Sprintf("%s", r.conf.AgentConfiguration.AllowPluginIf)
 	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.conf.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_FETCH_FLAGS"] = r.conf.AgentConfiguration.GitFetchFlags
