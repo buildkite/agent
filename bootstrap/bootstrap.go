@@ -1437,6 +1437,23 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
 
+	if sensitiveVarNames, ok := b.shell.Env.Get("BUILDKITE_SENSITIVE_VARS"); ok {
+		var sensitiveValues []string
+
+		for _, varName := range strings.Split(sensitiveVarNames, ",") {
+			if sensitiveValue, ok := b.shell.Env.Get(varName); ok {
+				sensitiveValues = append(sensitiveValues, sensitiveValue)
+			}
+		}
+
+		if len(sensitiveValues) > 0 {
+			logFilter := NewLogFilter(b.shell.Writer, "[REDACTED]", sensitiveValues)
+			defer logFilter.Sync()
+
+			b.shell.Writer = logFilter
+		}
+	}
+
 	var cmd []string
 	cmd = append(cmd, shell...)
 	cmd = append(cmd, cmdToExec)
