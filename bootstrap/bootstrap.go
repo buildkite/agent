@@ -1437,7 +1437,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
 
-	if sensitiveVarNames, ok := b.shell.Env.Get("BUILDKITE_SENSITIVE_VARS"); ok {
+	if sensitiveVarNames, ok := b.shell.Env.Get("BUILDKITE_REDACTED_VARS"); ok {
 		var sensitiveValues []string
 
 		for _, varName := range strings.Split(sensitiveVarNames, ",") {
@@ -1447,10 +1447,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		}
 
 		if len(sensitiveValues) > 0 {
-			logFilter := NewLogFilter(b.shell.Writer, "[REDACTED]", sensitiveValues)
-			defer logFilter.Sync()
+			redactor := NewRedactor(b.shell.Writer, "[REDACTED]", sensitiveValues)
+			defer redactor.Sync()
 
-			b.shell.Writer = logFilter
+			b.shell.Writer = redactor
 		}
 	}
 

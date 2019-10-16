@@ -5,7 +5,7 @@ import (
 	"io"
 )
 
-type LogFilter struct {
+type Redactor struct {
 	replacement []byte
 
 	// Current offset from the start of the next input segment
@@ -30,8 +30,8 @@ type LogFilter struct {
 	output io.Writer
 }
 
-// Construct a new LogFilter, and pre-compile the Boyer-Moore skip table
-func NewLogFilter(output io.Writer, replacement string, needles []string) *LogFilter {
+// Construct a new Redactor, and pre-compile the Boyer-Moore skip table
+func NewRedactor(output io.Writer, replacement string, needles []string) *Redactor {
 	minNeedleLen := 0
 	maxNeedleLen := 0
 	for _, needle := range needles {
@@ -43,7 +43,7 @@ func NewLogFilter(output io.Writer, replacement string, needles []string) *LogFi
 		}
 	}
 
-	redactor := &LogFilter{
+	redactor := &Redactor{
 		replacement: []byte(replacement),
 		output: output,
 
@@ -92,7 +92,7 @@ func NewLogFilter(output io.Writer, replacement string, needles []string) *LogFi
 	return redactor
 }
 
-func (redactor *LogFilter) Write(input []byte) (int, error) {
+func (redactor *Redactor) Write(input []byte) (int, error) {
 	// Current iterator index, which may be a safe offset from 0
 	cursor := redactor.offset
 
@@ -190,7 +190,7 @@ func (redactor *LogFilter) Write(input []byte) (int, error) {
 
 // Flush should be called after the final Write. This will Write() anything
 // retained in case of a partial match and reset the output buffer.
-func (redactor LogFilter) Sync() error {
+func (redactor Redactor) Sync() error {
 	_, err := redactor.output.Write(redactor.outbuf)
 	redactor.outbuf = redactor.outbuf[:0]
 	return err
