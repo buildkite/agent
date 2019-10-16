@@ -176,6 +176,8 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 
 	b.shell.Headerf("Running %s hook", name)
 
+	b.setupRedactor()
+
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
 	script, err := newHookScriptWrapper(hookPath)
@@ -1437,22 +1439,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
 
-	if sensitiveVarNames, ok := b.shell.Env.Get("BUILDKITE_REDACTED_VARS"); ok {
-		var sensitiveValues []string
-
-		for _, varName := range strings.Split(sensitiveVarNames, ",") {
-			if sensitiveValue, ok := b.shell.Env.Get(varName); ok {
-				sensitiveValues = append(sensitiveValues, sensitiveValue)
-			}
-		}
-
-		if len(sensitiveValues) > 0 {
-			redactor := NewRedactor(b.shell.Writer, "[REDACTED]", sensitiveValues)
-			defer redactor.Sync()
-
-			b.shell.Writer = redactor
-		}
-	}
+	b.setupRedactor()
 
 	var cmd []string
 	cmd = append(cmd, shell...)
@@ -1554,6 +1541,25 @@ func (b *Bootstrap) ignoredEnv() []string {
 		}
 	}
 	return ignored
+}
+
+func (b *Bootstrap) setupRedactor() {
+	if sensitiveVarNames, ok := b.shell.Env.Get("BUILDKITE_REDACTED_VARS"); ok {
+		var sensitiveValues []string
+
+		for _, varName := range strings.Split(sensitiveVarNames, ",") {
+			if sensitiveValue, ok := b.shell.Env.Get(varName); ok {
+				sensitiveValues = append(sensitiveValues, sensitiveValue)
+			}
+		}
+
+		if len(sensitiveValues) > 0 {
+			redactor := NewRedactor(b.shell.Writer, "[REDACTED]", sensitiveValues)
+			defer redactor.Sync()
+
+			b.shell.Writer = redactor
+		}
+	}
 }
 
 type pluginCheckout struct {
