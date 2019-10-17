@@ -1,9 +1,9 @@
 package bootstrap
 
 import (
-	"testing"
 	"bytes"
 	"fmt"
+	"testing"
 )
 
 func TestRedactorSingle(t *testing.T) {

@@ -16,8 +16,8 @@ type Redactor struct {
 	maxlen int
 
 	// Table of Boyer-Moore skip distances, and values to redact matching this end byte
-	table [255]struct{
-		skip int
+	table [255]struct {
+		skip    int
 		needles [][]byte
 	}
 
@@ -45,7 +45,7 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 
 	redactor := &Redactor{
 		replacement: []byte(replacement),
-		output: output,
+		output:      output,
 
 		// Linux pipes can buffer up to 65536 bytes before flushing, so there's
 		// a reasonable chance that's how much we'll get in a single Write().
@@ -62,7 +62,7 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 		// be part of a match
 		minlen: minNeedleLen,
 		maxlen: maxNeedleLen,
-		offset: minNeedleLen-1,
+		offset: minNeedleLen - 1,
 	}
 
 	// For bytes that don't appear in any of the substrings we're searching
@@ -110,7 +110,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 			cursor += skip
 
 			// Also copy any content behind the cursor which is guaranteed not
-			// to fall under a match 
+			// to fall under a match
 			confirmedTo := cursor - redactor.maxlen - 1
 			if confirmedTo > len(input) {
 				confirmedTo = len(input)
@@ -165,7 +165,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 
 				// The next end-of-string will be at least this far away so
 				// it's safe to skip forward a bit
-				cursor += redactor.minlen-1
+				cursor += redactor.minlen - 1
 				break
 			}
 		}
