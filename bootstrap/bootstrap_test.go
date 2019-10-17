@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"testing"
 
+	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,4 +22,19 @@ func TestDirForAgentName(t *testing.T) {
 	for _, test := range agentNameTests {
 		assert.Equal(t, test.expected, dirForAgentName(test.agentName))
 	}
+}
+
+func TestGetValuesToRedact(t *testing.T) {
+	t.Parallel()
+
+	redactConfig := "*_PASSWORD,*_TOKEN"
+	environment := map[string]string{
+		"BUILDKITE_PIPELINE": "unit-test",
+		"DATABASE_USERNAME": "AzureDiamond",
+		"DATABASE_PASSWORD": "hunter2",
+	}
+
+	valuesToRedact := getValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+
+	assert.Equal(t, valuesToRedact, []string{"hunter2"})
 }

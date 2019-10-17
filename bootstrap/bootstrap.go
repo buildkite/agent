@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -176,7 +177,11 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 
 	b.shell.Headerf("Running %s hook", name)
 
-	b.setupRedactor()
+	if redactor := b.setupRedactor(); redactor != nil {
+		defer redactor.Sync()
+
+		b.shell.Writer = redactor
+	}
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
@@ -1439,7 +1444,11 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
 
-	b.setupRedactor()
+	if redactor := b.setupRedactor(); redactor != nil {
+		defer redactor.Sync()
+
+		b.shell.Writer = redactor
+	}
 
 	var cmd []string
 	cmd = append(cmd, shell...)
@@ -1543,23 +1552,49 @@ func (b *Bootstrap) ignoredEnv() []string {
 	return ignored
 }
 
-func (b *Bootstrap) setupRedactor() {
-	if sensitiveVarNames, ok := b.shell.Env.Get("BUILDKITE_REDACTED_VARS"); ok {
-		var sensitiveValues []string
+// Check the redaction config and create a redactor if necessary - may return
+// nil if there's nothing to redact.
+// b.shell.Writer needs to be swapped to the returned Redactor (unless nil).
+// It's not done here so the caller can `defer redactor.Sync()`
+func (b *Bootstrap) setupRedactor() *Redactor {
+	redactVarsConfig, ok := b.shell.Env.Get("BUILDKITE_REDACTED_VARS")
+	if !ok {
+		return nil
+	}
 
-		for _, varName := range strings.Split(sensitiveVarNames, ",") {
-			if sensitiveValue, ok := b.shell.Env.Get(varName); ok {
-				sensitiveValues = append(sensitiveValues, sensitiveValue)
+	valuesToRedact := getValuesToRedact(b.shell, redactVarsConfig, b.shell.Env.ToMap())
+
+	if len(valuesToRedact) > 0 {
+		return NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+	} else {
+		return nil
+	}
+}
+
+// Given a redaction config string and an environment map, return the list of values to be redacted.
+// Lifted out of Bootstrap.setupRedactor to facilitate testing
+func getValuesToRedact(logger shell.Logger, config string, environment map[string]string) []string {
+	patterns := strings.Split(config, ",")
+
+	var valuesToRedact []string
+
+	for varName, varValue := range environment {
+		for _, pattern := range patterns {
+			matched, err := path.Match(pattern, varName)
+			if err != nil {
+				// path.ErrBadPattern is the only error returned by path.Match
+				logger.Warningf("Bad redacted vars pattern: %s", pattern)
+				continue
+			}
+
+			if matched {
+				valuesToRedact = append(valuesToRedact, varValue)
+				break // Break pattern loop, continue to next env var
 			}
 		}
-
-		if len(sensitiveValues) > 0 {
-			redactor := NewRedactor(b.shell.Writer, "[REDACTED]", sensitiveValues)
-			defer redactor.Sync()
-
-			b.shell.Writer = redactor
-		}
 	}
+
+	return valuesToRedact
 }
 
 type pluginCheckout struct {
