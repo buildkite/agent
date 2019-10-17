@@ -175,12 +175,14 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 	// In the case of line-buffered input, that means we would hold back the
 	// end of the line in a user-visible way. For this reason, we push through
 	// any line endings immediately rather than hold them back.
+	// The \r case should help to handle progress bars/spinners that use \r to
+	// overwrite the current line.
 	// Technically this means that passwords containing newlines aren't
 	// guarateed to get redacted, but who does that anyway?
 	for i := doneTo; i < len(input); i++ {
-		if input[i] == byte('\n') {
+		if input[i] == byte('\r') || input[i] == byte('\n') {
 			redactor.outbuf = append(redactor.outbuf, input[doneTo:i+1]...)
-			doneTo = i+1
+			doneTo = i + 1
 		}
 	}
 
