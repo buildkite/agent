@@ -171,6 +171,19 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 		}
 	}
 
+	// We buffer the end of the input in order to catch passwords that fall over Write boundaries.
+	// In the case of line-buffered input, that means we would hold back the
+	// end of the line in a user-visible way. For this reason, we push through
+	// any line endings immediately rather than hold them back.
+	// Technically this means that passwords containing newlines aren't
+	// guarateed to get redacted, but who does that anyway?
+	for i := doneTo; i < len(input); i++ {
+		if input[i] == byte('\n') {
+			redactor.outbuf = append(redactor.outbuf, input[doneTo:i+1]...)
+			doneTo = i+1
+		}
+	}
+
 	// Push the output buffer down
 	_, err := redactor.output.Write(redactor.outbuf)
 
