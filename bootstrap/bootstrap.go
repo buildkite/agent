@@ -1557,12 +1557,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 // b.shell.Writer needs to be swapped to the returned Redactor (unless nil).
 // It's not done here so the caller can `defer redactor.Sync()`
 func (b *Bootstrap) setupRedactor() *Redactor {
-	redactVarsConfig, ok := b.shell.Env.Get("BUILDKITE_REDACTED_VARS")
-	if !ok {
-		return nil
-	}
-
-	valuesToRedact := getValuesToRedact(b.shell, redactVarsConfig, b.shell.Env.ToMap())
+	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
 
 	if len(valuesToRedact) > 0 {
 		return NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
@@ -1573,9 +1568,7 @@ func (b *Bootstrap) setupRedactor() *Redactor {
 
 // Given a redaction config string and an environment map, return the list of values to be redacted.
 // Lifted out of Bootstrap.setupRedactor to facilitate testing
-func getValuesToRedact(logger shell.Logger, config string, environment map[string]string) []string {
-	patterns := strings.Split(config, ",")
-
+func getValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
 	var valuesToRedact []string
 
 	for varName, varValue := range environment {

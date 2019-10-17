@@ -120,6 +120,9 @@ type Config struct {
 
 	// Phases to execute, defaults to all phases
 	Phases []string
+
+	// List of environment variable globs to redact from job output
+	RedactedVars []string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

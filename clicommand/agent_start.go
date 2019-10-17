@@ -84,6 +84,7 @@ type AgentStartConfig struct {
 	Spawn                      int      `cli:"spawn"`
 	LogFormat                  string   `cli:"log-format"`
 	CancelSignal               string   `cli:"cancel-signal"`
+	RedactedVars               []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -368,6 +369,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
 			Value:  "SIGTERM",
 		},
+		cli.StringSliceFlag{
+			Name:   "redacted-vars",
+			Usage:  "Pattern of environment variable names containing sensitive values",
+			EnvVar: "BUILDKITE_REDACTED_VARS",
+			Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN"},
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -543,6 +550,7 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			Shell:                      cfg.Shell,
+			RedactedVars:               cfg.RedactedVars,
 		}
 
 		if loader.File != nil {

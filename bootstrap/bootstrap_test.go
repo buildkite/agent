@@ -27,7 +27,10 @@ func TestDirForAgentName(t *testing.T) {
 func TestGetValuesToRedact(t *testing.T) {
 	t.Parallel()
 
-	redactConfig := "*_PASSWORD,*_TOKEN"
+	redactConfig := []string{
+		"*_PASSWORD",
+		"*_TOKEN",
+	}
 	environment := map[string]string{
 		"BUILDKITE_PIPELINE": "unit-test",
 		"DATABASE_USERNAME":  "AzureDiamond",
