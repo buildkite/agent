@@ -115,7 +115,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 
 			// Also copy any content behind the cursor which is guaranteed not
 			// to fall under a match
-			confirmedTo := cursor - redactor.maxlen - 1
+			confirmedTo := cursor - redactor.maxlen
 			if confirmedTo > len(input) {
 				confirmedTo = len(input)
 			}
@@ -145,7 +145,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 				// If the candidate crosses the Write boundary, we need to
 				// concatenate the two sections to compare against
 				candidate = make([]byte, 0, len(needle))
-				candidate = append(candidate, redactor.outbuf[-startSubstr-1:]...)
+				candidate = append(candidate, redactor.outbuf[len(redactor.outbuf)+startSubstr:]...)
 				candidate = append(candidate, input[:cursor]...)
 			} else {
 				// Final case is that the start index is out of bounds, and
