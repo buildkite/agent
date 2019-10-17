@@ -1552,13 +1552,15 @@ func (b *Bootstrap) ignoredEnv() []string {
 // nil if there's nothing to redact.
 // The redactor is returned so the caller can `defer redactor.Sync()`
 func (b *Bootstrap) setupRedactor() *Redactor {
+	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+
 	// If the shell Writer is already a Redactor, don't layer another Redactor
 	// on top of it
 	if redactor, ok := b.shell.Writer.(*Redactor); ok {
+		// Still need to reset the values when re-using the Redactor
+		redactor.Reset(valuesToRedact)
 		return redactor
 	}
-
-	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
 
 	if len(valuesToRedact) > 0 {
 		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)

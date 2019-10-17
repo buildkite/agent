@@ -32,6 +32,21 @@ type Redactor struct {
 
 // Construct a new Redactor, and pre-compile the Boyer-Moore skip table
 func NewRedactor(output io.Writer, replacement string, needles []string) *Redactor {
+
+	redactor := &Redactor{
+		replacement: []byte(replacement),
+		output:      output,
+
+	}
+
+	redactor.Reset(needles)
+
+	return redactor
+}
+
+// We re-use the same Redactor between different hooks and the command
+// We need to reset and update the list of needles between each phase
+func (redactor *Redactor) Reset(needles []string) {
 	minNeedleLen := 0
 	maxNeedleLen := 0
 	for _, needle := range needles {
@@ -43,27 +58,26 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 		}
 	}
 
-	redactor := &Redactor{
-		replacement: []byte(replacement),
-		output:      output,
-
+	if redactor.outbuf == nil {
 		// Linux pipes can buffer up to 65536 bytes before flushing, so there's
 		// a reasonable chance that's how much we'll get in a single Write().
 		// maxNeedleLen is added since we may retain that many bytes to handle
 		// matches crossing Write boundaries.
 		// It's a reasonable starting capacity which hopefully means we don't
 		// have to reallocate the array, but append() will grow it if necessary
-		outbuf: make([]byte, 0, 65536+maxNeedleLen),
-
-		// Since Boyer-Moore looks for the end of substrings, we can safely offset
-		// processing by the length of the shortest string we're checking for
-		// Since Boyer-Moore looks for the end of substrings, only bytes further
-		// behind the iterator than the longest search string are guaranteed to not
-		// be part of a match
-		minlen: minNeedleLen,
-		maxlen: maxNeedleLen,
-		offset: minNeedleLen - 1,
+		redactor.outbuf = make([]byte, 0, 65536+maxNeedleLen)
+	} else {
+		redactor.outbuf = redactor.outbuf[:0]
 	}
+
+	// Since Boyer-Moore looks for the end of substrings, we can safely offset
+	// processing by the length of the shortest string we're checking for
+	// Since Boyer-Moore looks for the end of substrings, only bytes further
+	// behind the iterator than the longest search string are guaranteed to not
+	// be part of a match
+	redactor.minlen = minNeedleLen
+	redactor.maxlen = maxNeedleLen
+	redactor.offset = minNeedleLen - 1
 
 	// For bytes that don't appear in any of the substrings we're searching
 	// for, it's safe to skip forward the length of the shortest search
@@ -71,6 +85,7 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 	// Start by setting this as a default for all bytes
 	for i := range redactor.table {
 		redactor.table[i].skip = minNeedleLen
+		redactor.table[i].needles = nil
 	}
 
 	for _, needle := range needles {
@@ -89,7 +104,6 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 		}
 	}
 
-	return redactor
 }
 
 func (redactor *Redactor) Write(input []byte) (int, error) {
