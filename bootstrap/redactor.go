@@ -137,11 +137,11 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 			if startSubstr >= 0 {
 				// If the candidate string falls entirely within input, then just slice into input
 				candidate = input[startSubstr:cursor]
-			} else if -startSubstr < len(redactor.outbuf) {
+			} else if -startSubstr <= len(redactor.outbuf) {
 				// If the candidate crosses the Write boundary, we need to
 				// concatenate the two sections to compare against
 				candidate = make([]byte, 0, len(needle))
-				candidate = append(candidate, redactor.outbuf[-startSubstr:]...)
+				candidate = append(candidate, redactor.outbuf[-startSubstr-1:]...)
 				candidate = append(candidate, input[:cursor]...)
 			} else {
 				// Final case is that the start index is out of bounds, and
@@ -184,15 +184,22 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 		}
 	}
 
-	// Push the output buffer down
-	_, err := redactor.output.Write(redactor.outbuf)
+	var err error
+	if doneTo > 0 {
+		// Push the output buffer down
+		_, err = redactor.output.Write(redactor.outbuf)
 
-	// There will probably be a segment at the end of the input which may be a
-	// partial match crossing the Write boundary. This is retained in the
-	// output buffer to compare against on the next call
-	// Flush() needs to be called after the final Write(), or this bit won't
-	// get written
-	redactor.outbuf = append(redactor.outbuf[:0], input[doneTo:]...)
+		// There will probably be a segment at the end of the input which may be a
+		// partial match crossing the Write boundary. This is retained in the
+		// output buffer to compare against on the next call
+		// Flush() needs to be called after the final Write(), or this bit won't
+		// get written
+		redactor.outbuf = append(redactor.outbuf[:0], input[doneTo:]...)
+	} else {
+		// If nothing was done, just add what we got to the buffer to be
+		// processed on the next run
+		redactor.outbuf = append(redactor.outbuf, input...)
+	}
 
 	// We can offset the next Write processing by how far cursor is ahead of
 	// the end of this input segment
