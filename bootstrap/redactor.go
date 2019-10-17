@@ -93,6 +93,10 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 }
 
 func (redactor *Redactor) Write(input []byte) (int, error) {
+	if len(input) == 0 {
+		return 0, nil
+	}
+
 	// Current iterator index, which may be a safe offset from 0
 	cursor := redactor.offset
 
@@ -212,7 +216,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 
 // Flush should be called after the final Write. This will Write() anything
 // retained in case of a partial match and reset the output buffer.
-func (redactor Redactor) Sync() error {
+func (redactor *Redactor) Sync() error {
 	_, err := redactor.output.Write(redactor.outbuf)
 	redactor.outbuf = redactor.outbuf[:0]
 	return err
