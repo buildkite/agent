@@ -178,7 +178,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	b.shell.Headerf("Running %s hook", name)
 
 	if redactor := b.setupRedactor(); redactor != nil {
-		defer redactor.Sync()
+		defer redactor.Flush()
 	}
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
@@ -1443,7 +1443,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	}
 
 	if redactor := b.setupRedactor(); redactor != nil {
-		defer redactor.Sync()
+		defer redactor.Flush()
 	}
 
 	var cmd []string
@@ -1550,7 +1550,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 
 // Check the redaction config and create a redactor if necessary - may return
 // nil if there's nothing to redact.
-// The redactor is returned so the caller can `defer redactor.Sync()`
+// The redactor is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactor() *Redactor {
 	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
 

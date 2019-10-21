@@ -230,7 +230,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 
 // Flush should be called after the final Write. This will Write() anything
 // retained in case of a partial match and reset the output buffer.
-func (redactor *Redactor) Sync() error {
+func (redactor *Redactor) Flush() error {
 	_, err := redactor.output.Write(redactor.outbuf)
 	redactor.outbuf = redactor.outbuf[:0]
 	return err
