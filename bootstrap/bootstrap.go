@@ -25,6 +25,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Minimum length of values to be redacted. Number comes from the default
+// minimum password length in Linux.
+const RedactLengthMin = 6
+
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
 // as a sub-process of the buildkite-agent and finishes at the conclusion of a job.
 // Historically (prior to v3) the bootstrap was a shell script, but was ported to
@@ -1586,7 +1590,11 @@ func getValuesToRedact(logger shell.Logger, patterns []string, environment map[s
 			}
 
 			if matched {
-				valuesToRedact = append(valuesToRedact, varValue)
+				if len(varValue) < RedactLengthMin {
+					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
+				} else {
+					valuesToRedact = append(valuesToRedact, varValue)
+				}
 				break // Break pattern loop, continue to next env var
 			}
 		}
