@@ -1556,6 +1556,12 @@ func (b *Bootstrap) ignoredEnv() []string {
 // nil if there's nothing to redact.
 // The redactor is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactor() *Redactor {
+	if experiments.IsEnabled("output-redactor") {
+		b.shell.Commentf("Using output-redactor experiment 🧪")
+	} else {
+		return nil
+	}
+
 	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
 
 	// If the shell Writer is already a Redactor, don't layer another Redactor
