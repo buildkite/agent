@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -23,6 +24,10 @@ import (
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
 )
+
+// Minimum length of values to be redacted. Number comes from the default
+// minimum password length in Linux.
+const RedactLengthMin = 6
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
 // as a sub-process of the buildkite-agent and finishes at the conclusion of a job.
@@ -175,6 +180,10 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 
 	b.shell.Headerf("Running %s hook", name)
+
+	if redactor := b.setupRedactor(); redactor != nil {
+		defer redactor.Flush()
+	}
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
@@ -1437,6 +1446,10 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
 
+	if redactor := b.setupRedactor(); redactor != nil {
+		defer redactor.Flush()
+	}
+
 	var cmd []string
 	cmd = append(cmd, shell...)
 	cmd = append(cmd, cmdToExec)
@@ -1537,6 +1550,63 @@ func (b *Bootstrap) ignoredEnv() []string {
 		}
 	}
 	return ignored
+}
+
+// Check the redaction config and create a redactor if necessary - may return
+// nil if there's nothing to redact.
+// The redactor is returned so the caller can `defer redactor.Flush()`
+func (b *Bootstrap) setupRedactor() *Redactor {
+	if experiments.IsEnabled("output-redactor") {
+		b.shell.Commentf("Using output-redactor experiment 🧪")
+	} else {
+		return nil
+	}
+
+	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+
+	// If the shell Writer is already a Redactor, don't layer another Redactor
+	// on top of it
+	if redactor, ok := b.shell.Writer.(*Redactor); ok {
+		// Still need to reset the values when re-using the Redactor
+		redactor.Reset(valuesToRedact)
+		return redactor
+	}
+
+	if len(valuesToRedact) > 0 {
+		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		b.shell.Writer = redactor
+		return redactor
+	} else {
+		return nil
+	}
+}
+
+// Given a redaction config string and an environment map, return the list of values to be redacted.
+// Lifted out of Bootstrap.setupRedactor to facilitate testing
+func getValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
+	var valuesToRedact []string
+
+	for varName, varValue := range environment {
+		for _, pattern := range patterns {
+			matched, err := path.Match(pattern, varName)
+			if err != nil {
+				// path.ErrBadPattern is the only error returned by path.Match
+				logger.Warningf("Bad redacted vars pattern: %s", pattern)
+				continue
+			}
+
+			if matched {
+				if len(varValue) < RedactLengthMin {
+					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
+				} else {
+					valuesToRedact = append(valuesToRedact, varValue)
+				}
+				break // Break pattern loop, continue to next env var
+			}
+		}
+	}
+
+	return valuesToRedact
 }
 
 type pluginCheckout struct {

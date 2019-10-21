@@ -80,6 +80,7 @@ type BootstrapConfig struct {
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
+	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -288,6 +289,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The specific phases to execute. The order they're defined is is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
+		cli.StringSliceFlag{
+			Name:   "redacted-vars",
+			Usage:  "Pattern of environment variable names containing sensitive values",
+			EnvVar: "BUILDKITE_REDACTED_VARS",
+		},
 		DebugFlag,
 		ExperimentsFlag,
 		ProfileFlag,
@@ -371,6 +377,7 @@ var BootstrapCommand = cli.Command{
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
 			Phases:                       cfg.Phases,
+			RedactedVars:                 cfg.RedactedVars,
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())

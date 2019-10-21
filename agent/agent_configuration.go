@@ -28,4 +28,5 @@ type AgentConfiguration struct {
 	CancelGracePeriod          int
 	Shell                      string
 	Profile                    string
+	RedactedVars               []string
 }
