@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/buildkite/agent/logger"
@@ -87,11 +88,18 @@ func (a *ArtifactDownloader) Download() error {
 
 			p.Spawn(func() {
 				var err error
+				var path string = artifact.Path
+
+				// Convert windows paths to slashes, otherwise we get a literal
+				// download of "dir/dir/file" vs sub-directories on non-windows agents
+				if runtime.GOOS != `windows` {
+					path = strings.Replace(path, `\`, `/`, -1)
+				}
 
 				// Handle downloading from S3, GS, or RT
 				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
 					err = NewS3Downloader(a.logger, S3DownloaderConfig{
-						Path:        artifact.Path,
+						Path:        path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
@@ -99,7 +107,7 @@ func (a *ArtifactDownloader) Download() error {
 					}).Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
 					err = NewGSDownloader(a.logger, GSDownloaderConfig{
-						Path:        artifact.Path,
+						Path:        path,
 						Bucket:      artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
@@ -107,7 +115,7 @@ func (a *ArtifactDownloader) Download() error {
 					}).Start()
 				} else if strings.HasPrefix(artifact.UploadDestination, "rt://") {
 					err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
-						Path:        artifact.Path,
+						Path:        path,
 						Repository:  artifact.UploadDestination,
 						Destination: downloadDestination,
 						Retries:     5,
@@ -116,7 +124,7 @@ func (a *ArtifactDownloader) Download() error {
 				} else {
 					err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
 						URL:         artifact.URL,
-						Path:        artifact.Path,
+						Path:        path,
 						Destination: downloadDestination,
 						Retries:     5,
 						DebugHTTP:   a.conf.DebugHTTP,
