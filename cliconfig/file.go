@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/buildkite/agent/utils"
+	"github.com/buildkite/agent/v3/utils"
 )
 
 type File struct {

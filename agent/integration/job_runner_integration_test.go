@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/buildkite/agent/agent"
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/metrics"
+	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/bintest"
 )
 

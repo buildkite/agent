@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/agent/plugin"
-	"github.com/buildkite/agent/bootstrap/shell"
-	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/experiments"
-	"github.com/buildkite/agent/process"
-	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/v3/agent/plugin"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
 )

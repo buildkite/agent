@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"testing"
 
-	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/stretchr/testify/assert"
 )
 

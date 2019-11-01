@@ -1,6 +1,6 @@
 package api
 
-//go:generate interfacer -for github.com/buildkite/agent/api.Client -as agent.APIClient -o ../agent/api.go
+//go:generate interfacer -for github.com/buildkite/agent/v3/api.Client -as agent.APIClient -o ../agent/api.go
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-querystring/query"
 )
 

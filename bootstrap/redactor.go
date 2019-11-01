@@ -36,7 +36,6 @@ func NewRedactor(output io.Writer, replacement string, needles []string) *Redact
 	redactor := &Redactor{
 		replacement: []byte(replacement),
 		output:      output,
-
 	}
 
 	redactor.Reset(needles)

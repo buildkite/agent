@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/v3/env"
 )
 
 func TestEnvVarsAreMappedToConfig(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/stdin"
+	"github.com/buildkite/agent/v3/stdin"
 )
 
 // Derived from TestStatStdin in https://golang.org/src/os/os_test.go

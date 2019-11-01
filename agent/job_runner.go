@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/experiments"
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/metrics"
-	"github.com/buildkite/agent/process"
-	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/metrics"
+	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/shellwords"
 )
 

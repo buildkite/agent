@@ -4,9 +4,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/cliconfig"
-	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/retry"
 	"github.com/urfave/cli"
 )
 

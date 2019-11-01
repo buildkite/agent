@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 )
 
 func TestAnsiLogger(t *testing.T) {

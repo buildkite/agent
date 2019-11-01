@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 func VersionDump(_ logger.Logger) (string, error) {

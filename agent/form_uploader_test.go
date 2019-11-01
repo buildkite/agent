@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 func TestFormUploading(t *testing.T) {

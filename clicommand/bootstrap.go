@@ -8,10 +8,10 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/buildkite/agent/bootstrap"
-	"github.com/buildkite/agent/cliconfig"
-	"github.com/buildkite/agent/experiments"
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/bootstrap"
+	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
 )
 

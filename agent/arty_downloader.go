@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 type ArtifactoryDownloaderConfig struct {
@@ -80,7 +80,7 @@ func (d ArtifactoryDownloader) Start() error {
 
 func (d ArtifactoryDownloader) RepositoryFileLocation() string {
 	if d.RepositoryPath() != "" {
-		return path.Join(strings.TrimSuffix(d.RepositoryPath(), "/"),"/" , strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/"))
+		return path.Join(strings.TrimSuffix(d.RepositoryPath(), "/"), "/", strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/"))
 	} else {
 		return d.conf.Path
 	}

@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/mime"
-	"github.com/buildkite/agent/pool"
-	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/mime"
+	"github.com/buildkite/agent/v3/pool"
+	"github.com/buildkite/agent/v3/retry"
 	zglob "github.com/mattn/go-zglob"
 )
 
@@ -130,7 +130,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			// If a glob is absolute, we need to make it relative to the root so that
 			// it can be combined with the download destination to make a valid path.
 			// This is possibly weird and crazy, this logic dates back to
-			// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
+			// https://github.com/buildkite/agent/v3/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
 			// from 2014, so I'm replicating it here to avoid breaking things
 			if filepath.IsAbs(globPath) {
 				if runtime.GOOS == "windows" {

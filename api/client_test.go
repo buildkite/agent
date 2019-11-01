@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 func TestRegisteringAndConnectingClient(t *testing.T) {

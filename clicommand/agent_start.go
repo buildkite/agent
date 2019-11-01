@@ -10,13 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/agent"
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/cliconfig"
-	"github.com/buildkite/agent/experiments"
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/metrics"
-	"github.com/buildkite/agent/process"
+	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/metrics"
+	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
 )
@@ -605,7 +605,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
-		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
+		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent/v3")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
 		if agentConf.ConfigPath != "" {

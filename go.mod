@@ -1,4 +1,6 @@
-module github.com/buildkite/agent
+module github.com/buildkite/agent/v3
+
+go 1.13
 
 require (
 	cloud.google.com/go v0.0.0-20170217213217-65216237311a
@@ -8,6 +10,7 @@ require (
 	github.com/buildkite/interpolate v0.0.0-20171114090218-3a807e47135c
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.0
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e // indirect
@@ -26,7 +29,6 @@ require (
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d // indirect
 	github.com/smartystreets/goconvey v0.0.0-20180222194500-ef6db91d284a // indirect
-	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2
 	golang.org/x/crypto v0.0.0-20170825220121-81e90905daef
@@ -38,5 +40,3 @@ require (
 	google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
-
-go 1.13

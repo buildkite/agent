@@ -4,7 +4,7 @@ import "runtime"
 
 // You can overridden buildVersion at compile time by using:
 //
-//  go run -ldflags "-X github.com/buildkite/agent/agent.buildVersion abc" *.go --version
+//  go run -ldflags "-X github.com/buildkite/agent/v3/agent.buildVersion abc" *.go --version
 //
 // On CI, the binaries are always build with the buildVersion variable set.
 

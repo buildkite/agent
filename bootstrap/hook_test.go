@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/bootstrap/shell"
-	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/env"
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {

@@ -2,8 +2,6 @@ cloud.google.com/go v0.0.0-20170217213217-65216237311a h1:jCsBzsjojdK5UhWQfZurxl
 cloud.google.com/go v0.0.0-20170217213217-65216237311a/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895 h1:dmc/C8bpE5VkQn65PNbbyACDC8xw8Hpp/NEurdPmQDQ=
 github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
-github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc h1:Qs3YRJ9WQ1+Et+uoXBVfKUBzdn9FGJiH98UgfBIiqzk=
-github.com/ErikDubbelboer/gspt v0.0.0-20180711091504-e39e726e09cc/go.mod h1:01yGrV5aDnYieX2hSBoKGMaRiqHvnLoUy4ngWGZ/owg=
 github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5 h1:raOAL5Uz269DesNi7ejlUuwQY2fyvRrBYuzRWHkl+Wo=
 github.com/aws/aws-sdk-go v0.0.0-20180831223016-2a4034064ca5/go.mod h1:mFuSZ37Z9YOHbQEwBWztmVzqXrEkub65tZoCYDt7FT0=
 github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0 h1:UYcAVM2IdwHl3wTyyB2HfZc2MEVQrUqw/OkbwHlsy30=
@@ -72,9 +70,6 @@ github.com/smartystreets/assertions v0.0.0-20180927180507-b2de0cb4f26d/go.mod h1
 github.com/smartystreets/goconvey v0.0.0-20180222194500-ef6db91d284a h1:JSvGDIbmil4Ui/dDdFBExb7/cmkNjyX5F97oglmvCDo=
 github.com/smartystreets/goconvey v0.0.0-20180222194500-ef6db91d284a/go.mod h1:XDJAKZRPZ1CvBcN2aX5YOUTYGHki24fSF0Iv48Ibg0s=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
-github.com/stretchr/objx v0.2.0/go.mod h1:qt09Ya8vawLte6SNmTgCsAVtYtaKzEcn8ATUoHMkEqE=
-github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
-github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/urfave/cli v0.0.0-20180226030253-8e01ec4cd3e2 h1:98aNRvvwi7jK4ObVo/OnEKs9hw1bZ8JQNpwlB21ILD0=

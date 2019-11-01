@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 type ArtifactSearcher struct {
