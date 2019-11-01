@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 type ArtifactoryDownloaderConfig struct {

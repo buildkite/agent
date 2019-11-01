@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/utils"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/utils"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )

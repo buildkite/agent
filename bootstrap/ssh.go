@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/bootstrap/shell"
-	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/retry"
 )
 
 var (

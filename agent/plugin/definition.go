@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/buildkite/agent/yamltojson"
+	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/yaml"
 	"github.com/qri-io/jsonschema"
 )

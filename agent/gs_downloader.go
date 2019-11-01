@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 	storage "google.golang.org/api/storage/v1"
 )
 

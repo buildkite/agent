@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/process"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/process"
 )
 
 const longTestOutput = `+++ My header

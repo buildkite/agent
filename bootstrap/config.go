@@ -3,7 +3,7 @@ package bootstrap
 import (
 	"reflect"
 
-	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/v3/env"
 )
 
 // Config provides the configuration for the Bootstrap. Some of the keys are

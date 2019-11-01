@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 )
 
 type headerTimesStreamer struct {

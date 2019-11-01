@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh/knownhosts"

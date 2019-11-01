@@ -9,8 +9,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/pool"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/pool"
 )
 
 type ArtifactDownloaderConfig struct {

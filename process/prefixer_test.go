@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/agent/process"
+	"github.com/buildkite/agent/v3/process"
 )
 
 func TestPrefixer(t *testing.T) {

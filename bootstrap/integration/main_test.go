@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/buildkite/agent/agent"
-	"github.com/buildkite/agent/clicommand"
-	"github.com/buildkite/agent/experiments"
+	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/clicommand"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest"
 	"github.com/urfave/cli"
 )

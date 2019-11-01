@@ -1,7 +1,7 @@
 package agent
 
 import (
-	"github.com/buildkite/agent/api"
+	"github.com/buildkite/agent/v3/api"
 )
 
 type Uploader interface {

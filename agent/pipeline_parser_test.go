@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/bootstrap/shell"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/pkg/errors"
 )
 
@@ -82,7 +82,7 @@ func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
 }
 
 // runDockerCommand executes a command inside a docker container that is built as needed
-// Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L439
+// Ported from https://github.com/buildkite/agent/v3/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L439
 func runDockerCommand(sh *shell.Shell, cmd []string) error {
 	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
 	dockerContainer := fmt.Sprintf("buildkite_%s_container", jobId)
@@ -110,7 +110,7 @@ func runDockerCommand(sh *shell.Shell, cmd []string) error {
 }
 
 // runDockerComposeCommand executes a command with docker-compose
-// Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L462
+// Ported from https://github.com/buildkite/agent/v3/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L462
 func runDockerComposeCommand(sh *shell.Shell, cmd []string) error {
 	composeContainer, _ := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
 	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)

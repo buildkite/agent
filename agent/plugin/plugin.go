@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/buildkite/agent/env"
+	"github.com/buildkite/agent/v3/env"
 )
 
 type Plugin struct {

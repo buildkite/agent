@@ -11,7 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/agent/experiments"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest"
 )
 

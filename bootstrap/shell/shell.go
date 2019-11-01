@@ -15,9 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/process"
+	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"

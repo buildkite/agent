@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/buildkite/agent/env"
-	"github.com/buildkite/agent/yamltojson"
+	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/interpolate"
 
 	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice

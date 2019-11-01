@@ -1,9 +1,9 @@
 package clicommand
 
 import (
-	"github.com/buildkite/agent/agent"
-	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/cliconfig"
+	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/urfave/cli"
 )
 

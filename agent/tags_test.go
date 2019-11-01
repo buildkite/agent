@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/logger"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 )
 
