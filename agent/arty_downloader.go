@@ -80,7 +80,7 @@ func (d ArtifactoryDownloader) Start() error {
 
 func (d ArtifactoryDownloader) RepositoryFileLocation() string {
 	if d.RepositoryPath() != "" {
-		return path.Join(strings.TrimSuffix(d.RepositoryPath(), "/"),"/" , strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/"))
+		return path.Join(strings.TrimSuffix(d.RepositoryPath(), "/"), "/", strings.TrimPrefix(filepath.ToSlash(d.conf.Path), "/"))
 	} else {
 		return d.conf.Path
 	}
