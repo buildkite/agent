@@ -1,4 +1,6 @@
-module github.com/buildkite/agent
+module github.com/buildkite/agent/v3
+
+go 1.13
 
 require (
 	cloud.google.com/go v0.0.0-20170217213217-65216237311a
@@ -38,5 +40,3 @@ require (
 	google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441 // indirect
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 )
-
-go 1.13
