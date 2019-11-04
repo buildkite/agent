@@ -1435,7 +1435,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		cmdToExec = fmt.Sprintf(".%c%s", os.PathSeparator, scriptPath)
 	} else {
 		b.shell.Headerf("Running commands")
-		cmdToExec = b.Command
+		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, b.Command)
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
