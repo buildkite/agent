@@ -1435,7 +1435,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		cmdToExec = fmt.Sprintf(".%c%s", os.PathSeparator, scriptPath)
 	} else {
 		b.shell.Headerf("Running commands")
-		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, b.Command)
+		cmdToExec = b.Command
 	}
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
@@ -1444,6 +1444,11 @@ func (b *Bootstrap) defaultCommandPhase() error {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
+	} else if !commandIsScript {
+
+		// If we aren't running a script and we aren't running the command in our deprecated docker integration
+		// this adds a trap to ensure that an intermediate shell doesn't swallow signals from cancellation
+		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, cmdToExec)
 	}
 
 	if redactor := b.setupRedactor(); redactor != nil {
