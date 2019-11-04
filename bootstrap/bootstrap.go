@@ -1444,10 +1444,12 @@ func (b *Bootstrap) defaultCommandPhase() error {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
-	} else if !commandIsScript {
+	}
 
-		// If we aren't running a script and we aren't running the command in our deprecated docker integration
-		// this adds a trap to ensure that an intermediate shell doesn't swallow signals from cancellation
+	// If we aren't running a script, try and detect if we are using a posix shell
+	// and if so add a trap so that the intermediate shell doesn't swallow signals
+	// from cancellation
+	if !commandIsScript && isPosixShell(shell) {
 		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, cmdToExec)
 	}
 
@@ -1466,6 +1468,22 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	}
 
 	return b.shell.RunWithoutPrompt(cmd[0], cmd[1:]...)
+}
+
+// isPosixShell attempts to detect posix shells (e.g bash, sh, zsh )
+func isPosixShell(shell []string) bool {
+	bin := filepath.Base(shell[0])
+
+	if filepath.Base(shell[0]) == `env` {
+		bin = filepath.Base(shell[1])
+	}
+
+	switch bin {
+	case `bash`, `sh`, `zsh`, `ksh`:
+		return true
+	default:
+		return false
+	}
 }
 
 func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
