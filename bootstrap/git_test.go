@@ -33,7 +33,7 @@ func TestParsingGittableRepositoryFromGitURLs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, `ssh://git@github.com/buildkite/agent/v3.git`, u.String())
+	assert.Equal(t, `ssh://git@github.com/buildkite/agent.git`, u.String())
 	assert.Equal(t, `github.com`, u.Host)
 }
 
