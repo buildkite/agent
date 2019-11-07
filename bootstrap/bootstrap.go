@@ -1479,7 +1479,7 @@ func isPosixShell(shell []string) bool {
 	}
 
 	switch bin {
-	case `bash`, `sh`, `zsh`, `ksh`:
+	case `bash`, `sh`, `zsh`, `ksh`, `dash`:
 		return true
 	default:
 		return false
