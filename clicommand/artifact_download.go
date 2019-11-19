@@ -26,6 +26,21 @@ Example:
    This will search across all the artifacts for the build with files that match that part.
    The first argument is the search query, and the second argument is the download destination.
 
+   The exact location to which an artifact will be downloaded will be the concatenation of the
+   specified download destination and the path to the artifact when it was uploaded. Artifacts
+   uploaded with an absolute path will be downloaded to the exact same absolute path, ignoring the
+   download destination. Examples:
+
+   $ buildkite-agent artifact upload "pkg/archive.tar.gz"
+   $ buildkite-agent artifact download "pkg/*.tar.gz" "$WORKDIR"
+
+   will result in the artifact being downloaded to "$WORKDIR/pkg/archive.tar.gz".
+
+   $ buildkite-agent artifact upload "/tmp/pkg/*.tar.gz"
+   $ buildkite-agent artifact download "/tmp/pkg/*.tar.gz" "$WORKDIR"
+
+   will instead result in the artifact to be downloaded to "/tmp/pkg/archive.tar.gz".
+
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the particular job you want to download the artifact from:
 
