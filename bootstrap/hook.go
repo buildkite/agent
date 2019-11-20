@@ -50,10 +50,14 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	var err error
 	var scriptFileName string = `buildkite-agent-bootstrap-hook-runner`
 	var isBashHook bool
+	var isPwshHook bool
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
 	// we probably need a .bat extension
-	if filepath.Ext(hookPath) == "" {
+	if filepath.Ext(hookPath) == ".ps1" {
+		isPwshHook = true
+		scriptFileName += ".bat"
+	} else if filepath.Ext(hookPath) == "" {
 		isBashHook = true
 	} else if runtime.GOOS == "windows" {
 		scriptFileName += ".bat"
@@ -96,11 +100,20 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 
 	// Create the hook runner code
 	var script string
-	if runtime.GOOS == "windows" && !isBashHook {
+	if runtime.GOOS == "windows" && !isBashHook && !isPwshHook {
 		script = "@echo off\n" +
 			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
 			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
 			"CALL \"" + absolutePathToHook + "\"\n" +
+			"SET " + hookExitStatusEnv + "=!ERRORLEVEL!\n" +
+			"SET " + hookWorkingDirEnv + "=%CD%\n" +
+			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
+			"EXIT %" + hookExitStatusEnv + "%"
+	} else if runtime.GOOS == "windows" && isPwshHook {
+		script = "@echo off\n" +
+			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
+			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
+			"powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File \"" + absolutePathToHook + "\"\n" +
 			"SET " + hookExitStatusEnv + "=!ERRORLEVEL!\n" +
 			"SET " + hookWorkingDirEnv + "=%CD%\n" +
 			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
