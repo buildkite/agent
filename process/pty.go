@@ -1,4 +1,4 @@
-// +build !windows
+// +build linux,netbsd,freebsd,dragonfly darwin,386 darwin,amd64 openbsd,386 openbsd,amd64
 
 package process
 
