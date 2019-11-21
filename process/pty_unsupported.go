@@ -1,3 +1,6 @@
+// These are all the os/arch pairs that github.com/kr/pty fails compilation under.
+// pty.go has the complement of this list.
+
 // +build !linux,!netbsd,!freebsd,!dragonfly
 // +build !darwin !386
 // +build !darwin !amd64
