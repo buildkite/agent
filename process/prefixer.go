@@ -3,9 +3,15 @@ package process
 import (
 	"bytes"
 	"io"
-	"log"
+	"regexp"
 	"unicode/utf8"
 )
+
+// This regex matches "Erase in Line" escape characters:
+// [K Clear from cursor to the end of the line
+// [1K Clear from cursor to beginning of the line
+// [2K Clear entire line
+var lineBreakEscapeCharRegex = regexp.MustCompile(`^\[[012]?K`)
 
 type Prefixer struct {
 	w       io.Writer
@@ -50,11 +56,11 @@ func (p *Prefixer) Write(data []byte) (n int, err error) {
 			out = append(out, []byte(p.f())...)
 			offset = offset + next + 1
 		case '\x1b':
-			// match a clear line escape
-			if bytes.HasPrefix(data[offset+next+1:], []byte("[K")) {
-				out = append(out, data[offset:offset+next+3]...)
+			match := lineBreakEscapeCharRegex.Find(data[offset+next+1:])
+			if match != nil {
+				out = append(out, data[offset:offset+next+len(match)+1]...)
 				out = append(out, []byte(p.f())...)
-				offset = offset + next + 3
+				offset = offset + next + len(match) + 1
 			} else {
 				out = append(out, data[offset:offset+next+1]...)
 				offset = offset + next + 1
@@ -67,7 +73,6 @@ func (p *Prefixer) Write(data []byte) (n int, err error) {
 
 	// add any left overs
 	if offset < len(data) {
-		log.Printf("Found leftovers %q", data[offset:])
 		out = append(out, data[offset:]...)
 	}
 
