@@ -3,44 +3,44 @@ package process_test
 import (
 	"bytes"
 	"fmt"
-	"reflect"
-	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/buildkite/agent/v3/process"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestPrefixer(t *testing.T) {
-	var lineCounter int32
-	var input string = "blah\nblergh\n\nnope\n"
-	var out = &bytes.Buffer{}
+	for _, tc := range []struct {
+		input, expected string
+	}{
+		{"alpacas\nllamas\n", "#1: alpacas\n#2: llamas\n#3: "},
+		{"blah\x1b[Kbler\x1bgh", "#1: blah\x1b[K#2: bler\x1bgh"},
+		{"blah\x1b[2Kblergh", "#1: blah\x1b[2K#2: blergh"},
+		{"blah\x1b[1B\x1b[1A\x1b[2Kblergh", "#1: blah\x1b[1B\x1b[1A\x1b[2K#2: blergh"},
+	} {
+		tc := tc
+		t.Run("", func(tt *testing.T) {
+			tt.Parallel()
 
-	pw := process.NewPrefixer(out, func() string {
-		lineNumber := atomic.AddInt32(&lineCounter, 1)
-		return fmt.Sprintf("#%d: ", lineNumber)
-	})
+			var lineCounter int32
+			var out = &bytes.Buffer{}
 
-	n, err := pw.Write([]byte(input))
-	if err != nil {
-		t.Fatal(err)
-	}
+			pw := process.NewPrefixer(out, func() string {
+				lineNumber := atomic.AddInt32(&lineCounter, 1)
+				return fmt.Sprintf("#%d: ", lineNumber)
+			})
 
-	if expected := len(input); n != expected {
-		t.Fatalf("Short write: %d vs expected %d", n, expected)
-	}
+			n, err := pw.Write([]byte(tc.input))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	lines := strings.Split(out.String(), "\n")
+			if expected := len(tc.input); n != expected {
+				tt.Fatalf("Short write: %d vs expected %d", n, expected)
+			}
 
-	var expected = []string{
-		`#1: blah`,
-		`#2: blergh`,
-		`#3: `,
-		`#4: nope`,
-		`#5: `,
-	}
-
-	if !reflect.DeepEqual(expected, lines) {
-		t.Fatalf("Lines was unexpected:\nWanted: %v\nGot: %v\n", expected, lines)
+			assert.Equal(tt, tc.expected, out.String())
+		})
 	}
 }
