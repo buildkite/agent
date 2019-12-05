@@ -1446,6 +1446,13 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
 	}
 
+	// If we aren't running a script, try and detect if we are using a posix shell
+	// and if so add a trap so that the intermediate shell doesn't swallow signals
+	// from cancellation
+	if !commandIsScript && isPosixShell(shell) {
+		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, cmdToExec)
+	}
+
 	if redactor := b.setupRedactor(); redactor != nil {
 		defer redactor.Flush()
 	}
@@ -1461,6 +1468,22 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	}
 
 	return b.shell.RunWithoutPrompt(cmd[0], cmd[1:]...)
+}
+
+// isPosixShell attempts to detect posix shells (e.g bash, sh, zsh )
+func isPosixShell(shell []string) bool {
+	bin := filepath.Base(shell[0])
+
+	if filepath.Base(shell[0]) == `env` {
+		bin = filepath.Base(shell[1])
+	}
+
+	switch bin {
+	case `bash`, `sh`, `zsh`, `ksh`, `dash`:
+		return true
+	default:
+		return false
+	}
 }
 
 func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
