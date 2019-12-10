@@ -29,4 +29,5 @@ type AgentConfiguration struct {
 	Shell                      string
 	Profile                    string
 	RedactedVars               []string
+	AcquireJob                 string
 }

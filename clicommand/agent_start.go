@@ -48,6 +48,7 @@ type AgentStartConfig struct {
 	Config                     string   `cli:"config"`
 	Name                       string   `cli:"name"`
 	Priority                   string   `cli:"priority"`
+	AcquireJob                 string   `cli:"acquire-job"`
 	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout int      `cli:"disconnect-after-idle-timeout"`
 	BootstrapScript            string   `cli:"bootstrap-script" normalize:"commandpath"`
@@ -172,6 +173,12 @@ var AgentStartCommand = cli.Command{
 			Value:  "",
 			Usage:  "The priority of the agent (higher priorities are assigned work first)",
 			EnvVar: "BUILDKITE_AGENT_PRIORITY",
+		},
+		cli.StringFlag{
+			Name:   "acquire-job",
+			Value:  "",
+			Usage:  "Start this agent and only run the specified job, disconnecting after it's finished",
+			EnvVar: "BUILDKITE_AGENT_ACQUIRE_JOB",
 		},
 		cli.BoolFlag{
 			Name:   "disconnect-after-job",
@@ -579,6 +586,7 @@ var AgentStartCommand = cli.Command{
 			CancelGracePeriod:          cfg.CancelGracePeriod,
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
+			AcquireJob:                 cfg.AcquireJob,
 		}
 
 		if loader.File != nil {
@@ -666,6 +674,16 @@ var AgentStartCommand = cli.Command{
 				WaitForEC2TagsTimeout:    ec2TagTimeout,
 				WaitForGCPLabelsTimeout:  gcpLabelsTimeout,
 			}),
+			// We only want this agent to be ingored in Buildkite
+			// dispatches if it's being booted to acquire a
+			// specific job.
+			IgnoreInDispatches: cfg.AcquireJob != "",
+		}
+
+		// Spawning multiple agents doesn't work if the agent is being
+		// booted in acquisition mode
+		if cfg.Spawn > 1 && cfg.AcquireJob != "" {
+			l.Fatal("You can't spawn multiple agents and acquire a job at the same time")
 		}
 
 		var workers []*agent.AgentWorker

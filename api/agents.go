@@ -2,17 +2,18 @@ package api
 
 // AgentRegisterRequest is a call to register on the Buildkite Agent API
 type AgentRegisterRequest struct {
-	Name              string   `json:"name"`
-	Hostname          string   `json:"hostname"`
-	OS                string   `json:"os"`
-	Arch              string   `json:"arch"`
-	ScriptEvalEnabled bool     `json:"script_eval_enabled"`
-	Priority          string   `json:"priority,omitempty"`
-	Version           string   `json:"version"`
-	Build             string   `json:"build"`
-	Tags              []string `json:"meta_data"`
-	PID               int      `json:"pid,omitempty"`
-	MachineID         string   `json:"machine_id,omitempty"`
+	Name               string   `json:"name"`
+	Hostname           string   `json:"hostname"`
+	OS                 string   `json:"os"`
+	Arch               string   `json:"arch"`
+	ScriptEvalEnabled  bool     `json:"script_eval_enabled"`
+	IgnoreInDispatches bool     `json:"ignore_in_dispatches"`
+	Priority           string   `json:"priority,omitempty"`
+	Version            string   `json:"version"`
+	Build              string   `json:"build"`
+	Tags               []string `json:"meta_data"`
+	PID                int      `json:"pid,omitempty"`
+	MachineID          string   `json:"machine_id,omitempty"`
 }
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
