@@ -156,7 +156,7 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 		// there's really no point in letting the idle monitor know
 		// we're busy, but it's probably a good thing to do for good
 		// measure.
-		//idleMonitor.MarkBusy(a.agent.UUID)
+		idleMonitor.MarkBusy(a.agent.UUID)
 
 		return a.AcquireAndRunJob(a.agentConfiguration.AcquireJob)
 	} else {
