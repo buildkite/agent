@@ -56,7 +56,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	// we probably need a .bat extension
 	if filepath.Ext(hookPath) == ".ps1" {
 		isPwshHook = true
-		scriptFileName += ".bat"
+		scriptFileName += ".ps1"
 	} else if filepath.Ext(hookPath) == "" {
 		isBashHook = true
 	} else if runtime.GOOS == "windows" {
@@ -110,14 +110,13 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
 			"EXIT %" + hookExitStatusEnv + "%"
 	} else if runtime.GOOS == "windows" && isPwshHook {
-		script = "@echo off\n" +
-			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
-			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
-			"powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File \"" + absolutePathToHook + "\"\n" +
-			"SET " + hookExitStatusEnv + "=!ERRORLEVEL!\n" +
-			"SET " + hookWorkingDirEnv + "=%CD%\n" +
-			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
-			"EXIT %" + hookExitStatusEnv + "%"
+		script = "$ErrorActionPreference = \"STOP\"" +
+			"Get-ChildItem Env: | Foreach-Object {\"$($_.Name)=$($_.Value)\"} | Set-Content \"" + h.beforeEnvFile.Name() + "\"\n" +
+			absolutePathToHook + "\n" +
+			"if ($LASTEXITCODE -eq $null) {$Env:" + hookExitStatusEnv + " = 0} else {$Env:" + hookExitStatusEnv + " = $LASTEXITCODE}\n" +
+			"$Env:" + hookWorkingDirEnv + " = $PWD | Select-Object -ExpandProperty Path\n" +
+			"Get-ChildItem Env: | Foreach-Object {\"$($_.Name)=$($_.Value)\"} | Set-Content \"" + h.afterEnvFile.Name() + "\"\n" +
+			"exit $Env:" + hookExitStatusEnv
 	} else {
 		script = "export -p > \"" + filepath.ToSlash(h.beforeEnvFile.Name()) + "\"\n" +
 			". \"" + filepath.ToSlash(absolutePathToHook) + "\"\n" +

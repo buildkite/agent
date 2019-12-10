@@ -252,6 +252,7 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 
 	var isBash = filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
 	var isWindows = runtime.GOOS == "windows"
+	var isPwsh = filepath.Ext(path) == ".ps1"
 
 	switch {
 	case isWindows && isBash:
@@ -267,9 +268,18 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		command = bashPath
 		args = []string{"-c", filepath.ToSlash(path)}
 
+	case isWindows && isPwsh:
+		if s.Debug {
+			s.Commentf("Attempting to run %s with Powershell", path)
+		}
+		command = "powershell.exe"
+		args = []string{"-file", path}
+
+
 	case !isWindows && isBash:
 		command = "/bin/bash"
 		args = []string{"-c", path}
+
 
 	default:
 		command = path
