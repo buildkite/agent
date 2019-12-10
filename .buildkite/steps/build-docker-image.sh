@@ -3,7 +3,7 @@ set -euo pipefail
 
 ## This script can be run locally like this:
 ##
-## .buildkite/steps/build-docker-image.sh (alpine|ubuntu) (image tag) (codename) (version)
+## .buildkite/steps/build-docker-image.sh (alpine|ubuntu|centos) (image tag) (codename) (version)
 ## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 ##
 ## You can then publish that image with
@@ -54,7 +54,7 @@ codename="${3:-}"
 version="${4:-}"
 push="${PUSH_IMAGE:-true}"
 
-if [[ ! "$variant" =~ ^(alpine|ubuntu)$ ]] ; then
+if [[ ! "$variant" =~ ^(alpine|ubuntu|centos)$ ]] ; then
   echo "Unknown docker variant $variant"
   exit 1
 fi
@@ -88,6 +88,9 @@ alpine)
   ;;
 ubuntu)
   build_docker_image "$image_tag" "packaging/docker/ubuntu-linux"
+  ;;
+centos)
+  build_docker_image "$image_tag" "packaging/docker/centos-linux"
   ;;
 *)
   echo "Unknown variant $variant"
