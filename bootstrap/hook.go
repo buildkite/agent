@@ -110,7 +110,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
 			"EXIT %" + hookExitStatusEnv + "%"
 	} else if runtime.GOOS == "windows" && isPwshHook {
-		script = "$ErrorActionPreference = \"STOP\"" +
+		script = "$ErrorActionPreference = \"STOP\"\n" +
 			"Get-ChildItem Env: | Foreach-Object {\"$($_.Name)=$($_.Value)\"} | Set-Content \"" + h.beforeEnvFile.Name() + "\"\n" +
 			absolutePathToHook + "\n" +
 			"if ($LASTEXITCODE -eq $null) {$Env:" + hookExitStatusEnv + " = 0} else {$Env:" + hookExitStatusEnv + " = $LASTEXITCODE}\n" +
