@@ -3,7 +3,7 @@ set -euo pipefail
 
 ## This script can be run locally like this:
 ##
-## .buildkite/steps/publish-docker-image.sh (alpine|ubuntu) imagename (stable|experimental|unstable) <version> <build>
+## .buildkite/steps/publish-docker-image.sh (alpine|ubuntu|centos) imagename (stable|experimental|unstable) <version> <build>
 ## .buildkite/steps/publish-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 
 dry_run() {

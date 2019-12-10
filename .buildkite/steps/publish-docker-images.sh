@@ -17,7 +17,7 @@ fi
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
 
-for variant in "alpine" "ubuntu" ; do
+for variant in "alpine" "ubuntu" "centos" ; do
   echo "--- Getting docker image tag for $variant from build meta data"
   source_image=$(buildkite-agent meta-data get "agent-docker-image-$variant")
   echo "Docker Image Tag for $variant: $source_image"
