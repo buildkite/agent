@@ -106,14 +106,6 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 	}
 	defer a.metricsCollector.Stop()
 
-	// Create the intervals we'll be using
-	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
-	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
-
-	// Create the ticker
-	pingTicker := time.NewTicker(pingInterval)
-	defer pingTicker.Stop()
-
 	// Use a context to run heartbeats for as long as the agent runs for
 	heartbeatCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -136,6 +128,7 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 	})
 
 	// Setup and start the heartbeater
+	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
 	go func() {
 		for {
 			select {
@@ -156,6 +149,27 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 		}
 	}()
 
+	// If the agent is booted in acquisition mode, then we don't need to
+	// bother about starting the ping loop.
+	if a.agentConfiguration.AcquireJob != "" {
+		// When in acquisition mode, there can't be any agents, so
+		// there's really no point in letting the idle monitor know
+		// we're busy, but it's probably a good thing to do for good
+		// measure.
+		//idleMonitor.MarkBusy(a.agent.UUID)
+
+		return a.AcquireAndRunJob(a.agentConfiguration.AcquireJob)
+	} else {
+		return a.startPingLoop(idleMonitor)
+	}
+}
+
+func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
+	// Create the ticker
+	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
+	pingTicker := time.NewTicker(pingInterval)
+	defer pingTicker.Stop()
+
 	lastActionTime := time.Now()
 	a.logger.Info("Waiting for work...")
 
@@ -171,7 +185,7 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 				idleMonitor.MarkBusy(a.agent.UUID)
 
 				// Runs the job, only errors if something goes wrong
-				if runErr := a.AcceptAndRun(job); runErr != nil {
+				if runErr := a.AcceptAndRunJob(job); runErr != nil {
 					a.logger.Error("%v", runErr)
 				} else {
 					if a.agentConfiguration.DisconnectAfterJob {
@@ -362,8 +376,51 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 	return ping.Job, nil
 }
 
+// Attempts to acquire a job and run it, only returns an error if something
+// goes wrong
+func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
+	a.logger.Info("Attempting to acquire job %s...", jobId)
+
+	// Acquire the job using the ID we were provided. We'll retry as best
+	// we can on non 422 error.
+	var acquiredJob *api.Job
+	err := retry.Do(func(s *retry.Stats) error {
+		// If this agent has been asked to stop, don't even bother
+		// doing any retry checks and just bail.
+		if a.stopping {
+			s.Break()
+		}
+
+		var err error
+		var response *api.Response
+
+		acquiredJob, response, err = a.apiClient.AcquireJob(jobId)
+		if err != nil {
+			// If the API returns with a 422, that means that we
+			// succesfully *tried* to acquire the job, but
+			// Buildkite rejected the finish for some reason.
+			if response != nil && response.StatusCode == 422 {
+				a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
+				s.Break()
+			} else {
+				a.logger.Warn("%s (%s)", err, s)
+			}
+		}
+
+		return err
+	}, &retry.Config{Maximum: 10, Interval: 3 * time.Second})
+
+	// If `acquiredJob` is nil, then the job was never acquired
+	if acquiredJob == nil {
+		return fmt.Errorf("Failed to acquire job: %v", err)
+	}
+
+	// Now that we've acquired the job, lets' run it
+	return a.RunJob(acquiredJob)
+}
+
 // Accepts a job and runs it, only returns an error if something goes wrong
-func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
+func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 	a.logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
@@ -390,11 +447,16 @@ func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
 		return fmt.Errorf("Failed to accept job: %v", err)
 	}
 
+	// Now that we've accepted the job, lets' run it
+	return a.RunJob(accepted)
+}
+
+func (a *AgentWorker) RunJob(job *api.Job) error {
 	jobMetricsScope := a.metrics.With(metrics.Tags{
-		`pipeline`: accepted.Env[`BUILDKITE_PIPELINE_SLUG`],
-		`org`:      accepted.Env[`BUILDKITE_ORGANIZATION_SLUG`],
-		`branch`:   accepted.Env[`BUILDKITE_BRANCH`],
-		`source`:   accepted.Env[`BUILDKITE_SOURCE`],
+		`pipeline`: job.Env[`BUILDKITE_PIPELINE_SLUG`],
+		`org`:      job.Env[`BUILDKITE_ORGANIZATION_SLUG`],
+		`branch`:   job.Env[`BUILDKITE_BRANCH`],
+		`source`:   job.Env[`BUILDKITE_SOURCE`],
 	})
 
 	defer func() {
@@ -402,8 +464,9 @@ func (a *AgentWorker) AcceptAndRun(job *api.Job) error {
 		a.jobRunner = nil
 	}()
 
-	// Now that the job has been accepted, we can start it.
-	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, accepted, a.apiClient, JobRunnerConfig{
+	// Now that we've got a job to do, we can start it.
+	var err error
+	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, job, a.apiClient, JobRunnerConfig{
 		Debug:              a.debug,
 		CancelSignal:       a.cancelSig,
 		AgentConfiguration: a.agentConfiguration,
