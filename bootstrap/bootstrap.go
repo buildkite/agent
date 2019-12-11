@@ -666,7 +666,21 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 
 // Executes a named hook on plugins that have it
 func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) error {
-	for _, p := range checkouts {
+	// Command and checkout hooks are a little different, in that we only execute
+	// the first one we see. We run the first one, and output a warning for all
+	// the subsequent ones.
+	hookTypeSeen := make(map[string]bool)
+
+	for i, p := range checkouts {
+		if name == "command" || name == "checkout" {
+			if hookTypeSeen[name] {
+				b.shell.Warningf("Ignoring additional %s hook (%s plugin, position %d)", name, p.Plugin.Name(), i+1)
+				continue
+			} else {
+				hookTypeSeen[name] = true
+			}
+		}
+
 		hookPath, err := b.findHookFile(p.HooksDir, name)
 		if err != nil {
 			continue
@@ -676,13 +690,8 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 		if err := b.executeHook("plugin "+p.Plugin.Name()+" "+name, hookPath, env); err != nil {
 			return err
 		}
-
-		// Even if multiple plugins provide a "command" hook, we'll only execute the first one
-		// found, in order to avoid executing the same command multiple times.
-		if name == "command" {
-			break
-		}
 	}
+
 	return nil
 }
 
