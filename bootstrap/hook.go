@@ -60,7 +60,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 		scriptFileName += ".ps1"
 	} else if filepath.Ext(hookPath) == "" {
 		isBashHook = true
-	} else if runtime.GOOS == "windows" {
+	} else if isWindows {
 		scriptFileName += ".bat"
 	}
 
