@@ -280,7 +280,6 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		command = "/bin/bash"
 		args = []string{"-c", path}
 
-
 	default:
 		command = path
 		args = []string{}
