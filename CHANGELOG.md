@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.17.0](https://github.com/buildkite/agent/tree/v3.17.0) (2019-12-11)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.16.0...v3.17.0)
+
+### Added	
+- CentOS 7.x Docker image [#1137](https://github.com/buildkite/agent/pull/1137) (@moensch)
+- Added --acquire-job for optionally accepting a specific job [#1138](https://github.com/buildkite/agent/pull/1138) (@keithpitt)
+- Add filter to remove passwords, etc from job output [#1109](https://github.com/buildkite/agent/pull/1109) (@dbaggerman)
+- Allow fetching arbitrary tag=suffix pairs from GCP/EC2 meta-data [#1067](https://github.com/buildkite/agent/pull/1067) (@plasticine)
+
+### Fixed
+- Propagate signals in intermediate bash shells [#1116](https://github.com/buildkite/agent/pull/1116) (@lox)
+- Detect ansi clear lines and add ansi timestamps in ansi-timestamps experiments [#1128](https://github.com/buildkite/agent/pull/1128) (@lox)
+- Added v3 for better go module support [#1115](https://github.com/buildkite/agent/pull/1115) (@sayboras)
+- Convert windows paths to unix ones on artifact download [#1113](https://github.com/buildkite/agent/pull/1113) (@lox)
+
 ## [v3.16.0](https://github.com/buildkite/agent/tree/v3.16.0) (2019-10-14)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.15.2...v3.16.0)
 
