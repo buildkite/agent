@@ -50,12 +50,17 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	var err error
 	var scriptFileName string = `buildkite-agent-bootstrap-hook-runner`
 	var isBashHook bool
+	var isPwshHook bool
+	var isWindows = runtime.GOOS == "windows"
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
 	// we probably need a .bat extension
-	if filepath.Ext(hookPath) == "" {
+	if filepath.Ext(hookPath) == ".ps1" {
+		isPwshHook = true
+		scriptFileName += ".ps1"
+	} else if filepath.Ext(hookPath) == "" {
 		isBashHook = true
-	} else if runtime.GOOS == "windows" {
+	} else if isWindows {
 		scriptFileName += ".bat"
 	}
 
@@ -96,7 +101,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 
 	// Create the hook runner code
 	var script string
-	if runtime.GOOS == "windows" && !isBashHook {
+	if isWindows && !isBashHook && !isPwshHook {
 		script = "@echo off\n" +
 			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
 			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
@@ -105,6 +110,14 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 			"SET " + hookWorkingDirEnv + "=%CD%\n" +
 			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
 			"EXIT %" + hookExitStatusEnv + "%"
+	} else if isWindows && isPwshHook {
+		script = `$ErrorActionPreference = "STOP"\n` +
+			`Get-ChildItem Env: | Foreach-Object {$($_.Name)=$($_.Value)"} | Set-Content "` + h.beforeEnvFile.Name() + `\n` +
+			absolutePathToHook + `\n` +
+			`if ($LASTEXITCODE -eq $null) {$Env:` + hookExitStatusEnv + ` = 0} else {$Env:` + hookExitStatusEnv + ` = $LASTEXITCODE}\n` +
+			`$Env:` + hookWorkingDirEnv + ` = $PWD | Select-Object -ExpandProperty Path\n` +
+			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + h.afterEnvFile.Name() + `"\n` +
+			`exit $Env:` + hookExitStatusEnv
 	} else {
 		script = "export -p > \"" + filepath.ToSlash(h.beforeEnvFile.Name()) + "\"\n" +
 			". \"" + filepath.ToSlash(absolutePathToHook) + "\"\n" +
