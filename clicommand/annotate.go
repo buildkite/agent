@@ -171,6 +171,6 @@ var AnnotateCommand = cli.Command{
 			l.Fatal("Failed to annotate build: %s", err)
 		}
 
-		l.Info("Successfully annotated build")
+		l.Debug("Successfully annotated build")
 	},
 }
