@@ -237,7 +237,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		return fmt.Errorf("Error creating uploader: %v", err)
 	}
 
-	// Set the URL's of the artifacts based on the uploader
+	// Set the URLs of the artifacts based on the uploader
 	for _, artifact := range artifacts {
 		artifact.URL = uploader.URL(artifact)
 	}
@@ -315,7 +315,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 					errorsMutex.Unlock()
 				}
 
-				a.logger.Debug("Uploaded %d artfact states (%d/%d)", len(statesToUpload), artifactStatesUploaded, len(artifacts))
+				a.logger.Debug("Uploaded %d artifact states (%d/%d)", len(statesToUpload), artifactStatesUploaded, len(artifacts))
 			}
 
 			// Check again for states to upload in a few seconds
@@ -353,8 +353,8 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				a.logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)
 
 				// Track the error that was raised. We need to
-				// aquire a lock since we mutate the errors
-				// slice in mutliple routines.
+				// acquire a lock since we mutate the errors
+				// slice in multiple routines.
 				errorsMutex.Lock()
 				errors = append(errors, err)
 				errorsMutex.Unlock()
