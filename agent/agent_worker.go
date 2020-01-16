@@ -412,9 +412,7 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 
 	// If `acquiredJob` is nil, then the job was never acquired
 	if acquiredJob == nil {
-		a.logger.Warn("Failed to acquire job: %v", err)
-		// Return nil so that the AgentPool disconnnects this one-shot agent
-		return nil
+		return fmt.Errorf("Failed to acquire job: %v", err)
 	}
 
 	// Now that we've acquired the job, lets' run it
