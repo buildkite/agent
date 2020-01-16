@@ -51,20 +51,11 @@ func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
 	if err := worker.Connect(); err != nil {
 		return err
 	}
+	// Ensure the worker is disconnected at the end of this function.
+	defer worker.Disconnect();
 
-	// Starts the agent worker and wait for it to finish
-	err := worker.Start(im)
-
-	// Now that the agent has finished, we can disconnect it
-	disconnect := worker.Disconnect()
-
-	// If start exited due to an error return that
-	if err != nil {
-		return err
-	}
-
-	// Otherwise return the disconnect result
-	return disconnect
+	// Starts the agent worker and wait for it to finish.
+	return worker.Start(im)
 }
 
 func (r *AgentPool) Stop(graceful bool) {
