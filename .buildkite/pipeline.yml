@@ -201,8 +201,6 @@ steps:
     key: set-metadata
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
-  - wait
-
   - name: ":docker: alpine build"
     key: build-docker-alpine
     depends_on:
