@@ -4,10 +4,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.18.0](https://github.com/buildkite/agent/tree/v3.18.0) (2020-01-21)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.17.0...v3.18.0)
+
+### Added
+- Hooks can be written in PowerShell [#1122](https://github.com/buildkite/agent/pull/1122) (@pdemirdjian)
+
+### Changed
+- Ignore multiple checkout plugin hooks [#1135](https://github.com/buildkite/agent/pull/1135) (@toolmantim)
+- clicommand/annotate: demote success log from Info to Debug [#1141](https://github.com/buildkite/agent/pull/1141) (@pda)
+
+### Fixed
+- Fix AgentPool to disconnect if AgentWorker.Start fails  [#1146](https://github.com/buildkite/agent/pull/1146) (@keithduncan)
+- Fix run-parts usage for CentOS docker entrypoint [#1139](https://github.com/buildkite/agent/pull/1139) (@moensch)
+
 ## [v3.17.0](https://github.com/buildkite/agent/tree/v3.17.0) (2019-12-11)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.16.0...v3.17.0)
 
-### Added	
+### Added
 - CentOS 7.x Docker image [#1137](https://github.com/buildkite/agent/pull/1137) (@moensch)
 - Added --acquire-job for optionally accepting a specific job [#1138](https://github.com/buildkite/agent/pull/1138) (@keithpitt)
 - Add filter to remove passwords, etc from job output [#1109](https://github.com/buildkite/agent/pull/1109) (@dbaggerman)
