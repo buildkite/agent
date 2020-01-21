@@ -20,7 +20,7 @@ If an experiment doesn't exist, no error will be raised.
 
 ### `git-mirrors`
 
-Maintain a single bare git mirror with for each repository on a host that is shared amongst multiple agents and pipelines. Checkouts reference the git mirror using `git clone --reference`, as do submodules.
+Maintain a single bare git mirror for each repository on a host that is shared amongst multiple agents and pipelines. Checkouts reference the git mirror using `git clone --reference`, as do submodules.
 
 You must set a `git-mirrors-path` in your config for this to work.
 
