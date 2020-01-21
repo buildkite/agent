@@ -1,14 +1,12 @@
-version: '2.1'
+version: '3.5'
 
 services:
   agent:
     image: golang:1.13
     volumes:
-      - ../:/go/src/github.com/buildkite/agent:cached
-    working_dir: /go/src/github.com/buildkite/agent
+      - ../:/work:cached
+    working_dir: /work
     environment:
-      - GOFLAGS=-mod=vendor
-      - GO111MODULE=off
       - BUILDKITE_BUILD_NUMBER
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"

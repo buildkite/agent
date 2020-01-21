@@ -8,13 +8,12 @@ services:
       dockerfile: .buildkite/Dockerfile-windows
       context: ../
     volumes:
-      - ../:c:/Users/ContainerAdministrator/go/src/github.com/buildkite/agent
+      - ../:c:/work
+    working_dir: c:/work
     tty: false
     environment:
       - BUILDKITE_BUILD_NUMBER
       - "BUILDKITE_BUILD_PATH=c:\\buildkite\\builds"
-      - GOFLAGS=-mod=vendor
-      - GO111MODULE=off
 
 networks:
   default:
