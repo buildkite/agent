@@ -154,6 +154,5 @@ func (c *Config) ReadFromEnvironment(environ *env.Environment) map[string]string
 		}
 	}
 	
-
 	return changed
 }

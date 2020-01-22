@@ -430,15 +430,10 @@ func (b *Bootstrap) setUp() error {
 		// If we should consolidate repos, hash the repository path to use as the build dir
 		if b.Config.ShouldConsolidateRepos && b.Config.Repository != "" {
 
-			repositoryToHash := b.Config.Repository
-
-			// TODO move into a util?
-			hasher := md5.New()
-			hasher.Write([]byte(repositoryToHash))
-			hashedPath := hex.EncodeToString(hasher.Sum(nil))
+			hashedRepositoryName := hashRepositoryString(b.Config.Repository)
 
 			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
-				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, hashedPath))
+				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, hashedRepositoryName))
 		} else {
 			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
 				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
@@ -853,10 +848,9 @@ func (b *Bootstrap) removeCheckoutDir() error {
 }
 
 func (b *Bootstrap) createCheckoutDir() error {
-
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	if b.Debug && b.Config.ShouldConsolidateRepos {
+	if b.Config.ShouldConsolidateRepos {
 		b.shell.Commentf("Using hashed repository name as build dir instead of %s to consolidate builds into single dir", b.PipelineSlug)
 	}
 
@@ -1661,6 +1655,14 @@ func getValuesToRedact(logger shell.Logger, patterns []string, environment map[s
 	}
 
 	return valuesToRedact
+}
+
+func hashRepositoryString(repository string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(repository))
+	hashedRepostoryName := hex.EncodeToString(hasher.Sum(nil))
+
+	return hashedRepostoryName
 }
 
 type pluginCheckout struct {

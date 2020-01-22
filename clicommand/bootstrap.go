@@ -297,7 +297,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolTFlag{
 			Name:   "should-consolidate-repos",
-			Usage:  "Consolidate identical repositories into a single build dir",
+			Usage:  "Consolidate all builds using identical repositories into a single build directory",
 			EnvVar: "BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR",
 		},
 		DebugFlag,
