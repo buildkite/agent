@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -837,16 +839,23 @@ func (b *Bootstrap) removeCheckoutDir() error {
 
 func (b *Bootstrap) createCheckoutDir() error {
 
-	var checkoutPath string
+	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	if b.ShouldConsolidateRepos && b.Config.Repository != "" {
-		checkoutPath = b.Config.Repository
-	} else {
-		checkoutPath, _ = b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-	}
+		repositoryToHash := b.Config.Repository
 
-	if b.Debug {
-		b.shell.Commentf("Using %s as the checkout path", checkoutPath)
+		// TODO move into a util?
+		hasher := md5.New()
+		hasher.Write([]byte(repositoryToHash))
+		hashedPath := hex.EncodeToString(hasher.Sum(nil))
+
+		if b.Debug {
+			b.shell.Commentf("Changing build dir from %s to %s", b.PipelineSlug, hashedPath)
+		}
+
+		checkoutPath = filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, hashedPath)
+
+		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutPath)
 	}
 
 	if !fileExists(checkoutPath) {

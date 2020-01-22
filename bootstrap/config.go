@@ -125,7 +125,7 @@ type Config struct {
 	RedactedVars []string
 
 	// Whether or not to consolidate identical repositories into single build directory
-	ShouldConsolidateRepos bool
+	ShouldConsolidateRepos bool `env:"BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR"`
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
