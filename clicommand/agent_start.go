@@ -631,7 +631,6 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
-		l.Debug("Value of consolidate: %t", agentConf.ShouldConsolidateRepos)
 
 		if !agentConf.SSHKeyscan {
 			l.Info("Automatic ssh-keyscan has been disabled")
