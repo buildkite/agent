@@ -88,6 +88,7 @@ type AgentStartConfig struct {
 	LogFormat                  string   `cli:"log-format"`
 	CancelSignal               string   `cli:"cancel-signal"`
 	RedactedVars               []string `cli:"redacted-vars" normalize:"list"`
+	ShouldConsolidateRepos     bool     `cli:"should-consolidate-repos"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -400,6 +401,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_REDACTED_VARS",
 			Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN"},
 		},
+		cli.BoolFlag{
+			Name:   "should-consolidate-repos",
+			Usage:  "Consolidate identical repositories into a single build dir",
+			EnvVar: "BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -587,6 +593,7 @@ var AgentStartCommand = cli.Command{
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
+			ShouldConsolidateRepos:     cfg.ShouldConsolidateRepos,
 		}
 
 		if loader.File != nil {
@@ -624,6 +631,7 @@ var AgentStartCommand = cli.Command{
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
+		l.Debug("Value of consolidate: %t", agentConf.ShouldConsolidateRepos)
 
 		if !agentConf.SSHKeyscan {
 			l.Info("Automatic ssh-keyscan has been disabled")

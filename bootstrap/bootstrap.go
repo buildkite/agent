@@ -836,7 +836,18 @@ func (b *Bootstrap) removeCheckoutDir() error {
 }
 
 func (b *Bootstrap) createCheckoutDir() error {
-	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	var checkoutPath string
+
+	if b.ShouldConsolidateRepos && b.Config.Repository != "" {
+		checkoutPath = b.Config.Repository
+	} else {
+		checkoutPath, _ = b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	}
+
+	if b.Debug {
+		b.shell.Commentf("Using %s as the checkout path", checkoutPath)
+	}
 
 	if !fileExists(checkoutPath) {
 		b.shell.Commentf("Creating \"%s\"", checkoutPath)

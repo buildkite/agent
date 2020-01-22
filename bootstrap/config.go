@@ -123,6 +123,9 @@ type Config struct {
 
 	// List of environment variable globs to redact from job output
 	RedactedVars []string
+
+	// Whether or not to consolidate identical repositories into single build directory
+	ShouldConsolidateRepos bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
