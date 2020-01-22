@@ -656,6 +656,10 @@ var AgentStartCommand = cli.Command{
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
 		}
 
+		if agentConf.ShouldConsolidateRepos {
+			l.Info("Agent will use hashed name of repository for the build dir of all jobs using identical repositories")
+		}
+
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			l.Fatal("Failed to parse cancel-signal: %v", err)

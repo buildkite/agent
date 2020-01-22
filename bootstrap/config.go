@@ -125,7 +125,7 @@ type Config struct {
 	RedactedVars []string
 
 	// Whether or not to consolidate identical repositories into single build directory
-	ShouldConsolidateRepos bool `env:"BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR"`
+	ShouldConsolidateRepos bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
@@ -153,6 +153,7 @@ func (c *Config) ReadFromEnvironment(environ *env.Environment) map[string]string
 			}
 		}
 	}
+	
 
 	return changed
 }

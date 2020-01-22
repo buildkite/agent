@@ -399,6 +399,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT`,
 		`BUILDKITE_GIT_CLEAN_FLAGS`,
 		`BUILDKITE_SHELL`,
+		`BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR`,
 	}
 
 	var ignoredEnv []string
@@ -448,6 +449,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_SHELL"] = r.conf.AgentConfiguration.Shell
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
+	env["BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.ShouldConsolidateRepos)
 
 	// Whether to enable profiling in the bootstrap
 	if r.conf.AgentConfiguration.Profile != "" {

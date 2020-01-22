@@ -426,8 +426,23 @@ func (b *Bootstrap) setUp() error {
 		if b.BuildPath == "" {
 			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
 		}
-		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
-			filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+
+		// If we should consolidate repos, hash the repository path to use as the build dir
+		if b.Config.ShouldConsolidateRepos && b.Config.Repository != "" {
+
+			repositoryToHash := b.Config.Repository
+
+			// TODO move into a util?
+			hasher := md5.New()
+			hasher.Write([]byte(repositoryToHash))
+			hashedPath := hex.EncodeToString(hasher.Sum(nil))
+
+			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, hashedPath))
+		} else {
+			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+		}
 	}
 
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
@@ -841,21 +856,8 @@ func (b *Bootstrap) createCheckoutDir() error {
 
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	if b.ShouldConsolidateRepos && b.Config.Repository != "" {
-		repositoryToHash := b.Config.Repository
-
-		// TODO move into a util?
-		hasher := md5.New()
-		hasher.Write([]byte(repositoryToHash))
-		hashedPath := hex.EncodeToString(hasher.Sum(nil))
-
-		if b.Debug {
-			b.shell.Commentf("Changing build dir from %s to %s", b.PipelineSlug, hashedPath)
-		}
-
-		checkoutPath = filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, hashedPath)
-
-		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutPath)
+	if b.Debug && b.Config.ShouldConsolidateRepos {
+		b.shell.Commentf("Using hashed repository name as build dir instead of %s to consolidate builds into single dir", b.PipelineSlug)
 	}
 
 	if !fileExists(checkoutPath) {
