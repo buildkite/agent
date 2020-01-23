@@ -248,9 +248,14 @@ func (p *Process) Run() error {
 		}
 	}
 
+	exitSignal := "nil"
+	if p.status.Signaled() {
+		exitSignal = SignalString(p.status.Signal())
+	}
+
 	// Find the exit status of the script
-	p.logger.Info("Process with PID: %d finished with Exit Status: %d",
-		p.pid, p.status.ExitStatus())
+	p.logger.Info("Process with PID: %d finished with Exit Status: %d, Signal: %s",
+		p.pid, p.status.ExitStatus(), exitSignal)
 
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
