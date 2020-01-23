@@ -5,7 +5,6 @@ package process
 import (
 	"errors"
 	"fmt"
-	"os"
 	"os/exec"
 	"strconv"
 	"syscall"
