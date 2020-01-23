@@ -4,7 +4,6 @@ package process
 
 import (
 	"fmt"
-	"os"
 	"syscall"
 )
 
@@ -37,10 +36,6 @@ func (p *Process) interruptProcessGroup() error {
 
 func GetPgid(pid int) (int, error) {
 	return syscall.Getpgid(pid)
-}
-
-func OSSignalString(s os.Signal) string {
-	return SignalString(s.(syscall.Signal))
 }
 
 func SignalString(s syscall.Signal) string {
