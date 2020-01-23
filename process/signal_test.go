@@ -8,7 +8,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSignalString(t *testing.T) {
+func TestSignalStringUnix(t *testing.T) {
+	if runtime.GOOS == `windows` {
+		t.Skip("Unix signal names are not used on Windows")
+	}
+
 	for _, row := range []struct {
 		n int
 		s string
@@ -16,6 +20,24 @@ func TestSignalString(t *testing.T) {
 		{2, "SIGINT"},
 		{9, "SIGKILL"},
 		{15, "SIGTERM"},
+		{100, "100"},
+	} {
+		assert.Equal(t, row.s, process.SignalString(syscall.Signal(row.n)))
+	}
+}
+
+func TestSignalStringWindows(t *testing.T) {
+	if runtime.GOOS != `windows` {
+		t.Skip("Windows signal names are not used on Unix")
+	}
+
+	for _, row := range []struct {
+		n int
+		s string
+	}{
+		{2, "interrupt"},
+		{9, "killed"},
+		{15, "terminated"},
 		{100, "100"},
 	} {
 		assert.Equal(t, row.s, process.SignalString(syscall.Signal(row.n)))
