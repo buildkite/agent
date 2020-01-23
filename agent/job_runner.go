@@ -283,16 +283,14 @@ func (r *JobRunner) Run() error {
 
 	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
 	signal := ""
-
 	if ws := r.process.WaitStatus(); ws.Signaled() {
 		signal = process.SignalString(ws.Signal())
 	}
 
+	// Write some metrics about the job run
 	jobMetrics := r.metrics.With(metrics.Tags{
 		"exit_code": exitStatus,
 	})
-
-	// Write some metrics about the job run
 	if exitStatus == "0" {
 		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
 		jobMetrics.Count(`jobs.success`, 1)
@@ -336,7 +334,6 @@ func (r *JobRunner) Cancel() error {
 	if r.stopped {
 		reason = " (agent stopping)"
 	}
-
 	r.logger.Info("Canceling job %s with a grace period of %ds%s",
 		r.job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
 
@@ -475,7 +472,6 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
-
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
 	if pluginValidation, ok := env["BUILDKITE_PLUGIN_VALIDATION"]; ok {
@@ -484,7 +480,6 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 			enablePluginValidation = true
 		}
 	}
-
 	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
 
 	// Convert the env map into a slice (which is what the script gear
