@@ -54,6 +54,8 @@ func GetPgid(pid int) (int, error) {
 	return 0, errors.New("Not implemented on Windows")
 }
 
+// SignalString returns the name of the given signal.
+// e.g. SignalString(syscall.Signal(15)) // "terminated"
 func SignalString(s syscall.Signal) string {
 	return fmt.Sprintf("%v", s)
 }
