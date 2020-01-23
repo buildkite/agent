@@ -39,7 +39,7 @@ func TestSignalStringWindows(t *testing.T) {
 		{2, "interrupt"},
 		{9, "killed"},
 		{15, "terminated"},
-		{100, "100"},
+		{100, "signal 100"},
 	} {
 		assert.Equal(t, row.s, process.SignalString(syscall.Signal(row.n)))
 	}
