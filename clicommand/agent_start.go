@@ -7,6 +7,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -700,6 +702,9 @@ var AgentStartCommand = cli.Command{
 			if err != nil {
 				l.Fatal("%s", err)
 			}
+
+			// If user has provided a per-worker git mirror path, substitute it here
+			agentConf.GitMirrorsPath = strings.Replace(agentConf.GitMirrorsPath, "%n", strconv.Itoa(i), -1)
 
 			// Create an agent worker to run the agent
 			workers = append(workers,
