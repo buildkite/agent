@@ -159,14 +159,14 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 }
 
 func (a *ArtifactUploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
-	// Temporarily open the file to get it's size
+	// Temporarily open the file to get its size
 	file, err := os.Open(absolutePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	// Grab it's file info (which includes it's file size)
+	// Grab its file info (which includes its file size)
 	fileInfo, err := file.Stat()
 	if err != nil {
 		return nil, err

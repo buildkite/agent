@@ -15,14 +15,14 @@ fi
 # Add the buildkite user if it doesn't exist on installation
 if [ "$OPERATION" = "install" ] ; then
   if [ "$BK_USER_EXISTS" = "false" ]; then
-    # Create the buildkite system user and set it's home to /var/lib/buildkite
+    # Create the buildkite system user and set its home to /var/lib/buildkite
     useradd --system --no-create-home -d /var/lib/buildkite-agent buildkite-agent
 
     # The user exists now!
     BK_USER_EXISTS=true
   fi
 
-  # We create it's home folder in a seperate command so it doesn't blow up if
+  # We create its home folder in a seperate command so it doesn't blow up if
   # the folder already exists
   mkdir -p /var/lib/buildkite-agent
 fi

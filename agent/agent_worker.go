@@ -79,7 +79,7 @@ type AgentWorker struct {
 	jobRunner *JobRunner
 }
 
-// Creates the agent worker and initializes it's API Client
+// Creates the agent worker and initializes its API Client
 func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
 	return &AgentWorker{
 		logger:             l,

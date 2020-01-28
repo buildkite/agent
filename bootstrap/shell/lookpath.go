@@ -1,6 +1,6 @@
 // +build !windows
 
-// This file (along with it's Windows counterpart) have been taken from:
+// This file (along with its Windows counterpart) have been taken from:
 //
 // https://github.com/golang/go/blob/master/src/os/exec/lp.go
 //

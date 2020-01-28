@@ -312,7 +312,7 @@ type command struct {
 // buildCommand returns a command that can later be executed
 func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 	// Always use absolute path as Windows has a hard time
-	// finding executables in it's path
+	// finding executables in its path
 	absPath, err := s.AbsolutePath(name)
 	if err != nil {
 		return nil, err

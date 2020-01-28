@@ -33,7 +33,7 @@ func (p *Process) terminateProcessGroup() error {
 	p.logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.pid)
 
 	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
-	// anything left in it's process tree.
+	// anything left in its process tree.
 	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.pid)).Run()
 }
 

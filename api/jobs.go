@@ -49,7 +49,7 @@ func (c *Client) GetJobState(id string) (*JobState, *Response, error) {
 	return s, resp, err
 }
 
-// Acquires a job using it's ID
+// Acquires a job using its ID
 func (c *Client) AcquireJob(id string) (*Job, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/acquire", id)
 
@@ -67,7 +67,7 @@ func (c *Client) AcquireJob(id string) (*Job, *Response, error) {
 	return j, resp, err
 }
 
-// AcceptJob accepts the passed in job. Returns the job with it's finalized set of
+// AcceptJob accepts the passed in job. Returns the job with its finalized set of
 // environment variables (when a job is accepted, the agents environment is
 // applied to the job)
 func (c *Client) AcceptJob(job *Job) (*Job, *Response, error) {

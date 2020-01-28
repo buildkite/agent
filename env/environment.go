@@ -63,7 +63,7 @@ func (e *Environment) Set(key string, value string) string {
 	return value
 }
 
-// Remove a key from the Environment and return it's value
+// Remove a key from the Environment and return its value
 func (e *Environment) Remove(key string) string {
 	value, ok := e.Get(key)
 	if ok {
