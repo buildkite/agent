@@ -15,7 +15,7 @@ def parse(version_string)
     (\.(?<tiny>\d+))?
     # Pre is a string like alpha, beta, etc
     (\-(?<prerelease>[a-z]+))?
-    # The rest are numbers, and we dont care if its dashes or dots
+    # The rest are numbers, and we dont care if they use dashes or dots
     ([\-\.](?<prerelease_major>\d+))?
     ([\-\.](?<prerelease_minor>\d+))?
     ([\-\.](?<prerelease_patch>\d+))?
