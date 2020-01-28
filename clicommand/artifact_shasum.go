@@ -62,7 +62,7 @@ var ArtifactShasumCommand = cli.Command{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
-			Usage: "Scope the search to a particular step by using either it's name of job ID",
+			Usage: "Scope the search to a particular step by using either its name of job ID",
 		},
 		cli.StringFlag{
 			Name:   "build",
