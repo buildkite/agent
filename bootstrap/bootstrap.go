@@ -672,6 +672,13 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 	hookTypeSeen := make(map[string]bool)
 
 	for i, p := range checkouts {
+		// First we verify the plugin actually implements the hook
+		hookPath, err := b.findHookFile(p.HooksDir, name)
+		if err != nil {
+			continue
+		}
+
+		// Disallow plugins executing the command or checkout hook more than once
 		if name == "command" || name == "checkout" {
 			if hookTypeSeen[name] {
 				b.shell.Warningf("Ignoring additional %s hook (%s plugin, position %d)", name, p.Plugin.Name(), i+1)
@@ -679,11 +686,6 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 			} else {
 				hookTypeSeen[name] = true
 			}
-		}
-
-		hookPath, err := b.findHookFile(p.HooksDir, name)
-		if err != nil {
-			continue
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
