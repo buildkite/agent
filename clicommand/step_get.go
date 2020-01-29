@@ -56,13 +56,13 @@ var StepGetCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "step",
 			Value:  "",
-			Usage:  "The step to get. Can be either it's ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			Usage:  "The step to get. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
 			EnvVar: "BUILDKITE_STEP_ID",
 		},
 		cli.StringFlag{
 			Name:   "build",
 			Value:  "",
-			Usage:  "The build to look for the step in. Only required when targeting a step using it's key (BUILDKITE_STEP_KEY)",
+			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
 			EnvVar: "BUILDKITE_BUILD_ID",
 		},
 		cli.StringFlag{

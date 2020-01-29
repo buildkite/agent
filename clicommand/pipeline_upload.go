@@ -80,7 +80,7 @@ var PipelineUploadCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "The job that is making the changes to it's build",
+			Usage:  "The job that is making the changes to its build",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 		cli.BoolFlag{

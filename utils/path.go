@@ -30,7 +30,7 @@ func NormalizeCommand(commandPath string) (string, error) {
 
 	// if the file exists, absolute it
 	if _, err := os.Stat(commandPath); err == nil {
-		// make sure its absolute
+		// make sure it's absolute
 		absoluteCommandPath, err := filepath.Abs(commandPath)
 		if err != nil {
 			return "", err

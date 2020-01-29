@@ -1,4 +1,4 @@
-// This file (along with it's *nix counterpart) have been taken from:
+// This file (along with its *nix counterpart) have been taken from:
 //
 // https://github.com/golang/go/blob/master/src/os/exec/lp_windows.go
 //

@@ -572,8 +572,7 @@ func (r *JobRunner) onProcessStartCallback() {
 			r.logger.Debug("[JobRunner] Routine that refreshes the job has finished")
 		}()
 		for {
-			// Re-get the job and check it's status to see if it's been
-			// cancelled
+			// Re-get the job and check its status to see if it's been cancelled
 			jobState, _, err := r.apiClient.GetJobState(r.job.ID)
 			if err != nil {
 				// We don't really care if it fails, we'll just

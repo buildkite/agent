@@ -169,7 +169,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 				}
 			}
 
-			// Validate the fieid, and if it fails, return it's
+			// Validate the fieid, and if it fails, return its
 			// error.
 			err := l.validateField(fieldName, label, validationRules)
 			if err != nil {
@@ -225,7 +225,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		// by the configuration file
 		if l.File != nil {
 			if configFileValue, ok := l.File.Config[cliName]; ok {
-				// Convert the config file value to it's correct type
+				// Convert the config file value to its correct type
 				if fieldKind == reflect.String {
 					value = configFileValue
 				} else if fieldKind == reflect.Slice {

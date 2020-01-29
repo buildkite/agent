@@ -1416,12 +1416,12 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		//
 		// Such undesired payloads could be delivered by hiding that payload in
 		// non-executable objects in the repo (such as through partial shell
-		// fragments, or other material not intended to be run on it's own),
+		// fragments, or other material not intended to be run on its own),
 		// or by obfuscating binary executable code into other types of binaries.
 		//
 		// This also closes the risk factor with agents where you
 		// may have a dangerous script committed, but not executable (maybe
-		// because its part of a deployment process), but you don't want that
+		// because it's part of a deployment process), but you don't want that
 		// script to ever be executed on the buildkite agent itself!  With
 		// command-eval agents, such risks are everpresent since the master
 		// can tell the agent to do anything anyway, but no-command-eval agents

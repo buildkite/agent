@@ -27,7 +27,7 @@ Example:
    $ buildkite-agent artifact shasum "pkg/release.tar.gz" --build xxx
 
    This will search for all the files in the build with the path "pkg/release.tar.gz" and will
-   print to STDOUT it's SHA-1 checksum.
+   print to STDOUT its SHA-1 checksum.
 
    If you would like to target artifacts from a specific build step, you can do
    so by using the --step argument.
@@ -62,7 +62,7 @@ var ArtifactShasumCommand = cli.Command{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
-			Usage: "Scope the search to a particular step by using either it's name of job ID",
+			Usage: "Scope the search to a particular step by using either its name of job ID",
 		},
 		cli.StringFlag{
 			Name:   "build",

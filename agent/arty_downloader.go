@@ -21,7 +21,7 @@ type ArtifactoryDownloaderConfig struct {
 	Destination string
 
 	// The relative path that should be preserved in the download folder,
-	// also it's location in the repo
+	// also its location in the repo
 	Path string
 
 	// How many times should it retry the download before giving up
