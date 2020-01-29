@@ -674,6 +674,10 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 	for i, p := range checkouts {
 		// First we verify the plugin actually implements the hook
 		hookPath, err := b.findHookFile(p.HooksDir, name)
+		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
+		// agent is still go pre-1.13 compatible (I think) so we're avoiding errors.Is().
+		// In future somebody should check if os.IsNotExist() has added support for
+		// error unwrapping, or change this code to errors.Is(err, os.ErrNotExist)
 		if os.IsNotExist(err) {
 			continue
 		} else if err != nil {
