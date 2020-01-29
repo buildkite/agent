@@ -275,5 +275,11 @@ steps:
 
   - name: ":pipeline:"
     key: upload-release-steps
-    depends_on: build-github-release
+    depends_on:
+      - build-rpm-packages
+      - build-debian-packages
+      - build-docker-alpine
+      - build-docker-ubuntu
+      - build-docker-centos
+      - build-github-release
     command: ".buildkite/steps/upload-release-steps.sh"
