@@ -674,8 +674,10 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 	for i, p := range checkouts {
 		// First we verify the plugin actually implements the hook
 		hookPath, err := b.findHookFile(p.HooksDir, name)
-		if err != nil {
+		if os.IsNotExist(err) {
 			continue
+		} else if err != nil {
+			return err
 		}
 
 		// Disallow plugins executing the command or checkout hook more than once
