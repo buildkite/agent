@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"regexp"
+	"strings"
 
 	// "net/http/httputil"
 	"errors"
@@ -52,6 +53,21 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 	request, err := createUploadRequest(u.logger, artifact)
 	if err != nil {
 		return err
+	}
+
+	if u.conf.DebugHTTP {
+		// If the request is a multi-part form, then it's probably a
+		// file upload, in which case we don't want to spewing out the
+		// file contents into the debug log (especially if it's been
+		// gzipped)
+		var requestDump []byte
+		if strings.Contains(request.Header.Get("Content-Type"), "multipart/form-data") {
+			requestDump, err = httputil.DumpRequestOut(request, false)
+		} else {
+			requestDump, err = httputil.DumpRequestOut(request, true)
+		}
+
+		u.logger.Debug("\nERR: %s\n%s", err, string(requestDump))
 	}
 
 	// Create the client
