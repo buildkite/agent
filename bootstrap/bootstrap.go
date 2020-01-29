@@ -290,6 +290,8 @@ func (b *Bootstrap) findHookFile(hookDir string, name string) (string, error) {
 	if p := filepath.Join(hookDir, name); fileExists(p) {
 		return p, nil
 	}
+	// don't wrap os.ErrNotExist without checking callers handle it.
+	// e.g. os.IfNotExist(err) does not handle wrapped errors.
 	return "", os.ErrNotExist
 }
 
