@@ -284,9 +284,7 @@ func (b *BootstrapTester) Cancel() error {
 
 func (b *BootstrapTester) CheckMocks(t *testing.T) {
 	for _, mock := range b.mocks {
-		if !mock.Check(t) {
-			return
-		}
+		mock.Check(t)
 	}
 }
 
