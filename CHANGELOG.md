@@ -765,7 +765,7 @@ No changes
 
 ## 3.0-beta.19 - 2017-03-29
 ### Added
-- `buildkite-agent start --disconnect-after-job` will run the agent, and automatically disconnect after running its first job. This has sometimes been referred to as "one shot" mode and is useful when you spin up an environment per-job and want the agent to automatically disconnect once its finished its job
+- `buildkite-agent start --disconnect-after-job` will run the agent, and automatically disconnect after running its first job. This has sometimes been referred to as "one shot" mode and is useful when you spin up an environment per-job and want the agent to automatically disconnect once it's finished its job
 - `buildkite-agent start --disconnect-after-job-timeout` is the time in seconds the agent will wait for that first job to be assigned. The default value is 120 seconds (2 minutes). If a job isn't assigned to the agent after this time, it will automatically disconnect and the agent process will stop.
 
 ## 3.0-beta.18 - 2017-03-27
