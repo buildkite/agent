@@ -144,6 +144,74 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 	tester.CheckMocks(t)
 }
 
+func TestOnceOnlyHooks(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	var testPlugins []*testPlugin
+	var pluginMocks []*bintest.Mock
+	setupMock := func(name string, hooks ...string) *bintest.Mock {
+		pluginMock := tester.MustMock(t, name)
+		fakeHooks := make(map[string][]string)
+		for _, hook := range hooks {
+			if runtime.GOOS == "windows" {
+				fakeHooks[hook+".bat"] = []string{
+					"@echo off",
+					pluginMock.Path + " " + hook,
+				}
+			} else {
+				fakeHooks[hook] = []string{
+					"#!/bin/bash",
+					pluginMock.Path + " " + hook,
+				}
+			}
+		}
+		testPlugins = append(testPlugins, createTestPlugin(t, fakeHooks))
+		pluginMocks = append(pluginMocks, pluginMock)
+		return pluginMock
+	}
+
+	mockA := setupMock("plugin-a", "environment")
+	mockA.Expect("environment").Once()
+
+	mockB := setupMock("plugin-b", "environment", "checkout")
+	mockB.Expect("environment").Once()
+	mockB.Expect("checkout").Once()
+
+	mockC := setupMock("plugin-c", "checkout", "command")
+	mockC.Expect("checkout").NotCalled() // plugin-b already ran checkout
+	mockC.Expect("command").Once()
+
+	mockD := setupMock("plugin-d", "command", "post-command")
+	mockD.Expect("command").NotCalled() // plugin-c already ran command
+	mockD.Expect("post-command").Once()
+
+	pluginsJSON, err := json.Marshal(testPlugins)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`MY_CUSTOM_ENV=1`,
+		`BUILDKITE_PLUGINS=` + string(pluginsJSON),
+	}
+
+	tester.RunAndCheck(t, env...)
+
+	assertOutputCount := func(output, substr string, count int) {
+		if actual := strings.Count(output, substr); actual != count {
+			t.Errorf("Message: '%s' wanted count: %d, got: %d", substr, count, actual)
+		}
+	}
+	assertOutputCount(tester.Output, "Ignoring additional checkout hook", 1)
+	assertOutputCount(tester.Output, "Ignoring additional command hook", 1)
+}
+
 type testPlugin struct {
 	*gitRepository
 }
@@ -176,21 +244,34 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 	return &testPlugin{repo}
 }
 
+// ToJSON turns a single testPlugin into a single-item JSON
+// array suitable for BUILDKITE_PLUGINS
 func (tp *testPlugin) ToJSON() (string, error) {
-	commitHash, err := tp.RevParse("HEAD")
+	data, err := json.Marshal([]*testPlugin{tp})
 	if err != nil {
 		return "", err
+	}
+	return string(data), nil
+}
+
+// MarshalJSON turns a single testPlugin into a JSON object.
+// BUILDKITE_PLUGINS expects an array of these, so it would
+// generally be used on a []testPlugin slice.
+func (tp *testPlugin) MarshalJSON() ([]byte, error) {
+	commitHash, err := tp.RevParse("HEAD")
+	if err != nil {
+		return nil, err
 	}
 	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
 
-	var p = []interface{}{map[string]interface{}{
+	p := map[string]interface{}{
 		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(commitHash)): map[string]string{
 			"settings": "blah",
 		},
-	}}
+	}
 	b, err := json.Marshal(&p)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(b), nil
+	return b, nil
 }
