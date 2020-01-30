@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.19.0](https://github.com/buildkite/agent/tree/v3.19.0) (2020-01-30)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.18.0...v3.19.0)
+
+### Fixed
+- Fix plugin execution being skipped with duplicate hook warning [#1156](https://github.com/buildkite/agent/pull/1156) (@toolmantim)
+- minor changes [#1151](https://github.com/buildkite/agent/pull/1151) [#1154](https://github.com/buildkite/agent/pull/1154) [#1149](https://github.com/buildkite/agent/pull/1149)
+
 ## [v3.18.0](https://github.com/buildkite/agent/tree/v3.18.0) (2020-01-21)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.17.0...v3.18.0)
 
