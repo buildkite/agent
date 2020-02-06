@@ -53,7 +53,7 @@ var MetaDataSetCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "Which job should the meta-data be set on",
+			Usage:  "Which job's build should the meta-data be set on",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
