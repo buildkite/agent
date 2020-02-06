@@ -668,32 +668,16 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 
 // Executes a named hook on plugins that have it
 func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) error {
-	// Command and checkout hooks are a little different, in that we only execute
-	// the first one we see. We run the first one, and output a warning for all
-	// the subsequent ones.
-	hookTypeSeen := make(map[string]bool)
-
-	for i, p := range checkouts {
-		// First we verify the plugin actually implements the hook
+	for _, p := range checkouts {
 		hookPath, err := b.findHookFile(p.HooksDir, name)
 		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
 		// agent is still go pre-1.13 compatible (I think) so we're avoiding errors.Is().
 		// In future somebody should check if os.IsNotExist() has added support for
 		// error unwrapping, or change this code to errors.Is(err, os.ErrNotExist)
 		if os.IsNotExist(err) {
-			continue
+			continue // this plugin does not implement this hook
 		} else if err != nil {
 			return err
-		}
-
-		// Disallow plugins executing the command or checkout hook more than once
-		if name == "command" || name == "checkout" {
-			if hookTypeSeen[name] {
-				b.shell.Warningf("Ignoring additional %s hook (%s plugin, position %d)", name, p.Plugin.Name(), i+1)
-				continue
-			} else {
-				hookTypeSeen[name] = true
-			}
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
