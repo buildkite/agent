@@ -52,7 +52,7 @@ var MetaDataGetCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "Which job should the meta-data be retrieved from",
+			Usage:  "Which job's build should the meta-data be retrieved from",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 

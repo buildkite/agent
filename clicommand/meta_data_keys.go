@@ -46,7 +46,7 @@ var MetaDataKeysCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "Which job should the meta-data be checked for",
+			Usage:  "Which job's build should the meta-data be checked for",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
