@@ -287,3 +287,24 @@ steps:
 	expected := `{"steps":[{"name":":s3: xxx","command":"script/buildkite/xxx.sh","plugins":{"xxx/aws-assume-role#v0.1.0":{"role":"arn:aws:iam::xxx:role/xxx"},"ecr#v1.1.4":{"login":true,"account_ids":"xxx","registry_region":"us-east-1"},"docker-compose#v2.5.1":{"run":"xxx","config":".buildkite/docker/docker-compose.yml","env":["AWS_ACCESS_KEY_ID","AWS_SECRET_ACCESS_KEY","AWS_SESSION_TOKEN"]}},"agents":{"queue":"xxx"}}]}`
 	assert.Equal(t, expected, strings.TrimSpace(buf.String()))
 }
+
+func TestPipelineParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing.T) {
+	for _, row := range []struct {
+		noInterpolation bool
+		pipeline        string
+	}{
+		// dollar sign must be escaped when interpolation is in effect
+		{false, "steps:\n  - if: build.env(\"ACCOUNT\") =~ /^(foo|bar)\\$/"},
+		{true, "steps:\n  - if: build.env(\"ACCOUNT\") =~ /^(foo|bar)$/"},
+	} {
+		result, err := PipelineParser{
+			Pipeline:        []byte(row.pipeline),
+			NoInterpolation: row.noInterpolation,
+			Env:             env.New(),
+		}.Parse()
+		assert.NoError(t, err)
+		j, _ := json.Marshal(result)
+		assert.Equal(t, `{"steps":[{"if":"build.env(\"ACCOUNT\") =~ /^(foo|bar)$/"}]}`, string(j))
+	}
+
+}

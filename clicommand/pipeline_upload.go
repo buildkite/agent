@@ -213,7 +213,11 @@ var PipelineUploadCommand = cli.Command{
 			NoInterpolation: cfg.NoInterpolation,
 		}.Parse()
 		if err != nil {
-			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", filename, err)
+			src := filename
+			if src == "" {
+				src = "(stdin)"
+			}
+			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
 		}
 
 		// In dry-run mode we just output the generated pipeline to stdout
