@@ -144,7 +144,11 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 	tester.CheckMocks(t)
 }
 
-func TestOnceOnlyHooks(t *testing.T) {
+// A job may have multiple plugins that provide multiple hooks of a given type.
+// For a while (late 2019 / early 2020) we disallowed duplicate checkout and
+// command hooks from plugins; only the first would execute.  We since decided
+// to roll that back and permit e.g. multiple checkout plugin hooks.
+func TestOverlappingPluginHooks(t *testing.T) {
 	t.Parallel()
 
 	tester, err := NewBootstrapTester()
@@ -184,11 +188,11 @@ func TestOnceOnlyHooks(t *testing.T) {
 	mockB.Expect("checkout").Once()
 
 	mockC := setupMock("plugin-c", "checkout", "command")
-	mockC.Expect("checkout").NotCalled() // plugin-b already ran checkout
+	mockC.Expect("checkout").Once() // even though plugin-b already ran checkout
 	mockC.Expect("command").Once()
 
 	mockD := setupMock("plugin-d", "command", "post-command")
-	mockD.Expect("command").NotCalled() // plugin-c already ran command
+	mockD.Expect("command").Once() // even though plugin-c already ran command
 	mockD.Expect("post-command").Once()
 
 	pluginsJSON, err := json.Marshal(testPlugins)
@@ -202,14 +206,6 @@ func TestOnceOnlyHooks(t *testing.T) {
 	}
 
 	tester.RunAndCheck(t, env...)
-
-	assertOutputCount := func(output, substr string, count int) {
-		if actual := strings.Count(output, substr); actual != count {
-			t.Errorf("Message: '%s' wanted count: %d, got: %d", substr, count, actual)
-		}
-	}
-	assertOutputCount(tester.Output, "Ignoring additional checkout hook", 1)
-	assertOutputCount(tester.Output, "Ignoring additional command hook", 1)
 }
 
 type testPlugin struct {
