@@ -233,8 +233,6 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
-    agents:
-      queue: "deploy"
 
   - name: ":redhat: build"
     key: build-rpm-packages
