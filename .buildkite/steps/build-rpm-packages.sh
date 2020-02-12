@@ -19,9 +19,6 @@ dry_run() {
   fi
 }
 
-echo "--- Installing dependencies"
-bundle
-
 # Make sure we have a clean rpm folder
 rm -rf rpm
 
@@ -39,5 +36,5 @@ for ARCH in "amd64" "386"; do
   chmod +x "$BINARY"
 
   # Build the rpm package using the architecture and binary, they are saved to rpm/
-  ./scripts/build-rpm-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+  .buildkite/steps/ruby-env ./scripts/build-rpm-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
 done
