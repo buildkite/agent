@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+
+# start a docker container with the ruby environment we need in some build steps
+
+compose_file="$(dirname $0)/../docker-compose.yml"
+
+echo "+++ :docker::ruby: execute deploy"
+docker-compose -f "$compose_file" run --rm ruby "${@-bash}"
+

@@ -13,3 +13,18 @@ services:
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
+
+  ruby:
+    image: ruby:2.6
+    volumes:
+      - ..:/work
+      - ruby-2-6-agent-gem-cache:/usr/local/bundle
+    working_dir: /work
+    command: /bin/bash
+    environment:
+      - FULL_AGENT_VERSION
+      - AGENT_VERSION
+      - BUILD_VERSION
+
+volumes:
+  ruby-2-6-agent-gem-cache: ~
