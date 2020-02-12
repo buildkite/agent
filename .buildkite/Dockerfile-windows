@@ -1,5 +1,5 @@
 ## Development docker image for buildkite-agent on windows
-FROM mcr.microsoft.com/windows/servercore:1809
+FROM mcr.microsoft.com/windows/servercore:1809@sha256:23e7bb473261f12307e82d0cd52a1bcbad4bc64c00e889cee344401d0c3de3d3
 
 ENV ChocolateyUseWindowsCompression false
 
