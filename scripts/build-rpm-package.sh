@@ -38,6 +38,11 @@ PACKAGE_PATH="${DESTINATION_PATH}/${PACKAGE_NAME}"
 
 mkdir -p "$DESTINATION_PATH"
 
+info "Installing dependencies"
+
+bundle check || bundle
+which rpmbuild || (apt update && apt install -y rpm)
+
 info "Building rpm package $PACKAGE_NAME to $DESTINATION_PATH"
 
 bundle exec fpm -s "dir" \

@@ -242,8 +242,6 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
-    agents:
-      queue: "deploy"
 
   - name: ":github: :hammer:"
     key: build-github-release
