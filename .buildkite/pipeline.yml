@@ -278,4 +278,5 @@ steps:
       - build-docker-ubuntu
       - build-docker-centos
       - build-github-release
+      - test-windows
     command: ".buildkite/steps/upload-release-steps.sh"
