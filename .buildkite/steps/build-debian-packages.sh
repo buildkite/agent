@@ -36,5 +36,5 @@ for ARCH in "amd64" "386" "arm" "armhf" "arm64"; do
   chmod +x "$BINARY"
 
   # Build the debian package using the architectre and binary, they are saved to deb/
-  .buildkite/steps/ruby-env ./scripts/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+  ./scripts/ruby-env ./scripts/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
 done
