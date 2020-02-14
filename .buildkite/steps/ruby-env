@@ -5,6 +5,5 @@ set -euo pipefail
 
 compose_file="$(dirname $0)/../docker-compose.yml"
 
-echo "+++ :docker::ruby: execute deploy"
 docker-compose -f "$compose_file" run --rm ruby "${@-bash}"
 
