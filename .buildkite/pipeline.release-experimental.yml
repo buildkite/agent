@@ -6,7 +6,7 @@ steps:
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy"
+      queue: "deploy-production"
 
   - name: ":redhat: publish rpms"
     command: ".buildkite/steps/publish-rpm-package.sh"

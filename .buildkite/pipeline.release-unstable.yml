@@ -11,7 +11,7 @@ steps:
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy"
+      queue: "deploy-production"
 
   - name: ":octocat: :rocket:"
     command: ".buildkite/steps/github-release.sh"
