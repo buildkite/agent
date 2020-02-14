@@ -11,35 +11,35 @@ steps:
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy-production"
+      queue: "deploy"
 
   - name: ":octocat: :rocket:"
     command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
 
   - name: ":redhat:"
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
 
   - name: ":debian:"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
 
   - name: ":docker:"
     command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
 
   - wait
 
@@ -49,5 +49,4 @@ steps:
     env:
       CODENAME: "unstable"
     agents:
-      queue: "deploy"
-
+      queue: "deploy-legacy"

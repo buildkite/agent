@@ -6,25 +6,25 @@ steps:
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy-production"
+      queue: "deploy"
 
   - name: ":redhat: publish rpms"
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
 
   - name: ":debian: publish debs"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
 
   - name: ":docker:"
     command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy"
+      queue: "deploy-legacy"
