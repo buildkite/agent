@@ -36,5 +36,5 @@ for ARCH in "amd64" "386"; do
   chmod +x "$BINARY"
 
   # Build the rpm package using the architecture and binary, they are saved to rpm/
-  .buildkite/steps/ruby-env ./scripts/build-rpm-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
+  ./scripts/ruby-env ./scripts/build-rpm-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
 done
