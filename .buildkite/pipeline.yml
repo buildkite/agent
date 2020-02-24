@@ -272,11 +272,12 @@ steps:
   - name: ":pipeline:"
     key: upload-release-steps
     depends_on:
+      - test-windows
+      - test-bk-cli
       - build-rpm-packages
       - build-debian-packages
       - build-docker-alpine
       - build-docker-ubuntu
       - build-docker-centos
       - build-github-release
-      - test-windows
     command: ".buildkite/steps/upload-release-steps.sh"
