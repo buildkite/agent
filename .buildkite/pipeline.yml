@@ -272,6 +272,8 @@ steps:
   - name: ":pipeline:"
     key: upload-release-steps
     depends_on:
+      - test-windows
+      - test-bk-cli
       - build-rpm-packages
       - build-debian-packages
       - build-docker-alpine
