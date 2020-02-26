@@ -43,13 +43,7 @@ done
 
 echo "--- :s3: Copying /$version to /latest"
 
-# write all versions to a tmp file
-aws s3 ls --region "us-east-1" "$s3_base_url/" | grep PRE | awk '{print $2}' | awk -F '/' '{print $1}' > ../.versions
-
-# use ruby to determine the latest version
-../scripts/ruby-env bash -c "cat .versions | ./scripts/latest_version.rb > .latest_version"
-
-latest_version=$(cat ../.latest_version | tr -d "\n")
+latest_version=$(aws s3 ls --region "us-east-1" "$s3_base_url/" | grep PRE | awk '{print $2}' | awk -F '/' '{print $1}' | ruby ../scripts/latest_version.rb)
 latest_version_s3_url="$s3_base_url/$latest_version/"
 latest_s3_url="$s3_base_url/latest/"
 
