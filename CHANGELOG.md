@@ -328,7 +328,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Add buildkite-agent.cfg to docker images [#847](https://github.com/buildkite/agent/pull/847) (@lox)
 
 ### Added
-- Experimental `--spawn` option to spawn multiple parallel agents [#590](https://github.com/buildkite/agent/pull/590) (@lox)
+- Experimental `--spawn` option to spawn multiple parallel agents [#590](https://github.com/buildkite/agent/pull/590) (@lox) - **Update:** This feature is now super stable.
 - Add a linux/ppc64le build target [#859](https://github.com/buildkite/agent/pull/859) (@lox)
 - Basic metrics collection for Datadog [#832](https://github.com/buildkite/agent/pull/832) (@lox)
 - Added a `job update` command to make changes to a job [#833](https://github.com/buildkite/agent/pull/833) (@keithpitt)
