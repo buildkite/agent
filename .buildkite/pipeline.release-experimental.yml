@@ -26,8 +26,18 @@ steps:
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "experimental"
+      DEB_S3_BUCKET: "apt.buildkite.com/buildkite-agent"
     agents:
-      queue: "deploy-legacy"
+      queue: "deploy"
+    plugins:
+      - ecr#v2.0.0:
+          login: true
+          account-ids: "032379705303"
+      - docker#v3.5.0:
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2020.03"
+          propagate-environment: true
+          tmpfs:
+            - "/root/.gnupg"
 
   - name: ":docker:"
     command: ".buildkite/steps/publish-docker-images.sh"

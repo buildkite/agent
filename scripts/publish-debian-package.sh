@@ -30,16 +30,6 @@ if [ -z "$GPG_SIGNING_KEY" ]; then
   exit 1
 fi
 
-if [ -z "$GPG_PASSPHRASE_PASSWORD" ]; then
-  echo "Error: Missing ENV variable GPG_PASSPHRASE_PASSWORD"
-  exit 1
-fi
-
-if [ -z "$GPG_PASSPHRASE_PATH" ]; then
-  echo "Error: Missing ENV variable GPG_PASSPHRASE_PATH"
-  exit 1
-fi
-
 if [ -z "$DEB_S3_BUCKET" ]; then
   echo "Error: Missing ENV variable DEB_S3_BUCKET"
   exit 1
@@ -47,13 +37,10 @@ fi
 
 info "Uploading $PACKAGE to $DEB_S3_BUCKET ($CODENAME $COMPONENT)"
 
-# Decrpyt the GPG_PASSPHRASE with our GPG_PASSPHRASE_PASSWORD
-GPG_PASSPHRASE=`openssl aes-256-cbc -k "$GPG_PASSPHRASE_PASSWORD" -in "$GPG_PASSPHRASE_PATH" -d`
-
 deb_s3_args=(
   --preserve-versions
   --sign "$GPG_SIGNING_KEY"
-  --gpg-options "\-\-digest-algo SHA512 \-\-passphrase $GPG_PASSPHRASE"
+  --gpg-options "\-\-digest-algo SHA512"
   --codename "$CODENAME"
   --component "$COMPONENT"
 )
