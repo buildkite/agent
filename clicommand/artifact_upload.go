@@ -15,9 +15,11 @@ Description:
 
    Uploads files to a job as artifacts.
 
-   You need to ensure that the paths are surrounded by quotes otherwise the
-   built-in shell path globbing will provide the files, which is currently not
-   supported.
+   Please ensure path patterns are surrounded by quotes otherwise the built-in
+   shell path globbing will provide the files, which is currently not supported.
+
+   The destination argument is used when you are uploading artifacts to Amazon S3,
+   GCS, or Artifactory. 
 
 Example:
 
