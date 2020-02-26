@@ -9,7 +9,7 @@ import (
 
 var UploadHelpDescription = `Usage:
 
-   buildkite-agent artifact upload <pattern> <destination> [arguments...]
+   buildkite-agent artifact upload [options] <pattern> [destination]
 
 Description:
 
@@ -18,6 +18,12 @@ Description:
    You need to ensure that the paths are surrounded by quotes otherwise the
    built-in shell path globbing will provide the files, which is currently not
    supported.
+
+   You can specify an alternate destination on Amazon S3, Google Cloud Storage
+   or Artifactory as per the examples below. This may be specified in the
+   'destination' argument, or in the 'BUILDKITE_ARTIFACT_UPLOAD_DESTINATION'
+   environment variable.  Otherwise, artifacts are uploaded to a
+   Buildkite-managed Amazon S3 bucket.
 
 Example:
 
