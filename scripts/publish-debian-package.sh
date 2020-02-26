@@ -12,6 +12,14 @@ function info {
   echo -e "\033[35m$1\033[0m"
 }
 
+dry_run() {
+  if [[ "${DRY_RUN:-}" == "false" ]] ; then
+    "$@"
+  else
+    echo "[dry-run] $*"
+  fi
+}
+
 PACKAGE=${1}
 CODENAME=${2}
 COMPONENT="main"
@@ -72,7 +80,7 @@ fi
 
 # Uploads to s3 and signs with the default key on the system
 
-bundle exec deb-s3 upload "${deb_s3_args[@]}" "$PACKAGE"
+dry_run bundle exec deb-s3 upload "${deb_s3_args[@]}" "$PACKAGE"
 
 echo "✅ All done! To install this package:"
 echo ""
