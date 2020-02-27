@@ -18,6 +18,12 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `no-fake-exits`
+
+Avoid returning `-1` exit codes from processes which were killed. This value comes from Go's process management code, rather than the system, which can cause confusion. In concert with reporting the signal which terminated a process, this gives you a complete and accurate picture of the POSIX exit state of processes run in the agent.
+
+**Status**: correcting a historical bug, but holding back for a major release to avoid breaking peoples' workflows. We'd like this to be the standard behaviour in 4.0. 👍👍
+
 ### `git-mirrors`
 
 Maintain a single bare git mirror for each repository on a host that is shared amongst multiple agents and pipelines. Checkouts reference the git mirror using `git clone --reference`, as do submodules.

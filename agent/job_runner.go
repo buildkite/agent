@@ -281,9 +281,13 @@ func (r *JobRunner) Run() error {
 		r.logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
-	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+	ws := r.process.WaitStatus()
+	exitStatus := ""
 	signal := ""
-	if ws := r.process.WaitStatus(); ws.Signaled() {
+	if !experiments.IsEnabled(`no-fake-exits`) || ws.Exited() {
+		exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+	}
+	if ws.Signaled() {
 		signal = process.SignalString(ws.Signal())
 	}
 
