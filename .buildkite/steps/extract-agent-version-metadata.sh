@@ -6,9 +6,9 @@ build_version=${BUILDKITE_BUILD_NUMBER:-1}
 full_agent_version="buildkite-agent version ${agent_version}, build ${build_version}"
 
 # docker variants
-docker_alpine_image_tag="buildkiteci/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}"
-docker_ubuntu_image_tag="buildkiteci/agent:ubuntu-build-${BUILDKITE_BUILD_NUMBER}"
-docker_centos_image_tag="buildkiteci/agent:centos-build-${BUILDKITE_BUILD_NUMBER}"
+docker_alpine_image_tag="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}"
+docker_ubuntu_image_tag="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent:ubuntu-build-${BUILDKITE_BUILD_NUMBER}"
+docker_centos_image_tag="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent:centos-build-${BUILDKITE_BUILD_NUMBER}"
 
 is_prerelease=0
 if [[ "$agent_version" =~ (alpha|beta|rc) ]] ; then
