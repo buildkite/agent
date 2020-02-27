@@ -26,7 +26,7 @@ for variant in "alpine" "ubuntu" "centos" ; do
   echo "Docker Image Tag for $variant: $source_image"
 
   echo "--- :docker: Pulling prebuilt image"
-  dry_run docker pull "$source_image"
+  docker pull "$source_image"
 
   echo "--- :docker: Publishing images for $variant"
   .buildkite/steps/publish-docker-image.sh "$variant" "$source_image" "$CODENAME" "$version" "$build"

@@ -45,7 +45,7 @@ test_docker_image() {
 push_docker_image() {
   local image_tag="$1"
   echo "--- Pushing :docker: image to $image_tag"
-  dry_run docker push "$image_tag"
+  docker push "$image_tag"
 }
 
 variant="${1:-}"
