@@ -34,4 +34,8 @@ steps:
     env:
       CODENAME: "experimental"
     agents:
-      queue: "deploy-legacy"
+      queue: "deploy"
+    plugins:
+      - ecr#v2.0.0:
+          login: true
+          account-ids: "445615400570"

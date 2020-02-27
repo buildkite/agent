@@ -14,8 +14,11 @@ if [[ "$CODENAME" == "" ]]; then
   exit 1
 fi
 
-# login to ECR in the buildkite-dev AWS account, where the docker images have been staged privately
-eval "$(aws ecr get-login --no-include-email --registry-ids=445615400570 --region us-east-1)"
+echo "--- Logging in to Docker Hub"
+
+dockerhub_user="$(aws ssm get-parameter --name /pipelines/agent/DOCKER_HUB_USER --with-decryption --output text --query Parameter.Value --region us-east-1)"
+
+aws ssm get-parameter --name /pipelines/agent/DOCKER_HUB_PASSWORD --with-decryption --output text --query Parameter.Value --region us-east-1 | docker login --username="${dockerhub_user}" --password-stdin
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
