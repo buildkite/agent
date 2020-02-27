@@ -69,6 +69,9 @@ type JobRunner struct {
 	// If the job is being cancelled
 	cancelled bool
 
+	// If the agent is being stopped
+	stopped bool
+
 	// Used to wait on various routines that we spin up
 	routineWaitGroup sync.WaitGroup
 
@@ -279,12 +282,15 @@ func (r *JobRunner) Run() error {
 	}
 
 	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+	signal := ""
+	if ws := r.process.WaitStatus(); ws.Signaled() {
+		signal = process.SignalString(ws.Signal())
+	}
 
+	// Write some metrics about the job run
 	jobMetrics := r.metrics.With(metrics.Tags{
 		"exit_code": exitStatus,
 	})
-
-	// Write some metrics about the job run
 	if exitStatus == "0" {
 		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
 		jobMetrics.Count(`jobs.success`, 1)
@@ -297,11 +303,18 @@ func (r *JobRunner) Run() error {
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, exitStatus, r.logStreamer.FailedChunks())
+	r.finishJob(finishedAt, exitStatus, signal, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
 	return nil
+}
+
+func (r *JobRunner) CancelAndStop() error {
+	r.cancelLock.Lock()
+	r.stopped = true
+	r.cancelLock.Unlock()
+	return r.Cancel()
 }
 
 func (r *JobRunner) Cancel() error {
@@ -317,8 +330,12 @@ func (r *JobRunner) Cancel() error {
 		return nil
 	}
 
-	r.logger.Info("Canceling job %s with a grace period of %ds",
-		r.job.ID, r.conf.AgentConfiguration.CancelGracePeriod)
+	reason := ""
+	if r.stopped {
+		reason = " (agent stopping)"
+	}
+	r.logger.Info("Canceling job %s with a grace period of %ds%s",
+		r.job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
 
 	// First we interrupt the process (ctrl-c or SIGINT)
 	if err := r.process.Interrupt(); err != nil {
@@ -455,7 +472,6 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
-
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
 	if pluginValidation, ok := env["BUILDKITE_PLUGIN_VALIDATION"]; ok {
@@ -464,7 +480,6 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 			enablePluginValidation = true
 		}
 	}
-
 	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
 
 	// Convert the env map into a slice (which is what the script gear
@@ -502,10 +517,23 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
 // forever until it finally gets a successfull response from the API.
-func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, failedChunkCount int) error {
+func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal string, failedChunkCount int) error {
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.job.ExitStatus = exitStatus
+	r.job.Signal = signal
 	r.job.ChunksFailedCount = failedChunkCount
+
+	// If the agent has been stopped, send a signal reason of `agent_stop` to distinguish between
+	// user-generated cancels and those due to the agent getting an operating system signal. If
+	// the job was signalled because it was cancelled then the reason is `cancel`.
+	if r.stopped {
+		r.job.SignalReason = `agent_stop`
+	} else if r.cancelled {
+		r.job.SignalReason = `cancel`
+	}
+
+	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
+		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
 
 	return retry.Do(func(s *retry.Stats) error {
 		response, err := r.apiClient.FinishJob(r.job)
