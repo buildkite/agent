@@ -27,7 +27,7 @@ echo '--- Installing dependencies'
 apk --no-cache add createrepo_c --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing
 
 # createrepo_c requires some exotic flags on the cp, which aren't available on the busybox version
-apk add coreutils
+apk --no-cache add coreutils
 
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
