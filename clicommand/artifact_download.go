@@ -9,11 +9,12 @@ import (
 
 var DownloadHelpDescription = `Usage:
 
-   buildkite-agent artifact download [arguments...]
+   buildkite-agent artifact download [options] <query> <destination>
 
 Description:
 
-   Downloads artifacts from Buildkite to the local machine.
+	 Downloads artifacts specified by <query> from Buildkite to <destination>
+	 directory on the local machine.
 
    Note: You need to ensure that your search query is surrounded by quotes if
    using a wild card as the built-in shell path globbing will provide files,
