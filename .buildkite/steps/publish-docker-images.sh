@@ -15,7 +15,7 @@ if [[ "$CODENAME" == "" ]]; then
 fi
 
 # login to ECR in the buildkite-dev AWS account, where the docker images have been staged privately
-eval "$(aws ecr get-login --no-include-email --registry-ids=445615400570)"
+eval "$(aws ecr get-login --no-include-email --registry-ids=445615400570 --region us-east-1)"
 
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
