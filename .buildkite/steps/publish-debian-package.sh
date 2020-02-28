@@ -15,6 +15,14 @@ fi
 
 echo '--- Configuring gnupg'
 
+echo "confirming gnupg config is stored in memory, not on disk"
+
+apk add --update findmnt
+if ! findmnt --source tmpfs --target /root/.gnupg; then
+  echo "/root/.gnupg must be mounted as tmpfs to ensure private keys aren't written to disk"
+  exit 1
+fi
+
 echo "fetching signing key..."
 export GPG_SIGNING_KEY=$(aws ssm get-parameter --name /pipelines/agent/GPG_SIGNING_KEY --with-decryption --output text --query Parameter.Value --region us-east-1)
 
