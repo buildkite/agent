@@ -24,12 +24,15 @@ mkdir -p rpm
 buildkite-agent artifact download --build "$artifacts_build" "rpm/*.rpm" rpm/
 
 echo '--- Installing dependencies'
-bundle
+apk --no-cache add createrepo_c --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing
+
+# createrepo_c requires some exotic flags on the cp, which aren't available on the busybox version
+apk --no-cache add coreutils
 
 # Make sure we have a local copy of the yum repo
 echo "--- Syncing s3://$RPM_S3_BUCKET to `hostname`"
 mkdir -p $YUM_PATH
-aws --region us-east-1 s3 sync --delete "s3://$RPM_S3_BUCKET" "$YUM_PATH"
+aws --region us-east-1 s3 sync --delete --only-show-errors "s3://$RPM_S3_BUCKET" "$YUM_PATH"
 
 # Add the rpms and update meta-data
 for ARCH in "x86_64" "i386"; do
