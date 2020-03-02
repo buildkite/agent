@@ -32,7 +32,16 @@ steps:
     env:
       CODENAME: "stable"
     agents:
-      queue: "deploy-legacy"
+      queue: "deploy"
+    plugins:
+      - ecr#v2.0.0:
+          login: true
+          account-ids: "032379705303"
+      - docker#v3.5.0:
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2020.03"
+          propagate-environment: true
+          volumes:
+            - "/yum.buildkite.com"
 
   - name: ":debian:"
     command: ".buildkite/steps/publish-debian-package.sh"
