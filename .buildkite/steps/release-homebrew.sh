@@ -41,6 +41,7 @@ fi
 
 GITHUB_RELEASE_VERSION=$(buildkite-agent meta-data get github_release_version)
 GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
+GITHUB_RELEASE_ACCESS_TOKEN=$(aws ssm get-parameter --name /pipelines/agent/GITHUB_RELEASE_ACCESS_TOKEN --with-decryption --output text --query Parameter.Value --region us-east-1)
 
 if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
   BREW_RELEASE_TYPE="devel"
