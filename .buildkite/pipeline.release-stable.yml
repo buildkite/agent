@@ -31,6 +31,7 @@ steps:
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "stable"
+      RPM_S3_BUCKET: "yum.buildkite.com"
     agents:
       queue: "deploy"
     plugins:
