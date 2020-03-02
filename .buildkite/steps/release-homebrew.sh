@@ -111,4 +111,6 @@ if [[ "${DRY_RUN:-}" == "false" ]] ; then
       -H "Content-Type: application/json" \
       --data-binary "@pkg/github_post_data.json" \
       --fail
+else
+  echo "Dry Run Mode: skipping commit on github"
 fi
