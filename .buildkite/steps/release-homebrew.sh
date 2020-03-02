@@ -41,6 +41,7 @@ fi
 
 GITHUB_RELEASE_VERSION=$(buildkite-agent meta-data get github_release_version)
 GITHUB_RELEASE_TYPE=$(buildkite-agent meta-data get github_release_type)
+GITHUB_RELEASE_ACCESS_TOKEN=$(aws ssm get-parameter --name /pipelines/agent/GITHUB_RELEASE_ACCESS_TOKEN --with-decryption --output text --query Parameter.Value --region us-east-1)
 
 if [[ "$GITHUB_RELEASE_TYPE" != "stable" ]]; then
   BREW_RELEASE_TYPE="devel"
@@ -71,7 +72,7 @@ echo "Release SHA256: $RELEASE_SHA256"
 
 echo "--- :octocat: Fetching current homebrew formula from Github Contents API"
 
-CONTENTS_API_RESPONSE="$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN")"
+CONTENTS_API_RESPONSE="$(curl "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb" -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}")"
 
 echo "Base64 decoding Github response into $FORMULA_FILE"
 
@@ -106,8 +107,11 @@ JSON
 
 if [[ "${DRY_RUN:-}" == "false" ]] ; then
   echo "Posting JSON to Github Contents API"
-  curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb?access_token=$GITHUB_RELEASE_ACCESS_TOKEN" \
+  curl -X PUT "https://api.github.com/repos/buildkite/homebrew-buildkite/contents/buildkite-agent.rb" \
+      -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}" \
       -H "Content-Type: application/json" \
       --data-binary "@pkg/github_post_data.json" \
       --fail
+else
+  echo "Dry Run Mode: skipping commit on github"
 fi

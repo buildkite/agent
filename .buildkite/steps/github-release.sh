@@ -9,6 +9,9 @@ dry_run() {
   fi
 }
 
+echo '--- Getting credentials from SSM'
+export GITHUB_RELEASE_ACCESS_TOKEN=$(aws ssm get-parameter --name /pipelines/agent/GITHUB_RELEASE_ACCESS_TOKEN --with-decryption --output text --query Parameter.Value --region us-east-1)
+
 if [[ "$GITHUB_RELEASE_ACCESS_TOKEN" == "" ]]; then
   echo "Error: Missing \$GITHUB_RELEASE_ACCESS_TOKEN"
   exit 1
