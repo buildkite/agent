@@ -936,6 +936,14 @@ func (b *Bootstrap) CheckoutPhase() error {
 					// will be a lot slower (clone vs fetch), but hopefully will
 					// allow the agent to self-heal
 					_ = b.removeCheckoutDir()
+
+					// Now make sure the build directory exists again before we try
+					// to checkout again, or proceed and run hooks which presume the
+					// checkout dir exists
+					if err := b.createCheckoutDir(); err != nil {
+						return err
+					}
+
 				}
 
 				return err
