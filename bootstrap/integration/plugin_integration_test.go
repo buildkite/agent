@@ -67,6 +67,7 @@ func TestRunningPlugins(t *testing.T) {
 		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
+			return
 		}
 		c.Exit(0)
 	})
@@ -119,6 +120,55 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	if exitCode != 5 {
 		t.Fatalf("Expected an exit code of %d, got %d", 5, exitCode)
+	}
+
+	tester.CheckMocks(t)
+}
+
+func TestPluginConditionFailsBootstrap(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	pluginMock := tester.MustMock(t, "my-plugin")
+
+	var p *testPlugin
+
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": []string{
+				"@echo off",
+				pluginMock.Path + " testing",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": []string{
+				"#!/bin/bash",
+				pluginMock.Path + " testing",
+			},
+		})
+	}
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`BUILDKITE_PLUGINS=` + json,
+		`BUILDKITE_ALLOW_PLUGIN_IF=false`,
+	}
+
+	pluginMock.Expect("testing").NotCalled()
+
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatal("Expected the bootstrap to fail")
 	}
 
 	tester.CheckMocks(t)

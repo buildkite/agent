@@ -14,27 +14,26 @@ import (
 type Plugin struct {
 	// Where the plugin can be found (can either be a file system path, or
 	// a git repository)
-	Location string
+	Location string `conditional:"location"`
 
 	// The version of the plugin that should be running
-	Version string
+	Version string `conditional:"version"`
 
 	// The clone method
-	Scheme string
+	Scheme string `conditional:"scheme"`
 
 	// Any authentication attached to the repostiory
-	Authentication string
+	Authentication string `conditional:"authentication"`
 
 	// Whether the plugin refers to a vendored path
-	Vendored bool
+	Vendored bool `conditional:"vendored"`
 
 	// Configuration for the plugin
-	Configuration map[string]interface{}
+	Configuration map[string]interface{} `conditional:"config"`
 }
 
 var (
-	locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
-	vendoredRegex       = regexp.MustCompile(`^\.`)
+	vendoredRegex = regexp.MustCompile(`^\.`)
 )
 
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {

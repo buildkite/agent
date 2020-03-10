@@ -80,6 +80,7 @@ type AgentStartConfig struct {
 	NoPlugins                  bool     `cli:"no-plugins"`
 	NoPluginValidation         bool     `cli:"no-plugin-validation"`
 	NoPTY                      bool     `cli:"no-pty"`
+	AllowPluginIf              string   `cli:"allow-plugin-if"`
 	TimestampLines             bool     `cli:"timestamp-lines"`
 	HealthCheckAddr            string   `cli:"health-check-addr"`
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
@@ -389,6 +390,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
 		},
 		cli.StringFlag{
+			Name:   "allow-plugin-if",
+			Usage:  "Apply a conditional to specify plugins that the agent can use",
+			EnvVar: "BUILDKITE_ALLOW_PLUGIN_IF",
+			Value:  "",
+		},
+		cli.StringFlag{
 			Name:   "cancel-signal",
 			Usage:  "The signal to use for cancellation",
 			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
@@ -577,6 +584,7 @@ var AgentStartCommand = cli.Command{
 			SSHKeyscan:                 !cfg.NoSSHKeyscan,
 			CommandEval:                !cfg.NoCommandEval,
 			PluginsEnabled:             !cfg.NoPlugins,
+			AllowPluginIf:              cfg.AllowPluginIf,
 			PluginValidation:           !cfg.NoPluginValidation,
 			LocalHooksEnabled:          !cfg.NoLocalHooks,
 			RunInPty:                   !cfg.NoPTY,
