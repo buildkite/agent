@@ -1,6 +1,0 @@
-github.com/fortytw2/leaktest v0.0.0-20170715211739-3b724c3d7b87 h1:vC7ihXqN2fougprHfqpv7GyEd7tUgZfmHZ5bXPiSKgE=
-github.com/fortytw2/leaktest v0.0.0-20170715211739-3b724c3d7b87/go.mod h1:jDsjWgpAGjm2CA7WthBh/CdZYEPF31XHquHwclZch5g=
-github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 h1:q2e307iGHPdTGp0hoxKjt1H5pDo6utceo3dQVK3I5XQ=
-github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5/go.mod h1:jvVRKCrJTQWu0XVbaOlby/2lO20uSCHEMzzplHXte1o=
-github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5 h1:T7hUw7pBSINuHQyWwMdfIWZZH5M3ju4yXIbuV/Upp+4=
-github.com/sasha-s/go-deadlock v0.0.0-20180226215254-237a9547c8a5/go.mod h1:StQn567HiB1fF2yJ44N9au7wOhrPS3iZqiDbRupzT10=
