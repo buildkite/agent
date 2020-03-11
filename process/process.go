@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/pkg/errors"
 )
