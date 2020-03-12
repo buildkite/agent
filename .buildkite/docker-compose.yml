@@ -2,7 +2,7 @@ version: '3.5'
 
 services:
   agent:
-    image: golang:1.13
+    image: golang:1.14.0-buster
     volumes:
       - ../:/work:cached
     working_dir: /work

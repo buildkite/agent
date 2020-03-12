@@ -63,7 +63,7 @@ go run *.go start --debug --build-path=/tmp/buildkite-builds --token "abc"
 
 ### Dependency management
 
-We're using Go 1.13+ and [Go Modules](https://github.com/golang/go/wiki/Modules) to manage our Go dependencies.
+We're using Go 1.14+ and [Go Modules](https://github.com/golang/go/wiki/Modules) to manage our Go dependencies.
 
 If you are using Go 1.11+ and have the agent in your `GOPATH`, you will need to enable modules via the environment variable:
 
