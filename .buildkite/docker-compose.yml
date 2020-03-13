@@ -2,7 +2,7 @@ version: '3.5'
 
 services:
   agent:
-    image: golang:1.13
+    image: golang:1.14@sha256:d27017d27f9c9a58b361aa36126a29587ffd3b1b274af0d583fe4954365a4a59
     volumes:
       - ../:/work:cached
     working_dir: /work
