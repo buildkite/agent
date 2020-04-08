@@ -112,7 +112,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 			"EXIT %" + hookExitStatusEnv + "%"
 	} else if isWindows && isPwshHook {
 		script = "$ErrorActionPreference = \"STOP\"" + "\n" +
-			"Get-ChildItem Env: | Foreach-Object {$($_.Name)=$($_.Value)\"} | Set-Content \" " + h.beforeEnvFile.Name() + "\n" +
+			"Get-ChildItem Env: | Foreach-Object {\"$($_.Name)=$($_.Value)\"} | Set-Content " + h.beforeEnvFile.Name() + "\n" +
 			absolutePathToHook + "\n" +
 			"if ($LASTEXITCODE -eq $null) {$Env:" + hookExitStatusEnv + " = 0} else {$Env:" + hookExitStatusEnv + " = $LASTEXITCODE}\n" +
 			"$Env:" + hookWorkingDirEnv + " = $PWD | Select-Object -ExpandProperty Path\n" +
