@@ -57,7 +57,7 @@ func TestCollect(t *testing.T) {
 	}{
 		{
 			"Mr Freeze.jpg",
-			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			strings.Join([]string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"}, "/"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			362371,
@@ -65,7 +65,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			"Commando.jpg",
-			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			strings.Join([]string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"}, "/"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			113000,
@@ -73,7 +73,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			"The Terminator.jpg",
-			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			strings.Join([]string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"}, "/"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			47301,
@@ -81,7 +81,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			"Smile.gif",
-			filepath.Join(rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
+			strings.Join([]string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"}, "/"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
 			2038453,
