@@ -57,7 +57,7 @@ func TestCollect(t *testing.T) {
 	}{
 		{
 			Name:         "Mr Freeze.jpg",
-			Path:         strings.Join([]string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"}, "/"),
+			Path:         "test/fixtures/artifacts/Mr Freeze.jpg",
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     362371,
@@ -65,7 +65,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			Name:         "Commando.jpg",
-			Path:         strings.Join([]string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"}, "/"),
+			Path:         "test/fixtures/artifacts/folder/Commando.jpg",
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     113000,
@@ -73,7 +73,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			Name:         "The Terminator.jpg",
-			Path:         strings.Join([]string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"}, "/"),
+			Path:         "test/fixtures/artifacts/this is a folder with a space/The Terminator.jpg",
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     47301,
@@ -81,7 +81,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			Name:         "Smile.gif",
-			Path:         strings.Join([]string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"}, "/"),
+			Path:         rootWithoutVolume[1:] + "/test/fixtures/artifacts/gifs/Smile.gif",
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
 			GlobPath:     filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
 			FileSize:     2038453,
