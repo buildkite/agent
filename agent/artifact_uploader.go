@@ -140,10 +140,13 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				}
 			}
 
-			path, err := filepath.Rel(wd, absolutePath)
+			osPath, err := filepath.Rel(wd, absolutePath)
 			if err != nil {
 				return nil, err
 			}
+
+			// Convert any Windows paths to Unix/URI form
+			path := filepath.ToSlash(osPath)
 
 			// Build an artifact object using the paths we have.
 			artifact, err := a.build(path, absolutePath, globPath)
