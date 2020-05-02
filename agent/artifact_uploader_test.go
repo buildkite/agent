@@ -3,11 +3,13 @@ package agent
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 )
@@ -49,7 +51,7 @@ func TestCollect(t *testing.T) {
 
 	var testCases = []struct {
 		Name         string
-		Path         string
+		Path         []string
 		AbsolutePath string
 		GlobPath     string
 		FileSize     int
@@ -57,7 +59,7 @@ func TestCollect(t *testing.T) {
 	}{
 		{
 			Name:         "Mr Freeze.jpg",
-			Path:         strings.Join([]string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"}, "/"),
+			Path:         []string{"test", "fixtures", "artifacts", "Mr Freeze.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "Mr Freeze.jpg"),
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     362371,
@@ -65,7 +67,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			Name:         "Commando.jpg",
-			Path:         strings.Join([]string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"}, "/"),
+			Path:         []string{"test", "fixtures", "artifacts", "folder", "Commando.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "folder", "Commando.jpg"),
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     113000,
@@ -73,7 +75,7 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			Name:         "The Terminator.jpg",
-			Path:         strings.Join([]string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"}, "/"),
+			Path:         []string{"test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     47301,
@@ -81,13 +83,26 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			Name:         "Smile.gif",
-			Path:         strings.Join([]string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"}, "/"),
+			Path:         []string{rootWithoutVolume[1:], "test", "fixtures", "artifacts", "gifs", "Smile.gif"},
 			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "gifs", "Smile.gif"),
 			GlobPath:     filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
 			FileSize:     2038453,
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
 		},
 	}
+
+	// For the normalised-upload-paths experiment, uploaded artifact paths are
+	// normalised with Unix/URI style path separators, even on Windows.
+	// Without the experiment on, we use the file path given by the file system.
+	// 
+	// To simulate that in this test, we run the test twice, once comparing to
+	// paths processed with filepath.Join (which uses native OS path
+	// separators), and then with the experiment enabled and with the path.Join
+	// function instead (which uses Unix/URI-style path separators, regardless
+	// of platform)
+
+	// These test runs use filepath.Join, which is the behaviour without normalised-upload-paths
+	experiments.Disable(`normalised-upload-paths`)
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -96,13 +111,33 @@ func TestCollect(t *testing.T) {
 				t.Fatalf("Failed to find artifact %q", tc.Name)
 			}
 
-			assert.Equal(t, tc.Path, a.Path)
+			assert.Equal(t, filepath.Join(tc.Path...), a.Path)
 			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
 			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
 		})
 	}
+
+	// These test runs use path.Join, which is the behaviour without normalised-upload-paths
+	experiments.Enable(`normalised-upload-paths`)
+
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			a := findArtifact(artifacts, tc.Name)
+			if a == nil {
+				t.Fatalf("Failed to find artifact %q", tc.Name)
+			}
+
+			assert.Equal(t, path.Join(tc.Path...), a.Path)
+			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
+			assert.Equal(t, tc.GlobPath, a.GlobPath)
+			assert.Equal(t, tc.FileSize, int(a.FileSize))
+			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
+		})
+	}
+
+	experiments.Disable(`normalised-upload-paths`)
 }
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {

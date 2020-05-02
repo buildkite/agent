@@ -7,6 +7,11 @@ func Enable(experiment string) {
 	experiments[experiment] = true
 }
 
+// Disable a particular experiment in the agent
+func Disable(experiment string) {
+	delete(experiments, experiment)
+}
+
 // Check if an experiment has been enabled
 func IsEnabled(experiment string) bool {
 	if val, ok := experiments[experiment]; ok {

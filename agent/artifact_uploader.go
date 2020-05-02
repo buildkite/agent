@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/mime"
 	"github.com/buildkite/agent/v3/pool"
@@ -140,13 +141,15 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				}
 			}
 
-			osPath, err := filepath.Rel(wd, absolutePath)
+			path, err := filepath.Rel(wd, absolutePath)
 			if err != nil {
 				return nil, err
 			}
 
-			// Convert any Windows paths to Unix/URI form
-			path := filepath.ToSlash(osPath)
+			if experiments.IsEnabled(`normalised-upload-paths`) {
+				// Convert any Windows paths to Unix/URI form
+				path = filepath.ToSlash(path)
+			}
 
 			// Build an artifact object using the paths we have.
 			artifact, err := a.build(path, absolutePath, globPath)
