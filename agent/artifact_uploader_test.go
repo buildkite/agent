@@ -103,6 +103,7 @@ func TestCollect(t *testing.T) {
 
 	// These test runs use filepath.Join, which is the behaviour without normalised-upload-paths
 	experiments.Disable(`normalised-upload-paths`)
+	assert.Equal(t, experiments.IsEnabled(`normalised-upload-paths`), false)
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -121,6 +122,7 @@ func TestCollect(t *testing.T) {
 
 	// These test runs use path.Join, which is the behaviour without normalised-upload-paths
 	experiments.Enable(`normalised-upload-paths`)
+	assert.Equal(t, experiments.IsEnabled(`normalised-upload-paths`), true)
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
@@ -138,6 +140,7 @@ func TestCollect(t *testing.T) {
 	}
 
 	experiments.Disable(`normalised-upload-paths`)
+	assert.Equal(t, experiments.IsEnabled(`normalised-upload-paths`), false)
 }
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
