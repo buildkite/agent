@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## Unreleased
 
 ### Fixed
+- Add a retry for errors during artifact search [#1210](https://github.com/buildkite/agent/pull/1210) (@lox)
 - Fix checkout dir missing and hooks failing after failed checkout retries [#1192](https://github.com/buildkite/agent/pull/1192) (@sj26)
+
+### Changed
+- Bump golang build version to 1.14 [#1197](https://github.com/buildkite/agent/pull/1197) (@yob)
+- Added 'spawn=1' with to all .cfg templates [#1175](https://github.com/buildkite/agent/pull/1175) (@drnic)
+- Send more signal information back to Buildkite [#899](https://github.com/buildkite/agent/pull/899) (@lox)
+- Updated artifact --help documentation [#1183](https://github.com/buildkite/agent/pull/1183) (@pda)
+- Remove vendor in favor of go modules [#1117](https://github.com/buildkite/agent/pull/1117) (@lox)
+- Update crypto [#1194](https://github.com/buildkite/agent/pull/1194) (@gavinelder)
 
 ## [v3.20.0](https://github.com/buildkite/agent/tree/v3.20.0) (2020-02-10)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.19.0...v3.20.0)
