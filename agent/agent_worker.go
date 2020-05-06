@@ -137,8 +137,13 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 				if err != nil {
 					// Get the last heartbeat time to the nearest microsecond
 					a.stats.Lock()
-					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
-						err, heartbeatInterval, time.Now().Sub(a.stats.lastHeartbeat))
+					if a.stats.lastHeartbeat.IsZero() {
+						a.logger.Error("Failed to heartbeat %s. Will try again in %s. (No heartbeat yet)",
+							err, heartbeatInterval)
+					} else {
+						a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+							err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
+					}
 					a.stats.Unlock()
 				}
 
@@ -213,7 +218,7 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 						return nil
 					} else {
 						a.logger.Debug("Agent has been idle for %.f seconds, but other agents haven't",
-							time.Now().Sub(lastActionTime).Seconds())
+							time.Since(lastActionTime).Seconds())
 					}
 				}
 			}
@@ -332,7 +337,11 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
-		return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", err, a.stats.lastPing)
+		if a.stats.lastPing.IsZero() {
+			return nil, fmt.Errorf("Failed to ping: %v (No successful ping yet)", err)
+		} else {
+			return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", err, time.Since(a.stats.lastPing))
+		}
 	}
 
 	// Track a timestamp for the successful ping for better errors
