@@ -35,20 +35,6 @@ func TestCollect(t *testing.T) {
 	volumeName := filepath.VolumeName(root)
 	rootWithoutVolume := strings.TrimPrefix(root, volumeName)
 
-	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
-		Paths: fmt.Sprintf("%s;%s",
-			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
-			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
-		),
-	})
-
-	artifacts, err := uploader.Collect()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, len(artifacts), 4)
-
 	var testCases = []struct {
 		Name         string
 		Path         []string
@@ -91,23 +77,45 @@ func TestCollect(t *testing.T) {
 		},
 	}
 
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+		Paths: fmt.Sprintf("%s;%s",
+			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
+			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
+		),
+	})
+
 	// For the normalised-upload-paths experiment, uploaded artifact paths are
 	// normalised with Unix/URI style path separators, even on Windows.
-	// Without the experiment on, we use the file path given by the file system.
+	// Without the experiment on, we use the file path given by the file system
 	// 
-	// To simulate that in this test, we run the test twice, once comparing to
-	// paths processed with filepath.Join (which uses native OS path
-	// separators), and then with the experiment enabled and with the path.Join
-	// function instead (which uses Unix/URI-style path separators, regardless
-	// of platform)
+	// To simulate that in this test, we collect artifacts from the file system
+	// twice, once with the experiment explicitly disabled, and one with it
+	// enabled. We then check the test cases against both sets of artifacts,
+	// comparing to paths processed with filepath.Join (which uses native OS
+	// path separators), and then with the experiment enabled and with the
+	// path.Join function instead (which uses Unix/URI-style path separators,
+	// regardless of platform)
 
-	// These test runs use filepath.Join, which is the behaviour without normalised-upload-paths
 	experiments.Disable(`normalised-upload-paths`)
-	assert.Equal(t, experiments.IsEnabled(`normalised-upload-paths`), false)
+	artifactsWithoutExperimentEnabled, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 4, len(artifactsWithoutExperimentEnabled))
 
+	experiments.Enable(`normalised-upload-paths`)
+	artifactsWithExperimentEnabled, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, 4, len(artifactsWithExperimentEnabled))
+
+	experiments.Disable(`normalised-upload-paths`)
+
+	// These test cases use filepath.Join, which is the behaviour without normalised-upload-paths
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			a := findArtifact(artifacts, tc.Name)
+			a := findArtifact(artifactsWithoutExperimentEnabled, tc.Name)
 			if a == nil {
 				t.Fatalf("Failed to find artifact %q", tc.Name)
 			}
@@ -120,13 +128,10 @@ func TestCollect(t *testing.T) {
 		})
 	}
 
-	// These test runs use path.Join, which is the behaviour without normalised-upload-paths
-	experiments.Enable(`normalised-upload-paths`)
-	assert.Equal(t, experiments.IsEnabled(`normalised-upload-paths`), true)
-
+	// These test cases use path.Join, which is the behaviour without normalised-upload-paths
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			a := findArtifact(artifacts, tc.Name)
+			a := findArtifact(artifactsWithExperimentEnabled, tc.Name)
 			if a == nil {
 				t.Fatalf("Failed to find artifact %q", tc.Name)
 			}
@@ -138,9 +143,6 @@ func TestCollect(t *testing.T) {
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
 		})
 	}
-
-	experiments.Disable(`normalised-upload-paths`)
-	assert.Equal(t, experiments.IsEnabled(`normalised-upload-paths`), false)
 }
 
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
