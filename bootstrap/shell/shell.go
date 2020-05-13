@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/lockfile"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/shellwords"
-	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 )
 
@@ -186,7 +186,7 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 		}
 	}
 
-	return &lock, err
+	return lock, err
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
@@ -274,7 +274,6 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		}
 		command = "powershell.exe"
 		args = []string{"-file", path}
-
 
 	case !isWindows && isBash:
 		command = "/bin/bash"
