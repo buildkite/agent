@@ -286,5 +286,6 @@ steps:
       - build-docker-alpine
       - build-docker-ubuntu
       - build-docker-centos
+      - build-docker-sidecar
       - build-github-release
     command: ".buildkite/steps/upload-release-steps.sh"
