@@ -54,7 +54,7 @@ codename="${3:-}"
 version="${4:-}"
 push="${PUSH_IMAGE:-true}"
 
-if [[ ! "$variant" =~ ^(alpine|ubuntu|centos)$ ]] ; then
+if [[ ! "$variant" =~ ^(alpine|ubuntu|centos|sidecar)$ ]] ; then
   echo "Unknown docker variant $variant"
   exit 1
 fi
@@ -92,13 +92,23 @@ ubuntu)
 centos)
   build_docker_image "$image_tag" "packaging/docker/centos-linux"
   ;;
+sidecar)
+  build_docker_image "$image_tag" "packaging/docker/sidecar"
+  ;;
 *)
   echo "Unknown variant $variant"
   exit 1
   ;;
 esac
 
-test_docker_image "$image_tag"
+case $variant in
+sidecar)
+  echo "Skipping tests for sidecar variant"
+  ;;
+*)
+  test_docker_image "$image_tag"
+  ;;
+esac
 
 if [[ $push == "true" ]] ; then
   push_docker_image "$image_tag"
