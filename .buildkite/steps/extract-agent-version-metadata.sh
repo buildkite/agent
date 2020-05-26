@@ -6,9 +6,11 @@ build_version=${BUILDKITE_BUILD_NUMBER:-1}
 full_agent_version="buildkite-agent version ${agent_version}, build ${build_version}"
 
 # docker variants
-docker_alpine_image_tag="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent:alpine-build-${BUILDKITE_BUILD_NUMBER}"
-docker_ubuntu_image_tag="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent:ubuntu-build-${BUILDKITE_BUILD_NUMBER}"
-docker_centos_image_tag="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent:centos-build-${BUILDKITE_BUILD_NUMBER}"
+registry="445615400570.dkr.ecr.us-east-1.amazonaws.com/agent"
+docker_alpine_image_tag="$registry:alpine-build-${BUILDKITE_BUILD_NUMBER}"
+docker_ubuntu_image_tag="$registry:ubuntu-build-${BUILDKITE_BUILD_NUMBER}"
+docker_centos_image_tag="$registry:centos-build-${BUILDKITE_BUILD_NUMBER}"
+docker_sidecar_image_tag="$registry:sidecar-build-${BUILDKITE_BUILD_NUMBER}"
 
 is_prerelease=0
 if [[ "$agent_version" =~ (alpha|beta|rc) ]] ; then
@@ -21,6 +23,7 @@ echo "Build version: $build_version"
 echo "Docker Alpine Image Tag: $docker_alpine_image_tag"
 echo "Docker Ubuntu Image Tag: $docker_ubuntu_image_tag"
 echo "Docker CentOS Image Tag: $docker_centos_image_tag"
+echo "Docker Sidecar Image Tag: $docker_sidecar_image_tag"
 echo "Is prerelease? $is_prerelease"
 
 buildkite-agent meta-data set "agent-version" "$agent_version"
@@ -29,4 +32,5 @@ buildkite-agent meta-data set "agent-version-build" "$build_version"
 buildkite-agent meta-data set "agent-docker-image-alpine" "$docker_alpine_image_tag"
 buildkite-agent meta-data set "agent-docker-image-ubuntu" "$docker_ubuntu_image_tag"
 buildkite-agent meta-data set "agent-docker-image-centos" "$docker_centos_image_tag"
+buildkite-agent meta-data set "agent-docker-image-sidecar" "$docker_sidecar_image_tag"
 buildkite-agent meta-data set "agent-is-prerelease" "$is_prerelease"
