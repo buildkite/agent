@@ -408,9 +408,9 @@ var AgentStartCommand = cli.Command{
 		DebugHTTPFlag,
 
 		// Global flags
-		ExperimentsFlag,
 		NoColorFlag,
 		DebugFlag,
+		ExperimentsFlag,
 		ProfileFlag,
 
 		// Deprecated flags which will be removed in v4
