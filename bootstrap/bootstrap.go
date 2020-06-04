@@ -1269,7 +1269,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	if err := b.shell.Run("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
 
-		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color")
+		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--")
 		if err != nil {
 			return err
 		}
