@@ -245,7 +245,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolTFlag{
 			Name:   "command-eval",
-			Usage:  "Allow running of arbitary commands",
+			Usage:  "Allow running of arbitrary commands",
 			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
 		cli.BoolTFlag{
@@ -286,7 +286,7 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.StringSliceFlag{
 			Name:   "phases",
-			Usage:  "The specific phases to execute. The order they're defined is is irrelevant.",
+			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
 		cli.StringSliceFlag{
