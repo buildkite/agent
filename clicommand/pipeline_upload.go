@@ -56,13 +56,14 @@ type PipelineUploadConfig struct {
 	NoInterpolation bool   `cli:"no-interpolation"`
 
 	// Global flags
-	Debug   bool   `cli:"debug"`
-	NoColor bool   `cli:"no-color"`
-	Profile string `cli:"profile"`
+	Debug   bool         `cli:"debug"`
+	NoColor bool         `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile string       `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
 }
@@ -103,6 +104,7 @@ var PipelineUploadCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ExperimentsFlag,
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
