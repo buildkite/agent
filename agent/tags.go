@@ -157,14 +157,24 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 
 	// Attempt to add the default GCP meta-data tags
 	if conf.TagsFromGCPMetaData {
-		gcpTags, err := t.gcpMetaDataDefault()
-		if err != nil {
-			// Don't blow up if we can't find them, just show a nasty error.
-			l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
-		} else {
-			for tag, value := range gcpTags {
-				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+		l.Info("Fetching GCP meta-data...")
+
+		err := retry.Do(func(s *retry.Stats) error {
+			gcpTags, err := t.gcpMetaDataDefault()
+			if err != nil {
+				// Don't blow up if we can't find them, just show a nasty error.
+				l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+			} else {
+				for tag, value := range gcpTags {
+					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+				}
 			}
+			return err
+		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
 		}
 	}
 
