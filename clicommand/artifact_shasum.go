@@ -27,7 +27,7 @@ Example:
    $ buildkite-agent artifact shasum "pkg/release.tar.gz" --build xxx
 
    This will search for all the files in the build with the path "pkg/release.tar.gz" and will
-   print to STDOUT its SHA-1 checksum.
+   print the SHA-1 checksum of each one to STDOUT.
 
    If you would like to target artifacts from a specific build step, you can do
    so by using the --step argument.
