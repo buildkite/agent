@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"os"
 	"reflect"
 	"runtime"
@@ -81,8 +82,15 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 }
 
 func TestFetchingTagsFromGCP(t *testing.T) {
+	// Force test coverage of retry code, at the cost of 1000-2000ms.
+	// This could be removed/improved later if we want faster tests.
+	calls := 0
 	fetcher := &tagFetcher{
 		gcpMetaDataDefault: func() (map[string]string, error) {
+			defer func() { calls++ }()
+			if calls <= 0 {
+				return nil, errors.New("transient failure, should retry")
+			}
 			return map[string]string{
 				`gcp:instance-id`: "my-instance",
 				`gcp:zone`:        "blah",
