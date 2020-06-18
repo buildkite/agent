@@ -174,7 +174,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
-			l.Error(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			l.Error(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
 		}
 	}
 
