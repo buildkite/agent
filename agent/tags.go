@@ -163,13 +163,15 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			gcpTags, err := t.gcpMetaDataDefault()
 			if err != nil {
 				// Don't blow up if we can't find them, just show a nasty error.
-				l.Error(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
-			} else {
-				for tag, value := range gcpTags {
-					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
-				}
+				l.Error(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+				return err
 			}
-			return err
+
+			for tag, value := range gcpTags {
+				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+			}
+
+			return nil
 		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
