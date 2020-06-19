@@ -1078,8 +1078,8 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 		return "", err
 	}
 
-	// Update our mirror
-	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "update", "--prune"); err != nil {
+	// Fetch the build branch from the upstream repository into the mirror.
+	if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
 		return "", err
 	}
 
