@@ -7,7 +7,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 var MetaDataKeysHelpDescription = `Usage:
@@ -44,11 +44,11 @@ var MetaDataKeysCommand = cli.Command{
 	Usage:       "Lists all meta-data keys that have been previously set",
 	Description: MetaDataKeysHelpDescription,
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job's build should the meta-data be checked for",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job's build should the meta-data be checked for",
+			EnvVars: []string{"BUILDKITE_JOB_ID"},
 		},
 
 		// API Flags
@@ -63,7 +63,7 @@ var MetaDataKeysCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		// The configuration will be loaded into this struct
 		cfg := MetaDataKeysConfig{}
 
@@ -103,5 +103,7 @@ var MetaDataKeysCommand = cli.Command{
 		for _, key := range keys {
 			fmt.Printf("%s\n", key)
 		}
+
+		return nil
 	},
 }

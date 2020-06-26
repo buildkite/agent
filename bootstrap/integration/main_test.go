@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 func TestMain(m *testing.M) {
@@ -18,8 +18,8 @@ func TestMain(m *testing.M) {
 		app := cli.NewApp()
 		app.Name = "buildkite-agent"
 		app.Version = agent.Version()
-		app.Commands = []cli.Command{
-			clicommand.BootstrapCommand,
+		app.Commands = []*cli.Command{
+			&clicommand.BootstrapCommand,
 		}
 
 		if err := app.Run(os.Args); err != nil {
