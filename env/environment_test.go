@@ -105,5 +105,5 @@ func TestEnvironmentDiff(t *testing.T) {
 	assert.Equal(t, map[string]string{"B": "world"}, ab)
 
 	// b.Diff(a) gives us the key:values from b that are different in a
-	assert.Equal(t, map[string]string{"B": "there", "C": "new"}, ba)
+	assert.Equal(t, map[string]string{"B": "there", "C": "new", "D": ""}, ba)
 }
