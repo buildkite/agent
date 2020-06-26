@@ -1555,6 +1555,8 @@ func (b *Bootstrap) uploadArtifacts() error {
 		return err
 	}
 
+	b.shell.Printf("Artifact uploading complete")
+
 	// Run post-artifact hooks
 	if err := b.executeGlobalHook("post-artifact"); err != nil {
 		return err
