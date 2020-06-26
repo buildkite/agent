@@ -37,7 +37,7 @@ Description:
    again and provide the same context as the one you want to update. Or if you
    leave context blank, it will use the default context.
 
-   You can also update just the style of an existing annotation by omitting the
+   You can also update only the style of an existing annotation by omitting the
    body entirely and providing a new style value.
 
 Example:
