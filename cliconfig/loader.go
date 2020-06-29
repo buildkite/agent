@@ -11,7 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/oleiade/reflections"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 type Loader struct {
@@ -203,8 +203,8 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 
 		// Only set the value if the args are long enough for
 		// the position to exist.
-		if len(l.CLI.Args()) > argIndex {
-			value = l.CLI.Args()[argIndex]
+		if l.CLI.Args().Len() > argIndex {
+			value = l.CLI.Args().Get(argIndex)
 		}
 
 		// Otherwise see if we can pull it from an environment variable

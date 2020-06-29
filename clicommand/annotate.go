@@ -10,7 +10,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v2"
 )
 
 var AnnotateHelpDescription = `Usage:
@@ -72,26 +72,26 @@ var AnnotateCommand = cli.Command{
 	Usage:       "Annotate the build page within the Buildkite UI with text from within a Buildkite job",
 	Description: AnnotateHelpDescription,
 	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "context",
-			Usage:  "The context of the annotation used to differentiate this annotation from others",
-			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
+		&cli.StringFlag{
+			Name:    "context",
+			Usage:   "The context of the annotation used to differentiate this annotation from others",
+			EnvVars: []string{"BUILDKITE_ANNOTATION_CONTEXT"},
 		},
-		cli.StringFlag{
-			Name:   "style",
-			Usage:  "The style of the annotation (`success`, `info`, `warning` or `error`)",
-			EnvVar: "BUILDKITE_ANNOTATION_STYLE",
+		&cli.StringFlag{
+			Name:    "style",
+			Usage:   "The style of the annotation (`success`, `info`, `warning` or `error`)",
+			EnvVars: []string{"BUILDKITE_ANNOTATION_STYLE"},
 		},
-		cli.BoolFlag{
-			Name:   "append",
-			Usage:  "Append to the body of an existing annotation",
-			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
+		&cli.BoolFlag{
+			Name:    "append",
+			Usage:   "Append to the body of an existing annotation",
+			EnvVars: []string{"BUILDKITE_ANNOTATION_APPEND"},
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job should the annotation come from",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job should the annotation come from",
+			EnvVars: []string{"BUILDKITE_JOB_ID"},
 		},
 
 		// API Flags
@@ -106,7 +106,7 @@ var AnnotateCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) {
+	Action: func(c *cli.Context) error {
 		// The configuration will be loaded into this struct
 		cfg := AnnotateConfig{}
 
@@ -174,5 +174,6 @@ var AnnotateCommand = cli.Command{
 		}
 
 		l.Debug("Successfully annotated build")
+		return nil
 	},
 }
