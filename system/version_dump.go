@@ -15,6 +15,8 @@ func VersionDump(l logger.Logger) (string, error) {
 		return process.Run(l, "sw_vers")
 	} else if runtime.GOOS == "linux" {
 		return process.Cat("/etc/*-release")
+	} else if runtime.GOOS == "freebsd" || runtime.GOOS == "openbsd" || runtime.GOOS == "netbsd" || runtime.GOOS == "dragonfly" {
+		return process.Run(l, "uname", "-a")
 	}
 
 	return "", nil
