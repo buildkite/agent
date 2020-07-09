@@ -37,13 +37,23 @@ else
   case $UNAME in
     *amd64*)   ARCH="amd64"   ;;
     *x86_64*)  ARCH="amd64"   ;;
+    *arm64*)
+      ARCH="arm64"
+      if [[ "$PLATFORM" == "darwin" ]]; then
+        ARCH="amd64"
+        echo -e "\n\033[35mHi there, adventurer! \033[36mWe don't yet have a binary for macOS on Apple Silicon; relying on Rosetta 2 and using $ARCH instead!\033[0m"
+      fi
+      ;;
     *armv8*)   ARCH="arm64"   ;;
     *armv7*)   ARCH="armhf"   ;;
     *armv6l*)  ARCH="arm"     ;;
     *armv6*)   ARCH="armhf"   ;;
     *arm*)     ARCH="arm"     ;;
     *ppc64le*) ARCH="ppc64le" ;;
-    *)         ARCH="386"     ;;
+    *)
+      ARCH="386"
+      echo -e "\n\033[36mWe don't recognise the $UNAME architecture; falling back to $ARCH\033[0m"
+      ;;
   esac
 fi
 
