@@ -20,11 +20,12 @@ echo -e "\033[33m
 
 echo -e "Finding latest release..."
 
-UNAME=$(uname -sm | awk '{print tolower($0)}')
+SYSTEM=$(uname -s | awk '{print tolower($0)}')
+MACHINE=$(uname -m | awk '{print tolower($0)}')
 
-if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
+if [[ ($SYSTEM == *"mac os x"*) || ($SYSTEM == *darwin*) ]]; then
   PLATFORM="darwin"
-elif [[ ($UNAME == *"freebsd"*) ]]; then
+elif [[ ($SYSTEM == *"freebsd"*) ]]; then
   PLATFORM="freebsd"
 else
   PLATFORM="linux"
@@ -34,7 +35,7 @@ if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
   ARCH="$BUILDKITE_INSTALL_ARCH"
   echo "Using explicit arch '$ARCH'"
 else
-  case $UNAME in
+  case $MACHINE in
     *amd64*)   ARCH="amd64"   ;;
     *x86_64*)  ARCH="amd64"   ;;
     *arm64*)
@@ -52,15 +53,15 @@ else
     *ppc64le*) ARCH="ppc64le" ;;
     *)
       ARCH="386"
-      echo -e "\n\033[36mWe don't recognise the $UNAME architecture; falling back to $ARCH\033[0m"
+      echo -e "\n\033[36mWe don't recognise the $MACHINE architecture; falling back to $ARCH\033[0m"
       ;;
   esac
 fi
 
 if [[ "$BETA" == "true" ]]; then
-  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true"
+  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true&system=$SYSTEM&machine=$MACHINE"
 else
-  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH"
+  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&system=$SYSTEM&machine=$MACHINE"
 fi
 
 if command -v wget >/dev/null; then
