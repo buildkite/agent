@@ -11,11 +11,14 @@ import (
 
 // Returns a dump of the raw operating system information
 func VersionDump(l logger.Logger) (string, error) {
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		return process.Run(l, "sw_vers")
-	} else if runtime.GOOS == "linux" {
+	case "linux":
 		return process.Cat("/etc/*-release")
+	case "freebsd", "openbsd", "netbsd", "dragonfly":
+		return process.Run(l, "uname", "-sr")
+	default:
+		return "", nil
 	}
-
-	return "", nil
 }
