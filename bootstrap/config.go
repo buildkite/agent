@@ -59,7 +59,7 @@ type Config struct {
 	AgentName string
 
 	// Should the bootstrap remove an existing checkout before running the job
-	CleanCheckout bool
+	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
 
 	// Flags to pass to "git clone" command
 	GitCloneFlags string `env:"BUILDKITE_GIT_CLONE_FLAGS"`
