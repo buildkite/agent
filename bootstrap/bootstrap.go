@@ -25,8 +25,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Minimum length of values to be redacted. Number comes from the default
-// minimum password length in Linux.
+// RedactLengthMin is the shortest string length that will be considered a
+// potential secret by the environment redactor. e.g. if the redactor is
+// configured to filter out environment variables matching *_TOKEN, and
+// API_TOKEN is set to "none", this minimum length will prevent the word "none"
+// from being redacted from useful log output.
 const RedactLengthMin = 6
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
