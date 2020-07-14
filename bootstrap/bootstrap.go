@@ -64,7 +64,7 @@ func New(conf Config) *Bootstrap {
 	}
 }
 
-// Start runs the bootstrap and returns the exit code
+// Run the bootstrap and return the exit code
 func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
