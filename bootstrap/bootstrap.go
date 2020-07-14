@@ -266,8 +266,7 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
 	for k, v := range environ.ToMap() {
-		_, ok := bootstrapConfigEnvChanges[k]
-		if ok {
+		if _, ok := bootstrapConfigEnvChanges[k]; ok {
 			b.shell.Commentf("%s is now %q", k, v)
 		} else {
 			b.shell.Commentf("%s changed", k)
