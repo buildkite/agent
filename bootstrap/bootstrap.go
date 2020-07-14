@@ -1609,14 +1609,12 @@ func (b *Bootstrap) setupRedactor() *Redactor {
 		redactor.Reset(valuesToRedact)
 		return redactor
 	}
-
-	if len(valuesToRedact) > 0 {
-		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
-		b.shell.Writer = redactor
-		return redactor
-	} else {
+	if len(valuesToRedact) == 0 {
 		return nil
 	}
+	redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+	b.shell.Writer = redactor
+	return redactor
 }
 
 // Given a redaction config string and an environment map, return the list of values to be redacted.
