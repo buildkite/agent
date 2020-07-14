@@ -16,7 +16,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		GitCloneFlags:                "--prune",
 		GitCleanFlags:                "-v",
 		AgentName:                    "myAgent",
-		CleanCheckout:								false,
+		CleanCheckout:                false,
 	}
 
 	environ := env.FromSlice([]string{
@@ -32,7 +32,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_ARTIFACT_PATHS":  "newpath",
 		"BUILDKITE_GIT_CLONE_FLAGS": "-f",
 		"BUILDKITE_REPO":            "https://my.mirror/repo.git",
-		"BUILDKITE_CLEAN_CHECKOUT": "true"
+		"BUILDKITE_CLEAN_CHECKOUT":  "true",
 	}
 
 	if !reflect.DeepEqual(expected, changes) {
@@ -49,8 +49,25 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 			expected, config.Repository)
 	}
 
-	if expected := false; config.CleanCheckout != expected {
-		t.Fatalf("Expected CleanCheckout to be %v, got %v",
-			expected, config.CleanCheckout)
+	if expected := true; config.CleanCheckout != expected {
+		t.Fatalf("Expected Repository to be %v, got %v",
+			expected, config.Repository)
+	}
+}
+
+func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
+	t.Parallel()
+	config := &Config{
+		CleanCheckout: true,
+	}
+	environ := env.FromSlice([]string{
+		"BUILDKITE_CLEAN_CHECKOUT=blarg",
+	})
+	changes := config.ReadFromEnvironment(environ)
+	if len(changes) != 0 {
+		t.Fatalf("expected no changes, got %#v", changes)
+	}
+	if expected := true; config.CleanCheckout != expected {
+		t.Fatalf("Expected %v, got %v", expected, config.CleanCheckout)
 	}
 }
