@@ -2,6 +2,9 @@ package bootstrap
 
 import (
 	"reflect"
+	"strconv"
+
+	"log"
 
 	"github.com/buildkite/agent/v3/env"
 )
@@ -59,7 +62,7 @@ type Config struct {
 	AgentName string
 
 	// Should the bootstrap remove an existing checkout before running the job
-	CleanCheckout bool
+	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
 
 	// Flags to pass to "git clone" command
 	GitCloneFlags string `env:"BUILDKITE_GIT_CLONE_FLAGS"`
@@ -131,22 +134,38 @@ func (c *Config) ReadFromEnvironment(environ *env.Environment) map[string]string
 	changed := map[string]string{}
 
 	// Use reflection for the type and values
-	t := reflect.TypeOf(*c)
-	v := reflect.ValueOf(c).Elem()
+	fields := reflect.TypeOf(*c)
+	values := reflect.ValueOf(c).Elem()
 
 	// Iterate over all available fields and read the tag value
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		value := v.Field(i)
+	for i := 0; i < fields.NumField(); i++ {
+		f := fields.Field(i)
+		v := values.Field(i)
 
 		// Find struct fields with env tag
-		if tag := field.Tag.Get("env"); tag != "" && environ.Exists(tag) {
-			newValue, _ := environ.Get(tag)
+		if tag := f.Tag.Get("env"); tag != "" && environ.Exists(tag) {
+			newStr, _ := environ.Get(tag)
 
-			// We only care if the value has changed
-			if newValue != value.String() {
-				value.SetString(newValue)
-				changed[tag] = newValue
+			switch v.Kind() {
+			case reflect.String:
+				if newStr == v.String() {
+					break
+				}
+				v.SetString(newStr)
+				changed[tag] = newStr
+			case reflect.Bool:
+				newBool, err := strconv.ParseBool(newStr)
+				if err != nil {
+					log.Printf("warning: cannot parse %s=%s as bool, ignoring", tag, newStr)
+					break
+				}
+				if newBool == v.Bool() {
+					break
+				}
+				v.SetBool(newBool)
+				changed[tag] = newStr
+			default:
+				log.Printf("warning: bootstrap.Config.ReadFromEnvironment does not support %v for %s", v.Kind(), tag)
 			}
 		}
 	}
