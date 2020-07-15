@@ -25,8 +25,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Minimum length of values to be redacted. Number comes from the default
-// minimum password length in Linux.
+// RedactLengthMin is the shortest string length that will be considered a
+// potential secret by the environment redactor. e.g. if the redactor is
+// configured to filter out environment variables matching *_TOKEN, and
+// API_TOKEN is set to "none", this minimum length will prevent the word "none"
+// from being redacted from useful log output.
 const RedactLengthMin = 6
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
@@ -61,7 +64,7 @@ func New(conf Config) *Bootstrap {
 	}
 }
 
-// Start runs the bootstrap and returns the exit code
+// Run the bootstrap and return the exit code
 func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
@@ -247,35 +250,36 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	}
 
 	// Do we even have any environment variables to change?
-	if environ != nil && environ.Length() > 0 {
-		// First, let see any of the environment variables are supposed
-		// to change the bootstrap configuration at run time.
-		bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)
-
-		// Print out the env vars that changed. As we go through each
-		// one, we'll determine if it was a special "bootstrap"
-		// environment variable that has changed the bootstrap
-		// configuration at runtime.
-		//
-		// If it's "special", we'll show the value it was changed to -
-		// otherwise we'll hide it. Since we don't know if an
-		// environment variable contains sensitive information (i.e.
-		// THIRD_PARTY_API_KEY) we'll just not show any values for
-		// anything not controlled by us.
-		for k, v := range environ.ToMap() {
-			_, ok := bootstrapConfigEnvChanges[k]
-			if ok {
-				b.shell.Commentf("%s is now %q", k, v)
-			} else {
-				b.shell.Commentf("%s changed", k)
-			}
-		}
-
-		// Now that we've finished telling the user what's changed,
-		// let's mutate the current shell environment to include all
-		// the new values.
-		b.shell.Env = b.shell.Env.Merge(environ)
+	if environ == nil || environ.Length() == 0 {
+		return
 	}
+
+	// First, let see any of the environment variables are supposed
+	// to change the bootstrap configuration at run time.
+	bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)
+
+	// Print out the env vars that changed. As we go through each
+	// one, we'll determine if it was a special "bootstrap"
+	// environment variable that has changed the bootstrap
+	// configuration at runtime.
+	//
+	// If it's "special", we'll show the value it was changed to -
+	// otherwise we'll hide it. Since we don't know if an
+	// environment variable contains sensitive information (i.e.
+	// THIRD_PARTY_API_KEY) we'll just not show any values for
+	// anything not controlled by us.
+	for k, v := range environ.ToMap() {
+		if _, ok := bootstrapConfigEnvChanges[k]; ok {
+			b.shell.Commentf("%s is now %q", k, v)
+		} else {
+			b.shell.Commentf("%s changed", k)
+		}
+	}
+
+	// Now that we've finished telling the user what's changed,
+	// let's mutate the current shell environment to include all
+	// the new values.
+	b.shell.Env = b.shell.Env.Merge(environ)
 }
 
 // Returns the absolute path to the best matching hook file in a path, or os.ErrNotExist if none is found
@@ -1605,14 +1609,12 @@ func (b *Bootstrap) setupRedactor() *Redactor {
 		redactor.Reset(valuesToRedact)
 		return redactor
 	}
-
-	if len(valuesToRedact) > 0 {
-		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
-		b.shell.Writer = redactor
-		return redactor
-	} else {
+	if len(valuesToRedact) == 0 {
 		return nil
 	}
+	redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+	b.shell.Writer = redactor
+	return redactor
 }
 
 // Given a redaction config string and an environment map, return the list of values to be redacted.
