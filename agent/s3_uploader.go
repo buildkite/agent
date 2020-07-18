@@ -43,7 +43,7 @@ func NewS3Uploader(l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	bucketName, bucketPath := ParseS3Destination(c.Destination)
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(l, bucketName)
+	s3Client, err := newS3Client(l, bucketName, c.DebugHTTP)
 	if err != nil {
 		return nil, err
 	}

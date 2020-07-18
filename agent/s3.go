@@ -93,7 +93,7 @@ func awsS3Session(region string) (*session.Session, error) {
 	return sess, nil
 }
 
-func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
+func newS3Client(l logger.Logger, bucket string, debugHTTP bool) (*s3.S3, error) {
 	region, err := awsS3RegionFromEnv()
 	if err != nil {
 		return nil, err
@@ -106,7 +106,11 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 
 	l.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
 
-	s3client := s3.New(sess)
+	awsConfig := aws.NewConfig()
+	if debugHTTP {
+		awsConfig = awsConfig.WithLogLevel(aws.LogDebugWithRequestRetries | aws.LogDebugWithRequestErrors)
+	}
+	s3client := s3.New(sess, awsConfig)
 
 	// Test the authentication by trying to list the first 0 objects in the bucket.
 	_, err = s3client.ListObjects(&s3.ListObjectsInput{
