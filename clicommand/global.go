@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
@@ -154,17 +153,20 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 func UnsetConfigFromEnvironment(c *cli.Context) error {
 	flags := append(c.App.Flags, c.Command.Flags...)
 	for _, fl := range flags {
-		// use golang reflection to find EnvVar values on flags
+		// use golang reflection to find EnvVars values on flags
 		r := reflect.ValueOf(fl)
-		f := reflect.Indirect(r).FieldByName(`EnvVar`)
+		f := reflect.Indirect(r).FieldByName(`EnvVars`)
 		if !f.IsValid() {
-			return errors.New("EnvVar field not found on flag")
+			return errors.New("EnvVars field not found on flag")
 		}
-		// split comma delimited env
-		if envVars := f.String(); envVars != `` {
-			for _, env := range strings.Split(envVars, ",") {
-				os.Unsetenv(env)
-			}
+		if f.Kind() != reflect.Slice {
+			return errors.New("EnvVars not a slice")
+		}
+
+		// Loop over each EnvVar supported by the flag (there can be more than one!)
+		for i := 0; i < f.Len(); i++ {
+			envVar := f.Index(i).String()
+			os.Unsetenv(envVar)
 		}
 	}
 	return nil
