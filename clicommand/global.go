@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -150,12 +151,15 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 	return HandleProfileFlag(l, cfg)
 }
 
-func UnsetConfigFromEnvironment(c *cli.Context) {
+func UnsetConfigFromEnvironment(c *cli.Context) error {
 	flags := append(c.App.Flags, c.Command.Flags...)
 	for _, fl := range flags {
 		// use golang reflection to find EnvVar values on flags
 		r := reflect.ValueOf(fl)
 		f := reflect.Indirect(r).FieldByName(`EnvVar`)
+		if !f.IsValid() {
+			return errors.New("EnvVar field not found on flag")
+		}
 		// split comma delimited env
 		if envVars := f.String(); envVars != `` {
 			for _, env := range strings.Split(envVars, ",") {
@@ -163,6 +167,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) {
 			}
 		}
 	}
+	return nil
 }
 
 func loadAPIClientConfig(cfg interface{}, tokenField string) api.Config {
