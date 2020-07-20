@@ -220,7 +220,11 @@ func (c *Client) doRequest(req *http.Request, v interface{}) (*Response, error) 
 			requestDump, err = httputil.DumpRequestOut(req, true)
 		}
 
-		c.logger.Debug("ERR: %s\n%s", err, string(requestDump))
+		if err != nil {
+			c.logger.Debug("ERR: %s\n%s", err, string(requestDump))
+		} else {
+			c.logger.Debug("%s", string(requestDump))
+		}
 	}
 
 	ts := time.Now()
@@ -245,7 +249,11 @@ func (c *Client) doRequest(req *http.Request, v interface{}) (*Response, error) 
 
 	if c.conf.DebugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
-		c.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+		if err != nil {
+			c.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+		} else {
+			c.logger.Debug("\n%s", string(responseDump))
+		}
 	}
 
 	err = checkResponse(resp)

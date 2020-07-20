@@ -114,7 +114,11 @@ func (d Download) try() error {
 	if response.StatusCode/100 != 2 && response.StatusCode/100 != 3 {
 		if d.conf.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			d.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			if err != nil {
+				d.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			}  else {
+				d.logger.Debug("\n%s", string(responseDump))
+			}
 		}
 
 		return &downloadError{response.Status}
