@@ -489,7 +489,11 @@ var AgentStartCommand = cli.Command{
 		defer done()
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
-		UnsetConfigFromEnvironment(c)
+		err = UnsetConfigFromEnvironment(c)
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
 
 		// Check if git-mirrors are enabled
 		if experiments.IsEnabled(`git-mirrors`) {
