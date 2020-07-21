@@ -29,6 +29,9 @@ type JobRunnerConfig struct {
 
 	// Whether to set debug in the job
 	Debug bool
+
+	// Whether to set debug HTTP Requests in the job
+	DebugHTTP bool
 }
 
 type JobRunner struct {
@@ -439,6 +442,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 
 	// Add agent environment variables
 	env["BUILDKITE_AGENT_DEBUG"] = fmt.Sprintf("%t", r.conf.Debug)
+	env["BUILDKITE_AGENT_DEBUG_HTTP"] = fmt.Sprintf("%t", r.conf.DebugHTTP)
 	env["BUILDKITE_AGENT_PID"] = fmt.Sprintf("%d", os.Getpid())
 
 	// We know the BUILDKITE_BIN_PATH dir, because it's the path to the

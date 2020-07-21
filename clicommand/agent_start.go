@@ -713,6 +713,7 @@ var AgentStartCommand = cli.Command{
 						AgentConfiguration: agentConf,
 						CancelSignal:       cancelSig,
 						Debug:              cfg.Debug,
+						DebugHTTP:          cfg.DebugHTTP,
 						SpawnIndex:         i,
 					}))
 		}
