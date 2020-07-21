@@ -67,7 +67,11 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 			requestDump, err = httputil.DumpRequestOut(request, true)
 		}
 
-		u.logger.Debug("\nERR: %s\n%s", err, string(requestDump))
+		if err != nil {
+			u.logger.Debug("\nERR: %s\n%s", err, string(requestDump))
+		} else {
+			u.logger.Debug("\n%s", string(requestDump))
+		}
 	}
 
 	// Create the client
@@ -87,7 +91,11 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 
 		if u.conf.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			if err != nil {
+				u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			} else {
+				u.logger.Debug("\n%s", string(responseDump))
+			}
 		}
 
 		if response.StatusCode/100 != 2 {
