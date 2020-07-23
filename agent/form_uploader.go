@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptrace"
 	"net/http/httputil"
 	"regexp"
 	"strings"
@@ -72,6 +73,16 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 		} else {
 			u.logger.Debug("\n%s", string(requestDump))
 		}
+
+		// configure the HTTP request to log the server IP. The IPs for s3.amazonaws.com
+		// rotate every 5 seconds, and if one of them is misbehaving it may be helpful to
+		// know which one.
+		trace := &httptrace.ClientTrace{
+			GotConn: func(connInfo httptrace.GotConnInfo) {
+				u.logger.Debug("artifact %s uploading to: %s", artifact.ID, connInfo.Conn.RemoteAddr())
+			},
+		}
+		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	}
 
 	// Create the client
