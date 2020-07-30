@@ -183,6 +183,11 @@ var BootstrapCommand = cli.Command{
 			Usage:   "Whether or not the bootstrap should remove the existing repository before running the command",
 			EnvVars: []string{"BUILDKITE_CLEAN_CHECKOUT"},
 		},
+		&cli.BoolFlag{
+			Name:    "resolve-after-checkout",
+			Usage:   "Whether or not the bootstrap should resolve BUILDKITE_COMMIT based on the local git repo",
+			EnvVars: []string{"BUILDKITE_RESOLVE_COMMIT_AFTER_CHECKOUT"},
+		},
 		&cli.StringFlag{
 			Name:    "git-clone-flags",
 			Value:   "-v",

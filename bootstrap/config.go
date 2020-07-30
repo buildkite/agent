@@ -64,6 +64,9 @@ type Config struct {
 	// Should the bootstrap remove an existing checkout before running the job
 	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
 
+	// Should the bootstrap resolve BUILDKITE_COMMIT after checkout
+	ResolveCommitAfterCheckOut bool `env:"BUILDKITE_RESOLVE_COMMIT_AFTER_CHECKOUT"`
+
 	// Flags to pass to "git clone" command
 	GitCloneFlags string `env:"BUILDKITE_GIT_CLONE_FLAGS"`
 
