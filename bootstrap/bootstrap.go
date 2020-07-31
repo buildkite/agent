@@ -1283,6 +1283,20 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		}
 	}
 
+	// resolve BUILDKITE_COMMIT based on the local git repo
+	if b.ResolveCommitAfterCheckOut {
+		if commitRef, ok := b.shell.Env.Get(`BUILDKITE_COMMIT`); ok {
+			cmdOut, err := b.shell.RunAndCapture(`git`, `rev-parse`, commitRef)
+			if err != nil {
+				b.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
+			} else {
+				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+				b.shell.Commentf("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
+				b.shell.Env.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
+			}
+		}
+	}
+
 	return nil
 }
 
