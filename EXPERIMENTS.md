@@ -47,9 +47,8 @@ Take `buildkite-agent artifact upload coverage\report.xml` as an example:
 
 ### `resolve-commit-after-checkout`
 
-When $BUILDKITE_COMMIT is HEAD, this updates $BUILDKITE_COMMIT to the resolved commit after checkout.
+When BUILDKITE_COMMIT is HEAD, this updates BUILDKITE_COMMIT to the resolved commit after checkout.
 
-This fixes the issue where a pipeline with a default build pipeline configured from the dashboard and a scheduled build at master and HEAD will have a $BUILDKITE_COMMIT value of HEAD even after checkout.
-The result is that the build may fail if the first job includes logic which presumes that $BUILDKITE_COMMIT holds an actual commit.
+Fixes unexpected behaviour where a pipeline with builds at master and HEAD will have a BUILDKITE_COMMIT value of HEAD even after checkout.
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
