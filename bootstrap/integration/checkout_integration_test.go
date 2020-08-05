@@ -15,6 +15,47 @@ import (
 	"github.com/buildkite/bintest"
 )
 
+func TestCheckingOutWithResolvingCommitExperiment(t *testing.T) {
+	t.Parallel()
+
+	experiments.Enable(`resolve-commit-after-checkout`)
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]interface{}{
+		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "origin", "master"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+		{"rev-parse", "HEAD"},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchPattern(`^commit`)).AndExitWith(0)
+
+	tester.RunAndCheck(t, env...)
+}
+
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
