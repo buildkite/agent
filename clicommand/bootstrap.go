@@ -81,6 +81,7 @@ type BootstrapConfig struct {
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
+	ShouldConsolidateRepos       bool     `cli:"should-consolidate-repos"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -301,6 +302,11 @@ var BootstrapCommand = cli.Command{
 			Usage:   "Pattern of environment variable names containing sensitive values",
 			EnvVars: []string{"BUILDKITE_REDACTED_VARS"},
 		},
+		cli.BoolTFlag{
+			Name:   "should-consolidate-repos",
+			Usage:  "Consolidate all builds using identical repositories into a single build directory",
+			EnvVar: "BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR",
+		},
 		DebugFlag,
 		ExperimentsFlag,
 		ProfileFlag,
@@ -385,6 +391,7 @@ var BootstrapCommand = cli.Command{
 			Shell:                        cfg.Shell,
 			Phases:                       cfg.Phases,
 			RedactedVars:                 cfg.RedactedVars,
+			ShouldConsolidateRepos:       cfg.ShouldConsolidateRepos,
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())

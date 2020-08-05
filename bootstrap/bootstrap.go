@@ -2,6 +2,8 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -430,8 +432,18 @@ func (b *Bootstrap) setUp() error {
 		if b.BuildPath == "" {
 			return fmt.Errorf("Must set either a BUILDKITE_BUILD_PATH or a BUILDKITE_BUILD_CHECKOUT_PATH")
 		}
-		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
-			filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+
+		// If we should consolidate repos, hash the repository path to use as the build dir
+		if b.Config.ShouldConsolidateRepos && b.Config.Repository != "" {
+
+			hashedRepositoryName := hashRepositoryString(b.Config.Repository)
+
+			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, hashedRepositoryName))
+		} else {
+			b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH",
+				filepath.Join(b.BuildPath, dirForAgentName(b.AgentName), b.OrganizationSlug, b.PipelineSlug))
+		}
 	}
 
 	// The job runner sets BUILDKITE_IGNORED_ENV with any keys that were ignored
@@ -835,6 +847,10 @@ func (b *Bootstrap) removeCheckoutDir() error {
 
 func (b *Bootstrap) createCheckoutDir() error {
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	if b.Config.ShouldConsolidateRepos {
+		b.shell.Commentf("Using hashed repository name as build dir instead of %s to consolidate builds into single dir", b.PipelineSlug)
+	}
 
 	if !fileExists(checkoutPath) {
 		b.shell.Commentf("Creating \"%s\"", checkoutPath)
@@ -1643,6 +1659,14 @@ func getValuesToRedact(logger shell.Logger, patterns []string, environment map[s
 	}
 
 	return valuesToRedact
+}
+
+func hashRepositoryString(repository string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(repository))
+	hashedRepostoryName := hex.EncodeToString(hasher.Sum(nil))
+
+	return hashedRepostoryName
 }
 
 type pluginCheckout struct {

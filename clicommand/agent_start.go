@@ -88,6 +88,7 @@ type AgentStartConfig struct {
 	LogFormat                  string   `cli:"log-format"`
 	CancelSignal               string   `cli:"cancel-signal"`
 	RedactedVars               []string `cli:"redacted-vars" normalize:"list"`
+	ShouldConsolidateRepos     bool     `cli:"should-consolidate-repos"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -401,6 +402,11 @@ var AgentStartCommand = cli.Command{
 			EnvVars: []string{"BUILDKITE_REDACTED_VARS"},
 			Value:   cli.NewStringSlice("*_PASSWORD", "*_SECRET", "*_TOKEN"),
 		},
+		cli.BoolFlag{
+			Name:   "should-consolidate-repos",
+			Usage:  "Consolidate all builds using identical repositories into a single build directory",
+			EnvVar: "BUILDKITE_CONSOLIDATE_REPOS_INTO_BUILD_DIR",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -592,6 +598,7 @@ var AgentStartCommand = cli.Command{
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
+			ShouldConsolidateRepos:     cfg.ShouldConsolidateRepos,
 		}
 
 		if loader.File != nil {
@@ -652,6 +659,10 @@ var AgentStartCommand = cli.Command{
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
 			l.Info("Agents will disconnect after %d seconds of inactivity", agentConf.DisconnectAfterIdleTimeout)
+		}
+
+		if agentConf.ShouldConsolidateRepos {
+			l.Info("Agent will use hashed name of repository for the build dir of all jobs using identical repositories")
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
