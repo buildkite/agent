@@ -246,13 +246,28 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
+	// Default exit status is no exit status
+	exitStatus := ""
+	signal := ""
+	signalReason := ""
+
 	// Run the process. This will block until it finishes.
 	if err := r.process.Run(); err != nil {
 		// Send the error as output
 		r.logStreamer.Process(fmt.Sprintf("%s", err))
+
+		// The process did not run at all, so make sure it fails
+		exitStatus = "-1"
+		signalReason = "process_run_error"
 	} else {
 		// Add the final output to the streamer
 		r.logStreamer.Process(r.output.String())
+
+		// Collect the finished process' exit status
+		exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+		if ws := r.process.WaitStatus(); ws.Signaled() {
+			signal = process.SignalString(ws.Signal())
+		}
 	}
 
 	// Store the finished at time
@@ -284,12 +299,6 @@ func (r *JobRunner) Run() error {
 		r.logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
 	}
 
-	exitStatus := fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
-	signal := ""
-	if ws := r.process.WaitStatus(); ws.Signaled() {
-		signal = process.SignalString(ws.Signal())
-	}
-
 	// Write some metrics about the job run
 	jobMetrics := r.metrics.With(metrics.Tags{
 		"exit_code": exitStatus,
@@ -306,7 +315,7 @@ func (r *JobRunner) Run() error {
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, exitStatus, signal, r.logStreamer.FailedChunks())
+	r.finishJob(finishedAt, exitStatus, signal, signalReason, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
@@ -521,18 +530,23 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
 // forever until it finally gets a successfull response from the API.
-func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal string, failedChunkCount int) error {
+func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal string, signalReason string, failedChunkCount int) error {
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.job.ExitStatus = exitStatus
 	r.job.Signal = signal
 	r.job.ChunksFailedCount = failedChunkCount
 
-	// If the agent has been stopped, send a signal reason of `agent_stop` to distinguish between
-	// user-generated cancels and those due to the agent getting an operating system signal. If
-	// the job was signalled because it was cancelled then the reason is `cancel`.
-	if r.stopped {
+	if signalReason != "" {
+		r.job.SignalReason = signalReason
+	} else if r.stopped {
+		// If the agent has been stopped, send a signal reason of
+		// `agent_stop` to distinguish between user-generated cancels
+		// and those due to the agent getting an operating system
+		// signal.
 		r.job.SignalReason = `agent_stop`
 	} else if r.cancelled {
+		// If the job was signalled because it was cancelled then the
+		// reason is `cancel`.
 		r.job.SignalReason = `cancel`
 	}
 
