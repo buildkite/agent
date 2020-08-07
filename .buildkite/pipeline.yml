@@ -212,6 +212,13 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh centos"
 
+  - name: ":docker: sidecar build"
+    key: build-docker-sidecar
+    depends_on:
+      - build-binary-linux-amd64
+      - set-metadata
+    command: ".buildkite/steps/build-docker-image.sh sidecar"
+
   - name: ":debian: build"
     key: build-debian-packages
     depends_on:
@@ -268,5 +275,6 @@ steps:
       - build-docker-alpine
       - build-docker-ubuntu
       - build-docker-centos
+      - build-docker-sidecar
       - build-github-release
     command: ".buildkite/steps/upload-release-steps.sh"
