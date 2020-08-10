@@ -268,6 +268,14 @@ func (r *JobRunner) Run() error {
 		if ws := r.process.WaitStatus(); ws.Signaled() {
 			signal = process.SignalString(ws.Signal())
 		}
+		if r.stopped {
+			// The agent is being gracefully stopped, and we signaled the job to end. Often due
+			// to pending host shutdown or EC2 spot instance termination
+			signalReason = `agent_stop`
+		} else if r.cancelled {
+			// The job was signaled because it was cancelled via the buildkite web UI
+			signalReason = `cancel`
+		}
 	}
 
 	// Store the finished at time
@@ -536,21 +544,8 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.job.ExitStatus = exitStatus
 	r.job.Signal = signal
+	r.job.SignalReason = signalReason
 	r.job.ChunksFailedCount = failedChunkCount
-
-	if signalReason != "" {
-		r.job.SignalReason = signalReason
-	} else if r.stopped {
-		// If the agent has been stopped, send a signal reason of
-		// `agent_stop` to distinguish between user-generated cancels
-		// and those due to the agent getting an operating system
-		// signal.
-		r.job.SignalReason = `agent_stop`
-	} else if r.cancelled {
-		// If the job was signalled because it was cancelled then the
-		// reason is `cancel`.
-		r.job.SignalReason = `cancel`
-	}
 
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
