@@ -349,6 +349,8 @@ func (r *JobRunner) Cancel() error {
 	r.logger.Info("Canceling job %s with a grace period of %ds%s",
 		r.job.ID, r.conf.AgentConfiguration.CancelGracePeriod, reason)
 
+	r.cancelled = true
+
 	// First we interrupt the process (ctrl-c or SIGINT)
 	if err := r.process.Interrupt(); err != nil {
 		return err
