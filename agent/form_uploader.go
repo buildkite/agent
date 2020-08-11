@@ -23,6 +23,9 @@ import (
 
 var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
 
+// FormUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
+var maxFormUploadedArtifactSize = int64(5368709120)
+
 type FormUploaderConfig struct {
 	// Whether or not HTTP calls should be debugged
 	DebugHTTP bool
@@ -50,6 +53,10 @@ func (u *FormUploader) URL(artifact *api.Artifact) string {
 }
 
 func (u *FormUploader) Upload(artifact *api.Artifact) error {
+	if artifact.FileSize > maxFormUploadedArtifactSize {
+		return errors.New(fmt.Sprintf("File size (%d bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files.", artifact.FileSize))
+	}
+
 	// Create a HTTP request for uploading the file
 	request, err := createUploadRequest(u.logger, artifact)
 	if err != nil {
