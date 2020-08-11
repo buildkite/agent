@@ -165,3 +165,24 @@ func TestFormUploadFileMissing(t *testing.T) {
 		t.Errorf("Expected error no such file or directory, got %q", err)
 	}
 }
+
+func TestFormUploadTooBig(t *testing.T) {
+	uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
+	artifact := &api.Artifact{
+		ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
+		Path:         "llamas.txt",
+		AbsolutePath: "/llamas.txt",
+		GlobPath:     "llamas.txt",
+		ContentType:  "text/plain",
+		FileSize:     int64(6442450944), // 6Gb
+		UploadInstructions: &api.ArtifactUploadInstructions{},
+	}
+
+	err := uploader.Upload(artifact)
+	if err == nil {
+		t.Errorf("Expected error when uploading a file over 5Gb")
+	}
+	if err.Error() != "File size (6442450944 bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files." {
+		t.Errorf("Expected polite error message when uploading a file over 5Gb")
+	}
+}
