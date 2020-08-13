@@ -367,6 +367,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 				state = "error"
 			} else {
+				a.logger.Info("Successfully uploaded artifact \"%s\"", artifact.Path)
 				state = "finished"
 			}
 
