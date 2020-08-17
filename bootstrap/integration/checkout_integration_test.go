@@ -15,7 +15,7 @@ import (
 	"github.com/buildkite/bintest"
 )
 
-func TestCheckingOutWithResolvingCommitExperiment(t *testing.T) {
+func TestWithResolvingCommitExperiment(t *testing.T) {
 	t.Parallel()
 
 	experiments.Enable(`resolve-commit-after-checkout`)
@@ -38,24 +38,41 @@ func TestCheckingOutWithResolvingCommitExperiment(t *testing.T) {
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
-	git.ExpectAll([][]interface{}{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "origin", "master"},
-		{"checkout", "-f", "FETCH_HEAD"},
-		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
-		{"rev-parse", "HEAD"},
-	})
+	// But assert which ones are called
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.ExpectAll([][]interface{}{
+			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"rev-parse", "HEAD"},
+		})
+	} else {
+		git.ExpectAll([][]interface{}{
+			{"clone", "-v", "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"rev-parse", "HEAD"},
+		})
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
-	agent.Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchPattern(`^commit`)).AndExitWith(0)
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(1)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
+		AndExitWith(0)
 
 	tester.RunAndCheck(t, env...)
 }
-
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
