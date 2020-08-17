@@ -97,6 +97,9 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 		return nil, err
 	}
 
+	// file paths are deduplicated after resolving globs etc
+	seenPaths := make(map[string]bool)
+
 	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
 		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
@@ -121,6 +124,13 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			if err != nil {
 				return nil, err
 			}
+
+			// dedupe based on resolved absolutePath
+			if _, ok := seenPaths[absolutePath]; ok {
+				a.logger.Debug("Skipping duplicate path %s", file)
+				continue
+			}
+			seenPaths[absolutePath] = true
 
 			// Ignore directories, we only want files
 			if isDir(absolutePath) {
