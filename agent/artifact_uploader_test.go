@@ -87,7 +87,7 @@ func TestCollect(t *testing.T) {
 	// For the normalised-upload-paths experiment, uploaded artifact paths are
 	// normalised with Unix/URI style path separators, even on Windows.
 	// Without the experiment on, we use the file path given by the file system
-	// 
+	//
 	// To simulate that in this test, we collect artifacts from the file system
 	// twice, once with the experiment explicitly disabled, and one with it
 	// enabled. We then check the test cases against both sets of artifacts,
@@ -190,4 +190,37 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	if len(artifacts) != 3 {
 		t.Fatalf("Expected to match 3 artifacts, found %d", len(artifacts))
 	}
+}
+
+func TestCollectWithDuplicateMatches(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
+		}, ";"),
+	})
+
+	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paths := []string{}
+	for _, a := range artifacts {
+		paths = append(paths, a.Path)
+	}
+	assert.ElementsMatch(
+		t,
+		[]string{
+			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+		},
+		paths,
+	)
 }
