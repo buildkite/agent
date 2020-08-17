@@ -86,7 +86,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 			{"fetch", "-v", "origin", "master"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	} else {
 		git.ExpectAll([][]interface{}{
@@ -95,7 +95,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 			{"fetch", "-v", "origin", "master"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	}
 
@@ -167,7 +167,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	} else {
 		git.ExpectAll([][]interface{}{
@@ -182,7 +182,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	}
 
@@ -250,7 +250,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 			{"fetch", "-v", "origin", "master"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	} else {
 		git.ExpectAll([][]interface{}{
@@ -260,7 +260,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 			{"fetch", "-v", "origin", "master"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	}
 
@@ -306,7 +306,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 			{"fetch", "--depth=1", "origin", "master"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	} else {
 		git.ExpectAll([][]interface{}{
@@ -315,7 +315,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 			{"fetch", "--depth=1", "origin", "master"},
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"clean", "-fdq"},
-			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
 		})
 	}
 

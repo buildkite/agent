@@ -367,6 +367,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 				state = "error"
 			} else {
+				a.logger.Info("Successfully uploaded artifact \"%s\"", artifact.Path)
 				state = "finished"
 			}
 
@@ -379,8 +380,12 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		})
 	}
 
+	a.logger.Debug("Waiting for uploads to complete...")
+
 	// Wait for the pool to finish
 	p.Wait()
+
+	a.logger.Debug("Uploads complete, waiting for upload status to be sent to buildkite...")
 
 	// Wait for the statuses to finish uploading
 	stateUploaderWaitGroup.Wait()
@@ -388,6 +393,8 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	if len(errors) > 0 {
 		return fmt.Errorf("There were errors with uploading some of the artifacts")
 	}
+
+	a.logger.Info("Artifact uploads completed succesfully")
 
 	return nil
 }
