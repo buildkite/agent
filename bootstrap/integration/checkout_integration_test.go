@@ -64,8 +64,12 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
-	agent.Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchPattern(`^commit`)).AndExitWith(0)
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(1)
+	agent.
+		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
+		AndExitWith(0)
 
 	tester.RunAndCheck(t, env...)
 }
