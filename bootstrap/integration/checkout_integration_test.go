@@ -34,17 +34,33 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	}
 
 	// Actually execute git commands, but with expectations
-	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
 
-	git.ExpectAll([][]interface{}{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "origin", "master"},
-		{"checkout", "-f", "FETCH_HEAD"},
-		{"clean", "-fdq"},
-		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
-		{"rev-parse", "HEAD"},
-	})
+	// But assert which ones are called
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.ExpectAll([][]interface{}{
+			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"rev-parse", "HEAD"},
+		})
+	} else {
+		git.ExpectAll([][]interface{}{
+			{"clone", "-v", "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+			{"rev-parse", "HEAD"},
+		})
+	}
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
