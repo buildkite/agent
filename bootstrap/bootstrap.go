@@ -24,16 +24,13 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
-
-	"github.com/uber/jaeger-lib/metrics"
-
-	"github.com/uber/jaeger-client-go"
-	jaegercfg "github.com/uber/jaeger-client-go/config"
-	jaegerlog "github.com/uber/jaeger-client-go/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a
@@ -105,6 +102,11 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 	}()
 
+	span, ctx, stopper := b.startTracing(ctx)
+	defer stopper()
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
 		if err := b.tearDown(); err != nil {
@@ -120,10 +122,6 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.Errorf("Error setting up bootstrap: %v", err)
 		return shell.GetExitCode(err)
 	}
-
-	span, closer := b.startTracing(ctx)
-	defer closer.Close()
-	defer span.Finish()
 
 	var includePhase = func(phase string) bool {
 		if len(b.Phases) == 0 {
@@ -174,6 +172,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Phase errors are where something of ours broke that merits a big red error
 	// this won't include command failures, as we view that as more in the user space
 	if phaseErr != nil {
+		err = phaseErr
 		b.shell.Errorf("%v", phaseErr)
 		return shell.GetExitCode(phaseErr)
 	}
@@ -227,62 +226,62 @@ func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
 	return wireContext
 }
 
-// InjectTraceCtx ...
-func (b *Bootstrap) InjectTraceCtx(span opentracing.Span) {
+// stopper lets us abstract the tracer wrap up code so we can plug in different tracing
+// library implementations that are opentracing compatible. Opentracing itself
+// doesn't have a Stop function on its Tracer interface.
+type stopper func()
 
-}
-
-func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, io.Closer) {
+// startTracing sets up tracing based on the config values. It uses opentracing as an
+// abstraction so the agent can support multiple libraries if needbe.
+func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context.Context, stopper) {
 	b.shell.Commentf("Setting up tracer.")
-	// Sample configuration for testing. Use constant sampling to sample every trace
-	// and enable LogSpan to log every span via configured Logger.
-	cfg := jaegercfg.Configuration{
-		ServiceName: "buildkite_agent",
-		Sampler: &jaegercfg.SamplerConfig{
-			Type:  jaeger.SamplerTypeConst,
-			Param: 1,
-		},
-		Reporter: &jaegercfg.ReporterConfig{
-			LogSpans: true,
-		},
+	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
+	source, _ := b.shell.Env.Get("BUILDKITE_SOURCE")
+	label, hasLabel := b.shell.Env.Get("BUILDKITE_LABEL")
+	if !hasLabel {
+		label = "job"
 	}
 
-	// Example logger and metrics factory. Use github.com/uber/jaeger-client-go/log
-	// and github.com/uber/jaeger-lib/metrics respectively to bind to real logging and metrics
-	// frameworks.
-	jLogger := jaegerlog.StdLogger
-	jMetricsFactory := metrics.NullFactory
-
-	// Initialize tracer with a logger and a metrics factory
-	tracer, closer, _ := cfg.NewTracer(
-		jaegercfg.Logger(jLogger),
-		jaegercfg.Metrics(jMetricsFactory),
-	)
-	// Set the singleton opentracing.Tracer with the Jaeger tracer.
-	opentracing.SetGlobalTracer(tracer)
+	// Set specific tracing library here. Everything else should be using opentracing.
+	// Use a constant sampler - CI runs aren't high traffic.
+	var t opentracing.Tracer
+	var stopper stopper
+	if b.Config.TracingDatadogAddr != "" {
+		t = opentracer.New(
+			tracer.WithAgentAddr("localhost:8126"),
+			tracer.WithServiceName("buildkite_agent"),
+			tracer.WithSampler(tracer.NewAllSampler()),
+			tracer.WithGlobalTag("buildkite.agent", b.AgentName),
+			tracer.WithGlobalTag("buildkite.queue", b.Queue),
+			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),
+			tracer.WithGlobalTag("buildkite.branch", b.Branch),
+			tracer.WithGlobalTag("buildkite.job_id", b.JobID),
+			tracer.WithGlobalTag("buildkite.build_id", buildID),
+			tracer.WithGlobalTag("buildkite.source", source),
+		)
+		stopper = tracer.Stop
+	} else {
+		t = opentracing.NoopTracer{}
+		stopper = func() {}
+	}
+	opentracing.SetGlobalTracer(t)
 
 	b.shell.Commentf("Set up tracer.")
 
 	wireContext := b.extractTraceCtx()
 
+	// TODO: Figure out a convenient way to get distributed tracing working for jobs
+	//  that spawn/trigger other jobs/builds.
+	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + label
 	span := opentracing.StartSpan(
-		"bootstrap.run",
+		"job.run",
 		ext.RPCServerOption(wireContext),
+		opentracer.ResourceName(resourceName),
 	)
 
-	b.setTags(span)
+	ctx = opentracing.ContextWithSpan(ctx, span)
 
-	b.traceCtx = opentracing.ContextWithSpan(ctx, span)
-	b.shell.SetTraceCtx(b.traceCtx)
-
-	return span, closer
-}
-
-// setTags sets build related tags on the span
-func (b *Bootstrap) setTags(span opentracing.Span) {
-	span.SetTag("buildkite.job_id", b.JobID)
-	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
-	span.SetTag("buildkite.build_id", buildID)
+	return span, ctx, stopper
 }
 
 // executeHook runs a hook script with the hookRunner
