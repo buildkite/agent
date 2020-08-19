@@ -15,10 +15,21 @@ import (
 	"github.com/buildkite/bintest"
 )
 
+// Enable an experiment, returning a function to restore the previous state.
+// Usage: defer experimentWithUndo("foo")()
+func experimentWithUndo(name string) func() {
+	prev := experiments.IsEnabled(name)
+	experiments.Enable(name)
+	return func() {
+		if !prev {
+			experiments.Disable(name)
+		}
+	}
+}
+
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	t.Parallel()
-
-	experiments.Enable(`resolve-commit-after-checkout`)
+	defer experimentWithUndo("resolve-commit-after-checkout")()
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
@@ -68,8 +79,6 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	agent.Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchPattern(`^commit`)).AndExitWith(0)
 
 	tester.RunAndCheck(t, env...)
-
-	experiments.Disable(`resolve-commit-after-checkout`)
 }
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
