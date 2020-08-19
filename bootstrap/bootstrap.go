@@ -157,7 +157,15 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && includePhase(`command`) {
-		phaseErr = b.CommandPhase()
+		var commandErr error
+		phaseErr, commandErr = b.CommandPhase(ctx)
+		// Add command exit error info. This is distinct from a phaseErr, which is
+		// an error from the hook/job logic. These are both good to report but
+		// shouldn't override each other in reporting.
+		if commandErr != nil {
+			b.shell.Printf("user command error: %v", commandErr)
+			ext.LogError(span, commandErr)
+		}
 
 		// Only upload artifacts as part of the command phase
 		if err = b.uploadArtifacts(ctx); err != nil {
@@ -1441,33 +1449,72 @@ func (b *Bootstrap) resolveCommit() {
 	}
 }
 
-// CommandPhase determines how to run the build, and then runs it
-func (b *Bootstrap) CommandPhase() error {
-	if err := b.executeGlobalHook("pre-command"); err != nil {
+// runPreCommandHooks runs the pre-command hooks and adds tracing spans.
+func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "pre-command hooks")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
+	if err = b.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-
-	if err := b.executeLocalHook("pre-command"); err != nil {
+	if err = b.executeLocalHook(ctx, "pre-command"); err != nil {
 		return err
 	}
-
-	if err := b.executePluginHook("pre-command", b.pluginCheckouts); err != nil {
+	if err = b.executePluginHook(ctx, "pre-command", b.pluginCheckouts); err != nil {
 		return err
 	}
+	return nil
+}
 
-	var commandExitError error
+// runCommand runs the command and adds tracing spans.
+func (b *Bootstrap) runCommand(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "command")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
 
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case b.hasPluginHook("command"):
-		commandExitError = b.executePluginHook("command", b.pluginCheckouts)
+		err = b.executePluginHook(ctx, "command", b.pluginCheckouts)
 	case b.hasLocalHook("command"):
-		commandExitError = b.executeLocalHook("command")
+		err = b.executeLocalHook(ctx, "command")
 	case b.hasGlobalHook("command"):
-		commandExitError = b.executeGlobalHook("command")
+		err = b.executeGlobalHook(ctx, "command")
 	default:
-		commandExitError = b.defaultCommandPhase()
+		err = b.defaultCommandPhase(ctx)
 	}
+	return err
+}
+
+// runPostCommandHooks runs the post-command hooks and adds tracing spans.
+func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "post-command hooks")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
+	if err = b.executeGlobalHook(ctx, "post-command"); err != nil {
+		return err
+	}
+	if err = b.executeLocalHook(ctx, "post-command"); err != nil {
+		return err
+	}
+	if err = b.executePluginHook(ctx, "post-command", b.pluginCheckouts); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CommandPhase determines how to run the build, and then runs it
+func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
+	// Run pre-command hooks
+	if err := b.runPreCommandHooks(ctx); err != nil {
+		return err, nil
+	}
+
+	// Run the actual command
+	commandExitError := b.runCommand(ctx)
+	var realCommandError error
 
 	// If the command returned an exit that wasn't a `exec.ExitError`
 	// (which is returned when the command is actually run, but fails),
@@ -1476,6 +1523,7 @@ func (b *Bootstrap) CommandPhase() error {
 		if shell.IsExitSignaled(commandExitError) {
 			b.shell.Errorf("The command was interrupted by a signal")
 		} else {
+			realCommandError = commandExitError
 			b.shell.Errorf("The command exited with status %d", shell.GetExitCode(commandExitError))
 		}
 	} else if commandExitError != nil {
@@ -1492,19 +1540,11 @@ func (b *Bootstrap) CommandPhase() error {
 	b.shell.Env.Set("BUILDKITE_COMMAND_EXIT_STATUS", fmt.Sprintf("%d", shell.GetExitCode(commandExitError)))
 
 	// Run post-command hooks
-	if err := b.executeGlobalHook("post-command"); err != nil {
-		return err
+	if err := b.runPostCommandHooks(ctx); err != nil {
+		return err, realCommandError
 	}
 
-	if err := b.executeLocalHook("post-command"); err != nil {
-		return err
-	}
-
-	if err := b.executePluginHook("post-command", b.pluginCheckouts); err != nil {
-		return err
-	}
-
-	return nil
+	return nil, realCommandError
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
