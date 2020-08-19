@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,7 +23,15 @@ import (
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/shellwords"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
+
+	"github.com/uber/jaeger-lib/metrics"
+
+	"github.com/uber/jaeger-client-go"
+	jaegercfg "github.com/uber/jaeger-client-go/config"
+	jaegerlog "github.com/uber/jaeger-client-go/log"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a
@@ -54,6 +63,9 @@ type Bootstrap struct {
 
 	// A channel to track cancellation
 	cancelCh chan struct{}
+
+	// bit hacky but avoids passing around the context everywhere
+	traceCtx context.Context
 }
 
 // New returns a new Bootstrap instance
@@ -106,6 +118,10 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.Errorf("Error setting up bootstrap: %v", err)
 		return shell.GetExitCode(err)
 	}
+
+	span, closer := b.startTracing(ctx)
+	defer closer.Close()
+	defer span.Finish()
 
 	var includePhase = func(phase string) bool {
 		if len(b.Phases) == 0 {
@@ -173,8 +189,100 @@ func (b *Bootstrap) Cancel() error {
 	return nil
 }
 
+func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
+	// TODO: fallback to BUILD_ID/JOB_ID
+	traceCtx, ok := b.shell.Env.Get("BUILDKITE_TRACE_CONTEXT")
+	if !ok {
+		// Return nil so a new span will be created
+		return nil
+	}
+	decodedCtx, err := base64.URLEncoding.DecodeString(traceCtx)
+	if err != nil {
+		b.shell.Errorf("error:", err)
+		// Not worth stopping the run over
+		return nil
+	}
+
+	wireContext, err := opentracing.GlobalTracer().Extract(
+		opentracing.Binary,
+		decodedCtx,
+	)
+	if err != nil {
+		b.shell.Errorf("error:", err)
+		// Not worth stopping the run over
+		return nil
+	}
+
+	return wireContext
+}
+
+// InjectTraceCtx ...
+func (b *Bootstrap) InjectTraceCtx(span opentracing.Span) {
+
+}
+
+func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, io.Closer) {
+	b.shell.Commentf("Setting up tracer.")
+	// Sample configuration for testing. Use constant sampling to sample every trace
+	// and enable LogSpan to log every span via configured Logger.
+	cfg := jaegercfg.Configuration{
+		ServiceName: "buildkite_agent",
+		Sampler: &jaegercfg.SamplerConfig{
+			Type:  jaeger.SamplerTypeConst,
+			Param: 1,
+		},
+		Reporter: &jaegercfg.ReporterConfig{
+			LogSpans: true,
+		},
+	}
+
+	// Example logger and metrics factory. Use github.com/uber/jaeger-client-go/log
+	// and github.com/uber/jaeger-lib/metrics respectively to bind to real logging and metrics
+	// frameworks.
+	jLogger := jaegerlog.StdLogger
+	jMetricsFactory := metrics.NullFactory
+
+	// Initialize tracer with a logger and a metrics factory
+	tracer, closer, _ := cfg.NewTracer(
+		jaegercfg.Logger(jLogger),
+		jaegercfg.Metrics(jMetricsFactory),
+	)
+	// Set the singleton opentracing.Tracer with the Jaeger tracer.
+	opentracing.SetGlobalTracer(tracer)
+
+	b.shell.Commentf("Set up tracer.")
+
+	wireContext := b.extractTraceCtx()
+
+	span := opentracing.StartSpan(
+		"bootstrap.run",
+		ext.RPCServerOption(wireContext),
+	)
+
+	b.setTags(span)
+
+	b.traceCtx = opentracing.ContextWithSpan(ctx, span)
+	b.shell.SetTraceCtx(b.traceCtx)
+
+	return span, closer
+}
+
+// setTags sets build related tags on the span
+func (b *Bootstrap) setTags(span opentracing.Span) {
+	span.SetTag("buildkite.job_id", b.JobID)
+	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
+	span.SetTag("buildkite.build_id", buildID)
+}
+
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.Environment) error {
+	span, ctx := opentracing.StartSpanFromContext(b.traceCtx, "hook.execute")
+	defer span.Finish()
+	span.SetTag("hook.name", name)
+	span.SetTag("hook.path", hookPath)
+	b.shell.SetTraceCtx(ctx)
+	defer b.shell.SetTraceCtx(b.traceCtx)
+
 	if !fileExists(hookPath) {
 		if b.Debug {
 			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", name, hookPath)
@@ -216,7 +324,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 
 	// Run the wrapper script
-	if err := b.shell.RunScript(script.Path(), extraEnviron); err != nil {
+	if err := b.shell.RunScript(ctx, script.Path(), extraEnviron); err != nil {
 		exitCode := shell.GetExitCode(err)
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
@@ -1378,6 +1486,13 @@ func (b *Bootstrap) CommandPhase() error {
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase() error {
+	span, ctx := opentracing.StartSpanFromContext(b.traceCtx, "hook.execute")
+	defer span.Finish()
+	span.SetTag("hook.name", "command")
+	span.SetTag("hook.type", "default")
+	b.shell.SetTraceCtx(ctx)
+	defer b.shell.SetTraceCtx(b.traceCtx)
+
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(b.Command) == "" {
 		return fmt.Errorf("No command has been provided")

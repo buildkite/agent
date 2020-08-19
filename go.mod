@@ -10,7 +10,7 @@ require (
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/denisbrodbeck/machineid v1.0.0
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e // indirect
@@ -20,16 +20,19 @@ require (
 	github.com/mitchellh/go-homedir v1.0.0
 	github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
 	github.com/oleiade/reflections v0.0.0-20160817071559-0e86b3c98b2f
+	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pborman/uuid v0.0.0-20170112150404-1b00554d8222
 	github.com/pkg/errors v0.9.1
 	github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2 // indirect
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/stretchr/testify v1.5.1
+	github.com/uber/jaeger-client-go v2.25.0+incompatible
+	github.com/uber/jaeger-lib v2.2.0+incompatible
 	github.com/urfave/cli v1.22.4
+	go.uber.org/atomic v1.6.0 // indirect
 	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073
 	golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
-	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f // indirect
 	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82
 	google.golang.org/api v0.0.0-20181016191922-cc9bd73d51b4
 	google.golang.org/appengine v1.2.0 // indirect

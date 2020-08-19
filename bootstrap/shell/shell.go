@@ -3,6 +3,7 @@ package shell
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/opentracing/opentracing-go"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
@@ -240,10 +243,35 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	return strings.TrimSpace(b.String()), nil
 }
 
+// SetTraceCtx ...
+func (s *Shell) SetTraceCtx(ctx context.Context) {
+	s.ctx = ctx
+}
+
+func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
+	span := opentracing.SpanFromContext(ctx)
+	buf := new(bytes.Buffer)
+	err := span.Tracer().Inject(
+		span.Context(),
+		opentracing.Binary,
+		buf,
+	)
+	if err != nil {
+		s.Errorf("error:", err)
+		// Not worth stopping the run over
+		return
+	}
+
+	traceCtxStr := base64.URLEncoding.EncodeToString(buf.Bytes())
+	s.Commentf("traceCtx: ", traceCtxStr)
+
+	env.Set("BUILDKITE_TRACE_CONTEXT", traceCtxStr)
+}
+
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
 // can also be passed the the script
-func (s *Shell) RunScript(path string, extra *env.Environment) error {
+func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
 
@@ -274,7 +302,6 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		}
 		command = "powershell.exe"
 		args = []string{"-file", path}
-
 
 	case !isWindows && isBash:
 		command = "/bin/bash"
@@ -350,6 +377,11 @@ type executeFlags struct {
 }
 
 func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) error {
+	// Combine the two slices of env, let the latter overwrite the former
+	tracedEnv := env.FromSlice(cmd.Env)
+	s.injectTraceCtx(s.ctx, tracedEnv)
+	cmd.Env = tracedEnv.ToSlice()
+
 	s.cmdLock.Lock()
 	s.cmd = cmd
 	s.cmdLock.Unlock()
