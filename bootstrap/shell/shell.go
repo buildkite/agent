@@ -203,13 +203,13 @@ func (s *Shell) Run(command string, arg ...string) error {
 // RunWithoutPrompt runs a command, write stdout and stderr to the logger and
 // return an error if it fails. Notably it doesn't show a prompt.
 func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
-	cmd, err := s.buildCommand(command, arg...)
+	cmd, err := s.buildCommand(s.ctx, command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	return s.executeCommand(cmd, s.Writer, executeFlags{
+	return s.executeCommand(s.ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -224,14 +224,14 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 		s.Promptf("%s", process.FormatCommand(command, arg))
 	}
 
-	cmd, err := s.buildCommand(command, arg...)
+	cmd, err := s.buildCommand(s.ctx, command, arg...)
 	if err != nil {
 		return "", err
 	}
 
 	var b bytes.Buffer
 
-	err = s.executeCommand(cmd, &b, executeFlags{
+	err = s.executeCommand(s.ctx, cmd, &b, executeFlags{
 		Stdout: true,
 		Stderr: false,
 		PTY:    false,
@@ -243,11 +243,8 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	return strings.TrimSpace(b.String()), nil
 }
 
-// SetTraceCtx ...
-func (s *Shell) SetTraceCtx(ctx context.Context) {
-	s.ctx = ctx
-}
-
+// injectTraceCtx adds tracing information to the given env vars to support
+// distributed tracing across jobs/builds.
 func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	span := opentracing.SpanFromContext(ctx)
 	buf := new(bytes.Buffer)
@@ -263,7 +260,6 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	}
 
 	traceCtxStr := base64.URLEncoding.EncodeToString(buf.Bytes())
-	s.Commentf("traceCtx: ", traceCtxStr)
 
 	env.Set("BUILDKITE_TRACE_CONTEXT", traceCtxStr)
 }
@@ -312,7 +308,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 		args = []string{}
 	}
 
-	cmd, err := s.buildCommand(command, args...)
+	cmd, err := s.buildCommand(ctx, command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -323,7 +319,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environme
 	customEnv := currentEnv.Merge(extra)
 	cmd.Env = customEnv.ToSlice()
 
-	return s.executeCommand(cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -337,7 +333,7 @@ type command struct {
 }
 
 // buildCommand returns a command that can later be executed
-func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
+func (s *Shell) buildCommand(ctx context.Context, name string, arg ...string) (*command, error) {
 	// Always use absolute path as Windows has a hard time
 	// finding executables in its path
 	absPath, err := s.AbsolutePath(name)
@@ -354,7 +350,7 @@ func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 
 	// Create a sub-context so that shell.Cancel() can interrupt
 	// a running command
-	subctx, cancel := context.WithCancel(s.ctx)
+	subctx, cancel := context.WithCancel(ctx)
 	cfg.Context = subctx
 
 	// Add env that commands expect a shell to set
@@ -376,10 +372,10 @@ type executeFlags struct {
 	PTY bool
 }
 
-func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) error {
+func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
 	// Combine the two slices of env, let the latter overwrite the former
 	tracedEnv := env.FromSlice(cmd.Env)
-	s.injectTraceCtx(s.ctx, tracedEnv)
+	s.injectTraceCtx(ctx, tracedEnv)
 	cmd.Env = tracedEnv.ToSlice()
 
 	s.cmdLock.Lock()
