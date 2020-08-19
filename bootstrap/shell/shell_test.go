@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/bintest"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
@@ -332,4 +333,39 @@ func newShellForTest(t *testing.T) *shell.Shell {
 	}
 	sh.Logger = shell.DiscardLogger
 	return sh
+}
+
+func TestRunWithoutPrompt(t *testing.T) {
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := bytes.NewBufferString("")
+	sh.Writer = out
+
+	err = sh.RunWithoutPrompt("echo", "hi")
+	assert.NoError(t, err)
+	assert.Equal(t, "hi\n", out.String())
+
+	out.Reset()
+	err = sh.RunWithoutPrompt("asdasdasdasdzxczxczxzxc")
+	assert.Error(t, err)
+}
+
+func TestRunWithoutPromptWithContext(t *testing.T) {
+	sh, err := shell.New()
+	ctx := context.Background()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := bytes.NewBufferString("")
+	sh.Writer = out
+
+	err = sh.RunWithoutPromptWithContext(ctx, "echo", "hi")
+	assert.NoError(t, err)
+	assert.Equal(t, "hi\n", out.String())
+
+	out.Reset()
+	err = sh.RunWithoutPromptWithContext(ctx, "asdasdasdasdzxczxczxzxc")
+	assert.Error(t, err)
 }

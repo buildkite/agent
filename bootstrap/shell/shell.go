@@ -203,15 +203,23 @@ func (s *Shell) Run(command string, arg ...string) error {
 }
 
 // RunWithoutPrompt runs a command, write stdout and stderr to the logger and
-// return an error if it fails. Notably it doesn't show a prompt.
+// return an error if it fails. Notably it doesn't show a prompt. It will use the
+// context set on the Shell object itself.
 func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
-	cmd, err := s.buildCommand(s.ctx, command, arg...)
+	return s.RunWithoutPromptWithContext(s.ctx, command, arg...)
+}
+
+// RunWithoutPromptWithContext runs a command, writes stdout and err to the logger,
+// and returns an error if it fails. It doesn't show a prompt. It will use the given
+// context.
+func (s *Shell) RunWithoutPromptWithContext(ctx context.Context, command string, arg ...string) error {
+	cmd, err := s.buildCommand(ctx, command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	return s.executeCommand(s.ctx, cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
