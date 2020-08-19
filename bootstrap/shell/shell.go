@@ -197,6 +197,12 @@ func (s *Shell) Run(command string, arg ...string) error {
 	return s.RunWithoutPrompt(command, arg...)
 }
 
+func (s *Shell) RunWithInput(input string, command string, arg ...string) error {
+	s.Promptf("%s # (with piped input)", process.FormatCommand(command, arg))
+
+	return s.RunWithInputWithoutPrompt(input, command, arg...)
+}
+
 // RunWithoutPrompt runs a command, write stdout and stderr to the logger and
 // return an error if it fails. Notably it doesn't show a prompt.
 func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
@@ -207,9 +213,26 @@ func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
 	}
 
 	return s.executeCommand(cmd, s.Writer, executeFlags{
-		Stdout: true,
-		Stderr: true,
-		PTY:    s.PTY,
+		UseStdin: false,
+		Stdout:   true,
+		Stderr:   true,
+		PTY:      s.PTY,
+	})
+}
+
+func (s *Shell) RunWithInputWithoutPrompt(input string, command string, arg ...string) error {
+	cmd, err := s.buildCommand(command, arg...)
+	if err != nil {
+		s.Errorf("Error building command: %v", err)
+		return err
+	}
+
+	return s.executeCommand(cmd, s.Writer, executeFlags{
+		UseStdin: true,
+		Stdin:    input,
+		Stdout:   true,
+		Stderr:   true,
+		PTY:      s.PTY,
 	})
 }
 
@@ -275,7 +298,6 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		command = "powershell.exe"
 		args = []string{"-file", path}
 
-
 	case !isWindows && isBash:
 		command = "/bin/bash"
 		args = []string{"-c", path}
@@ -339,6 +361,10 @@ func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 }
 
 type executeFlags struct {
+	// Whether to make stdin available for writing
+	UseStdin bool
+	Stdin    string
+
 	// Whether to capture stdout
 	Stdout bool
 
@@ -368,6 +394,12 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 		cmd.cancel()
 	}()
 
+	var stdin *io.PipeWriter
+	var r *io.PipeReader
+	if flags.UseStdin {
+		r, stdin = io.Pipe()
+	}
+
 	cfg := cmd.Config
 
 	// Modify process config based on execution flags
@@ -392,6 +424,14 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 			defer stdErrStreamer.Close()
 			cfg.Stderr = stdErrStreamer
 		}
+
+		// Attach a standard input if need one
+		if flags.UseStdin {
+			cfg.UseStdin = true
+			cfg.Stdin = r
+		} else {
+			cfg.UseStdin = false
+		}
 	}
 
 	p := process.New(logger.Discard, cfg)
@@ -402,6 +442,16 @@ func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) er
 
 	if err := p.Run(); err != nil {
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
+	}
+
+	if flags.UseStdin {
+		if _, err := io.WriteString(stdin, flags.Stdin); err != nil {
+			return errors.Wrapf(err, "Error writing input to `%s`", cmdStr)
+		}
+
+		if err := stdin.Close(); err != nil {
+			return errors.Wrapf(err, "Error closing input to `%s`", cmdStr)
+		}
 	}
 
 	return p.WaitResult()

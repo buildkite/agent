@@ -64,6 +64,8 @@ type Config struct {
 	Path            string
 	Args            []string
 	Env             []string
+	UseStdin        bool
+	Stdin           io.Reader
 	Stdout          io.Writer
 	Stderr          io.Writer
 	Dir             string
@@ -195,7 +197,11 @@ func (p *Process) Run() error {
 	} else {
 		p.command.Stdout = p.conf.Stdout
 		p.command.Stderr = p.conf.Stderr
-		p.command.Stdin = nil
+		if p.conf.UseStdin {
+			p.command.Stdin = p.conf.Stdin
+		} else {
+			p.command.Stdin = nil
+		}
 
 		err := p.command.Start()
 		if err != nil {

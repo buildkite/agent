@@ -201,6 +201,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		Args:            cmd[1:],
 		Env:             processEnv,
 		PTY:             conf.AgentConfiguration.RunInPty,
+		UseStdin:        false,
 		Stdout:          processWriter,
 		Stderr:          processWriter,
 		InterruptSignal: conf.CancelSignal,

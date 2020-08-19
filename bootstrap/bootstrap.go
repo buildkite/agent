@@ -1278,7 +1278,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 			return err
 		}
 
-		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput); err != nil {
+		if err = b.shell.RunWithInput(gitCommitOutput, "buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
 			return err
 		}
 	}
