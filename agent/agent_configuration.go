@@ -30,4 +30,5 @@ type AgentConfiguration struct {
 	Profile                    string
 	RedactedVars               []string
 	AcquireJob                 string
+	TracingDatadogAddr         string
 }

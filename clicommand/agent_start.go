@@ -84,6 +84,7 @@ type AgentStartConfig struct {
 	HealthCheckAddr            string   `cli:"health-check-addr"`
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
+	TracingDatadogAddr         string   `cli:"tracing-datadog-addr"`
 	Spawn                      int      `cli:"spawn"`
 	LogFormat                  string   `cli:"log-format"`
 	CancelSignal               string   `cli:"cancel-signal"`
@@ -400,6 +401,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_REDACTED_VARS",
 			Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN"},
 		},
+		cli.StringFlag{
+			Name:   "tracing-datadog-addr",
+			Usage:  "If set, send Datadog tracing data to this agent address",
+			EnvVar: "BUILDKITE_TRACING_DATADOG_ADDR",
+			Value:  "",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -591,6 +598,7 @@ var AgentStartCommand = cli.Command{
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
+			TracingDatadogAddr:         cfg.TracingDatadogAddr,
 		}
 
 		if loader.File != nil {
