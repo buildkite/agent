@@ -1,8 +1,10 @@
 package bootstrap
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -189,6 +191,8 @@ func (b *Bootstrap) Cancel() error {
 	return nil
 }
 
+// extractTraceCtx pulls encoded distributed tracing information from the env vars.
+// Note: This should match the injectTraceCtx code in shell.
 func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
 	// TODO: fallback to BUILD_ID/JOB_ID
 	traceCtx, ok := b.shell.Env.Get("BUILDKITE_TRACE_CONTEXT")
@@ -198,17 +202,24 @@ func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
 	}
 	decodedCtx, err := base64.URLEncoding.DecodeString(traceCtx)
 	if err != nil {
-		b.shell.Errorf("error:", err)
+		b.shell.Warningf("trace extraction decode error: %v", err)
+		// Not worth stopping the run over
+		return nil
+	}
+	dec := gob.NewDecoder(bytes.NewBuffer(decodedCtx))
+	carrier := tracer.TextMapCarrier{}
+	if err := dec.Decode(&carrier); err != nil {
+		b.shell.Warningf("tracing carrier extraction decoding error: %v", err)
 		// Not worth stopping the run over
 		return nil
 	}
 
 	wireContext, err := opentracing.GlobalTracer().Extract(
-		opentracing.Binary,
-		decodedCtx,
+		opentracing.TextMap,
+		carrier,
 	)
 	if err != nil {
-		b.shell.Errorf("error:", err)
+		b.shell.Warningf("trace extraction error: %v", err)
 		// Not worth stopping the run over
 		return nil
 	}
