@@ -12,13 +12,9 @@ func Disable(experiment string) {
 	delete(experiments, experiment)
 }
 
-// Check if an experiment has been enabled
+// IsEnabled returns whether the named experiment is enabled
 func IsEnabled(experiment string) bool {
-	if val, ok := experiments[experiment]; ok {
-		return val
-	} else {
-		return false
-	}
+	return experiments[experiment] // map[T]bool returns false for missing keys
 }
 
 // Enabled returns the keys of all the enabled experiments
