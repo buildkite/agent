@@ -1268,16 +1268,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// resolve BUILDKITE_COMMIT based on the local git repo
 	if experiments.IsEnabled(`resolve-commit-after-checkout`) {
 		b.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
-		if commitRef, ok := b.shell.Env.Get(`BUILDKITE_COMMIT`); ok {
-			cmdOut, err := b.shell.RunAndCapture(`git`, `rev-parse`, commitRef)
-			if err != nil {
-				b.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
-			} else {
-				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-				b.shell.Commentf("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
-				b.shell.Env.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
-			}
-		}
+		b.resolveCommit()
 	}
 
 	// Grab author and commit information and send
@@ -1299,6 +1290,22 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	return nil
+}
+
+func (b *Bootstrap) resolveCommit() {
+	commitRef, _ := b.shell.Env.Get("BUILDKITE_COMMIT")
+	if commitRef == "" {
+		b.shell.Warningf("BUILDKITE_COMMIT was empty")
+		return
+	}
+	cmdOut, err := b.shell.RunAndCapture(`git`, `rev-parse`, commitRef)
+	if err != nil {
+		b.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
+		return
+	}
+	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
+	b.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
+	b.shell.Env.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
 }
 
 // CommandPhase determines how to run the build, and then runs it
