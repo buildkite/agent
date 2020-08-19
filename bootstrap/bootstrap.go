@@ -62,9 +62,6 @@ type Bootstrap struct {
 
 	// A channel to track cancellation
 	cancelCh chan struct{}
-
-	// bit hacky but avoids passing around the context everywhere
-	traceCtx context.Context
 }
 
 // New returns a new Bootstrap instance
@@ -109,7 +106,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
-		if err := b.tearDown(); err != nil {
+		if err = b.tearDown(ctx); err != nil {
 			b.shell.Errorf("Error tearing down bootstrap: %v", err)
 
 			// this gets passed back via the named return
@@ -118,7 +115,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}()
 
 	// Initialize the environment, a failure here will still call the tearDown
-	if err := b.setUp(); err != nil {
+	if err = b.setUp(ctx); err != nil {
 		b.shell.Errorf("Error setting up bootstrap: %v", err)
 		return shell.GetExitCode(err)
 	}
@@ -142,12 +139,12 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		phaseErr = b.preparePlugins()
 
 		if phaseErr == nil {
-			phaseErr = b.PluginPhase()
+			phaseErr = b.PluginPhase(ctx)
 		}
 	}
 
 	if phaseErr == nil && includePhase(`checkout`) {
-		phaseErr = b.CheckoutPhase()
+		phaseErr = b.CheckoutPhase(ctx)
 	} else {
 		checkoutDir, exists := b.shell.Env.Get(`BUILDKITE_BUILD_CHECKOUT_PATH`)
 		if exists {
@@ -156,14 +153,14 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && includePhase(`plugin`) {
-		phaseErr = b.VendoredPluginPhase()
+		phaseErr = b.VendoredPluginPhase(ctx)
 	}
 
 	if phaseErr == nil && includePhase(`command`) {
 		phaseErr = b.CommandPhase()
 
 		// Only upload artifacts as part of the command phase
-		if err := b.uploadArtifacts(); err != nil {
+		if err = b.uploadArtifacts(ctx); err != nil {
 			b.shell.Errorf("%v", err)
 			return shell.GetExitCode(err)
 		}
@@ -285,13 +282,15 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 }
 
 // executeHook runs a hook script with the hookRunner
-func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.Environment) error {
-	span, ctx := opentracing.StartSpanFromContext(b.traceCtx, "hook.execute")
-	defer span.Finish()
+func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron *env.Environment) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "hook.execute")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+	span.SetTag("hook.type", scope)
 	span.SetTag("hook.name", name)
-	span.SetTag("hook.path", hookPath)
-	b.shell.SetTraceCtx(ctx)
-	defer b.shell.SetTraceCtx(b.traceCtx)
+	span.SetTag("hook.command", hookPath)
+
+	name = scope + " " + name
 
 	if !fileExists(hookPath) {
 		if b.Debug {
@@ -334,7 +333,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 	}
 
 	// Run the wrapper script
-	if err := b.shell.RunScript(ctx, script.Path(), extraEnviron); err != nil {
+	if err = b.shell.RunScript(ctx, script.Path(), extraEnviron); err != nil {
 		exitCode := shell.GetExitCode(err)
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
@@ -428,7 +427,7 @@ func (b *Bootstrap) globalHookPath(name string) (string, error) {
 }
 
 // Executes a global hook if one exists
-func (b *Bootstrap) executeGlobalHook(name string) error {
+func (b *Bootstrap) executeGlobalHook(ctx context.Context, name string) error {
 	if !b.hasGlobalHook(name) {
 		return nil
 	}
@@ -436,7 +435,7 @@ func (b *Bootstrap) executeGlobalHook(name string) error {
 	if err != nil {
 		return err
 	}
-	return b.executeHook("global "+name, p, nil)
+	return b.executeHook(ctx, "global", name, p, nil)
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
@@ -450,7 +449,7 @@ func (b *Bootstrap) hasLocalHook(name string) bool {
 }
 
 // Executes a local hook
-func (b *Bootstrap) executeLocalHook(name string) error {
+func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
 	if !b.hasLocalHook(name) {
 		return nil
 	}
@@ -473,7 +472,7 @@ func (b *Bootstrap) executeLocalHook(name string) error {
 		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
-	return b.executeHook("local "+name, localHookPath, nil)
+	return b.executeHook(ctx, "local", name, localHookPath, nil)
 }
 
 // Returns whether or not a file exists on the filesystem. We consider any
@@ -532,7 +531,11 @@ func addExecutePermissionToFile(filename string) error {
 
 // setUp is run before all the phases run. It's responsible for initializing the
 // bootstrap environment
-func (b *Bootstrap) setUp() error {
+func (b *Bootstrap) setUp(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "environment")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
 	// Create an empty env for us to keep track of our env changes in
 	b.shell.Env = env.FromSlice(os.Environ())
 
@@ -584,20 +587,25 @@ func (b *Bootstrap) setUp() error {
 	// It's important to do this before checking out plugins, in case you want
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
-	return b.executeGlobalHook("environment")
+	err = b.executeGlobalHook(ctx, "environment")
+	return err
 }
 
 // tearDown is called before the bootstrap exits, even on error
-func (b *Bootstrap) tearDown() error {
-	if err := b.executeGlobalHook("pre-exit"); err != nil {
+func (b *Bootstrap) tearDown(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "pre-exit")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
+	if err = b.executeGlobalHook(ctx, "pre-exit"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook("pre-exit"); err != nil {
+	if err = b.executeLocalHook(ctx, "pre-exit"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-exit", b.pluginCheckouts); err != nil {
+	if err = b.executePluginHook(ctx, "pre-exit", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -607,7 +615,7 @@ func (b *Bootstrap) tearDown() error {
 	}
 
 	for _, dir := range b.cleanupDirs {
-		if err := os.RemoveAll(dir); err != nil {
+		if err = os.RemoveAll(dir); err != nil {
 			b.shell.Warningf("Failed to remove dir %s: %v", dir, err)
 		}
 	}
@@ -696,7 +704,7 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
 // checked out and made available to later phases
-func (b *Bootstrap) PluginPhase() error {
+func (b *Bootstrap) PluginPhase(ctx context.Context) error {
 	if len(b.plugins) == 0 {
 		if b.Debug {
 			b.shell.Commentf("Skipping plugin phase")
@@ -732,12 +740,12 @@ func (b *Bootstrap) PluginPhase() error {
 	b.pluginCheckouts = checkouts
 
 	// Now we can run plugin environment hooks too
-	return b.executePluginHook("environment", checkouts)
+	return b.executePluginHook(ctx, "environment", checkouts)
 }
 
 // VendoredPluginPhase is where plugins that are included in the
 // checked out code are added
-func (b *Bootstrap) VendoredPluginPhase() error {
+func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 	if !b.hasPlugins() {
 		return nil
 	}
@@ -785,11 +793,11 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 	b.pluginCheckouts = append(b.pluginCheckouts, vendoredCheckouts...)
 
 	// Now we can run plugin environment hooks too
-	return b.executePluginHook("environment", vendoredCheckouts)
+	return b.executePluginHook(ctx, "environment", vendoredCheckouts)
 }
 
 // Executes a named hook on plugins that have it
-func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) error {
+func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
 	for _, p := range checkouts {
 		hookPath, err := b.findHookFile(p.HooksDir, name)
 		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
@@ -803,7 +811,7 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
-		if err := b.executeHook("plugin "+p.Plugin.Name()+" "+name, hookPath, env); err != nil {
+		if err := b.executeHook(ctx, "plugin", p.Plugin.Name()+" "+name, hookPath, env); err != nil {
 			return err
 		}
 	}
@@ -972,19 +980,23 @@ func (b *Bootstrap) createCheckoutDir() error {
 
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
-func (b *Bootstrap) CheckoutPhase() error {
-	if err := b.executeGlobalHook("pre-checkout"); err != nil {
+func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "checkout")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
+	if err = b.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-checkout", b.pluginCheckouts); err != nil {
+	if err = b.executePluginHook(ctx, "pre-checkout", b.pluginCheckouts); err != nil {
 		return err
 	}
 
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if b.CleanCheckout {
 		b.shell.Headerf("Cleaning pipeline checkout")
-		if err := b.removeCheckoutDir(); err != nil {
+		if err = b.removeCheckoutDir(); err != nil {
 			return err
 		}
 	}
@@ -993,7 +1005,8 @@ func (b *Bootstrap) CheckoutPhase() error {
 
 	// If we have a blank repository then use a temp dir for builds
 	if b.Config.Repository == "" {
-		buildDir, err := ioutil.TempDir("", "buildkite-job-"+b.Config.JobID)
+		var buildDir string
+		buildDir, err = ioutil.TempDir("", "buildkite-job-"+b.Config.JobID)
 		if err != nil {
 			return err
 		}
@@ -1004,23 +1017,23 @@ func (b *Bootstrap) CheckoutPhase() error {
 	}
 
 	// Make sure the build directory exists
-	if err := b.createCheckoutDir(); err != nil {
+	if err = b.createCheckoutDir(); err != nil {
 		return err
 	}
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
 	case b.hasPluginHook("checkout"):
-		if err := b.executePluginHook("checkout", b.pluginCheckouts); err != nil {
+		if err = b.executePluginHook(ctx, "checkout", b.pluginCheckouts); err != nil {
 			return err
 		}
 	case b.hasGlobalHook("checkout"):
-		if err := b.executeGlobalHook("checkout"); err != nil {
+		if err = b.executeGlobalHook(ctx, "checkout"); err != nil {
 			return err
 		}
 	default:
 		if b.Config.Repository != "" {
-			err := retry.Do(func(s *retry.Stats) error {
+			err = retry.Do(func(s *retry.Stats) error {
 				err := b.defaultCheckoutPhase()
 				if err == nil {
 					return nil
@@ -1083,15 +1096,15 @@ func (b *Bootstrap) CheckoutPhase() error {
 	previousCheckoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run post-checkout hooks
-	if err := b.executeGlobalHook("post-checkout"); err != nil {
+	if err = b.executeGlobalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook("post-checkout"); err != nil {
+	if err = b.executeLocalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook("post-checkout", b.pluginCheckouts); err != nil {
+	if err = b.executePluginHook(ctx, "post-checkout", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -1102,7 +1115,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
 		b.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
-		if err := b.shell.Chdir(newCheckoutPath); err != nil {
+		if err = b.shell.Chdir(newCheckoutPath); err != nil {
 			return err
 		}
 	}
@@ -1495,13 +1508,12 @@ func (b *Bootstrap) CommandPhase() error {
 }
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
-func (b *Bootstrap) defaultCommandPhase() error {
-	span, ctx := opentracing.StartSpanFromContext(b.traceCtx, "hook.execute")
-	defer span.Finish()
+func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "hook.execute")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
 	span.SetTag("hook.name", "command")
 	span.SetTag("hook.type", "default")
-	b.shell.SetTraceCtx(ctx)
-	defer b.shell.SetTraceCtx(b.traceCtx)
 
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(b.Command) == "" {
@@ -1511,6 +1523,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(b.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && fileExists(pathToCommand)
+	span.SetTag("hook.command", pathToCommand)
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
@@ -1530,7 +1543,8 @@ func (b *Bootstrap) defaultCommandPhase() error {
 	var cmdToExec string
 
 	// The shell gets parsed based on the operating system
-	shell, err := shellwords.Split(b.Shell)
+	var shell []string
+	shell, err = shellwords.Split(b.Shell)
 	if err != nil {
 		return fmt.Errorf("Failed to split shell (%q) into tokens: %v", b.Shell, err)
 	}
@@ -1607,7 +1621,8 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		if b.Debug {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		return runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
+		err = runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
+		return err
 	}
 
 	// If we aren't running a script, try and detect if we are using a posix shell
@@ -1631,7 +1646,8 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		b.shell.Promptf("%s", cmdToExec)
 	}
 
-	return b.shell.RunWithoutPrompt(cmd[0], cmd[1:]...)
+	err = b.shell.RunWithoutPromptWithContext(ctx, cmd[0], cmd[1:]...)
+	return err
 }
 
 // isPosixShell attempts to detect posix shells (e.g bash, sh, zsh )
@@ -1676,21 +1692,25 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 }
 
-func (b *Bootstrap) uploadArtifacts() error {
+func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 	if b.AutomaticArtifactUploadPaths == "" {
 		return nil
 	}
 
+	span, ctx := opentracing.StartSpanFromContext(ctx, "upload artifacts")
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
 	// Run pre-artifact hooks
-	if err := b.executeGlobalHook("pre-artifact"); err != nil {
+	if err = b.executeGlobalHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook("pre-artifact"); err != nil {
+	if err = b.executeLocalHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook("pre-artifact", b.pluginCheckouts); err != nil {
+	if err = b.executePluginHook(ctx, "pre-artifact", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -1704,20 +1724,20 @@ func (b *Bootstrap) uploadArtifacts() error {
 		args = append(args, b.ArtifactUploadDestination)
 	}
 
-	if err := b.shell.Run("buildkite-agent", args...); err != nil {
+	if err = b.shell.Run("buildkite-agent", args...); err != nil {
 		return err
 	}
 
 	// Run post-artifact hooks
-	if err := b.executeGlobalHook("post-artifact"); err != nil {
+	if err = b.executeGlobalHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
 
-	if err := b.executeLocalHook("post-artifact"); err != nil {
+	if err = b.executeLocalHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
 
-	if err := b.executePluginHook("post-artifact", b.pluginCheckouts); err != nil {
+	if err = b.executePluginHook(ctx, "post-artifact", b.pluginCheckouts); err != nil {
 		return err
 	}
 
