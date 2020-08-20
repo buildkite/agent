@@ -1304,8 +1304,10 @@ func (b *Bootstrap) resolveCommit() {
 		return
 	}
 	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-	b.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
-	b.shell.Env.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
+	if trimmedCmdOut != commitRef {
+		b.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
+		b.shell.Env.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
+	}
 }
 
 // CommandPhase determines how to run the build, and then runs it
