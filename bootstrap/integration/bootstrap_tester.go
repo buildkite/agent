@@ -107,16 +107,6 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	// Support testing experiments
 	if exp := experiments.Enabled(); len(exp) > 0 {
 		bt.Env = append(bt.Env, `BUILDKITE_AGENT_EXPERIMENT=`+strings.Join(exp, ","))
-
-		if experiments.IsEnabled(`git-mirrors`) {
-			gitMirrorsDir, err := ioutil.TempDir("", "bootstrap-git-mirrors")
-			if err != nil {
-				return nil, err
-			}
-
-			bt.GitMirrorsDir = gitMirrorsDir
-			bt.Env = append(bt.Env, "BUILDKITE_GIT_MIRRORS_PATH="+gitMirrorsDir)
-		}
 	}
 
 	// Windows requires certain env variables to be present

@@ -1100,9 +1100,8 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
-	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
-		b.shell.Commentf("Using git-mirrors experiment 🧪")
-
+	if b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
+		b.shell.Commentf("Using git-mirrors")
 		var err error
 		mirrorDir, err = b.updateGitMirror()
 		if err != nil {

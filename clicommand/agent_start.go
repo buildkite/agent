@@ -13,7 +13,6 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -493,13 +492,6 @@ var AgentStartCommand = cli.Command{
 		if err != nil {
 			fmt.Printf("%s", err)
 			os.Exit(1)
-		}
-
-		// Check if git-mirrors are enabled
-		if experiments.IsEnabled(`git-mirrors`) {
-			if cfg.GitMirrorsPath == `` {
-				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
-			}
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)
