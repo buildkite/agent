@@ -47,8 +47,6 @@ Take `buildkite-agent artifact upload coverage\report.xml` as an example:
 
 ### `resolve-commit-after-checkout`
 
-When BUILDKITE_COMMIT is HEAD, this updates BUILDKITE_COMMIT to the resolved commit after checkout.
-
-Fixes unexpected behaviour where a pipeline with builds at master and HEAD will have a BUILDKITE_COMMIT value of HEAD even after checkout.
+After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This makes `BUILDKITE_COMMIT` useful for builds triggered against non-commit-hash refs such as `HEAD`.
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
