@@ -239,7 +239,12 @@ type stopper func()
 // startTracing sets up tracing based on the config values. It uses opentracing as an
 // abstraction so the agent can support multiple libraries if needbe.
 func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context.Context, stopper) {
-	b.shell.Commentf("Setting up tracer.")
+	// Newer versions of the tracing libs print out diagnostic info which spams the
+	// Buildkite agent logs. Disable it by default unless it's been explicitly set.
+	if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
+		os.Setenv("DD_TRACE_STARTUP_LOGS", "false")
+	}
+
 	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
 	source, _ := b.shell.Env.Get("BUILDKITE_SOURCE")
 	label, hasLabel := b.shell.Env.Get("BUILDKITE_LABEL")
@@ -270,8 +275,6 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 		stopper = func() {}
 	}
 	opentracing.SetGlobalTracer(t)
-
-	b.shell.Commentf("Set up tracer.")
 
 	wireContext := b.extractTraceCtx()
 
