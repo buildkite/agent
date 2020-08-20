@@ -1,10 +1,7 @@
 package bootstrap
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -198,37 +195,13 @@ func (b *Bootstrap) Cancel() error {
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
-	// TODO: fallback to BUILD_ID/JOB_ID
-	traceCtx, ok := b.shell.Env.Get("BUILDKITE_TRACE_CONTEXT")
-	if !ok {
+	sctx, err := opentracing.GlobalTracer().Extract(opentracing.TextMap, b.shell.Env.ToMap())
+	if err != nil {
 		// Return nil so a new span will be created
 		return nil
+	} else {
+		return sctx
 	}
-	decodedCtx, err := base64.URLEncoding.DecodeString(traceCtx)
-	if err != nil {
-		b.shell.Warningf("trace extraction decode error: %v", err)
-		// Not worth stopping the run over
-		return nil
-	}
-	dec := gob.NewDecoder(bytes.NewBuffer(decodedCtx))
-	carrier := tracer.TextMapCarrier{}
-	if err := dec.Decode(&carrier); err != nil {
-		b.shell.Warningf("tracing carrier extraction decoding error: %v", err)
-		// Not worth stopping the run over
-		return nil
-	}
-
-	wireContext, err := opentracing.GlobalTracer().Extract(
-		opentracing.TextMap,
-		carrier,
-	)
-	if err != nil {
-		b.shell.Warningf("trace extraction error: %v", err)
-		// Not worth stopping the run over
-		return nil
-	}
-
-	return wireContext
 }
 
 // stopper lets us abstract the tracer wrap up code so we can plug in different tracing
@@ -261,6 +234,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithAgentAddr("localhost:8126"),
 			tracer.WithServiceName("buildkite_agent"),
 			tracer.WithSampler(tracer.NewAllSampler()),
+			tracer.WithPropagator(tracetools.NewEnvVarPropagator("BUILDKITE_TRACE_CONTEXT")),
 			tracer.WithGlobalTag("buildkite.agent", b.AgentName),
 			tracer.WithGlobalTag("buildkite.queue", b.Queue),
 			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),

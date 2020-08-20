@@ -3,8 +3,6 @@ package shell
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"os"
@@ -18,7 +16,6 @@ import (
 	"time"
 
 	"github.com/opentracing/opentracing-go"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
@@ -261,27 +258,8 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	if span == nil {
 		return
 	}
-	carrier := tracer.TextMapCarrier{}
-	err := span.Tracer().Inject(
-		span.Context(),
-		opentracing.TextMap,
-		carrier,
-	)
-	if err != nil {
-		s.Warningf("trace injection error: %v", err)
-		// Not worth stopping the run over
-		return
-	}
-
-	buf := new(bytes.Buffer)
-	enc := gob.NewEncoder(buf)
-	if err := enc.Encode(carrier); err != nil {
-		s.Warningf("tracing carrier encoding error: %v", err)
-		return
-	}
-	traceCtxStr := base64.URLEncoding.EncodeToString(buf.Bytes())
-
-	env.Set("BUILDKITE_TRACE_CONTEXT", traceCtxStr)
+	// Intentionally ignoring error. Logging will spam agent logs.
+	_ = opentracing.GlobalTracer().Inject(span.Context(), opentracing.TextMap, env.ToMap())
 }
 
 // RunScript is like Run, but the target is an interpreted script which has
