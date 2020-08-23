@@ -231,7 +231,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	var stopper stopper
 	if b.Config.TracingDatadogAddr != "" {
 		t = opentracer.New(
-			tracer.WithAgentAddr("localhost:8126"),
+			tracer.WithAgentAddr(b.Config.TracingDatadogAddr),
 			tracer.WithServiceName("buildkite_agent"),
 			tracer.WithSampler(tracer.NewAllSampler()),
 			tracer.WithPropagator(tracetools.NewEnvVarPropagator("BUILDKITE_TRACE_CONTEXT")),
