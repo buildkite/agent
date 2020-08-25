@@ -26,6 +26,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
+	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
@@ -234,6 +235,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithAgentAddr(b.Config.TracingDatadogAddr),
 			tracer.WithServiceName("buildkite_agent"),
 			tracer.WithSampler(tracer.NewAllSampler()),
+			tracer.WithAnalytics(true),
 			tracer.WithGlobalTag("buildkite.agent", b.AgentName),
 			tracer.WithGlobalTag("buildkite.queue", b.Queue),
 			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),
@@ -241,6 +243,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithGlobalTag("buildkite.job_id", b.JobID),
 			tracer.WithGlobalTag("buildkite.build_id", buildID),
 			tracer.WithGlobalTag("buildkite.source", source),
+			tracer.WithGlobalTag(ddext.SamplingPriority, ddext.PriorityUserKeep),
 		)
 		stopper = tracer.Stop
 	} else {
