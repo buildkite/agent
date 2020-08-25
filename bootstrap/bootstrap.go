@@ -259,19 +259,27 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 		"job.run",
 		// The span setup code will properly handle this if it's nil
 		opentracing.ChildOf(wireContext),
-		// This is unforatunately Datadog-specific, since opentracing uses 'component'
-		// where DD normally uses 'resource'.
-		opentracer.ResourceName(resourceName),
 	)
 
 	ctx = opentracing.ContextWithSpan(ctx, span)
+
+	// Some tracer-specific span code.
+	if b.Config.TracingDatadogAddr != "" {
+		// Datadog uses 'resource' instead of opentracing's 'component'. And it's not
+		// smart enough to automatically remap component tags so we have to be
+		// different here.
+		span.SetTag(ddext.ResourceName, resourceName)
+		span.SetTag(ddext.AnalyticsEvent, true)
+	} else {
+		ext.Component.Set(span, resourceName)
+	}
 
 	return span, ctx, stopper
 }
 
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron *env.Environment) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 	span.SetTag("hook.type", scope)
@@ -520,7 +528,7 @@ func addExecutePermissionToFile(filename string) error {
 // setUp is run before all the phases run. It's responsible for initializing the
 // bootstrap environment
 func (b *Bootstrap) setUp(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "environment")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "environment")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -581,7 +589,7 @@ func (b *Bootstrap) setUp(ctx context.Context) error {
 
 // tearDown is called before the bootstrap exits, even on error
 func (b *Bootstrap) tearDown(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "pre-exit")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -969,7 +977,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "checkout")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1431,7 +1439,7 @@ func (b *Bootstrap) resolveCommit() {
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "pre-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command hooks")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1449,7 +1457,7 @@ func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 
 // runCommand runs the command and adds tracing spans.
 func (b *Bootstrap) runCommand(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "command")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1469,7 +1477,7 @@ func (b *Bootstrap) runCommand(ctx context.Context) error {
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "post-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command hooks")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1529,7 +1537,7 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 	span.SetTag("hook.name", "command")
@@ -1717,7 +1725,7 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		return nil
 	}
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "upload artifacts")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "upload artifacts")
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
