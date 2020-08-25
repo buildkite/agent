@@ -20,6 +20,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
@@ -258,8 +259,12 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 	if span == nil {
 		return
 	}
-	// Intentionally ignoring error. Logging will spam agent logs.
-	_ = opentracing.GlobalTracer().Inject(span.Context(), opentracing.TextMap, env.ToMap())
+	if err := tracetools.EncodeTraceContext(span, env.ToMap()); err != nil {
+		if s.Debug {
+			s.Logger.Warningf("Failed to encode trace context: %v", err)
+		}
+		return
+	}
 }
 
 // RunScript is like Run, but the target is an interpreted script which has

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/interpolate"
 
@@ -62,7 +63,7 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 	}
 
 	// Propagate distributed tracing context to the new pipelines if available
-	if tracing, has := p.Env.Get("BUILDKITE_TRACE_CONTEXT"); has {
+	if tracing, has := p.Env.Get(tracetools.EnvVarTraceContextKey); has {
 		var envVars yaml.MapSlice
 		if envMap, has := mapSliceItem("env", pipeline); has {
 			envVars = envMap.Value.(yaml.MapSlice)
@@ -70,7 +71,7 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 			envVars = yaml.MapSlice{}
 		}
 		envVars = append(envVars, yaml.MapItem{
-			Key:   "BUILDKITE_TRACE_CONTEXT",
+			Key:   tracetools.EnvVarTraceContextKey,
 			Value: tracing,
 		})
 		// Since the actual env vars MapSlice is nested under the top level MapSlice,

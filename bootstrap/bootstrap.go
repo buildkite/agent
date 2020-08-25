@@ -195,7 +195,7 @@ func (b *Bootstrap) Cancel() error {
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
-	sctx, err := opentracing.GlobalTracer().Extract(opentracing.TextMap, b.shell.Env.ToMap())
+	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.ToMap())
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil
@@ -234,7 +234,6 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithAgentAddr(b.Config.TracingDatadogAddr),
 			tracer.WithServiceName("buildkite_agent"),
 			tracer.WithSampler(tracer.NewAllSampler()),
-			tracer.WithPropagator(tracetools.NewEnvVarPropagator("BUILDKITE_TRACE_CONTEXT")),
 			tracer.WithGlobalTag("buildkite.agent", b.AgentName),
 			tracer.WithGlobalTag("buildkite.queue", b.Queue),
 			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),
@@ -255,7 +254,10 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + label
 	span := opentracing.StartSpan(
 		"job.run",
-		ext.RPCServerOption(wireContext),
+		// The span setup code will properly handle this if it's nil
+		opentracing.ChildOf(wireContext),
+		// This is unforatunately Datadog-specific, since opentracing uses 'component'
+		// where DD normally uses 'resource'.
 		opentracer.ResourceName(resourceName),
 	)
 
