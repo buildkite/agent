@@ -252,8 +252,6 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 
 	wireContext := b.extractTraceCtx()
 
-	// TODO: Figure out a convenient way to get distributed tracing working for jobs
-	//  that spawn/trigger other jobs/builds.
 	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + label
 	span := opentracing.StartSpan(
 		"job.run",
