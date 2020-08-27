@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
@@ -720,6 +721,9 @@ var AgentStartCommand = cli.Command{
 		// Setup the agent pool that spawns agent workers
 		pool := agent.NewAgentPool(workers)
 
+		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
+		defer func() { shutdownHook(l, cfg.HooksPath) }()
+
 		// Handle process signals
 		signals := handlePoolSignals(l, pool)
 		defer close(signals)
@@ -788,4 +792,22 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 	}()
 
 	return signals
+}
+
+// shutdownHook looks for a shutdown hook script in the hooks path and executes it
+// if it's available. This is very similar to the bootstrap hook code. Just run at
+// the agent level.
+func shutdownHook(log logger.Logger, hooksPath string) {
+	p := filepath.Join(hooksPath, "shutdown")
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		return
+	}
+	sh, err := shell.New()
+	if err != nil {
+		log.Error("Failed to create shell object for shutdown hook: %v", err)
+		return
+	}
+	if err = sh.RunScript(p, nil); err != nil {
+		log.Error("Shutdown hook error: %v", err)
+	}
 }
