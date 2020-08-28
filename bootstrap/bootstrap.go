@@ -230,9 +230,9 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	// Use a constant sampler - CI runs aren't high traffic.
 	var t opentracing.Tracer
 	var stopper stopper
-	if b.Config.TracingDatadogAddr != "" {
+	switch b.Config.TracingBackend {
+	case "datadog":
 		t = opentracer.New(
-			tracer.WithAgentAddr(b.Config.TracingDatadogAddr),
 			tracer.WithServiceName("buildkite_agent"),
 			tracer.WithSampler(tracer.NewAllSampler()),
 			tracer.WithAnalytics(true),
@@ -246,7 +246,10 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithGlobalTag(ddext.SamplingPriority, ddext.PriorityUserKeep),
 		)
 		stopper = tracer.Stop
-	} else {
+	default:
+		b.shell.Commentf("An invalid tracing backend was given: %s. Tracing will not occur.", b.Config.TracingBackend)
+		fallthrough
+	case "":
 		t = opentracing.NoopTracer{}
 		stopper = func() {}
 	}
@@ -264,7 +267,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
 	// Some tracer-specific span code.
-	if b.Config.TracingDatadogAddr != "" {
+	if b.Config.TracingBackend == "datadog" {
 		// Datadog uses 'resource' instead of opentracing's 'component'. And it's not
 		// smart enough to automatically remap component tags so we have to be
 		// different here.

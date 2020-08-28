@@ -505,8 +505,8 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
 
-	if r.conf.AgentConfiguration.TracingDatadogAddr != "" {
-		env["BUILDKITE_TRACING_DATADOG_ADDR"] = r.conf.AgentConfiguration.TracingDatadogAddr
+	if r.conf.AgentConfiguration.TracingBackend != "" {
+		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
 	}
 
 	// Convert the env map into a slice (which is what the script gear

@@ -84,7 +84,7 @@ type AgentStartConfig struct {
 	HealthCheckAddr            string   `cli:"health-check-addr"`
 	MetricsDatadog             bool     `cli:"metrics-datadog"`
 	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
-	TracingDatadogAddr         string   `cli:"tracing-datadog-addr"`
+	TracingBackend             string   `cli:"tracing-backend"`
 	Spawn                      int      `cli:"spawn"`
 	LogFormat                  string   `cli:"log-format"`
 	CancelSignal               string   `cli:"cancel-signal"`
@@ -150,6 +150,14 @@ func DefaultConfigFilePaths() (paths []string) {
 	}
 
 	return
+}
+
+// validTracingBackends is a list of valid backends for tracing. This is sanity
+// checked during agent startup so that bootstrapped jobs don't silently have
+// no tracing if an invalid value is given.
+var validTracingBackends = map[string]struct{}{
+	"":        struct{}{},
+	"datadog": struct{}{},
 }
 
 var AgentStartCommand = cli.Command{
@@ -402,9 +410,9 @@ var AgentStartCommand = cli.Command{
 			Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN"},
 		},
 		cli.StringFlag{
-			Name:   "tracing-datadog-addr",
-			Usage:  "If set, send Datadog tracing data to this agent address",
-			EnvVar: "BUILDKITE_TRACING_DATADOG_ADDR",
+			Name:   "tracing-backend",
+			Usage:  "The name of the tracing backend to use.",
+			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
 
@@ -572,6 +580,11 @@ var AgentStartCommand = cli.Command{
 			DatadogHost: cfg.MetricsDatadogHost,
 		})
 
+		// Sanity check supported tracing backends
+		if _, has := validTracingBackends[cfg.TracingBackend]; !has {
+			l.Fatal("The given tracing backend is not supported: %s", cfg.TracingBackend)
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
 			BootstrapScript:            cfg.BootstrapScript,
@@ -598,7 +611,7 @@ var AgentStartCommand = cli.Command{
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
-			TracingDatadogAddr:         cfg.TracingDatadogAddr,
+			TracingBackend:             cfg.TracingBackend,
 		}
 
 		if loader.File != nil {

@@ -62,9 +62,9 @@ func TestStartTracing(t *testing.T) {
 	stopper()
 	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
 
-	// With the Datadog address set, the global tracer should be from Datadog.
+	// With the Datadog tracing backend, the global tracer should be from Datadog.
 	cfg = Config{
-		TracingDatadogAddr: "127.0.0.1:8126",
+		TracingBackend: "datadog",
 	}
 	b = New(cfg)
 	b.shell, err = shell.NewWithContext(oriCtx)

@@ -130,8 +130,8 @@ type Config struct {
 	// List of environment variable globs to redact from job output
 	RedactedVars []string
 
-	// Address for reporting tracing data to Datadog. If empty, tracing will be disabled
-	TracingDatadogAddr string
+	// Backend to use for tracing. If an empty string, no tracing will occur.
+	TracingBackend string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
