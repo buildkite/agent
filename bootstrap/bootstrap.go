@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
@@ -220,10 +221,32 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	}
 
 	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
+	buildNumber, _ := b.shell.Env.Get("BUILDKITE_BUILD_NUMBER")
+	buildURL, _ := b.shell.Env.Get("BUILDKITE_BUILD_URL")
 	source, _ := b.shell.Env.Get("BUILDKITE_SOURCE")
 	label, hasLabel := b.shell.Env.Get("BUILDKITE_LABEL")
 	if !hasLabel {
 		label = "job"
+	}
+	retry := int64(0)
+	if attemptStr, has := b.shell.Env.Get("BUILDKITE_RETRY_COUNT"); has {
+		if parsedRetry, err := strconv.ParseInt(attemptStr, 10, 64); err == nil {
+			retry = parsedRetry
+		}
+	}
+	parallel := int64(0)
+	if parallelStr, has := b.shell.Env.Get("BUILDKITE_PARALLEL_JOB"); has {
+		if parsedParallel, err := strconv.ParseInt(parallelStr, 10, 64); err == nil {
+			parallel = parsedParallel
+		}
+	}
+	rebuiltFromID, has := b.shell.Env.Get("BUILDKITE_REBUILT_FROM_BUILD_NUMBER")
+	if !has || rebuiltFromID == "" {
+		rebuiltFromID = "n/a"
+	}
+	triggeredFromID, has := b.shell.Env.Get("BUILDKITE_TRIGGERED_FROM_BUILD_ID")
+	if !has || triggeredFromID == "" {
+		triggeredFromID = "n/a"
 	}
 
 	// Set specific tracing library here. Everything else should be using opentracing.
@@ -237,12 +260,20 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithSampler(tracer.NewAllSampler()),
 			tracer.WithAnalytics(true),
 			tracer.WithGlobalTag("buildkite.agent", b.AgentName),
+			tracer.WithGlobalTag("buildkite.version", agent.Version()),
 			tracer.WithGlobalTag("buildkite.queue", b.Queue),
+			tracer.WithGlobalTag("buildkite.org", b.OrganizationSlug),
 			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),
 			tracer.WithGlobalTag("buildkite.branch", b.Branch),
 			tracer.WithGlobalTag("buildkite.job_id", b.JobID),
 			tracer.WithGlobalTag("buildkite.build_id", buildID),
+			tracer.WithGlobalTag("buildkite.build_number", buildNumber),
+			tracer.WithGlobalTag("buildkite.build_url", buildURL),
 			tracer.WithGlobalTag("buildkite.source", source),
+			tracer.WithGlobalTag("buildkite.retry", retry),
+			tracer.WithGlobalTag("buildkite.parallel", parallel),
+			tracer.WithGlobalTag("buildkite.rebuilt_from_id", rebuiltFromID),
+			tracer.WithGlobalTag("buildkite.triggered_from_id", triggeredFromID),
 			tracer.WithGlobalTag(ddext.SamplingPriority, ddext.PriorityUserKeep),
 		)
 		stopper = tracer.Stop
