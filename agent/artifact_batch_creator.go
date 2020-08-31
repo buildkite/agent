@@ -51,13 +51,17 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		}
 
 		// The artifacts that will be uploaded in this chunk
-		theseArtiacts := a.conf.Artifacts[i:j]
+		theseArtifacts := a.conf.Artifacts[i:j]
 
 		// An ID is required so Buildkite can ensure this create
 		// operation is idompotent (if we try and upload the same ID
 		// twice, it'll just return the previous data and skip the
 		// upload)
-		batch := &api.ArtifactBatch{api.NewUUID(), theseArtiacts, a.conf.UploadDestination}
+		batch := &api.ArtifactBatch{
+			ID:                api.NewUUID(),
+			Artifacts:         theseArtifacts,
+			UploadDestination: a.conf.UploadDestination,
+		}
 
 		a.logger.Info("Creating (%d-%d)/%d artifacts", i, j, length)
 
@@ -86,8 +90,8 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		// Save the id and instructions to each artifact
 		index := 0
 		for _, id := range creation.ArtifactIDs {
-			theseArtiacts[index].ID = id
-			theseArtiacts[index].UploadInstructions = creation.UploadInstructions
+			theseArtifacts[index].ID = id
+			theseArtifacts[index].UploadInstructions = creation.UploadInstructions
 			index += 1
 		}
 	}
