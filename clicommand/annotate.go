@@ -15,7 +15,7 @@ import (
 
 var AnnotateHelpDescription = `Usage:
 
-   buildkite-agent annotate [<body>] [arguments...]
+   buildkite-agent annotate [body] [arguments...]
 
 Description:
 

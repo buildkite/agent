@@ -21,7 +21,7 @@ import (
 
 var PipelineUploadHelpDescription = `Usage:
 
-   buildkite-agent pipeline upload [<file>] [arguments...]
+   buildkite-agent pipeline upload [file] [arguments...]
 
 Description:
 
