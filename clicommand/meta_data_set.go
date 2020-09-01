@@ -13,7 +13,7 @@ import (
 
 var MetaDataSetHelpDescription = `Usage:
 
-   buildkite-agent meta-data set <key> [<value>] [arguments...]
+   buildkite-agent meta-data set <key> [value] [arguments...]
 
 Description:
 
