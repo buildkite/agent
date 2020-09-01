@@ -1,6 +1,11 @@
 package clicommand
 
 import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
@@ -9,9 +14,9 @@ import (
 
 var SearchHelpDescription = `Usage:
 
-   buildkite-agent artifact search [options] <query> <destination>
+   buildkite-agent artifact search [options] <query>
 
-Description:  ## TODO CHECK
+Description:
 
 	 Searches for build artifacts specified by <query> on Buildkite
 
@@ -19,25 +24,32 @@ Description:  ## TODO CHECK
    using a wild card as the built-in shell path globbing will provide files,
    which will break the search.
 
-Example: ## TODO CHECK
+Example:
 
    $ buildkite-agent artifact search "pkg/*.tar.gz" --build xxx
 
-   This will search across all the artifacts for the build for files that match that query.
+   This will search across all uploaded artifacts in a build for files that match that query.
    The first argument is the search query.
 
    If you're trying to find a specific file, and there are multiple artifacts from different
-   jobs, you can target the particular job you want to search the artifact using --step:
+   jobs, you can target the particular job you want to search the artifacts from using --step:
 
    $ buildkite-agent artifact search "pkg/*.tar.gz" --step "tests" --build xxx
 
-   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)`
+   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
+
+   Formatting output can be done somewhat like unix find's -printf option:
+
+   $ buildkite-agent artifact search "*" -printf "%p\n"
+
+   The above will return a list of filenames separated by newline. Other available options are:`
 
 type ArtifactSearchConfig struct {
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
+	PrintFormat        string `cli:"printf"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -73,6 +85,28 @@ var ArtifactSearchCommand = cli.Command{
 			EnvVars: []string{"BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS"},
 			Usage:   "Include artifacts from retried jobs in the search",
 		},
+		&cli.StringFlag{
+			Name:  "printf",
+			Value: "%j %p %c\n",
+			Usage: `Output formatting of results. Defaults to "%j %p %c\n" (Job ID, path, created at time).
+
+				The following directives are available:
+
+				%i		UUID of the artifact
+
+				%p		Artifact path
+
+				%c		Artifact creation time (an ISO 8601 / RFC-3339 formatted UTC timestamp)
+
+				%j		UUID of the job that uploaded the artifact, helpful for subsequent artifact downloads
+
+				%s		File size of the artifact in bytes
+
+				%S		SHA1 checksum of the artifact
+
+				%u		Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead
+			`,
+		},
 
 		// API Flags
 		AgentAccessTokenFlag,
@@ -104,19 +138,30 @@ var ArtifactSearchCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Setup the downloader
-		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{
-			Query:              cfg.Query,
-			Destination:        cfg.Destination,
-			BuildID:            cfg.Build,
-			Step:               cfg.Step,
-			IncludeRetriedJobs: cfg.IncludeRetriedJobs,
-			DebugHTTP:          cfg.DebugHTTP,
-		})
+		// Setup the searcher and try get the artifacts
+		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs)
+		if err != nil {
+			return err
+		}
 
-		// Download the artifacts
-		if err := downloader.Download(); err != nil {
-			l.Fatal("Failed to download artifacts: %s", err)
+		artifactCount := len(artifacts)
+
+		if artifactCount == 0 {
+			l.Debug("No matches found for %s", cfg.Query)
+		}
+
+		for _, artifact := range artifacts {
+			r := strings.NewReplacer(
+				"%p", artifact.Path,
+				"%c", artifact.CreatedAt.Format(time.RFC3339),
+				"%j", artifact.JobID,
+				"%s", strconv.FormatInt(artifact.FileSize, 10),
+				"%S", artifact.Sha1Sum,
+				"%u", artifact.URL,
+				"%i", artifact.ID,
+			)
+			fmt.Print(r.Replace(cfg.PrintFormat))
 		}
 
 		return nil

@@ -69,6 +69,7 @@ func main() {
 			Subcommands: []*cli.Command{
 				&clicommand.ArtifactUploadCommand,
 				&clicommand.ArtifactDownloadCommand,
+				&clicommand.ArtifactSearchCommand,
 				&clicommand.ArtifactShasumCommand,
 			},
 		},
