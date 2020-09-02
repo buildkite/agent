@@ -74,6 +74,7 @@ type ArtifactSearchOptions struct {
 	Query              string `url:"query,omitempty"`
 	Scope              string `url:"scope,omitempty"`
 	IncludeRetriedJobs bool   `url:"include_retried_jobs,omitempty"`
+	IncludeDuplicates  bool   `url:"include_duplicates,omitempty"`
 }
 
 type ArtifactBatchUpdateArtifact struct {

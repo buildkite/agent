@@ -42,7 +42,7 @@ Example:
 
    $ buildkite-agent artifact search "*" -printf "%p\n"
 
-   The above will return a list of filenames separated by newline. Other available options are:`
+   The above will return a list of filenames separated by newline.`
 
 type ArtifactSearchConfig struct {
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
@@ -140,7 +140,7 @@ var ArtifactSearchCommand = cli.Command{
 
 		// Setup the searcher and try get the artifacts
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs)
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
 		}
