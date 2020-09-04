@@ -66,7 +66,7 @@ func (a *ArtifactDownloader) Download() error {
 
 	// Find the artifacts that we want to download
 	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
-		Search(a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs)
+		Search(a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
 	if err != nil {
 		return err
 	}

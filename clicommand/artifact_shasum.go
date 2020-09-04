@@ -43,10 +43,10 @@ type ArtifactShasumConfig struct {
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -110,7 +110,7 @@ var ArtifactShasumCommand = cli.Command{
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
 
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs)
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
 		if err != nil {
 			l.Fatal("Failed to find artifacts: %s", err)
 		}

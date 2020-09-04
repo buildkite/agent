@@ -27,7 +27,7 @@ func NewArtifactSearcher(l logger.Logger, ac APIClient, buildID string) *Artifac
 	}
 }
 
-func (a *ArtifactSearcher) Search(query string, scope string, includeRetriedJobs bool) ([]*api.Artifact, error) {
+func (a *ArtifactSearcher) Search(query string, scope string, includeRetriedJobs bool, includeDuplicates bool) ([]*api.Artifact, error) {
 	if scope == "" {
 		a.logger.Info("Searching for artifacts: \"%s\"", query)
 	} else {
@@ -43,6 +43,7 @@ func (a *ArtifactSearcher) Search(query string, scope string, includeRetriedJobs
 			Query:              query,
 			Scope:              scope,
 			IncludeRetriedJobs: includeRetriedJobs,
+			IncludeDuplicates:  includeDuplicates,
 		})
 		return searchErr
 	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
