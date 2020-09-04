@@ -146,7 +146,7 @@ var ArtifactSearchCommand = cli.Command{
 		}
 
 		if len(artifacts) == 0 {
-			return cli.Exit(fmt.Sprintf("No matches found for %s", cfg.Query), 1)
+			return cli.Exit(fmt.Sprintf("No matches found for %q", cfg.Query), 1)
 		}
 
 		for _, artifact := range artifacts {
