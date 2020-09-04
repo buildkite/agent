@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+
+## [v3.23.0](https://github.com/buildkite/agent/compare/v3.22.1...v3.23.0) (2020-09-04)
+
+### Added
+* New artifact search subcommand [#1278](https://github.com/buildkite/agent/pull/1278) ([chloeruka](https://github.com/chloeruka))
+![image](https://user-images.githubusercontent.com/30171259/92212159-e32bd700-eed4-11ea-9af8-2ad024eaecc1.png)
+* Add sidecar agent suitable for being shared via volume in ECS or Kubernetes [#1218](https://github.com/buildkite/agent/pull/1218) ([keithduncan](https://github.com/keithduncan)) [#1263](https://github.com/buildkite/agent/pull/1263) ([yob](https://github.com/yob))
+* We now fetch amd64 binaries on Apple Silicon Macs in anticipation of new macOS ARM computers [#1237](https://github.com/buildkite/agent/pull/1237) ([ticky](https://github.com/ticky))
+* Opt-in experimental `resolve-commit-after-checkout` flag to resolve `BUILDKITE_COMMIT` refs (e.g. "HEAD") to a commit hash [#1256](https://github.com/buildkite/agent/pull/1256) ([jayco](https://github.com/jayco))
+* Experimental: Build & publish RPM ARM64 package for aarch64 [#1243](https://github.com/buildkite/agent/pull/1243) ([chloeruka](https://github.com/chloeruka)) [#1241](https://github.com/buildkite/agent/pull/1241) ([chloeruka](https://github.com/chloeruka))
+
+### Changed
+* Stop building i386 for darwin after 14 years of amd64 Mac hardware [#1238](https://github.com/buildkite/agent/pull/1238) ([pda](https://github.com/pda))
+* Updated github.com/urfave/cli to v2 - this is the CLI framework we use for agent commands. [#1233](https://github.com/buildkite/agent/pull/1233) ([yob](https://github.com/yob)) [#1250](https://github.com/buildkite/agent/pull/1250) ([yob](https://github.com/yob))
+* Send the reported system and machine names when fetching latest release [#1240](https://github.com/buildkite/agent/pull/1240) ([ticky](https://github.com/ticky))
+* Bump build environment from [go](https://github.com/golang/go) 1.14.2 to 1.14.7 [#1235](https://github.com/buildkite/agent/pull/1235) ([yob](https://github.com/yob)) [#1262](https://github.com/buildkite/agent/pull/1262) ([yob](https://github.com/yob))
+* Update [aws-sdk-go](https://github.com/aws/aws-sdk-go) to 1.32.10 [#1234](https://github.com/buildkite/agent/pull/1234) ([yob](https://github.com/yob))
+
+### Fixed
+* `git-mirrors` experiment now only fetches branch instead of a full remote update [#1112](https://github.com/buildkite/agent/pull/1112) ([lox](https://github.com/lox))
+* Hooks can introduce empty environment variables [#1232](https://github.com/buildkite/agent/pull/1232) ([pda](https://github.com/pda))
+* ArtifactUploader now deduplicates upload file paths [#1268](https://github.com/buildkite/agent/pull/1268) ([pda](https://github.com/pda))
+* Added additional logging to artifact uploads  [#1266](https://github.com/buildkite/agent/pull/1266) ([yob](https://github.com/yob)) [#1265](https://github.com/buildkite/agent/pull/1265) ([denbeigh2000](https://github.com/denbeigh2000)) [#1255](https://github.com/buildkite/agent/pull/1255) ([yob](https://github.com/yob))
+* Fail faster when uploading an artifact > 5Gb to unsupported destinations [#1264](https://github.com/buildkite/agent/pull/1264) ([yob](https://github.com/yob))
+* Job should now reliably fail when process.Run() -> err [#1261](https://github.com/buildkite/agent/pull/1261) ([sj26](https://github.com/sj26))
+* Fix checkout failure when there is a file called HEAD in the repository root [#1223](https://github.com/buildkite/agent/pull/1223) ([zhenyavinogradov](https://github.com/zhenyavinogradov)) [#1260](https://github.com/buildkite/agent/pull/1260) ([pda](https://github.com/pda))
+* Enable `BUILDKITE_AGENT_DEBUG_HTTP` in jobs if it's enabled in the agent process [#1251](https://github.com/buildkite/agent/pull/1251) ([yob](https://github.com/yob))
+* Avoid passing nils to Printf() during HTTP Debug mode [#1252](https://github.com/buildkite/agent/pull/1252) ([yob](https://github.com/yob))
+* Allow `BUILDKITE_CLEAN_CHECKOUT` to be set via hooks [#1242](https://github.com/buildkite/agent/pull/1242) ([niceking](https://github.com/niceking))
+* Add optional brackets to file arg documentation [#1276](https://github.com/buildkite/agent/pull/1276) ([harrietgrace](https://github.com/harrietgrace))
+* Reword artifact shasum documentation [#1229](https://github.com/buildkite/agent/pull/1229) ([vineetgopal](https://github.com/vineetgopal))
+* Provide example dogstatsd integration options [#1219](https://github.com/buildkite/agent/pull/1219) ([GaryPWhite](https://github.com/GaryPWhite))
+* submit basic OS info when registering from a BSD system [#1239](https://github.com/buildkite/agent/pull/1239) ([yob](https://github.com/yob))
+* Various typo fixes and light refactors [#1277](https://github.com/buildkite/agent/pull/1277) ([chloeruka](https://github.com/chloeruka)) [#1271](https://github.com/buildkite/agent/pull/1271) ([pda](https://github.com/pda)) [#1244](https://github.com/buildkite/agent/pull/1244) ([pda](https://github.com/pda)) [#1224](https://github.com/buildkite/agent/pull/1224) ([plaindocs](https://github.com/plaindocs))
+
 ## [v3.22.1](https://github.com/buildkite/agent/compare/v3.22.0...v3.22.1) (2020-06-18)
 
 ### Fixed
