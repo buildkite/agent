@@ -38,9 +38,9 @@ Example:
 
    You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
 
-   Formatting output can be done somewhat like unix find's -printf option:
+   Output formatting can be altered with the -format flag as follows:
 
-   $ buildkite-agent artifact search "*" -printf "%p\n"
+   $ buildkite-agent artifact search "*" -format "%p\n"
 
    The above will return a list of filenames separated by newline.`
 
@@ -49,7 +49,7 @@ type ArtifactSearchConfig struct {
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
-	PrintFormat        string `cli:"printf"`
+	PrintFormat        string `cli:"format"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -86,7 +86,7 @@ var ArtifactSearchCommand = cli.Command{
 			Usage:   "Include artifacts from retried jobs in the search",
 		},
 		&cli.StringFlag{
-			Name:  "printf",
+			Name:  "format",
 			Value: "%j %p %c\n",
 			Usage: `Output formatting of results. Defaults to "%j %p %c\n" (Job ID, path, created at time).
 
@@ -145,10 +145,8 @@ var ArtifactSearchCommand = cli.Command{
 			return err
 		}
 
-		artifactCount := len(artifacts)
-
-		if artifactCount == 0 {
-			l.Debug("No matches found for %s", cfg.Query)
+		if len(artifacts) == 0 {
+			return cli.Exit(fmt.Sprintf("No matches found for %s", cfg.Query), 1)
 		}
 
 		for _, artifact := range artifacts {
