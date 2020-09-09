@@ -3,7 +3,6 @@ package agent
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,7 +111,8 @@ func TestCollect(t *testing.T) {
 
 	experiments.Disable(`normalised-upload-paths`)
 
-	// These test cases use filepath.Join, which is the behaviour without normalised-upload-paths
+	// These test cases use filepath.Join, which uses per-OS path separators;
+	// this is the behaviour without normalised-upload-paths.
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			a := findArtifact(artifactsWithoutExperimentEnabled, tc.Name)
@@ -128,7 +128,8 @@ func TestCollect(t *testing.T) {
 		})
 	}
 
-	// These test cases use path.Join, which is the behaviour without normalised-upload-paths
+	// These test cases uses filepath.ToSlash(), which always emits forward-slashes.
+	// this is the behaviour with normalised-upload-paths.
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
 			a := findArtifact(artifactsWithExperimentEnabled, tc.Name)
@@ -136,7 +137,13 @@ func TestCollect(t *testing.T) {
 				t.Fatalf("Failed to find artifact %q", tc.Name)
 			}
 
-			assert.Equal(t, path.Join(tc.Path...), a.Path)
+			// Note that the rootWithoutVolume component of some tc.Path values
+			// may already have backslashes in them on Windows:
+			// []string{"path\to\codebase", "test", "fixtures", "hello"}
+			// So forward-slash joining them with path.Join(tc.Path...} isn't enough.
+			forwardSlashed := filepath.ToSlash(filepath.Join(tc.Path...))
+
+			assert.Equal(t, forwardSlashed, a.Path)
 			assert.Equal(t, tc.AbsolutePath, a.AbsolutePath)
 			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
