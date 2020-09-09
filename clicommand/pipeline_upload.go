@@ -16,7 +16,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/stdin"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var PipelineUploadHelpDescription = `Usage:
@@ -73,26 +73,26 @@ var PipelineUploadCommand = cli.Command{
 	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job.",
 	Description: PipelineUploadHelpDescription,
 	Flags: []cli.Flag{
-		&cli.BoolFlag{
-			Name:    "replace",
-			Usage:   "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
-			EnvVars: []string{"BUILDKITE_PIPELINE_REPLACE"},
+		cli.BoolFlag{
+			Name:   "replace",
+			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
+			EnvVar: "BUILDKITE_PIPELINE_REPLACE",
 		},
-		&cli.StringFlag{
-			Name:    "job",
-			Value:   "",
-			Usage:   "The job that is making the changes to its build",
-			EnvVars: []string{"BUILDKITE_JOB_ID"},
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "The job that is making the changes to its build",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
-		&cli.BoolFlag{
-			Name:    "dry-run",
-			Usage:   "Rather than uploading the pipeline, it will be echoed to stdout",
-			EnvVars: []string{"BUILDKITE_PIPELINE_UPLOAD_DRY_RUN"},
+		cli.BoolFlag{
+			Name:   "dry-run",
+			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
 		},
-		&cli.BoolFlag{
-			Name:    "no-interpolation",
-			Usage:   "Skip variable interpolation the pipeline when uploaded",
-			EnvVars: []string{"BUILDKITE_PIPELINE_NO_INTERPOLATION"},
+		cli.BoolFlag{
+			Name:   "no-interpolation",
+			Usage:  "Skip variable interpolation the pipeline when uploaded",
+			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 
 		// API Flags
@@ -107,7 +107,7 @@ var PipelineUploadCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := PipelineUploadConfig{}
 
@@ -233,7 +233,7 @@ var PipelineUploadCommand = cli.Command{
 				l.Fatal("%#v", err)
 			}
 
-			return nil
+			return
 		}
 
 		// Check we have a job id set if not in dry run
@@ -276,7 +276,5 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		l.Info("Successfully uploaded and parsed pipeline config")
-
-		return nil
 	},
 }

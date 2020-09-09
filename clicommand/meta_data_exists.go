@@ -7,7 +7,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var MetaDataExistsHelpDescription = `Usage:
@@ -45,11 +45,11 @@ var MetaDataExistsCommand = cli.Command{
 	Usage:       "Check to see if the meta data key exists for a build",
 	Description: MetaDataExistsHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "job",
-			Value:   "",
-			Usage:   "Which job's build should the meta-data be checked for",
-			EnvVars: []string{"BUILDKITE_JOB_ID"},
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "Which job's build should the meta-data be checked for",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
 		// API Flags
@@ -64,7 +64,7 @@ var MetaDataExistsCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := MetaDataExistsConfig{}
 
@@ -105,7 +105,5 @@ var MetaDataExistsCommand = cli.Command{
 		if !exists.Exists {
 			os.Exit(100)
 		}
-
-		return nil
 	},
 }
