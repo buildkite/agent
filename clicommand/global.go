@@ -5,75 +5,76 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/oleiade/reflections"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 const (
 	DefaultEndpoint = "https://agent.buildkite.com/v3"
 )
 
-var AgentAccessTokenFlag = &cli.StringFlag{
-	Name:    "agent-access-token",
-	Value:   "",
-	Usage:   "The access token used to identify the agent",
-	EnvVars: []string{"BUILDKITE_AGENT_ACCESS_TOKEN"},
+var AgentAccessTokenFlag = cli.StringFlag{
+	Name:   "agent-access-token",
+	Value:  "",
+	Usage:  "The access token used to identify the agent",
+	EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
 }
 
-var AgentRegisterTokenFlag = &cli.StringFlag{
-	Name:    "token",
-	Value:   "",
-	Usage:   "Your account agent token",
-	EnvVars: []string{"BUILDKITE_AGENT_TOKEN"},
+var AgentRegisterTokenFlag = cli.StringFlag{
+	Name:   "token",
+	Value:  "",
+	Usage:  "Your account agent token",
+	EnvVar: "BUILDKITE_AGENT_TOKEN",
 }
 
-var EndpointFlag = &cli.StringFlag{
-	Name:    "endpoint",
-	Value:   DefaultEndpoint,
-	Usage:   "The Agent API endpoint",
-	EnvVars: []string{"BUILDKITE_AGENT_ENDPOINT"},
+var EndpointFlag = cli.StringFlag{
+	Name:   "endpoint",
+	Value:  DefaultEndpoint,
+	Usage:  "The Agent API endpoint",
+	EnvVar: "BUILDKITE_AGENT_ENDPOINT",
 }
 
-var NoHTTP2Flag = &cli.BoolFlag{
-	Name:    "no-http2",
-	Usage:   "Disable HTTP2 when communicating with the Agent API.",
-	EnvVars: []string{"BUILDKITE_NO_HTTP2"},
+var NoHTTP2Flag = cli.BoolFlag{
+	Name:   "no-http2",
+	Usage:  "Disable HTTP2 when communicating with the Agent API.",
+	EnvVar: "BUILDKITE_NO_HTTP2",
 }
 
-var DebugFlag = &cli.BoolFlag{
-	Name:    "debug",
-	Usage:   "Enable debug mode",
-	EnvVars: []string{"BUILDKITE_AGENT_DEBUG"},
+var DebugFlag = cli.BoolFlag{
+	Name:   "debug",
+	Usage:  "Enable debug mode",
+	EnvVar: "BUILDKITE_AGENT_DEBUG",
 }
 
-var ProfileFlag = &cli.StringFlag{
-	Name:    "profile",
-	Usage:   "Enable a profiling mode, either cpu, memory, mutex or block",
-	EnvVars: []string{"BUILDKITE_AGENT_PROFILE"},
+var ProfileFlag = cli.StringFlag{
+	Name:   "profile",
+	Usage:  "Enable a profiling mode, either cpu, memory, mutex or block",
+	EnvVar: "BUILDKITE_AGENT_PROFILE",
 }
 
-var DebugHTTPFlag = &cli.BoolFlag{
-	Name:    "debug-http",
-	Usage:   "Enable HTTP debug mode, which dumps all request and response bodies to the log",
-	EnvVars: []string{"BUILDKITE_AGENT_DEBUG_HTTP"},
+var DebugHTTPFlag = cli.BoolFlag{
+	Name:   "debug-http",
+	Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log",
+	EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
 }
 
-var NoColorFlag = &cli.BoolFlag{
-	Name:    "no-color",
-	Usage:   "Don't show colors in logging",
-	EnvVars: []string{"BUILDKITE_AGENT_NO_COLOR"},
+var NoColorFlag = cli.BoolFlag{
+	Name:   "no-color",
+	Usage:  "Don't show colors in logging",
+	EnvVar: "BUILDKITE_AGENT_NO_COLOR",
 }
 
-var ExperimentsFlag = &cli.StringSliceFlag{
-	Name:    "experiment",
-	Value:   &cli.StringSlice{},
-	Usage:   "Enable experimental features within the buildkite-agent",
-	EnvVars: []string{"BUILDKITE_AGENT_EXPERIMENT"},
+var ExperimentsFlag = cli.StringSliceFlag{
+	Name:   "experiment",
+	Value:  &cli.StringSlice{},
+	Usage:  "Enable experimental features within the buildkite-agent",
+	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
 func CreateLogger(cfg interface{}) logger.Logger {
@@ -153,20 +154,17 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 func UnsetConfigFromEnvironment(c *cli.Context) error {
 	flags := append(c.App.Flags, c.Command.Flags...)
 	for _, fl := range flags {
-		// use golang reflection to find EnvVars values on flags
+		// use golang reflection to find EnvVar values on flags
 		r := reflect.ValueOf(fl)
-		f := reflect.Indirect(r).FieldByName(`EnvVars`)
+		f := reflect.Indirect(r).FieldByName(`EnvVar`)
 		if !f.IsValid() {
-			return errors.New("EnvVars field not found on flag")
+			return errors.New("EnvVar field not found on flag")
 		}
-		if f.Kind() != reflect.Slice {
-			return errors.New("EnvVars not a slice")
-		}
-
-		// Loop over each EnvVar supported by the flag (there can be more than one!)
-		for i := 0; i < f.Len(); i++ {
-			envVar := f.Index(i).String()
-			os.Unsetenv(envVar)
+		// split comma delimited env
+		if envVars := f.String(); envVars != `` {
+			for _, env := range strings.Split(envVars, ",") {
+				os.Unsetenv(env)
+			}
 		}
 	}
 	return nil

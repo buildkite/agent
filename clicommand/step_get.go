@@ -7,7 +7,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var StepGetHelpDescription = `Usage:
@@ -54,23 +54,23 @@ var StepGetCommand = cli.Command{
 	Usage:       "Get the value of an attribute",
 	Description: StepGetHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "step",
-			Value:   "",
-			Usage:   "The step to get. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
-			EnvVars: []string{"BUILDKITE_STEP_ID"},
+		cli.StringFlag{
+			Name:   "step",
+			Value:  "",
+			Usage:  "The step to get. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_STEP_ID",
 		},
-		&cli.StringFlag{
-			Name:    "build",
-			Value:   "",
-			Usage:   "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
-			EnvVars: []string{"BUILDKITE_BUILD_ID"},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_BUILD_ID",
 		},
-		&cli.StringFlag{
-			Name:    "format",
-			Value:   "",
-			Usage:   "The format to output the attribute value in (currently only JSON is supported)",
-			EnvVars: []string{"BUILDKITE_STEP_GET_FORMAT"},
+		cli.StringFlag{
+			Name:   "format",
+			Value:  "",
+			Usage:  "The format to output the attribute value in (currently only JSON is supported)",
+			EnvVar: "BUILDKITE_STEP_GET_FORMAT",
 		},
 
 		// API Flags
@@ -85,7 +85,7 @@ var StepGetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := StepGetConfig{}
 
@@ -135,7 +135,5 @@ var StepGetCommand = cli.Command{
 
 		// Output the value to STDOUT
 		fmt.Print(stepExportResponse.Output)
-
-		return nil
 	},
 }

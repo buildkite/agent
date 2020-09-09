@@ -4,7 +4,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var UploadHelpDescription = `Usage:
@@ -73,17 +73,17 @@ var ArtifactUploadCommand = cli.Command{
 	Usage:       "Uploads files to a job as artifacts",
 	Description: UploadHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "job",
-			Value:   "",
-			Usage:   "Which job should the artifacts be uploaded to",
-			EnvVars: []string{"BUILDKITE_JOB_ID"},
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "Which job should the artifacts be uploaded to",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
-		&cli.StringFlag{
-			Name:    "content-type",
-			Value:   "",
-			Usage:   "A specific Content-Type to set for the artifacts (otherwise detected)",
-			EnvVars: []string{"BUILDKITE_ARTIFACT_CONTENT_TYPE"},
+		cli.StringFlag{
+			Name:   "content-type",
+			Value:  "",
+			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
+			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
 		},
 
 		// API Flags
@@ -98,7 +98,7 @@ var ArtifactUploadCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := ArtifactUploadConfig{}
 
@@ -129,7 +129,5 @@ var ArtifactUploadCommand = cli.Command{
 		if err := uploader.Upload(); err != nil {
 			l.Fatal("Failed to upload artifacts: %s", err)
 		}
-
-		return nil
 	},
 }

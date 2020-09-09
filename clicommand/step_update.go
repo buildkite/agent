@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var StepUpdateHelpDescription = `Usage:
@@ -51,22 +51,22 @@ var StepUpdateCommand = cli.Command{
 	Usage:       "Change the value of an attribute",
 	Description: StepUpdateHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "step",
-			Value:   "",
-			Usage:   "The step to update. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
-			EnvVars: []string{"BUILDKITE_STEP_ID"},
+		cli.StringFlag{
+			Name:   "step",
+			Value:  "",
+			Usage:  "The step to update. Can be either its ID (BUILDKITE_STEP_ID) or key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_STEP_ID",
 		},
-		&cli.StringFlag{
-			Name:    "build",
-			Value:   "",
-			Usage:   "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
-			EnvVars: []string{"BUILDKITE_BUILD_ID"},
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			Usage:  "The build to look for the step in. Only required when targeting a step using its key (BUILDKITE_STEP_KEY)",
+			EnvVar: "BUILDKITE_BUILD_ID",
 		},
-		&cli.BoolFlag{
-			Name:    "append",
-			Usage:   "Append to current attribute instead of replacing it",
-			EnvVars: []string{"BUILDKITE_STEP_UPDATE_APPEND"},
+		cli.BoolFlag{
+			Name:   "append",
+			Usage:  "Append to current attribute instead of replacing it",
+			EnvVar: "BUILDKITE_STEP_UPDATE_APPEND",
 		},
 
 		// API Flags
@@ -81,7 +81,7 @@ var StepUpdateCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := StepUpdateConfig{}
 
@@ -97,7 +97,7 @@ var StepUpdateCommand = cli.Command{
 		defer done()
 
 		// Read the value from STDIN if argument omitted entirely
-		if c.Args().Len() < 2 {
+		if len(c.Args()) < 2 {
 			l.Info("Reading value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
@@ -139,6 +139,5 @@ var StepUpdateCommand = cli.Command{
 		if err != nil {
 			l.Fatal("Failed to change step: %s", err)
 		}
-		return nil
 	},
 }

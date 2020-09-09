@@ -4,7 +4,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var DownloadHelpDescription = `Usage:
@@ -59,21 +59,21 @@ var ArtifactDownloadCommand = cli.Command{
 	Usage:       "Downloads artifacts from Buildkite to the local machine",
 	Description: DownloadHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
+		cli.StringFlag{
 			Name:  "step",
 			Value: "",
 			Usage: "Scope the search to a particular step by using either its name or job ID",
 		},
-		&cli.StringFlag{
-			Name:    "build",
-			Value:   "",
-			EnvVars: []string{"BUILDKITE_BUILD_ID"},
-			Usage:   "The build that the artifacts were uploaded to",
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			EnvVar: "BUILDKITE_BUILD_ID",
+			Usage:  "The build that the artifacts were uploaded to",
 		},
-		&cli.BoolFlag{
-			Name:    "include-retried-jobs",
-			EnvVars: []string{"BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS"},
-			Usage:   "Include artifacts from retried jobs in the search",
+		cli.BoolFlag{
+			Name:   "include-retried-jobs",
+			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
+			Usage:  "Include artifacts from retried jobs in the search",
 		},
 
 		// API Flags
@@ -88,7 +88,7 @@ var ArtifactDownloadCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := ArtifactDownloadConfig{}
 
@@ -120,7 +120,5 @@ var ArtifactDownloadCommand = cli.Command{
 		if err := downloader.Download(); err != nil {
 			l.Fatal("Failed to download artifacts: %s", err)
 		}
-
-		return nil
 	},
 }

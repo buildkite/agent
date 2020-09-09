@@ -10,7 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var AppHelpTemplate = `Usage:
@@ -60,52 +60,51 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "buildkite-agent"
 	app.Version = agent.Version()
-	app.Commands = []*cli.Command{
-		&clicommand.AgentStartCommand,
-		&clicommand.AnnotateCommand,
+	app.Commands = []cli.Command{
+		clicommand.AgentStartCommand,
+		clicommand.AnnotateCommand,
 		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",
-			Subcommands: []*cli.Command{
-				&clicommand.ArtifactUploadCommand,
-				&clicommand.ArtifactDownloadCommand,
-				&clicommand.ArtifactSearchCommand,
-				&clicommand.ArtifactShasumCommand,
+			Subcommands: []cli.Command{
+				clicommand.ArtifactUploadCommand,
+				clicommand.ArtifactDownloadCommand,
+				clicommand.ArtifactSearchCommand,
+				clicommand.ArtifactShasumCommand,
 			},
 		},
 		{
 			Name:  "meta-data",
 			Usage: "Get/set data from Buildkite jobs",
-			Subcommands: []*cli.Command{
-				&clicommand.MetaDataSetCommand,
-				&clicommand.MetaDataGetCommand,
-				&clicommand.MetaDataExistsCommand,
-				&clicommand.MetaDataKeysCommand,
+			Subcommands: []cli.Command{
+				clicommand.MetaDataSetCommand,
+				clicommand.MetaDataGetCommand,
+				clicommand.MetaDataExistsCommand,
+				clicommand.MetaDataKeysCommand,
 			},
 		},
 		{
 			Name:  "pipeline",
 			Usage: "Make changes to the pipeline of the currently running build",
-			Subcommands: []*cli.Command{
-				&clicommand.PipelineUploadCommand,
+			Subcommands: []cli.Command{
+				clicommand.PipelineUploadCommand,
 			},
 		},
 		{
 			Name:  "step",
 			Usage: "Get or update an attribute of a build step",
-			Subcommands: []*cli.Command{
-				&clicommand.StepGetCommand,
-				&clicommand.StepUpdateCommand,
+			Subcommands: []cli.Command{
+				clicommand.StepGetCommand,
+				clicommand.StepUpdateCommand,
 			},
 		},
-		&clicommand.BootstrapCommand,
+		clicommand.BootstrapCommand,
 	}
 
 	// When no sub command is used
-	app.Action = func(c *cli.Context) error {
+	app.Action = func(c *cli.Context) {
 		cli.ShowAppHelp(c)
 		os.Exit(1)
-		return nil
 	}
 
 	// When a sub command can't be found

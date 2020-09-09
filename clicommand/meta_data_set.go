@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var MetaDataSetHelpDescription = `Usage:
@@ -51,11 +51,11 @@ var MetaDataSetCommand = cli.Command{
 	Usage:       "Set data on a build",
 	Description: MetaDataSetHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
-			Name:    "job",
-			Value:   "",
-			Usage:   "Which job's build should the meta-data be set on",
-			EnvVars: []string{"BUILDKITE_JOB_ID"},
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "Which job's build should the meta-data be set on",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
 		// API Flags
@@ -70,7 +70,7 @@ var MetaDataSetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := MetaDataSetConfig{}
 
@@ -86,7 +86,7 @@ var MetaDataSetCommand = cli.Command{
 		defer done()
 
 		// Read the value from STDIN if argument omitted entirely
-		if c.Args().Len() < 2 {
+		if len(c.Args()) < 2 {
 			l.Info("Reading meta-data value from STDIN")
 
 			input, err := ioutil.ReadAll(os.Stdin)
@@ -120,7 +120,5 @@ var MetaDataSetCommand = cli.Command{
 		if err != nil {
 			l.Fatal("Failed to set meta-data: %s", err)
 		}
-
-		return nil
 	},
 }

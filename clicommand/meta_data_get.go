@@ -7,7 +7,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var MetaDataGetHelpDescription = `Usage:
@@ -45,16 +45,16 @@ var MetaDataGetCommand = cli.Command{
 	Usage:       "Get data from a build",
 	Description: MetaDataGetHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
+		cli.StringFlag{
 			Name:  "default",
 			Value: "",
 			Usage: "If the meta-data value doesn't exist return this instead",
 		},
-		&cli.StringFlag{
-			Name:    "job",
-			Value:   "",
-			Usage:   "Which job's build should the meta-data be retrieved from",
-			EnvVars: []string{"BUILDKITE_JOB_ID"},
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "Which job's build should the meta-data be retrieved from",
+			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
 		// API Flags
@@ -69,7 +69,7 @@ var MetaDataGetCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := MetaDataGetConfig{}
 
@@ -117,7 +117,7 @@ var MetaDataGetCommand = cli.Command{
 				l.Warn("No meta-data value exists with key `%s`, returning the supplied default \"%s\"", cfg.Key, cfg.Default)
 
 				fmt.Print(cfg.Default)
-				return nil
+				return
 			} else {
 				l.Fatal("Failed to get meta-data: %s", err)
 			}
@@ -125,7 +125,5 @@ var MetaDataGetCommand = cli.Command{
 
 		// Output the value to STDOUT
 		fmt.Print(metaData.Value)
-
-		return nil
 	},
 }

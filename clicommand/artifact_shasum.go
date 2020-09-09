@@ -6,7 +6,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli"
 )
 
 var ShasumHelpDescription = `Usage:
@@ -60,21 +60,21 @@ var ArtifactShasumCommand = cli.Command{
 	Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",
 	Description: ShasumHelpDescription,
 	Flags: []cli.Flag{
-		&cli.StringFlag{
+		cli.StringFlag{
 			Name:  "step",
 			Value: "",
 			Usage: "Scope the search to a particular step by using either its name of job ID",
 		},
-		&cli.StringFlag{
-			Name:    "build",
-			Value:   "",
-			EnvVars: []string{"BUILDKITE_BUILD_ID"},
-			Usage:   "The build that the artifacts were uploaded to",
+		cli.StringFlag{
+			Name:   "build",
+			Value:  "",
+			EnvVar: "BUILDKITE_BUILD_ID",
+			Usage:  "The build that the artifacts were uploaded to",
 		},
-		&cli.BoolFlag{
-			Name:    "include-retried-jobs",
-			EnvVars: []string{"BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS"},
-			Usage:   "Include artifacts from retried jobs in the search",
+		cli.BoolFlag{
+			Name:   "include-retried-jobs",
+			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
+			Usage:  "Include artifacts from retried jobs in the search",
 		},
 
 		// API Flags
@@ -89,7 +89,7 @@ var ArtifactShasumCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
 		cfg := ArtifactShasumConfig{}
 
@@ -126,7 +126,5 @@ var ArtifactShasumCommand = cli.Command{
 
 			fmt.Printf("%s\n", artifacts[0].Sha1Sum)
 		}
-
-		return nil
 	},
 }
