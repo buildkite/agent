@@ -48,7 +48,7 @@ function buildkite-cpu-arm64 {
 function buildkite-apple-silicon-check {
   if buildkite-cpu-arm64; then
     ARCH="amd64"
-    echo -e "\n\033[35mHi there, adventurer! \033[36mWe don't yet have a binary for macOS on Apple Silicon; relying on Rosetta 2 and using $ARCH instead!\033[0m"
+    echo -e "\n\033[35mHi there, adventurer! \033[36mWe don't yet have a binary for macOS on Apple Silicon; relying on Rosetta 2 and using $ARCH instead!\033[0m\n"
   fi
 }
 
