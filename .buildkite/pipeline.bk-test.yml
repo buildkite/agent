@@ -15,6 +15,25 @@ steps:
       [[ "\${LOCAL_ENV?}" == "alpacas" ]]
       [[ "\${ENV_ORDER?}" == "local" ]]
 
+  - label: "add annotation"
+    command: |
+      buildkite-agent annotate 'Llamas are very social animals and live with others as a herd. Their wool is very soft and lanolin-free. Llamas can learn simple tasks after a few repetitions. When using a pack, they can carry about 25 to 30% of their body weight for 8 to 13 km.' --context llamas
+      buildkite-agent annotate 'Alpacas are kept in herds that graze on the level heights of the Andes of Southern Peru, Western Bolivia, Ecuador, and Northern Chile at an altitude of 3,500 to 5,000 metres (11,000 to 16,000 feet) above sea level.' --style info --context alpacas
+
+  - wait
+
+  - label: "append to annotation"
+    command: |
+      buildkite-agent annotate 'The ancestors of Llamas are thought to have originated from the central plains of North America about 40 million years ago, and susequently migrated to South America about three million years ago during the Great American Interchange.' --context llamas --append
+      buildkite-agent annotate 'Alpacas communicate through body language. The most common is spitting when they are in distress, fearful, or mean to show dominance.' --style info --context alpacas --append
+
+  - wait
+
+  - label: "replace annotation"
+    command: |
+      buildkite-agent annotate 'Names of llama body parts: ears, poll, withers, back, hip, croup, base of tail, tail, buttock, hock, metatarsal gland, heel, cannon bone, gaskin, stifle joint, flank, barrel, elbow, pastern, fetlock, Knee, Chest, point of shoulder, shoulder, throat, cheek or jowl, muzzle' --style warning --context llamas
+      buildkite-agent annotate 'Alpacas make a variety of sounds: Humming, Snorting, Grumbling, Clucking, Screaming, Screeching' --style warning --context alpacas
+
   - label: "set metadata"
     command: |
       buildkite-agent meta-data set "family" "camelids"
@@ -26,6 +45,11 @@ steps:
       buildkite-agent meta-data exists "family"
       family=$(buildkite-agent meta-data get "family")
       [[ \${family} == "camelids" ]]
+
+  - label: "get metadata with default"
+    command: |
+      kingdom=$(buildkite-agent meta-data get "kingdom" --default "animalia")
+      [[ \${kingdom} == "animalia" ]]
 
   - wait
 
