@@ -31,19 +31,45 @@ else
   PLATFORM="linux"
 fi
 
+# On Apple Silicon Macs, the architecture reported by `uname` depends on the
+# architecture of the shell, which is in turn influenced by the *terminal*,
+# as *child processes prefer their parents' architecture*.
+# 
+# This means that for Terminal.app with the default shell it will be arm64,
+# but x86_64 for people using (pre-3.4.0 builds of) iTerm2 or x86_64 shells.
+#
+# Based on logic in Homebrew at https://github.com/Homebrew/brew/pull/7995
+function buildkite-cpu-arm64 {
+  [[ "$PLATFORM" == "darwin" && "$(/usr/sbin/sysctl -n hw.optional.arm64 2> /dev/null)" == "1" ]]
+}
+
+# If we are running on macOS and on Apple Silicon, we force the ARCH to amd64
+# to take advantage of Rosetta 2, and emit a special message for those users.
+function buildkite-apple-silicon-check {
+  if buildkite-cpu-arm64; then
+    ARCH="amd64"
+    echo -e "\n\033[35mHi there, adventurer! \033[36mWe don't yet have a binary for macOS on Apple Silicon; relying on Rosetta 2 and using $ARCH instead!\033[0m\n"
+  fi
+}
+
 if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
   ARCH="$BUILDKITE_INSTALL_ARCH"
   echo "Using explicit arch '$ARCH'"
 else
   case $MACHINE in
     *amd64*)   ARCH="amd64"   ;;
-    *x86_64*)  ARCH="amd64"   ;;
+    *x86_64*)
+      ARCH="amd64"
+      # x86_64 is reported by Apple Silicon Macs
+      # when the shell is running inside Rosetta 2
+      buildkite-apple-silicon-check
+      ;;
     *arm64*)
       ARCH="arm64"
-      if [[ "$PLATFORM" == "darwin" ]]; then
-        ARCH="amd64"
-        echo -e "\n\033[35mHi there, adventurer! \033[36mWe don't yet have a binary for macOS on Apple Silicon; relying on Rosetta 2 and using $ARCH instead!\033[0m"
-      fi
+      # ARM64 is the native arch on Apple Silicon Macs,
+      # but we only have amd64 builds to offer, so this
+      # check can override for compatibility
+      buildkite-apple-silicon-check
       ;;
     *armv8*)   ARCH="arm64"   ;;
     *armv7*)   ARCH="armhf"   ;;
