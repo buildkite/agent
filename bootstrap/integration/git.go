@@ -34,9 +34,30 @@ type gitRepository struct {
 }
 
 func newGitRepository() (*gitRepository, error) {
-	tempDir, err := ioutil.TempDir("", "git-repo")
+	tempDirRaw, err := ioutil.TempDir("", "git-repo")
 	if err != nil {
 		return nil, fmt.Errorf("Error creating temp dir: %v", err)
+	}
+
+	// io.TempDir on Windows tilde-shortens (8.3 style?) long filenames in the path.
+	// This becomes a problem when that path is used for `git add`;
+	// git believes the tilde-style path is outside the repo, but accepts the long-filename path.
+	//
+	// C:\Users\Administrator\AppData\Local\Temp\2\git-repo162512502>git add C:\Users\ADMINI~1\AppData\Local\Temp\2\git-repo162512502\.buildkite\hooks\pre-exit.bat
+	// fatal: C:\Users\ADMINI~1\AppData\Local\Temp\2\git-repo162512502\.buildkite\hooks\pre-exit.bat: 'C:\Users\ADMINI~1\AppData\Local\Temp\2\git-repo162512502\.buildkite\hooks\pre-exit.bat' is outside repository
+	//
+	// C:\Users\Administrator\AppData\Local\Temp\2\git-repo162512502>git add C:\Users\Administrator\AppData\Local\Temp\2\git-repo162512502\.buildkite\hooks\pre-exit.bat
+	// (ok)
+	//
+	// Some attempts to resolve the TempDir to a full file path:
+	// filepath.Abs:          C:\Users\ADMINI~1\AppData\Local\Temp\2\git-repo275254366
+	// filepath.Clean:        C:\Users\ADMINI~1\AppData\Local\Temp\2\git-repo275254366
+	// filepath.EvalSymlinks: C:\Users\Administrator\AppData\Local\Temp\2\git-repo275254366
+	//
+	// EvalSymlinks seems best? Maybe there's a better way?
+	tempDir, err := filepath.EvalSymlinks(tempDirRaw)
+	if err != nil {
+		return nil, fmt.Errorf("EvalSymlinks for temp dir: %v", err)
 	}
 
 	gr := &gitRepository{Path: tempDir}
