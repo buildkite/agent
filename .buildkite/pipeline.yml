@@ -172,7 +172,7 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":hammer: bk cli"
+  - name: ":hammer: bk cli & agent cli"
     key: test-bk-cli
     depends_on: build-binary-linux-amd64
     command: ".buildkite/steps/test-bk.sh"
