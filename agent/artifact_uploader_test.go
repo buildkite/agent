@@ -24,7 +24,7 @@ func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
 }
 
 func TestCollect(t *testing.T) {
-	t.Parallel()
+	// t.Parallel() cannot be used with experiments.Enable
 
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
