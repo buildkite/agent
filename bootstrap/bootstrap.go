@@ -649,7 +649,7 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 			HooksDir:    filepath.Join(pluginLocation, "hooks"),
 		}
 
-		// Also make sure that plugin is withing this repository
+		// Also make sure that plugin is within this repository
 		// checkout and isn't elsewhere on the system.
 		if !strings.HasPrefix(pluginLocation, checkoutPath+string(os.PathSeparator)) {
 			return fmt.Errorf("Vendored plugin paths must be within the checked-out repository")

@@ -22,7 +22,7 @@ type Plugin struct {
 	// The clone method
 	Scheme string
 
-	// Any authentication attached to the repostiory
+	// Any authentication attached to the repository
 	Authentication string
 
 	// Whether the plugin refers to a vendored path
