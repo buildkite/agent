@@ -28,7 +28,7 @@ func experimentWithUndo(name string) func() {
 }
 
 func TestWithResolvingCommitExperiment(t *testing.T) {
-	t.Parallel()
+	// t.Parallel() cannot be used with experiments.Enable()
 	defer experimentWithUndo("resolve-commit-after-checkout")()
 
 	tester, err := NewBootstrapTester()

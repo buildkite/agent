@@ -24,7 +24,7 @@ func findArtifact(artifacts []*api.Artifact, search string) *api.Artifact {
 }
 
 func TestCollect(t *testing.T) {
-	t.Parallel()
+	// t.Parallel() cannot be used with experiments.Enable
 
 	wd, _ := os.Getwd()
 	root := filepath.Join(wd, "..")
@@ -95,6 +95,15 @@ func TestCollect(t *testing.T) {
 	// path.Join function instead (which uses Unix/URI-style path separators,
 	// regardless of platform)
 
+	experimentKey := "normalised-upload-paths"
+	experimentPrev := experiments.IsEnabled(experimentKey)
+	defer func() {
+		if experimentPrev {
+			experiments.Enable(experimentKey)
+		} else {
+			experiments.Disable(experimentKey)
+		}
+	}()
 	experiments.Disable(`normalised-upload-paths`)
 	artifactsWithoutExperimentEnabled, err := uploader.Collect()
 	if err != nil {
@@ -108,8 +117,6 @@ func TestCollect(t *testing.T) {
 		t.Fatal(err)
 	}
 	assert.Equal(t, 4, len(artifactsWithExperimentEnabled))
-
-	experiments.Disable(`normalised-upload-paths`)
 
 	// These test cases use filepath.Join, which uses per-OS path separators;
 	// this is the behaviour without normalised-upload-paths.
