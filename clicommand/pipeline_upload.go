@@ -249,7 +249,7 @@ var PipelineUploadCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Generate a UUID that will identifiy this pipeline change. We
+		// Generate a UUID that will identify this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
 		// to be the same for each attempt at updating the pipeline.
 		uuid := api.NewUUID()

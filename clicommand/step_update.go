@@ -110,7 +110,7 @@ var StepUpdateCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Generate a UUID that will identifiy this change. We do this
+		// Generate a UUID that will identify this change. We do this
 		// outside of the retry loop because we want this UUID to be
 		// the same for each attempt at updating the step.
 		idempotencyUUID := api.NewUUID()
