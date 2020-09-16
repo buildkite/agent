@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go v0.0.0-20170217213217-65216237311a
 	github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895
 	github.com/aws/aws-sdk-go v1.32.10
-	github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0
+	github.com/buildkite/bintest/v3 v3.1.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/buildkite/yaml v0.0.0-20181016232759-0caa5f0796e3

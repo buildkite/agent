@@ -10,7 +10,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 )
 
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {

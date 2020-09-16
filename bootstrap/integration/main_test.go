@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/experiments"
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 	"github.com/urfave/cli"
 )
 

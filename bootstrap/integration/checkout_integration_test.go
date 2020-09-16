@@ -12,8 +12,19 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/experiments"
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 )
+
+// Example commit info:
+//
+// commit 65e2f46931cf9fe1ba9e445d92d213cfa3be5312
+// Author:     Example Human <legit@example.com>
+// AuthorDate: Thu Jan 15 11:05:16 2015 +0800
+// Commit:     Example Human <legit@example.com>
+// CommitDate: Thu Jan 15 11:05:16 2015 +0800
+//
+//     hello world
+var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\n.*^Author:`)
 
 // Enable an experiment, returning a function to restore the previous state.
 // Usage: defer experimentWithUndo("foo")()
@@ -76,10 +87,11 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
 	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
-	agent.Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchPattern(`^commit`)).AndExitWith(0)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
+
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
@@ -125,12 +137,8 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(1)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -212,12 +220,8 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(1)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -290,12 +294,8 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(1)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -345,12 +345,8 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 
 	// Mock out the meta-data calls to the agent after checkout
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(1)
-	agent.
-		Expect("meta-data", "set", "buildkite:git:commit", bintest.MatchAny()).
-		AndExitWith(0)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
 }
@@ -365,14 +361,8 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	defer tester.Close()
 
 	agent := tester.MustMock(t, "buildkite-agent")
-	agent.
-		Expect("meta-data", "exists", "buildkite:git:commit").
-		AndExitWith(1)
-
-	agent.
-		Expect("meta-data", "set", "buildkite:git:commit",
-			bintest.MatchPattern(`^commit`)).
-		AndExitWith(0)
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
 
 	tester.RunAndCheck(t)
 }

@@ -3,7 +3,7 @@ package integration
 import (
 	"testing"
 
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 )
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {

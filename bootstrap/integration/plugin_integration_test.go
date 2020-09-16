@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 )
 
 func TestRunningPlugins(t *testing.T) {
