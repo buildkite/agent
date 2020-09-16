@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,20 @@ func TestRun(t *testing.T) {
 
 	if expected := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
 		t.Fatalf("Expected %q, got %q", expected, actual)
+	}
+}
+
+func TestRunWithStdin(t *testing.T) {
+	out := &bytes.Buffer{}
+	sh := newShellForTest(t)
+	sh.Writer = out
+
+	err := sh.WithStdin(strings.NewReader("hello stdin")).Run("tr", "hs", "HS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected, actual := "Hello Stdin", out.String(); expected != actual {
+		t.Errorf("expected %q, got %q", expected, actual)
 	}
 }
 
