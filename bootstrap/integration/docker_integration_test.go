@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 )
 
 func argumentForCommand(cmd string) interface{} {
