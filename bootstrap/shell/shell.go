@@ -216,7 +216,13 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 // Run runs a command, write stdout and stderr to the logger and return an error
 // if it fails
 func (s *Shell) Run(command string, arg ...string) error {
-	s.Promptf("%s", process.FormatCommand(command, arg))
+	formatted := process.FormatCommand(command, arg)
+	if s.stdin == nil {
+		s.Promptf("%s", formatted)
+	} else {
+		// bash-syntax-compatible indication that input is coming from somewhere
+		s.Promptf("%s < /dev/stdin", formatted)
+	}
 
 	return s.RunWithoutPrompt(command, arg...)
 }
