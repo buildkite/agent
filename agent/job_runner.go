@@ -20,6 +20,26 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
+const (
+	// BuildkiteMessageMax is the maximum length of "BUILDKITE_MESSAGE=...\0"
+	// environment entry passed to bootstrap, beyond which it will be truncated
+	// to avoid exceeding the system limit. Note that it includes the variable
+	// name, equals sign, and null terminator.
+	//
+	// The true limit varies by system and may be shared with other env/argv
+	// data. We'll settle on an arbitrary generous but reasonable value, and
+	// adjust it if issues arise.
+	//
+	// macOS 10.15:    256 KiB shared by environment & argv
+	// Linux 4.19:     128 KiB per k=v env
+	// Windows 10:  16,384 KiB shared
+	// POSIX:            4 KiB minimum shared
+	BuildkiteMessageMax = 64 * 1024
+
+	// BuildkiteMessageName is the env var name of the build/commit message.
+	BuildkiteMessageName = "BUILDKITE_MESSAGE"
+)
+
 type JobRunnerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
@@ -505,6 +525,12 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
 
+	// see documentation for BuildkiteMessageMax
+	if err := truncateEnv(r.logger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
+		r.logger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)
+		// attempt to continue anyway
+	}
+
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
 	envSlice := []string{}
@@ -513,6 +539,25 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	return envSlice, nil
+}
+
+// truncateEnv cuts environment variable `key` down to `max` length, such that
+// "key=value\0" does not exceed the max.
+func truncateEnv(l logger.Logger, env map[string]string, key string, max int) error {
+	msglen := len(env[key])
+	if msglen <= max {
+		return nil
+	}
+	msgmax := max - len(key) - 2 // two bytes for "=" and null terminator
+	description := fmt.Sprintf("value truncated %d -> %d bytes", msglen, msgmax)
+	apology := fmt.Sprintf("[%s]", description)
+	if len(apology) > msgmax {
+		return fmt.Errorf("max=%d too short to include truncation apology", max)
+	}
+	keeplen := msgmax - len(apology)
+	env[key] = env[key][0:keeplen] + apology
+	l.Warn("%s %s", key, description)
+	return nil
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related
