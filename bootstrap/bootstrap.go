@@ -1082,9 +1082,17 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 		return "", err
 	}
 
-	// Fetch the build branch from the upstream repository into the mirror.
-	if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
-		return "", err
+	if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+		// Fetch the PR head from the upstream repository into the mirror.
+		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+			return "", err
+		}
+	} else {
+		// Fetch the build branch from the upstream repository into the mirror.
+		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
+			return "", err
+		}
 	}
 
 	return mirrorDir, nil
