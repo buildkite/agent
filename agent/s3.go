@@ -7,10 +7,12 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -82,10 +84,16 @@ func awsS3Session(region string) (*session.Session, error) {
 
 	sess.Config.Region = aws.String(region)
 
+	roleARN := os.Getenv("AWS_ROLE_ARN")
+	tokenPath := os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")
+	sessionName := os.Getenv("AWS_ROLE_SESSION_NAME")
+
 	sess.Config.Credentials = credentials.NewChainCredentials(
 		[]credentials.Provider{
 			&credentialsProvider{},
 			&credentials.EnvProvider{},
+			// WebIdentityRole
+			stscreds.NewWebIdentityRoleProvider(sts.New(sess), roleARN, sessionName, tokenPath),
 			// EC2 and ECS meta-data providers
 			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
 		})
