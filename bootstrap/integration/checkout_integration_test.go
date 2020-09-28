@@ -642,6 +642,69 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
+func TestGitMirrorEnv(t *testing.T) {
+	// t.Parallel() cannot test experiment flags in parallel
+	defer experimentWithUndo("git-mirrors")()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// assert the correct BUILDKITE_REPO_MIRROR _after_ the bootstrap has run
+	gitMirrorPath := ""
+	tester.ExpectGlobalHook("pre-command").Once().AndCallFunc(func(c *bintest.Call) {
+		gitMirrorPath = c.GetEnv("BUILDKITE_REPO_MIRROR")
+		c.Exit(0)
+	})
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	if experiments.IsEnabled(`git-mirrors`) {
+		git.ExpectAll([][]interface{}{
+			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+		})
+	} else {
+		git.ExpectAll([][]interface{}{
+			{"clone", "-v", "--", tester.Repo.Path, "."},
+			{"clean", "-fdq"},
+			{"fetch", "-v", "origin", "master"},
+			{"checkout", "-f", "FETCH_HEAD"},
+			{"clean", "-fdq"},
+			{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+		})
+	}
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	if !strings.HasPrefix(gitMirrorPath, tester.GitMirrorsDir) {
+		t.Errorf("Expected BUILDKITE_REPO_MIRROR=%q to begin with %q", gitMirrorPath, tester.GitMirrorsDir)
+	}
+}
+
 type subDirMatcher struct {
 	dir string
 }
