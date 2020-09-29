@@ -1102,12 +1102,12 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
-
 		var err error
 		mirrorDir, err = b.updateGitMirror()
 		if err != nil {
 			return err
 		}
+		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
 	// Make sure the build directory exists and that we change directory into it
