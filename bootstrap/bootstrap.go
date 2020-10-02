@@ -1083,6 +1083,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 
 	if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+		b.shell.Commentf("Fetch and mirror pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 		// Fetch the PR head from the upstream repository into the mirror.
 		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
