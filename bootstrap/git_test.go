@@ -364,21 +364,34 @@ func TestGitCheckRefFormat(t *testing.T) {
 
 func TestGitCheckoutValidatesRef(t *testing.T) {
 	sh := &mockShellRunner{}
+	defer sh.Check(t)
 	err := gitCheckout(&shell.Shell{}, "", "--nope")
 	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
-	sh.Check(t, [][]string{{}})
 }
 
 func TestGitCheckoutSomething(t *testing.T) {
-	sh := &mockShellRunner{}
+	sh := (&mockShellRunner{}).Expect("git", "checkout", "-f", "-q", "main")
+	defer sh.Check(t)
 	err := gitCheckout(sh, "-f -q", "main")
 	require.NoError(t, err)
-	sh.Check(t, [][]string{{"git", "checkout", "-f", "-q", "main"}})
+}
+
+func TestGitClone(t *testing.T) {
+	sh := (&mockShellRunner{}).Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
+	defer sh.Check(t)
+	err := gitClone(sh, "-v --references url", "repo", "dir")
+	require.NoError(t, err)
 }
 
 // mockShellRunner implements shellRunner for testing expected calls.
 type mockShellRunner struct {
-	calls [][]string
+	expect [][]string
+	calls  [][]string
+}
+
+func (r *mockShellRunner) Expect(cmd string, args ...string) *mockShellRunner {
+	r.expect = append(r.expect, append([]string{cmd}, args...))
+	return r
 }
 
 func (r *mockShellRunner) Run(cmd string, args ...string) error {
@@ -386,11 +399,14 @@ func (r *mockShellRunner) Run(cmd string, args ...string) error {
 	return nil
 }
 
-func (r *mockShellRunner) Check(t *testing.T, expect [][]string) {
+func (r *mockShellRunner) Check(t *testing.T) {
 	if r.calls == nil {
 		r.calls = [][]string{{}}
 	}
-	if !reflect.DeepEqual(r.calls, expect) {
-		t.Errorf("\nexpected: %#v\n     got: %#v\n", expect, r.calls)
+	if r.expect == nil {
+		r.expect = [][]string{{}}
+	}
+	if !reflect.DeepEqual(r.calls, r.expect) {
+		t.Errorf("\nexpected: %#v\n     got: %#v\n", r.expect, r.calls)
 	}
 }

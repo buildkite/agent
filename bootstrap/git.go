@@ -54,7 +54,7 @@ func gitCheckout(sh shellRunner, gitCheckoutFlags, reference string) error {
 	return nil
 }
 
-func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
+func gitClone(sh shellRunner, gitCloneFlags, repository, dir string) error {
 	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
 	if err != nil {
 		return err
