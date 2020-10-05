@@ -2,10 +2,13 @@ package bootstrap
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParsingGittableRepositoryFromFilesPaths(t *testing.T) {
@@ -344,4 +347,50 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 		AndExitWith(255)
 
 	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
+}
+
+func TestGitCheckRefFormat(t *testing.T) {
+	for ref, expect := range map[string]bool{
+		"hello":   true,
+		"--world": false,
+	} {
+		t.Run(ref, func(t *testing.T) {
+			if gitCheckRefFormat(ref) != expect {
+				t.Errorf("gitCheckRefFormat(%q) should be %v", ref, expect)
+			}
+		})
+	}
+}
+
+func TestGitCheckoutValidatesRef(t *testing.T) {
+	sh := &mockShellRunner{}
+	err := gitCheckout(&shell.Shell{}, "", "--nope")
+	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
+	sh.Check(t, [][]string{{}})
+}
+
+func TestGitCheckoutSomething(t *testing.T) {
+	sh := &mockShellRunner{}
+	err := gitCheckout(sh, "-f -q", "main")
+	require.NoError(t, err)
+	sh.Check(t, [][]string{{"git", "checkout", "-f", "-q", "main"}})
+}
+
+// mockShellRunner implements shellRunner for testing expected calls.
+type mockShellRunner struct {
+	calls [][]string
+}
+
+func (r *mockShellRunner) Run(cmd string, args ...string) error {
+	r.calls = append(r.calls, append([]string{cmd}, args...))
+	return nil
+}
+
+func (r *mockShellRunner) Check(t *testing.T, expect [][]string) {
+	if r.calls == nil {
+		r.calls = [][]string{{}}
+	}
+	if !reflect.DeepEqual(r.calls, expect) {
+		t.Errorf("\nexpected: %#v\n     got: %#v\n", expect, r.calls)
+	}
 }

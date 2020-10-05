@@ -27,10 +27,17 @@ type gitError struct {
 	Type int
 }
 
-func gitCheckout(sh *shell.Shell, gitCheckoutFlags, reference string) error {
+type shellRunner interface {
+	Run(string, ...string) error
+}
+
+func gitCheckout(sh shellRunner, gitCheckoutFlags, reference string) error {
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
 		return err
+	}
+	if !gitCheckRefFormat(reference) {
+		return fmt.Errorf("%q is not a valid git ref format", reference)
 	}
 
 	commandArgs := []string{"checkout"}
@@ -239,4 +246,11 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 	// didn't return a value for hostname (weird!),
 	// so we fall back to the old behaviour of just replacing strings
 	return gitHostAliasRegexp.ReplaceAllString(host, "")
+}
+
+// gitCheckRefFormat is a simplified version of `git check-ref-format`
+// https://git-scm.com/docs/git-check-ref-format
+// Perhaps one day it should shell out to that command instead.
+func gitCheckRefFormat(ref string) bool {
+	return ref[0] != '-' // prevent args that git could interpret as options.
 }
