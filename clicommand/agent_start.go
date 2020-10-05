@@ -1,7 +1,9 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +21,9 @@ import (
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
+
+	// register pprof into DefaultServeMux
+	_ "net/http/pprof"
 )
 
 var StartDescription = `Usage:
@@ -658,6 +663,13 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("Failed to parse cancel-signal: %v", err)
 		}
 
+		if pprofSrv, url, err := pprofStart(); err == nil {
+			defer pprofSrv.Shutdown(context.TODO())
+			l.Info("pprof on %s", url)
+		} else {
+			l.Warn("Error starting pprof: %v", err)
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
 
@@ -751,6 +763,18 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 	},
+}
+
+func pprofStart() (*http.Server, string, error) {
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return nil, "", err
+	}
+	server := &http.Server{}
+	go func() {
+		fmt.Println(server.Serve(listener))
+	}()
+	return server, fmt.Sprintf("http://%s/debug/pprof", listener.Addr()), nil
 }
 
 func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
