@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,6 +25,9 @@ import (
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
+
+	// register pprof into DefaultServeMux
+	_ "net/http/pprof"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a
@@ -64,8 +69,29 @@ func New(conf Config) *Bootstrap {
 	}
 }
 
+func (b *Bootstrap) pprof() (*http.Server, error) {
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return nil, err
+	}
+	server := &http.Server{}
+	go func() {
+		fmt.Printf("pprof on http://%s/\n", listener.Addr())
+		b.shell.Commentf("pprof on http://%s/debug/pprof\n", listener.Addr())
+		fmt.Println(server.Serve(listener))
+	}()
+	return server, nil
+}
+
 // Run the bootstrap and return the exit code
 func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
+	srv, err := b.pprof()
+	if err == nil {
+		defer srv.Shutdown(ctx)
+	} else {
+		fmt.Printf("Error creating pprof listener: %v", err)
+	}
+
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
