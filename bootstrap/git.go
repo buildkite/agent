@@ -104,6 +104,7 @@ func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...stri
 
 	commandArgs := []string{"fetch"}
 	commandArgs = append(commandArgs, individualFetchFlags...)
+	commandArgs = append(commandArgs, "--") // terminate arg parsing; only repository & refspecs may follow.
 	commandArgs = append(commandArgs, repository)
 
 	for _, r := range refSpec {
