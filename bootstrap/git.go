@@ -103,7 +103,7 @@ func gitCleanSubmodules(sh shellRunner, gitCleanFlags string) error {
 	return nil
 }
 
-func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...string) error {
+func gitFetch(sh shellRunner, gitFetchFlags, repository string, refSpec ...string) error {
 	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
 	if err != nil {
 		return err
