@@ -667,7 +667,10 @@ func (r *JobRunner) onProcessStartCallback() {
 				// try again soon anyway
 				r.logger.Warn("Problem with getting job state %s (%s)", r.job.ID, err)
 			} else if jobState.State == "canceling" || jobState.State == "canceled" {
-				r.Cancel()
+				err = r.Cancel()
+				if err != nil {
+					r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
+				}
 			}
 
 			// Sleep for a bit, or until the job is finished
