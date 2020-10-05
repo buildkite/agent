@@ -370,38 +370,42 @@ func TestGitCheckoutValidatesRef(t *testing.T) {
 }
 
 func TestGitCheckoutSomething(t *testing.T) {
-	sh := (&mockShellRunner{}).Expect("git", "checkout", "-f", "-q", "main")
+	sh := mockRunner().Expect("git", "checkout", "-f", "-q", "main")
 	defer sh.Check(t)
 	err := gitCheckout(sh, "-f -q", "main")
 	require.NoError(t, err)
 }
 
 func TestGitClone(t *testing.T) {
-	sh := (&mockShellRunner{}).Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
+	sh := mockRunner().Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
 	defer sh.Check(t)
 	err := gitClone(sh, "-v --references url", "repo", "dir")
 	require.NoError(t, err)
 }
 
 func TestGitClean(t *testing.T) {
-	sh := (&mockShellRunner{}).Expect("git", "clean", "--foo", "--bar")
+	sh := mockRunner().Expect("git", "clean", "--foo", "--bar")
 	defer sh.Check(t)
 	err := gitClean(sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitCleanSubmodules(t *testing.T) {
-	sh := (&mockShellRunner{}).Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
+	sh := mockRunner().Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
 	defer sh.Check(t)
 	err := gitCleanSubmodules(sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitFetch(t *testing.T) {
-	sh := (&mockShellRunner{}).Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
+	sh := mockRunner().Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
 	defer sh.Check(t)
 	err := gitFetch(sh, "--foo --bar", "repo", "ref1", "ref2")
 	require.NoError(t, err)
+}
+
+func mockRunner() *mockShellRunner {
+	return &mockShellRunner{}
 }
 
 // mockShellRunner implements shellRunner for testing expected calls.
@@ -421,13 +425,7 @@ func (r *mockShellRunner) Run(cmd string, args ...string) error {
 }
 
 func (r *mockShellRunner) Check(t *testing.T) {
-	if r.calls == nil {
-		r.calls = [][]string{{}}
-	}
-	if r.expect == nil {
-		r.expect = [][]string{{}}
-	}
 	if !reflect.DeepEqual(r.calls, r.expect) {
-		t.Errorf("\nexpected: %#v\n     got: %#v\n", r.expect, r.calls)
+		t.Errorf("\nexpected: %q\n     got: %q\n", r.expect, r.calls)
 	}
 }
