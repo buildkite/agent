@@ -87,7 +87,7 @@ func gitClean(sh shellRunner, gitCleanFlags string) error {
 	return nil
 }
 
-func gitCleanSubmodules(sh *shell.Shell, gitCleanFlags string) error {
+func gitCleanSubmodules(sh shellRunner, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err

@@ -390,6 +390,13 @@ func TestGitClean(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestGitCleanSubmodules(t *testing.T) {
+	sh := (&mockShellRunner{}).Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
+	defer sh.Check(t)
+	err := gitCleanSubmodules(sh, "--foo --bar")
+	require.NoError(t, err)
+}
+
 // mockShellRunner implements shellRunner for testing expected calls.
 type mockShellRunner struct {
 	expect [][]string
