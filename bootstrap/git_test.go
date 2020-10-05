@@ -383,6 +383,13 @@ func TestGitClone(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestGitClean(t *testing.T) {
+	sh := (&mockShellRunner{}).Expect("git", "clean", "--foo", "--bar")
+	defer sh.Check(t)
+	err := gitClean(sh, "--foo --bar")
+	require.NoError(t, err)
+}
+
 // mockShellRunner implements shellRunner for testing expected calls.
 type mockShellRunner struct {
 	expect [][]string

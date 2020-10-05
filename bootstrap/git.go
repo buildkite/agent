@@ -71,7 +71,7 @@ func gitClone(sh shellRunner, gitCloneFlags, repository, dir string) error {
 	return nil
 }
 
-func gitClean(sh *shell.Shell, gitCleanFlags string) error {
+func gitClean(sh shellRunner, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
