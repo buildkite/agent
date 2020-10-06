@@ -1195,11 +1195,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	if b.Commit == "HEAD" {
-		if err := gitCheckout(b.shell, `-f`, `FETCH_HEAD`); err != nil {
+		if err := gitCheckout(b.shell, "-f", "FETCH_HEAD"); err != nil {
 			return err
 		}
 	} else {
-		if err := gitCheckout(b.shell, `-f`, b.Commit); err != nil {
+		if err := gitCheckout(b.shell, "-f", b.Commit); err != nil {
 			return err
 		}
 	}
