@@ -352,6 +352,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 func TestGitCheckRefFormat(t *testing.T) {
 	for ref, expect := range map[string]bool{
 		"hello":          true,
+		"hello-world":    true,
 		"hello/world":    true,
 		"--option":       false,
 		" leadingspace":  false,
@@ -359,10 +360,12 @@ func TestGitCheckRefFormat(t *testing.T) {
 		"has~tilde":      false,
 		"has^caret":      false,
 		"has:colon":      false,
-		"has\007special": false,
+		"has\007control": false,
+		"has\177del":     false,
 		"endswithdot.":   false,
 		"two..dots":      false,
 		"@":              false,
+		"back\\slash":    false,
 	} {
 		t.Run(ref, func(t *testing.T) {
 			if gitCheckRefFormat(ref) != expect {
