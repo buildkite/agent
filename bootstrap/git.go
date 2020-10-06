@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/shellwords"
@@ -248,9 +249,63 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 	return gitHostAliasRegexp.ReplaceAllString(host, "")
 }
 
-// gitCheckRefFormat is a simplified version of `git check-ref-format`
+// gitCheckRefFormat is a simplified version of `git check-ref-format`.
+// It mostly assumes --allow-onelevel i.e. no need for refs/heads/… prefix.
+// It is more permissive than the canonical implementation.
 // https://git-scm.com/docs/git-check-ref-format
-// Perhaps one day it should shell out to that command instead.
 func gitCheckRefFormat(ref string) bool {
-	return ref[0] != '-' // prevent args that git could interpret as options.
+	// Numbered rules are from git 2.28.0's `git help check-ref-format`.
+	// Not covered by this implementation:
+	//   1. They can include slash / for hierarchical (directory) grouping, but
+	//   no slash-separated component can begin with a dot .  or end with the
+	//   sequence .lock
+	//   2. They must contain at least one /. This enforces the presence of a
+	//   category like heads/, tags/ etc. but the actual names are not
+	//   restricted. If the --allow-onelevel option is used, this rule is waived
+	//   5. They cannot have question-mark ?, asterisk *, or open bracket [
+	//   anywhere. See the --refspec-pattern option below for an exception to
+	//   this rule
+	//   6. They cannot begin or end with a slash / or contain multiple
+	//   consecutive slashes (see the --normalize option below for an exception
+	//   to this rule)
+	//   8. They cannot contain a sequence @{.
+
+	// 3. They cannot have two consecutive dots .. anywhere
+	if strings.Contains(ref, "..") {
+		return false
+	}
+	// 9. They cannot be the single character @.
+	if ref == "@" {
+		return false
+	}
+	for i, c := range ref {
+		//  4. They cannot have ASCII control characters (i.e. bytes whose values are lower than \040, or \177 DEL) ...
+		if unicode.IsControl(c) {
+			return false
+		}
+		// 4. They cannot have ... space, tilde ~, caret ^, or colon : anywhere
+		// 10. They cannot contain a \.
+		for _, deny := range ` ~^:\` {
+			if c == deny {
+				return false
+			}
+		}
+		if i == 0 {
+			// (disallow refs that would be interpreted as command options/flags)
+			for _, deny := range `-` {
+				if c == deny {
+					return false
+				}
+			}
+		}
+		if i == len(ref)-1 {
+			// 7. They cannot end with a dot .
+			for _, deny := range `.` {
+				if c == deny {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

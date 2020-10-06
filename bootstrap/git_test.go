@@ -351,8 +351,18 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 
 func TestGitCheckRefFormat(t *testing.T) {
 	for ref, expect := range map[string]bool{
-		"hello":   true,
-		"--world": false,
+		"hello":          true,
+		"hello/world":    true,
+		"--option":       false,
+		" leadingspace":  false,
+		"has space":      false,
+		"has~tilde":      false,
+		"has^caret":      false,
+		"has:colon":      false,
+		"has\007special": false,
+		"endswithdot.":   false,
+		"two..dots":      false,
+		"@":              false,
 	} {
 		t.Run(ref, func(t *testing.T) {
 			if gitCheckRefFormat(ref) != expect {
@@ -363,17 +373,24 @@ func TestGitCheckRefFormat(t *testing.T) {
 }
 
 func TestGitCheckoutValidatesRef(t *testing.T) {
-	sh := &mockShellRunner{}
+	sh := mockRunner()
 	defer sh.Check(t)
 	err := gitCheckout(&shell.Shell{}, "", "--nope")
 	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
 }
 
-func TestGitCheckoutSomething(t *testing.T) {
+func TestGitCheckout(t *testing.T) {
 	sh := mockRunner().Expect("git", "checkout", "-f", "-q", "main")
 	defer sh.Check(t)
 	err := gitCheckout(sh, "-f -q", "main")
 	require.NoError(t, err)
+}
+
+func TestGitCheckoutSketchyArgs(t *testing.T) {
+	sh := mockRunner()
+	defer sh.Check(t)
+	err := gitCheckout(sh, "-f -q", "  --hello")
+	assert.EqualError(t, err, `"  --hello" is not a valid git ref format`)
 }
 
 func TestGitClone(t *testing.T) {
