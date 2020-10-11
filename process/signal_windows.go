@@ -5,9 +5,8 @@ package process
 import (
 	"errors"
 	"fmt"
-	"os/exec"
-	"strconv"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -23,14 +22,56 @@ func (p *Process) setupProcessGroup() {
 	p.command.SysProcAttr = &windows.SysProcAttr{
 		CreationFlags: windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP,
 	}
+	jobHandle, err := newJobObject()
+	if err != nil {
+		p.logger.Error("Creating Job Object failed: %v", err)
+	}
+	p.winJobHandle = jobHandle
+}
+
+func newJobObject() (uintptr, error) {
+	handle, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
+			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+		},
+	}
+	if _, err := windows.SetInformationJobObject(
+		handle,
+		windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)),
+		uint32(unsafe.Sizeof(info))); err != nil {
+		return 0, err
+	}
+
+	return uintptr(handle), nil
+}
+
+func (p *Process) postStart() error {
+	// convert the pid into a windows process handle. We need particular permissions on the handle
+	// for AssignProcessToJobObject to accept it
+	pid := uint32(p.command.Process.Pid)
+	processPerms := uint32(windows.PROCESS_QUERY_LIMITED_INFORMATION | windows.PROCESS_SET_QUOTA | windows.PROCESS_TERMINATE)
+	processHandle, err := windows.OpenProcess(processPerms, false, pid)
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(processHandle)
+
+	err = windows.AssignProcessToJobObject(windows.Handle(p.winJobHandle), processHandle)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *Process) terminateProcessGroup() error {
-	p.logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.pid)
-
-	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
-	// anything left in its process tree.
-	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.pid)).Run()
+	p.logger.Debug("[Process] Terminating process tree by destroying job")
+	return windows.CloseHandle(windows.Handle(p.winJobHandle))
 }
 
 func (p *Process) interruptProcessGroup() error {
