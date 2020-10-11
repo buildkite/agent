@@ -30,7 +30,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073
 	golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f // indirect
-	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82
+	golang.org/x/sys v0.0.0-20201009025420-dfb3f7c4e634
 	google.golang.org/api v0.0.0-20181016191922-cc9bd73d51b4
 	google.golang.org/appengine v1.2.0 // indirect
 	google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441 // indirect
