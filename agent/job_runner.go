@@ -683,6 +683,32 @@ func (r *JobRunner) onProcessStartCallback() {
 			}
 		}
 	}()
+
+	// Start a routine that will constantly log out the process tree created by the job
+	// Windows only, because that's where I'm debugging things atm
+	if experiments.IsEnabled(`debug-processes`) {
+		r.routineWaitGroup.Add(1)
+		go func() {
+			defer func() {
+				// Mark this routine as done in the wait group
+				r.routineWaitGroup.Done()
+
+				r.logger.Debug("[ProcessLogger] Routine that logs the job process tree has finished")
+			}()
+			for {
+				tree := r.process.Processtree()
+				r.logger.Warn("Bootstrap Processtree:\n%s", tree.String())
+				// Sleep for a bit, or until the job is finished
+				select {
+				case <-time.After(5 * time.Second):
+				case <-r.context.Done():
+					return
+				case <-r.process.Done():
+					return
+				}
+			}
+		}()
+	}
 }
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {

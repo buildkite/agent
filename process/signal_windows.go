@@ -23,6 +23,11 @@ func (p *Process) setupProcessGroup() {
 	p.command.SysProcAttr = &windows.SysProcAttr{
 		CreationFlags: windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP,
 	}
+	processGroup, err := newProcessGroup()
+	if err != nil {
+		p.logger.Error("Error creating processGroup: %v", err)
+	}
+	p.processGroup = processGroup
 }
 
 func (p *Process) terminateProcessGroup() error {

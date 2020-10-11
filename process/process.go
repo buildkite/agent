@@ -82,6 +82,7 @@ type Process struct {
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
+	processGroup  processGroup
 }
 
 // New returns a new instance of Process
@@ -95,6 +96,15 @@ func New(l logger.Logger, c Config) *Process {
 // Pid is the pid of the running process
 func (p *Process) Pid() int {
 	return p.pid
+}
+
+// Return a tree collection of process and its descendent processes in a tree structure
+func (p *Process) Processtree() ProcessTreeRoot {
+	tree, err := p.processGroup.processTree()
+	if err != nil {
+		p.logger.Error("error fetching process tree: %v", err)
+	}
+	return tree
 }
 
 // WaitResult returns the raw error returned by Wait()
@@ -202,7 +212,7 @@ func (p *Process) Run() error {
 		if err != nil {
 			return err
 		}
-
+		p.processGroup.addProcess(p.command.Process)
 		p.pid = p.command.Process.Pid
 
 		// Signal waiting consumers in Started() by closing the started channel
