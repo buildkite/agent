@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/utils"
 )
 
 const (
@@ -134,7 +135,7 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	}
 
 	// Make script executable
-	err = addExecutePermissionToFile(h.scriptFile.Name())
+	err = utils.ChmodExecutable(h.scriptFile.Name())
 	if err != nil {
 		return h, err
 	}

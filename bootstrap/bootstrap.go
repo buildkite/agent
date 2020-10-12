@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
 )
@@ -393,23 +394,6 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 		sh.Warningf("Error adding to known_hosts: %v", err)
 		return
 	}
-}
-
-// Makes sure a file is executable
-func addExecutePermissionToFile(filename string) error {
-	s, err := os.Stat(filename)
-	if err != nil {
-		return fmt.Errorf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
-	}
-
-	if s.Mode()&0100 == 0 {
-		err = os.Chmod(filename, s.Mode()|0100)
-		if err != nil {
-			return fmt.Errorf("Failed to mark \"%s\" as executable (%s)", filename, err)
-		}
-	}
-
-	return nil
 }
 
 // setUp is run before all the phases run. It's responsible for initializing the
@@ -1457,7 +1441,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 		// shouldn't be vulnerable to this!
 		if b.Config.CommandEval {
 			// Make script executable
-			if err = addExecutePermissionToFile(pathToCommand); err != nil {
+			if err = utils.ChmodExecutable(pathToCommand); err != nil {
 				b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
 				return err
 			}
