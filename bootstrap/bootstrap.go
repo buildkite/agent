@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
 )
@@ -175,7 +176,7 @@ func (b *Bootstrap) Cancel() error {
 
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.Environment) error {
-	if !fileExists(hookPath) {
+	if !utils.FileExists(hookPath) {
 		if b.Debug {
 			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", name, hookPath)
 		}
@@ -291,7 +292,7 @@ func (b *Bootstrap) findHookFile(hookDir string, name string) (string, error) {
 		}
 	}
 	// otherwise chech for th default shell script
-	if p := filepath.Join(hookDir, name); fileExists(p) {
+	if p := filepath.Join(hookDir, name); utils.FileExists(p) {
 		return p, nil
 	}
 	// don't wrap os.ErrNotExist without checking callers handle it.
@@ -358,15 +359,6 @@ func (b *Bootstrap) executeLocalHook(name string) error {
 	return b.executeHook("local "+name, localHookPath, nil)
 }
 
-// Returns whether or not a file exists on the filesystem. We consider any
-// error returned by os.Stat to indicate that the file doesn't exist. We could
-// be specific and use os.IsNotExist(err), but most other errors also indicate
-// that the file isn't there (or isn't available) so we'll just catch them all.
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return err == nil
-}
-
 func dirForAgentName(agentName string) string {
 	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
 	return badCharsPattern.ReplaceAllString(agentName, "-")
@@ -379,7 +371,7 @@ func dirForRepository(repository string) string {
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
-	if fileExists(repository) {
+	if utils.FileExists(repository) {
 		return
 	}
 
@@ -639,7 +631,7 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 			return errors.Wrapf(err, "Failed to resolve vendored plugin path for plugin %s", p.Name())
 		}
 
-		if !fileExists(pluginLocation) {
+		if !utils.FileExists(pluginLocation) {
 			return fmt.Errorf("Vendored plugin path %s doesn't exist", p.Location)
 		}
 
@@ -741,7 +733,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Has it already been checked out?
-	if fileExists(pluginGitDirectory) {
+	if utils.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
 		headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "--short=7", "HEAD")
@@ -762,7 +754,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 
 	// Once we've got the lock, we need to make sure another process didn't already
 	// checkout the plugin
-	if fileExists(pluginGitDirectory) {
+	if utils.FileExists(pluginGitDirectory) {
 		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
 		return checkout, nil
 	}
@@ -836,7 +828,7 @@ func (b *Bootstrap) removeCheckoutDir() error {
 func (b *Bootstrap) createCheckoutDir() error {
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	if !fileExists(checkoutPath) {
+	if !utils.FileExists(checkoutPath) {
 		b.shell.Commentf("Creating \"%s\"", checkoutPath)
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
 			return err
@@ -993,7 +985,7 @@ func (b *Bootstrap) CheckoutPhase() error {
 }
 
 func hasGitSubmodules(sh *shell.Shell) bool {
-	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
+	return utils.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
 func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
@@ -1017,7 +1009,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
 
 	// Create the mirrors path if it doesn't exist
-	if baseDir := filepath.Dir(mirrorDir); !fileExists(baseDir) {
+	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
 		b.shell.Commentf("Creating \"%s\"", baseDir)
 		if err := os.MkdirAll(baseDir, 0777); err != nil {
 			return "", err
@@ -1040,7 +1032,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	defer mirrorCloneLock.Unlock()
 
 	// If we don't have a mirror, we need to clone it
-	if !fileExists(mirrorDir) {
+	if !utils.FileExists(mirrorDir) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
 			return "", err
@@ -1122,7 +1114,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
-	if fileExists(existingGitDir) {
+	if utils.FileExists(existingGitDir) {
 		// Update the the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
 			return err
@@ -1384,7 +1376,7 @@ func (b *Bootstrap) defaultCommandPhase() error {
 
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(b.shell.Getwd(), scriptFileName))
-	commandIsScript := err == nil && fileExists(pathToCommand)
+	commandIsScript := err == nil && utils.FileExists(pathToCommand)
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
