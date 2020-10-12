@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 // Windows has no concept of parent/child processes or signals. The best we can do
@@ -17,18 +19,9 @@ import (
 
 // See https://docs.microsoft.com/en-us/windows/console/generateconsolectrlevent
 
-var (
-	libkernel32                  = syscall.MustLoadDLL("kernel32")
-	procGenerateConsoleCtrlEvent = libkernel32.MustFindProc("GenerateConsoleCtrlEvent")
-)
-
-const (
-	createNewProcessGroupFlag = 0x00000200
-)
-
 func (p *Process) setupProcessGroup() {
-	p.command.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_UNICODE_ENVIRONMENT | createNewProcessGroupFlag,
+	p.command.SysProcAttr = &windows.SysProcAttr{
+		CreationFlags: windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP,
 	}
 }
 
@@ -43,8 +36,8 @@ func (p *Process) terminateProcessGroup() error {
 func (p *Process) interruptProcessGroup() error {
 	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
 	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
-	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.pid))
-	if r1 == 0 {
+	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.pid))
+	if err != nil {
 		return err
 	}
 	return nil
