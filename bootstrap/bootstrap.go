@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/utils"
@@ -283,23 +283,6 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	b.shell.Env = b.shell.Env.Merge(environ)
 }
 
-// Returns the absolute path to the best matching hook file in a path, or os.ErrNotExist if none is found
-func (b *Bootstrap) findHookFile(hookDir string, name string) (string, error) {
-	if runtime.GOOS == "windows" {
-		// check for windows types first
-		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD;.PS1"); err == nil {
-			return p, nil
-		}
-	}
-	// otherwise chech for th default shell script
-	if p := filepath.Join(hookDir, name); utils.FileExists(p) {
-		return p, nil
-	}
-	// don't wrap os.ErrNotExist without checking callers handle it.
-	// e.g. os.IfNotExist(err) does not handle wrapped errors.
-	return "", os.ErrNotExist
-}
-
 func (b *Bootstrap) hasGlobalHook(name string) bool {
 	_, err := b.globalHookPath(name)
 	return err == nil
@@ -307,7 +290,7 @@ func (b *Bootstrap) hasGlobalHook(name string) bool {
 
 // Returns the absolute path to a global hook, or os.ErrNotExist if none is found
 func (b *Bootstrap) globalHookPath(name string) (string, error) {
-	return b.findHookFile(b.HooksPath, name)
+	return hook.Find(b.HooksPath, name)
 }
 
 // Executes a global hook if one exists
@@ -324,7 +307,8 @@ func (b *Bootstrap) executeGlobalHook(name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (b *Bootstrap) localHookPath(name string) (string, error) {
-	return b.findHookFile(filepath.Join(b.shell.Getwd(), ".buildkite", "hooks"), name)
+	dir := filepath.Join(b.shell.Getwd(), ".buildkite", "hooks")
+	return hook.Find(dir, name)
 }
 
 func (b *Bootstrap) hasLocalHook(name string) bool {
@@ -665,7 +649,7 @@ func (b *Bootstrap) VendoredPluginPhase() error {
 // Executes a named hook on plugins that have it
 func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) error {
 	for _, p := range checkouts {
-		hookPath, err := b.findHookFile(p.HooksDir, name)
+		hookPath, err := hook.Find(p.HooksDir, name)
 		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
 		// agent is still go pre-1.13 compatible (I think) so we're avoiding errors.Is().
 		// In future somebody should check if os.IsNotExist() has added support for
@@ -688,7 +672,7 @@ func (b *Bootstrap) executePluginHook(name string, checkouts []*pluginCheckout) 
 // If any plugin has a hook by this name
 func (b *Bootstrap) hasPluginHook(name string) bool {
 	for _, p := range b.pluginCheckouts {
-		if _, err := b.findHookFile(p.HooksDir, name); err == nil {
+		if _, err := hook.Find(p.HooksDir, name); err == nil {
 			return true
 		}
 	}
