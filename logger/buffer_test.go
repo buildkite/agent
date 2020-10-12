@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuffer(t *testing.T) {
-	l := &logger.Buffer{}
+	l := logger.NewBuffer()
 	l.Info("hello %s", "world")
 	func(x logger.Logger) {
 		x.Debug("foo bar")

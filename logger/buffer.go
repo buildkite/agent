@@ -10,6 +10,15 @@ type Buffer struct {
 	Messages []string
 }
 
+// NewBuffer creates a new Buffer with Messages slice initialized.
+// This makes it simpler to assert empty []string when no log messages
+// have been sent; otherwise Messages would be nil.
+func NewBuffer() *Buffer {
+	return &Buffer{
+		Messages: make([]string, 0),
+	}
+}
+
 func (b *Buffer) Debug(format string, v ...interface{}) {
 	b.Messages = append(b.Messages, "[debug] "+fmt.Sprintf(format, v...))
 }

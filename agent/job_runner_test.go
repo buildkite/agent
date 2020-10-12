@@ -11,7 +11,7 @@ import (
 )
 
 func TestTruncateEnv(t *testing.T) {
-	l := &logger.Buffer{}
+	l := logger.NewBuffer()
 	env := map[string]string{"FOO": strings.Repeat("a", 100)}
 	err := truncateEnv(l, env, "FOO", 64)
 	require.NoError(t, err)
