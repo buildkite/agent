@@ -72,7 +72,7 @@ func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
 func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
@@ -308,7 +308,7 @@ syslogfacility USER`).
 func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
