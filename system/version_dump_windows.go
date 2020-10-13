@@ -2,15 +2,12 @@ package system
 
 import (
 	"fmt"
-	"syscall"
-
 	"github.com/buildkite/agent/v3/logger"
+	"golang.org/x/sys/windows"
 )
 
 func VersionDump(_ logger.Logger) (string, error) {
-	dll := syscall.MustLoadDLL("kernel32.dll")
-	p := dll.MustFindProc("GetVersion")
-	v, _, _ := p.Call()
+	info := windows.RtlGetVersion()
 
-	return fmt.Sprintf("Windows version %d.%d (Build %d)\n", byte(v), uint8(v>>8), uint16(v>>16)), nil
+	return fmt.Sprintf("Windows version %d.%d (Build %d)\n", info.MajorVersion, info.MinorVersion, info.BuildNumber), nil
 }

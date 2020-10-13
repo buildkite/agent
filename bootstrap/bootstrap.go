@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -20,9 +19,11 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/shellwords"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -322,7 +323,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 
 	name = scope + " " + name
 
-	if !fileExists(hookPath) {
+	if !utils.FileExists(hookPath) {
 		if b.Debug {
 			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", name, hookPath)
 		}
@@ -337,7 +338,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script, err := newHookScriptWrapper(hookPath)
+	script, err := hook.CreateScriptWrapper(hookPath)
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)
 		return err
@@ -429,23 +430,6 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	b.shell.Env = b.shell.Env.Merge(environ)
 }
 
-// Returns the absolute path to the best matching hook file in a path, or os.ErrNotExist if none is found
-func (b *Bootstrap) findHookFile(hookDir string, name string) (string, error) {
-	if runtime.GOOS == "windows" {
-		// check for windows types first
-		if p, err := shell.LookPath(name, hookDir, ".BAT;.CMD;.PS1"); err == nil {
-			return p, nil
-		}
-	}
-	// otherwise chech for th default shell script
-	if p := filepath.Join(hookDir, name); fileExists(p) {
-		return p, nil
-	}
-	// don't wrap os.ErrNotExist without checking callers handle it.
-	// e.g. os.IfNotExist(err) does not handle wrapped errors.
-	return "", os.ErrNotExist
-}
-
 func (b *Bootstrap) hasGlobalHook(name string) bool {
 	_, err := b.globalHookPath(name)
 	return err == nil
@@ -453,7 +437,7 @@ func (b *Bootstrap) hasGlobalHook(name string) bool {
 
 // Returns the absolute path to a global hook, or os.ErrNotExist if none is found
 func (b *Bootstrap) globalHookPath(name string) (string, error) {
-	return b.findHookFile(b.HooksPath, name)
+	return hook.Find(b.HooksPath, name)
 }
 
 // Executes a global hook if one exists
@@ -470,7 +454,8 @@ func (b *Bootstrap) executeGlobalHook(ctx context.Context, name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (b *Bootstrap) localHookPath(name string) (string, error) {
-	return b.findHookFile(filepath.Join(b.shell.Getwd(), ".buildkite", "hooks"), name)
+	dir := filepath.Join(b.shell.Getwd(), ".buildkite", "hooks")
+	return hook.Find(dir, name)
 }
 
 func (b *Bootstrap) hasLocalHook(name string) bool {
@@ -505,15 +490,6 @@ func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
 	return b.executeHook(ctx, "local", name, localHookPath, nil)
 }
 
-// Returns whether or not a file exists on the filesystem. We consider any
-// error returned by os.Stat to indicate that the file doesn't exist. We could
-// be specific and use os.IsNotExist(err), but most other errors also indicate
-// that the file isn't there (or isn't available) so we'll just catch them all.
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return err == nil
-}
-
 func dirForAgentName(agentName string) string {
 	badCharsPattern := regexp.MustCompile("[[:^alnum:]]")
 	return badCharsPattern.ReplaceAllString(agentName, "-")
@@ -526,7 +502,7 @@ func dirForRepository(repository string) string {
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
 func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
-	if fileExists(repository) {
+	if utils.FileExists(repository) {
 		return
 	}
 
@@ -540,23 +516,6 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 		sh.Warningf("Error adding to known_hosts: %v", err)
 		return
 	}
-}
-
-// Makes sure a file is executable
-func addExecutePermissionToFile(filename string) error {
-	s, err := os.Stat(filename)
-	if err != nil {
-		return fmt.Errorf("Failed to retrieve file information of \"%s\" (%s)", filename, err)
-	}
-
-	if s.Mode()&0100 == 0 {
-		err = os.Chmod(filename, s.Mode()|0100)
-		if err != nil {
-			return fmt.Errorf("Failed to mark \"%s\" as executable (%s)", filename, err)
-		}
-	}
-
-	return nil
 }
 
 // setUp is run before all the phases run. It's responsible for initializing the
@@ -795,7 +754,7 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 			return errors.Wrapf(err, "Failed to resolve vendored plugin path for plugin %s", p.Name())
 		}
 
-		if !fileExists(pluginLocation) {
+		if !utils.FileExists(pluginLocation) {
 			return fmt.Errorf("Vendored plugin path %s doesn't exist", p.Location)
 		}
 
@@ -805,7 +764,7 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 			HooksDir:    filepath.Join(pluginLocation, "hooks"),
 		}
 
-		// Also make sure that plugin is withing this repository
+		// Also make sure that plugin is within this repository
 		// checkout and isn't elsewhere on the system.
 		if !strings.HasPrefix(pluginLocation, checkoutPath+string(os.PathSeparator)) {
 			return fmt.Errorf("Vendored plugin paths must be within the checked-out repository")
@@ -829,7 +788,7 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 // Executes a named hook on plugins that have it
 func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
 	for _, p := range checkouts {
-		hookPath, err := b.findHookFile(p.HooksDir, name)
+		hookPath, err := hook.Find(p.HooksDir, name)
 		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
 		// agent is still go pre-1.13 compatible (I think) so we're avoiding errors.Is().
 		// In future somebody should check if os.IsNotExist() has added support for
@@ -852,7 +811,7 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 // If any plugin has a hook by this name
 func (b *Bootstrap) hasPluginHook(name string) bool {
 	for _, p := range b.pluginCheckouts {
-		if _, err := b.findHookFile(p.HooksDir, name); err == nil {
+		if _, err := hook.Find(p.HooksDir, name); err == nil {
 			return true
 		}
 	}
@@ -897,7 +856,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Has it already been checked out?
-	if fileExists(pluginGitDirectory) {
+	if utils.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
 		headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "--short=7", "HEAD")
@@ -918,7 +877,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 
 	// Once we've got the lock, we need to make sure another process didn't already
 	// checkout the plugin
-	if fileExists(pluginGitDirectory) {
+	if utils.FileExists(pluginGitDirectory) {
 		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
 		return checkout, nil
 	}
@@ -992,7 +951,7 @@ func (b *Bootstrap) removeCheckoutDir() error {
 func (b *Bootstrap) createCheckoutDir() error {
 	checkoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
-	if !fileExists(checkoutPath) {
+	if !utils.FileExists(checkoutPath) {
 		b.shell.Commentf("Creating \"%s\"", checkoutPath)
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
 			return err
@@ -1154,7 +1113,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 }
 
 func hasGitSubmodules(sh *shell.Shell) bool {
-	return fileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
+	return utils.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
 func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
@@ -1178,7 +1137,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
 
 	// Create the mirrors path if it doesn't exist
-	if baseDir := filepath.Dir(mirrorDir); !fileExists(baseDir) {
+	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
 		b.shell.Commentf("Creating \"%s\"", baseDir)
 		if err := os.MkdirAll(baseDir, 0777); err != nil {
 			return "", err
@@ -1201,7 +1160,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	defer mirrorCloneLock.Unlock()
 
 	// If we don't have a mirror, we need to clone it
-	if !fileExists(mirrorDir) {
+	if !utils.FileExists(mirrorDir) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
 			return "", err
@@ -1263,12 +1222,12 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
-
 		var err error
 		mirrorDir, err = b.updateGitMirror()
 		if err != nil {
 			return err
 		}
+		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
 	// Make sure the build directory exists and that we change directory into it
@@ -1283,7 +1242,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
-	if fileExists(existingGitDir) {
+	if utils.FileExists(existingGitDir) {
 		// Update the the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
 			return err
@@ -1356,11 +1315,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	if b.Commit == "HEAD" {
-		if err := gitCheckout(b.shell, `-f`, `FETCH_HEAD`); err != nil {
+		if err := gitCheckout(b.shell, "-f", "FETCH_HEAD"); err != nil {
 			return err
 		}
 	} else {
-		if err := gitCheckout(b.shell, `-f`, b.Commit); err != nil {
+		if err := gitCheckout(b.shell, "-f", b.Commit); err != nil {
 			return err
 		}
 	}
@@ -1439,13 +1398,12 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
 	if err := b.shell.Run("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
-
-		gitCommitOutput, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--")
+		out, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--")
 		if err != nil {
 			return err
 		}
-
-		if err = b.shell.Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit", gitCommitOutput); err != nil {
+		stdin := strings.NewReader(out)
+		if err := b.shell.WithStdin(stdin).Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
 			return err
 		}
 	}
@@ -1584,7 +1542,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(b.shell.Getwd(), scriptFileName))
-	commandIsScript := err == nil && fileExists(pathToCommand)
+	commandIsScript := err == nil && utils.FileExists(pathToCommand)
 	span.SetTag("hook.command", pathToCommand)
 
 	// If the command isn't a script, then it's something we need
@@ -1659,7 +1617,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 		// shouldn't be vulnerable to this!
 		if b.Config.CommandEval {
 			// Make script executable
-			if err = addExecutePermissionToFile(pathToCommand); err != nil {
+			if err = utils.ChmodExecutable(pathToCommand); err != nil {
 				b.shell.Warningf("Error marking script %q as executable: %v", pathToCommand, err)
 				return err
 			}

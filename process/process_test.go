@@ -72,6 +72,25 @@ func TestProcessOutputPTY(t *testing.T) {
 	assertProcessDoesntExist(t, p)
 }
 
+func TestProcessInput(t *testing.T) {
+	stdout := &bytes.Buffer{}
+
+	p := process.New(logger.Discard, process.Config{
+		Path:   "tr",
+		Args:   []string{"hw", "HW"},
+		Stdin:  strings.NewReader("hello world"),
+		Stdout: stdout,
+	})
+	// wait for the process to finish
+	if err := p.Run(); err != nil {
+		t.Fatal(err)
+	}
+	if expected, actual := "Hello World", stdout.String(); expected != actual {
+		t.Errorf("stdout expected %q, got %q", expected, actual)
+	}
+	assertProcessDoesntExist(t, p)
+}
+
 func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32

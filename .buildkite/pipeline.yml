@@ -13,16 +13,10 @@ steps:
 
   - name: ":hammer: :windows:"
     key: test-windows
-    command: ".buildkite\\steps\\tests.sh"
+    command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
-    plugins:
-      docker-compose#v3.0.0:
-        config: .buildkite/docker-compose.windows.yml
-        run: agent
-        tty: false
-        shell: ["bash.exe"]
     agents:
-      queue: "windows"
+      queue: buildkite-agent-windows
 
   - label: ":junit:"
     depends_on:

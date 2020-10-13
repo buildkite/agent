@@ -64,6 +64,7 @@ type Config struct {
 	Path            string
 	Args            []string
 	Env             []string
+	Stdin           io.Reader
 	Stdout          io.Writer
 	Stderr          io.Writer
 	Dir             string
@@ -193,9 +194,9 @@ func (p *Process) Run() error {
 			waitGroup.Done()
 		}()
 	} else {
+		p.command.Stdin = p.conf.Stdin
 		p.command.Stdout = p.conf.Stdout
 		p.command.Stderr = p.conf.Stderr
-		p.command.Stdin = nil
 
 		err := p.command.Start()
 		if err != nil {

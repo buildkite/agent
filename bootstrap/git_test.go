@@ -2,10 +2,13 @@ package bootstrap
 
 import (
 	"path/filepath"
+	"reflect"
 	"testing"
 
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParsingGittableRepositoryFromFilesPaths(t *testing.T) {
@@ -69,7 +72,7 @@ func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
 func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
@@ -305,7 +308,7 @@ syslogfacility USER`).
 func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
@@ -344,4 +347,105 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 		AndExitWith(255)
 
 	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
+}
+
+func TestGitCheckRefFormat(t *testing.T) {
+	for ref, expect := range map[string]bool{
+		"hello":          true,
+		"hello-world":    true,
+		"hello/world":    true,
+		"--option":       false,
+		" leadingspace":  false,
+		"has space":      false,
+		"has~tilde":      false,
+		"has^caret":      false,
+		"has:colon":      false,
+		"has\007control": false,
+		"has\177del":     false,
+		"endswithdot.":   false,
+		"two..dots":      false,
+		"@":              false,
+		"back\\slash":    false,
+	} {
+		t.Run(ref, func(t *testing.T) {
+			if gitCheckRefFormat(ref) != expect {
+				t.Errorf("gitCheckRefFormat(%q) should be %v", ref, expect)
+			}
+		})
+	}
+}
+
+func TestGitCheckoutValidatesRef(t *testing.T) {
+	sh := mockRunner()
+	defer sh.Check(t)
+	err := gitCheckout(&shell.Shell{}, "", "--nope")
+	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
+}
+
+func TestGitCheckout(t *testing.T) {
+	sh := mockRunner().Expect("git", "checkout", "-f", "-q", "main")
+	defer sh.Check(t)
+	err := gitCheckout(sh, "-f -q", "main")
+	require.NoError(t, err)
+}
+
+func TestGitCheckoutSketchyArgs(t *testing.T) {
+	sh := mockRunner()
+	defer sh.Check(t)
+	err := gitCheckout(sh, "-f -q", "  --hello")
+	assert.EqualError(t, err, `"  --hello" is not a valid git ref format`)
+}
+
+func TestGitClone(t *testing.T) {
+	sh := mockRunner().Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
+	defer sh.Check(t)
+	err := gitClone(sh, "-v --references url", "repo", "dir")
+	require.NoError(t, err)
+}
+
+func TestGitClean(t *testing.T) {
+	sh := mockRunner().Expect("git", "clean", "--foo", "--bar")
+	defer sh.Check(t)
+	err := gitClean(sh, "--foo --bar")
+	require.NoError(t, err)
+}
+
+func TestGitCleanSubmodules(t *testing.T) {
+	sh := mockRunner().Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
+	defer sh.Check(t)
+	err := gitCleanSubmodules(sh, "--foo --bar")
+	require.NoError(t, err)
+}
+
+func TestGitFetch(t *testing.T) {
+	sh := mockRunner().Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
+	defer sh.Check(t)
+	err := gitFetch(sh, "--foo --bar", "repo", "ref1", "ref2")
+	require.NoError(t, err)
+}
+
+func mockRunner() *mockShellRunner {
+	return &mockShellRunner{}
+}
+
+// mockShellRunner implements shellRunner for testing expected calls.
+type mockShellRunner struct {
+	expect [][]string
+	calls  [][]string
+}
+
+func (r *mockShellRunner) Expect(cmd string, args ...string) *mockShellRunner {
+	r.expect = append(r.expect, append([]string{cmd}, args...))
+	return r
+}
+
+func (r *mockShellRunner) Run(cmd string, args ...string) error {
+	r.calls = append(r.calls, append([]string{cmd}, args...))
+	return nil
+}
+
+func (r *mockShellRunner) Check(t *testing.T) {
+	if !reflect.DeepEqual(r.calls, r.expect) {
+		t.Errorf("\nexpected: %q\n     got: %q\n", r.expect, r.calls)
+	}
 }

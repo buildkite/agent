@@ -43,6 +43,12 @@ type Shell struct {
 	// Whether the shell is a PTY
 	PTY bool
 
+	// stdin is an optional input stream used by Run() and friends.
+	// It remains unexported on the assumption that it's not useful except via
+	// WithStdin() to get a shell-copy prepared for a single command that needs
+	// input.
+	stdin io.Reader
+
 	// Where stdout is written, defaults to os.Stdout
 	Writer io.Writer
 
@@ -85,6 +91,24 @@ func NewWithContext(ctx context.Context) (*Shell, error) {
 
 	sh.ctx = ctx
 	return sh, nil
+}
+
+// WithStdin returns a copy of the Shell with the provided io.Reader set as the
+// Stdin for the next command. The copy should be discarded after one command.
+// e.g. sh.WithStdin(strings.NewReader("hello world")).Run("cat")
+func (s *Shell) WithStdin(r io.Reader) *Shell {
+	// cargo-culted cmdLock, not sure if it's needed
+	s.cmdLock.Lock()
+	defer s.cmdLock.Unlock()
+	// Can't copy struct like `newsh := *s` because sync.Mutex can't be copied.
+	return &Shell{
+		Logger: s.Logger,
+		Env:    s.Env,
+		stdin:  r, // our new stdin
+		Writer: s.Writer,
+		wd:     s.wd,
+		ctx:    s.ctx,
+	}
 }
 
 // Getwd returns the current working directory of the shell
@@ -195,7 +219,13 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 // Run runs a command, write stdout and stderr to the logger and return an error
 // if it fails
 func (s *Shell) Run(command string, arg ...string) error {
-	s.Promptf("%s", process.FormatCommand(command, arg))
+	formatted := process.FormatCommand(command, arg)
+	if s.stdin == nil {
+		s.Promptf("%s", formatted)
+	} else {
+		// bash-syntax-compatible indication that input is coming from somewhere
+		s.Promptf("%s < /dev/stdin", formatted)
+	}
 
 	return s.RunWithoutPrompt(command, arg...)
 }
@@ -345,10 +375,11 @@ func (s *Shell) buildCommand(ctx context.Context, name string, arg ...string) (*
 	}
 
 	cfg := process.Config{
-		Path: absPath,
-		Args: arg,
-		Env:  s.Env.ToSlice(),
-		Dir:  s.wd,
+		Path:  absPath,
+		Args:  arg,
+		Env:   s.Env.ToSlice(),
+		Stdin: s.stdin,
+		Dir:   s.wd,
 	}
 
 	// Create a sub-context so that shell.Cancel() can interrupt

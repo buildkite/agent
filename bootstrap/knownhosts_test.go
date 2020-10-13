@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/bintest/v3"
 )
 
 func TestAddingToKnownHosts(t *testing.T) {
@@ -26,7 +27,7 @@ func TestAddingToKnownHosts(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.Name, func(t *testing.T) {
-			sh := newTestShell(t)
+			sh := shell.NewTestShell(t)
 
 			ssh, err := bintest.NewMock("ssh")
 			if err != nil {

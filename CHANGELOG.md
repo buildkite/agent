@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Support for job tracing via [Datadog APM](https://www.datadoghq.com/product/apm/). To enable, either set the `tracing-backend` config or the `BUILDKITE_TRACING_BACKEND` env var to `datadog`. By default the agent will attempt to send traces to the default agent address and APM port (`127.0.0.1:8126`), but this can be configured with the `DD_AGENT_HOST` and `DD_AGENT_APM_PORT` env vars.
 
+## [v3.24.0](https://github.com/buildkite/agent/compare/v3.23.1...v3.24.0) (2020-09-29)
+
+### Fixed
+* Fix build script [#1300](https://github.com/buildkite/agent/pull/1300) ([goodspark](https://github.com/goodspark))
+* Fix typos [#1297](https://github.com/buildkite/agent/pull/1297) ([JuanitoFatas](https://github.com/JuanitoFatas))
+* Fix flaky tests: experiments and parallel tests don't mix [#1295](https://github.com/buildkite/agent/pull/1295) ([pda](https://github.com/pda))
+* artifact_uploader_test fixed for Windows. [#1288](https://github.com/buildkite/agent/pull/1288) ([pda](https://github.com/pda))
+* Windows integration tests: git file path quirk fix [#1291](https://github.com/buildkite/agent/pull/1291) ([pda](https://github.com/pda))
+
+### Changed
+* git-mirrors: set BUILDKITE_REPO_MIRROR=/path/to/mirror/repo [#1311](https://github.com/buildkite/agent/pull/1311) ([pda](https://github.com/pda))
+* Truncate BUILDKITE_MESSAGE to 64 KiB [#1307](https://github.com/buildkite/agent/pull/1307) ([pda](https://github.com/pda))
+* CI: windows tests on queue=buildkite-agent-windows without Docker [#1294](https://github.com/buildkite/agent/pull/1294) ([pda](https://github.com/pda))
+* buildkite:git:commit meta-data via stdin; avoid Argument List Too Long [#1302](https://github.com/buildkite/agent/pull/1302) ([pda](https://github.com/pda))
+* Expand the CLI test step [#1293](https://github.com/buildkite/agent/pull/1293) ([ticky](https://github.com/ticky))
+* Improve Apple Silicon Mac support [#1289](https://github.com/buildkite/agent/pull/1289) ([ticky](https://github.com/ticky))
+* update github.com/urfave/cli to the latest v1 release [#1287](https://github.com/buildkite/agent/pull/1287) ([yob](https://github.com/yob))
+
+
 ## [v3.23.1](https://github.com/buildkite/agent/compare/v3.23.0...v3.23.1) (2020-09-09)
 
 ### Fixed
