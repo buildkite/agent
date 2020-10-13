@@ -121,12 +121,12 @@ func (g processGroup) listProcesses() ([]ps.Process, error) {
 		return nil, errors.New(fmt.Sprintf("JOBOBJECT_BASIC_PROCESS_ID_LIST buffer not large enough. Got %d pids, wanted %d", list.NumberOfProcessIdsInList, list.NumberOfAssignedProcesses))
 	}
 
-	processes := make([]ps.Process, list.NumberOfProcessIdsInList)
+	processes := make([]ps.Process, 0, list.NumberOfProcessIdsInList)
 	for i := 0; i < int(list.NumberOfProcessIdsInList); i++ {
 		pid := binary.LittleEndian.Uint64(list.ProcessIdList[8*i : 8*(i+1)])
 		process, err := ps.FindProcess(int(pid))
-		if err == nil {
-			processes[i] = process
+		if process != nil && err == nil {
+			processes = append(processes, process)
 		}
 	}
 	return processes, nil
