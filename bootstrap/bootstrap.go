@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/utils"
@@ -191,7 +192,7 @@ func (b *Bootstrap) executeHook(name string, hookPath string, extraEnviron *env.
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script, err := newHookScriptWrapper(hookPath)
+	script, err := hook.CreateScriptWrapper(hookPath)
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)
 		return err

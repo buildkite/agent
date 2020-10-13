@@ -1,4 +1,4 @@
-package bootstrap
+package hook
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		}
 	}
 
-	wrapper := newTestHookWrapper(t, script)
+	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
 	sh := shell.NewTestShell(t)
@@ -80,7 +80,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		}
 	}
 
-	wrapper := newTestHookWrapper(t, script)
+	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
 	sh := shell.NewTestShell(t)
@@ -112,7 +112,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 }
 
-func newTestHookWrapper(t *testing.T, script []string) *hookScriptWrapper {
+func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 	hookName := "hookwrapper"
 	if runtime.GOOS == "windows" {
 		hookName += ".bat"
@@ -131,7 +131,7 @@ func newTestHookWrapper(t *testing.T, script []string) *hookScriptWrapper {
 
 	hookFile.Close()
 
-	wrapper, err := newHookScriptWrapper(hookFile.Name())
+	wrapper, err := CreateScriptWrapper(hookFile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
