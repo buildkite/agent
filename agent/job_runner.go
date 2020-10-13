@@ -696,8 +696,12 @@ func (r *JobRunner) onProcessStartCallback() {
 				r.logger.Debug("[ProcessLogger] Routine that logs the job process tree has finished")
 			}()
 			for {
-				tree := r.process.Processtree()
-				r.logger.Warn("Bootstrap Processtree:\n%s", tree.String())
+				tree, err := r.process.Processtree()
+				if err != nil {
+					r.logger.Error("Fetching process tree failed: %v", err)
+				} else {
+					r.logger.Warn("Bootstrap Processtree:\n%s", tree.String())
+				}
 				// Sleep for a bit, or until the job is finished
 				select {
 				case <-time.After(5 * time.Second):

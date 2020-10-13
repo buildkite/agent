@@ -99,12 +99,12 @@ func (p *Process) Pid() int {
 }
 
 // Return a tree collection of process and its descendent processes in a tree structure
-func (p *Process) Processtree() ProcessTreeRoot {
+func (p *Process) Processtree() (ProcessTreeRoot, error) {
 	tree, err := p.processGroup.processTree()
 	if err != nil {
-		p.logger.Error("error fetching process tree: %v", err)
+		return tree, err
 	}
-	return tree
+	return tree, nil
 }
 
 // WaitResult returns the raw error returned by Wait()
