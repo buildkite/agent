@@ -1,4 +1,4 @@
-package bootstrap
+package hook
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/utils"
 )
 
 const (
@@ -26,10 +27,10 @@ const (
 // Then we can use the diff of the two to figure out what changes to make to the
 // bootstrap. Horrible, but effective.
 
-// hookScriptWrapper wraps a hook script with env collection and then provides
+// ScriptWrapper wraps a hook script with env collection and then provides
 // a way to get the difference between the environment before the hook is run and
 // after it
-type hookScriptWrapper struct {
+type ScriptWrapper struct {
 	hookPath      string
 	scriptFile    *os.File
 	beforeEnvFile *os.File
@@ -42,8 +43,10 @@ type hookScriptChanges struct {
 	Dir string
 }
 
-func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
-	var h = &hookScriptWrapper{
+// CreateScriptWrapper creates and configures a ScriptWrapper.
+// Writes temporary files to the filesystem.
+func CreateScriptWrapper(hookPath string) (*ScriptWrapper, error) {
+	var wrap = &ScriptWrapper{
 		hookPath: hookPath,
 	}
 
@@ -65,36 +68,36 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	}
 
 	// Create a temporary file that we'll put the hook runner code in
-	h.scriptFile, err = shell.TempFileWithExtension(scriptFileName)
+	wrap.scriptFile, err = shell.TempFileWithExtension(scriptFileName)
 	if err != nil {
 		return nil, err
 	}
-	defer h.scriptFile.Close()
+	defer wrap.scriptFile.Close()
 
 	// We'll pump the ENV before the hook into this temp file
-	h.beforeEnvFile, err = shell.TempFileWithExtension(
+	wrap.beforeEnvFile, err = shell.TempFileWithExtension(
 		`buildkite-agent-bootstrap-hook-env-before`,
 	)
 	if err != nil {
 		return nil, err
 	}
-	h.beforeEnvFile.Close()
+	wrap.beforeEnvFile.Close()
 
 	// We'll then pump the ENV _after_ the hook into this temp file
-	h.afterEnvFile, err = shell.TempFileWithExtension(
+	wrap.afterEnvFile, err = shell.TempFileWithExtension(
 		`buildkite-agent-bootstrap-hook-env-after`,
 	)
 	if err != nil {
 		return nil, err
 	}
-	h.afterEnvFile.Close()
+	wrap.afterEnvFile.Close()
 
-	absolutePathToHook, err := filepath.Abs(h.hookPath)
+	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", h.hookPath, err)
+		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", wrap.hookPath, err)
 	}
 
-	h.beforeWd, err = os.Getwd()
+	wrap.beforeWd, err = os.Getwd()
 	if err != nil {
 		return nil, err
 	}
@@ -104,66 +107,66 @@ func newHookScriptWrapper(hookPath string) (*hookScriptWrapper, error) {
 	if isWindows && !isBashHook && !isPwshHook {
 		script = "@echo off\n" +
 			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
-			"SET > \"" + h.beforeEnvFile.Name() + "\"\n" +
+			"SET > \"" + wrap.beforeEnvFile.Name() + "\"\n" +
 			"CALL \"" + absolutePathToHook + "\"\n" +
 			"SET " + hookExitStatusEnv + "=!ERRORLEVEL!\n" +
 			"SET " + hookWorkingDirEnv + "=%CD%\n" +
-			"SET > \"" + h.afterEnvFile.Name() + "\"\n" +
+			"SET > \"" + wrap.afterEnvFile.Name() + "\"\n" +
 			"EXIT %" + hookExitStatusEnv + "%"
 	} else if isWindows && isPwshHook {
 		script = `$ErrorActionPreference = "STOP"\n` +
-			`Get-ChildItem Env: | Foreach-Object {$($_.Name)=$($_.Value)"} | Set-Content "` + h.beforeEnvFile.Name() + `\n` +
+			`Get-ChildItem Env: | Foreach-Object {$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.beforeEnvFile.Name() + `\n` +
 			absolutePathToHook + `\n` +
 			`if ($LASTEXITCODE -eq $null) {$Env:` + hookExitStatusEnv + ` = 0} else {$Env:` + hookExitStatusEnv + ` = $LASTEXITCODE}\n` +
 			`$Env:` + hookWorkingDirEnv + ` = $PWD | Select-Object -ExpandProperty Path\n` +
-			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + h.afterEnvFile.Name() + `"\n` +
+			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.afterEnvFile.Name() + `"\n` +
 			`exit $Env:` + hookExitStatusEnv
 	} else {
-		script = "export -p > \"" + filepath.ToSlash(h.beforeEnvFile.Name()) + "\"\n" +
+		script = "export -p > \"" + filepath.ToSlash(wrap.beforeEnvFile.Name()) + "\"\n" +
 			". \"" + filepath.ToSlash(absolutePathToHook) + "\"\n" +
 			"export " + hookExitStatusEnv + "=$?\n" +
 			"export " + hookWorkingDirEnv + "=$PWD\n" +
-			"export -p > \"" + filepath.ToSlash(h.afterEnvFile.Name()) + "\"\n" +
+			"export -p > \"" + filepath.ToSlash(wrap.afterEnvFile.Name()) + "\"\n" +
 			"exit $" + hookExitStatusEnv
 	}
 
 	// Write the hook script to the runner then close the file so we can run it
-	_, err = h.scriptFile.WriteString(script)
+	_, err = wrap.scriptFile.WriteString(script)
 	if err != nil {
 		return nil, err
 	}
 
 	// Make script executable
-	err = addExecutePermissionToFile(h.scriptFile.Name())
+	err = utils.ChmodExecutable(wrap.scriptFile.Name())
 	if err != nil {
-		return h, err
+		return wrap, err
 	}
 
-	return h, nil
+	return wrap, nil
 }
 
 // Path returns the path to the wrapper script, this is the one that should be executed
-func (h *hookScriptWrapper) Path() string {
-	return h.scriptFile.Name()
+func (wrap *ScriptWrapper) Path() string {
+	return wrap.scriptFile.Name()
 }
 
 // Close cleans up the wrapper script and the environment files
-func (h *hookScriptWrapper) Close() {
-	os.Remove(h.scriptFile.Name())
-	os.Remove(h.beforeEnvFile.Name())
-	os.Remove(h.afterEnvFile.Name())
+func (wrap *ScriptWrapper) Close() {
+	os.Remove(wrap.scriptFile.Name())
+	os.Remove(wrap.beforeEnvFile.Name())
+	os.Remove(wrap.afterEnvFile.Name())
 }
 
 // Changes returns the changes in the environment and working dir after the hook script runs
-func (h *hookScriptWrapper) Changes() (hookScriptChanges, error) {
-	beforeEnvContents, err := ioutil.ReadFile(h.beforeEnvFile.Name())
+func (wrap *ScriptWrapper) Changes() (hookScriptChanges, error) {
+	beforeEnvContents, err := ioutil.ReadFile(wrap.beforeEnvFile.Name())
 	if err != nil {
-		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", h.beforeEnvFile.Name(), err)
+		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
 	}
 
-	afterEnvContents, err := ioutil.ReadFile(h.afterEnvFile.Name())
+	afterEnvContents, err := ioutil.ReadFile(wrap.afterEnvFile.Name())
 	if err != nil {
-		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", h.afterEnvFile.Name(), err)
+		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
 	}
 
 	beforeEnv := env.FromExport(string(beforeEnvContents))
