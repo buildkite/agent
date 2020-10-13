@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -798,8 +799,11 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 // if it's available. This is very similar to the bootstrap hook code. Just run at
 // the agent level.
 func shutdownHook(log logger.Logger, hooksPath string) {
-	p := filepath.Join(hooksPath, "shutdown")
-	if _, err := os.Stat(p); os.IsNotExist(err) {
+	p, err := hook.Find(hooksPath, "shutdown")
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Error("Error finding shutdown hook: %v", err)
+		}
 		return
 	}
 	sh, err := shell.New()
@@ -807,6 +811,7 @@ func shutdownHook(log logger.Logger, hooksPath string) {
 		log.Error("Failed to create shell object for shutdown hook: %v", err)
 		return
 	}
+	sh.Promptf("%s", p)
 	if err = sh.RunScript(p, nil); err != nil {
 		log.Error("Shutdown hook error: %v", err)
 	}
