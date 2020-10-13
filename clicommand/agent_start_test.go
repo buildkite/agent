@@ -11,12 +11,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupHooksPath() (string, func(), error) {
+func setupHooksPath(t *testing.T) (string, func()) {
 	hooksPath, err := ioutil.TempDir("", "")
 	if err != nil {
-		return "", nil, err
+		assert.FailNow(t, "failed to create temp file: %v", err)
 	}
-	return hooksPath, func() { os.RemoveAll(hooksPath) }, nil
+	return hooksPath, func() { os.RemoveAll(hooksPath) }
+}
+
+func writeShutdownHook(t *testing.T, dir string) string {
+	var filename, script string
+	if runtime.GOOS == "windows" {
+		filename = "shutdown.bat"
+		script = "@echo off\necho hello world"
+	} else {
+		filename = "shutdown"
+		script = "echo hello world"
+	}
+	filepath := filepath.Join(dir, filename)
+	if err := ioutil.WriteFile(filepath, []byte(script), 0755); err != nil {
+		assert.FailNow(t, "failed to write shutdown hook: %v", err)
+	}
+	return filepath
 }
 
 // Since the hook doesn't really return anything, we can't really test stuff but at
@@ -28,35 +44,24 @@ func TestShutdownHook(t *testing.T) {
 			NoColor:   true,
 		}
 	}
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
 	t.Run("with shutdown hook", func(t *testing.T) {
-		hooksPath, closer, err := setupHooksPath()
-		if err != nil {
-			assert.FailNow(t, "failed to create temp file: %v", err)
-		}
+		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-
-		filename := "shutdown"
-		if runtime.GOOS == "windows" {
-			filename = "shutdown.bat"
-		}
-		filepath := filepath.Join(hooksPath, filename)
-		err = ioutil.WriteFile(filepath, []byte("echo hello"), 0755)
-		if err != nil {
-			assert.FailNow(t, "failed to write shutdown hook: %v", err)
-		}
-
+		filepath := writeShutdownHook(t, hooksPath)
 		log := logger.NewBuffer()
 		shutdownHook(log, cfg(hooksPath))
+
 		assert.Equal(t, []string{
-			"[info] $ " + filepath, // prompt
-			"[info] hello",         // output
+			"[info] " + prompt + " " + filepath, // prompt
+			"[info] hello world",                // output
 		}, log.Messages)
 	})
 	t.Run("with no shutdown hook", func(t *testing.T) {
-		hooksPath, closer, err := setupHooksPath()
-		if err != nil {
-			assert.FailNow(t, "failed to create temp file: %v", err)
-		}
+		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
 		log := logger.NewBuffer()
