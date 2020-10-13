@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/buildkite/agent/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
 )
 
@@ -17,11 +16,11 @@ func NewTestShell(t *testing.T) *Shell {
 		t.Fatal(err)
 	}
 
-	sh.Logger = shell.DiscardLogger
+	sh.Logger = DiscardLogger
 	sh.Writer = ioutil.Discard
 
 	if os.Getenv(`DEBUG_SHELL`) == "1" {
-		sh.Logger = shell.TestingLogger{T: t}
+		sh.Logger = TestingLogger{T: t}
 	}
 
 	// Windows requires certain env variables to be present
