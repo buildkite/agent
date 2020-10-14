@@ -1001,7 +1001,11 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	// If we don't have a mirror, we need to clone it
 	if !utils.FileExists(mirrorDir) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
+
+		gitCloneMirrorFlags := b.GitCloneMirrorFlags
+		gitCloneMirrorFlags += "--mirror"
+
+		if err := gitClone(b.shell, gitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
 			return "", err
 		}
 
