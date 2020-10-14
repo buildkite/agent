@@ -116,7 +116,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--bare", "--mirror", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "-v", "--", "origin", "master"},
@@ -324,7 +324,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--bare", "--mirror", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "--depth=1", "--", "origin", "master"},
