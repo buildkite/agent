@@ -204,8 +204,7 @@ func (p *Process) Run() error {
 		if err != nil {
 			return err
 		}
-		err = p.postStart()
-		if err != nil {
+		if err := p.postStart(); err != nil {
 			p.logger.Error("[Process] postStart failed: %v", err)
 		}
 		p.pid = p.command.Process.Pid
