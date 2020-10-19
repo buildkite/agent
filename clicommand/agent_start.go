@@ -1,12 +1,15 @@
 package clicommand
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -723,7 +726,7 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer func() { shutdownHook(l, cfg.HooksPath) }()
+		defer shutdownHook(l, cfg)
 
 		// Handle process signals
 		signals := handlePoolSignals(l, pool)
@@ -798,8 +801,9 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 // shutdownHook looks for a shutdown hook script in the hooks path and executes it
 // if it's available. This is very similar to the bootstrap hook code. Just run at
 // the agent level.
-func shutdownHook(log logger.Logger, hooksPath string) {
-	p, err := hook.Find(hooksPath, "shutdown")
+func shutdownHook(log logger.Logger, cfg AgentStartConfig) {
+	// search for a shutdown hook (on Windows that includes .bat and .ps1 files)
+	p, err := hook.Find(cfg.HooksPath, "shutdown")
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Error("Error finding shutdown hook: %v", err)
@@ -811,8 +815,29 @@ func shutdownHook(log logger.Logger, hooksPath string) {
 		log.Error("Failed to create shell object for shutdown hook: %v", err)
 		return
 	}
+
+	// pipe from hook output to logger
+	r, w := io.Pipe()
+	sh.Logger = &shell.WriterLogger{Writer: w, Ansi: !cfg.NoColor} // for Promptf
+	sh.Writer = w                                                  // for stdout+stderr
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scan := bufio.NewScanner(r) // log each line separately
+		log = log.WithFields(logger.StringField("hook", "shutdown"))
+		for scan.Scan() {
+			log.Info(scan.Text())
+		}
+	}()
+
+	// run shutdown hook
 	sh.Promptf("%s", p)
 	if err = sh.RunScript(p, nil); err != nil {
 		log.Error("Shutdown hook error: %v", err)
 	}
+	w.Close() // goroutine scans until pipe is closed
+
+	// wait for hook to finish and output to flush to logger
+	wg.Wait()
 }
