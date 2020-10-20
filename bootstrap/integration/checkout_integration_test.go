@@ -63,7 +63,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "-v", "--", "origin", "master"},
@@ -103,7 +103,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
-		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--config pack.threads=35",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 	}
@@ -116,7 +116,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "-v", "--", "origin", "master"},
@@ -187,7 +187,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "-v", "--mirror", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -271,7 +271,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "-v", "--mirror", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -324,7 +324,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "--depth=1", "--", "origin", "master"},
@@ -385,7 +385,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git.IgnoreUnexpectedInvocations()
 
 	if experiments.IsEnabled(`git-mirrors`) {
-		git.Expect("clone", "-v", "--mirror", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
+		git.Expect("clone", "--mirror", "-v", "--", "git@github.com:buildkite/agent.git", bintest.MatchAny()).
 			AndExitWith(0)
 	} else {
 		git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
@@ -438,7 +438,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git.IgnoreUnexpectedInvocations()
 
 	if experiments.IsEnabled(`git-mirrors`) {
-		git.Expect("clone", "-v", "--mirror", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
+		git.Expect("clone", "--mirror", "-v", "--", "https://github.com/buildkite/bash-example.git", bintest.MatchAny()).
 			AndExitWith(0)
 	} else {
 		git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
@@ -674,7 +674,7 @@ func TestGitMirrorEnv(t *testing.T) {
 	// But assert which ones are called
 	if experiments.IsEnabled(`git-mirrors`) {
 		git.ExpectAll([][]interface{}{
-			{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+			{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 			{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 			{"clean", "-fdq"},
 			{"fetch", "-v", "--", "origin", "master"},
