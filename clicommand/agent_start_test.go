@@ -19,25 +19,23 @@ func setupHooksPath(t *testing.T) (string, func()) {
 	return hooksPath, func() { os.RemoveAll(hooksPath) }
 }
 
-func writeShutdownHook(t *testing.T, dir string) string {
+func writeAgentShutdownHook(t *testing.T, dir string) string {
 	var filename, script string
 	if runtime.GOOS == "windows" {
-		filename = "shutdown.bat"
+		filename = "agent-shutdown.bat"
 		script = "@echo off\necho hello world"
 	} else {
-		filename = "shutdown"
+		filename = "agent-shutdown"
 		script = "echo hello world"
 	}
 	filepath := filepath.Join(dir, filename)
 	if err := ioutil.WriteFile(filepath, []byte(script), 0755); err != nil {
-		assert.FailNow(t, "failed to write shutdown hook: %v", err)
+		assert.FailNow(t, "failed to write agent-shutdown hook: %v", err)
 	}
 	return filepath
 }
 
-// Since the hook doesn't really return anything, we can't really test stuff but at
-// least make sure the code doesn't explode.
-func TestShutdownHook(t *testing.T) {
+func TestAgentShutdownHook(t *testing.T) {
 	cfg := func(hooksPath string) AgentStartConfig {
 		return AgentStartConfig{
 			HooksPath: hooksPath,
@@ -48,29 +46,29 @@ func TestShutdownHook(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		prompt = ">"
 	}
-	t.Run("with shutdown hook", func(t *testing.T) {
+	t.Run("with agent-shutdown hook", func(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
-		filepath := writeShutdownHook(t, hooksPath)
+		filepath := writeAgentShutdownHook(t, hooksPath)
 		log := logger.NewBuffer()
-		shutdownHook(log, cfg(hooksPath))
+		agentShutdownHook(log, cfg(hooksPath))
 
 		assert.Equal(t, []string{
 			"[info] " + prompt + " " + filepath, // prompt
 			"[info] hello world",                // output
 		}, log.Messages)
 	})
-	t.Run("with no shutdown hook", func(t *testing.T) {
+	t.Run("with no agent-shutdown hook", func(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
 		log := logger.NewBuffer()
-		shutdownHook(log, cfg(hooksPath))
+		agentShutdownHook(log, cfg(hooksPath))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 	t.Run("with bad hooks path", func(t *testing.T) {
 		log := logger.NewBuffer()
-		shutdownHook(log, cfg("zxczxczxc"))
+		agentShutdownHook(log, cfg("zxczxczxc"))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 }

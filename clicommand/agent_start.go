@@ -726,7 +726,7 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer shutdownHook(l, cfg)
+		defer agentShutdownHook(l, cfg)
 
 		// Handle process signals
 		signals := handlePoolSignals(l, pool)
@@ -798,21 +798,21 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 	return signals
 }
 
-// shutdownHook looks for a shutdown hook script in the hooks path and executes it
-// if it's available. This is very similar to the bootstrap hook code. Just run at
-// the agent level.
-func shutdownHook(log logger.Logger, cfg AgentStartConfig) {
-	// search for a shutdown hook (on Windows that includes .bat and .ps1 files)
-	p, err := hook.Find(cfg.HooksPath, "shutdown")
+// agentShutdownHook looks for an agent-shutdown hook script in the hooks path
+// and executes it if found. Output (stdout + stderr) is streamed into the main
+// agent logger. Exit status failure is logged but ignored.
+func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
+	// search for agent-shutdown hook (including .bat & .ps1 files on Windows)
+	p, err := hook.Find(cfg.HooksPath, "agent-shutdown")
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Error("Error finding shutdown hook: %v", err)
+			log.Error("Error finding agent-shutdown hook: %v", err)
 		}
 		return
 	}
 	sh, err := shell.New()
 	if err != nil {
-		log.Error("Failed to create shell object for shutdown hook: %v", err)
+		log.Error("creating shell for agent-shutdown hook: %v", err)
 		return
 	}
 
@@ -825,16 +825,16 @@ func shutdownHook(log logger.Logger, cfg AgentStartConfig) {
 	go func() {
 		defer wg.Done()
 		scan := bufio.NewScanner(r) // log each line separately
-		log = log.WithFields(logger.StringField("hook", "shutdown"))
+		log = log.WithFields(logger.StringField("hook", "agent-shutdown"))
 		for scan.Scan() {
 			log.Info(scan.Text())
 		}
 	}()
 
-	// run shutdown hook
+	// run agent-shutdown hook
 	sh.Promptf("%s", p)
 	if err = sh.RunScript(p, nil); err != nil {
-		log.Error("Shutdown hook error: %v", err)
+		log.Error("agent-shutdown hook: %v", err)
 	}
 	w.Close() // goroutine scans until pipe is closed
 
