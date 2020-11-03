@@ -28,6 +28,9 @@ type Plugin struct {
 	// Whether the plugin refers to a vendored path
 	Vendored bool
 
+	// Whether the plugin's configuration keys should keep their original case
+	PreserveConfigurationKeyCase bool
+
 	// Configuration for the plugin
 	Configuration map[string]interface{}
 }
@@ -205,15 +208,19 @@ var (
 )
 
 // formatEnvKey converts strings into an ENV key friendly format
-func formatEnvKey(key string) string {
-	key = strings.ToUpper(key)
+func formatEnvKey(key string, preserveCase bool) string {
+	if !preserveCase {
+		key = strings.ToUpper(key)
+	}
+
 	key = removeWhitespaceRegex.ReplaceAllString(key, " ")
 	key = toDashRegex.ReplaceAllString(key, "_")
 	key = removeDoubleUnderscore.ReplaceAllString(key, "_")
+
 	return key
 }
 
-func walkConfigValues(prefix string, v interface{}, into *[]string) error {
+func walkConfigValues(prefix string, v interface{}, into *[]string, preserveConfigurationKeyCase bool) error {
 	switch vv := v.(type) {
 
 	// handles all of our primitive types, golang provides a good string representation
@@ -224,7 +231,7 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 	// handle lists of things, which get a KEY_N prefix depending on the index
 	case []interface{}:
 		for i := range vv {
-			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into); err != nil {
+			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into, preserveConfigurationKeyCase); err != nil {
 				return err
 			}
 		}
@@ -233,7 +240,7 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 	// handle maps of things, which get a KEY_SUBKEY prefix depending on the map keys
 	case map[string]interface{}:
 		for k, vvv := range vv {
-			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k)), vvv, into); err != nil {
+			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k, preserveConfigurationKeyCase)), vvv, into, preserveConfigurationKeyCase); err != nil {
 				return err
 			}
 		}
@@ -245,12 +252,14 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 
 // Converts the plugin configuration values to environment variables
 func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
+	preserveConfigurationKeyCase := p.PreserveConfigurationKeyCase
+
 	envSlice := []string{}
-	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
+	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name(), false))
 
 	for k, v := range p.Configuration {
-		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
-		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
+		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k, preserveConfigurationKeyCase))
+		if err := walkConfigValues(configPrefix, v, &envSlice, preserveConfigurationKeyCase); err != nil {
 			return nil, err
 		}
 	}

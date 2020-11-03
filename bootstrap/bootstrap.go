@@ -531,6 +531,10 @@ func (b *Bootstrap) validatePluginCheckout(checkout *pluginCheckout) error {
 		return result
 	}
 
+	if checkout.Definition != nil {
+		checkout.Plugin.PreserveCase = checkout.Definition.PreserveCase;
+	}
+
 	b.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
 	return nil
 }
