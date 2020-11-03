@@ -21,6 +21,7 @@ var ErrDefinitionNotFound = errors.New("Definition file not found")
 type Definition struct {
 	Name          string                 `json:"name"`
 	Requirements  []string               `json:"requirements"`
+	PreserveCase  bool                   `json:"preserveCase"`
 	Configuration *jsonschema.RootSchema `json:"configuration"`
 }
 
