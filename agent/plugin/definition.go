@@ -19,10 +19,10 @@ var ErrDefinitionNotFound = errors.New("Definition file not found")
 
 // Definition defines the plugin.yml file that each plugin has
 type Definition struct {
-	Name          string                 `json:"name"`
-	Requirements  []string               `json:"requirements"`
-	PreserveCase  bool                   `json:"preserveCase"`
-	Configuration *jsonschema.RootSchema `json:"configuration"`
+	Name                         string                 `json:"name"`
+	Requirements                 []string               `json:"requirements"`
+	PreserveConfigurationKeyCase bool                   `json:"preserveConfigKeyCase"`
+	Configuration                *jsonschema.RootSchema `json:"configuration"`
 }
 
 // ParseDefinition parses either yaml or json bytes into a Definition

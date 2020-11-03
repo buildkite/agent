@@ -11,7 +11,7 @@ var testPluginDef = `
 name: test-plugin
 description: A test plugin
 author: https://github.com/buildkite
-preserveCase: true
+preserveConfigKeyCase: true
 requirements:
   - docker
   - docker-compose

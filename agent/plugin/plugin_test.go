@@ -388,7 +388,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 	}, envMap.ToSlice())
 }
 
-func pluginEnvFromConfig(t *testing.T, configJson string, preserveCase bool) (*env.Environment, error) {
+func pluginEnvFromConfig(t *testing.T, configJson string, preserveConfigurationKeyCase bool) (*env.Environment, error) {
 	var config map[string]interface{}
 
 	json.Unmarshal([]byte(configJson), &config)
@@ -400,7 +400,7 @@ func pluginEnvFromConfig(t *testing.T, configJson string, preserveCase bool) (*e
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(plugins))
 
-	plugins[0].PreserveCase = preserveCase;
+	plugins[0].PreserveConfigurationKeyCase = preserveConfigurationKeyCase;
 
 	return plugins[0].ConfigurationToEnvironment()
 }
