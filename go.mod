@@ -5,6 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.0.0-20170217213217-65216237311a
 	github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895
+	github.com/Masterminds/semver v1.5.0
 	github.com/aws/aws-sdk-go v1.32.10
 	github.com/buildkite/bintest/v3 v3.1.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251

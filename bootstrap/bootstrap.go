@@ -669,6 +669,20 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
 	}
 
+	if p.Constraint != nil {
+		// A version constraint has been specified - attempt to resolve it to set a proper Version
+		// This must occur before we access .Identifier() or .Label() of this plugin
+		repo, err := p.Repository()
+		if err != nil {
+			return nil, err
+		}
+		remoteTags, err := b.getRemoteTags(repo)
+		err = p.ResolveConstraint(remoteTags)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Get the identifer for the plugin
 	id, err := p.Identifier()
 	if err != nil {
@@ -1249,6 +1263,16 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	}
 
 	return nil
+}
+
+// getRemote tags returns an version sorted list of tags on a remote repository
+func (b *Bootstrap) getRemoteTags(repo string) (string, error) {
+	output, err := b.shell.RunAndCapture("git", "ls-remote", "--sort", "version:refname", "--tags", repo)
+	if err != nil {
+		b.shell.Errorf("Error running git ls-remote --sort version:refname --tags %q: %v", repo, err)
+		return "", err
+	}
+	return output, nil
 }
 
 func (b *Bootstrap) resolveCommit() {
