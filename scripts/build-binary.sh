@@ -21,6 +21,13 @@ if [[ "$GOARCH" = "armhf" ]]; then
   export GOARM="7"
 fi
 
+# TODO delete this conditional once we're using go 1.16
+if [[ "$GOARCH" = "arm64" && "$GOOS" = "darwin" ]]; then
+  GO_BINARY=gotip
+else
+  GO_BINARY=go
+fi
+
 echo -e "Building $NAME with:\n"
 
 echo "GOOS=$GOOS"
@@ -40,7 +47,7 @@ fi
 export CGO_ENABLED=0
 
 mkdir -p $BUILD_PATH
-go build -v -ldflags "-X github.com/buildkite/agent/v3/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
+$GO_BINARY build -v -ldflags "-X github.com/buildkite/agent/v3/agent.buildVersion=$BUILD_VERSION" -o $BUILD_PATH/$BINARY_FILENAME *.go
 
 chmod +x $BUILD_PATH/$BINARY_FILENAME
 
