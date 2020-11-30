@@ -32,7 +32,7 @@ Example:
 
    $ buildkite-agent artifact download --step "tests" --build xxx "pkg/*.tar.gz" .
 
-   You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)
+   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
 
    By default, only artifacts from the most recent job in a chain of retried jobs are downloaded.
    To include artifacts from previous retried jobs, use the "--include-retried-jobs" flag:
