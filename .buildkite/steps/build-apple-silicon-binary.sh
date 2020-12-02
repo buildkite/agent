@@ -8,7 +8,7 @@ rm -rf pkg
 
 go get golang.org/dl/gotip
 
-gotip download 272258
+gotip download
 
 gotip version
 
