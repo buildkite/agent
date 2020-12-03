@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
-* Compile a native executable for Apple Silicon [#1339](https://github.com/buildkite/agent/pull/1339) ([yob](https://github.com/yob))
+* Compile an experimental native executable for Apple Silicon [#1339](https://github.com/buildkite/agent/pull/1339) ([yob](https://github.com/yob))
+  * Using a pre-release version of go, we'll switch to compiling with go 1.16 once it's released
 
 ### Changed
 
