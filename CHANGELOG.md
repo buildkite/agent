@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.26.0](https://github.com/buildkite/agent/compare/v3.25.0...v3.26.0) (2020-12-03)
+
+### Added
+
+* Compile a native executable for Apple Silicon [#1339](https://github.com/buildkite/agent/pull/1339) ([yob](https://github.com/yob))
+
+### Changed
+
+* Install script: use the arm64 binary for aarch64 machines [#1340](https://github.com/buildkite/agent/pull/1340) ([gc-plp](https://github.com/gc-plp))
+* Build with golang 1.15 [#1334](https://github.com/buildkite/agent/pull/1334) ([yob](https://github.com/yob))
+* Bump alpine docker image from alpine 3.8 to 3.12 [#1333](https://github.com/buildkite/agent/pull/1333) ([yob](https://github.com/yob))
+* Upgrade docker ubuntu to 20.04 focal [#1312](https://github.com/buildkite/agent/pull/1312) ([sj26](https://github.com/sj26))
+
 ## [v3.25.0](https://github.com/buildkite/agent/compare/v3.24.0...v3.25.0) (2020-10-21)
 
 ### Added
