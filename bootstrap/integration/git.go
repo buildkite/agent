@@ -14,10 +14,6 @@ func createTestGitRespository() (*gitRepository, error) {
 		return nil, err
 	}
 
-	if err = repo.CreateBranch("master"); err != nil {
-		return nil, err
-	}
-
 	if err := ioutil.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test"), 0600); err != nil {
 		return nil, err
 	}
@@ -27,30 +23,6 @@ func createTestGitRespository() (*gitRepository, error) {
 	}
 
 	if err = repo.Commit("Initial Commit"); err != nil {
-		return nil, err
-	}
-
-	if err = repo.CreateBranch("update-test-txt"); err != nil {
-		return nil, err
-	}
-
-	if err := ioutil.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test pull request"), 0600); err != nil {
-		return nil, err
-	}
-
-	if err = repo.Add("test.txt"); err != nil {
-		return nil, err
-	}
-
-	if err = repo.Commit("PR Commit"); err != nil {
-		return nil, err
-	}
-
-	if _, err = repo.Execute("update-ref", "refs/pull/123/head", "HEAD"); err != nil {
-		return nil, err
-	}
-
-	if err = repo.CheckoutBranch("master"); err != nil {
 		return nil, err
 	}
 
@@ -107,20 +79,6 @@ func (gr *gitRepository) Add(path string) error {
 
 func (gr *gitRepository) Commit(message string, params ...interface{}) error {
 	if _, err := gr.Execute("commit", "-m", fmt.Sprintf(message, params...)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (gr *gitRepository) CheckoutBranch(branch string) error {
-	if _, err := gr.Execute("checkout", branch); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (gr *gitRepository) CreateBranch(branch string) error {
-	if _, err := gr.Execute("checkout", "-b", branch); err != nil {
 		return err
 	}
 	return nil
