@@ -61,10 +61,10 @@ func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
 
 	// But assert which ones are called
 	git.ExpectAll([][]interface{}{
-		{"clone", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "origin", "refs/pull/123/head"},
+		{"fetch", "--", "origin", "refs/pull/123/head"},
 		{"rev-parse", "FETCH_HEAD"},
 		{"checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
