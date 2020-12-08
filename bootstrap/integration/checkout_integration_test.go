@@ -38,6 +38,47 @@ func experimentWithUndo(name string) func() {
 	}
 }
 
+func TestCheckingOutGitHubPullRequestsWithGitMirrorsExperiment(t *testing.T) {
+	// t.Parallel() cannot be used with experiments.Enable()
+	defer experimentWithUndo("git-mirrors")()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// But assert which ones are called
+	git.ExpectAll([][]interface{}{
+		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clean", "-ffxdq"},
+		{"fetch", "--", "origin", "refs/pull/123/head"},
+		{"rev-parse", "FETCH_HEAD"},
+		{"checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-ffxdq"},
+		{"--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--"},
+	})
+
+	// Mock out the meta-data calls to the agent after checkout
+	agent := tester.MustMock(t, "buildkite-agent")
+	agent.Expect("meta-data", "exists", "buildkite:git:commit").AndExitWith(1)
+	agent.Expect("meta-data", "set", "buildkite:git:commit").WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+}
+
 func TestWithResolvingCommitExperiment(t *testing.T) {
 	// t.Parallel() cannot be used with experiments.Enable()
 	defer experimentWithUndo("resolve-commit-after-checkout")()
