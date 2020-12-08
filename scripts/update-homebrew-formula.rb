@@ -32,13 +32,13 @@ print $stdin.read.sub(%r{
   (
     #{release} \s+ do      .*?
       version \s+ ").*?("  .*?
-      if Hardware::CPU.arm\?
+      if \s+ Hardware::CPU.arm\? .*?
         url     \s+ ").*?("  .*?
         sha256  \s+ ").*?("  .*?
-      else
+      else .*?
         url     \s+ ").*?("  .*?
         sha256  \s+ ").*?("  .*?
-      end
-    end
+      end .*?
+    end .*?
   )
 }xm, "\\1#{version}\\2#{arm64_url}\\3#{arm64_sha256}\\4#{amd64_url}\\5#{amd64_sha256}\\6")
