@@ -53,7 +53,7 @@ BINARY_NAME_AMD64="buildkite-agent-darwin-amd64-${AGENT_VERSION}.tar.gz"
 DOWNLOAD_URL_AMD64="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME_AMD64"
 
 BINARY_NAME_ARM64="buildkite-agent-darwin-arm64-${AGENT_VERSION}.tar.gz"
-DOWNLOAD_URL_ARM64="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME_AMD64"
+DOWNLOAD_URL_ARM64="https://github.com/buildkite/agent/releases/download/v$GITHUB_RELEASE_VERSION/$BINARY_NAME_ARM64"
 
 ARTIFACTS_BUILD="$(buildkite-agent meta-data get "agent-artifacts-build")"
 
