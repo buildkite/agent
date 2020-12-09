@@ -2,20 +2,20 @@ FROM alpine:3.12
 
 RUN apk add --no-cache \
       bash \
-      git \
-      perl \
-      rsync \
-      openssh-client \
       curl \
-      docker \
+      docker-cli \
       docker-compose \
+      git \
       jq \
-      su-exec \
-      py-pip \
       libc6-compat \
+      perl \
+      py-pip \
+      rsync \
       run-parts \
+      su-exec \
       tini \
-      tzdata
+      tzdata \
+      openssh-client
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
