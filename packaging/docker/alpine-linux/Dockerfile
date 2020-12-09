@@ -8,14 +8,14 @@ RUN apk add --no-cache \
       git \
       jq \
       libc6-compat \
+      openssh-client \
       perl \
       py-pip \
       rsync \
       run-parts \
       su-exec \
       tini \
-      tzdata \
-      openssh-client
+      tzdata
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
