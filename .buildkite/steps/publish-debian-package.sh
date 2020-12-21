@@ -3,7 +3,7 @@ set -euo pipefail
 
 artifacts_build=$(buildkite-agent meta-data get "agent-artifacts-build" )
 
-# /root/,gnupg is a tmpfs volume, so we can safely store key data there and know
+# /root/.gnupg is a tmpfs volume, so we can safely store key data there and know
 # it won't be written to a disk
 secret_key_path="/root/.gnupg/gpg-secret.gpg"
 public_key_path="/root/.gnupg/gpg-public.gpg"
