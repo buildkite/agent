@@ -12,6 +12,19 @@ services:
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
 
+  # a temporary service for building a mac+arm binary. We can drop this once the above service
+  # is using 1.16+
+  agent1-16:
+    image: golang:1.16beta1-buster@sha256:d9a340f55e7bf46ba4b13f7d485c4e8e61b4439f40af4a98207c8b676b8478e7
+    volumes:
+      - ../:/work:cached
+    working_dir: /work
+    environment:
+      - BUILDKITE_BUILD_NUMBER
+      - BUILDKITE_JOB_ID
+      - "BUILDKITE_AGENT_TAGS=queue=default"
+      - "BUILDKITE_BUILD_PATH=/buildkite"
+
   ruby:
     image: ruby:2.6
     volumes:
