@@ -130,7 +130,7 @@ func DefaultShell() string {
 }
 
 func DefaultConfigFilePaths() (paths []string) {
-	// Toggle beetwen windows an *nix paths
+	// Toggle beetwen windows and *nix paths
 	if runtime.GOOS == "windows" {
 		paths = []string{
 			"C:\\buildkite-agent\\buildkite-agent.cfg",
@@ -140,9 +140,14 @@ func DefaultConfigFilePaths() (paths []string) {
 	} else {
 		paths = []string{
 			"$HOME/.buildkite-agent/buildkite-agent.cfg",
-			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
-			"/etc/buildkite-agent/buildkite-agent.cfg",
 		}
+
+		// For Apple Silicon Macs, prioritise the `/opt/homebrew` path over `/usr/local`
+		if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+			paths = append(paths, "/opt/homebrew/etc/buildkite-agent/buildkite-agent.cfg")
+		}
+
+		paths = append(paths, "/usr/local/etc/buildkite-agent/buildkite-agent.cfg", "/etc/buildkite-agent/buildkite-agent.cfg")
 	}
 
 	// Also check to see if there's a buildkite-agent.cfg in the folder
