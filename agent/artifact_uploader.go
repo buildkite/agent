@@ -110,7 +110,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 
 		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
 		// then we will get the ErrNotExist that is handled below
-		files, err := zglob.Glob(globPath)
+		files, err := zglob.GlobFollowSymlinks(globPath)
 		if err == os.ErrNotExist {
 			a.logger.Info("File not found: %s", globPath)
 			continue

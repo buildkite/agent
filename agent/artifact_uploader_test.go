@@ -109,14 +109,14 @@ func TestCollect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 4, len(artifactsWithoutExperimentEnabled))
+	assert.Equal(t, 6, len(artifactsWithoutExperimentEnabled))
 
 	experiments.Enable(`normalised-upload-paths`)
 	artifactsWithExperimentEnabled, err := uploader.Collect()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 4, len(artifactsWithExperimentEnabled))
+	assert.Equal(t, 6, len(artifactsWithExperimentEnabled))
 
 	// These test cases use filepath.Join, which uses per-OS path separators;
 	// this is the behaviour without normalised-upload-paths.
@@ -201,8 +201,8 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(artifacts) != 3 {
-		t.Fatalf("Expected to match 3 artifacts, found %d", len(artifacts))
+	if len(artifacts) != 5 {
+		t.Fatalf("Expected to match 5 artifacts, found %d", len(artifacts))
 	}
 }
 
@@ -234,6 +234,8 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "terminator2.jpg"),
 		},
 		paths,
 	)
