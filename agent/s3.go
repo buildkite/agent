@@ -31,6 +31,8 @@ func (e *credentialsProvider) Retrieve() (creds credentials.Value, err error) {
 		creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_KEY")
 	}
 
+	creds.SessionToken = os.Getenv("BUILDKITE_S3_SESSION_TOKEN")
+
 	if creds.AccessKeyID == "" {
 		err = errors.New("BUILDKITE_S3_ACCESS_KEY_ID or BUILDKITE_S3_ACCESS_KEY not found in environment")
 	}

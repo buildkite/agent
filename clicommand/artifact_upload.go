@@ -37,6 +37,10 @@ Example:
    $ export BUILDKITE_S3_ACL=private # default is public-read
    $ buildkite-agent artifact upload "log/**/*.log" s3://name-of-your-s3-bucket/$BUILDKITE_JOB_ID
 
+   You can use Amazon IAM assumed roles by specifying the session token:
+
+   $ export BUILDKITE_S3_SESSION_TOKEN=zzz
+
    Or upload directly to Google Cloud Storage:
 
    $ export BUILDKITE_GS_ACL=private
