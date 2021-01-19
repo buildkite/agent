@@ -224,6 +224,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := b.shell.Env.Get("BUILDKITE_BUILD_NUMBER")
 	buildURL, _ := b.shell.Env.Get("BUILDKITE_BUILD_URL")
+	jobURL := fmt.Sprintf("%s#%s", buildURL, b.JobID)
 	source, _ := b.shell.Env.Get("BUILDKITE_SOURCE")
 	label, hasLabel := b.shell.Env.Get("BUILDKITE_LABEL")
 	if !hasLabel {
@@ -267,6 +268,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),
 			tracer.WithGlobalTag("buildkite.branch", b.Branch),
 			tracer.WithGlobalTag("buildkite.job_id", b.JobID),
+			tracer.WithGlobalTag("buildkite.job_url", jobURL),
 			tracer.WithGlobalTag("buildkite.build_id", buildID),
 			tracer.WithGlobalTag("buildkite.build_number", buildNumber),
 			tracer.WithGlobalTag("buildkite.build_url", buildURL),
