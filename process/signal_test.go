@@ -1,9 +1,9 @@
 package process_test
 
 import (
+	"runtime"
 	"syscall"
 	"testing"
-	"runtime"
 
 	"github.com/buildkite/agent/v3/process"
 	"github.com/stretchr/testify/assert"

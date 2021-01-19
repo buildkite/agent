@@ -1,13 +1,16 @@
 package clicommand
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
@@ -129,7 +132,7 @@ func DefaultShell() string {
 }
 
 func DefaultConfigFilePaths() (paths []string) {
-	// Toggle beetwen windows an *nix paths
+	// Toggle beetwen windows and *nix paths
 	if runtime.GOOS == "windows" {
 		paths = []string{
 			"C:\\buildkite-agent\\buildkite-agent.cfg",
@@ -139,9 +142,14 @@ func DefaultConfigFilePaths() (paths []string) {
 	} else {
 		paths = []string{
 			"$HOME/.buildkite-agent/buildkite-agent.cfg",
-			"/usr/local/etc/buildkite-agent/buildkite-agent.cfg",
-			"/etc/buildkite-agent/buildkite-agent.cfg",
 		}
+
+		// For Apple Silicon Macs, prioritise the `/opt/homebrew` path over `/usr/local`
+		if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+			paths = append(paths, "/opt/homebrew/etc/buildkite-agent/buildkite-agent.cfg")
+		}
+
+		paths = append(paths, "/usr/local/etc/buildkite-agent/buildkite-agent.cfg", "/etc/buildkite-agent/buildkite-agent.cfg")
 	}
 
 	// Also check to see if there's a buildkite-agent.cfg in the folder
@@ -292,7 +300,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "git-clone-mirror-flags",
-			Value:  "-v --mirror",
+			Value:  "-v",
 			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
 			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		},
@@ -745,7 +753,7 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer func() { shutdownHook(l, cfg.HooksPath) }()
+		defer agentShutdownHook(l, cfg)
 
 		// Handle process signals
 		signals := handlePoolSignals(l, pool)
@@ -817,24 +825,46 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 	return signals
 }
 
-// shutdownHook looks for a shutdown hook script in the hooks path and executes it
-// if it's available. This is very similar to the bootstrap hook code. Just run at
-// the agent level.
-func shutdownHook(log logger.Logger, hooksPath string) {
-	p, err := hook.Find(hooksPath, "shutdown")
+// agentShutdownHook looks for an agent-shutdown hook script in the hooks path
+// and executes it if found. Output (stdout + stderr) is streamed into the main
+// agent logger. Exit status failure is logged but ignored.
+func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
+	// search for agent-shutdown hook (including .bat & .ps1 files on Windows)
+	p, err := hook.Find(cfg.HooksPath, "agent-shutdown")
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Error("Error finding shutdown hook: %v", err)
+			log.Error("Error finding agent-shutdown hook: %v", err)
 		}
 		return
 	}
 	sh, err := shell.New()
 	if err != nil {
-		log.Error("Failed to create shell object for shutdown hook: %v", err)
+		log.Error("creating shell for agent-shutdown hook: %v", err)
 		return
 	}
+
+	// pipe from hook output to logger
+	r, w := io.Pipe()
+	sh.Logger = &shell.WriterLogger{Writer: w, Ansi: !cfg.NoColor} // for Promptf
+	sh.Writer = w                                                  // for stdout+stderr
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scan := bufio.NewScanner(r) // log each line separately
+		log = log.WithFields(logger.StringField("hook", "agent-shutdown"))
+		for scan.Scan() {
+			log.Info(scan.Text())
+		}
+	}()
+
+	// run agent-shutdown hook
 	sh.Promptf("%s", p)
 	if err = sh.RunScript(context.Background(), p, nil); err != nil {
-		log.Error("Shutdown hook error: %v", err)
+		log.Error("agent-shutdown hook: %v", err)
 	}
+	w.Close() // goroutine scans until pipe is closed
+
+	// wait for hook to finish and output to flush to logger
+	wg.Wait()
 }

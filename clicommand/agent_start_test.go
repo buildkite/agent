@@ -11,54 +11,64 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupHooksPath() (string, func(), error) {
+func setupHooksPath(t *testing.T) (string, func()) {
 	hooksPath, err := ioutil.TempDir("", "")
 	if err != nil {
-		return "", nil, err
+		assert.FailNow(t, "failed to create temp file: %v", err)
 	}
-	return hooksPath, func() { os.RemoveAll(hooksPath) }, nil
+	return hooksPath, func() { os.RemoveAll(hooksPath) }
 }
 
-// Since the hook doesn't really return anything, we can't really test stuff but at
-// least make sure the code doesn't explode.
-func TestShutdownHook(t *testing.T) {
+func writeAgentShutdownHook(t *testing.T, dir string) string {
+	var filename, script string
+	if runtime.GOOS == "windows" {
+		filename = "agent-shutdown.bat"
+		script = "@echo off\necho hello world"
+	} else {
+		filename = "agent-shutdown"
+		script = "echo hello world"
+	}
+	filepath := filepath.Join(dir, filename)
+	if err := ioutil.WriteFile(filepath, []byte(script), 0755); err != nil {
+		assert.FailNow(t, "failed to write agent-shutdown hook: %v", err)
+	}
+	return filepath
+}
 
-	t.Run("with shutdown hook", func(t *testing.T) {
-		hooksPath, closer, err := setupHooksPath()
-		if err != nil {
-			assert.FailNow(t, "failed to create temp file: %v", err)
+func TestAgentShutdownHook(t *testing.T) {
+	cfg := func(hooksPath string) AgentStartConfig {
+		return AgentStartConfig{
+			HooksPath: hooksPath,
+			NoColor:   true,
 		}
+	}
+	prompt := "$"
+	if runtime.GOOS == "windows" {
+		prompt = ">"
+	}
+	t.Run("with agent-shutdown hook", func(t *testing.T) {
+		hooksPath, closer := setupHooksPath(t)
+		defer closer()
+		filepath := writeAgentShutdownHook(t, hooksPath)
+		log := logger.NewBuffer()
+		agentShutdownHook(log, cfg(hooksPath))
+
+		assert.Equal(t, []string{
+			"[info] " + prompt + " " + filepath, // prompt
+			"[info] hello world",                // output
+		}, log.Messages)
+	})
+	t.Run("with no agent-shutdown hook", func(t *testing.T) {
+		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		filename := "shutdown"
-		if runtime.GOOS == "windows" {
-			filename = "shutdown.bat"
-		}
-		err = ioutil.WriteFile(filepath.Join(hooksPath, filename), []byte("echo hello"), 0755)
-		if err != nil {
-			assert.FailNow(t, "failed to write shutdown hook: %v", err)
-		}
-
 		log := logger.NewBuffer()
-		shutdownHook(log, hooksPath)
+		agentShutdownHook(log, cfg(hooksPath))
 		assert.Equal(t, []string{}, log.Messages)
 	})
-
-	t.Run("with no shutdown hook", func(t *testing.T) {
-		hooksPath, closer, err := setupHooksPath()
-		if err != nil {
-			assert.FailNow(t, "failed to create temp file: %v", err)
-		}
-		defer closer()
-
-		log := logger.NewBuffer()
-		shutdownHook(log, hooksPath)
-		assert.Equal(t, []string{}, log.Messages)
-	})
-
 	t.Run("with bad hooks path", func(t *testing.T) {
 		log := logger.NewBuffer()
-		shutdownHook(log, "zxczxczxc")
+		agentShutdownHook(log, cfg("zxczxczxc"))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 }

@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Support for job tracing via [Datadog APM](https://www.datadoghq.com/product/apm/). To enable, either set the `tracing-backend` config or the `BUILDKITE_TRACING_BACKEND` env var to `datadog`. By default the agent will attempt to send traces to the default agent address and APM port (`127.0.0.1:8126`), but this can be configured with the `DD_AGENT_HOST` and `DD_AGENT_APM_PORT` env vars.
 
+## [v3.26.0](https://github.com/buildkite/agent/compare/v3.25.0...v3.26.0) (2020-12-03)
+
+### Added
+
+* Compile an experimental native executable for Apple Silicon [#1339](https://github.com/buildkite/agent/pull/1339) ([yob](https://github.com/yob))
+  * Using a pre-release version of go, we'll switch to compiling with go 1.16 once it's released
+
+### Changed
+
+* Install script: use the arm64 binary for aarch64 machines [#1340](https://github.com/buildkite/agent/pull/1340) ([gc-plp](https://github.com/gc-plp))
+* Build with golang 1.15 [#1334](https://github.com/buildkite/agent/pull/1334) ([yob](https://github.com/yob))
+* Bump alpine docker image from alpine 3.8 to 3.12 [#1333](https://github.com/buildkite/agent/pull/1333) ([yob](https://github.com/yob))
+* Upgrade docker ubuntu to 20.04 focal [#1312](https://github.com/buildkite/agent/pull/1312) ([sj26](https://github.com/sj26))
+
+## [v3.25.0](https://github.com/buildkite/agent/compare/v3.24.0...v3.25.0) (2020-10-21)
+
+### Added
+* Add --mirror flag by default for mirror clones [#1328](https://github.com/buildkite/agent/pull/1328) ([chrislloyd](https://github.com/chrislloyd))
+* Add an agent-wide shutdown hook [#1275](https://github.com/buildkite/agent/pull/1275) ([goodspark](https://github.com/goodspark)) [#1322](https://github.com/buildkite/agent/pull/1322) ([pda](https://github.com/pda))
+
+### Fixed
+* Improve windows telemetry so that we report the version accurately in-platform [#1330](https://github.com/buildkite/agent/pull/1330) ([yob](https://github.com/yob)) [#1316](https://github.com/buildkite/agent/pull/1316) ([yob](https://github.com/yob))
+* Ensure no orphaned processes when Windows jobs complete [#1329](https://github.com/buildkite/agent/pull/1329) ([yob](https://github.com/yob))
+* Log error messages when canceling a running job fails [#1317](https://github.com/buildkite/agent/pull/1317) ([yob](https://github.com/yob))
+* gitCheckout() validates branch, plus unit tests [#1315](https://github.com/buildkite/agent/pull/1315) ([pda](https://github.com/pda))
+* gitFetch() terminates options with -- before repo/refspecs [#1314](https://github.com/buildkite/agent/pull/1314) ([pda](https://github.com/pda))
+
 ## [v3.24.0](https://github.com/buildkite/agent/compare/v3.23.1...v3.24.0) (2020-09-29)
 
 ### Fixed

@@ -82,6 +82,8 @@ type Process struct {
 	command       *exec.Cmd
 	mu            sync.Mutex
 	started, done chan struct{}
+
+	winJobHandle uintptr
 }
 
 // New returns a new instance of Process
@@ -202,7 +204,9 @@ func (p *Process) Run() error {
 		if err != nil {
 			return err
 		}
-
+		if err := p.postStart(); err != nil {
+			p.logger.Error("[Process] postStart failed: %v", err)
+		}
 		p.pid = p.command.Process.Pid
 
 		// Signal waiting consumers in Started() by closing the started channel

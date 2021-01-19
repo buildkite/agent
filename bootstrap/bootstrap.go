@@ -1162,7 +1162,8 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	// If we don't have a mirror, we need to clone it
 	if !utils.FileExists(mirrorDir) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		if err := gitClone(b.shell, b.GitCloneMirrorFlags, b.Repository, mirrorDir); err != nil {
+		flags := "--mirror " + b.GitCloneMirrorFlags
+		if err := gitClone(b.shell, flags, b.Repository, mirrorDir); err != nil {
 			return "", err
 		}
 
@@ -1202,9 +1203,18 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 		return "", err
 	}
 
-	// Fetch the build branch from the upstream repository into the mirror.
-	if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
-		return "", err
+	if b.PullRequest != "false" && strings.Contains(b.PipelineProvider, "github") {
+		b.shell.Commentf("Fetch and mirror pull request head from GitHub")
+		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
+		// Fetch the PR head from the upstream repository into the mirror.
+		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+			return "", err
+		}
+	} else {
+		// Fetch the build branch from the upstream repository into the mirror.
+		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
+			return "", err
+		}
 	}
 
 	return mirrorDir, nil

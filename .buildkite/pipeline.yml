@@ -116,6 +116,16 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
+  - name: ":mac: arm64"
+    command: ".buildkite/steps/build-binary.sh darwin arm64"
+    key: build-binary-darwin-arm64
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent1-16
+
   - name: ":freebsd: amd64"
     command: ".buildkite/steps/build-binary.sh freebsd amd64"
     key: build-binary-freebsd-amd64
@@ -246,6 +256,7 @@ steps:
       - build-binary-linux-arm64
       - build-binary-linux-ppc64le
       - build-binary-darwin-amd64
+      - build-binary-darwin-arm64
       - build-binary-freebsd-amd64
       - build-binary-freebsd-386
       - build-binary-openbsd-amd64

@@ -19,6 +19,11 @@ func (p *Process) setupProcessGroup() {
 	}
 }
 
+func (p *Process) postStart() error {
+	// a no-op on non-windows
+	return nil
+}
+
 func (p *Process) terminateProcessGroup() error {
 	p.logger.Debug("[Process] Sending signal SIGKILL to PGID: %d", p.pid)
 	return syscall.Kill(-p.pid, syscall.SIGKILL)

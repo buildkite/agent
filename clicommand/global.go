@@ -95,7 +95,12 @@ func CreateLogger(cfg interface{}) logger.Logger {
 
 		// Show agent fields as a prefix
 		printer.IsPrefixFn = func(field logger.Field) bool {
-			return field.Key() == `agent`
+			switch field.Key() {
+			case "agent", "hook":
+				return true
+			default:
+				return false
+			}
 		}
 
 		// Turn off color if a NoColor option is present
