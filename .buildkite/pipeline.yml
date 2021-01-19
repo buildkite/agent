@@ -106,6 +106,16 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
+  - name: ":linux: ppc64be"
+    command: ".buildkite/steps/build-binary.sh linux ppc64be"
+    key: build-binary-linux-ppc64be
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
   - name: ":mac: amd64"
     command: ".buildkite/steps/build-binary.sh darwin amd64"
     key: build-binary-darwin-amd64
