@@ -9,7 +9,14 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+
+	"github.com/Masterminds/semver"
 )
+
+// https://github.com/Masterminds/semver/blob/0ce76fe59f74ed481275b478858c859ba90eb668/version.go#L41
+const semVerRegex string = `v?([0-9]+)(\.[0-9]+)?(\.[0-9]+)?` +
+	`(-([0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*))?` +
+	`(\+([0-9A-Za-z\-]+(\.[0-9A-Za-z\-]+)*))?`
 
 type Plugin struct {
 	// Where the plugin can be found (can either be a file system path, or
@@ -18,6 +25,9 @@ type Plugin struct {
 
 	// The version of the plugin that should be running
 	Version string
+
+	// Constraint describes the plugin semver version constraint, it is mutually exclusive with `Version`
+	Constraint *semver.Constraints
 
 	// The clone method
 	Scheme string
@@ -48,6 +58,17 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 	plugin.Scheme = u.Scheme
 	plugin.Location = u.Host + u.Path
 	plugin.Version = u.Fragment
+
+	// If a constraint has been specified
+	if constraint := u.Query().Get("constraint"); constraint != "" {
+		plugin.Constraint, err = semver.NewConstraint(constraint)
+		if err != nil {
+			return nil, fmt.Errorf("Cannot parse plugin version constraint %q: %s", constraint, err)
+		}
+		if plugin.Version != "" {
+			return nil, fmt.Errorf("Cannot specify both version and constraint")
+		}
+	}
 	plugin.Vendored = vendoredRegex.MatchString(plugin.Location)
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
@@ -202,6 +223,7 @@ var (
 	toDashRegex            = regexp.MustCompile(`-|\s+`)
 	removeWhitespaceRegex  = regexp.MustCompile(`\s+`)
 	removeDoubleUnderscore = regexp.MustCompile(`_+`)
+	versionRegex           = regexp.MustCompile("refs/tags/(?P<semver>" + semVerRegex + ")")
 )
 
 // formatEnvKey converts strings into an ENV key friendly format
@@ -303,4 +325,59 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 	}
 
 	return s, nil
+}
+
+// ResolveConstraint processes `ls-remote --tags` output and sets the plugin Version to the highest matching semver based on the constraint
+// The ls-remote operation is intentionally not in this package to avoid importing the shell package into this context
+func (p *Plugin) ResolveConstraint(remoteTags string) error {
+	if p.Constraint == nil {
+		return fmt.Errorf("Plugin has no constraint specified")
+	}
+
+	versions, err := findSemverTags(remoteTags)
+	if err != nil {
+		return err
+	}
+
+	// Reverse sort them (newest first)
+	sort.Sort(sort.Reverse(semver.Collection(versions)))
+
+	for _, tag := range versions {
+		if p.Constraint.Check(tag) {
+			// Set the plugin version to this git tag
+			p.Version = tag.Original()
+			return nil
+		}
+	}
+	return fmt.Errorf("No version found matching constraint")
+}
+
+// findSemverTags inspects a `ls-remote --tags` output and extracts all refs that are a valid semver
+func findSemverTags(remoteTags string) ([]*semver.Version, error) {
+	// Find index position of the named `semver` submatch in our regular expression
+	semverSubexpressionIndex := 0
+	for i, name := range versionRegex.SubexpNames() {
+		if name == "semver" {
+			semverSubexpressionIndex = i
+			break
+		}
+	}
+
+	matches := versionRegex.FindAllStringSubmatch(remoteTags, -1)
+	vs := make([]*semver.Version, 0) // Since some matches might be invalid we cannot predict the length
+	for _, match := range matches {
+		// Only extract our specific `semver` named submatch
+		if len(match) < semverSubexpressionIndex+1 {
+			// Not enough matches found in this capture group - ignore it and move onto the next
+			continue
+		}
+		v, err := semver.NewVersion(match[semverSubexpressionIndex])
+		if err == nil {
+			// We ignore errors here - there might be tags that are not a valid semver at this point
+			// though unlikely, because of the regex match we do
+			vs = append(vs, v)
+		}
+	}
+
+	return vs, nil
 }

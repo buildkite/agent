@@ -5,10 +5,70 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Masterminds/semver"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/stretchr/testify/assert"
 )
 
+func TestFindSemverTags(t *testing.T) {
+	lsRemoteOut := `48187550589c805195e8c3f15d4839783e5e869e	refs/tags/v1.0
+1e90ce3fbd7d8dca0c5009e20b9598cb42872306	refs/tags/v1.1
+c41f62fba4e66c930c258cf5ee163c311083d8a3	refs/tags/v1.2.0
+1ee4e5c7b0de9670d0b10265e116ab4b809fda36	refs/tags/v1.2.1
+4e2a1593653460071e1f276dd3a8f030d1b469c3	refs/tags/v1.3.0
+2cef046fd56c76ad01580018866877a8a0ad0827	refs/tags/v1.3.1`
+
+	expected := []*semver.Version{
+		semver.MustParse("v1.0"),
+		semver.MustParse("v1.1"),
+		semver.MustParse("v1.2.0"),
+		semver.MustParse("v1.2.1"),
+		semver.MustParse("v1.3.0"),
+		semver.MustParse("v1.3.1"),
+	}
+	versions, err := findSemverTags(lsRemoteOut)
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, expected, versions)
+}
+
+func TestResolveConstraint(t *testing.T) {
+	t.Parallel()
+	lsRemoteOut := `48187550589c805195e8c3f15d4839783e5e869e	refs/tags/v1.0
+	1e90ce3fbd7d8dca0c5009e20b9598cb42872306	refs/tags/v1.1
+	c41f62fba4e66c930c258cf5ee163c311083d8a3	refs/tags/v1.2.0
+	1ee4e5c7b0de9670d0b10265e116ab4b809fda36	refs/tags/v1.2.1
+	4e2a1593653460071e1f276dd3a8f030d1b469c3	refs/tags/v1.3.0
+	2cef046fd56c76ad01580018866877a8a0ad0827	refs/tags/v1.3.1`
+
+	t.Run("version-match", func(tt *testing.T) {
+		tt.Parallel()
+		jsonText := `[{"https://github.com/buildkite-plugins/docker-compose?constraint=~1.2.x":{"container":"app"}}]`
+
+		plugins, err := CreateFromJSON(jsonText)
+		if err != nil {
+			t.Error(err)
+		}
+		err = plugins[0].ResolveConstraint(lsRemoteOut)
+		//assert.NoError(tt, err)
+		assert.Equal(t, "v1.2.1", plugins[0].Version, "correct version is matched")
+	})
+
+	t.Run("missing-constraint", func(tt *testing.T) {
+		tt.Parallel()
+		jsonText := `[{"https://github.com/buildkite-plugins/docker-compose":{"container":"app"}}]`
+
+		plugins, err := CreateFromJSON(jsonText)
+		if err != nil {
+			t.Error(err)
+		}
+		err = plugins[0].ResolveConstraint(lsRemoteOut)
+		assert.Error(tt, err)
+	})
+
+}
 func TestCreateFromJSON(t *testing.T) {
 	t.Parallel()
 
@@ -113,6 +173,14 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 		{
 			`["github.com/buildkite-plugins/ping#master#lololo"]`,
 			"Too many #'s in \"github.com/buildkite-plugins/ping#master#lololo\"",
+		},
+		{
+			`[{"https://github.com/buildkite-plugins/docker-compose?constraint=^2.x#a34fa34":{"container":"app"}}]`,
+			"Cannot specify both version and constraint",
+		},
+		{
+			`[{"https://github.com/buildkite-plugins/docker-compose?constraint=something bad":{"container":"app"}}]`,
+			"improper constraint",
 		},
 	} {
 		tc := tc

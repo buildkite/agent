@@ -3,6 +3,8 @@ cloud.google.com/go v0.0.0-20170217213217-65216237311a/go.mod h1:aQUYkXzVsufM+Dw
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895 h1:dmc/C8bpE5VkQn65PNbbyACDC8xw8Hpp/NEurdPmQDQ=
 github.com/DataDog/datadog-go v0.0.0-20180822151419-281ae9f2d895/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
+github.com/Masterminds/semver v1.5.0 h1:H65muMkzWKEuNDnfl9d70GUjFniHKHRbFPGBuZ3QEww=
+github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/aws/aws-sdk-go v1.32.10 h1:cEJTxGcBGlsM2tN36MZQKhlK93O9HrnaRs+lq2f0zN8=
 github.com/aws/aws-sdk-go v1.32.10/go.mod h1:5zCpMtNQVjRREroY7sYe8lOMRSxkhG6MZveU8YkpAk0=
 github.com/buildkite/bintest v0.0.0-20190227031731-820c89d3b3a0 h1:UYcAVM2IdwHl3wTyyB2HfZc2MEVQrUqw/OkbwHlsy30=
