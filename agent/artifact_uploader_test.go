@@ -109,14 +109,14 @@ func TestCollect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 6, len(artifactsWithoutExperimentEnabled))
+	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
 	experiments.Enable(`normalised-upload-paths`)
 	artifactsWithExperimentEnabled, err := uploader.Collect()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, 6, len(artifactsWithExperimentEnabled))
+	assert.Equal(t, 5, len(artifactsWithExperimentEnabled))
 
 	// These test cases use filepath.Join, which uses per-OS path separators;
 	// this is the behaviour without normalised-upload-paths.
@@ -201,6 +201,33 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if len(artifacts) != 4 {
+		t.Fatalf("Expected to match 4 artifacts, found %d", len(artifacts))
+	}
+
+}
+
+func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("dontmatchanything", "*"),
+			filepath.Join("dontmatchanything.zip"),
+			filepath.Join("test", "fixtures", "artifacts", "links", "folder-link", "dontmatchanything", "**", "*.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+		}, ";"),
+		FollowSymlinks: true,
+	})
+
+	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if len(artifacts) != 5 {
 		t.Fatalf("Expected to match 5 artifacts, found %d", len(artifacts))
 	}
@@ -217,6 +244,41 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
 		}, ";"),
+	})
+
+	artifacts, err := uploader.Collect()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paths := []string{}
+	for _, a := range artifacts {
+		paths = append(paths, a.Path)
+	}
+	assert.ElementsMatch(
+		t,
+		[]string{
+			filepath.Join("test", "fixtures", "artifacts", "Mr Freeze.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "this is a folder with a space", "The Terminator.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "links", "terminator", "terminator2.jpg"),
+		},
+		paths,
+	)
+}
+
+func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
+	wd, _ := os.Getwd()
+	root := filepath.Join(wd, "..")
+	os.Chdir(root)
+	defer os.Chdir(wd)
+
+	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
+		Paths: strings.Join([]string{
+			filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
+			filepath.Join("test", "fixtures", "artifacts", "folder", "Commando.jpg"), // dupe
+		}, ";"),
+		FollowSymlinks: true,
 	})
 
 	artifacts, err := uploader.Collect()

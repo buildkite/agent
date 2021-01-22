@@ -49,6 +49,12 @@ Example:
    $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
    $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID`
 
+var FollowSymlinksFlag = cli.BoolFlag{
+	Name:   "follow-symlinks",
+	Usage:  "Follow symbolic links in paths",
+	EnvVar: "BUILDKITE_AGENT_ARTIFACT_UPLOAD_FOLLOW_SYMLINKS",
+}
+
 type ArtifactUploadConfig struct {
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
 	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
@@ -56,16 +62,19 @@ type ArtifactUploadConfig struct {
 	ContentType string `cli:"content-type"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
 	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
+
+	// Uploader flags
+	FollowSymlinks bool `cli:"follow-symlinks"`
 }
 
 var ArtifactUploadCommand = cli.Command{
@@ -97,6 +106,7 @@ var ArtifactUploadCommand = cli.Command{
 		DebugFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		FollowSymlinksFlag,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -118,11 +128,12 @@ var ArtifactUploadCommand = cli.Command{
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
-			JobID:       cfg.Job,
-			Paths:       cfg.UploadPaths,
-			Destination: cfg.Destination,
-			ContentType: cfg.ContentType,
-			DebugHTTP:   cfg.DebugHTTP,
+			JobID:          cfg.Job,
+			Paths:          cfg.UploadPaths,
+			Destination:    cfg.Destination,
+			ContentType:    cfg.ContentType,
+			DebugHTTP:      cfg.DebugHTTP,
+			FollowSymlinks: cfg.FollowSymlinks,
 		})
 
 		// Upload the artifacts
