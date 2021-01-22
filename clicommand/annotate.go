@@ -52,6 +52,7 @@ type AnnotateConfig struct {
 	Style   string `cli:"style"`
 	Context string `cli:"context"`
 	Append  bool   `cli:"append"`
+	Remove  bool   `cli:"remove"`
 	Job     string `cli:"job" validate:"required"`
 
 	// Global flags
@@ -86,6 +87,11 @@ var AnnotateCommand = cli.Command{
 			Name:   "append",
 			Usage:  "Append to the body of an existing annotation",
 			EnvVar: "BUILDKITE_ANNOTATION_APPEND",
+		},
+		cli.BoolFlag{
+			Name:   "remove",
+			Usage:  "Remove an existing annotation",
+			EnvVar: "BUILDKITE_ANNOTATION_REMOVE",
 		},
 		cli.StringFlag{
 			Name:   "job",
@@ -147,6 +153,7 @@ var AnnotateCommand = cli.Command{
 			Style:   cfg.Style,
 			Context: cfg.Context,
 			Append:  cfg.Append,
+			Remove:  cfg.Remove,
 		}
 
 		// Retry the annotation a few times before giving up

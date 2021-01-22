@@ -8,6 +8,7 @@ type Annotation struct {
 	Context string `json:"context,omitempty"`
 	Style   string `json:"style,omitempty"`
 	Append  bool   `json:"append,omitempty"`
+	Remove  bool   `json:"remove,omitempty"`
 }
 
 // Annotate a build in the Buildkite UI
