@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,7 @@ import (
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var script []string
 
 	if runtime.GOOS != "windows" {
@@ -39,7 +41,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 
 	sh := shell.NewTestShell(t)
 
-	if err := sh.RunScript(wrapper.Path(), nil); err != nil {
+	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -62,6 +64,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	ctx := context.Background()
 	var script []string
 
 	if runtime.GOOS != "windows" {
@@ -88,7 +91,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := sh.RunScript(wrapper.Path(), nil); err != nil {
+	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
 		t.Fatal(err)
 	}
 

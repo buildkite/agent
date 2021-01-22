@@ -525,6 +525,10 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 	env["BUILDKITE_PLUGIN_VALIDATION"] = fmt.Sprintf("%t", enablePluginValidation)
 
+	if r.conf.AgentConfiguration.TracingBackend != "" {
+		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
+	}
+
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.logger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
 		r.logger.Warn("failed to truncate %s: %v", BuildkiteMessageName, err)

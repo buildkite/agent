@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/interpolate"
 
@@ -61,6 +62,24 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 		return &PipelineParserResult{pipeline: pipeline}, nil
 	}
 
+	// Propagate distributed tracing context to the new pipelines if available
+	if tracing, has := p.Env.Get(tracetools.EnvVarTraceContextKey); has {
+		var envVars yaml.MapSlice
+		if envMap, has := mapSliceItem("env", pipeline); has {
+			envVars = envMap.Value.(yaml.MapSlice)
+		} else {
+			envVars = yaml.MapSlice{}
+		}
+		envVars = append(envVars, yaml.MapItem{
+			Key:   tracetools.EnvVarTraceContextKey,
+			Value: tracing,
+		})
+		// Since the actual env vars MapSlice is nested under the top level MapSlice,
+		// updating the env vars doesn't actually update the pipeline. So we have to
+		// replace it.
+		pipeline = upsertSliceItem("env", pipeline, envVars)
+	}
+
 	// Preprocess any env that are defined in the top level block and place them into env for
 	// later interpolation into env blocks
 	if item, ok := mapSliceItem("env", pipeline); ok {
@@ -81,6 +100,27 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 	}
 
 	return &PipelineParserResult{pipeline: interpolated.(yaml.MapSlice)}, nil
+}
+
+// upsertSliceItem will replace a key's value in the given MapSlice with the given
+// replacement or insert it if it doesn't exist.
+func upsertSliceItem(key string, s yaml.MapSlice, val interface{}) yaml.MapSlice {
+	found := -1
+	for i, item := range s {
+		if k, ok := item.Key.(string); ok && k == key {
+			found = i
+			break
+		}
+	}
+	if found != -1 {
+		s[found].Value = val
+	} else {
+		s = append(s, yaml.MapItem{
+			Key:   key,
+			Value: val,
+		})
+	}
+	return s
 }
 
 func mapSliceItem(key string, s yaml.MapSlice) (yaml.MapItem, bool) {

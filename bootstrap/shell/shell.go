@@ -15,9 +15,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
+
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
@@ -228,15 +231,23 @@ func (s *Shell) Run(command string, arg ...string) error {
 }
 
 // RunWithoutPrompt runs a command, write stdout and stderr to the logger and
-// return an error if it fails. Notably it doesn't show a prompt.
+// return an error if it fails. Notably it doesn't show a prompt. It will use the
+// context set on the Shell object itself.
 func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
-	cmd, err := s.buildCommand(command, arg...)
+	return s.RunWithoutPromptWithContext(s.ctx, command, arg...)
+}
+
+// RunWithoutPromptWithContext runs a command, writes stdout and err to the logger,
+// and returns an error if it fails. It doesn't show a prompt. It will use the given
+// context.
+func (s *Shell) RunWithoutPromptWithContext(ctx context.Context, command string, arg ...string) error {
+	cmd, err := s.buildCommand(ctx, command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	return s.executeCommand(cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -251,14 +262,14 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 		s.Promptf("%s", process.FormatCommand(command, arg))
 	}
 
-	cmd, err := s.buildCommand(command, arg...)
+	cmd, err := s.buildCommand(s.ctx, command, arg...)
 	if err != nil {
 		return "", err
 	}
 
 	var b bytes.Buffer
 
-	err = s.executeCommand(cmd, &b, executeFlags{
+	err = s.executeCommand(s.ctx, cmd, &b, executeFlags{
 		Stdout: true,
 		Stderr: false,
 		PTY:    false,
@@ -270,10 +281,26 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	return strings.TrimSpace(b.String()), nil
 }
 
+// injectTraceCtx adds tracing information to the given env vars to support
+// distributed tracing across jobs/builds.
+func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
+	span := opentracing.SpanFromContext(ctx)
+	// Not all shell runs will have tracing (nor do they really need to).
+	if span == nil {
+		return
+	}
+	if err := tracetools.EncodeTraceContext(span, env.ToMap()); err != nil {
+		if s.Debug {
+			s.Logger.Warningf("Failed to encode trace context: %v", err)
+		}
+		return
+	}
+}
+
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
 // can also be passed the the script
-func (s *Shell) RunScript(path string, extra *env.Environment) error {
+func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
 
@@ -314,7 +341,7 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		args = []string{}
 	}
 
-	cmd, err := s.buildCommand(command, args...)
+	cmd, err := s.buildCommand(ctx, command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -325,7 +352,7 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	customEnv := currentEnv.Merge(extra)
 	cmd.Env = customEnv.ToSlice()
 
-	return s.executeCommand(cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -339,7 +366,7 @@ type command struct {
 }
 
 // buildCommand returns a command that can later be executed
-func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
+func (s *Shell) buildCommand(ctx context.Context, name string, arg ...string) (*command, error) {
 	// Always use absolute path as Windows has a hard time
 	// finding executables in its path
 	absPath, err := s.AbsolutePath(name)
@@ -357,7 +384,7 @@ func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 
 	// Create a sub-context so that shell.Cancel() can interrupt
 	// a running command
-	subctx, cancel := context.WithCancel(s.ctx)
+	subctx, cancel := context.WithCancel(ctx)
 	cfg.Context = subctx
 
 	// Add env that commands expect a shell to set
@@ -379,7 +406,12 @@ type executeFlags struct {
 	PTY bool
 }
 
-func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) error {
+func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
+	// Combine the two slices of env, let the latter overwrite the former
+	tracedEnv := env.FromSlice(cmd.Env)
+	s.injectTraceCtx(ctx, tracedEnv)
+	cmd.Env = tracedEnv.ToSlice()
+
 	s.cmdLock.Lock()
 	s.cmd = cmd
 	s.cmdLock.Unlock()

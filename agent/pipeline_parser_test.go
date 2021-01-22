@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/yaml"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -306,5 +307,42 @@ func TestPipelineParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing
 		j, _ := json.Marshal(result)
 		assert.Equal(t, `{"steps":[{"if":"build.env(\"ACCOUNT\") =~ /^(foo|bar)$/"}]}`, string(j))
 	}
+}
 
+func TestPipelinePropagatesTracingDataIfAvailable(t *testing.T) {
+	e := env.New()
+	e.Set("BUILDKITE_TRACE_CONTEXT", "123")
+	for _, row := range []struct {
+		hasExistingEnv bool
+		expected       string
+	}{
+		{false, `{"steps":[{"command":"echo asd"}],"env":{"BUILDKITE_TRACE_CONTEXT":"123"}}`},
+		{true, `{"steps":[{"command":"echo asd"}],"env":{"ASD":1,"BUILDKITE_TRACE_CONTEXT":"123"}}`},
+	} {
+		pipelineYaml := "steps:\n  - command: echo asd\n"
+		if row.hasExistingEnv {
+			pipelineYaml += "env:\n  ASD: 1"
+		}
+		result, err := PipelineParser{
+			Pipeline: []byte(pipelineYaml),
+			Env:      e,
+		}.Parse()
+		assert.NoError(t, err)
+		j, _ := json.Marshal(result)
+		assert.Equal(t, row.expected, string(j))
+	}
+}
+
+func TestUpsertSliceItem(t *testing.T) {
+	y := yaml.MapSlice{
+		{Key: "a", Value: "b"},
+	}
+
+	y = upsertSliceItem("a", y, "c")
+	assert.Len(t, y, 1)
+	assert.Equal(t, y[0], yaml.MapItem{Key: "a", Value: "c"})
+
+	y = upsertSliceItem("b", y, 1)
+	assert.Len(t, y, 2)
+	assert.Equal(t, y[1], yaml.MapItem{Key: "b", Value: 1})
 }

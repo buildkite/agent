@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Support for job tracing via [Datadog APM](https://www.datadoghq.com/product/apm/). To enable, either set the `tracing-backend` config or the `BUILDKITE_TRACING_BACKEND` env var to `datadog`. By default the agent will attempt to send traces to the default agent address and APM port (`127.0.0.1:8126`), but this can be configured with the `DD_AGENT_HOST` and `DD_AGENT_APM_PORT` env vars.
+
 ## [v3.26.0](https://github.com/buildkite/agent/compare/v3.25.0...v3.26.0) (2020-12-03)
 
 ### Added

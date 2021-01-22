@@ -61,6 +61,9 @@ type Config struct {
 	// Name of the agent running the bootstrap
 	AgentName string
 
+	// Name of the queue the agent belongs to, if tagged
+	Queue string
+
 	// Should the bootstrap remove an existing checkout before running the job
 	CleanCheckout bool `env:"BUILDKITE_CLEAN_CHECKOUT"`
 
@@ -126,6 +129,9 @@ type Config struct {
 
 	// List of environment variable globs to redact from job output
 	RedactedVars []string
+
+	// Backend to use for tracing. If an empty string, no tracing will occur.
+	TracingBackend string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
