@@ -111,6 +111,8 @@ google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441 h1:bSWt6ARwwvYe1FAiH0O
 google.golang.org/grpc v0.0.0-20170216003643-d0c32ee6a441/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
 gopkg.in/DataDog/dd-trace-go.v1 v1.26.0 h1:Fxt3Z7Nc9NJwqaD5NMOEDANTOT3sUo4gViwFbnqJAfY=
 gopkg.in/DataDog/dd-trace-go.v1 v1.26.0/go.mod h1:Sp1lku8WJMvNV0kjDI4Ni/T7J/U3BO5ct5kEaoVU8+I=
+gopkg.in/DataDog/dd-trace-go.v1 v1.28.0 h1:EmglUJuykRsTwsQDcKaAo3CmOunWU6Dqk7U2lo7Pjss=
+gopkg.in/DataDog/dd-trace-go.v1 v1.28.0/go.mod h1:Sp1lku8WJMvNV0kjDI4Ni/T7J/U3BO5ct5kEaoVU8+I=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 h1:qIbj1fsPNlZgppZ+VLlY7N33q108Sa+fhmuc+sWQYwY=
 gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
