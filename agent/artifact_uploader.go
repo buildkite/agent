@@ -41,6 +41,9 @@ type ArtifactUploaderConfig struct {
 
 	// Whether to show HTTP debugging
 	DebugHTTP bool
+
+	// Whether to follow symbolic links when resolving globs
+	FollowSymlinks bool
 }
 
 type ArtifactUploader struct {
@@ -110,7 +113,12 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 
 		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
 		// then we will get the ErrNotExist that is handled below
-		files, err := zglob.Glob(globPath)
+		globfunc := zglob.Glob
+		if a.conf.FollowSymlinks {
+			// Follow symbolic links for files & directories while expanding globs
+			globfunc = zglob.GlobFollowSymlinks
+		}
+		files, err := globfunc(globPath)
 		if err == os.ErrNotExist {
 			a.logger.Info("File not found: %s", globPath)
 			continue
