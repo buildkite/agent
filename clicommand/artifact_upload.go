@@ -51,8 +51,8 @@ Example:
 
 var FollowSymlinksFlag = cli.BoolFlag{
 	Name:   "follow-symlinks",
-	Usage:  "Follow symbolic links in paths",
-	EnvVar: "BUILDKITE_AGENT_ARTIFACT_UPLOAD_FOLLOW_SYMLINKS",
+	Usage:  "Follow symbolic links while resolving globs",
+	EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
 }
 
 type ArtifactUploadConfig struct {
