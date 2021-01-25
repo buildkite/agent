@@ -84,21 +84,25 @@ func awsS3Session(region string) (*session.Session, error) {
 
 	sess.Config.Region = aws.String(region)
 
-	roleARN := os.Getenv("AWS_ROLE_ARN")
-	tokenPath := os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")
-	sessionName := os.Getenv("AWS_ROLE_SESSION_NAME")
-
 	sess.Config.Credentials = credentials.NewChainCredentials(
 		[]credentials.Provider{
 			&credentialsProvider{},
 			&credentials.EnvProvider{},
-			// WebIdentityRole
-			stscreds.NewWebIdentityRoleProvider(sts.New(sess), roleARN, sessionName, tokenPath),
+			webIdentityRoleProvider(sess),
 			// EC2 and ECS meta-data providers
 			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
 		})
 
 	return sess, nil
+}
+
+func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
+	return stscreds.NewWebIdentityRoleProvider(
+		sts.New(sess),
+		os.Getenv("AWS_ROLE_ARN"),
+		os.Getenv("AWS_ROLE_SESSION_NAME"),
+		os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE"),
+	)
 }
 
 func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
