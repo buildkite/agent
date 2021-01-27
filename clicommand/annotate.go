@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/stdin"
+
 	"github.com/buildkite/agent/agent"
 	"github.com/buildkite/agent/api"
 	"github.com/buildkite/agent/cliconfig"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/retry"
-	"github.com/buildkite/agent/stdin"
 	"github.com/urfave/cli"
 )
 
@@ -108,7 +109,7 @@ var AnnotateCommand = cli.Command{
 
 		if cfg.Body != "" {
 			body = cfg.Body
-		} else if stdin.IsPipe() {
+		} else if stdin.IsReadable() {
 			logger.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN

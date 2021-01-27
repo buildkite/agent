@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/buildkite/agent/shell"
+	"github.com/buildkite/agent/env"
 )
 
 type Plugin struct {
@@ -86,7 +86,18 @@ func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
 			plugins = append(plugins, plugin)
 		case map[string]interface{}:
 			for location, config := range vv {
-				// Ensure the config is a hash
+				// Plugins without configs are easy!
+				if config == nil {
+					plugin, err := CreatePlugin(string(location), map[string]interface{}{})
+					if err != nil {
+						return nil, err
+					}
+
+					plugins = append(plugins, plugin)
+					continue
+				}
+
+				// Since there is a config, it's gotta be a hash
 				config, ok := config.(map[string]interface{})
 				if !ok {
 					return nil, fmt.Errorf("Configuration for \"%s\" is not a hash", location)
@@ -97,6 +108,7 @@ func CreatePluginsFromJSON(j string) ([]*Plugin, error) {
 				if err != nil {
 					return nil, err
 				}
+
 				plugins = append(plugins, plugin)
 			}
 		default:
@@ -176,50 +188,67 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 	return strings.TrimPrefix(dir, "/"), nil
 }
 
-// Converts the plugin configuration values to environment variables
-func (p *Plugin) ConfigurationToEnvironment() (*shell.Environment, error) {
-	env := []string{}
+var (
+	toDashRegex            = regexp.MustCompile(`-|\s+`)
+	removeWhitespaceRegex  = regexp.MustCompile(`\s+`)
+	removeDoubleUnderscore = regexp.MustCompile(`_+`)
+)
 
-	toDashRegex := regexp.MustCompile(`-|\s+`)
-	removeWhitespaceRegex := regexp.MustCompile(`\s+`)
-	removeDoubleUnderscore := regexp.MustCompile(`_+`)
+// formatEnvKey converts strings into an ENV key friendly format
+func formatEnvKey(key string) string {
+	key = strings.ToUpper(key)
+	key = removeWhitespaceRegex.ReplaceAllString(key, " ")
+	key = toDashRegex.ReplaceAllString(key, "_")
+	key = removeDoubleUnderscore.ReplaceAllString(key, "_")
+	return key
+}
+
+func walkConfigValues(prefix string, v interface{}, into *[]string) error {
+	switch vv := v.(type) {
+
+	// handles all of our primitive types, golang provides a good string representation
+	case string, bool, json.Number:
+		*into = append(*into, fmt.Sprintf("%s=%v", prefix, vv))
+		return nil
+
+	// handle lists of things, which get a KEY_N prefix depending on the index
+	case []interface{}:
+		for i := range vv {
+			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into); err != nil {
+				return err
+			}
+		}
+		return nil
+
+	// handle maps of things, which get a KEY_SUBKEY prefix depending on the map keys
+	case map[string]interface{}:
+		for k, vvv := range vv {
+			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k)), vvv, into); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return fmt.Errorf("Unknown type %T %v", v, v)
+}
+
+// Converts the plugin configuration values to environment variables
+func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
+	envSlice := []string{}
+	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
 
 	for k, v := range p.Configuration {
-		k = removeWhitespaceRegex.ReplaceAllString(k, " ")
-		name := strings.ToUpper(toDashRegex.ReplaceAllString(fmt.Sprintf("BUILDKITE_PLUGIN_%s_%s", p.Name(), k), "_"))
-		name = removeDoubleUnderscore.ReplaceAllString(name, "_")
-
-		switch vv := v.(type) {
-		case string:
-			env = append(env, fmt.Sprintf("%s=%s", name, vv))
-		case json.Number:
-			env = append(env, fmt.Sprintf("%s=%s", name, vv.String()))
-		case []string:
-			for i := range vv {
-				env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vv[i]))
-			}
-		case []interface{}:
-			for i := range vv {
-				switch vvv := vv[i].(type) {
-				case json.Number:
-					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv.String()))
-				case string:
-					env = append(env, fmt.Sprintf("%s_%d=%s", name, i, vvv))
-				default:
-					fmt.Printf("Unknown type %T %v", vvv, vvv)
-					// unknown type
-				}
-			}
-		default:
-			fmt.Printf("Unknown type %T %v", vv, vv)
-			// unknown type
+		configPrefix := fmt.Sprintf("%s_%s", envPrefix, formatEnvKey(k))
+		if err := walkConfigValues(configPrefix, v, &envSlice); err != nil {
+			return nil, err
 		}
 	}
 
 	// Sort them into a consistent order
-	sort.Strings(env)
+	sort.Strings(envSlice)
 
-	return shell.EnvironmentFromSlice(env), nil
+	return env.FromSlice(envSlice), nil
 }
 
 // Pretty name for the plugin

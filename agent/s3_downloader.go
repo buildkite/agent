@@ -1,18 +1,17 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/AdRoll/goamz/s3"
-	"github.com/buildkite/agent/logger"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/s3"
 )
 
 type S3Downloader struct {
-	// The name of the bucket
+	// The S3 bucket name and the path, e.g s3://my-bucket-name/foo/bar
 	Bucket string
 
 	// The root directory of the download
@@ -30,32 +29,21 @@ type S3Downloader struct {
 }
 
 func (d S3Downloader) Start() error {
-	// Try to auth with S3
-	auth, err := awsS3Auth()
-	if err != nil {
-		return errors.New(fmt.Sprintf("Error creating AWS S3 authentication: %s", err.Error()))
-	}
-
-	// Try and get the region
-	region, err := awsS3Region()
+	// Initialize the s3 client, and authenticate it
+	s3Client, err := newS3Client(d.BucketName())
 	if err != nil {
 		return err
 	}
 
-	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", d.BucketName(), region.Name)
+	req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{
+		Bucket: aws.String(d.BucketName()),
+		Key:    aws.String(d.BucketFileLocation()),
+	})
 
-	// Find the bucket
-	s3 := s3.New(auth, region)
-	bucket := s3.Bucket(d.BucketName())
-
-	// If the list doesn't return an error, then we've got our bucket
-	_, err = bucket.List("", "", "", 0)
+	signedURL, err := req.Presign(time.Hour)
 	if err != nil {
-		return errors.New("Could not find bucket `" + d.BucketName() + "` in region `" + region.Name + "` (" + err.Error() + ")")
+		return fmt.Errorf("error pre-signing request: %v", err)
 	}
-
-	// Generate a Signed URL
-	signedURL := bucket.SignedURL(d.BucketFileLocation(), time.Now().Add(time.Hour))
 
 	// We can now cheat and pass the URL onto our regular downloader
 	return Download{

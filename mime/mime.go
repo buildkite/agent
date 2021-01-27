@@ -488,6 +488,7 @@ var types = []string{
 	"pot", "text/plain",
 	"brf", "text/plain",
 	"srt", "text/plain",
+	"log", "text/plain",
 	"rtx", "text/richtext",
 	"sct", "text/scriptlet",
 	"wsc", "text/scriptlet",

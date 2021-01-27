@@ -1,15 +1,21 @@
 package agent
 
 type AgentConfiguration struct {
-	BootstrapScript            string
-	BuildPath                  string
-	HooksPath                  string
-	PluginsPath                string
-	GitCloneFlags              string
-	GitCleanFlags              string
-	SSHFingerprintVerification bool
-	CommandEval                bool
-	RunInPty                   bool
-	DisconnectAfterJob         bool
-	DisconnectAfterJobTimeout  int
+	ConfigPath                string
+	BootstrapScript           string
+	BuildPath                 string
+	HooksPath                 string
+	PluginsPath               string
+	GitCloneFlags             string
+	GitCleanFlags             string
+	GitSubmodules             bool
+	SSHKeyscan                bool
+	CommandEval               bool
+	PluginsEnabled            bool
+	LocalHooksEnabled         bool
+	RunInPty                  bool
+	TimestampLines            bool
+	DisconnectAfterJob        bool
+	DisconnectAfterJobTimeout int
+	Shell                     string
 }

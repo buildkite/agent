@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/buildkite/agent/bootstrap"
@@ -35,7 +36,7 @@ type BootstrapConfig struct {
 	Plugins                      string `cli:"plugins"`
 	PullRequest                  string `cli:"pullrequest"`
 	GitSubmodules                bool   `cli:"git-submodules"`
-	SSHFingerprintVerification   bool   `cli:"ssh-fingerprint-verification"`
+	SSHKeyscan                   bool   `cli:"ssh-keyscan"`
 	AgentName                    string `cli:"agent" validate:"required"`
 	OrganizationSlug             string `cli:"organization" validate:"required"`
 	PipelineSlug                 string `cli:"pipeline" validate:"required"`
@@ -50,8 +51,11 @@ type BootstrapConfig struct {
 	HooksPath                    string `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                  string `cli:"plugins-path" normalize:"filepath"`
 	CommandEval                  bool   `cli:"command-eval"`
+	PluginsEnabled               bool   `cli:"plugins-enabled"`
+	LocalHooksEnabled            bool   `cli:"local-hooks-enabled"`
 	PTY                          bool   `cli:"pty"`
 	Debug                        bool   `cli:"debug"`
+	Shell                        string `cli:"shell"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -196,9 +200,19 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_COMMAND_EVAL",
 		},
 		cli.BoolTFlag{
-			Name:   "ssh-fingerprint-verification",
-			Usage:  "Automatically verify SSH fingerprints",
-			EnvVar: "BUILDKITE_SSH_FINGERPRINT_VERIFICATION",
+			Name:   "plugins-enabled",
+			Usage:  "Allow plugins to be run",
+			EnvVar: "BUILDKITE_PLUGINS_ENABLED",
+		},
+		cli.BoolTFlag{
+			Name:   "local-hooks-enabled",
+			Usage:  "Allow local hooks to be run",
+			EnvVar: "BUILDKITE_LOCAL_HOOKS_ENABLED",
+		},
+		cli.BoolTFlag{
+			Name:   "ssh-keyscan",
+			Usage:  "Automatically run ssh-keyscan before checkout",
+			EnvVar: "BUILDKITE_SSH_KEYSCAN",
 		},
 		cli.BoolTFlag{
 			Name:   "git-submodules",
@@ -208,7 +222,13 @@ var BootstrapCommand = cli.Command{
 		cli.BoolTFlag{
 			Name:   "pty",
 			Usage:  "Run jobs within a pseudo terminal",
-			EnvVar: "BUILDKITE_NO_PTY",
+			EnvVar: "BUILDKITE_PTY",
+		},
+		cli.StringFlag{
+			Name:   "shell",
+			Usage:  "The shell to use to interpret build commands",
+			EnvVar: "BUILDKITE_SHELL",
+			Value:  DefaultShell(),
 		},
 		DebugFlag,
 	},
@@ -229,36 +249,41 @@ var BootstrapCommand = cli.Command{
 
 		// Configure the bootstraper
 		bootstrap := &bootstrap.Bootstrap{
-			Command:                      cfg.Command,
-			JobID:                        cfg.JobID,
-			Repository:                   cfg.Repository,
-			Commit:                       cfg.Commit,
-			Branch:                       cfg.Branch,
-			Tag:                          cfg.Tag,
-			RefSpec:                      cfg.RefSpec,
-			Plugins:                      cfg.Plugins,
-			GitSubmodules:                cfg.GitSubmodules,
-			PullRequest:                  cfg.PullRequest,
-			GitCloneFlags:                cfg.GitCloneFlags,
-			GitCleanFlags:                cfg.GitCleanFlags,
-			AgentName:                    cfg.AgentName,
-			PipelineProvider:             cfg.PipelineProvider,
-			PipelineSlug:                 cfg.PipelineSlug,
-			OrganizationSlug:             cfg.OrganizationSlug,
-			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
-			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
-			CleanCheckout:                cfg.CleanCheckout,
-			BuildPath:                    cfg.BuildPath,
-			BinPath:                      cfg.BinPath,
-			HooksPath:                    cfg.HooksPath,
-			PluginsPath:                  cfg.PluginsPath,
-			Debug:                        cfg.Debug,
-			RunInPty:                     runInPty,
-			CommandEval:                  cfg.CommandEval,
-			SSHFingerprintVerification:   cfg.SSHFingerprintVerification,
+			Config: bootstrap.Config{
+				Command:                      cfg.Command,
+				JobID:                        cfg.JobID,
+				Repository:                   cfg.Repository,
+				Commit:                       cfg.Commit,
+				Branch:                       cfg.Branch,
+				Tag:                          cfg.Tag,
+				RefSpec:                      cfg.RefSpec,
+				Plugins:                      cfg.Plugins,
+				GitSubmodules:                cfg.GitSubmodules,
+				PullRequest:                  cfg.PullRequest,
+				GitCloneFlags:                cfg.GitCloneFlags,
+				GitCleanFlags:                cfg.GitCleanFlags,
+				AgentName:                    cfg.AgentName,
+				PipelineProvider:             cfg.PipelineProvider,
+				PipelineSlug:                 cfg.PipelineSlug,
+				OrganizationSlug:             cfg.OrganizationSlug,
+				AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,
+				ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
+				CleanCheckout:                cfg.CleanCheckout,
+				BuildPath:                    cfg.BuildPath,
+				BinPath:                      cfg.BinPath,
+				HooksPath:                    cfg.HooksPath,
+				PluginsPath:                  cfg.PluginsPath,
+				Debug:                        cfg.Debug,
+				RunInPty:                     runInPty,
+				CommandEval:                  cfg.CommandEval,
+				PluginsEnabled:               cfg.PluginsEnabled,
+				LocalHooksEnabled:            cfg.LocalHooksEnabled,
+				SSHKeyscan:                   cfg.SSHKeyscan,
+				Shell:                        cfg.Shell,
+			},
 		}
 
-		// Start the bootstraper
-		bootstrap.Start()
+		// Run the bootstrap and exit with whatever it returns
+		os.Exit(bootstrap.Start())
 	},
 }

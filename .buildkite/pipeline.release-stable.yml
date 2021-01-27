@@ -1,0 +1,53 @@
+steps:
+  - wait
+
+  - name: ":spiral_note_pad:"
+    command: ".buildkite/steps/check-changelog.sh"
+
+  - wait
+
+  - name: ":s3:"
+    command: ".buildkite/steps/publish-to-s3.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - name: ":octocat: :rocket:"
+    command: ".buildkite/steps/github-release.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - name: ":redhat:"
+    command: ".buildkite/steps/publish-rpm-package.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - name: ":debian:"
+    command: ".buildkite/steps/publish-debian-package.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - name: ":docker:"
+    command: ".buildkite/steps/publish-docker-images.sh"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+
+  - wait
+
+  - name: ":beer:"
+    command: ".buildkite/steps/release-homebrew.sh"
+    artifact_paths: "pkg/*.rb;pkg/*.json"
+    env:
+      CODENAME: "stable"
+    agents:
+      queue: "deploy"
+

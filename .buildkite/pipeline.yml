@@ -1,263 +1,152 @@
+env:
+  DRY_RUN: false # set to true to disable publishing releases
+
 steps:
-  - name: ":hammer:"
-    command: "scripts/tests.sh"
+  - name: ":hammer: :linux:"
+    command: ".buildkite/steps/tests.sh"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
+
+  - name: ":hammer: :windows:"
+    trigger: agent-windows
+    async: true
+    build:
+      message: "${BUILDKITE_MESSAGE}"
+      commit: "${BUILDKITE_COMMIT}"
+      branch: "${BUILDKITE_BRANCH}"
 
   - wait
 
   - name: ":windows: 386"
-    command: "scripts/build-binary.sh windows 386"
+    command: ".buildkite/steps/build-binary.sh windows 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":windows: amd64"
-    command: "scripts/build-binary.sh windows amd64"
+    command: ".buildkite/steps/build-binary.sh windows amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: amd64"
-    command: "scripts/build-binary.sh linux amd64"
+    command: ".buildkite/steps/build-binary.sh linux amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: 386"
-    command: "scripts/build-binary.sh linux 386"
+    command: ".buildkite/steps/build-binary.sh linux 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: arm"
-    command: "scripts/build-binary.sh linux arm"
+    command: ".buildkite/steps/build-binary.sh linux arm"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: armhf"
-    command: "scripts/build-binary.sh linux armhf"
+    command: ".buildkite/steps/build-binary.sh linux armhf"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":linux: arm64"
-    command: "scripts/build-binary.sh linux arm64"
+    command: ".buildkite/steps/build-binary.sh linux arm64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":mac: 386"
-    command: "scripts/build-binary.sh darwin 386"
+    command: ".buildkite/steps/build-binary.sh darwin 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":mac: amd64"
-    command: "scripts/build-binary.sh darwin amd64"
+    command: ".buildkite/steps/build-binary.sh darwin amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":freebsd: amd64"
-    command: "scripts/build-binary.sh freebsd amd64"
+    command: ".buildkite/steps/build-binary.sh freebsd amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":freebsd: 386"
-    command: "scripts/build-binary.sh freebsd 386"
+    command: ".buildkite/steps/build-binary.sh freebsd 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":openbsd: amd64"
-    command: "scripts/build-binary.sh openbsd amd64"
+    command: ".buildkite/steps/build-binary.sh openbsd amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":openbsd: 386"
-    command: "scripts/build-binary.sh openbsd 386"
+    command: ".buildkite/steps/build-binary.sh openbsd 386"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - name: ":dragonflybsd: amd64"
-    command: "scripts/build-binary.sh dragonfly amd64"
+    command: ".buildkite/steps/build-binary.sh dragonfly amd64"
     artifact_paths: "pkg/*"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
         run: agent
 
   - wait
 
   - name: ":mag:"
-    command: "scripts/extract-agent-version-metadata.sh"
+    command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
   - wait
+
+  - name: ":docker: build"
+    command: ".buildkite/steps/build-docker-images.sh"
 
   - name: ":debian: build"
-    command: "scripts/build-debian-packages.sh"
+    command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
-    branches: "master 2-1-stable"
     agents:
       queue: "deploy"
 
-  - wait
-
-  - name: ":s3: publish binaries"
-    command: "scripts/publish-to-s3.sh"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "experimental"
-    agents:
-      queue: "deploy"
-
-  - name: ":redhat: experimental"
-    command: "scripts/rpm-package.sh"
+  - name: ":redhat: build"
+    command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "experimental"
-    agents:
-      queue: "deploy"
-
-  - name: ":debian: publish experimental"
-    command: "scripts/publish-debian-package.sh"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "experimental"
     agents:
       queue: "deploy"
 
   - name: ":github: :hammer:"
-    command: "scripts/build-github-release.sh"
+    command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
-    branches: "master 2-1-stable"
     plugins:
-      docker-compose#e8ce6c1:
+      docker-compose#v1.8.0:
+        config: docker-compose.release.yml
         run: github-release
 
   - wait
 
-  - name: ":whale: :rocket:"
-    trigger: docker-buildkite-agent
-    branches: "master 2-1-stable"
-    async: true
-    build:
-      message: "Update Docker images"
-      commit: "HEAD"
-      branch: "master"
-      env:
-        CODENAME: "experimental"
-
-  - block: ":shipit: Unstable"
-    branches: "master 2-1-stable"
-
-  - name: ":s3: publish binaries"
-    command: "scripts/publish-to-s3.sh"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "unstable"
-    agents:
-      queue: "deploy"
-
-  - name: ":octocat: :rocket:"
-    command: "scripts/github-release.sh"
-    branches: "master 2-1-stable"
-    agents:
-      queue: "deploy"
-
-  - name: ":redhat:"
-    command: "scripts/rpm-package.sh"
-    artifact_paths: "rpm/**/*"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "unstable"
-    agents:
-      queue: "deploy"
-
-  - name: ":debian: publish unstable"
-    command: "scripts/publish-debian-package.sh"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "unstable"
-    agents:
-      queue: "deploy"
-
-  - wait
-
-  - name: ":whale: :rocket:"
-    trigger: docker-buildkite-agent
-    branches: "master 2-1-stable"
-    async: true
-    build:
-      message: "Update Docker images"
-      commit: "HEAD"
-      branch: "master"
-      env:
-        CODENAME: "unstable"
-
-  - name: ":beer:"
-    command: "scripts/release-homebrew.sh"
-    artifact_paths: "pkg/*.rb;pkg/*.json"
-    branches: "master 2-1-stable"
-    agents:
-      queue: "deploy"
-
-  - block: ":shipit: Stable"
-    branches: "master 2-1-stable"
-
-  - name: ":s3: publish binaries"
-    command: "scripts/publish-to-s3.sh"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "stable"
-    agents:
-      queue: "deploy"
-
-  - name: ":redhat:"
-    command: "scripts/rpm-package.sh"
-    artifact_paths: "rpm/**/*"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "stable"
-    agents:
-      queue: "deploy"
-
-  - name: ":debian: publish stable"
-    command: "scripts/publish-debian-package.sh"
-    branches: "master 2-1-stable"
-    env:
-      CODENAME: "stable"
-    agents:
-      queue: "deploy"
-
-  - wait
-
-  - name: ":whale: :rocket:"
-    trigger: docker-buildkite-agent
-    branches: "master 2-1-stable"
-    async: true
-    build:
-      message: "Update Docker images"
-      commit: "HEAD"
-      branch: "master"
-      env:
-        CODENAME: "stable"
+  - name: ":pipeline:"
+    command: ".buildkite/steps/upload-release-steps.sh"

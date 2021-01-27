@@ -1,44 +1,49 @@
 package agent
 
 import (
-	"errors"
-	"fmt"
-	"time"
-
-	"github.com/AdRoll/goamz/aws"
-	"github.com/AdRoll/goamz/ec2"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
 type EC2Tags struct {
 }
 
 func (e EC2Tags) Get() (map[string]string, error) {
-	tags := make(map[string]string)
-
-	// Passing blank values here instructs the AWS library to look at the
-	// current instances meta data for the security credentials.
-	auth, err := aws.GetAuth("", "", "", time.Time{})
+	sess, err := awsSession()
 	if err != nil {
-		return tags, errors.New(fmt.Sprintf("Error creating AWS authentication: %s", err.Error()))
+		return nil, err
 	}
 
-	// Find the current region and create a new EC2 connection
-	region := aws.GetRegion(aws.InstanceRegion())
-	ec2Client := ec2.New(auth, region)
+	tags := make(map[string]string)
+	ec2metadataClient := ec2metadata.New(sess)
 
-	// Filter by the current machines instance-id
-	filter := ec2.NewFilter()
-	filter.Add("resource-id", aws.InstanceId())
-
-	// Describe the tags for the current instance
-	resp, err := ec2Client.DescribeTags(filter)
+	// Grab the current instances id
+	instanceId, err := ec2metadataClient.GetMetadata("instance-id")
 	if err != nil {
-		return tags, errors.New(fmt.Sprintf("Error downloading tags: %s", err.Error()))
+		return tags, err
+	}
+
+	svc := ec2.New(sess)
+
+	// Describe the tags of the current instance
+	resp, err := svc.DescribeTags(&ec2.DescribeTagsInput{
+		Filters: []*ec2.Filter{
+			{
+				Name: aws.String("resource-id"),
+				Values: []*string{
+					aws.String(instanceId),
+				},
+			},
+		},
+	})
+	if err != nil {
+		return tags, err
 	}
 
 	// Collect the tags
 	for _, tag := range resp.Tags {
-		tags[tag.Key] = tag.Value
+		tags[*tag.Key] = *tag.Value
 	}
 
 	return tags, nil

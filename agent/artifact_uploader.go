@@ -7,15 +7,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
-	"github.com/buildkite/agent/glob"
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/pool"
 	"github.com/buildkite/agent/retry"
+	zglob "github.com/mattn/go-zglob"
+)
+
+const (
+	ArtifactPathDelimiter = ";"
 )
 
 type ArtifactUploader struct {
@@ -53,55 +58,83 @@ func (a *ArtifactUploader) Upload() error {
 	return nil
 }
 
+func isDir(path string) bool {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return fi.IsDir()
+}
+
 func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
-	globPaths := strings.Split(a.Paths, ";")
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
 
-	for _, globPath := range globPaths {
-		workingDirectory := glob.Root(globPath)
+	for _, globPath := range strings.Split(a.Paths, ArtifactPathDelimiter) {
 		globPath = strings.TrimSpace(globPath)
+		if globPath == "" {
+			continue
+		}
 
-		if globPath != "" {
-			logger.Debug("Searching for %s", filepath.Join(workingDirectory, globPath))
+		logger.Debug("Searching for %s", globPath)
 
-			files, err := glob.Glob(workingDirectory, globPath)
+		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
+		// then we will get the ErrNotExist that is handled below
+		files, err := zglob.Glob(globPath)
+		if err == os.ErrNotExist {
+			logger.Info("File not found: %s", globPath)
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+
+		// Process each glob match into an api.Artifact
+		for _, file := range files {
+			absolutePath, err := filepath.Abs(file)
 			if err != nil {
 				return nil, err
 			}
 
-			for _, file := range files {
-				// Generate an absolute path for the artifact
-				absolutePath, err := filepath.Abs(file)
-				if err != nil {
-					return nil, err
-				}
-
-				if isDir, _ := glob.IsDir(absolutePath); isDir {
-					logger.Debug("Skipping directory %s", file)
-					continue
-				}
-
-				// Create a relative path (from the workingDirectory) to the artifact, by removing the
-				// first part of the absolutePath that is the workingDirectory.
-				relativePath := strings.Replace(absolutePath, workingDirectory, "", 1)
-
-				// Ensure the relativePath doesn't have a file seperator "/" as the first character
-				relativePath = strings.TrimPrefix(relativePath, string(os.PathSeparator))
-
-				// Build an artifact object using the paths we have.
-				artifact, err := a.build(relativePath, absolutePath, globPath)
-				if err != nil {
-					return nil, err
-				}
-
-				artifacts = append(artifacts, artifact)
+			// Ignore directories, we only want files
+			if isDir(absolutePath) {
+				logger.Debug("Skipping directory %s", file)
+				continue
 			}
+
+			// If a glob is absolute, we need to make it relative to the root so that
+			// it can be combined with the download destination to make a valid path.
+			// This is possibly weird and crazy, this logic dates back to
+			// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
+			// from 2014, so I'm replicating it here to avoid breaking things
+			if filepath.IsAbs(globPath) {
+				if runtime.GOOS == "windows" {
+					wd = filepath.VolumeName(absolutePath) + "/"
+				} else {
+					wd = "/"
+				}
+			}
+
+			path, err := filepath.Rel(wd, absolutePath)
+			if err != nil {
+				return nil, err
+			}
+
+			// Build an artifact object using the paths we have.
+			artifact, err := a.build(path, absolutePath, globPath)
+			if err != nil {
+				return nil, err
+			}
+
+			artifacts = append(artifacts, artifact)
 		}
 	}
 
 	return artifacts, nil
 }
 
-func (a *ArtifactUploader) build(relativePath string, absolutePath string, globPath string) (*api.Artifact, error) {
+func (a *ArtifactUploader) build(path string, absolutePath string, globPath string) (*api.Artifact, error) {
 	// Temporarily open the file to get it's size
 	file, err := os.Open(absolutePath)
 	if err != nil {
@@ -122,7 +155,7 @@ func (a *ArtifactUploader) build(relativePath string, absolutePath string, globP
 
 	// Create our new artifact data structure
 	artifact := &api.Artifact{
-		Path:         relativePath,
+		Path:         path,
 		AbsolutePath: absolutePath,
 		GlobPath:     globPath,
 		FileSize:     fileInfo.Size(),
@@ -142,7 +175,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		} else if strings.HasPrefix(a.Destination, "gs://") {
 			uploader = new(GSUploader)
 		} else {
-			return errors.New("Unknown upload destination: " + a.Destination)
+			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3:// and gs:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.Destination))
 		}
 	} else {
 		uploader = new(FormUploader)

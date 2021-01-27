@@ -185,7 +185,7 @@ You can now start the agent!
 
 For docs, help and support:
 
-  https://buildkite.com/docs/agent
+  https://buildkite.com/docs/agent/v3
 
 Happy building! <3
 "

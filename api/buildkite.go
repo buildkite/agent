@@ -134,7 +134,7 @@ func (c *Client) NewRequestWithMessagePack(method, urlStr string, body interface
 	return req, nil
 }
 
-// NewFormRequest creates an mutli-part form request. A relative URL can be
+// NewFormRequest creates an multi-part form request. A relative URL can be
 // provided in urlStr, in which case it is resolved relative to the UploadURL
 // of the Client. Relative URLs should always be specified without a preceding
 // slash.

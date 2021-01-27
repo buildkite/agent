@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/buildkite/agent/logger"
 	"github.com/buildkite/agent/process"
 	"github.com/buildkite/agent/retry"
+	"github.com/buildkite/shellwords"
 )
 
 type JobRunner struct {
@@ -43,6 +45,12 @@ type JobRunner struct {
 
 	// Used to wait on various routines that we spin up
 	routineWaitGroup sync.WaitGroup
+
+	// A lock to protect concurrent calls to kill
+	killLock sync.Mutex
+
+	// File containing a copy of the job env
+	envFile *os.File
 }
 
 // Initializes the job runner
@@ -59,13 +67,36 @@ func (r JobRunner) Create() (runner *JobRunner, err error) {
 	// the Buildkite Agent API
 	runner.logStreamer = LogStreamer{MaxChunkSizeBytes: r.Job.ChunksMaxSizeBytes, Callback: r.onUploadChunk}.New()
 
+	// Prepare a file to recieve the given job environment
+	if file, err := ioutil.TempFile("", fmt.Sprintf("job-env-%s", runner.Job.ID)); err != nil {
+		return runner, err
+	} else {
+		logger.Debug("[JobRunner] Created env file: %s", file.Name())
+		runner.envFile = file
+	}
+
+	env, err := r.createEnvironment()
+	if err != nil {
+		return nil, err
+	}
+
+	// The bootstrap-script gets parsed based on the operating system
+	cmd, err := shellwords.Split(r.AgentConfiguration.BootstrapScript)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to split bootstrap-script (%q) into tokens: %v",
+			r.AgentConfiguration.BootstrapScript, err)
+	}
+
 	// The process that will run the bootstrap script
 	runner.process = &process.Process{
-		Script:        r.AgentConfiguration.BootstrapScript,
-		Env:           r.createEnvironment(),
-		PTY:           r.AgentConfiguration.RunInPty,
-		StartCallback: r.onProcessStartCallback,
-		LineCallback:  runner.headerTimesStreamer.Scan,
+		Script:             cmd,
+		Env:                env,
+		PTY:                r.AgentConfiguration.RunInPty,
+		Timestamp:          r.AgentConfiguration.TimestampLines,
+		StartCallback:      r.onProcessStartCallback,
+		LineCallback:       runner.headerTimesStreamer.Scan,
+		LinePreProcessor:   runner.headerTimesStreamer.LinePreProcessor,
+		LineCallbackFilter: runner.headerTimesStreamer.LineIsHeader,
 	}
 
 	return
@@ -124,12 +155,23 @@ func (r *JobRunner) Run() error {
 	logger.Debug("[JobRunner] Waiting for all other routines to finish")
 	r.routineWaitGroup.Wait()
 
+	// Remove the env file, if any
+	if r.envFile != nil {
+		if err := os.Remove(r.envFile.Name()); err != nil {
+			logger.Warn("[JobRunner] Error cleaning up env file: %s", err)
+		}
+		logger.Debug("[JobRunner] Deleted env file: %s", r.envFile.Name())
+	}
+
 	logger.Info("Finished job %s", r.Job.ID)
 
 	return nil
 }
 
 func (r *JobRunner) Kill() error {
+	r.killLock.Lock()
+	defer r.killLock.Unlock()
+
 	if !r.cancelled {
 		logger.Info("Canceling job %s", r.Job.ID)
 		r.cancelled = true
@@ -144,8 +186,8 @@ func (r *JobRunner) Kill() error {
 	return nil
 }
 
-// Creates the environment variables that will be used in the process
-func (r *JobRunner) createEnvironment() []string {
+// Creates the environment variables that will be used in the process and writes a flat environment file
+func (r *JobRunner) createEnvironment() ([]string, error) {
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
 	// sent by Buildkite. The variables below should always take
@@ -153,6 +195,21 @@ func (r *JobRunner) createEnvironment() []string {
 	env := make(map[string]string)
 	for key, value := range r.Job.Env {
 		env[key] = value
+	}
+
+	// Write out the job environment to a file, in k="v" format, with newlines escaped
+	// We present only the clean environment - i.e only variables configured
+	// on the job upstream - and expose the path in another environment variable.
+	if r.envFile != nil {
+		for key, value := range env {
+			if _, err := r.envFile.WriteString(fmt.Sprintf("%s=%q\n", key, value)); err != nil {
+				return nil, err
+			}
+		}
+		if err := r.envFile.Close(); err != nil {
+			return nil, err
+		}
+		env["BUILDKITE_ENV_FILE"] = r.envFile.Name()
 	}
 
 	// Add agent environment variables
@@ -166,14 +223,19 @@ func (r *JobRunner) createEnvironment() []string {
 	dir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	env["BUILDKITE_BIN_PATH"] = dir
 
-	// Add misc options
+	// Add options from the agent configuration
+	env["BUILDKITE_CONFIG_PATH"] = r.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.AgentConfiguration.BuildPath
 	env["BUILDKITE_HOOKS_PATH"] = r.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.AgentConfiguration.PluginsPath
-	env["BUILDKITE_SSH_FINGERPRINT_VERIFICATION"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHFingerprintVerification)
+	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.AgentConfiguration.SSHKeyscan)
+	env["BUILDKITE_GIT_SUBMODULES"] = fmt.Sprintf("%t", r.AgentConfiguration.GitSubmodules)
 	env["BUILDKITE_COMMAND_EVAL"] = fmt.Sprintf("%t", r.AgentConfiguration.CommandEval)
+	env["BUILDKITE_PLUGINS_ENABLED"] = fmt.Sprintf("%t", r.AgentConfiguration.PluginsEnabled)
+	env["BUILDKITE_LOCAL_HOOKS_ENABLED"] = fmt.Sprintf("%t", r.AgentConfiguration.LocalHooksEnabled)
 	env["BUILDKITE_GIT_CLONE_FLAGS"] = r.AgentConfiguration.GitCloneFlags
 	env["BUILDKITE_GIT_CLEAN_FLAGS"] = r.AgentConfiguration.GitCleanFlags
+	env["BUILDKITE_SHELL"] = r.AgentConfiguration.Shell
 
 	// Convert the env map into a slice (which is what the script gear
 	// needs)
@@ -182,7 +244,7 @@ func (r *JobRunner) createEnvironment() []string {
 		envSlice = append(envSlice, fmt.Sprintf("%s=%s", key, value))
 	}
 
-	return envSlice
+	return envSlice, nil
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related

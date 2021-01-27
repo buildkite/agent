@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/api"
@@ -14,17 +16,21 @@ import (
 )
 
 type AgentPool struct {
-	APIClient          *api.Client
-	Token              string
-	ConfigFilePath     string
-	Name               string
-	Priority           string
-	Tags               []string
-	TagsFromEC2        bool
-	TagsFromEC2Tags    bool
-	TagsFromGCP        bool
-	Endpoint           string
-	AgentConfiguration *AgentConfiguration
+	APIClient             *api.Client
+	Token                 string
+	ConfigFilePath        string
+	Name                  string
+	Priority              string
+	Tags                  []string
+	TagsFromEC2           bool
+	TagsFromEC2Tags       bool
+	TagsFromGCP           bool
+	WaitForEC2TagsTimeout time.Duration
+	Endpoint              string
+	AgentConfiguration    *AgentConfiguration
+
+	interruptCount int
+	signalLock     sync.Mutex
 }
 
 func (r *AgentPool) Start() error {
@@ -73,12 +79,22 @@ func (r *AgentPool) Start() error {
 
 	// Start a signalwatcher so we can monitor signals and handle shutdowns
 	signalwatcher.Watch(func(sig signalwatcher.Signal) {
+		r.signalLock.Lock()
+		defer r.signalLock.Unlock()
+
 		if sig == signalwatcher.QUIT {
 			logger.Debug("Received signal `%s`", sig.String())
 			worker.Stop(false)
 		} else if sig == signalwatcher.TERM || sig == signalwatcher.INT {
 			logger.Debug("Received signal `%s`", sig.String())
-			worker.Stop(true)
+			if r.interruptCount == 0 {
+				r.interruptCount++
+				logger.Info("Received CTRL-C, send again to forcefully kill the agent")
+				worker.Stop(true)
+			} else {
+				logger.Info("Forcefully stopping running jobs and stopping the agent")
+				worker.Stop(false)
+			}
 		} else {
 			logger.Debug("Ignoring signal `%s`", sig.String())
 		}
@@ -139,10 +155,13 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 	// Attempt to add the EC2 tags
 	if r.TagsFromEC2Tags {
 		logger.Info("Fetching EC2 tags...")
-
-		// same as above
 		err := retry.Do(func(s *retry.Stats) error {
 			tags, err := EC2Tags{}.Get()
+			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
+			// to be applied to instances. This error will cause retries.
+			if err == nil && len(tags) == 0 {
+				err = errors.New("EC2 tags are empty")
+			}
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
 			} else {
@@ -152,9 +171,8 @@ func (r *AgentPool) CreateAgentTemplate() *api.Agent {
 				}
 				s.Break()
 			}
-
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+		}, &retry.Config{Maximum: 5, Interval: r.WaitForEC2TagsTimeout / 5, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
@@ -253,19 +271,23 @@ func (r *AgentPool) ShowBanner() {
 	logger.Debug("Hooks directory: %s", r.AgentConfiguration.HooksPath)
 	logger.Debug("Plugins directory: %s", r.AgentConfiguration.PluginsPath)
 
-	if !r.AgentConfiguration.SSHFingerprintVerification {
-		logger.Debug("Automatic SSH fingerprint verification has been disabled")
+	if !r.AgentConfiguration.SSHKeyscan {
+		logger.Info("Automatic ssh-keyscan has been disabled")
 	}
 
 	if !r.AgentConfiguration.CommandEval {
-		logger.Debug("Evaluating console commands has been disabled")
+		logger.Info("Evaluating console commands has been disabled")
+	}
+
+	if !r.AgentConfiguration.PluginsEnabled {
+		logger.Info("Plugins have been disabled")
 	}
 
 	if !r.AgentConfiguration.RunInPty {
-		logger.Debug("Running builds within a pseudoterminal (PTY) has been disabled")
+		logger.Info("Running builds within a pseudoterminal (PTY) has been disabled")
 	}
 
 	if r.AgentConfiguration.DisconnectAfterJob {
-		logger.Debug("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
+		logger.Info("Agent will disconnect after a job run has completed with a timeout of %d seconds", r.AgentConfiguration.DisconnectAfterJobTimeout)
 	}
 }

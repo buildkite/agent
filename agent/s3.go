@@ -2,75 +2,123 @@ package agent
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"time"
 
-	"github.com/AdRoll/goamz/aws"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/defaults"
+	"github.com/aws/aws-sdk-go/aws/endpoints"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/buildkite/agent/logger"
 )
 
-func awsS3Auth() (aws.Auth, error) {
-	// First try to authenticate using the BUILDKITE_ ENV variables
-	buildkiteAuth, buildkiteErr := buildkiteS3EnvAuth()
-	if buildkiteErr == nil {
-		return buildkiteAuth, nil
-	}
-
-	// Passing blank values here instructs the AWS library to look at the
-	// current instances meta data for the security credentials.
-	awsAuth, awsErr := aws.GetAuth("", "", "", time.Time{})
-	if awsErr == nil {
-		return awsAuth, nil
-	}
-
-	var err error
-
-	// If they attempted to use the BUILDKITE_ ENV variables, return them
-	// that error, otherwise default to the error from AWS
-	if buildkiteErr != nil && buildkiteAuth.AccessKey != "" || buildkiteAuth.SecretKey != "" {
-		err = buildkiteErr
-	} else {
-		err = awsErr
-	}
-
-	return aws.Auth{}, err
+type credentialsProvider struct {
+	retrieved bool
 }
 
-func buildkiteS3EnvAuth() (auth aws.Auth, err error) {
-	auth.AccessKey = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
-	if auth.AccessKey == "" {
-		auth.AccessKey = os.Getenv("BUILDKITE_S3_ACCESS_KEY")
+func (e *credentialsProvider) Retrieve() (creds credentials.Value, err error) {
+	e.retrieved = false
+
+	creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
+	if creds.AccessKeyID == "" {
+		creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY")
 	}
 
-	auth.SecretKey = os.Getenv("BUILDKITE_S3_SECRET_ACCESS_KEY")
-	if auth.SecretKey == "" {
-		auth.SecretKey = os.Getenv("BUILDKITE_S3_SECRET_KEY")
+	creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_ACCESS_KEY")
+	if creds.SecretAccessKey == "" {
+		creds.SecretAccessKey = os.Getenv("BUILDKITE_S3_SECRET_KEY")
 	}
 
-	if auth.AccessKey == "" {
+	if creds.AccessKeyID == "" {
 		err = errors.New("BUILDKITE_S3_ACCESS_KEY_ID or BUILDKITE_S3_ACCESS_KEY not found in environment")
 	}
-	if auth.SecretKey == "" {
+	if creds.SecretAccessKey == "" {
 		err = errors.New("BUILDKITE_S3_SECRET_ACCESS_KEY or BUILDKITE_S3_SECRET_KEY not found in environment")
 	}
 
+	e.retrieved = true
 	return
 }
 
-func awsS3Region() (region aws.Region, err error) {
+func (e *credentialsProvider) IsExpired() bool {
+	return !e.retrieved
+}
+
+func awsS3RegionFromEnv() (region string, err error) {
 	regionName := "us-east-1"
 	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
 		regionName = os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
-	} else if os.Getenv("AWS_DEFAULT_REGION") != "" {
-		regionName = os.Getenv("AWS_DEFAULT_REGION")
+	} else {
+		var err error
+		regionName, err = awsRegion()
+		if err != nil {
+			return "", err
+		}
 	}
 
-	// Check to make sure the region exists. There is a GetRegion API, but
-	// there doesn't seem to be a way to make it error out if the region
-	// doesn't exist.
-	region, ok := aws.Regions[regionName]
-	if ok == false {
-		err = errors.New("Unknown AWS S3 Region `" + regionName + "`")
+	// Check to make sure the region exists.
+	resolver := endpoints.DefaultResolver()
+	partitions := resolver.(endpoints.EnumPartitions).Partitions()
+
+	for _, p := range partitions {
+		for id := range p.Regions() {
+			if id == regionName {
+				return regionName, nil
+			}
+		}
 	}
 
-	return
+	return "", fmt.Errorf("Unknown AWS S3 Region %q", regionName)
+}
+
+func awsS3Session(region string) (*session.Session, error) {
+	// Chicken and egg... but this is kinda how they do it in the sdk
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, err
+	}
+
+	sess.Config.Region = aws.String(region)
+
+	sess.Config.Credentials = credentials.NewChainCredentials(
+		[]credentials.Provider{
+			&credentialsProvider{},
+			&credentials.EnvProvider{},
+			// EC2 and ECS meta-data providers
+			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
+		})
+
+	return sess, nil
+}
+
+func newS3Client(bucket string) (*s3.S3, error) {
+	region, err := awsS3RegionFromEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	sess, err := awsS3Session(region)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
+
+	s3client := s3.New(sess)
+
+	// Test the authentication by trying to list the first 0 objects in the bucket.
+	_, err = s3client.ListObjects(&s3.ListObjectsInput{
+		Bucket:  aws.String(bucket),
+		MaxKeys: aws.Int64(0),
+	})
+	if err != nil {
+		if err == credentials.ErrNoValidProvidersFoundInChain {
+			return nil, fmt.Errorf("Could not find a valid authentication strategy to connect to S3. Try setting BUILDKITE_S3_ACCESS_KEY and BUILDKITE_S3_SECRET_KEY")
+		}
+		return nil, fmt.Errorf("Failed to authenticate to bucket `%s` in region `%s` (%s)", bucket, region, err.Error())
+	}
+
+	return s3client, nil
 }

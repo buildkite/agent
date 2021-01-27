@@ -1,28 +1,35 @@
 package agent
 
 import (
-	"github.com/AdRoll/goamz/aws"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 )
 
 type EC2MetaData struct {
 }
 
 func (e EC2MetaData) Get() (map[string]string, error) {
-	metaData := make(map[string]string)
+	sess, err := awsSession()
+	if err != nil {
+		return nil, err
+	}
 
-	instanceId, err := aws.GetMetaData("instance-id")
+	metaData := make(map[string]string)
+	ec2metadataClient := ec2metadata.New(sess)
+
+	instanceId, err := ec2metadataClient.GetMetadata("instance-id")
 	if err != nil {
 		return metaData, err
 	}
+
 	metaData["aws:instance-id"] = string(instanceId)
 
-	instanceType, err := aws.GetMetaData("instance-type")
+	instanceType, err := ec2metadataClient.GetMetadata("instance-type")
 	if err != nil {
 		return metaData, err
 	}
 	metaData["aws:instance-type"] = string(instanceType)
 
-	amiId, err := aws.GetMetaData("ami-id")
+	amiId, err := ec2metadataClient.GetMetadata("ami-id")
 	if err != nil {
 		return metaData, err
 	}

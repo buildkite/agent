@@ -1,14 +1,16 @@
-// +build !windows
-
 package stdin
 
-import "os"
+import (
+	"os"
+)
 
-func IsPipe() bool {
-	stat, err := os.Stdin.Stat()
+func IsReadable() bool {
+	fi, err := os.Stdin.Stat()
 	if err != nil {
 		return false
-	} else {
-		return (stat.Mode() & os.ModeCharDevice) == 0
 	}
+	if fi.Mode()&os.ModeNamedPipe == 0 {
+		return false
+	}
+	return true
 }

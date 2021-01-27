@@ -103,7 +103,7 @@ var PipelineUploadCommand = cli.Command{
 			if err != nil {
 				logger.Fatal("Failed to read file: %s", err)
 			}
-		} else if stdin.IsPipe() {
+		} else if stdin.IsReadable() {
 			logger.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
@@ -180,6 +180,12 @@ var PipelineUploadCommand = cli.Command{
 			_, err = client.Pipelines.Upload(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: parsed, Replace: cfg.Replace})
 			if err != nil {
 				logger.Warn("%s (%s)", err, s)
+				apierr := err.(*api.ErrorResponse)
+				// 422 responses will always fail no need to retry
+				if apierr.Response.StatusCode == 422 {
+					logger.Error("Unrecoverable error, skipping retries")
+					s.Break()
+				}
 			}
 
 			return err

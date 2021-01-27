@@ -11,45 +11,49 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
+	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/logger"
-	"github.com/buildkite/agent/shell"
 )
 
 type Process struct {
 	Pid        int
 	PTY        bool
-	Script     string
+	Timestamp  bool
+	Script     []string
 	Env        []string
 	ExitStatus string
 
-	buffer bytes.Buffer
-
+	buffer  outputBuffer
 	command *exec.Cmd
 
 	// This callback is called when the process offically starts
 	StartCallback func()
 
 	// For every line in the process output, this callback will be called
-	// with the contents of the line
-	LineCallback func(string)
+	// with the contents of the line if its filter returns true.
+	LineCallback       func(string)
+	LinePreProcessor   func(string) string
+	LineCallbackFilter func(string) bool
 
 	// Running is stored as an int32 so we can use atomic operations to
 	// set/get it (it's accessed by multiple goroutines)
 	running int32
 }
 
-func (p *Process) Start() error {
-	c, err := shell.CommandFromString(p.Script)
-	if err != nil {
-		return err
-	}
+// If you change header parsing here make sure to change it in the
+// buildkite.com frontend logic, too
 
-	p.command = exec.Command(c.Command, c.Args...)
+var headerExpansionRegex = regexp.MustCompile("^(?:\\^\\^\\^\\s+\\+\\+\\+)\\s*$")
+
+func (p *Process) Start() error {
+	p.command = exec.Command(p.Script[0], p.Script[1:]...)
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
@@ -62,9 +66,12 @@ func (p *Process) Start() error {
 
 	lineReaderPipe, lineWriterPipe := io.Pipe()
 
-	multiWriter := io.MultiWriter(&p.buffer, lineWriterPipe)
-
-	logger.Info("Starting to run: %s", c.String())
+	var multiWriter io.Writer
+	if p.Timestamp {
+		multiWriter = io.MultiWriter(lineWriterPipe)
+	} else {
+		multiWriter = io.MultiWriter(&p.buffer, lineWriterPipe)
+	}
 
 	// Toggle between running in a pty
 	if p.PTY {
@@ -172,11 +179,37 @@ func (p *Process) Start() error {
 				}
 			}
 
-			lineCallbackWaitGroup.Add(1)
-			go func(line string) {
-				defer lineCallbackWaitGroup.Done()
-				p.LineCallback(line)
-			}(string(line))
+			// If we're timestamping this main thread will take
+			// the hit of running the regex so we can build up
+			// the timestamped buffer without breaking headers,
+			// otherwise we let the goroutines take the perf hit.
+
+			checkedForCallback := false
+			lineHasCallback := false
+			lineString := p.LinePreProcessor(string(line))
+
+			// Create the prefixed buffer
+			if p.Timestamp {
+				lineHasCallback = p.LineCallbackFilter(lineString)
+				checkedForCallback = true
+				if lineHasCallback || headerExpansionRegex.MatchString(lineString) {
+					// Don't timestamp special lines (e.g. header)
+					p.buffer.WriteString(fmt.Sprintf("%s\n", line))
+				} else {
+					currentTime := time.Now().UTC().Format(time.RFC3339)
+					p.buffer.WriteString(fmt.Sprintf("[%s] %s\n", currentTime, line))
+				}
+			}
+
+			if lineHasCallback || !checkedForCallback {
+				lineCallbackWaitGroup.Add(1)
+				go func(line string) {
+					defer lineCallbackWaitGroup.Done()
+					if (checkedForCallback && lineHasCallback) || p.LineCallbackFilter(lineString) {
+						p.LineCallback(line)
+					}
+				}(lineString)
+			}
 		}
 
 		// We need to make sure all the line callbacks have finish before
@@ -209,7 +242,7 @@ func (p *Process) Start() error {
 	// Sometimes (in docker containers) io.Copy never seems to finish. This is a mega
 	// hack around it. If it doesn't finish after 1 second, just continue.
 	logger.Debug("[Process] Waiting for routines to finish")
-	err = timeoutWait(&waitGroup)
+	err := timeoutWait(&waitGroup)
 	if err != nil {
 		logger.Debug("[Process] Timed out waiting for wait group: (%T: %v)", err, err)
 	}
@@ -223,8 +256,15 @@ func (p *Process) Output() string {
 }
 
 func (p *Process) Kill() error {
-	// Send a sigterm
-	err := p.signal(syscall.SIGTERM)
+	var err error
+	if runtime.GOOS == "windows" {
+		// Sending Interrupt on Windows is not implemented.
+		// https://golang.org/src/os/exec.go?s=3842:3884#L110
+		err = exec.Command("CMD", "/C", "TASKKILL", "/F", "/PID", strconv.Itoa(p.Pid)).Run()
+	} else {
+		// Send a sigterm
+		err = p.signal(syscall.SIGTERM)
+	}
 	if err != nil {
 		return err
 	}
@@ -358,4 +398,32 @@ func timeoutWait(waitGroup *sync.WaitGroup) error {
 	}
 
 	return nil
+}
+
+// outputBuffer is a goroutine safe bytes.Buffer
+type outputBuffer struct {
+	sync.RWMutex
+	buf bytes.Buffer
+}
+
+// Write appends the contents of p to the buffer, growing the buffer as needed. It returns
+// the number of bytes written.
+func (ob *outputBuffer) Write(p []byte) (n int, err error) {
+	ob.Lock()
+	defer ob.Unlock()
+	return ob.buf.Write(p)
+}
+
+// WriteString appends the contents of s to the buffer, growing the buffer as needed. It returns
+// the number of bytes written.
+func (ob *outputBuffer) WriteString(s string) (n int, err error) {
+	return ob.Write([]byte(s))
+}
+
+// String returns the contents of the unread portion of the buffer
+// as a string.  If the Buffer is a nil pointer, it returns "<nil>".
+func (ob *outputBuffer) String() string {
+	ob.RLock()
+	defer ob.RUnlock()
+	return ob.buf.String()
 }

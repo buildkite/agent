@@ -50,10 +50,14 @@ func (u *GSUploader) Setup(destination string, debugHTTP bool) error {
 }
 
 func (u *GSUploader) URL(artifact *api.Artifact) string {
-	// If not publicly accessible, GET on this URL results in 403.
+	host := "storage.googleapis.com"
+	if os.Getenv("BUILDKITE_GCS_ACCESS_HOST") != "" {
+		host = os.Getenv("BUILDKITE_GCS_ACCESS_HOST")
+	}
+
 	var artifactURL = &url.URL{
 		Scheme: "https",
-		Host:   "storage.googleapis.com",
+		Host:   host,
 		Path:   u.BucketName() + "/" + u.artifactPath(artifact),
 	}
 	return artifactURL.String()
@@ -80,8 +84,9 @@ func (u *GSUploader) Upload(artifact *api.Artifact) error {
 			u.artifactPath(artifact), u.BucketName(), permission)
 	}
 	object := &storage.Object{
-		Name:        u.artifactPath(artifact),
-		ContentType: u.mimeType(artifact),
+		Name:               u.artifactPath(artifact),
+		ContentType:        u.mimeType(artifact),
+		ContentDisposition: u.contentDisposition(artifact),
 	}
 	file, err := os.Open(artifact.AbsolutePath)
 	if err != nil {
@@ -144,4 +149,8 @@ func (u *GSUploader) mimeType(a *api.Artifact) string {
 	} else {
 		return "binary/octet-stream"
 	}
+}
+
+func (u *GSUploader) contentDisposition(a *api.Artifact) string {
+	return fmt.Sprintf("inline; filename=\"%s\"", filepath.Base(a.Path))
 }

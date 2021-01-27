@@ -1,25 +1,13 @@
-version: '2'
+version: '2.1'
 
 services:
-
   agent:
-    image: golang:1.8
+    build: .
     working_dir: /go/src/github.com/buildkite/agent
     volumes:
-      - ./:/go/src/github.com/buildkite/agent
+      - ./:/go/src/github.com/buildkite/agent:cached
     environment:
-      BUILDKITE_BUILD_NUMBER:
-
-  github-release:
-    build:
-      context: .
-      dockerfile: Dockerfile-github-release
-    volumes:
-      - ./:/app
-      - /usr/bin/buildkite-agent:/usr/bin/buildkite-agent
-    working_dir: /app
-    environment:
-      - BUILDKITE_AGENT_ACCESS_TOKEN
-      - BUILDKITE_JOB_ID
-      - BUILDKITE_BUILD_ID
       - BUILDKITE_BUILD_NUMBER
+      - BUILDKITE_JOB_ID
+      - "BUILDKITE_AGENT_TAGS=queue=default"
+      - "BUILDKITE_BUILD_PATH=/buildkite"

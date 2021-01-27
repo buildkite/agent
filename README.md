@@ -1,6 +1,6 @@
 # Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
 
-_Note: This is the 3.0 development branch of the buildkite-agent, and may not contain files or code in the current stable release. To see code or submit PRs for stable agent versions, please use the corresponding maintenance branch: [2.6.x](https://github.com/buildkite/agent/tree/2-6-stable)_.
+_Note: This is the development branch of the buildkite-agent, and may not contain files or code in the current stable release. To see code or submit PRs for stable agent versions, please use the corresponding maintenance branch: [3.0.x](https://github.com/buildkite/agent/tree/3-0-stable)_.
 
 The buildkite-agent is a small, reliable, and cross-platform build runner that makes it easy to run automated builds on your own infrastructure. It’s main responsibilities are polling [buildkite.com](https://buildkite.com/) for work, running build jobs, reporting back the status code and output log of the job, and uploading the job's artifacts.
 
@@ -32,17 +32,19 @@ The agents page on Buildkite has personalised instructions for installing the ag
 
 To start an agent all you need is your agent token, which you can find on your Agents page within Buildkite.
 
-```
-$ buildkite-agent start --token
+```bash
+buildkite-agent start --token
 ```
 
 ## Development
 
+These instructions assume you are running a recent macOS, but could easily be adapted to Linux and Windows.
+
 ### With Docker
 
 ```bash
-$ docker-compose run agent bash
-root@d854f845511a:/go/src/github.com/buildkite/agent# go run *.go start --token xxx --debug
+docker-compose run agent bash
+root@d854f845511a:/go/src/github.com/buildkite/agent# go run main.go start --token xxx --debug
 ```
 
 ### Without Docker
@@ -52,12 +54,12 @@ root@d854f845511a:/go/src/github.com/buildkite/agent# go run *.go start --token 
 brew install go
 
 # Setup your GOPATH
-export GOPATH="$HOME/Code/go"
-export PATH="$HOME/Code/go/bin:$PATH"
+export GOPATH="$HOME/go"
+export PATH="$HOME/go/bin:$PATH"
 
 # Checkout the code
 go get github.com/buildkite/agent
-cd "$GOPATH/src/github.com/buildkite/agent"
+cd "$HOME/go/src/github.com/buildkite/agent"
 ```
 
 To test the commands locally:
@@ -66,9 +68,22 @@ To test the commands locally:
 go run main.go start --debug --token "abc123"
 ```
 
+### Windows via Vagrant
+
+This requires either Virtualbox (free) or VMWare Fusion + Vagrant VMWare Fusion plugin (paid).
+
+It assumes that you have Docker for Mac or similar installed. The following commands are run on your local machine. Expect things to take a long time, the vagrant box is 10GB and the docker base image is 3.4GB.
+
+```bash
+vagrant up
+eval $(docker-machine env windows-2016)
+docker-compose -f docker-compose.windows.yml run agent cmd
+C:\gopath\src\github.com\buildkite\agent> go run main.go start --token xxx --debug
+```
+
 ### Dependency management
 
-We're using [govendor](https://github.com/kardianos/govendor) to manage our Go depenencies. Install it with:
+We're using [govendor](https://github.com/kardianos/govendor) to manage our Go dependencies. Install it with:
 
 ```bash
 go get github.com/kardianos/govendor
@@ -86,16 +101,18 @@ Or explicitly fetch it with a version using:
 govendor fetch github.com/buildkite/go-buildkite@v2.0.0
 ```
 
-Check out the [govendor repo](https://github.com/kardianos/govendor) and [dev guide](https://github.com/kardianos/govendor/blob/master/doc/dev-guide.md) for more docs.
-
 ## Contributing
 
 1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+1. Create your feature branch (`git checkout -b my-new-feature`)
+1. Commit your changes (`git commit -am 'Add some feature'`)
+1. Push to the branch (`git push origin my-new-feature`)
+1. Create new Pull Request
+
+## Contributors
+
+Many thanks to our fine contributors! @adill, @airhorns, @alexjurkiewicz, @bendrucker, @bradfeehan, @byroot, @cab, @caiofbpa, @colinrymer, @cysp, @daveoflynn, @daveoxley, @daveslutzkin, @davidk-zenefits, @DazWorrall, @dch, @deoxxa, @dgoodlad, @donpinkster, @essen, @grosskur, @jgavris, @joelmoss, @jules2689, @julianwa, @kouky, @marius92mc, @mirdhyn, @mousavian, @nikyoudale, @pda, @rprieto, @samritchie, @silarsis, @skevy, @stefanmb, @tekacs, @theojulienne, @tommeier, @underscorediscovery, and @wolfeidau.
 
 ## Copyright
 
-Copyright (c) 2014-2016 Keith Pitt, Buildkite Pty Ltd. See LICENSE for details.
+Copyright (c) 2014-2017 Buildkite Pty Ltd. See [LICENSE](./LICENSE.txt) for details.

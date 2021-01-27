@@ -1,104 +1,133 @@
 package agent
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
-	"path/filepath"
+	"os"
 	"reflect"
 	"strings"
 
-	"github.com/buildkite/agent/envvar"
-	"github.com/buildkite/agent/logger"
-	"github.com/ghodss/yaml"
+	"github.com/buildkite/agent/env"
+	"github.com/buildkite/interpolate"
+
+	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice
+	yaml "github.com/buildkite/yaml"
 )
 
 type PipelineParser struct {
+	Env      *env.Environment
 	Filename string
 	Pipeline []byte
 }
 
-func (p PipelineParser) Parse() (pipeline interface{}, err error) {
-	// First try and figure out the format from the filename
-	format, err := inferFormat(p.Pipeline, p.Filename)
-	if err != nil {
-		return nil, err
+func (p PipelineParser) Parse() (interface{}, error) {
+	if p.Env == nil {
+		p.Env = env.FromSlice(os.Environ())
 	}
 
-	// Unmarshal the pipeline into an actual data structure
-	unmarshaled, err := unmarshal(p.Pipeline, format)
-	if err != nil {
-		return nil, err
-	}
-
-	// Recursivly go through the entire pipeline and perform environment
-	// variable interpolation on strings
-	interpolated, err := interpolate(unmarshaled)
-	if err != nil {
-		return nil, err
-	}
-
-	return interpolated, nil
-}
-
-func inferFormat(pipeline []byte, filename string) (string, error) {
-	// If we have a filename, try and figure out a format from that
-	if filename != "" {
-		extension := filepath.Ext(filename)
-		if extension == ".yaml" || extension == ".yml" {
-			return "yaml", nil
-		} else if extension == ".json" {
-			return "json", nil
-		}
-	}
-
-	// Boo...we couldn't figure it out based on the filename. Next we'll
-	// use a very dirty and ugly way of detecting if the pipeline is JSON.
-	// It's not nice...but seems to work really well for our use case!
-	firstCharacter := string(strings.TrimSpace(string(pipeline))[0])
-	if firstCharacter == "{" || firstCharacter == "[" {
-		return "json", nil
-	}
-
-	// If nothing else could be figured out, then default to YAML
-	return "yaml", nil
-}
-
-func unmarshal(pipeline []byte, format string) (interface{}, error) {
-	var unmarshaled interface{}
-
-	if format == "yaml" {
-		logger.Debug("Parsing pipeline configuration as YAML")
-
-		err := yaml.Unmarshal(pipeline, &unmarshaled)
-		if err != nil {
-			// Error messages from the YAML parser have this ugly
-			// prefix, so I'll just strip it for the sake of the
-			// "aesthetics"
-			message := strings.Replace(fmt.Sprintf("%s", err), "error converting YAML to JSON: yaml: ", "", 1)
-
-			return nil, fmt.Errorf("Failed to parse YAML: %s", message)
-		}
-	} else if format == "json" {
-		logger.Debug("Parsing pipeline configuration as JSON")
-
-		err := json.Unmarshal(pipeline, &unmarshaled)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to parse JSON: %s", err)
-		}
+	var errPrefix string
+	if p.Filename == "" {
+		errPrefix = "Failed to parse pipeline"
 	} else {
-		if format == "" {
-			return nil, fmt.Errorf("No format was supplied")
+		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
+	}
+
+	var pipeline interface{}
+	var pipelineAsSlice []interface{}
+
+	// Historically we support uploading just steps, so we parse it as either a
+	// slice, or if it's a map we need to do environment block processing
+	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipelineAsSlice); err == nil {
+		pipeline = pipelineAsSlice
+	} else {
+		pipelineAsMap, err := p.parseWithEnv()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
+		}
+		pipeline = pipelineAsMap
+	}
+
+	// Recursively go through the entire pipeline and perform environment
+	// variable interpolation on strings
+	interpolated, err := p.interpolate(pipeline)
+	if err != nil {
+		return nil, err
+	}
+
+	// Now we roundtrip this back into YAML bytes and back into a generic interface{}
+	// that works with all upstream code (which likes working with JSON). Specifically we
+	// need to convert the map[interface{}]interface{}'s that YAML likes into JSON compatible
+	// map[string]interface{}
+	b, err := yaml.Marshal(interpolated)
+	if err != nil {
+		return nil, err
+	}
+
+	var result interface{}
+	if err := unmarshalAsStringMap(b, &result); err != nil {
+		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
+	}
+
+	return result, nil
+}
+
+func (p PipelineParser) parseWithEnv() (interface{}, error) {
+	var pipeline yaml.MapSlice
+
+	// Initially we unmarshal this into a yaml.MapSlice so that we preserve the order of maps
+	if err := yaml.Unmarshal([]byte(p.Pipeline), &pipeline); err != nil {
+		return nil, err
+	}
+
+	// Preprocess any env tat are defined in the top level block and place them into env for
+	// later interpolation into env blocks
+	if item, ok := mapSliceItem("env", pipeline); ok {
+		if envMap, ok := item.Value.(yaml.MapSlice); ok {
+			if err := p.interpolateEnvBlock(envMap); err != nil {
+				return nil, err
+			}
 		} else {
-			return nil, fmt.Errorf("Unknown format `%s`", format)
+			return nil, fmt.Errorf("Expected pipeline top-level env block to be a map, got %T", item)
 		}
 	}
 
-	return unmarshaled, nil
+	return pipeline, nil
+}
+
+func mapSliceItem(key string, s yaml.MapSlice) (yaml.MapItem, bool) {
+	for _, item := range s {
+		if k, ok := item.Key.(string); ok && k == key {
+			return item, true
+		}
+	}
+	return yaml.MapItem{}, false
+}
+
+func (p PipelineParser) interpolateEnvBlock(envMap yaml.MapSlice) error {
+	for _, item := range envMap {
+		k, ok := item.Key.(string)
+		if !ok {
+			return fmt.Errorf("Unexpected type of %T for env block key %v", item.Key, item.Key)
+		}
+		switch tv := item.Value.(type) {
+		case string:
+			interpolated, err := interpolate.Interpolate(p.Env, tv)
+			if err != nil {
+				return err
+			}
+			p.Env.Set(k, interpolated)
+		}
+	}
+	return nil
+}
+
+func formatYAMLError(err error) error {
+	return errors.New(strings.TrimPrefix(err.Error(), "yaml: "))
 }
 
 // interpolate function inspired from: https://gist.github.com/hvoecking/10772475
 
-func interpolate(obj interface{}) (interface{}, error) {
+func (p PipelineParser) interpolate(obj interface{}) (interface{}, error) {
 	// Make sure there's something actually to interpolate
 	if obj == nil {
 		return nil, nil
@@ -110,7 +139,7 @@ func interpolate(obj interface{}) (interface{}, error) {
 	// Make a copy that we'll add the new values to
 	copy := reflect.New(original.Type()).Elem()
 
-	err := interpolateRecursive(copy, original)
+	err := p.interpolateRecursive(copy, original)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +148,7 @@ func interpolate(obj interface{}) (interface{}, error) {
 	return copy.Interface(), nil
 }
 
-func interpolateRecursive(copy, original reflect.Value) error {
+func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error {
 	switch original.Kind() {
 	// If it is a pointer we need to unwrap and call once again
 	case reflect.Ptr:
@@ -137,7 +166,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 		copy.Set(reflect.New(originalValue.Type()))
 
 		// Unwrap the newly created pointer
-		err := interpolateRecursive(copy.Elem(), originalValue)
+		err := p.interpolateRecursive(copy.Elem(), originalValue)
 		if err != nil {
 			return err
 		}
@@ -159,7 +188,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 		// points to, so we have to call Elem() to unwrap it
 		copyValue := reflect.New(originalValue.Type()).Elem()
 
-		err := interpolateRecursive(copyValue, originalValue)
+		err := p.interpolateRecursive(copyValue, originalValue)
 		if err != nil {
 			return err
 		}
@@ -169,7 +198,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 	// If it is a struct we interpolate each field
 	case reflect.Struct:
 		for i := 0; i < original.NumField(); i += 1 {
-			err := interpolateRecursive(copy.Field(i), original.Field(i))
+			err := p.interpolateRecursive(copy.Field(i), original.Field(i))
 			if err != nil {
 				return err
 			}
@@ -180,7 +209,7 @@ func interpolateRecursive(copy, original reflect.Value) error {
 		copy.Set(reflect.MakeSlice(original.Type(), original.Len(), original.Cap()))
 
 		for i := 0; i < original.Len(); i += 1 {
-			err := interpolateRecursive(copy.Index(i), original.Index(i))
+			err := p.interpolateRecursive(copy.Index(i), original.Index(i))
 			if err != nil {
 				return err
 			}
@@ -195,17 +224,26 @@ func interpolateRecursive(copy, original reflect.Value) error {
 
 			// New gives us a pointer, but again we want the value
 			copyValue := reflect.New(originalValue.Type()).Elem()
-			err := interpolateRecursive(copyValue, originalValue)
+			err := p.interpolateRecursive(copyValue, originalValue)
 			if err != nil {
 				return err
 			}
 
-			copy.SetMapIndex(key, copyValue)
+			// Also interpolate the key if it's a string
+			if key.Kind() == reflect.String {
+				interpolatedKey, err := interpolate.Interpolate(p.Env, key.Interface().(string))
+				if err != nil {
+					return err
+				}
+				copy.SetMapIndex(reflect.ValueOf(interpolatedKey), copyValue)
+			} else {
+				copy.SetMapIndex(key, copyValue)
+			}
 		}
 
 	// If it is a string interpolate it (yay finally we're doing what we came for)
 	case reflect.String:
-		interpolated, err := envvar.Interpolate(original.Interface().(string))
+		interpolated, err := interpolate.Interpolate(p.Env, original.Interface().(string))
 		if err != nil {
 			return err
 		}
@@ -217,4 +255,47 @@ func interpolateRecursive(copy, original reflect.Value) error {
 	}
 
 	return nil
+}
+
+// Unmarshal YAML to map[string]interface{} instead of map[interface{}]interface{}, such that
+// we can Marshal cleanly into JSON
+// Via https://github.com/go-yaml/yaml/issues/139#issuecomment-220072190
+func unmarshalAsStringMap(in []byte, out interface{}) error {
+	var res interface{}
+
+	if err := yaml.Unmarshal(in, &res); err != nil {
+		return err
+	}
+	*out.(*interface{}) = cleanupMapValue(res)
+
+	return nil
+}
+
+func cleanupInterfaceArray(in []interface{}) []interface{} {
+	res := make([]interface{}, len(in))
+	for i, v := range in {
+		res[i] = cleanupMapValue(v)
+	}
+	return res
+}
+
+func cleanupInterfaceMap(in map[interface{}]interface{}) map[string]interface{} {
+	res := make(map[string]interface{})
+	for k, v := range in {
+		res[fmt.Sprintf("%v", k)] = cleanupMapValue(v)
+	}
+	return res
+}
+
+func cleanupMapValue(v interface{}) interface{} {
+	switch v := v.(type) {
+	case []interface{}:
+		return cleanupInterfaceArray(v)
+	case map[interface{}]interface{}:
+		return cleanupInterfaceMap(v)
+	case nil, bool, string, int, float64:
+		return v
+	default:
+		panic("Unhandled map type " + fmt.Sprintf("%T", v))
+	}
 }

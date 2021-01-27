@@ -7,6 +7,8 @@ import (
 )
 
 func TestS3DowloaderBucketPath(t *testing.T) {
+	t.Parallel()
+
 	s3Uploader := S3Downloader{Bucket: "s3://my-bucket-name/foo/bar"}
 	assert.Equal(t, s3Uploader.BucketPath(), "foo/bar")
 
@@ -15,6 +17,8 @@ func TestS3DowloaderBucketPath(t *testing.T) {
 }
 
 func TestS3DowloaderBucketName(t *testing.T) {
+	t.Parallel()
+
 	s3Uploader := S3Downloader{Bucket: "s3://my-bucket-name/foo/bar"}
 	assert.Equal(t, s3Uploader.BucketName(), "my-bucket-name")
 
@@ -23,6 +27,8 @@ func TestS3DowloaderBucketName(t *testing.T) {
 }
 
 func TestS3DowloaderBucketFileLocation(t *testing.T) {
+	t.Parallel()
+
 	s3Uploader := S3Downloader{Bucket: "s3://my-bucket-name/s3/folder", Path: "here/please/right/now/"}
 	assert.Equal(t, s3Uploader.BucketFileLocation(), "s3/folder/here/please/right/now/")
 
