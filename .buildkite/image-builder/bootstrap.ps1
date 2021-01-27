@@ -10,6 +10,8 @@ $Env:Path = "C:\GoPath\bin;" + $Env:Path
 [Environment]::SetEnvironmentVariable('GOPATH', $Env:GOPATH, [EnvironmentVariableTarget]::Machine)
 [Environment]::SetEnvironmentVariable('Path', $env:PATH, [EnvironmentVariableTarget]::Machine)
 
+git config --global core.symlinks true
+
 Write-Output "github.com/buildkite/agent: cloning into git-mirrors"
 git clone -v --mirror -- `
   "git://github.com/buildkite/agent.git" `
