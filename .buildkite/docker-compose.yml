@@ -15,7 +15,7 @@ services:
   # a temporary service for building a mac+arm binary. We can drop this once the above service
   # is using 1.16+
   agent1-16:
-    image: golang:1.16beta1-buster@sha256:d9a340f55e7bf46ba4b13f7d485c4e8e61b4439f40af4a98207c8b676b8478e7
+    image: golang:1.16rc1-buster@sha256:924e207d894369efb63d996a9fcf430b2a452c38bd1227d0cf20c0cf55f32f19
     volumes:
       - ../:/work:cached
     working_dir: /work
