@@ -5,11 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [UNRELEASED](https://github.com/buildkite/agent/compare/v3.26.0...master)
 
 ### Added
+* Add a Linux ppc64 build to the pipeline [#1362](https://github.com/buildkite/agent/pull/1362) ([ticky](https://github.com/ticky))
+* Add support for agent tracing using Datadog APM [#1273](https://github.com/buildkite/agent/pull/1273) ([goodspark](https://github.com/goodspark))
+* Agent can now upload artifacts using AssumedRoles using `BUILDKITE_S3_SESSION_TOKEN` [#1359](https://github.com/buildkite/agent/pull/1359) ([grahamc](https://github.com/grahamc))
+* Improvements to ARM64 support (i.e. Apple Silicon/M1) [#1346](https://github.com/buildkite/agent/pull/1346), [#1354](https://github.com/buildkite/agent/pull/1354), [#1343](https://github.com/buildkite/agent/pull/1343) ([ticky](https://github.com/ticky))
 
-- Support for job tracing via [Datadog APM](https://www.datadoghq.com/product/apm/). To enable, either set the `tracing-backend` config or the `BUILDKITE_TRACING_BACKEND` env var to `datadog`. By default the agent will attempt to send traces to the default agent address and APM port (`127.0.0.1:8126`), but this can be configured with the `DD_AGENT_HOST` and `DD_AGENT_APM_PORT` env vars.
+### Changed
+* Compile the darwin/arm64 binary using go 1.16beta1 [#1352](https://github.com/buildkite/agent/pull/1352) ([yob](https://github.com/yob))
+* Use Docker CLI packages, update Docker Compose, and update centos to 8.x [#1351](https://github.com/buildkite/agent/pull/1351) ([RemcodM](https://github.com/RemcodM))
+
+## Fixed
+* Fixed an issue in #1314 that broke pull requests with git-mirrors [#1347](https://github.com/buildkite/agent/pull/1347) ([ticky](https://github.com/ticky))
 
 ## [v3.26.0](https://github.com/buildkite/agent/compare/v3.25.0...v3.26.0) (2020-12-03)
 
