@@ -67,7 +67,7 @@ output_steps_yaml() {
   fi
 }
 
-if [[ "${BUILDKITE_BRANCH}" != "master" && "${DRY_RUN}" != "true" && "${BUILDKITE_BRANCH}" != *-*-stable ]] ; then
+if [[ "${BUILDKITE_BRANCH}" != "main" && "${DRY_RUN}" != "true" && "${BUILDKITE_BRANCH}" != *-*-stable ]] ; then
   echo "No release steps to be uploaded"
   exit 0
 fi
