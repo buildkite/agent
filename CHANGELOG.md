@@ -5,16 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [UNRELEASED](https://github.com/buildkite/agent/compare/v3.26.0...master)
+## [v3.27.0](https://github.com/buildkite/agent/compare/v3.26.0...v3.27.0)
 
 ### Added
-* Add a Linux ppc64 build to the pipeline [#1362](https://github.com/buildkite/agent/pull/1362) ([ticky](https://github.com/ticky))
 * Add support for agent tracing using Datadog APM [#1273](https://github.com/buildkite/agent/pull/1273) ([goodspark](https://github.com/goodspark))
-* Agent can now upload artifacts using AssumedRoles using `BUILDKITE_S3_SESSION_TOKEN` [#1359](https://github.com/buildkite/agent/pull/1359) ([grahamc](https://github.com/grahamc))
 * Improvements to ARM64 support (i.e. Apple Silicon/M1) [#1346](https://github.com/buildkite/agent/pull/1346), [#1354](https://github.com/buildkite/agent/pull/1354), [#1343](https://github.com/buildkite/agent/pull/1343) ([ticky](https://github.com/ticky))
+* Add a Linux ppc64 build to the pipeline [#1362](https://github.com/buildkite/agent/pull/1362) ([ticky](https://github.com/ticky))
+* Agent can now upload artifacts using AssumedRoles using `BUILDKITE_S3_SESSION_TOKEN` [#1359](https://github.com/buildkite/agent/pull/1359) ([grahamc](https://github.com/grahamc))
 
 ### Changed
-* Compile the darwin/arm64 binary using go 1.16beta1 [#1352](https://github.com/buildkite/agent/pull/1352) ([yob](https://github.com/yob))
+* Compile the darwin/arm64 binary using go 1.16rc1 [#1352](https://github.com/buildkite/agent/pull/1352) ([yob](https://github.com/yob)) [#1369](https://github.com/buildkite/agent/pull/1369) ([chloeruka](https://github.com/chloeruka))
 * Use Docker CLI packages, update Docker Compose, and update centos to 8.x [#1351](https://github.com/buildkite/agent/pull/1351) ([RemcodM](https://github.com/RemcodM))
 
 ## Fixed
