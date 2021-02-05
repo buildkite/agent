@@ -10,6 +10,8 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -730,6 +732,9 @@ var AgentStartCommand = cli.Command{
 			} else {
 				l.Info("Registering agent %d of %d with Buildkite...", i, cfg.Spawn)
 			}
+
+			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
+			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
 
 			// Register the agent with the buildkite API
 			ag, err := agent.Register(l, client, registerReq)
