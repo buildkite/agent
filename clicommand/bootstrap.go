@@ -17,7 +17,7 @@ import (
 
 var BootstrapHelpDescription = `Usage:
 
-   buildkite-agent bootstrap [arguments...]
+   buildkite-agent bootstrap [options...]
 
 Description:
 

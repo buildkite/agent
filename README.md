@@ -10,7 +10,7 @@ Full documentation is available at [buildkite.com/docs/agent](https://buildkite.
 $ buildkite-agent --help
 Usage:
 
-  buildkite-agent <command> [arguments...]
+  buildkite-agent <command> [options...]
 
 Available commands are:
 

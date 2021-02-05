@@ -13,7 +13,7 @@ import (
 
 var StepUpdateHelpDescription = `Usage:
 
-   buildkite-agent step update <attribute> <value> [arguments...]
+   buildkite-agent step update <attribute> <value> [options...]
 
 Description:
 
@@ -34,10 +34,10 @@ type StepUpdateConfig struct {
 	Build     string `cli:"build"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`

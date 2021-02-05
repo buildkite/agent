@@ -15,7 +15,7 @@ import (
 
 var AppHelpTemplate = `Usage:
 
-  {{.Name}} <command> [arguments...]
+  {{.Name}} <command> [options...]
 
 Available commands are:
 
@@ -27,7 +27,7 @@ Use "{{.Name}} <command> --help" for more information about a command.
 
 var SubcommandHelpTemplate = `Usage:
 
-  {{.Name}} {{if .VisibleFlags}}<command>{{end}} [arguments...]
+  {{.Name}} {{if .VisibleFlags}}<command>{{end}} [options...]
 
 Available commands are:
 

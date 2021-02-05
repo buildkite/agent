@@ -29,7 +29,7 @@ import (
 
 var StartDescription = `Usage:
 
-   buildkite-agent start [arguments...]
+   buildkite-agent start [options...]
 
 Description:
 

@@ -21,7 +21,7 @@ import (
 
 var PipelineUploadHelpDescription = `Usage:
 
-   buildkite-agent pipeline upload [file] [arguments...]
+   buildkite-agent pipeline upload [file] [options...]
 
 Description:
 
@@ -56,10 +56,10 @@ type PipelineUploadConfig struct {
 	NoInterpolation bool   `cli:"no-interpolation"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`

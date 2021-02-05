@@ -12,7 +12,7 @@ import (
 
 var StepGetHelpDescription = `Usage:
 
-   buildkite-agent step get <attribute> [arguments...]
+   buildkite-agent step get <attribute> [options...]
 
 Description:
 
@@ -37,10 +37,10 @@ type StepGetConfig struct {
 	Format    string `cli:"format"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
