@@ -12,7 +12,7 @@ import (
 
 var MetaDataKeysHelpDescription = `Usage:
 
-   buildkite-agent meta-data keys [arguments...]
+   buildkite-agent meta-data keys [options...]
 
 Description:
 
@@ -27,10 +27,10 @@ type MetaDataKeysConfig struct {
 	Job string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`

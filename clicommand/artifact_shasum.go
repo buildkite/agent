@@ -11,7 +11,7 @@ import (
 
 var ShasumHelpDescription = `Usage:
 
-   buildkite-agent artifact shasum [arguments...]
+   buildkite-agent artifact shasum [options...]
 
 Description:
 

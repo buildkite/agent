@@ -15,7 +15,7 @@ import (
 
 var AnnotateHelpDescription = `Usage:
 
-   buildkite-agent annotate [body] [arguments...]
+   buildkite-agent annotate [body] [options...]
 
 Description:
 
@@ -55,10 +55,10 @@ type AnnotateConfig struct {
 	Job     string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug   bool         `cli:"debug"`
-	NoColor bool         `cli:"no-color"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile string       `cli:"profile"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
