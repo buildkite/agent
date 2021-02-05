@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 
@@ -25,7 +24,7 @@ type PipelineParser struct {
 
 func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 	if p.Env == nil {
-		p.Env = env.FromSlice(os.Environ())
+		p.Env = env.New()
 	}
 
 	var errPrefix string

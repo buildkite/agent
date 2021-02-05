@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 
@@ -245,42 +244,6 @@ func decodeIntoStruct(into interface{}, from interface{}) error {
 	return json.Unmarshal(b, into)
 }
 
-func TestPipelineParserLoadsSystemEnvironment(t *testing.T) {
-	var pipeline = `{
-		"steps": [{
-			"command": "echo ${LLAMAS_ROCK?}"
-		}]
-	}`
-
-	var decoded struct {
-		Steps []struct {
-			Command string `json:"command"`
-		} `json:"steps"`
-	}
-
-	_, err := PipelineParser{Pipeline: []byte(pipeline)}.Parse()
-	if err == nil {
-		t.Fatalf("Expected $LLAMAS_ROCK: not set")
-	}
-
-	os.Setenv("LLAMAS_ROCK", "absolutely")
-	defer os.Unsetenv("LLAMAS_ROCK")
-
-	result2, err := PipelineParser{Pipeline: []byte(pipeline)}.Parse()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = decodeIntoStruct(&decoded, result2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if decoded.Steps[0].Command != "echo absolutely" {
-		t.Fatalf("Unexpected: %q", decoded.Steps[0].Command)
-	}
-}
-
 func TestPipelineParserPreservesOrderOfPlugins(t *testing.T) {
 	var pipeline = `---
 steps:
@@ -330,7 +293,6 @@ func TestPipelineParserParsesConditionalWithEndOfLineAnchorDollarSign(t *testing
 		result, err := PipelineParser{
 			Pipeline:        []byte(row.pipeline),
 			NoInterpolation: row.noInterpolation,
-			Env:             env.New(),
 		}.Parse()
 		assert.NoError(t, err)
 		j, _ := json.Marshal(result)
