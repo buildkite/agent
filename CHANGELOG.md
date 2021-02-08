@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * Improvements to ARM64 support (i.e. Apple Silicon/M1) [#1346](https://github.com/buildkite/agent/pull/1346), [#1354](https://github.com/buildkite/agent/pull/1354), [#1343](https://github.com/buildkite/agent/pull/1343) ([ticky](https://github.com/ticky))
 * Add a Linux ppc64 build to the pipeline [#1362](https://github.com/buildkite/agent/pull/1362) ([ticky](https://github.com/ticky))
 * Agent can now upload artifacts using AssumedRoles using `BUILDKITE_S3_SESSION_TOKEN` [#1359](https://github.com/buildkite/agent/pull/1359) ([grahamc](https://github.com/grahamc))
+* Agent name `%spawn` interpolation to deprecate/replace `%n` [#1377](https://github.com/buildkite/agent/pull/1377) ([ticky](https://github.com/ticky))
 
 ### Changed
 * Compile the darwin/arm64 binary using go 1.16rc1 [#1352](https://github.com/buildkite/agent/pull/1352) ([yob](https://github.com/yob)) [#1369](https://github.com/buildkite/agent/pull/1369) ([chloeruka](https://github.com/chloeruka))
