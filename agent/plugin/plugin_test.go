@@ -364,6 +364,24 @@ func TestConfigurationToEnvironment(t *testing.T) {
 		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_ARRAY_KEY_0_SUBKEY_2=llamas",
 		"BUILDKITE_PLUGIN_NAME=DOCKER_COMPOSE",
 	}, envMap.ToSlice())
+
+	// Ensure on duplicate plugin definition, each plugin gets its respective config exported
+	plugins, err := duplicatePluginFromConfig(t, `{ "config-key": 41 }`, `{ "second-ref-key": 42 }`)
+	assert.NoError(t, err)
+	envMap1, err := plugins[0].ConfigurationToEnvironment()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{
+		"BUILDKITE_PLUGIN_CONFIGURATION={\"config-key\":41}",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_CONFIG_KEY=41",
+		"BUILDKITE_PLUGIN_NAME=DOCKER_COMPOSE",
+	}, envMap1.ToSlice())
+	envMap2, err := plugins[1].ConfigurationToEnvironment()
+	assert.NoError(t, err)
+	assert.Equal(t, []string{
+		"BUILDKITE_PLUGIN_CONFIGURATION={\"second-ref-key\":42}",
+		"BUILDKITE_PLUGIN_DOCKER_COMPOSE_SECOND_REF_KEY=42",
+		"BUILDKITE_PLUGIN_NAME=DOCKER_COMPOSE",
+	}, envMap2.ToSlice())
 }
 
 func pluginEnvFromConfig(t *testing.T, configJson string) (*env.Environment, error) {
@@ -379,4 +397,21 @@ func pluginEnvFromConfig(t *testing.T, configJson string) (*env.Environment, err
 	assert.Equal(t, 1, len(plugins))
 
 	return plugins[0].ConfigurationToEnvironment()
+}
+
+func duplicatePluginFromConfig(t *testing.T, configJson1, configJson2 string) ([]*Plugin, error) {
+	var config1 map[string]interface{}
+	var config2 map[string]interface{}
+
+	json.Unmarshal([]byte(configJson1), &config1)
+	json.Unmarshal([]byte(configJson1), &config2)
+
+	jsonString := fmt.Sprintf(`[ { "%s": %s }, { "%s": %s } ]`, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", configJson1, "github.com/buildkite-plugins/docker-compose-buildkite-plugin", configJson2)
+
+	plugins, err := CreateFromJSON(jsonString)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(plugins))
+
+	return plugins, nil
 }
