@@ -2,20 +2,7 @@ version: '3.5'
 
 services:
   agent:
-    image: golang:1.15@sha256:1ba0da74b20aad52b091877b0e0ece503c563f39e37aa6b0e46777c4d820a2ae
-    volumes:
-      - ../:/work:cached
-    working_dir: /work
-    environment:
-      - BUILDKITE_BUILD_NUMBER
-      - BUILDKITE_JOB_ID
-      - "BUILDKITE_AGENT_TAGS=queue=default"
-      - "BUILDKITE_BUILD_PATH=/buildkite"
-
-  # a temporary service for building a mac+arm binary. We can drop this once the above service
-  # is using 1.16+
-  agent1-16:
-    image: golang:1.16rc1-buster@sha256:924e207d894369efb63d996a9fcf430b2a452c38bd1227d0cf20c0cf55f32f19
+    image: golang:1.16@sha256:f3f90f4d30866c1bdae90012b506bd5e557ce27ccd2510ed30a011c44c1affc8
     volumes:
       - ../:/work:cached
     working_dir: /work
