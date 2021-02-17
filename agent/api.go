@@ -11,6 +11,7 @@ type APIClient interface {
 	AcceptJob(*api.Job) (*api.Job, *api.Response, error)
 	AcquireJob(string) (*api.Job, *api.Response, error)
 	Annotate(string, *api.Annotation) (*api.Response, error)
+	AnnotationRemove(string, string) (*api.Response, error)
 	Config() api.Config
 	Connect() (*api.Response, error)
 	CreateArtifacts(string, *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error)
