@@ -258,6 +258,16 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 	// Sort them into a consistent order
 	sort.Strings(envSlice)
 
+	// Append current plugin name
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
+
+	// Append current plugin configuration as JSON
+	configJson, err := json.Marshal(p.Configuration)
+	if err != nil {
+		return nil, err
+	}
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJson))
+
 	return env.FromSlice(envSlice), nil
 }
 
