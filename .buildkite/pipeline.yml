@@ -134,7 +134,7 @@ steps:
     plugins:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
-        run: agent1-16
+        run: agent
 
   - name: ":freebsd: amd64"
     command: ".buildkite/steps/build-binary.sh freebsd amd64"
