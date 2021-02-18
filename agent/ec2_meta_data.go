@@ -40,7 +40,6 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 	if err != nil {
 		return metaData, err
 	}
-
 	metaData["aws:instance-id"] = string(instanceId)
 
 	instanceType, err := c.GetMetadata("instance-type")
@@ -54,6 +53,11 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 		return metaData, err
 	}
 	metaData["aws:ami-id"] = string(amiId)
+
+	instanceLifeCycle, err := c.GetMetadata("instance-life-cycle")
+	if err == nil {
+		metaData["aws:instance-life-cycle"] = string(instanceLifeCycle)
+	}
 
 	return metaData, nil
 }
