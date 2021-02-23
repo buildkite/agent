@@ -27,12 +27,12 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2 // indirect
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
+	github.com/rjeczalik/interfaces v0.1.1
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/stretchr/testify v1.5.1
 	github.com/urfave/cli v1.22.4
 	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073
 	golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
-	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
 	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7 // indirect
