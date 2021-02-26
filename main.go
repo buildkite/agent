@@ -64,6 +64,13 @@ func main() {
 		clicommand.AgentStartCommand,
 		clicommand.AnnotateCommand,
 		{
+			Name:  "annotation",
+			Usage: "Make changes an annotation on the currently running build",
+			Subcommands: []cli.Command{
+				clicommand.AnnotationRemoveCommand,
+			},
+		},
+		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",
 			Subcommands: []cli.Command{
