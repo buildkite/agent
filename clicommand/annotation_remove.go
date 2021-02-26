@@ -56,7 +56,7 @@ var AnnotationRemoveCommand = cli.Command{
     cli.StringFlag{
       Name:   "job",
       Value:  "",
-      Usage:  "Which job should the annotation come from",
+      Usage:  "Which job is removing the annotation",
       EnvVar: "BUILDKITE_JOB_ID",
     },
 
