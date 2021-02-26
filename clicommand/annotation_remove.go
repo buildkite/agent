@@ -18,7 +18,7 @@ Description:
    Remove an existing annotation which was previously published using the
    buildkite-agent annotate command.
 
-   Or if you leave context blank, it will use the default context.
+   If you leave context blank, it will use the default context.
 
 Example:
 
