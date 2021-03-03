@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )
 
@@ -81,6 +82,7 @@ type BootstrapConfig struct {
 	Experiments                  []string `cli:"experiment" normalize:"list"`
 	Phases                       []string `cli:"phases" normalize:"list"`
 	Profile                      string   `cli:"profile"`
+	CancelSignal                 string   `cli:"cancel-signal"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
 }
@@ -297,6 +299,12 @@ var BootstrapCommand = cli.Command{
 			Usage:  "The specific phases to execute. The order they're defined is irrelevant.",
 			EnvVar: "BUILDKITE_BOOTSTRAP_PHASES",
 		},
+		cli.StringFlag{
+			Name:   "cancel-signal",
+			Usage:  "The signal to use for cancellation",
+			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
+			Value:  "SIGTERM",
+		},
 		cli.StringSliceFlag{
 			Name:   "redacted-vars",
 			Usage:  "Pattern of environment variable names containing sensitive values",
@@ -353,6 +361,11 @@ var BootstrapCommand = cli.Command{
 			}
 		}
 
+		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
+		if err != nil {
+			l.Fatal("Failed to parse cancel-signal: %v", err)
+		}
+
 		// Configure the bootstraper
 		bootstrap := bootstrap.New(bootstrap.Config{
 			Command:                      cfg.Command,
@@ -392,6 +405,7 @@ var BootstrapCommand = cli.Command{
 			SSHKeyscan:                   cfg.SSHKeyscan,
 			Shell:                        cfg.Shell,
 			Phases:                       cfg.Phases,
+			CancelSignal:                 cancelSig,
 			RedactedVars:                 cfg.RedactedVars,
 			TracingBackend:               cfg.TracingBackend,
 		})

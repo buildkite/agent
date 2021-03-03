@@ -85,6 +85,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 
 		b.shell.PTY = b.Config.RunInPty
 		b.shell.Debug = b.Config.Debug
+		b.shell.InterruptSignal = b.Config.CancelSignal
 	}
 
 	// Listen for cancellation
