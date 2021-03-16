@@ -514,6 +514,12 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile
 	}
 
+	// PTY-mode is enabled by default in `start` and `bootstrap`, so we only need
+	// to propagate it if it's explicitly disabled.
+	if r.conf.AgentConfiguration.RunInPty == false {
+		env["BUILDKITE_PTY"] = "false"
+	}
+
 	enablePluginValidation := r.conf.AgentConfiguration.PluginValidation
 	// Allow BUILDKITE_PLUGIN_VALIDATION to be enabled from env for easier
 	// per-pipeline testing
