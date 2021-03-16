@@ -509,6 +509,11 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_AGENT_EXPERIMENT"] = strings.Join(experiments.Enabled(), ",")
 	env["BUILDKITE_REDACTED_VARS"] = strings.Join(r.conf.AgentConfiguration.RedactedVars, ",")
 
+	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
+	if r.conf.CancelSignal != process.SIGTERM {
+		env["BUILDKITE_CANCEL_SIGNAL"] = r.conf.CancelSignal.String()
+	}
+
 	// Whether to enable profiling in the bootstrap
 	if r.conf.AgentConfiguration.Profile != "" {
 		env["BUILDKITE_AGENT_PROFILE"] = r.conf.AgentConfiguration.Profile

@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/process"
 )
 
 // Config provides the configuration for the Bootstrap. Some of the keys are
@@ -126,6 +127,9 @@ type Config struct {
 
 	// Phases to execute, defaults to all phases
 	Phases []string
+
+	// What signal to use for command cancellation
+	CancelSignal process.Signal
 
 	// List of environment variable globs to redact from job output
 	RedactedVars []string
