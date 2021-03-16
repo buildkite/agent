@@ -536,11 +536,7 @@ var AgentStartCommand = cli.Command{
 
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
-			cfg.BootstrapScript = fmt.Sprintf(
-				"%s bootstrap --cancel-signal %s",
-				shellwords.Quote(os.Args[0]),
-				cfg.CancelSignal,
-			)
+			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(os.Args[0]))
 		}
 
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
