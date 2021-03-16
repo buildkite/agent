@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/.buildkite"
+    schedule:
+      interval: "weekly"
