@@ -335,9 +335,8 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 
 	b.shell.Headerf("Running %s hook", name)
 
-	if redactor := b.setupRedactor(); redactor != nil {
-		defer redactor.Flush()
-	}
+	redactors := b.setupRedactor()
+	defer redactors.Flush()
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
@@ -391,11 +390,11 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 	}
 
 	// Finally, apply changes to the current shell and config
-	b.applyEnvironmentChanges(changes.Env, changes.Dir)
+	b.applyEnvironmentChanges(changes.Env, changes.Dir, redactors)
 	return nil
 }
 
-func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string) {
+func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string, redactors RedactorMux) {
 	if dir != b.shell.Getwd() {
 		_ = b.shell.Chdir(dir)
 	}
@@ -404,6 +403,12 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	if environ == nil || environ.Length() == 0 {
 		return
 	}
+
+	mergedEnv := b.shell.Env.Merge(environ)
+
+	// reset output redactors based on new environment variable values
+	redactors.Flush()
+	redactors.Reset(getValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv.ToMap()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
@@ -430,7 +435,7 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	// Now that we've finished telling the user what's changed,
 	// let's mutate the current shell environment to include all
 	// the new values.
-	b.shell.Env = b.shell.Env.Merge(environ)
+	b.shell.Env = mergedEnv
 }
 
 func (b *Bootstrap) hasGlobalHook(name string) bool {
@@ -1665,9 +1670,8 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, cmdToExec)
 	}
 
-	if redactor := b.setupRedactor(); redactor != nil {
-		defer redactor.Flush()
-	}
+	redactors := b.setupRedactor()
+	defer redactors.Flush()
 
 	var cmd []string
 	cmd = append(cmd, shell...)
@@ -1792,31 +1796,54 @@ func (b *Bootstrap) ignoredEnv() []string {
 	return ignored
 }
 
-// Check the redaction config and create a redactor if necessary - may return
-// nil if there's nothing to redact.
-// The redactor is returned so the caller can `defer redactor.Flush()`
-func (b *Bootstrap) setupRedactor() *Redactor {
+// setupRedactor wraps shell output and logging in Redactor if any redaction
+// is necessary based on RedactedVars configuration and the existence of
+// matching environment vars.
+// RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
+func (b *Bootstrap) setupRedactor() RedactorMux {
 	if experiments.IsEnabled("output-redactor") {
 		b.shell.Commentf("Using output-redactor experiment 🧪")
 	} else {
 		return nil
 	}
-
 	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+	var mux RedactorMux
 
-	// If the shell Writer is already a Redactor, don't layer another Redactor
-	// on top of it
+	// If the shell Writer is already a Redactor, reset the values to redact.
 	if redactor, ok := b.shell.Writer.(*Redactor); ok {
-		// Still need to reset the values when re-using the Redactor
 		redactor.Reset(valuesToRedact)
-		return redactor
+		mux = append(mux, redactor)
+	} else if len(valuesToRedact) == 0 {
+		// skip
+	} else {
+		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		b.shell.Writer = redactor
+		mux = append(mux, redactor)
 	}
-	if len(valuesToRedact) == 0 {
-		return nil
+
+	// If the shell.Logger is already a redacted WriterLogger, reset the values to redact.
+	// (maybe there's a better way to do two levels of type assertion? ...
+	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
+	var shellWriterLogger *shell.WriterLogger
+	var shellLoggerRedactor *Redactor
+	if logger, ok := b.shell.Logger.(*shell.WriterLogger); ok {
+		shellWriterLogger = logger
+		if redactor, ok := logger.Writer.(*Redactor); ok {
+			shellLoggerRedactor = redactor
+		}
 	}
-	redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
-	b.shell.Writer = redactor
-	return redactor
+	if redactor := shellLoggerRedactor; redactor != nil {
+		redactor.Reset(valuesToRedact)
+		mux = append(mux, redactor)
+	} else if len(valuesToRedact) == 0 {
+		// skip
+	} else if shellWriterLogger != nil {
+		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		shellWriterLogger.Writer = redactor
+		mux = append(mux, redactor)
+	}
+
+	return mux
 }
 
 // Given a redaction config string and an environment map, return the list of values to be redacted.
