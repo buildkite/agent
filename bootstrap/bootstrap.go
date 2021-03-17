@@ -421,7 +421,12 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	// anything not controlled by us.
 	for k, v := range environ.ToMap() {
 		if _, ok := bootstrapConfigEnvChanges[k]; ok {
-			b.shell.Commentf("%s is now %q", k, v)
+			// Dont print REDACTED ENV changes
+			if b.shell.Env.Get("BUILDKITE_REDACTED_VARS").contains(k) {
+				b.shell.Commentf("%s changed", k)
+			} else {
+				b.shell.Commentf("%s is now %q", k, v)
+			}
 		} else {
 			b.shell.Commentf("%s changed", k)
 		}
