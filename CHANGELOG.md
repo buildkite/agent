@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.28.1](https://github.com/buildkite/agent/compare/v3.27.0...v3.28.1)
+
+### Added
+
+* collect instance-life-cycle as a default tag on EC2 instances [#1374](https://github.com/buildkite/agent/pull/1374) [yob](https://github.com/yob))
+* Expose plugin config in two new instance variables, `BUILDKITE_PLUGIN_NAME` and `BUILDKITE_PLUGIN_CONFIGURATION` [#1382](https://github.com/buildkite/agent/pull/1382) [moensch](https://github.com/moensch)
+* Add `buildkite-agent annotation remove` command [#1364](https://github.com/buildkite/agent/pull/1364/) [ticky](https://github.com/ticky)
+* Allow customizing the signal bootstrap sends to processes on cancel  [#1390](https://github.com/buildkite/agent/pull/1390/) [brentleyjones](https://github.com/brentleyjones)
+
+### Changed
+
+* On new installs the default agent name has changed from `%hostname-%n` to `%hostname-%spawn` [#1389](https://github.com/buildkite/agent/pull/1389) [pda](https://github.com/pda)
+
+## Fixed
+
+* Fixed --no-pty flag [#1394][https://github.com/buildkite/agent/pull/1394] [pda](https://github.com/pda)
+
+## v3.28.0
+
+* Skipped due to a versioning error
+
 ## [v3.27.0](https://github.com/buildkite/agent/compare/v3.26.0...v3.27.0)
 
 ### Added
