@@ -183,7 +183,7 @@ func (p *Process) Run() error {
 				// We can safely ignore this error, because
 				// it's just the PTY telling us that it closed
 				// successfully.  See:
-				// https://github.com/buildkite/agent/v3/pull/34#issuecomment-46080419
+				// https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 				err = nil
 			}
 
