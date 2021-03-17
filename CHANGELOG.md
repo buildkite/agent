@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 * On new installs the default agent name has changed from `%hostname-%n` to `%hostname-%spawn` [#1389](https://github.com/buildkite/agent/pull/1389) [pda](https://github.com/pda)
 
-## Fixed
+### Fixed
 
 * Fixed --no-pty flag [#1394][https://github.com/buildkite/agent/pull/1394] [pda](https://github.com/pda)
 
