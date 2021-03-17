@@ -651,7 +651,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
-		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent/v3")
+		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
 		if agentConf.ConfigPath != "" {
