@@ -30,16 +30,15 @@ type Redactor struct {
 	output io.Writer
 }
 
+type RedactorMux []*Redactor
+
 // Construct a new Redactor, and pre-compile the Boyer-Moore skip table
 func NewRedactor(output io.Writer, replacement string, needles []string) *Redactor {
-
 	redactor := &Redactor{
 		replacement: []byte(replacement),
 		output:      output,
 	}
-
 	redactor.Reset(needles)
-
 	return redactor
 }
 
@@ -233,4 +232,25 @@ func (redactor *Redactor) Flush() error {
 	_, err := redactor.output.Write(redactor.outbuf)
 	redactor.outbuf = redactor.outbuf[:0]
 	return err
+}
+
+// Flush flushes all redactors
+func (mux RedactorMux) Flush() error {
+	var errs []error
+	for _, r := range mux {
+		if err := r.Flush(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) != 0 {
+		return errs[0] // TODO: combine errors
+	}
+	return nil
+}
+
+// Reset resets all redactors with new needles (secrets)
+func (mux RedactorMux) Reset(needles []string) {
+	for _, r := range mux {
+		r.Reset(needles)
+	}
 }
