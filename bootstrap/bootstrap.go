@@ -335,7 +335,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 
 	b.shell.Headerf("Running %s hook", name)
 
-	redactors := b.setupRedactor()
+	redactors := b.setupRedactors()
 	defer redactors.Flush()
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
@@ -1670,7 +1670,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, cmdToExec)
 	}
 
-	redactors := b.setupRedactor()
+	redactors := b.setupRedactors()
 	defer redactors.Flush()
 
 	var cmd []string
@@ -1796,11 +1796,11 @@ func (b *Bootstrap) ignoredEnv() []string {
 	return ignored
 }
 
-// setupRedactor wraps shell output and logging in Redactor if any redaction
+// setupRedactors wraps shell output and logging in Redactor if any redaction
 // is necessary based on RedactedVars configuration and the existence of
 // matching environment vars.
 // RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
-func (b *Bootstrap) setupRedactor() RedactorMux {
+func (b *Bootstrap) setupRedactors() RedactorMux {
 	if experiments.IsEnabled("output-redactor") {
 		b.shell.Commentf("Using output-redactor experiment 🧪")
 	} else {
@@ -1847,7 +1847,7 @@ func (b *Bootstrap) setupRedactor() RedactorMux {
 }
 
 // Given a redaction config string and an environment map, return the list of values to be redacted.
-// Lifted out of Bootstrap.setupRedactor to facilitate testing
+// Lifted out of Bootstrap.setupRedactors to facilitate testing
 func getValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
 	var valuesToRedact []string
 
