@@ -3,7 +3,7 @@ set -euo pipefail
 
 
 echo "--- :package: Downloading bk binary"
-curl -Lfs -o bk https://github.com/buildkite/cli/releases/download/v1.0.0/bk-linux-amd64-1.0.0
+curl -Lfs -o bk https://github.com/buildkite/cli/releases/download/v1.2.0/cli-linux-amd64
 chmod +x ./bk
 
 echo "--- :package: Downloading built binary"
