@@ -219,6 +219,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	runner.process = process.New(l, process.Config{
 		Path:            cmd[0],
 		Args:            cmd[1:],
+		Dir:             conf.AgentConfiguration.BuildPath,
 		Env:             processEnv,
 		PTY:             conf.AgentConfiguration.RunInPty,
 		Stdout:          processWriter,

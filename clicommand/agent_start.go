@@ -25,6 +25,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
 )
@@ -690,6 +691,15 @@ var AgentStartCommand = cli.Command{
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			l.Fatal("Failed to parse cancel-signal: %v", err)
+		}
+
+		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
+		// so we may as well check that'll work now and fail early if it's a problem
+		if !utils.FileExists(agentConf.BuildPath) {
+			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
+			if err := os.MkdirAll(agentConf.BuildPath, 0777); err != nil {
+				l.Fatal("Failed to create builds path: %v", err)
+			}
 		}
 
 		// Create the API client
