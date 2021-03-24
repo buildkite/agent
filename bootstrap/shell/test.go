@@ -36,7 +36,9 @@ func NewTestShell(t *testing.T) *Shell {
 			"ProgramData=" + os.Getenv("ProgramData"),
 		})
 	} else {
-		sh.Env = env.New()
+		sh.Env = env.FromSlice([]string{
+			"PATH=" + os.Getenv("PATH"),
+		})
 	}
 
 	return sh
