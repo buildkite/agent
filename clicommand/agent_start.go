@@ -420,7 +420,7 @@ var AgentStartCommand = cli.Command{
 			Name:   "redacted-vars",
 			Usage:  "Pattern of environment variable names containing sensitive values",
 			EnvVar: "BUILDKITE_REDACTED_VARS",
-			Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN"},
+			Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN", "*_ACCESS_KEY", "*_SECRET_KEY"},
 		},
 		cli.StringFlag{
 			Name:   "tracing-backend",
