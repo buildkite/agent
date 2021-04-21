@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * Output-redactor: redact shell logger, including changed env vars [#1401](https://github.com/buildkite/agent/pull/1401) ([pda](https://github.com/pda))
 * Add *_ACCESS_KEY & *_SECRET_KEY to default redactor-var [#1405](https://github.com/buildkite/agent/pull/1405) ([pda](https://github.com/pda))
 * Build with Golang 1.16.3 [#1412](https://github.com/buildkite/agent/pull/1412) ([dependabot[bot]](https://github.com/apps/dependabot))
-* Update [Buildkite CLI](https://github.com/buildkite/cli) release from 1.0.0 tp 1.2.0 [#1403](https://github.com/buildkite/agent/pull/1403) ([yob](https://github.com/yob))
+* Update [Buildkite CLI](https://github.com/buildkite/cli) release from 1.0.0 to 1.2.0 [#1403](https://github.com/buildkite/agent/pull/1403) ([yob](https://github.com/yob))
 
 ### Fixed 
 * Avoid occasional failure to run jobs when working directory is missing [#1402](https://github.com/buildkite/agent/pull/1402) ([yob](https://github.com/yob))
