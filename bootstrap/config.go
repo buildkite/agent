@@ -83,7 +83,7 @@ type Config struct {
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
 
-	// Are aribtary commands allowed to be executed
+	// Are arbitrary commands allowed to be executed
 	CommandEval bool
 
 	// Are plugins enabled?
