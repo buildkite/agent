@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.29.0](https://github.com/buildkite/agent/compare/v3.28.1...v3.29.0) (2021-04-21)
+
+### Changed
+* Support mips64le architecture target. [#1379](https://github.com/buildkite/agent/pull/1379) ([houfangdong](https://github.com/houfangdong))
+* Search the path for bash when running bootstrap scripts [#1404](https://github.com/buildkite/agent/pull/1404) ([yob](https://github.com/yob))
+* Output-redactor: redact shell logger, including changed env vars [#1401](https://github.com/buildkite/agent/pull/1401) ([pda](https://github.com/pda))
+* Add *_ACCESS_KEY & *_SECRET_KEY to default redactor-var [#1405](https://github.com/buildkite/agent/pull/1405) ([pda](https://github.com/pda))
+* Build with Golang 1.16.3 [#1412](https://github.com/buildkite/agent/pull/1412) ([dependabot[bot]](https://github.com/apps/dependabot))
+* Update [Buildkite CLI](https://github.com/buildkite/cli) release from 1.0.0 tp 1.2.0 [#1403](https://github.com/buildkite/agent/pull/1403) ([yob](https://github.com/yob))
+
+### Fixed 
+* Avoid occasional failure to run jobs when working directory is missing [#1402](https://github.com/buildkite/agent/pull/1402) ([yob](https://github.com/yob))
+* Avoid a rare panic when running `buildkite-agent pipeline upload` [#1406](https://github.com/buildkite/agent/pull/1406) ([yob](https://github.com/yob))
+
 ## [v3.28.1](https://github.com/buildkite/agent/compare/v3.27.0...v3.28.1)
 
 ### Added
