@@ -64,6 +64,7 @@ else
     *ppc64le*) ARCH="ppc64le" ;;
     *aarch64*) ARCH="arm64"   ;;
     *mips64*) ARCH="mips64le" ;;
+    *s390x*)   ARCH="s390x"   ;;
     *)
       ARCH="386"
       echo -e "\n\033[36mWe don't recognise the $MACHINE architecture; falling back to $ARCH\033[0m"

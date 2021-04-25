@@ -126,6 +126,16 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
+  - name: ":linux: s390x"
+    command: ".buildkite/steps/build-binary.sh linux s390x"
+    key: build-binary-linux-s390x
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
   - name: ":mac: amd64"
     command: ".buildkite/steps/build-binary.sh darwin amd64"
     key: build-binary-darwin-amd64
@@ -276,6 +286,7 @@ steps:
       - build-binary-linux-arm64
       - build-binary-linux-ppc64le
       - build-binary-linux-mips64le
+      - build-binary-linux-s390x
       - build-binary-darwin-amd64
       - build-binary-darwin-arm64
       - build-binary-freebsd-amd64
