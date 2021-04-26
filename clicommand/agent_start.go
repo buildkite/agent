@@ -279,6 +279,12 @@ var AgentStartCommand = cli.Command{
 			Value:  time.Second * 10,
 		},
 		cli.DurationFlag{
+			Name:   "wait-for-ec2-meta-data-tags-timeout",
+			Usage:  "The amount of time to wait for meta-data tags from EC2 before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_META_DATA_TAGS_TIMEOUT",
+			Value:  time.Second * 10,
+		},
+		cli.DurationFlag{
 			Name:   "wait-for-gcp-labels-timeout",
 			Usage:  "The amount of time to wait for labels from GCP before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
