@@ -25,6 +25,7 @@ type FetchTagsConfig struct {
 	TagsFromGCPLabels        bool
 	TagsFromHost             bool
 	WaitForEC2TagsTimeout    time.Duration
+	WaitForEC2MetaDataTagsTimeout time.Duration
 	WaitForGCPLabelsTimeout  time.Duration
 }
 
@@ -100,7 +101,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+		}, &retry.Config{Maximum: 5, Interval: conf.WaitForEC2MetaDataTagsTimeout / 5, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
