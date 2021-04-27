@@ -75,7 +75,7 @@ type AgentStartConfig struct {
 	TagsFromGCPLabels          bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost               bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
-	WaitForEC2MetaDataTagsTimeout string `cli:"wait-for-ec2-meta-data-tags-timeout"`
+	WaitForEC2MetaDataTimeout  string   `cli:"wait-for-ec2-meta-data-timeout"`
 	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
 	GitCloneFlags              string   `cli:"git-clone-flags"`
 	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
@@ -279,9 +279,9 @@ var AgentStartCommand = cli.Command{
 			Value:  time.Second * 10,
 		},
 		cli.DurationFlag{
-			Name:   "wait-for-ec2-meta-data-tags-timeout",
-			Usage:  "The amount of time to wait for meta-data tags from EC2 before proceeding",
-			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_META_DATA_TAGS_TIMEOUT",
+			Name:   "wait-for-ec2-meta-data-timeout",
+			Usage:  "The amount of time to wait for meta-data from EC2 before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_META_DATA_TIMEOUT",
 			Value:  time.Second * 10,
 		},
 		cli.DurationFlag{
@@ -587,12 +587,12 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		var ec2MetaDataTagTimeout time.Duration
-		if t := cfg.WaitForEC2MetaDataTagsTimeout; t != "" {
+		var ec2MetaDataTimeout time.Duration
+		if t := cfg.WaitForEC2MetaDataTimeout; t != "" {
 			var err error
-			ec2MetaDataTagTimeout, err = time.ParseDuration(t)
+			ec2MetaDataTimeout, err = time.ParseDuration(t)
 			if err != nil {
-				l.Fatal("Failed to parse ec2 meta-data tag timeout: %v", err)
+				l.Fatal("Failed to parse ec2 meta-data timeout: %v", err)
 			}
 		}
 
@@ -727,17 +727,17 @@ var AgentStartCommand = cli.Command{
 			Priority:          cfg.Priority,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
 			Tags: agent.FetchTags(l, agent.FetchTagsConfig{
-				Tags:                     cfg.Tags,
-				TagsFromEC2MetaData:      (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
-				TagsFromEC2MetaDataPaths: cfg.TagsFromEC2MetaDataPaths,
-				TagsFromEC2Tags:          cfg.TagsFromEC2Tags,
-				TagsFromGCPMetaData:      (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
-				TagsFromGCPMetaDataPaths: cfg.TagsFromGCPMetaDataPaths,
-				TagsFromGCPLabels:        cfg.TagsFromGCPLabels,
-				TagsFromHost:             cfg.TagsFromHost,
-				WaitForEC2TagsTimeout:    ec2TagTimeout,
-				WaitForEC2MetaDataTagsTimeout: ec2MetaDataTagTimeout,
-				WaitForGCPLabelsTimeout:  gcpLabelsTimeout,
+				Tags:                      cfg.Tags,
+				TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
+				TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
+				TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
+				TagsFromGCPMetaData:       (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
+				TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
+				TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
+				TagsFromHost:              cfg.TagsFromHost,
+				WaitForEC2TagsTimeout:     ec2TagTimeout,
+				WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
+				WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
 			}),
 			// We only want this agent to be ingored in Buildkite
 			// dispatches if it's being booted to acquire a
