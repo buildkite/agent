@@ -17,15 +17,16 @@ import (
 type FetchTagsConfig struct {
 	Tags []string
 
-	TagsFromEC2MetaData      bool
-	TagsFromEC2MetaDataPaths []string
-	TagsFromEC2Tags          bool
-	TagsFromGCPMetaData      bool
-	TagsFromGCPMetaDataPaths []string
-	TagsFromGCPLabels        bool
-	TagsFromHost             bool
-	WaitForEC2TagsTimeout    time.Duration
-	WaitForGCPLabelsTimeout  time.Duration
+	TagsFromEC2MetaData       bool
+	TagsFromEC2MetaDataPaths  []string
+	TagsFromEC2Tags           bool
+	TagsFromGCPMetaData       bool
+	TagsFromGCPMetaDataPaths  []string
+	TagsFromGCPLabels         bool
+	TagsFromHost              bool
+	WaitForEC2TagsTimeout     time.Duration
+	WaitForEC2MetaDataTimeout time.Duration
+	WaitForGCPLabelsTimeout   time.Duration
 }
 
 // FetchTags loads tags from a variety of sources
@@ -100,7 +101,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+		}, &retry.Config{Maximum: 5, Interval: conf.WaitForEC2MetaDataTimeout / 5, Jitter: true})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
