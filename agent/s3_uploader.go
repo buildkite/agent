@@ -58,7 +58,9 @@ func NewS3Uploader(l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 }
 
 func ParseS3Destination(destination string) (name string, path string) {
-	parts := strings.Split(strings.TrimPrefix(string(destination), "s3://"), "/")
+	destinationWithNoTrailingSlash := strings.TrimSuffix(string(destination), "/")
+	destinationWithNoProtocol := strings.TrimPrefix(destinationWithNoTrailingSlash, "s3://")
+	parts := strings.Split(destinationWithNoProtocol, "/")
 	path = strings.Join(parts[1:len(parts)], "/")
 	name = parts[0]
 	return
