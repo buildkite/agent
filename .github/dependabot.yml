@@ -3,4 +3,4 @@ updates:
   - package-ecosystem: "docker"
     directory: "/.buildkite"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
