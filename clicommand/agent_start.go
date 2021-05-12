@@ -128,8 +128,10 @@ func DefaultShell() string {
 	switch runtime.GOOS {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
-	case "freebsd", "openbsd", "netbsd":
+	case "freebsd", "openbsd":
 		return `/usr/local/bin/bash -e -c`
+	case "netbsd":
+		return `/usr/pkg/bin/bash -e -c`
 	default:
 		return `/bin/bash -e -c`
 	}
