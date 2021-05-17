@@ -206,6 +206,16 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
+  - name: ":netbsd: amd64"
+    command: ".buildkite/steps/build-binary.sh netbsd amd64"
+    key: build-binary-netbsd-amd64
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
   - name: ":hammer: bk cli & agent cli"
     key: test-bk-cli
     depends_on: build-binary-linux-amd64
@@ -294,6 +304,7 @@ steps:
       - build-binary-openbsd-amd64
       - build-binary-openbsd-386
       - build-binary-dragonfly-amd64
+      - build-binary-netbsd-amd64
       - set-metadata
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
