@@ -54,51 +54,52 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                     string   `cli:"config"`
-	Name                       string   `cli:"name"`
-	Priority                   string   `cli:"priority"`
-	AcquireJob                 string   `cli:"acquire-job"`
-	DisconnectAfterJob         bool     `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout int      `cli:"disconnect-after-idle-timeout"`
-	BootstrapScript            string   `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod          int      `cli:"cancel-grace-period"`
-	BuildPath                  string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                  string   `cli:"hooks-path" normalize:"filepath"`
-	PluginsPath                string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                      string   `cli:"shell"`
-	Tags                       []string `cli:"tags" normalize:"list"`
-	TagsFromEC2MetaData        bool     `cli:"tags-from-ec2-meta-data"`
-	TagsFromEC2MetaDataPaths   []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
-	TagsFromEC2Tags            bool     `cli:"tags-from-ec2-tags"`
-	TagsFromGCPMetaData        bool     `cli:"tags-from-gcp-meta-data"`
-	TagsFromGCPMetaDataPaths   []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
-	TagsFromGCPLabels          bool     `cli:"tags-from-gcp-labels"`
-	TagsFromHost               bool     `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout      string   `cli:"wait-for-ec2-tags-timeout"`
-	WaitForEC2MetaDataTimeout  string   `cli:"wait-for-ec2-meta-data-timeout"`
-	WaitForGCPLabelsTimeout    string   `cli:"wait-for-gcp-labels-timeout"`
-	GitCloneFlags              string   `cli:"git-clone-flags"`
-	GitCloneMirrorFlags        string   `cli:"git-clone-mirror-flags"`
-	GitCleanFlags              string   `cli:"git-clean-flags"`
-	GitFetchFlags              string   `cli:"git-fetch-flags"`
-	GitMirrorsPath             string   `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout      int      `cli:"git-mirrors-lock-timeout"`
-	NoGitSubmodules            bool     `cli:"no-git-submodules"`
-	NoSSHKeyscan               bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval              bool     `cli:"no-command-eval"`
-	NoLocalHooks               bool     `cli:"no-local-hooks"`
-	NoPlugins                  bool     `cli:"no-plugins"`
-	NoPluginValidation         bool     `cli:"no-plugin-validation"`
-	NoPTY                      bool     `cli:"no-pty"`
-	TimestampLines             bool     `cli:"timestamp-lines"`
-	HealthCheckAddr            string   `cli:"health-check-addr"`
-	MetricsDatadog             bool     `cli:"metrics-datadog"`
-	MetricsDatadogHost         string   `cli:"metrics-datadog-host"`
-	TracingBackend             string   `cli:"tracing-backend"`
-	Spawn                      int      `cli:"spawn"`
-	LogFormat                  string   `cli:"log-format"`
-	CancelSignal               string   `cli:"cancel-signal"`
-	RedactedVars               []string `cli:"redacted-vars" normalize:"list"`
+	Config                      string   `cli:"config"`
+	Name                        string   `cli:"name"`
+	Priority                    string   `cli:"priority"`
+	AcquireJob                  string   `cli:"acquire-job"`
+	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
+	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
+	CancelGracePeriod           int      `cli:"cancel-grace-period"`
+	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                       string   `cli:"shell"`
+	Tags                        []string `cli:"tags" normalize:"list"`
+	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
+	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
+	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
+	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
+	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
+	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost                bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCloneFlags               string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags               string   `cli:"git-clean-flags"`
+	GitFetchFlags               string   `cli:"git-fetch-flags"`
+	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
+	NoGitSubmodules             bool     `cli:"no-git-submodules"`
+	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval               bool     `cli:"no-command-eval"`
+	NoLocalHooks                bool     `cli:"no-local-hooks"`
+	NoPlugins                   bool     `cli:"no-plugins"`
+	NoPluginValidation          bool     `cli:"no-plugin-validation"`
+	NoPTY                       bool     `cli:"no-pty"`
+	TimestampLines              bool     `cli:"timestamp-lines"`
+	HealthCheckAddr             string   `cli:"health-check-addr"`
+	MetricsDatadog              bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
+	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
+	TracingBackend              string   `cli:"tracing-backend"`
+	Spawn                       int      `cli:"spawn"`
+	LogFormat                   string   `cli:"log-format"`
+	CancelSignal                string   `cli:"cancel-signal"`
+	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -408,6 +409,11 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
+		cli.BoolFlag{
+			Name:   "metrics-datadog-distributions",
+			Usage:  "Use Datadog Distributions for Timing metrics",
+			EnvVar: "BUILDKITE_METRICS_DATADOG_DISTRIBUTIONS",
+		},
 		cli.StringFlag{
 			Name:   "log-format",
 			Usage:  "The format to use for the logger output",
@@ -608,8 +614,9 @@ var AgentStartCommand = cli.Command{
 		}
 
 		mc := metrics.NewCollector(l, metrics.CollectorConfig{
-			Datadog:     cfg.MetricsDatadog,
-			DatadogHost: cfg.MetricsDatadogHost,
+			Datadog:              cfg.MetricsDatadog,
+			DatadogHost:          cfg.MetricsDatadogHost,
+			DatadogDistributions: cfg.MetricsDatadogDistributions,
 		})
 
 		// Sanity check supported tracing backends
