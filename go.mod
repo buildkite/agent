@@ -10,13 +10,13 @@ require (
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
 	github.com/buildkite/yaml v0.0.0-20210326113714-4a3f40911396
+	github.com/creack/pty v1.1.12
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.0
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/google/uuid v1.1.2 // indirect
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e // indirect
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/kr/pty v1.1.2
 	github.com/mattn/go-zglob v0.0.0-20180803001819-2ea3427bfa53
 	github.com/mitchellh/go-homedir v1.0.0
 	github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
