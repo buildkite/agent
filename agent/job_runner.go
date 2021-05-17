@@ -250,6 +250,17 @@ func (r *JobRunner) Run() error {
 
 	startedAt := time.Now()
 
+	// Publish metric for how long this job was in the queue for, if we can
+	// calculate that
+	if r.job.RunnableAt != "" {
+		runnableAt, err := time.Parse(time.RFC3339Nano, r.job.RunnableAt)
+		if err != nil {
+			r.logger.Error("Metric submission failed to parse %s", r.job.RunnableAt)
+		} else {
+			r.metrics.Timing("queue.duration", startedAt.Sub(runnableAt))
+		}
+	}
+
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
 	// up like started log streamer workers, etc.
