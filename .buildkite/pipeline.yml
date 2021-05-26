@@ -242,12 +242,19 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh alpine"
 
-  - name: ":docker: ubuntu build"
-    key: build-docker-ubuntu
+  - name: ":docker: ubuntu 18.04 build"
+    key: build-docker-ubuntu-18.04
     depends_on:
       - build-binary-linux-amd64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh ubuntu"
+    command: ".buildkite/steps/build-docker-image.sh ubuntu-18.04"
+
+  - name: ":docker: ubuntu 20.04 build"
+    key: build-docker-ubuntu-20.04
+    depends_on:
+      - build-binary-linux-amd64
+      - set-metadata
+    command: ".buildkite/steps/build-docker-image.sh ubuntu-20.04"
 
   - name: ":docker: centos build"
     key: build-docker-centos
@@ -321,7 +328,8 @@ steps:
       - build-rpm-packages
       - build-debian-packages
       - build-docker-alpine
-      - build-docker-ubuntu
+      - build-docker-ubuntu-18.04
+      - build-docker-ubuntu-20.04
       - build-docker-centos
       - build-docker-sidecar
       - build-github-release
