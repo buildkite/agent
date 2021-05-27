@@ -250,6 +250,13 @@ func (r *JobRunner) Run() error {
 
 	startedAt := time.Now()
 
+	// Start the build in the Buildkite Agent API. This is the first thing
+	// we do so if it fails, we don't have to worry about cleaning things
+	// up like started log streamer workers, etc.
+	if err := r.startJob(startedAt); err != nil {
+		return err
+	}
+
 	// Publish metric for how long this job was in the queue for, if we can
 	// calculate that
 	if r.job.RunnableAt != "" {
@@ -259,13 +266,6 @@ func (r *JobRunner) Run() error {
 		} else {
 			r.metrics.Timing("queue.duration", startedAt.Sub(runnableAt))
 		}
-	}
-
-	// Start the build in the Buildkite Agent API. This is the first thing
-	// we do so if it fails, we don't have to worry about cleaning things
-	// up like started log streamer workers, etc.
-	if err := r.startJob(startedAt); err != nil {
-		return err
 	}
 
 	// Start the header time streamer
