@@ -257,8 +257,8 @@ func (r *JobRunner) Run() error {
 		return err
 	}
 
-	// Publish metric for how long this job was in the queue for, if we can
-	// calculate that
+	// If this agent successfully grabs the job from the API, publish metric for
+	// how long this job was in the queue for, if we can calculate that
 	if r.job.RunnableAt != "" {
 		runnableAt, err := time.Parse(time.RFC3339Nano, r.job.RunnableAt)
 		if err != nil {
