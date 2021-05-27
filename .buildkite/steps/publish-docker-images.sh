@@ -23,7 +23,7 @@ aws ssm get-parameter --name /pipelines/agent/DOCKER_HUB_PASSWORD --with-decrypt
 version=$(buildkite-agent meta-data get "agent-version")
 build=$(buildkite-agent meta-data get "agent-version-build")
 
-for variant in "alpine" "ubuntu" "centos" "sidecar" ; do
+for variant in "alpine" "ubuntu-18.04" "ubuntu-20.04" "centos" "sidecar" ; do
   echo "--- Getting docker image tag for $variant from build meta data"
   source_image=$(buildkite-agent meta-data get "agent-docker-image-$variant")
   echo "Docker Image Tag for $variant: $source_image"
