@@ -16,6 +16,7 @@ type Job struct {
 	SignalReason       string            `json:"signal_reason,omitempty"`
 	StartedAt          string            `json:"started_at,omitempty"`
 	FinishedAt         string            `json:"finished_at,omitempty"`
+	RunnableAt         string            `json:"runnable_at,omitempty"`
 	ChunksFailedCount  int               `json:"chunks_failed_count,omitempty"`
 }
 
