@@ -552,14 +552,7 @@ var AgentStartCommand = cli.Command{
 
 		// Set a useful default for the bootstrap script
 		if cfg.BootstrapScript == "" {
-			pathToBinary, err := filepath.Abs(os.Args[0])
-			if err != nil {
-				// This error *likely* means the working directory got deleted,
-				// which is possible, but given this runs at startup, unlikely
-				// https://github.com/golang/go/blob/6c1c055d1ea417d050503efe92c1eead0da68cef/src/path/filepath/path.go#L238-L256
-				l.Fatal("Could not determine absolute path to buildkite-agent binary")
-			}
-			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(pathToBinary))
+			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(os.Args[0]))
 		}
 
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
