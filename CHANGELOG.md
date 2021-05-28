@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.30.0](https://github.com/buildkite/agent/compare/v3.29.0...v3.30.0) (2021-05-28)
+
+### Added
+* Send queue metrics to Datadog when job received [#1442](https://github.com/buildkite/agent/pull/1442) ([keithduncan](https://github.com/keithduncan))
+* Add flag to send Datadog Metrics as Distributions [#1433](https://github.com/buildkite/agent/pull/1433) ([amukherjeetwilio](https://github.com/amukherjeetwilio))
+* Ubuntu 18.04 based Docker image [#1441](https://github.com/buildkite/agent/pull/1441) ([keithduncan](https://github.com/keithduncan))
+* Build binaries for `netbsd` and `s390x` [#1432](https://github.com/buildkite/agent/pull/1432), [#1421](https://github.com/buildkite/agent/pull/1421) ([yob](https://github.com/yob))
+* Add `wait-for-ec2-meta-data-timeout` config variable [#1425](https://github.com/buildkite/agent/pull/1425) ([OliverKoo](https://github.com/OliverKoo))
+
+### Changed
+* Build using golang 1.16.4 [#1429](https://github.com/buildkite/agent/pull/1429)
+* Replace kr/pty with creack/pty and upgrade from 1.1.2 to 1.1.12 [#1431](https://github.com/buildkite/agent/pull/1431) ([ibuclaw](https://github.com/ibuclaw))
+
+### Fixed
+* Trim trailing slash from `buildkite-agent artifact upload` when using custom S3 bucket paths [#1427](https://github.com/buildkite/agent/pull/1427) ([shevaun](https://github.com/shevaun))
+* Use /usr/pkg/bin/bash as default shell on NetBSD [#1430](https://github.com/buildkite/agent/pull/1430) ([ibuclaw](https://github.com/ibuclaw))
+
 ## [v3.29.0](https://github.com/buildkite/agent/compare/v3.28.1...v3.29.0) (2021-04-21)
 
 ### Changed
