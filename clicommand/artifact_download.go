@@ -13,12 +13,27 @@ var DownloadHelpDescription = `Usage:
 
 Description:
 
-	 Downloads artifacts specified by <query> from Buildkite to <destination>
-	 directory on the local machine.
+   Downloads artifacts matching <query> from Buildkite to <destination>
+   directory on the local machine.
 
    Note: You need to ensure that your search query is surrounded by quotes if
-   using a wild card as the built-in shell path globbing will provide files,
-   which will break the download.
+   using a wild card as the built-in shell path globbing will expand the wild
+   card and break the query.
+
+   If the last path component of <destination> matches the first path component
+   of your <query>, the last component of <destination> is dropped from the
+   final path e.g. a query of 'app/logs/*' with a destination of 'foo/app' will
+   write any matched artifact files to 'foo/app/logs/', relative to the current
+   working directory.
+
+   To bypass this behaviour, place a trailing slash on <destination>, e.g. a
+   query of 'app/logs/*' and a destination of 'foo/app/' will write the matched
+   artifact files to 'foo/app/app/logs/', relative to the current working
+   directory.
+
+   You can also change working directory to the intended destination and use a
+   <destination> of '.' to always create a directory hierarchy matching the
+   artifact paths.
 
 Example:
 
