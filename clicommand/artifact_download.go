@@ -22,14 +22,14 @@ Description:
 
    If the last path component of <destination> matches the first path component
    of your <query>, the last component of <destination> is dropped from the
-   final path e.g. a query of 'app/logs/*' with a destination of 'foo/app' will
-   write any matched artifact files to 'foo/app/logs/', relative to the current
-   working directory.
+   final path. For example, a query of 'app/logs/*' with a destination of
+   'foo/app' will write any matched artifact files to 'foo/app/logs/', relative
+   to the current working directory.
 
-   To bypass this behaviour, place a trailing slash on <destination>, e.g. a
-   query of 'app/logs/*' and a destination of 'foo/app/' will write the matched
-   artifact files to 'foo/app/app/logs/', relative to the current working
-   directory.
+   To skip this behaviour, use a <destination> argument with a trailing slash.
+   For example, a query of 'app/logs/*' and a destination of 'foo/app/' will
+   write the matched artifact files to 'foo/app/app/logs/', relative to the
+   current working directory.
 
    You can also change working directory to the intended destination and use a
    <destination> of '.' to always create a directory hierarchy matching the
