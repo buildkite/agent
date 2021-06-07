@@ -63,13 +63,13 @@ func (d Download) Start() error {
 	}, &retry.Config{Maximum: d.conf.Retries, Interval: 5 * time.Second})
 }
 
-func (d Download) try() error {
+func getTargetPath(path string, destination string) string {
 	// If we're downloading a file with a path of "pkg/foo.txt" to a folder
 	// called "pkg", we should merge the two paths together. So, instead of it
 	// downloading to: destination/pkg/pkg/foo.txt, it will just download to
 	// destination/pkg/foo.txt
-	destinationPaths := strings.Split(d.conf.Destination, string(os.PathSeparator))
-	downloadPaths := strings.Split(d.conf.Path, string(os.PathSeparator))
+	destinationPaths := strings.Split(destination, string(os.PathSeparator))
+	downloadPaths := strings.Split(path, string(os.PathSeparator))
 
 	for i := 0; i < len(downloadPaths); i += 100 {
 		// If the last part of the destination path matches
@@ -88,8 +88,13 @@ func (d Download) try() error {
 	}
 
 	finalizedDestination := strings.Join(destinationPaths, string(os.PathSeparator))
+	targetFile := filepath.Join(finalizedDestination, path)
 
-	targetFile := filepath.Join(finalizedDestination, d.conf.Path)
+	return targetFile
+}
+
+func (d Download) try() error {
+	targetFile := getTargetPath(d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
 	// Show a nice message that we're starting to download the file
