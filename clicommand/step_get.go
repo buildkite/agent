@@ -12,7 +12,7 @@ import (
 
 var StepGetHelpDescription = `Usage:
 
-   buildkite-agent step get <attribute> [arguments...]
+   buildkite-agent step get <attribute> [options...]
 
 Description:
 
@@ -25,7 +25,7 @@ Description:
 
 Example:
 
-   $ buildkite-agent step get "label"
+   $ buildkite-agent step get "label" --step "key"
    $ buildkite-agent step get --format json
    $ buildkite-agent step get "retry" --format json
    $ buildkite-agent step get "state" --step "my-other-step"`
@@ -37,9 +37,10 @@ type StepGetConfig struct {
 	Format    string `cli:"format"`
 
 	// Global flags
-	Debug   bool   `cli:"debug"`
-	NoColor bool   `cli:"no-color"`
-	Profile string `cli:"profile"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -81,6 +82,7 @@ var StepGetCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ExperimentsFlag,
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {

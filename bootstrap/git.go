@@ -27,10 +27,17 @@ type gitError struct {
 	Type int
 }
 
-func gitCheckout(sh *shell.Shell, gitCheckoutFlags, reference string) error {
+type shellRunner interface {
+	Run(string, ...string) error
+}
+
+func gitCheckout(sh shellRunner, gitCheckoutFlags, reference string) error {
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
 		return err
+	}
+	if !gitCheckRefFormat(reference) {
+		return fmt.Errorf("%q is not a valid git ref format", reference)
 	}
 
 	commandArgs := []string{"checkout"}
@@ -47,7 +54,7 @@ func gitCheckout(sh *shell.Shell, gitCheckoutFlags, reference string) error {
 	return nil
 }
 
-func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
+func gitClone(sh shellRunner, gitCloneFlags, repository, dir string) error {
 	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
 	if err != nil {
 		return err
@@ -64,7 +71,7 @@ func gitClone(sh *shell.Shell, gitCloneFlags, repository, dir string) error {
 	return nil
 }
 
-func gitClean(sh *shell.Shell, gitCleanFlags string) error {
+func gitClean(sh shellRunner, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -80,7 +87,7 @@ func gitClean(sh *shell.Shell, gitCleanFlags string) error {
 	return nil
 }
 
-func gitCleanSubmodules(sh *shell.Shell, gitCleanFlags string) error {
+func gitCleanSubmodules(sh shellRunner, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -96,7 +103,7 @@ func gitCleanSubmodules(sh *shell.Shell, gitCleanFlags string) error {
 	return nil
 }
 
-func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...string) error {
+func gitFetch(sh shellRunner, gitFetchFlags, repository string, refSpec ...string) error {
 	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
 	if err != nil {
 		return err
@@ -104,6 +111,7 @@ func gitFetch(sh *shell.Shell, gitFetchFlags, repository string, refSpec ...stri
 
 	commandArgs := []string{"fetch"}
 	commandArgs = append(commandArgs, individualFetchFlags...)
+	commandArgs = append(commandArgs, "--") // terminate arg parsing; only repository & refspecs may follow.
 	commandArgs = append(commandArgs, repository)
 
 	for _, r := range refSpec {
@@ -238,4 +246,38 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 	// didn't return a value for hostname (weird!),
 	// so we fall back to the old behaviour of just replacing strings
 	return gitHostAliasRegexp.ReplaceAllString(host, "")
+}
+
+// gitCheckRefFormatDenyRegexp is a pattern used by gitCheckRefFormat().
+// Numbered rules are from git 2.28.0's `git help check-ref-format`.
+// Not covered by this implementation:
+//   1. They can include slash / for hierarchical (directory) grouping, but
+//   no slash-separated component can begin with a dot .  or end with the
+//   sequence .lock
+//   2. They must contain at least one /. This enforces the presence of a
+//   category like heads/, tags/ etc. but the actual names are not
+//   restricted. If the --allow-onelevel option is used, this rule is waived
+//   5. They cannot have question-mark ?, asterisk *, or open bracket [
+//   anywhere. See the --refspec-pattern option below for an exception to
+//   this rule
+//   6. They cannot begin or end with a slash / or contain multiple
+//   consecutive slashes (see the --normalize option below for an exception
+//   to this rule)
+//   8. They cannot contain a sequence @{.
+var gitCheckRefFormatDenyRegexp = regexp.MustCompile(strings.Join([]string{
+	`\.\.`,        //  3. cannot have two consecutive dots .. anywhere
+	`[[:cntrl:]]`, //  4. cannot have ASCII control characters (i.e. bytes whose values are lower than \040, or \177 DEL) ...
+	`[ ~^:]`,      //  4. cannot have ... space, tilde ~, caret ^, or colon : anywhere
+	`\.$`,         //  7. cannot end with a dot .
+	`^@$`,         //  9. cannot be the single character @.
+	`\\`,          // 10. cannot contain a \
+	`^-`,          // bonus: disallow refs that would be interpreted as command options/flags
+}, "|"))
+
+// gitCheckRefFormat is a simplified version of `git check-ref-format`.
+// It mostly assumes --allow-onelevel i.e. no need for refs/heads/… prefix.
+// It is more permissive than the canonical implementation.
+// https://git-scm.com/docs/git-check-ref-format
+func gitCheckRefFormat(ref string) bool {
+	return !gitCheckRefFormatDenyRegexp.MatchString(ref)
 }

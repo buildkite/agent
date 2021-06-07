@@ -21,7 +21,7 @@ import (
 
 var PipelineUploadHelpDescription = `Usage:
 
-   buildkite-agent pipeline upload <file> [arguments...]
+   buildkite-agent pipeline upload [file] [options...]
 
 Description:
 
@@ -56,13 +56,14 @@ type PipelineUploadConfig struct {
 	NoInterpolation bool   `cli:"no-interpolation"`
 
 	// Global flags
-	Debug   bool   `cli:"debug"`
-	NoColor bool   `cli:"no-color"`
-	Profile string `cli:"profile"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token"`
+	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
 }
@@ -103,6 +104,7 @@ var PipelineUploadCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ExperimentsFlag,
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
@@ -247,7 +249,7 @@ var PipelineUploadCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Generate a UUID that will identifiy this pipeline change. We
+		// Generate a UUID that will identify this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
 		// to be the same for each attempt at updating the pipeline.
 		uuid := api.NewUUID()

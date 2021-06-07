@@ -22,7 +22,7 @@ type Plugin struct {
 	// The clone method
 	Scheme string
 
-	// Any authentication attached to the repostiory
+	// Any authentication attached to the repository
 	Authentication string
 
 	// Whether the plugin refers to a vendored path
@@ -257,6 +257,16 @@ func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
 
 	// Sort them into a consistent order
 	sort.Strings(envSlice)
+
+	// Append current plugin name
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
+
+	// Append current plugin configuration as JSON
+	configJson, err := json.Marshal(p.Configuration)
+	if err != nil {
+		return nil, err
+	}
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJson))
 
 	return env.FromSlice(envSlice), nil
 }

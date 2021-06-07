@@ -5,9 +5,10 @@ package process
 import (
 	"errors"
 	"fmt"
-	"os/exec"
-	"strconv"
 	"syscall"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // Windows has no concept of parent/child processes or signals. The best we can do
@@ -17,34 +18,67 @@ import (
 
 // See https://docs.microsoft.com/en-us/windows/console/generateconsolectrlevent
 
-var (
-	libkernel32                  = syscall.MustLoadDLL("kernel32")
-	procGenerateConsoleCtrlEvent = libkernel32.MustFindProc("GenerateConsoleCtrlEvent")
-)
-
-const (
-	createNewProcessGroupFlag = 0x00000200
-)
-
 func (p *Process) setupProcessGroup() {
-	p.command.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_UNICODE_ENVIRONMENT | createNewProcessGroupFlag,
+	p.command.SysProcAttr = &windows.SysProcAttr{
+		CreationFlags: windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP,
 	}
+	jobHandle, err := newJobObject()
+	if err != nil {
+		p.logger.Error("Creating Job Object failed: %v", err)
+	}
+	p.winJobHandle = jobHandle
+}
+
+func newJobObject() (uintptr, error) {
+	handle, err := windows.CreateJobObject(nil, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	info := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{
+		BasicLimitInformation: windows.JOBOBJECT_BASIC_LIMIT_INFORMATION{
+			LimitFlags: windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+		},
+	}
+	if _, err := windows.SetInformationJobObject(
+		handle,
+		windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)),
+		uint32(unsafe.Sizeof(info))); err != nil {
+		return 0, err
+	}
+
+	return uintptr(handle), nil
+}
+
+func (p *Process) postStart() error {
+	// convert the pid into a windows process handle. We need particular permissions on the handle
+	// for AssignProcessToJobObject to accept it
+	pid := uint32(p.command.Process.Pid)
+	processPerms := uint32(windows.PROCESS_QUERY_LIMITED_INFORMATION | windows.PROCESS_SET_QUOTA | windows.PROCESS_TERMINATE)
+	processHandle, err := windows.OpenProcess(processPerms, false, pid)
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(processHandle)
+
+	err = windows.AssignProcessToJobObject(windows.Handle(p.winJobHandle), processHandle)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *Process) terminateProcessGroup() error {
-	p.logger.Debug("[Process] Terminating process tree with TASKKILL.EXE PID: %d", p.pid)
-
-	// taskkill.exe with /F will call TerminateProcess and hard-kill the process and
-	// anything left in its process tree.
-	return exec.Command("CMD", "/C", "TASKKILL.EXE", "/F", "/T", "/PID", strconv.Itoa(p.pid)).Run()
+	p.logger.Debug("[Process] Terminating process tree by destroying job")
+	return windows.CloseHandle(windows.Handle(p.winJobHandle))
 }
 
 func (p *Process) interruptProcessGroup() error {
 	// Sends a CTRL-BREAK signal to the process group id, which is the same as the process PID
 	// For some reason I cannot fathom, this returns "Incorrect function" in docker for windows
-	r1, _, err := procGenerateConsoleCtrlEvent.Call(syscall.CTRL_BREAK_EVENT, uintptr(p.pid))
-	if r1 == 0 {
+	err := windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(p.pid))
+	if err != nil {
 		return err
 	}
 	return nil

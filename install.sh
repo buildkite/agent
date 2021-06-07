@@ -20,11 +20,12 @@ echo -e "\033[33m
 
 echo -e "Finding latest release..."
 
-UNAME=$(uname -sm | awk '{print tolower($0)}')
+SYSTEM=$(uname -s | awk '{print tolower($0)}')
+MACHINE=$(uname -m | awk '{print tolower($0)}')
 
-if [[ ($UNAME == *"mac os x"*) || ($UNAME == *darwin*) ]]; then
+if [[ ($SYSTEM == *"mac os x"*) || ($SYSTEM == *darwin*) ]]; then
   PLATFORM="darwin"
-elif [[ ($UNAME == *"freebsd"*) ]]; then
+elif [[ ($SYSTEM == *"freebsd"*) ]]; then
   PLATFORM="freebsd"
 else
   PLATFORM="linux"
@@ -34,23 +35,47 @@ if [ -n "$BUILDKITE_INSTALL_ARCH" ]; then
   ARCH="$BUILDKITE_INSTALL_ARCH"
   echo "Using explicit arch '$ARCH'"
 else
-  case $UNAME in
+  case $MACHINE in
     *amd64*)   ARCH="amd64"   ;;
-    *x86_64*)  ARCH="amd64"   ;;
+    *x86_64*)
+      ARCH="amd64"
+
+      # On Apple Silicon Macs, the architecture reported by `uname` depends on
+      # the architecture of the shell, which is in turn influenced by the
+      # *terminal*, as *child processes prefer their parents' architecture*.
+      # 
+      # This means that for Terminal.app with the default shell it will be
+      # arm64, but x86_64 for people using (pre-3.4.0 builds of) iTerm2 or
+      # x86_64 shells.
+      #
+      # Based on logic in Homebrew: https://github.com/Homebrew/brew/pull/7995
+      if [[ "$PLATFORM" == "darwin" && "$(/usr/sbin/sysctl -n hw.optional.arm64 2> /dev/null)" == "1" ]]; then
+        ARCH="arm64"
+      fi
+      ;;
+    *arm64*)
+      ARCH="arm64"
+      ;;
     *armv8*)   ARCH="arm64"   ;;
     *armv7*)   ARCH="armhf"   ;;
     *armv6l*)  ARCH="arm"     ;;
     *armv6*)   ARCH="armhf"   ;;
     *arm*)     ARCH="arm"     ;;
     *ppc64le*) ARCH="ppc64le" ;;
-    *)         ARCH="386"     ;;
+    *aarch64*) ARCH="arm64"   ;;
+    *mips64*) ARCH="mips64le" ;;
+    *s390x*)   ARCH="s390x"   ;;
+    *)
+      ARCH="386"
+      echo -e "\n\033[36mWe don't recognise the $MACHINE architecture; falling back to $ARCH\033[0m"
+      ;;
   esac
 fi
 
 if [[ "$BETA" == "true" ]]; then
-  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true"
+  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&prerelease=true&system=$SYSTEM&machine=$MACHINE"
 else
-  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH"
+  RELEASE_INFO_URL="https://buildkite.com/agent/releases/latest?platform=$PLATFORM&arch=$ARCH&system=$SYSTEM&machine=$MACHINE"
 fi
 
 if command -v wget >/dev/null; then

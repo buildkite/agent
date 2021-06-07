@@ -3,4 +3,7 @@
 # The `post-checkout` hook will run after the bootstrap script has checked out
 # your pipelines source code.
 
+# Note that as the script is sourced not run directly, the shebang line will be ignored
+# See https://buildkite.com/docs/agent/v3/hooks#creating-hook-scripts
+
 set -e

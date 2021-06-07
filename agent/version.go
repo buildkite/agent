@@ -7,8 +7,10 @@ import "runtime"
 //  go run -ldflags "-X github.com/buildkite/agent/v3/agent.buildVersion abc" *.go --version
 //
 // On CI, the binaries are always build with the buildVersion variable set.
+//
+// Pre-release builds' versions must be in the format `x.y-beta`, `x.y-beta.z` or `x.y-beta.z.a`
 
-var baseVersion string = "3.22.0"
+var baseVersion string = "3.30.0"
 var buildVersion string = ""
 
 func Version() string {

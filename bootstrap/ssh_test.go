@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +33,7 @@ func TestFindingSSHTools(t *testing.T) {
 func TestSSHKeyscanReturnsOutput(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
@@ -57,7 +57,7 @@ func TestSSHKeyscanReturnsOutput(t *testing.T) {
 func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
@@ -81,7 +81,7 @@ func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
@@ -106,7 +106,7 @@ func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 	t.Parallel()
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {

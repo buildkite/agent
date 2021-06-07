@@ -2,15 +2,31 @@ package system
 
 import (
 	"fmt"
-	"syscall"
-
 	"github.com/buildkite/agent/v3/logger"
+	"golang.org/x/sys/windows"
+)
+
+var (
+	VER_NT_WORKSTATION       = byte(0x0000001)
+	VER_NT_DOMAIN_CONTROLLER = byte(0x0000002)
+	VER_NT_SERVER            = byte(0x0000003)
 )
 
 func VersionDump(_ logger.Logger) (string, error) {
-	dll := syscall.MustLoadDLL("kernel32.dll")
-	p := dll.MustFindProc("GetVersion")
-	v, _, _ := p.Call()
+	info := windows.RtlGetVersion()
 
-	return fmt.Sprintf("Windows version %d.%d (Build %d)\n", byte(v), uint8(v>>8), uint16(v>>16)), nil
+	return fmt.Sprintf("Windows version %d.%d (Build %d) (ProductType %s)\n", info.MajorVersion, info.MinorVersion, info.BuildNumber, productTypeToString(info.ProductType)), nil
+}
+
+func productTypeToString(productType byte) string {
+	switch productType {
+	case VER_NT_WORKSTATION:
+		return "VER_NT_WORKSTATION"
+	case VER_NT_DOMAIN_CONTROLLER:
+		return "VER_NT_DOMAIN_CONTROLLER"
+	case VER_NT_SERVER:
+		return "VER_NT_SERVER"
+	default:
+		return "UNKNOWN"
+	}
 }

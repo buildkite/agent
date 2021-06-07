@@ -2,13 +2,14 @@ package api
 
 import (
 	"fmt"
+	"time"
 )
 
 // Artifact represents an artifact on the Buildkite Agent API
 type Artifact struct {
 	// The ID of the artifact. The ID is assigned to it after a successful
 	// batch creation
-	ID string `json:"-"`
+	ID string `json:"id"`
 
 	// The path to the artifact relative to the working directory
 	Path string `json:"path"`
@@ -24,6 +25,12 @@ type Artifact struct {
 
 	// A Sha1Sum calculation of the file
 	Sha1Sum string `json:"sha1sum"`
+
+	// ID of the job that created this artifact (from API)
+	JobID string `json:"job_id"`
+
+	// UTC timestamp this artifact was considered created
+	CreatedAt time.Time `json:"created_at"`
 
 	// The HTTP url to this artifact once it's been uploaded
 	URL string `json:"url,omitempty"`
@@ -67,6 +74,7 @@ type ArtifactSearchOptions struct {
 	Query              string `url:"query,omitempty"`
 	Scope              string `url:"scope,omitempty"`
 	IncludeRetriedJobs bool   `url:"include_retried_jobs,omitempty"`
+	IncludeDuplicates  bool   `url:"include_duplicates,omitempty"`
 }
 
 type ArtifactBatchUpdateArtifact struct {

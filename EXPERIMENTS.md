@@ -44,3 +44,9 @@ Take `buildkite-agent artifact upload coverage\report.xml` as an example:
 - With this experiment enabled, it would be `s3://example/coverage/report.xml`.
 
 **Status**: a major improvement for Windows compatibility, we'd like this to be the standard behaviour in 4.0. 👍👍
+
+### `resolve-commit-after-checkout`
+
+After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This makes `BUILDKITE_COMMIT` useful for builds triggered against non-commit-hash refs such as `HEAD`.
+
+**Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍

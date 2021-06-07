@@ -28,8 +28,10 @@ trigger_step() {
         agent-version-build: "${build_version}"
         agent-version-full:  "${full_agent_version}"
         agent-docker-image-alpine: "${agent_docker_image_alpine}"
-        agent-docker-image-ubuntu: "${agent_docker_image_ubuntu}"
+        'agent-docker-image-ubuntu-18.04': "${agent_docker_image_ubuntu_bionic}"
+        'agent-docker-image-ubuntu-20.04': "${agent_docker_image_ubuntu_focal}"
         agent-docker-image-centos: "${agent_docker_image_centos}"
+        agent-docker-image-sidecar: "${agent_docker_image_sidecar}"
         agent-is-prerelease: "${agent_is_prerelease}"
       env:
         DRY_RUN: "${DRY_RUN:-false}"
@@ -66,7 +68,7 @@ output_steps_yaml() {
   fi
 }
 
-if [[ "${BUILDKITE_BRANCH}" != "master" && "${DRY_RUN}" != "true" && "${BUILDKITE_BRANCH}" != *-*-stable ]] ; then
+if [[ "${BUILDKITE_BRANCH}" != "main" && "${DRY_RUN}" != "true" && "${BUILDKITE_BRANCH}" != *-*-stable ]] ; then
   echo "No release steps to be uploaded"
   exit 0
 fi
@@ -75,8 +77,10 @@ agent_version=$(buildkite-agent meta-data get "agent-version")
 build_version=$(buildkite-agent meta-data get "agent-version-build")
 full_agent_version=$(buildkite-agent meta-data get "agent-version-full")
 agent_docker_image_alpine=$(buildkite-agent meta-data get "agent-docker-image-alpine")
-agent_docker_image_ubuntu=$(buildkite-agent meta-data get "agent-docker-image-ubuntu")
+agent_docker_image_ubuntu_bionic=$(buildkite-agent meta-data get "agent-docker-image-ubuntu-18.04")
+agent_docker_image_ubuntu_focal=$(buildkite-agent meta-data get "agent-docker-image-ubuntu-20.04")
 agent_docker_image_centos=$(buildkite-agent meta-data get "agent-docker-image-centos")
+agent_docker_image_sidecar=$(buildkite-agent meta-data get "agent-docker-image-sidecar")
 agent_is_prerelease=$(buildkite-agent meta-data get "agent-is-prerelease")
 
 # If there is already a release (which means a tag), we want to avoid trying to create

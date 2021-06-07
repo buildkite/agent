@@ -1,4 +1,4 @@
-# Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=master)
+# Buildkite Agent ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=main)
 
 _Note: This is the development branch of the buildkite-agent, and may not contain files or code in the current stable release._
 
@@ -10,7 +10,7 @@ Full documentation is available at [buildkite.com/docs/agent](https://buildkite.
 $ buildkite-agent --help
 Usage:
 
-  buildkite-agent <command> [arguments...]
+  buildkite-agent <command> [options...]
 
 Available commands are:
 
@@ -26,9 +26,15 @@ Available commands are:
 Use "buildkite-agent <command> --help" for more information about a command.
 ```
 
+## Dependencies
+
+The agent is fairly portable and should run out of the box on most supported platforms without extras. On Linux hosts it requires `dbus`.
+
 ## Installing
 
-The agents page on Buildkite has personalised instructions for installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via homebrew), Windows and Linux. You can also run the agent [via Docker](https://hub.docker.com/r/buildkite/agent).
+[The agents page](https://buildkite.com/organizations/-/agents) on Buildkite has personalised instructions, or you can refer to [the Buildkite docs](https://buildkite.com/docs/agent/v3/installation). Both cover installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via homebrew), Windows and Linux.
+
+You can also run the agent [via Docker](https://hub.docker.com/r/buildkite/agent).
 
 ## Starting
 

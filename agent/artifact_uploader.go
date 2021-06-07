@@ -41,6 +41,9 @@ type ArtifactUploaderConfig struct {
 
 	// Whether to show HTTP debugging
 	DebugHTTP bool
+
+	// Whether to follow symbolic links when resolving globs
+	FollowSymlinks bool
 }
 
 type ArtifactUploader struct {
@@ -97,6 +100,9 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 		return nil, err
 	}
 
+	// file paths are deduplicated after resolving globs etc
+	seenPaths := make(map[string]bool)
+
 	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
 		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
@@ -107,7 +113,12 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 
 		// Resolve the globs (with * and ** in them), if it's a non-globbed path and doesn't exists
 		// then we will get the ErrNotExist that is handled below
-		files, err := zglob.Glob(globPath)
+		globfunc := zglob.Glob
+		if a.conf.FollowSymlinks {
+			// Follow symbolic links for files & directories while expanding globs
+			globfunc = zglob.GlobFollowSymlinks
+		}
+		files, err := globfunc(globPath)
 		if err == os.ErrNotExist {
 			a.logger.Info("File not found: %s", globPath)
 			continue
@@ -122,6 +133,13 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				return nil, err
 			}
 
+			// dedupe based on resolved absolutePath
+			if _, ok := seenPaths[absolutePath]; ok {
+				a.logger.Debug("Skipping duplicate path %s", file)
+				continue
+			}
+			seenPaths[absolutePath] = true
+
 			// Ignore directories, we only want files
 			if isDir(absolutePath) {
 				a.logger.Debug("Skipping directory %s", file)
@@ -131,7 +149,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 			// If a glob is absolute, we need to make it relative to the root so that
 			// it can be combined with the download destination to make a valid path.
 			// This is possibly weird and crazy, this logic dates back to
-			// https://github.com/buildkite/agent/v3/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
+			// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
 			// from 2014, so I'm replicating it here to avoid breaking things
 			if filepath.IsAbs(globPath) {
 				if runtime.GOOS == "windows" {
@@ -367,6 +385,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 
 				state = "error"
 			} else {
+				a.logger.Info("Successfully uploaded artifact \"%s\"", artifact.Path)
 				state = "finished"
 			}
 
@@ -379,8 +398,12 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		})
 	}
 
+	a.logger.Debug("Waiting for uploads to complete...")
+
 	// Wait for the pool to finish
 	p.Wait()
+
+	a.logger.Debug("Uploads complete, waiting for upload status to be sent to buildkite...")
 
 	// Wait for the statuses to finish uploading
 	stateUploaderWaitGroup.Wait()
@@ -388,6 +411,8 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 	if len(errors) > 0 {
 		return fmt.Errorf("There were errors with uploading some of the artifacts")
 	}
+
+	a.logger.Info("Artifact uploads completed succesfully")
 
 	return nil
 }

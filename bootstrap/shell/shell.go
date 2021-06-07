@@ -15,9 +15,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
+
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
@@ -40,6 +43,12 @@ type Shell struct {
 	// Whether the shell is a PTY
 	PTY bool
 
+	// stdin is an optional input stream used by Run() and friends.
+	// It remains unexported on the assumption that it's not useful except via
+	// WithStdin() to get a shell-copy prepared for a single command that needs
+	// input.
+	stdin io.Reader
+
 	// Where stdout is written, defaults to os.Stdout
 	Writer io.Writer
 
@@ -55,6 +64,9 @@ type Shell struct {
 	// Currently running command
 	cmd     *command
 	cmdLock sync.Mutex
+
+	// The signal to use to interrupt the command
+	InterruptSignal process.Signal
 }
 
 // New returns a new Shell
@@ -82,6 +94,25 @@ func NewWithContext(ctx context.Context) (*Shell, error) {
 
 	sh.ctx = ctx
 	return sh, nil
+}
+
+// WithStdin returns a copy of the Shell with the provided io.Reader set as the
+// Stdin for the next command. The copy should be discarded after one command.
+// e.g. sh.WithStdin(strings.NewReader("hello world")).Run("cat")
+func (s *Shell) WithStdin(r io.Reader) *Shell {
+	// cargo-culted cmdLock, not sure if it's needed
+	s.cmdLock.Lock()
+	defer s.cmdLock.Unlock()
+	// Can't copy struct like `newsh := *s` because sync.Mutex can't be copied.
+	return &Shell{
+		Logger:          s.Logger,
+		Env:             s.Env,
+		stdin:           r, // our new stdin
+		Writer:          s.Writer,
+		wd:              s.wd,
+		ctx:             s.ctx,
+		InterruptSignal: s.InterruptSignal,
+	}
 }
 
 // Getwd returns the current working directory of the shell
@@ -192,21 +223,35 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 // Run runs a command, write stdout and stderr to the logger and return an error
 // if it fails
 func (s *Shell) Run(command string, arg ...string) error {
-	s.Promptf("%s", process.FormatCommand(command, arg))
+	formatted := process.FormatCommand(command, arg)
+	if s.stdin == nil {
+		s.Promptf("%s", formatted)
+	} else {
+		// bash-syntax-compatible indication that input is coming from somewhere
+		s.Promptf("%s < /dev/stdin", formatted)
+	}
 
 	return s.RunWithoutPrompt(command, arg...)
 }
 
 // RunWithoutPrompt runs a command, write stdout and stderr to the logger and
-// return an error if it fails. Notably it doesn't show a prompt.
+// return an error if it fails. Notably it doesn't show a prompt. It will use the
+// context set on the Shell object itself.
 func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
-	cmd, err := s.buildCommand(command, arg...)
+	return s.RunWithoutPromptWithContext(s.ctx, command, arg...)
+}
+
+// RunWithoutPromptWithContext runs a command, writes stdout and err to the logger,
+// and returns an error if it fails. It doesn't show a prompt. It will use the given
+// context.
+func (s *Shell) RunWithoutPromptWithContext(ctx context.Context, command string, arg ...string) error {
+	cmd, err := s.buildCommand(ctx, command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
 	}
 
-	return s.executeCommand(cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -221,14 +266,14 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 		s.Promptf("%s", process.FormatCommand(command, arg))
 	}
 
-	cmd, err := s.buildCommand(command, arg...)
+	cmd, err := s.buildCommand(s.ctx, command, arg...)
 	if err != nil {
 		return "", err
 	}
 
 	var b bytes.Buffer
 
-	err = s.executeCommand(cmd, &b, executeFlags{
+	err = s.executeCommand(s.ctx, cmd, &b, executeFlags{
 		Stdout: true,
 		Stderr: false,
 		PTY:    false,
@@ -240,10 +285,26 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	return strings.TrimSpace(b.String()), nil
 }
 
+// injectTraceCtx adds tracing information to the given env vars to support
+// distributed tracing across jobs/builds.
+func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
+	span := opentracing.SpanFromContext(ctx)
+	// Not all shell runs will have tracing (nor do they really need to).
+	if span == nil {
+		return
+	}
+	if err := tracetools.EncodeTraceContext(span, env.ToMap()); err != nil {
+		if s.Debug {
+			s.Logger.Warningf("Failed to encode trace context: %v", err)
+		}
+		return
+	}
+}
+
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
 // can also be passed the the script
-func (s *Shell) RunScript(path string, extra *env.Environment) error {
+func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
 
@@ -275,9 +336,12 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		command = "powershell.exe"
 		args = []string{"-file", path}
 
-
 	case !isWindows && isBash:
-		command = "/bin/bash"
+		bashPath, err := s.AbsolutePath("bash")
+		if err != nil {
+			return fmt.Errorf("Error finding bash, needed to run scripts: %v.", err)
+		}
+		command = bashPath
 		args = []string{"-c", path}
 
 	default:
@@ -285,7 +349,7 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 		args = []string{}
 	}
 
-	cmd, err := s.buildCommand(command, args...)
+	cmd, err := s.buildCommand(ctx, command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -296,7 +360,7 @@ func (s *Shell) RunScript(path string, extra *env.Environment) error {
 	customEnv := currentEnv.Merge(extra)
 	cmd.Env = customEnv.ToSlice()
 
-	return s.executeCommand(cmd, s.Writer, executeFlags{
+	return s.executeCommand(ctx, cmd, s.Writer, executeFlags{
 		Stdout: true,
 		Stderr: true,
 		PTY:    s.PTY,
@@ -310,7 +374,7 @@ type command struct {
 }
 
 // buildCommand returns a command that can later be executed
-func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
+func (s *Shell) buildCommand(ctx context.Context, name string, arg ...string) (*command, error) {
 	// Always use absolute path as Windows has a hard time
 	// finding executables in its path
 	absPath, err := s.AbsolutePath(name)
@@ -319,15 +383,17 @@ func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 	}
 
 	cfg := process.Config{
-		Path: absPath,
-		Args: arg,
-		Env:  s.Env.ToSlice(),
-		Dir:  s.wd,
+		Path:            absPath,
+		Args:            arg,
+		Env:             s.Env.ToSlice(),
+		Stdin:           s.stdin,
+		Dir:             s.wd,
+		InterruptSignal: s.InterruptSignal,
 	}
 
 	// Create a sub-context so that shell.Cancel() can interrupt
 	// a running command
-	subctx, cancel := context.WithCancel(s.ctx)
+	subctx, cancel := context.WithCancel(ctx)
 	cfg.Context = subctx
 
 	// Add env that commands expect a shell to set
@@ -349,7 +415,12 @@ type executeFlags struct {
 	PTY bool
 }
 
-func (s *Shell) executeCommand(cmd *command, w io.Writer, flags executeFlags) error {
+func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
+	// Combine the two slices of env, let the latter overwrite the former
+	tracedEnv := env.FromSlice(cmd.Env)
+	s.injectTraceCtx(ctx, tracedEnv)
+	cmd.Env = tracedEnv.ToSlice()
+
 	s.cmdLock.Lock()
 	s.cmd = cmd
 	s.cmdLock.Unlock()

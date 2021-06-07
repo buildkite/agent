@@ -26,6 +26,8 @@ if [ "$BUILD_ARCH" == "amd64" ]; then
   ARCH="x86_64"
 elif [ "$BUILD_ARCH" == "386" ]; then
   ARCH="i386"
+elif [ "$BUILD_ARCH" == "arm64" ]; then
+  ARCH="aarch64"
 else
   echo "Unknown architecture: $BUILD_ARCH"
   exit 1

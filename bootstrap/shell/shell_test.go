@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
@@ -101,6 +103,20 @@ func TestRun(t *testing.T) {
 
 	if expected := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
 		t.Fatalf("Expected %q, got %q", expected, actual)
+	}
+}
+
+func TestRunWithStdin(t *testing.T) {
+	out := &bytes.Buffer{}
+	sh := newShellForTest(t)
+	sh.Writer = out
+
+	err := sh.WithStdin(strings.NewReader("hello stdin")).Run("tr", "hs", "HS")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected, actual := "Hello Stdin", out.String(); expected != actual {
+		t.Errorf("expected %q, got %q", expected, actual)
 	}
 }
 
@@ -332,4 +348,39 @@ func newShellForTest(t *testing.T) *shell.Shell {
 	}
 	sh.Logger = shell.DiscardLogger
 	return sh
+}
+
+func TestRunWithoutPrompt(t *testing.T) {
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := bytes.NewBufferString("")
+	sh.Writer = out
+
+	err = sh.RunWithoutPrompt("echo", "hi")
+	assert.NoError(t, err)
+	assert.Equal(t, "hi\n", out.String())
+
+	out.Reset()
+	err = sh.RunWithoutPrompt("asdasdasdasdzxczxczxzxc")
+	assert.Error(t, err)
+}
+
+func TestRunWithoutPromptWithContext(t *testing.T) {
+	sh, err := shell.New()
+	ctx := context.Background()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := bytes.NewBufferString("")
+	sh.Writer = out
+
+	err = sh.RunWithoutPromptWithContext(ctx, "echo", "hi")
+	assert.NoError(t, err)
+	assert.Equal(t, "hi\n", out.String())
+
+	out.Reset()
+	err = sh.RunWithoutPromptWithContext(ctx, "asdasdasdasdzxczxczxzxc")
+	assert.Error(t, err)
 }

@@ -13,16 +13,10 @@ steps:
 
   - name: ":hammer: :windows:"
     key: test-windows
-    command: ".buildkite\\steps\\tests.sh"
+    command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
-    plugins:
-      docker-compose#v3.0.0:
-        config: .buildkite/docker-compose.windows.yml
-        run: agent
-        tty: false
-        shell: ["bash.exe"]
     agents:
-      queue: "windows"
+      queue: buildkite-agent-windows
 
   - label: ":junit:"
     depends_on:
@@ -102,6 +96,16 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
+  - name: ":linux: ppc64"
+    command: ".buildkite/steps/build-binary.sh linux ppc64"
+    key: build-binary-linux-ppc64
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
   - name: ":linux: ppc64le"
     command: ".buildkite/steps/build-binary.sh linux ppc64le"
     key: build-binary-linux-ppc64le
@@ -112,9 +116,19 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":mac: 386"
-    command: ".buildkite/steps/build-binary.sh darwin 386"
-    key: build-binary-darwin-386
+  - name: ":linux: mips64le"
+    command: ".buildkite/steps/build-binary.sh linux mips64le"
+    key: build-binary-linux-mips64le
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - name: ":linux: s390x"
+    command: ".buildkite/steps/build-binary.sh linux s390x"
+    key: build-binary-linux-s390x
     depends_on: test-linux # don't wait for slower windows tests
     artifact_paths: "pkg/*"
     plugins:
@@ -125,6 +139,16 @@ steps:
   - name: ":mac: amd64"
     command: ".buildkite/steps/build-binary.sh darwin amd64"
     key: build-binary-darwin-amd64
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - name: ":mac: arm64"
+    command: ".buildkite/steps/build-binary.sh darwin arm64"
+    key: build-binary-darwin-arm64
     depends_on: test-linux # don't wait for slower windows tests
     artifact_paths: "pkg/*"
     plugins:
@@ -182,7 +206,17 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":hammer: bk cli"
+  - name: ":netbsd: amd64"
+    command: ".buildkite/steps/build-binary.sh netbsd amd64"
+    key: build-binary-netbsd-amd64
+    depends_on: test-linux # don't wait for slower windows tests
+    artifact_paths: "pkg/*"
+    plugins:
+      docker-compose#v1.8.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - name: ":hammer: bk cli & agent cli"
     key: test-bk-cli
     depends_on: build-binary-linux-amd64
     command: ".buildkite/steps/test-bk.sh"
@@ -208,12 +242,19 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh alpine"
 
-  - name: ":docker: ubuntu build"
-    key: build-docker-ubuntu
+  - name: ":docker: ubuntu 18.04 build"
+    key: build-docker-ubuntu-bionic-beaver
     depends_on:
       - build-binary-linux-amd64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh ubuntu"
+    command: ".buildkite/steps/build-docker-image.sh ubuntu-18.04"
+
+  - name: ":docker: ubuntu 20.04 build"
+    key: build-docker-ubuntu-focal-fossa
+    depends_on:
+      - build-binary-linux-amd64
+      - set-metadata
+    command: ".buildkite/steps/build-docker-image.sh ubuntu-20.04"
 
   - name: ":docker: centos build"
     key: build-docker-centos
@@ -221,6 +262,13 @@ steps:
       - build-binary-linux-amd64
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh centos"
+
+  - name: ":docker: sidecar build"
+    key: build-docker-sidecar
+    depends_on:
+      - build-binary-linux-amd64
+      - set-metadata
+    command: ".buildkite/steps/build-docker-image.sh sidecar"
 
   - name: ":debian: build"
     key: build-debian-packages
@@ -254,13 +302,16 @@ steps:
       - build-binary-linux-armhf
       - build-binary-linux-arm64
       - build-binary-linux-ppc64le
-      - build-binary-darwin-386
+      - build-binary-linux-mips64le
+      - build-binary-linux-s390x
       - build-binary-darwin-amd64
+      - build-binary-darwin-arm64
       - build-binary-freebsd-amd64
       - build-binary-freebsd-386
       - build-binary-openbsd-amd64
       - build-binary-openbsd-386
       - build-binary-dragonfly-amd64
+      - build-binary-netbsd-amd64
       - set-metadata
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
@@ -277,7 +328,9 @@ steps:
       - build-rpm-packages
       - build-debian-packages
       - build-docker-alpine
-      - build-docker-ubuntu
+      - build-docker-ubuntu-bionic-beaver
+      - build-docker-ubuntu-focal-fossa
       - build-docker-centos
+      - build-docker-sidecar
       - build-github-release
     command: ".buildkite/steps/upload-release-steps.sh"

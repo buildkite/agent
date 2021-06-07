@@ -1,6 +1,7 @@
-package bootstrap
+package hook
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -16,6 +17,7 @@ import (
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	var script []string
 
 	if runtime.GOOS != "windows" {
@@ -34,12 +36,12 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		}
 	}
 
-	wrapper := newTestHookWrapper(t, script)
+	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 
-	if err := sh.RunScript(wrapper.Path(), nil); err != nil {
+	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -62,6 +64,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	ctx := context.Background()
 	var script []string
 
 	if runtime.GOOS != "windows" {
@@ -80,15 +83,15 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		}
 	}
 
-	wrapper := newTestHookWrapper(t, script)
+	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
 
-	sh := newTestShell(t)
+	sh := shell.NewTestShell(t)
 	if err := sh.Chdir(tempDir); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := sh.RunScript(wrapper.Path(), nil); err != nil {
+	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -112,39 +115,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	}
 }
 
-func newTestShell(t *testing.T) *shell.Shell {
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sh.Logger = shell.DiscardLogger
-	sh.Writer = ioutil.Discard
-
-	if os.Getenv(`DEBUG_SHELL`) == "1" {
-		sh.Logger = shell.TestingLogger{T: t}
-	}
-
-	// Windows requires certain env variables to be present
-	if runtime.GOOS == "windows" {
-		sh.Env = env.FromSlice([]string{
-			//			"PATH=" + os.Getenv("PATH"),
-			"SystemRoot=" + os.Getenv("SystemRoot"),
-			"WINDIR=" + os.Getenv("WINDIR"),
-			"COMSPEC=" + os.Getenv("COMSPEC"),
-			"PATHEXT=" + os.Getenv("PATHEXT"),
-			"TMP=" + os.Getenv("TMP"),
-			"TEMP=" + os.Getenv("TEMP"),
-			"ProgramData=" + os.Getenv("ProgramData"),
-		})
-	} else {
-		sh.Env = env.New()
-	}
-
-	return sh
-}
-
-func newTestHookWrapper(t *testing.T, script []string) *hookScriptWrapper {
+func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 	hookName := "hookwrapper"
 	if runtime.GOOS == "windows" {
 		hookName += ".bat"
@@ -163,7 +134,7 @@ func newTestHookWrapper(t *testing.T, script []string) *hookScriptWrapper {
 
 	hookFile.Close()
 
-	wrapper, err := newHookScriptWrapper(hookFile.Name())
+	wrapper, err := CreateScriptWrapper(hookFile.Name())
 	if err != nil {
 		t.Fatal(err)
 	}

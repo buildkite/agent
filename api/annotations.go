@@ -21,3 +21,15 @@ func (c *Client) Annotate(jobId string, annotation *Annotation) (*Response, erro
 
 	return c.doRequest(req, nil)
 }
+
+// Remove an annotation from a build
+func (c *Client) AnnotationRemove(jobId string, context string) (*Response, error) {
+	u := fmt.Sprintf("jobs/%s/annotations/%s", jobId, context)
+
+	req, err := c.newRequest("DELETE", u, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.doRequest(req, nil)
+}

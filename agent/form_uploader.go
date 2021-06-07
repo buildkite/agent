@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httptrace"
 	"net/http/httputil"
 	"regexp"
 	"strings"
@@ -21,6 +22,9 @@ import (
 )
 
 var ArtifactPathVariableRegex = regexp.MustCompile("\\$\\{artifact\\:path\\}")
+
+// FormUploader uploads to S3 as a single signed POST, which have a hard limit of 5Gb.
+var maxFormUploadedArtifactSize = int64(5368709120)
 
 type FormUploaderConfig struct {
 	// Whether or not HTTP calls should be debugged
@@ -49,6 +53,10 @@ func (u *FormUploader) URL(artifact *api.Artifact) string {
 }
 
 func (u *FormUploader) Upload(artifact *api.Artifact) error {
+	if artifact.FileSize > maxFormUploadedArtifactSize {
+		return errors.New(fmt.Sprintf("File size (%d bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files.", artifact.FileSize))
+	}
+
 	// Create a HTTP request for uploading the file
 	request, err := createUploadRequest(u.logger, artifact)
 	if err != nil {
@@ -67,7 +75,21 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 			requestDump, err = httputil.DumpRequestOut(request, true)
 		}
 
-		u.logger.Debug("\nERR: %s\n%s", err, string(requestDump))
+		if err != nil {
+			u.logger.Debug("\nERR: %s\n%s", err, string(requestDump))
+		} else {
+			u.logger.Debug("\n%s", string(requestDump))
+		}
+
+		// configure the HTTP request to log the server IP. The IPs for s3.amazonaws.com
+		// rotate every 5 seconds, and if one of them is misbehaving it may be helpful to
+		// know which one.
+		trace := &httptrace.ClientTrace{
+			GotConn: func(connInfo httptrace.GotConnInfo) {
+				u.logger.Debug("artifact %s uploading to: %s", artifact.ID, connInfo.Conn.RemoteAddr())
+			},
+		}
+		request = request.WithContext(httptrace.WithClientTrace(request.Context(), trace))
 	}
 
 	// Create the client
@@ -87,7 +109,11 @@ func (u *FormUploader) Upload(artifact *api.Artifact) error {
 
 		if u.conf.DebugHTTP {
 			responseDump, err := httputil.DumpResponse(response, true)
-			u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			if err != nil {
+				u.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
+			} else {
+				u.logger.Debug("\n%s", string(responseDump))
+			}
 		}
 
 		if response.StatusCode/100 != 2 {

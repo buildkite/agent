@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/kr/pty"
+	"github.com/creack/pty"
 )
 
 func StartPTY(c *exec.Cmd) (*os.File, error) {

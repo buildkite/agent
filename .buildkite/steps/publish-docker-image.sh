@@ -61,6 +61,14 @@ if [[ "$codename" == "stable" ]] ; then
   done
   release_image "${variant}"
 
+  # publish bare 'ubuntu' only from ubuntu-20.04
+  if [[ "$variant" == "ubuntu-20.04" ]] ; then
+    for tag in $(parse_version "$version") ; do
+      release_image "${tag}-ubuntu"
+    done
+    release_image "ubuntu"
+  fi
+
   # publish latest and stable only from alpine
   if [[ "$variant" == "alpine" ]] ; then
     release_image "latest"

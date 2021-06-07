@@ -11,7 +11,7 @@
 /.agent.*.conf
 /.buildkite-agent.cfg
 /.vagrant
-packaging/docker/alpine-linux/buildkite-agent
-packaging/docker/ubuntu-linux/buildkite-agent
+packaging/docker/*/buildkite-agent
+packaging/docker/*/hooks/
 
 .idea

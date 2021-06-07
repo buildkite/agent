@@ -13,7 +13,7 @@ import (
 
 var StepUpdateHelpDescription = `Usage:
 
-   buildkite-agent step update <attribute> <value> [arguments...]
+   buildkite-agent step update <attribute> <value> [options...]
 
 Description:
 
@@ -34,9 +34,10 @@ type StepUpdateConfig struct {
 	Build     string `cli:"build"`
 
 	// Global flags
-	Debug   bool   `cli:"debug"`
-	NoColor bool   `cli:"no-color"`
-	Profile string `cli:"profile"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -77,6 +78,7 @@ var StepUpdateCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ExperimentsFlag,
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
@@ -108,7 +110,7 @@ var StepUpdateCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Generate a UUID that will identifiy this change. We do this
+		// Generate a UUID that will identify this change. We do this
 		// outside of the retry loop because we want this UUID to be
 		// the same for each attempt at updating the step.
 		idempotencyUUID := api.NewUUID()

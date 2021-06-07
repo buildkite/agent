@@ -15,7 +15,7 @@ import (
 
 var AppHelpTemplate = `Usage:
 
-  {{.Name}} <command> [arguments...]
+  {{.Name}} <command> [options...]
 
 Available commands are:
 
@@ -27,7 +27,7 @@ Use "{{.Name}} <command> --help" for more information about a command.
 
 var SubcommandHelpTemplate = `Usage:
 
-  {{.Name}} {{if .VisibleFlags}}<command>{{end}} [arguments...]
+  {{.Name}} {{if .VisibleFlags}}<command>{{end}} [options...]
 
 Available commands are:
 
@@ -64,11 +64,19 @@ func main() {
 		clicommand.AgentStartCommand,
 		clicommand.AnnotateCommand,
 		{
+			Name:  "annotation",
+			Usage: "Make changes an annotation on the currently running build",
+			Subcommands: []cli.Command{
+				clicommand.AnnotationRemoveCommand,
+			},
+		},
+		{
 			Name:  "artifact",
 			Usage: "Upload/download artifacts from Buildkite jobs",
 			Subcommands: []cli.Command{
 				clicommand.ArtifactUploadCommand,
 				clicommand.ArtifactDownloadCommand,
+				clicommand.ArtifactSearchCommand,
 				clicommand.ArtifactShasumCommand,
 			},
 		},

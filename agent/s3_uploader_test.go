@@ -13,6 +13,7 @@ func TestParseS3DestinationBucketPath(t *testing.T) {
 	}{
 		{"s3://my-bucket-name/foo/bar", "foo/bar"},
 		{"s3://starts-with-an-s/and-this-is-its/folder", "and-this-is-its/folder"},
+		{"s3://custom-s3-domain/folder/ends-with-a-slash/", "folder/ends-with-a-slash"},
 	} {
 		_, path := ParseS3Destination(tc.Destination)
 		if path != tc.Path {

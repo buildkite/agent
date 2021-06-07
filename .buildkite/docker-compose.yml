@@ -2,7 +2,9 @@ version: '3.5'
 
 services:
   agent:
-    image: golang:1.14@sha256:b451547e2056c6369bbbaf5a306da1327cc12c074f55c311f6afe3bfc1c286b6
+    build:
+      context: .
+      dockerfile: Dockerfile-compile
     volumes:
       - ../:/work:cached
     working_dir: /work

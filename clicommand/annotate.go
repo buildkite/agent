@@ -15,7 +15,7 @@ import (
 
 var AnnotateHelpDescription = `Usage:
 
-   buildkite-agent annotate [<body>] [arguments...]
+   buildkite-agent annotate [body] [options...]
 
 Description:
 
@@ -37,7 +37,7 @@ Description:
    again and provide the same context as the one you want to update. Or if you
    leave context blank, it will use the default context.
 
-   You can also update just the style of an existing annotation by omitting the
+   You can also update only the style of an existing annotation by omitting the
    body entirely and providing a new style value.
 
 Example:
@@ -55,9 +55,10 @@ type AnnotateConfig struct {
 	Job     string `cli:"job" validate:"required"`
 
 	// Global flags
-	Debug   bool   `cli:"debug"`
-	NoColor bool   `cli:"no-color"`
-	Profile string `cli:"profile"`
+	Debug       bool     `cli:"debug"`
+	NoColor     bool     `cli:"no-color"`
+	Experiments []string `cli:"experiment" normalize:"list"`
+	Profile     string   `cli:"profile"`
 
 	// API config
 	DebugHTTP        bool   `cli:"debug-http"`
@@ -102,6 +103,7 @@ var AnnotateCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		ExperimentsFlag,
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {

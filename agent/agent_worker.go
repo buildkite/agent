@@ -19,6 +19,9 @@ type AgentWorkerConfig struct {
 	// Whether to set debug in the job
 	Debug bool
 
+	// Whether to set debugHTTP in the job
+	DebugHTTP bool
+
 	// What signal to use for worker cancellation
 	CancelSignal process.Signal
 
@@ -63,6 +66,9 @@ type AgentWorker struct {
 	// Whether to enable debug
 	debug bool
 
+	// Whether to enable debugging of HTTP requests
+	debugHTTP bool
+
 	// The signal to use for cancellation
 	cancelSig process.Signal
 
@@ -87,6 +93,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		metricsCollector:   m,
 		apiClient:          apiClient.FromAgentRegisterResponse(a),
 		debug:              c.Debug,
+		debugHTTP:          c.DebugHTTP,
 		agentConfiguration: c.AgentConfiguration,
 		stop:               make(chan struct{}),
 		cancelSig:          c.CancelSignal,
@@ -261,7 +268,10 @@ func (a *AgentWorker) Stop(graceful bool) {
 			// Kill the current job. Doesn't do anything if the job
 			// is already being killed, so it's safe to call
 			// multiple times.
-			a.jobRunner.CancelAndStop()
+			err := a.jobRunner.CancelAndStop()
+			if err != nil {
+				a.logger.Error("Unexpected error canceling job (err: %s)", err)
+			}
 		} else {
 			a.logger.Info("Forcefully stopping agent. Since there is no job running, the agent will disconnect immediately")
 		}
@@ -477,6 +487,7 @@ func (a *AgentWorker) RunJob(job *api.Job) error {
 	var err error
 	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, job, a.apiClient, JobRunnerConfig{
 		Debug:              a.debug,
+		DebugHTTP:          a.debugHTTP,
 		CancelSignal:       a.cancelSig,
 		AgentConfiguration: a.agentConfiguration,
 	})

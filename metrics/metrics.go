@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/DataDog/datadog-go/statsd"
@@ -26,8 +27,9 @@ type Collector struct {
 }
 
 type CollectorConfig struct {
-	Datadog     bool
-	DatadogHost string
+	Datadog              bool
+	DatadogHost          string
+	DatadogDistributions bool
 }
 
 func NewCollector(l logger.Logger, c CollectorConfig) *Collector {
@@ -87,7 +89,19 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 	mergedTags := s.mergeTags(tags...).StringSlice()
 	s.c.logger.Debug("Metrics timing %s=%v %v", name, value, mergedTags)
 
-	if err := s.c.client.Timing(name, value, mergedTags, 1); err != nil {
+	var err error
+	if s.c.config.DatadogDistributions {
+		// Datadog recommends that, as distributions are a new distinct metric,
+		// they belong to a new metric name. We handle this by just slamming
+		// .distribution to end of all metrics that we submit this way
+		if !strings.HasSuffix(name, ".distribution") {
+			name = name + ".distribution"
+		}
+		err = s.c.client.Distribution(name, float64(value.Milliseconds()), mergedTags, 1)
+	} else {
+		err = s.c.client.Timing(name, value, mergedTags, 1)
+	}
+	if err != nil {
 		s.c.logger.Error("Metrics timing failed: %v", err)
 	}
 }

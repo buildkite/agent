@@ -19,7 +19,7 @@ import (
 
 	"github.com/buildkite/agent/v3/experiments"
 
-	"github.com/buildkite/bintest"
+	"github.com/buildkite/bintest/v3"
 )
 
 // BootstrapTester invokes a buildkite-agent bootstrap script with a temporary environment
