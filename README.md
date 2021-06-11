@@ -79,6 +79,38 @@ export GO111MODULE=on
 
 Dependencies are no longer committed to the repository, so compiling on Go <= 1.10 is not supported.
 
+## Platform Support
+
+Inspired by the Rust language platform support guidance.
+
+### Tier 1, guaranteed to work
+
+- linux x86_64
+- windows x86_64
+
+### Tier 2, guaranteed to build
+
+- linux x86
+- linux arm64
+- windows x86
+- windows arm64
+- darwin x86_64
+- darwin arm64
+
+### Tier 3, community supported
+
+- linux arm
+- linux armf
+- linux ppc64
+- linux mips64
+- linux s390x
+- netbsd x86_64
+- freebsd x86
+- freebsd x86_64
+- openbsd x86
+- openbsd x84_64
+- dragonfly x86_64
+
 ## Contributing
 
 1. Fork it
