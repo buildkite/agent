@@ -111,6 +111,14 @@ Inspired by the Rust language platform support guidance.
 - openbsd x84_64
 - dragonfly x86_64
 
+## Operating System Support
+
+We support the agent running on the following operating systems:
+
+- Linux based [min version TBD]
+- macOS [min version TBD]
+- Windows [min version TBD]
+
 ## Docker Support
 
 We package and publish Docker Images to Docker Hub for the following operating systems:
