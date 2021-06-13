@@ -34,7 +34,27 @@ The agent is fairly portable and should run out of the box on most supported pla
 
 [The agents page](https://buildkite.com/organizations/-/agents) on Buildkite has personalised instructions, or you can refer to [the Buildkite docs](https://buildkite.com/docs/agent/v3/installation). Both cover installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via homebrew), Windows and Linux.
 
-You can also run the agent [via Docker](https://hub.docker.com/r/buildkite/agent).
+### Docker
+
+We also support and publish [Docker Images](https://hub.docker.com/r/buildkite/agent) for the
+following operating systems. Docker images are tagged using the agent SemVer components followed
+by the operating system.
+
+For example, agent version 3.30.0 is published as:
+
+- 3-ubuntu-20.04, tracks minor updates in version 3 installed in Ubuntu 20.04
+- 3.30-ubuntu-20.04, tracks bugfix updates in version 3.30 installed in Ubuntu 20.04
+- 3.30.0-ubuntu-20.04, tracks the exact version installed in Ubuntu 20.04
+
+#### Tier 1, guaranteed to work
+
+- Alpine 3.12
+- Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
+- Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
+
+#### Tier 2, guaranteed to build
+
+- Centos 8
 
 ## Starting
 
@@ -79,16 +99,21 @@ export GO111MODULE=on
 
 Dependencies are no longer committed to the repository, so compiling on Go <= 1.10 is not supported.
 
-## Architecture Support
+## Platform Support
 
-Inspired by the Rust language platform support guidance.
+We provide support for security and bug fixes on the current major release only.
 
-### Tier 1, guaranteed to work
+### Architecture Support
+
+We offer support for the following machine architectures (inspired by the Rust language platform
+support guidance):
+
+#### Tier 1, guaranteed to work
 
 - linux x86_64
 - windows x86_64
 
-### Tier 2, guaranteed to build
+#### Tier 2, guaranteed to build
 
 - linux x86
 - linux arm64
@@ -97,7 +122,7 @@ Inspired by the Rust language platform support guidance.
 - darwin x86_64
 - darwin arm64
 
-### Tier 3, community supported
+#### Tier 3, community supported
 
 - linux arm
 - linux armf
@@ -111,27 +136,15 @@ Inspired by the Rust language platform support guidance.
 - openbsd x84_64
 - dragonfly x86_64
 
-## Operating System Support
+### Operating System Support
 
-We support the agent running on the following operating systems:
+We provide support for running the Buildkite Agent on the following operating systems.
+The agent binary is fairly portable and should run out of the box on most UNIX like
+systems.
 
 - Linux based [min version TBD]
 - macOS [min version TBD]
 - Windows [min version TBD]
-
-## Docker Support
-
-We package and publish Docker Images to Docker Hub for the following operating systems:
-
-### Tier 1, guaranteed to work
-
-- Alpine 3.12
-- Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
-- Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
-
-### Tier 2, guaranteed to build
-
-- Centos 8
 
 ## Contributing
 
