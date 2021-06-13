@@ -79,7 +79,7 @@ export GO111MODULE=on
 
 Dependencies are no longer committed to the repository, so compiling on Go <= 1.10 is not supported.
 
-## Platform Support
+## Architecture Support
 
 Inspired by the Rust language platform support guidance.
 
