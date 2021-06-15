@@ -86,3 +86,29 @@ func TestRedactorSlowLoris(t *testing.T) {
 		t.Errorf("Redaction failed: %s", buf.String())
 	}
 }
+
+func TestRedactorSubsetSecrets(t *testing.T) {
+	/*
+		This probably isn't a desired behaviour but I wanted to document it.
+
+		If one of the needles/secrets is a prefix subset of another, only
+		the smaller / prefix secret will be redacted.
+
+		I suspect this will not be an issue in practice due to the strings
+		we expect to redact.
+
+		If this is a critical issue, this test is NOT required to pass
+		for backwards compatibility and SHOULD be changed to test that
+		the longer secret string is redacted.
+	*/
+
+	var buf bytes.Buffer
+	redactor := NewRedactor(&buf, "[REDACTED]", []string{"secret1111", "secret"})
+
+	redactor.Write([]byte("secret1111"))
+	redactor.Flush()
+
+	if buf.String() != "[REDACTED]1111" {
+		t.Errorf("Redaction failed: %s", buf.String())
+	}
+}
