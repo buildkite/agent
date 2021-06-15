@@ -65,3 +65,24 @@ func TestRedactorResetMidStream(t *testing.T) {
 		t.Errorf("Redaction failed: %s", buf.String())
 	}
 }
+
+func TestRedactorSlowLoris(t *testing.T) {
+	var buf bytes.Buffer
+	redactor := NewRedactor(&buf, "[REDACTED]", []string{"secret1111"})
+
+	redactor.Write([]byte("s"))
+	redactor.Write([]byte("e"))
+	redactor.Write([]byte("c"))
+	redactor.Write([]byte("r"))
+	redactor.Write([]byte("e"))
+	redactor.Write([]byte("t"))
+	redactor.Write([]byte("1"))
+	redactor.Write([]byte("1"))
+	redactor.Write([]byte("1"))
+	redactor.Write([]byte("1"))
+	redactor.Flush()
+
+	if buf.String() != "[REDACTED]" {
+		t.Errorf("Redaction failed: %s", buf.String())
+	}
+}
