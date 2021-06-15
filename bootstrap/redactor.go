@@ -109,28 +109,53 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 		return 0, nil
 	}
 
-	// Current iterator index, which may be a safe offset from 0
+	// Current iterator index, how much we can safely consume from input without
+	// reading past the end of any of the needle values.
+	//
+	// May be further than the number of bytes given in input.
 	cursor := redactor.offset
 
 	// Current index which is guaranteed to be completely redacted
 	// May lag behind cursor by up to the length of the longest search string
 	doneTo := 0
 
+	// For so long as the safe consumption index is inside the current input array
 	for cursor < len(input) {
 		ch := input[cursor]
 		skip := redactor.table[ch].skip
 
+		possibleNeedleEnd := skip == 0
+
 		// If the skip table tells us that there is no search string ending in
 		// the current byte, skip forward by the indicated distance.
-		if skip != 0 {
+		if !possibleNeedleEnd {
+			// Advance the safe to consume index, may be beyond the length of the current input
 			cursor += skip
 
 			// Also copy any content behind the cursor which is guaranteed not
-			// to fall under a match
+			// to fall under a match.
+			//
+			// cursor is currently the most we could have safely read into input
+			// (and having not found a needle there) plus the additional amount
+			// we can now read before having to check for one
+			//
+			// cursor could now be pointing at the last byte of the maxlen needle
+			// so the most bytes we can safely confirm are from up to that point.
+			//
+			// Everything in this input prior to the start of that needle can be
+			// confirmed, and that needle (if present) will be redacted in the next
+			// loop or next write.
 			confirmedTo := cursor - redactor.maxlen
+
+			// The maxlen needle (if any) is fully in future write calls, this whole
+			// input slice can be confirmed.
 			if confirmedTo > len(input) {
 				confirmedTo = len(input)
 			}
+
+			// Save the confirmed input to outbuf ready for pushing down and advance
+			// doneTo to signal we have a confirmed series of bytes ready for pushing
+			// down.
 			if confirmedTo > doneTo {
 				redactor.outbuf = append(redactor.outbuf, input[doneTo:confirmedTo]...)
 				doneTo = confirmedTo
@@ -180,7 +205,8 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 				doneTo = cursor
 
 				// The next end-of-string will be at least this far away so
-				// it's safe to skip forward a bit
+				// it's safe to skip forward a bit. May be beyond the current
+				// input.
 				cursor += redactor.minlen - 1
 				break
 			}
