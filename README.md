@@ -142,7 +142,7 @@ The agent binary is fairly portable and should run out of the box on most UNIX l
 systems.
 
 - Ubuntu 18.04 and newer
-- Debian [min version TBD]
+- Debian 8 and newer
 - RedHat [min version TBD]
 - Amazon Linux [min version TBD]
 - macOS
