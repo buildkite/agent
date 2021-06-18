@@ -103,6 +103,9 @@ Dependencies are no longer committed to the repository, so compiling on Go <= 1.
 
 We provide support for security and bug fixes on the current major release only.
 
+Our architecture and operating system support is primarily limited to what golang
+itself [supports](https://github.com/golang/go/wiki/MinimumRequirements).
+
 ### Architecture Support
 
 We offer support for the following machine architectures (inspired by the Rust language platform
