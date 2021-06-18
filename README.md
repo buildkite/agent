@@ -146,7 +146,7 @@ binary is fairly portable and should run out of the box on most UNIX like system
 
 - Ubuntu 18.04 and newer
 - Debian 8 and newer
-- RedHat
+- Red Hat
   - RHEL 7
   - RHEL 8
 - CentOS
