@@ -143,9 +143,15 @@ systems.
 
 - Ubuntu 18.04 and newer
 - Debian 8 and newer
-- RedHat [min version TBD]
-- CentOS [min version TBD]
-- Amazon Linux [min version TBD]
+- RedHat
+  - RHEL 7
+  - RHEL 8
+- CentOS
+  - CentOS 7
+  - CentOS 8
+- Amazon Linux
+  - Amazon Linux 1
+  - Amazon Linux 2
 - macOS
   - 10.11
   - 10.12
