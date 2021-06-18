@@ -142,7 +142,13 @@ The agent binary is fairly portable and should run out of the box on most UNIX l
 systems.
 
 - Linux based [min version TBD]
-- macOS [min version TBD]
+- macOS
+  - 10.11
+  - 10.12
+  - 10.13
+  - 10.14
+  - 10.15
+  - 11
 - Windows Server
   - 2016
   - 2019
