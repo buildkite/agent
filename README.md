@@ -141,7 +141,10 @@ We provide support for running the Buildkite Agent on the following operating sy
 The agent binary is fairly portable and should run out of the box on most UNIX like
 systems.
 
-- Linux based [min version TBD]
+- Ubuntu [min version TBD]
+- Debian [min version TBD]
+- RedHat [min version TBD]
+- Amazon Linux [min version TBD]
 - macOS
   - 10.11
   - 10.12
