@@ -106,7 +106,7 @@ We provide support for security and bug fixes on the current major release only.
 ### Architecture Support
 
 We offer support for the following machine architectures (inspired by the Rust language platform
-support guidance):
+support guidance).
 
 #### Tier 1, guaranteed to work
 
@@ -137,9 +137,9 @@ support guidance):
 
 ### Operating System Support
 
-We provide support for running the Buildkite Agent on the following operating systems.
-The agent binary is fairly portable and should run out of the box on most UNIX like
-systems.
+We currently provide support for running the Buildkite Agent on the following operating
+systems. Future major releases may drop support for old operating systems. The agent
+binary is fairly portable and should run out of the box on most UNIX like systems.
 
 - Ubuntu 18.04 and newer
 - Debian 8 and newer
