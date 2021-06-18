@@ -144,6 +144,7 @@ systems.
 - Ubuntu 18.04 and newer
 - Debian 8 and newer
 - RedHat [min version TBD]
+- CentOS [min version TBD]
 - Amazon Linux [min version TBD]
 - macOS
   - 10.11
