@@ -118,7 +118,6 @@ support guidance):
 - linux x86
 - linux arm64
 - windows x86
-- windows arm64
 - darwin x86_64
 - darwin arm64
 
