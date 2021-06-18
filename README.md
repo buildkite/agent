@@ -144,7 +144,9 @@ systems.
 
 - Linux based [min version TBD]
 - macOS [min version TBD]
-- Windows [min version TBD]
+- Windows Server
+  - 2016
+  - 2019
 
 ## Contributing
 
