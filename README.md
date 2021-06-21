@@ -152,7 +152,6 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - CentOS 8
 - Amazon Linux 2
 - macOS
-  - 10.11
   - 10.12
   - 10.13
   - 10.14
