@@ -1802,11 +1802,12 @@ func (b *Bootstrap) ignoredEnv() []string {
 // RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactors() RedactorMux {
 	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
-
-	if len(valuesToRedact) > 0 {
-		b.shell.Commentf("Enabling output redaction")
-	} else {
+	if len(valuesToRedact) == 0 {
 		return nil
+	}
+
+	if b.Debug {
+		b.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", b.Config.RedactedVars)
 	}
 
 	var mux RedactorMux
