@@ -1801,12 +1801,15 @@ func (b *Bootstrap) ignoredEnv() []string {
 // matching environment vars.
 // RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactors() RedactorMux {
-	if experiments.IsEnabled("output-redactor") {
-		b.shell.Commentf("Using output-redactor experiment 🧪")
-	} else {
+	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+	if len(valuesToRedact) == 0 {
 		return nil
 	}
-	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+
+	if b.Debug {
+		b.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", b.Config.RedactedVars)
+	}
+
 	var mux RedactorMux
 
 	// If the shell Writer is already a Redactor, reset the values to redact.

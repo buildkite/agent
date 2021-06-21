@@ -42,7 +42,23 @@ func TestGetValuesToRedact(t *testing.T) {
 
 	valuesToRedact := getValuesToRedact(shell.DiscardLogger, redactConfig, environment)
 
-	assert.Equal(t, valuesToRedact, []string{"hunter2"})
+	assert.Equal(t, []string{"hunter2"}, valuesToRedact)
+}
+
+func TestGetValuesToRedactEmpty(t *testing.T) {
+	t.Parallel()
+
+	redactConfig := []string{}
+	environment := map[string]string{
+		"FOO": "BAR",
+		"BUILDKITE_PIPELINE": "unit-test",
+	}
+
+	valuesToRedact := getValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+
+	var expected []string
+	assert.Equal(t, expected, valuesToRedact)
+	assert.Equal(t, 0, len(valuesToRedact))
 }
 
 func TestStartTracing(t *testing.T) {

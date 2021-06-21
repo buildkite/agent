@@ -352,7 +352,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 		value, _ := reflections.GetField(l.Config, fieldName)
 		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
 
-		// Make sure we're normalizing a string filed
+		// Make sure we're normalizing a string field
 		if fieldKind != reflect.String {
 			return fmt.Errorf("filepath normalization only works on string fields")
 		}
@@ -372,7 +372,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 		value, _ := reflections.GetField(l.Config, fieldName)
 		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
 
-		// Make sure we're normalizing a string filed
+		// Make sure we're normalizing a string field
 		if fieldKind != reflect.String {
 			return fmt.Errorf("commandpath normalization only works on string fields")
 		}
@@ -392,18 +392,22 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 		value, _ := reflections.GetField(l.Config, fieldName)
 		fieldKind, _ := reflections.GetFieldKind(l.Config, fieldName)
 
-		// Make sure we're normalizing a string filed
+		// Make sure we're normalizing a string field
 		if fieldKind != reflect.Slice {
 			return fmt.Errorf("list normalization only works on slice fields")
 		}
 
-		// Normalize the field to be a command
+		// Normalize the field to be a string
 		if valueAsSlice, ok := value.([]string); ok {
 			normalizedSlice := []string{}
 
 			for _, value := range valueAsSlice {
 				// Split values with commas into fields
 				for _, normalized := range strings.Split(value, ",") {
+					if normalized == "" {
+						continue
+					}
+
 					normalizedSlice = append(normalizedSlice, normalized)
 				}
 			}
