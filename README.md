@@ -54,7 +54,7 @@ For example, agent version 3.30.0 is published as:
 
 #### Tier 2, guaranteed to build
 
-- Centos 8
+- CentOS 8
 
 ## Starting
 
@@ -161,7 +161,9 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - 2016
   - 2019
 
-[1] See https://github.com/golang/go/issues/23011 for macOS / golang support
+[1] See https://github.com/golang/go/issues/23011 for macOS / golang support and
+[Supported macOS Versions](./docs/macos.md) for the last supported version of the
+Buildkite Agent for versions of macOS prior to those listed above.
 
 ## Contributing
 
