@@ -151,7 +151,7 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - CentOS 7
   - CentOS 8
 - Amazon Linux 2
-- macOS
+- macOS [1]
   - 10.12
   - 10.13
   - 10.14
@@ -160,6 +160,8 @@ binary is fairly portable and should run out of the box on most UNIX like system
 - Windows Server
   - 2016
   - 2019
+
+[1] See https://github.com/golang/go/issues/23011 for macOS / golang support
 
 ## Contributing
 
