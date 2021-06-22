@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/gob"
+	"net/http"
 
-	"github.com/opentracing/opentracing-go"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	ot "github.com/opentracing/opentracing-go"
 )
 
 // EnvVarTraceContextKey is the env var key that will be used to store/retrieve the
@@ -15,15 +15,16 @@ const EnvVarTraceContextKey = "BUILDKITE_TRACE_CONTEXT"
 
 // EncodeTraceContext will serialize and encode tracing data into a string and place
 // it into the given env vars map.
-func EncodeTraceContext(span opentracing.Span, env map[string]string) error {
-	textmap := tracer.TextMapCarrier{}
-	if err := span.Tracer().Inject(span.Context(), opentracing.TextMap, &textmap); err != nil {
+func EncodeTraceContext(span ot.Span, env map[string]string) error {
+	headers := http.Header{}
+	carrier := ot.HTTPHeadersCarrier(headers)
+	if err := span.Tracer().Inject(span.Context(), ot.HTTPHeaders, carrier); err != nil {
 		return err
 	}
 
 	buf := bytes.NewBuffer([]byte{})
 	enc := gob.NewEncoder(buf)
-	if err := enc.Encode(textmap); err != nil {
+	if err := enc.Encode(headers); err != nil {
 		return err
 	}
 
@@ -33,10 +34,10 @@ func EncodeTraceContext(span opentracing.Span, env map[string]string) error {
 
 // DecodeTraceContext will decode, deserialize, and extract the tracing data from the
 // given env var map.
-func DecodeTraceContext(env map[string]string) (opentracing.SpanContext, error) {
+func DecodeTraceContext(env map[string]string) (ot.SpanContext, error) {
 	s, has := env[EnvVarTraceContextKey]
 	if !has {
-		return nil, opentracing.ErrSpanContextNotFound
+		return nil, ot.ErrSpanContextNotFound
 	}
 
 	contextBytes, err := base64.URLEncoding.DecodeString(s)
@@ -46,10 +47,10 @@ func DecodeTraceContext(env map[string]string) (opentracing.SpanContext, error) 
 
 	buf := bytes.NewBuffer(contextBytes)
 	dec := gob.NewDecoder(buf)
-	textmap := opentracing.TextMapCarrier{}
-	if err := dec.Decode(&textmap); err != nil {
+	httpheader := ot.HTTPHeadersCarrier{}
+	if err := dec.Decode(&httpheader); err != nil {
 		return nil, err
 	}
 
-	return opentracing.GlobalTracer().Extract(opentracing.TextMap, textmap)
+	return ot.GlobalTracer().Extract(ot.HTTPHeaders, httpheader)
 }

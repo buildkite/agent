@@ -174,8 +174,9 @@ func DefaultConfigFilePaths() (paths []string) {
 // checked during agent startup so that bootstrapped jobs don't silently have
 // no tracing if an invalid value is given.
 var validTracingBackends = map[string]struct{}{
-	"":        struct{}{},
-	"datadog": struct{}{},
+	"":          struct{}{},
+	"datadog":   struct{}{},
+	"honeycomb": struct{}{},
 }
 
 var AgentStartCommand = cli.Command{

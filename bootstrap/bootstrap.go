@@ -28,9 +28,17 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
+
 	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+
+	"go.opentelemetry.io/otel"
+	otel_bridge "go.opentelemetry.io/otel/bridge/opentracing"
+	"go.opentelemetry.io/otel/exporters/otlp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpgrpc"
+	otel_trace "go.opentelemetry.io/otel/sdk/trace"
+	"google.golang.org/grpc/credentials"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a
@@ -281,6 +289,52 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithGlobalTag(ddext.SamplingPriority, ddext.PriorityUserKeep),
 		)
 		stopper = tracer.Stop
+	case "honeycomb":
+		apikey, _ := os.LookupEnv("HONEYCOMB_API_KEY")
+		dataset, _ := os.LookupEnv("HONEYCOMB_DATASET")
+
+		// Initialize an OTLP exporter over gRPC and point it to Honeycomb.
+		// This is based on the docs at https://docs.honeycomb.io/getting-data-in/opentelemetry/
+		// The honeycomb API can accept opentelemetry formatted data natively, so we don't need
+		// a special honeycomb opentelemetry adapter. We can use the standard OTLP exporter, pointed
+		// at a honeycomnb API endpoint
+		ctx := context.Background()
+		exporter, err := otlp.NewExporter(
+			ctx,
+			otlpgrpc.NewDriver(
+				otlpgrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, "")),
+				otlpgrpc.WithEndpoint("api.honeycomb.io:443"),
+				otlpgrpc.WithHeaders(map[string]string{
+					"x-honeycomb-team":    apikey,
+					"x-honeycomb-dataset": dataset,
+				}),
+			),
+		)
+		if err != nil {
+			fmt.Printf("ERROR: %v\n", err)
+			os.Exit(1)
+		}
+		// Configure the OTel tracer provider. Collect every trace with no sampling - the throughput on CI isn't high
+		// enough to bother sampling - better to have 100% of the data
+		provider := otel_trace.NewTracerProvider(
+			otel_trace.WithSampler(otel_trace.AlwaysSample()),
+			otel_trace.WithBatcher(exporter),
+		)
+		otel.SetTracerProvider(provider)
+
+		// wrap the open telemetry tracer in an opentracing compatible tracer. One day we'll
+		// probably drop opentracing and use opentelemetry directly, but for now we need the indirection
+		temp := otel.Tracer("buildkite-agent")
+		bridgeTracer := otel_bridge.NewBridgeTracer()
+		bridgeTracer.SetOpenTelemetryTracer(temp)
+
+		// cast the bridgeTracer to a standard opentracing.Tracer interface
+		t = bridgeTracer
+		stopper = func() {
+			ctx := context.Background()
+			provider.ForceFlush(ctx)
+			provider.Shutdown(ctx)
+		}
 	default:
 		b.shell.Commentf("An invalid tracing backend was given: %s. Tracing will not occur.", b.Config.TracingBackend)
 		fallthrough
