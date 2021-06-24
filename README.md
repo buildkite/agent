@@ -34,7 +34,27 @@ The agent is fairly portable and should run out of the box on most supported pla
 
 [The agents page](https://buildkite.com/organizations/-/agents) on Buildkite has personalised instructions, or you can refer to [the Buildkite docs](https://buildkite.com/docs/agent/v3/installation). Both cover installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via homebrew), Windows and Linux.
 
-You can also run the agent [via Docker](https://hub.docker.com/r/buildkite/agent).
+### Docker
+
+We also support and publish [Docker Images](https://hub.docker.com/r/buildkite/agent) for the
+following operating systems. Docker images are tagged using the agent SemVer components followed
+by the operating system.
+
+For example, agent version 3.30.0 is published as:
+
+- 3-ubuntu-20.04, tracks minor and bugfix updates in version 3 installed in Ubuntu 20.04
+- 3.30-ubuntu-20.04, tracks bugfix updates in version 3.30 installed in Ubuntu 20.04
+- 3.30.0-ubuntu-20.04, tracks the exact version installed in Ubuntu 20.04
+
+#### Tier 1, guaranteed to work
+
+- Alpine 3.12
+- Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
+- Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
+
+#### Tier 2, guaranteed to build
+
+- CentOS 8
 
 ## Starting
 
@@ -78,6 +98,73 @@ export GO111MODULE=on
 ```
 
 Dependencies are no longer committed to the repository, so compiling on Go <= 1.10 is not supported.
+
+## Platform Support
+
+We provide support for security and bug fixes on the current major release only.
+
+Our architecture and operating system support is primarily limited by what golang
+itself [supports](https://github.com/golang/go/wiki/MinimumRequirements).
+
+### Architecture Support
+
+We offer support for the following machine architectures (inspired by the Rust language platform
+support guidance).
+
+#### Tier 1, guaranteed to work
+
+- linux x86_64
+- windows x86_64
+
+#### Tier 2, guaranteed to build
+
+- linux x86
+- linux arm64
+- windows x86
+- darwin x86_64
+- darwin arm64
+
+#### Tier 3, community supported
+
+- linux arm
+- linux armf
+- linux ppc64
+- linux mips64
+- linux s390x
+- netbsd x86_64
+- freebsd x86
+- freebsd x86_64
+- openbsd x86
+- openbsd x84_64
+- dragonfly x86_64
+
+### Operating System Support
+
+We currently provide support for running the Buildkite Agent on the following operating
+systems. Future major releases may drop support for old operating systems. The agent
+binary is fairly portable and should run out of the box on most UNIX like systems.
+
+- Ubuntu 18.04 and newer
+- Debian 8 and newer
+- Red Hat RHEL 7 and newer
+- CentOS
+  - CentOS 7
+  - CentOS 8
+- Amazon Linux 2
+- macOS [1]
+  - 10.12
+  - 10.13
+  - 10.14
+  - 10.15
+  - 11
+- Windows Server
+  - 2012
+  - 2016
+  - 2019
+
+[1] See https://github.com/golang/go/issues/23011 for macOS / golang support and
+[Supported macOS Versions](./docs/macos.md) for the last supported version of the
+Buildkite Agent for versions of macOS prior to those listed above.
 
 ## Contributing
 
