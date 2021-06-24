@@ -42,7 +42,7 @@ by the operating system.
 
 For example, agent version 3.30.0 is published as:
 
-- 3-ubuntu-20.04, tracks minor updates in version 3 installed in Ubuntu 20.04
+- 3-ubuntu-20.04, tracks minor and bugfix updates in version 3 installed in Ubuntu 20.04
 - 3.30-ubuntu-20.04, tracks bugfix updates in version 3.30 installed in Ubuntu 20.04
 - 3.30.0-ubuntu-20.04, tracks the exact version installed in Ubuntu 20.04
 
