@@ -158,6 +158,7 @@ binary is fairly portable and should run out of the box on most UNIX like system
   - 10.15
   - 11
 - Windows Server
+  - 2012
   - 2016
   - 2019
 
