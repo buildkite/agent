@@ -304,7 +304,7 @@ func (r *JobRunner) Run() error {
 			r.logStreamer.Process(fmt.Sprintf("pre-bootstrap hook rejected the environment/command for this job: %s", err))
 
 			exitStatus = "-1"
-			signalReason = "pre_bootstrap_rejection"
+			signalReason = ""
 		}
 	}
 
