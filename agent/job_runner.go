@@ -13,7 +13,6 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/logger"
@@ -621,22 +620,22 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 		return false, err
 	}
 
-	// TODO pass line logging up to buildkite?
-	// TODO if capturing and printing output of this script do we expect the redactors to run
+	// TODO stream logging up to buildkite?
+	// TODO if capturing and printing output of this script do we expect the redactors to run?
 
 	// TODO do we expect this script to be executed by bash, or sourced by bash
 	// - agent-shutdown is executed
 	// - all other current hooks are sourced by the hook/scriptwrapper.go
 	// - proposed hearbeat hook expects an executable https://github.com/buildkite/agent/pull/1057
 
-	sh.Promptf("%s", hook)
+	sh.Debug = true
 
 	// This (plus inherited) is the only ENV that should be exposed
-	// to the pre-bootstrap hook
-	preBootstrapEnv := env.New()
-	preBootstrapEnv.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
+	// to the pre-bootstrap hook.
+	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
-	if err := sh.RunScript(context.TODO(), hook, preBootstrapEnv); err != nil {
+	if output, err := sh.RunAndCapture(hook); err != nil {
+		r.logStreamer.Process(output)
 		return false, err
 	}
 
