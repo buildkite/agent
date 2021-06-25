@@ -624,6 +624,11 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	// TODO pass line logging up to buildkite?
 	// TODO if capturing and printing output of this script do we expect the redactors to run
 
+	// TODO do we expect this script to be executed by bash, or sourced by bash
+	// - agent-shutdown is executed
+	// - all other current hooks are sourced by the hook/scriptwrapper.go
+	// - proposed hearbeat hook expects an executable https://github.com/buildkite/agent/pull/1057
+
 	sh.Promptf("%s", hook)
 
 	// This (plus inherited) is the only ENV that should be exposed
