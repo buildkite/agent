@@ -13,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -283,30 +284,53 @@ func (r *JobRunner) Run() error {
 	signal := ""
 	signalReason := ""
 
-	// Run the process. This will block until it finishes.
-	if err := r.process.Run(); err != nil {
-		// Send the error as output
-		r.logStreamer.Process(fmt.Sprintf("%s", err))
+	// Before executing the bootstrap process with the received Job env,
+	// execute the pre-bootstrap hook (if present) for it to tell us
+	// whether it is happy to proceed.
+	environmentCommandOkay := true
 
-		// The process did not run at all, so make sure it fails
-		exitStatus = "-1"
-		signalReason = "process_run_error"
-	} else {
-		// Add the final output to the streamer
-		r.logStreamer.Process(r.output.String())
+	// FIXME(KD) is looking on disk suitable for this use case, do we want an
+	// agent setting where if set we _must_ execute a pre-bootstrap hook,
+	// otherwise it's a hard error?
+	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
+		okay, err := r.executePreBootstrapHook(hook)
+		if !okay {
+			environmentCommandOkay = false
 
-		// Collect the finished process' exit status
-		exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
-		if ws := r.process.WaitStatus(); ws.Signaled() {
-			signal = process.SignalString(ws.Signal())
+			// Send the error as output
+			r.logStreamer.Process(fmt.Sprintf("pre-bootstrap hook rejected the environment/command for this job: %s", err))
+
+			exitStatus = "-1"
+			signalReason = "pre_bootstrap_rejection"
 		}
-		if r.stopped {
-			// The agent is being gracefully stopped, and we signaled the job to end. Often due
-			// to pending host shutdown or EC2 spot instance termination
-			signalReason = `agent_stop`
-		} else if r.cancelled {
-			// The job was signaled because it was cancelled via the buildkite web UI
-			signalReason = `cancel`
+	}
+
+	if environmentCommandOkay {
+		// Run the process. This will block until it finishes.
+		if err := r.process.Run(); err != nil {
+			// Send the error as output
+			r.logStreamer.Process(fmt.Sprintf("%s", err))
+
+			// The process did not run at all, so make sure it fails
+			exitStatus = "-1"
+			signalReason = "process_run_error"
+		} else {
+			// Add the final output to the streamer
+			r.logStreamer.Process(r.output.String())
+
+			// Collect the finished process' exit status
+			exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+			if ws := r.process.WaitStatus(); ws.Signaled() {
+				signal = process.SignalString(ws.Signal())
+			}
+			if r.stopped {
+				// The agent is being gracefully stopped, and we signaled the job to end. Often due
+				// to pending host shutdown or EC2 spot instance termination
+				signalReason = `agent_stop`
+			} else if r.cancelled {
+				// The job was signaled because it was cancelled via the buildkite web UI
+				signalReason = `cancel`
+			}
 		}
 	}
 
@@ -585,6 +609,10 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	env[key] = env[key][0:keeplen] + apology
 	l.Warn("%s %s", key, description)
 	return nil
+}
+
+func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
+	return true, nil
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related
