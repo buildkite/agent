@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/logger"
@@ -293,6 +295,8 @@ func (r *JobRunner) Run() error {
 	// agent setting where if set we _must_ execute a pre-bootstrap hook,
 	// otherwise it's a hard error?
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
+		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
+		// positive result from the hook
 		okay, err := r.executePreBootstrapHook(hook)
 		if !okay {
 			environmentCommandOkay = false
@@ -612,6 +616,24 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 }
 
 func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
+	sh, err := shell.New()
+	if err != nil {
+		return false, err
+	}
+
+	// TODO pass line logging up to buildkite?
+
+	sh.Promptf("%s", hook)
+
+	// This (plus inherited) is the only ENV that should be exposed
+	// to the pre-bootstrap hook
+	preBootstrapEnv := env.New()
+	preBootstrapEnv.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
+
+	if err := sh.RunScript(context.TODO(), hook, preBootstrapEnv); err != nil {
+		return false, err
+	}
+
 	return true, nil
 }
 
