@@ -622,6 +622,7 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	}
 
 	// TODO pass line logging up to buildkite?
+	// TODO if capturing and printing output of this script do we expect the redactors to run
 
 	sh.Promptf("%s", hook)
 
