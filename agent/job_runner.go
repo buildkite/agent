@@ -290,9 +290,6 @@ func (r *JobRunner) Run() error {
 	// whether it is happy to proceed.
 	environmentCommandOkay := true
 
-	// FIXME(KD) is looking on disk suitable for this use case, do we want an
-	// agent setting where if set we _must_ execute a pre-bootstrap hook,
-	// otherwise it's a hard error?
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
 		// positive result from the hook
