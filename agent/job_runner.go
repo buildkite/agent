@@ -617,9 +617,6 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 		return false, err
 	}
 
-	// TODO stream logging up to buildkite?
-	// TODO if capturing and printing output of this script do we expect the redactors to run?
-
 	// TODO do we expect this script to be executed by bash, or sourced by bash
 	// - agent-shutdown is executed
 	// - all other current hooks are sourced by the hook/scriptwrapper.go
@@ -632,7 +629,7 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
 	if output, err := sh.RunAndCapture(hook); err != nil {
-		r.logStreamer.Process(output)
+		// TODO print to agent output
 		return false, err
 	}
 
