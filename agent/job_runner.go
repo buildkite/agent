@@ -616,25 +616,37 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	return nil
 }
 
+type LogWriter struct {
+	l logger.Logger
+}
+
+func (w LogWriter) Write(bytes []byte) (int, error) {
+	w.l.Info("%s", bytes)
+	return len(bytes), nil
+}
+
 func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
+	r.logger.Info("Running pre-bootstrap hook %q", hook)
+
 	sh, err := shell.New()
 	if err != nil {
 		return false, err
 	}
 
-	sh.Debug = true
-
 	// This (plus inherited) is the only ENV that should be exposed
 	// to the pre-bootstrap hook.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
-	output, err := sh.RunAndCapture(hook)
-	if err != nil {
-		r.logger.Error("pre-bootstrap hook %q rejected job: %s", hook, output)
+	sh.Writer = LogWriter {
+		l: r.logger,
+	}
+
+	if err := sh.RunWithoutPrompt(hook); err != nil {
+		r.logger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
 		return false, err
 	}
 
-	r.logger.Info("pre-bootstrap hook %q accepted job: %s", hook, output)
+	r.logger.Info("Finished pre-bootstrap hook %q: job accepted", hook)
 	return true, nil
 }
 
