@@ -297,8 +297,10 @@ func (r *JobRunner) Run() error {
 		if !okay {
 			environmentCommandOkay = false
 
-			// Send the error as output
-			r.logStreamer.Process(fmt.Sprintf("pre-bootstrap hook rejected the environment/command for this job: %s", err))
+			// Ensure the Job UI knows why this job resulted in failure
+			r.logStreamer.Process("pre-bootstrap hook rejected this job")
+			// But disclose more information in the agent logs
+			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
 			exitStatus = "-1"
 
