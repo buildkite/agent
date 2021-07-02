@@ -626,11 +626,13 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	// to the pre-bootstrap hook.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
-	if output, err := sh.RunAndCapture(hook); err != nil {
-		// TODO print to agent output
+	output, err := sh.RunAndCapture(hook)
+	if err != nil {
+		r.logger.Error("pre-bootstrap hook %q rejected job: %s", hook, output)
 		return false, err
 	}
 
+	r.logger.Info("pre-bootstrap hook %q accepted job: %s", hook, output)
 	return true, nil
 }
 
