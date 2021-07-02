@@ -298,7 +298,7 @@ func (r *JobRunner) Run() error {
 			environmentCommandOkay = false
 
 			// Ensure the Job UI knows why this job resulted in failure
-			r.logStreamer.Process("pre-bootstrap hook rejected this job")
+			r.logStreamer.Process("pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
 			// But disclose more information in the agent logs
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
