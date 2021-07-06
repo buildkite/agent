@@ -161,10 +161,13 @@ func DefaultConfigFilePaths() (paths []string) {
 
 	// Also check to see if there's a buildkite-agent.cfg in the folder
 	// that the binary is running in.
-	pathToBinary, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	exePath, err := os.Executable()
 	if err == nil {
-		pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
-		paths = append([]string{pathToRelativeConfig}, paths...)
+		pathToBinary, err := filepath.Abs(filepath.Dir(exePath))
+		if err == nil {
+			pathToRelativeConfig := filepath.Join(pathToBinary, "buildkite-agent.cfg")
+			paths = append([]string{pathToRelativeConfig}, paths...)
+		}
 	}
 
 	return
