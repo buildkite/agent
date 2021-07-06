@@ -26,7 +26,7 @@ Description:
    'foo/app' will write any matched artifact files to 'foo/app/logs/', relative
    to the current working directory.
 
-   To skip this behaviour, use a <destination> argument with a trailing slash.
+   To avoid this behaviour, use a <destination> argument with a trailing slash.
    For example, a query of 'app/logs/*' and a destination of 'foo/app/' will
    write the matched artifact files to 'foo/app/app/logs/', relative to the
    current working directory.
