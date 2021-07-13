@@ -539,7 +539,8 @@ func (b *Bootstrap) setUp(ctx context.Context) error {
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if b.BinPath != "" {
 		path, _ := b.shell.Env.Get("PATH")
-		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", b.BinPath, string(os.PathListSeparator), path))
+		// BinPath goes last so we don't disturb other tools
+		b.shell.Env.Set("PATH", fmt.Sprintf("%s%s%s", path, string(os.PathListSeparator), b.BinPath))
 	}
 
 	// Set a BUILDKITE_BUILD_CHECKOUT_PATH unless one exists already. We do this here
