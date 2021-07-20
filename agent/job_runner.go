@@ -303,10 +303,7 @@ func (r *JobRunner) Run() error {
 			r.logger.Error("pre-bootstrap hook rejected this job: %s", err)
 
 			exitStatus = "-1"
-
-			// TODO swap the signal reason once buildkite.com supports this enum value
-			// signalReason = "agent_refused"
-			signalReason = ""
+			signalReason = "agent_refused"
 		}
 	}
 
