@@ -122,6 +122,21 @@ func addNginxTypes(types map[string]string) error {
 	return nil
 }
 
+func addYamlTypes(types map[string]string) error {
+	// Most recent movement on the IEFT is
+	// https://mailarchive.ietf.org/arch/msg/media-types/bdCyTe91zNz-i-9tuJGDa9bHcpQ/
+	// where the thread collectively advocates text/yaml and discusses that
+	// others are already using this
+	const yamlMime = "text/yaml"
+	if _, ok := types["yml"]; !ok {
+		types["yml"] = yamlMime
+	}
+	if _, ok := types["yaml"]; !ok {
+		types["yaml"] = yamlMime
+	}
+	return nil
+}
+
 func generate() error {
 	types := make(map[string]string)
 	err := addApacheTypes(types)
@@ -129,6 +144,10 @@ func generate() error {
 		return err
 	}
 	err = addNginxTypes(types)
+	if err != nil {
+		return err
+	}
+	err = addYamlTypes(types)
 	if err != nil {
 		return err
 	}
