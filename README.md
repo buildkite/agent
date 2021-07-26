@@ -129,6 +129,7 @@ support guidance).
 - linux arm
 - linux armf
 - linux ppc64
+- linux ppc64le
 - linux mips64
 - linux s390x
 - netbsd x86_64

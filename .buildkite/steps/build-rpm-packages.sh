@@ -24,7 +24,7 @@ rm -rf rpm
 
 # Build the packages into rpm/
 PLATFORM="linux"
-for ARCH in "amd64" "386" "arm64"; do
+for ARCH in "amd64" "386" "arm64" "ppc64" "ppc64le"; do
   echo "--- Building rpm package ${PLATFORM}/${ARCH}"
 
   BINARY="pkg/buildkite-agent-${PLATFORM}-${ARCH}"
