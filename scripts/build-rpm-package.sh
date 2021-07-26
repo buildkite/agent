@@ -28,6 +28,10 @@ elif [ "$BUILD_ARCH" == "386" ]; then
   ARCH="i386"
 elif [ "$BUILD_ARCH" == "arm64" ]; then
   ARCH="aarch64"
+elif [ "$BUILD_ARCH" == "ppc64" ]; then
+  ARCH="ppc64"
+elif [ "$BUILD_ARCH" == "ppc64le" ]; then
+  ARCH="ppc64le"
 else
   echo "Unknown architecture: $BUILD_ARCH"
   exit 1

@@ -290,6 +290,8 @@ steps:
       - build-binary-linux-amd64
       - build-binary-linux-386
       - build-binary-linux-arm64
+      - build-binary-linux-ppc64
+      - build-binary-linux-ppc64le
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
