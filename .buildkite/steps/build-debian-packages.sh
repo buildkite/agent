@@ -24,7 +24,7 @@ rm -rf deb
 
 # Build the packages into deb/
 PLATFORM="linux"
-for ARCH in "amd64" "386" "arm" "armhf" "arm64" "ppc64le"; do
+for ARCH in "amd64" "386" "arm" "armhf" "arm64" "ppc64" "ppc64le"; do
   echo "--- Building debian package ${PLATFORM}/${ARCH}"
 
   BINARY="pkg/buildkite-agent-${PLATFORM}-${ARCH}"
