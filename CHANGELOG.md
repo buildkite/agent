@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.32.0](https://github.com/buildkite/agent/compare/v3.31.0...v3.32.0) (2021-07-30)
+
+### Added
+
+* A new pre-bootstrap hook which can accept or reject jobs before environment variables are loaded [#1456](https://github.com/buildkite/agent/pull/1456)
+* `ppc64` and `ppc64le` architecture binaries to the DEB and RPM packages [#1474](https://github.com/buildkite/agent/pull/1474) [#1473](https://github.com/buildkite/agent/pull/1473) ([staticfloat](https://github.com/staticfloat))
+* Use text/yaml mime type for .yml and .yaml artifacts [#1470](https://github.com/buildkite/agent/pull/1470)
+
+### Changed
+
+* Add BUILDKITE_BIN_PATH to end, not start, of PATH [#1465](https://github.com/buildkite/agent/pull/1465) ([DavidSpickett](https://github.com/DavidSpickett))
+
 ## [v3.31.0](https://github.com/buildkite/agent/compare/v3.30.0...v3.31.0) (2021-07-02)
 
 ### Added
