@@ -31,7 +31,7 @@ GEM
       json (>= 1.7.7)
       ruby-xz
     io-like (0.3.0)
-    json (1.8.3)
+    json (1.8.6)
     mini_portile2 (2.0.0)
     nokogiri (1.6.7.2)
       mini_portile2 (~> 2.0.0.rc2)
@@ -48,4 +48,4 @@ DEPENDENCIES
   fpm
 
 BUNDLED WITH
-   1.12.1
+   1.17.3
