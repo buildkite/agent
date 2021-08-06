@@ -112,3 +112,11 @@ func TestRedactorSubsetSecrets(t *testing.T) {
 		t.Errorf("Redaction failed: %s", buf.String())
 	}
 }
+
+func TestRedactorLatin1(t *testing.T) {
+	var buf bytes.Buffer
+	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ÿ"})
+
+	redactor.Write([]byte("foo"))
+	redactor.Flush()
+}
