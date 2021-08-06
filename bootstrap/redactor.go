@@ -16,7 +16,7 @@ type Redactor struct {
 	maxlen int
 
 	// Table of Boyer-Moore skip distances, and values to redact matching this end byte
-	table [255]struct {
+	table [256]struct {
 		skip    int
 		needles [][]byte
 	}
