@@ -416,7 +416,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		return fmt.Errorf("There were errors with uploading some of the artifacts")
 	}
 
-	a.logger.Info("Artifact uploads completed succesfully")
+	a.logger.Info("Artifact uploads completed successfully")
 
 	return nil
 }
