@@ -187,7 +187,16 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		// Only upload artifacts as part of the command phase
 		if err = b.uploadArtifacts(ctx); err != nil {
 			b.shell.Errorf("%v", err)
-			return shell.GetExitCode(err)
+
+			if commandErr != nil {
+				// Both command, and upload have errored.
+				//
+				// Ignore the agent upload error, rely on the phase and command
+				// error reporting below.
+			} else {
+				// Only upload has errored, report its error.
+				return shell.GetExitCode(err)
+			}
 		}
 	}
 
