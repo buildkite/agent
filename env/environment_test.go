@@ -98,12 +98,34 @@ func TestEnvironmentDiff(t *testing.T) {
 	t.Parallel()
 	a := FromSlice([]string{"A=hello", "B=world"})
 	b := FromSlice([]string{"A=hello", "B=there", "C=new", "D="})
-	ab := a.Diff(b).ToMap()
-	ba := b.Diff(a).ToMap()
 
-	// a.Diff(b) gives us the key:values from a that are different in b
-	assert.Equal(t, map[string]string{"B": "world"}, ab)
+	ab := a.Diff(b)
+	assert.Equal(t, Diff {
+		Added: map[string]string{},
+		Changed: map[string]Pair{
+			"B": Pair {
+				Old: "there",
+				New: "world",
+			},
+		},
+		Removed: []string{
+			"C",
+			"D",
+		},
+	}, ab)
 
-	// b.Diff(a) gives us the key:values from b that are different in a
-	assert.Equal(t, map[string]string{"B": "there", "C": "new", "D": ""}, ba)
+	ba := b.Diff(a)
+	assert.Equal(t, Diff {
+		Added: map[string]string{
+			"C": "new",
+			"D": "",
+		},
+		Changed: map[string]Pair {
+			"B": Pair {
+				Old: "world",
+				New: "there",
+			},
+		},
+		Removed: []string{},
+	}, ba)
 }

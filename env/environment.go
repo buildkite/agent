@@ -12,6 +12,17 @@ type Environment struct {
 	env map[string]string
 }
 
+type Pair struct {
+	Old string
+	New string
+}
+
+type Diff struct {
+	Added map[string]string
+	Changed map[string]Pair
+	Removed []string
+}
+
 func New() *Environment {
 	return &Environment{env: map[string]string{}}
 }
@@ -79,13 +90,35 @@ func (e *Environment) Length() int {
 
 // Diff returns a new environment with the keys and values from this
 // environment which are different in the other one.
-func (e *Environment) Diff(other *Environment) *Environment {
-	diff := &Environment{env: make(map[string]string)}
+func (e *Environment) Diff(other *Environment) Diff {
+	diff := Diff{
+		Added: make(map[string]string),
+		Changed: make(map[string]Pair),
+		Removed: make([]string, 0),
+	}
+
 	for k, v := range e.env {
-		if other, ok := other.Get(k); !ok || other != v {
-			diff.Set(k, v)
+		other, ok := other.Get(k)
+		if !ok {
+			// This environment has added this key to other
+			diff.Added[k] = v
+			continue
+		}
+
+		if other != v {
+			diff.Changed[k] = Pair {
+				Old: other,
+				New: v,
+			}
 		}
 	}
+
+	for k, _ := range other.env {
+		if _, ok := e.Get(k); !ok {
+			diff.Removed = append(diff.Removed, k)
+		}
+	}
+
 	return diff
 }
 
