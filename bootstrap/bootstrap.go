@@ -1758,7 +1758,6 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 
 	// If blank, the upload destination is buildkite
 	if b.ArtifactUploadDestination != "" {
-		b.shell.Commentf("Using default artifact upload destination")
 		args = append(args, b.ArtifactUploadDestination)
 	}
 
