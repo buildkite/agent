@@ -160,6 +160,22 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	if phaseErr == nil && includePhase(`command`) {
 		var commandErr error
 		phaseErr, commandErr = b.CommandPhase(ctx)
+		/*
+			Five possible states at this point:
+
+			Pre-command failed
+			Pre-command succeeded, command failed, post-command succeeded
+			Pre-command succeeded, command failed, post-command failed
+			Pre-command succeeded, command succeeded, post-command succeeded
+			Pre-command succeeded, command succeeded, post-command failed
+
+			All states should attempt an artifact upload, to change this would
+			not be backwards compatible.
+
+			At this point, if commandErr != nil, BUILDKITE_COMMAND_EXIT_STATUS
+			has been set.
+		*/
+
 		// Add command exit error info. This is distinct from a phaseErr, which is
 		// an error from the hook/job logic. These are both good to report but
 		// shouldn't override each other in reporting.
@@ -171,7 +187,16 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		// Only upload artifacts as part of the command phase
 		if err = b.uploadArtifacts(ctx); err != nil {
 			b.shell.Errorf("%v", err)
-			return shell.GetExitCode(err)
+
+			if commandErr != nil {
+				// Both command, and upload have errored.
+				//
+				// Ignore the agent upload error, rely on the phase and command
+				// error reporting below.
+			} else {
+				// Only upload has errored, report its error.
+				return shell.GetExitCode(err)
+			}
 		}
 	}
 
