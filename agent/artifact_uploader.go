@@ -250,10 +250,14 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		} else {
 			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
 		}
+
+		a.logger.Info("Uploading to %q, using your agent configuration", a.conf.Destination)
 	} else {
 		uploader = NewFormUploader(a.logger, FormUploaderConfig{
 			DebugHTTP: a.conf.DebugHTTP,
 		})
+
+		a.logger.Info("Uploading to default Buildkite artifact storage")
 	}
 
 	// Check if creation caused an error
@@ -412,7 +416,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		return fmt.Errorf("There were errors with uploading some of the artifacts")
 	}
 
-	a.logger.Info("Artifact uploads completed succesfully")
+	a.logger.Info("Artifact uploads completed successfully")
 
 	return nil
 }
