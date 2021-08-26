@@ -118,7 +118,7 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 		return nil, err
 	}
 
-	l.Debug("Authorizing S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
+	l.Debug("Testing AWS S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
 
 	s3client := s3.New(sess)
 
