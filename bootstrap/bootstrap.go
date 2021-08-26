@@ -1581,7 +1581,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(b.Command) == "" {
-		return fmt.Errorf("No command has been provided")
+		return fmt.Errorf("The command phase has no `command` to execute. Provide a `command` field in your step configuration, or define a `command` hook in a step plug-in, your repository `.buildkite/hooks`, or agent `hooks-path`.")
 	}
 
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
