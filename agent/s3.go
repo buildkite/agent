@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -130,7 +131,7 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	if err != nil {
 		if err == credentials.ErrNoValidProvidersFoundInChain {
 			hasProxy := os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != ""
-			hasNoProxyIdmsException := os.Getenv("NO_PROXY").Contains("169.254.169.254")
+			hasNoProxyIdmsException := strings.Contains(os.Getenv("NO_PROXY"), "169.254.169.254")
 
 			errorTitle := "Could not authenticate with AWS S3 using any of the included credential providers."
 
