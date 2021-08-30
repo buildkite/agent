@@ -871,15 +871,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return nil, err
 	}
 
-	// Try and lock this particular plugin while we check it out (we create
-	// the file outside of the plugin directory so git clone doesn't have
-	// a cry about the directory not being empty)
-	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
-	if err != nil {
-		return nil, err
-	}
-	defer pluginCheckoutHook.Unlock()
-
 	// Create a path to the plugin
 	directory := filepath.Join(b.PluginsPath, id)
 	pluginGitDirectory := filepath.Join(directory, ".git")
@@ -888,6 +879,15 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		CheckoutDir: directory,
 		HooksDir:    filepath.Join(directory, "hooks"),
 	}
+
+	// Try and lock this particular plugin while we check it out (we create
+	// the file outside of the plugin directory so git clone doesn't have
+	// a cry about the directory not being empty)
+	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	if err != nil {
+		return nil, err
+	}
+	defer pluginCheckoutHook.Unlock()
 
 	// Has it already been checked out?
 	if utils.FileExists(pluginGitDirectory) {
