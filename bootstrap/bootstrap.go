@@ -1185,7 +1185,6 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	if b.Debug {
 		b.shell.Commentf("Acquiring mirror repository clone lock")
 	}
-
 	// Lock the mirror dir to prevent concurrent clones
 	mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
 	if err != nil {
@@ -1193,15 +1192,11 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 	defer mirrorCloneLock.Unlock()
 
-	// If we don't have a mirror, we need to clone it
 	if !utils.FileExists(mirrorDir) {
-		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
-		flags := "--mirror " + b.GitCloneMirrorFlags
-		if err := gitClone(b.shell, flags, b.Repository, mirrorDir); err != nil {
+		b.shell.Commentf("Creating a git-mirror at %q for %q", mirrorDir, b.Repository)
+		if err := b.shell.Run("git", "init", "--shared=group", "--bare", mirrorDir); err != nil {
 			return "", err
 		}
-
-		return mirrorDir, nil
 	}
 
 	// If it exists, immediately release the clone lock
@@ -1216,7 +1211,6 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	if b.Debug {
 		b.shell.Commentf("Acquiring mirror repository update lock")
 	}
-
 	// Lock the mirror dir to prevent concurrent updates
 	mirrorUpdateLock, err := b.shell.LockFile(mirrorDir+".updatelock", lockTimeout)
 	if err != nil {
