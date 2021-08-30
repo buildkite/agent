@@ -204,7 +204,7 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 		if err := lock.TryLock(); err != nil {
 			s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
 
-			if te, ok := err.(interface{ Temporary() bool }); ok {
+			if _, ok := err.(interface{ Temporary() bool }); ok {
 				s.Commentf("Trying again in %s...", lockRetryDuration)
 				time.Sleep(lockRetryDuration)
 			} else {
