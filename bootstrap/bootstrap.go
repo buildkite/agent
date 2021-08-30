@@ -909,13 +909,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return nil, err
 	}
 
-	// Once we've got the lock, we need to make sure another process didn't already
-	// checkout the plugin
-	if utils.FileExists(pluginGitDirectory) {
-		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
-		return checkout, nil
-	}
-
 	repo, err := p.Repository()
 	if err != nil {
 		return nil, err
