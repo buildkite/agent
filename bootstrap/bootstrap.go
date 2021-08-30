@@ -903,6 +903,8 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return checkout, nil
 	}
 
+	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
+
 	// Make the directory
 	tempDir, err = os.MkdirTemp(b.PluginsPath, id)
 	if err != nil {
@@ -913,8 +915,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
 
 	// Switch to the plugin directory
 	b.shell.Commentf("Switching to the plugin directory")
