@@ -904,7 +904,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Make the directory
-	err = os.MkdirAll(directory, 0777)
+	tempDir, err = os.MkdirTemp(b.PluginsPath, id)
 	if err != nil {
 		return nil, err
 	}
@@ -919,7 +919,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Switch to the plugin directory
 	b.shell.Commentf("Switching to the plugin directory")
 	previousWd := b.shell.Getwd()
-	if err = b.shell.Chdir(directory); err != nil {
+	if err = b.shell.Chdir(tempDir); err != nil {
 		return nil, err
 	}
 	// Switch back to the previous working directory
@@ -940,6 +940,11 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
 			return nil, err
 		}
+	}
+
+	err = os.Rename(tempDir, directory)
+	if err != nil {
+		return nil, err
 	}
 
 	return checkout, nil
