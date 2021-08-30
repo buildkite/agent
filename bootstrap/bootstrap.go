@@ -921,15 +921,13 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Switch to the plugin directory
+	b.shell.Commentf("Switching to the plugin directory")
 	previousWd := b.shell.Getwd()
 	if err = b.shell.Chdir(directory); err != nil {
 		return nil, err
 	}
-
 	// Switch back to the previous working directory
 	defer b.shell.Chdir(previousWd)
-
-	b.shell.Commentf("Switching to the plugin directory")
 
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, repo)
