@@ -1269,9 +1269,11 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		var err error
 		mirrorDir, err = b.updateGitMirror()
 		if err != nil {
-			return err
+			b.shell.Errorf("Your git-mirror failed to update: %v", err)
+			mirrorDir = ""
+		} else {
+			b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 		}
-		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
 	// Make sure the build directory exists and that we change directory into it
