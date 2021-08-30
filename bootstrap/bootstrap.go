@@ -905,13 +905,17 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 
 	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
 
-	// Make the directory
-	tempDir, err = os.MkdirTemp(b.PluginsPath, id)
+	repo, err := p.Repository()
 	if err != nil {
 		return nil, err
 	}
 
-	repo, err := p.Repository()
+	if b.SSHKeyscan {
+		addRepositoryHostToSSHKnownHosts(b.shell, repo)
+	}
+
+	// Make the directory
+	tempDir, err = os.MkdirTemp(b.PluginsPath, id)
 	if err != nil {
 		return nil, err
 	}
@@ -924,10 +928,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 	// Switch back to the previous working directory
 	defer b.shell.Chdir(previousWd)
-
-	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(b.shell, repo)
-	}
 
 	// Plugin clones shouldn't use custom GitCloneFlags
 	if err = b.shell.Run("git", "clone", "-v", "--", repo, "."); err != nil {
