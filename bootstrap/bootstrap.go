@@ -921,7 +921,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Switch to the plugin directory
-	b.shell.Commentf("Switching to the plugin directory")
+	b.shell.Commentf("Switching to the temporary plugin directory")
 	previousWd := b.shell.Getwd()
 	if err = b.shell.Chdir(tempDir); err != nil {
 		return nil, err
@@ -942,6 +942,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		}
 	}
 
+	b.shell.Commentf("Moving temporary plugin directory to final location")
 	err = os.Rename(tempDir, directory)
 	if err != nil {
 		return nil, err
