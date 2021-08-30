@@ -915,7 +915,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Make the directory
-	tempDir, err = os.MkdirTemp(b.PluginsPath, id)
+	tempDir, err := os.MkdirTemp(b.PluginsPath, id)
 	if err != nil {
 		return nil, err
 	}
