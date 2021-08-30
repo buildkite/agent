@@ -916,10 +916,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 
 	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
 
-	if b.Debug {
-		b.shell.Commentf("Checking if \"%s\" is a local repository", repo)
-	}
-
 	// Switch to the plugin directory
 	b.shell.Commentf("Switching to the plugin directory")
 	previousWd := b.shell.Getwd()
