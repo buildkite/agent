@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.32.2](https://github.com/buildkite/agent/compare/v3.32.1...v3.32.2) (2021-08-31)
+
+### Added
+
+* Improved error logging around AWS Credentials [#1490](https://github.com/buildkite/agent/pull/1490)
+* Logging to the artifact upload command to say where artifacts are being sent [#1486](https://github.com/buildkite/agent/pull/1486)
+* Support for cross-region artifact buckets [#1495](https://github.com/buildkite/agent/pull/1495)
+
+### Changed
+
+* artifact_paths failures no longer mask a command error [#1487](https://github.com/buildkite/agent/pull/1487)
+
+### Fixed
+
+* Failed plug-in checkouts using the default branch instead of the requested version [#1493](https://github.com/buildkite/agent/pull/1493)
+* Missing quote in the PowerShell hook wrapper [#1494](https://github.com/buildkite/agent/pull/1494)
+
 ## [v3.32.1](https://github.com/buildkite/agent/compare/v3.32.0...v3.32.1) (2021-08-06)
 
 ### Fixed
