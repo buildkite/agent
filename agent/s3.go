@@ -52,11 +52,8 @@ func (e *credentialsProvider) IsExpired() bool {
 }
 
 func awsS3RegionFromEnv() (region string, err error) {
-	regionName := "us-east-1"
-	if os.Getenv("BUILDKITE_S3_DEFAULT_REGION") != "" {
-		regionName = os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
-	} else {
-		var err error
+	regionName := os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
+	if regionName == "" {
 		regionName, err = awsRegion()
 		if err != nil {
 			return "", err
