@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/sts"
 	"github.com/buildkite/agent/v3/logger"
 )
@@ -108,15 +109,28 @@ func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRolePro
 func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	region, err := awsS3RegionFromEnv()
 	if err != nil {
-		return nil, err
+		// Fallback region guess
+		region = "us-east-1"
 	}
 
+	// Using the guess region, construct a session and ask that region where the
+	// bucket lives
 	sess, err := awsS3Session(region)
 	if err != nil {
 		return nil, err
 	}
+	bucketRegion, err := s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, region)
+	if err != nil {
+		return nil, err
+	}
 
-	l.Debug("Testing AWS S3 credentials and finding bucket `%s` in region `%s`...", bucket, region)
+	// Construct the final session for the bucket region
+	sess, err = awsS3Session(bucketRegion)
+	if err != nil {
+		return nil, err
+	}
+
+	l.Debug("Testing AWS S3 credentials for bucket %q in region %q...", bucket, bucketRegion)
 
 	s3client := s3.New(sess)
 
