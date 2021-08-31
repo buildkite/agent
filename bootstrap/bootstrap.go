@@ -871,15 +871,6 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return nil, err
 	}
 
-	// Try and lock this particular plugin while we check it out (we create
-	// the file outside of the plugin directory so git clone doesn't have
-	// a cry about the directory not being empty)
-	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
-	if err != nil {
-		return nil, err
-	}
-	defer pluginCheckoutHook.Unlock()
-
 	// Create a path to the plugin
 	directory := filepath.Join(b.PluginsPath, id)
 	pluginGitDirectory := filepath.Join(directory, ".git")
@@ -888,6 +879,15 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		CheckoutDir: directory,
 		HooksDir:    filepath.Join(directory, "hooks"),
 	}
+
+	// Try and lock this particular plugin while we check it out (we create
+	// the file outside of the plugin directory so git clone doesn't have
+	// a cry about the directory not being empty)
+	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	if err != nil {
+		return nil, err
+	}
+	defer pluginCheckoutHook.Unlock()
 
 	// Has it already been checked out?
 	if utils.FileExists(pluginGitDirectory) {
@@ -903,44 +903,31 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return checkout, nil
 	}
 
-	// Make the directory
-	err = os.MkdirAll(directory, 0777)
-	if err != nil {
-		return nil, err
-	}
-
-	// Once we've got the lock, we need to make sure another process didn't already
-	// checkout the plugin
-	if utils.FileExists(pluginGitDirectory) {
-		b.shell.Commentf("Plugin \"%s\" already checked out", p.Label())
-		return checkout, nil
-	}
+	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
 
 	repo, err := p.Repository()
 	if err != nil {
 		return nil, err
 	}
 
-	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
-
-	if b.Debug {
-		b.shell.Commentf("Checking if \"%s\" is a local repository", repo)
-	}
-
-	// Switch to the plugin directory
-	previousWd := b.shell.Getwd()
-	if err = b.shell.Chdir(directory); err != nil {
-		return nil, err
-	}
-
-	// Switch back to the previous working directory
-	defer b.shell.Chdir(previousWd)
-
-	b.shell.Commentf("Switching to the plugin directory")
-
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, repo)
 	}
+
+	// Make the directory
+	tempDir, err := ioutil.TempDir(b.PluginsPath, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Switch to the plugin directory
+	b.shell.Commentf("Switching to the temporary plugin directory")
+	previousWd := b.shell.Getwd()
+	if err = b.shell.Chdir(tempDir); err != nil {
+		return nil, err
+	}
+	// Switch back to the previous working directory
+	defer b.shell.Chdir(previousWd)
 
 	// Plugin clones shouldn't use custom GitCloneFlags
 	if err = b.shell.Run("git", "clone", "-v", "--", repo, "."); err != nil {
@@ -953,6 +940,12 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
 			return nil, err
 		}
+	}
+
+	b.shell.Commentf("Moving temporary plugin directory to final location")
+	err = os.Rename(tempDir, directory)
+	if err != nil {
+		return nil, err
 	}
 
 	return checkout, nil

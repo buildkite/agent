@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+go version
+
 GO111MODULE=off go get gotest.tools/gotestsum
 
 echo '+++ Running tests'
