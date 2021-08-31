@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 * Improved error logging around AWS Credentials [#1490](https://github.com/buildkite/agent/pull/1490)
 * Logging to the artifact upload command to say where artifacts are being sent [#1486](https://github.com/buildkite/agent/pull/1486)
+* Support for cross-region artifact buckets [#1495](https://github.com/buildkite/agent/pull/1495)
 
 ### Changed
 
