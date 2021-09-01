@@ -1,4 +1,4 @@
-FROM alpine:3.14.0
+FROM alpine:3.14.2
 
 # We need buildkite-agent to download artifacts, and zip for Windows zipping
 RUN apk --no-cache add bash zip curl \
