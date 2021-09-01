@@ -114,12 +114,12 @@ func CreateScriptWrapper(hookPath string) (*ScriptWrapper, error) {
 			"SET > \"" + wrap.afterEnvFile.Name() + "\"\n" +
 			"EXIT %" + hookExitStatusEnv + "%"
 	} else if isWindows && isPwshHook {
-		script = `$ErrorActionPreference = "STOP"\n` +
-			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.beforeEnvFile.Name() + `\n` +
-			absolutePathToHook + `\n` +
-			`if ($LASTEXITCODE -eq $null) {$Env:` + hookExitStatusEnv + ` = 0} else {$Env:` + hookExitStatusEnv + ` = $LASTEXITCODE}\n` +
-			`$Env:` + hookWorkingDirEnv + ` = $PWD | Select-Object -ExpandProperty Path\n` +
-			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.afterEnvFile.Name() + `"\n` +
+		script = `$ErrorActionPreference = "STOP"` + "\n" +
+			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.beforeEnvFile.Name() + `"` + "\n" +
+			absolutePathToHook + "\n" +
+			`if ($LASTEXITCODE -eq $null) {$Env:` + hookExitStatusEnv + ` = 0} else {$Env:` + hookExitStatusEnv + ` = $LASTEXITCODE}` + "\n" +
+			`$Env:` + hookWorkingDirEnv + ` = $PWD | Select-Object -ExpandProperty Path` + "\n" +
+			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.afterEnvFile.Name() + `"` + "\n" +
 			`exit $Env:` + hookExitStatusEnv
 	} else {
 		script = "export -p > \"" + filepath.ToSlash(wrap.beforeEnvFile.Name()) + "\"\n" +
