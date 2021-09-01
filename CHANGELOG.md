@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.32.3](https://github.com/buildkite/agent/compare/v3.32.2...v3.32.3) (2021-09-01)
+
+### Fixed
+
+* PowerShell hooks on Windows [#1497](https://github.com/buildkite/agent/pull/1497)
+
 ## [v3.32.2](https://github.com/buildkite/agent/compare/v3.32.1...v3.32.2) (2021-08-31)
 
 ### Added
