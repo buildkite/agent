@@ -9,7 +9,7 @@ RUN mkdir /buildkite \
           /buildkite/bin
 
 COPY buildkite-agent.cfg /buildkite/
-COPY buildkite-agent-${TARGETARCH} /buildkite/bin/
+COPY buildkite-agent-linux-${TARGETARCH} /buildkite/bin/
 
 FROM busybox:musl
 COPY --from=0 /buildkite /buildkite

@@ -38,7 +38,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
-COPY ./buildkite-agent-${TARGETARCH} /usr/local/bin/buildkite-agent
+COPY ./buildkite-agent-linux-${TARGETARCH} /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite
