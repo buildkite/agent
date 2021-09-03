@@ -1,5 +1,7 @@
 FROM centos:8.3.2011
 
+ARG TARGETARCH
+
 ENV DOCKER_COMPOSE_VERSION=1.27.4
 ENV TINI_VERSION=0.19.0
 
@@ -33,7 +35,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
-COPY ./buildkite-agent /usr/local/bin/buildkite-agent
+COPY ./buildkite-agent-${TARGETARCH} /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite
