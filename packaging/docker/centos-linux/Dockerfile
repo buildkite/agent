@@ -1,6 +1,7 @@
 FROM centos:8.3.2011
 
 ARG TARGETARCH
+ARG TARGETVARIANT
 
 ENV DOCKER_COMPOSE_VERSION=v2.0.0-rc.3
 ENV TINI_VERSION=v0.19.0
@@ -32,7 +33,7 @@ RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
     && chmod +x /sbin/tini
 
 RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
-    "amd64")    docker_arch=amd64 ;; \
+    "amd64/")   docker_arch=amd64 ;; \
     "arm64/v8") docker_arch=arm64 ;; \
     "arm/v7")   docker_arch=armv7 ;; \
     "*")        echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT"; exit 1 ;; \

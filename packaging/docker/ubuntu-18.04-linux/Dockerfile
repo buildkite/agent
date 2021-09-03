@@ -36,7 +36,7 @@ RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
     && chmod +x /sbin/tini
 
 RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
-    "amd64")    docker_arch=amd64 ;; \
+    "amd64/")   docker_arch=amd64 ;; \
     "arm64/v8") docker_arch=arm64 ;; \
     "arm/v7")   docker_arch=armv7 ;; \
     "*")        echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT"; exit 1 ;; \
