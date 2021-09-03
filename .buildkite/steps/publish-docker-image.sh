@@ -29,8 +29,7 @@ parse_version() {
 release_image() {
   local tag="$1"
   echo "--- :docker: Tagging ${target_image}:${tag}"
-  dry_run docker tag "$source_image" "${target_image}:$tag"
-  dry_run docker push "${target_image}:$tag"
+  dry_run docker manifest create "${target_image}:$tag" ${DIGESTS[@]}
 }
 
 variant="${1:-}"
@@ -45,6 +44,13 @@ variant_suffix=""
 if [[ "$variant" != "alpine" ]] ; then
   variant_suffix="-$variant"
 fi
+
+echo "Fetching manifest for ${source_image}"
+manifest="$(mktemp)"
+docker manifest inspect "${source_image}" >"${manifest}"
+
+# Get all manifests, and each manifest’s digest
+DIGESTS=($(jq -r '.manifests | .[] | .digest' <"${manifest}"))
 
 echo "Tagging docker images for $variant/$codename (version $version build $build)"
 
