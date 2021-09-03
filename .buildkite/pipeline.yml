@@ -1,3 +1,6 @@
+agents:
+  queue: elastic-runners-edge
+
 env:
   DRY_RUN: false # set to true to disable publishing releases
 
