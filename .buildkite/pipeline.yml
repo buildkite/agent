@@ -239,8 +239,9 @@ steps:
     key: build-docker-alpine
     depends_on:
       - build-binary-linux-amd64
+      - build-binary-linux-arm64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh alpine"
+    command: ".buildkite/steps/build-docker-image.sh alpine linux/arm64/v8,linux/amd64"
 
   - name: ":docker: ubuntu 18.04 build"
     key: build-docker-ubuntu-bionic-beaver
