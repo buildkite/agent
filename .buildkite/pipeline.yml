@@ -67,7 +67,10 @@ steps:
   - name: ":linux: amd64"
     command: ".buildkite/steps/build-binary.sh linux amd64"
     key: build-binary-linux-amd64
-    depends_on: test-linux # don't wait for slower windows tests
+    depends_on:
+      # don't wait for slower windows tests
+      - test-linux-amd64
+      - test-linux-arm64
     artifact_paths: "pkg/*"
     plugins:
       docker-compose#v3.0.0:
