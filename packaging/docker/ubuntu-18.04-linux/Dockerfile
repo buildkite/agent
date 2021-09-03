@@ -5,7 +5,7 @@ ARG TARGETVARIANT
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_COMPOSE_VERSION=v2.0.0-rc.3
-ENV TINI_VERSION=0.19.0
+ENV TINI_VERSION=v0.19.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       apt-transport-https \
@@ -26,7 +26,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -Lfs -o /sbin/tini https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini-${TARGETARCH} \
+RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
+    "amd64/")   tini_arch=amd64 ;; \
+    "arm64/v8") tini_arch=arm64 ;; \
+    "arm/v7")   tini_arch=armhf ;; \
+    "*") echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT; exit 1 ;; \
+    esac && \
+    curl -Lfs -o /sbin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${tini_arch} \
     && chmod +x /sbin/tini
 
 RUN curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${TARGETARCH} -o /usr/local/bin/docker-compose \

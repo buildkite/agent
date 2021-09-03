@@ -3,7 +3,7 @@ FROM centos:8.3.2011
 ARG TARGETARCH
 
 ENV DOCKER_COMPOSE_VERSION=v2.0.0-rc.3
-ENV TINI_VERSION=0.19.0
+ENV TINI_VERSION=v0.19.0
 
 RUN yum -y install \
       bash \
@@ -22,9 +22,16 @@ RUN yum -y install \
     && yum clean all \
     && rm -rf /var/cache/yum*
 
-RUN curl -Lfs -o /sbin/tini  https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini-${TARGETARCH} \
-    && chmod +x /sbin/tini \
-    && curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${TARGETARCH} -o /usr/local/bin/docker-compose \
+RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
+    "amd64/")   tini_arch=amd64 ;; \
+    "arm64/v8") tini_arch=arm64 ;; \
+    "arm/v7")   tini_arch=armhf ;; \
+    "*") echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT; exit 1 ;; \
+    esac && \
+    curl -Lfs -o /sbin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${tini_arch} \
+    && chmod +x /sbin/tini
+
+RUN curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${TARGETARCH} -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg \
