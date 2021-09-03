@@ -26,8 +26,9 @@ build_docker_image() {
   echo "--- Building :docker: $image_tag"
   cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
 
-  cp pkg/* "${packaging_dir}"
+  cp pkg/buildkite-agent-* "${packaging_dir}/"
   chmod +x ${packaging_dir}/buildkite-agent-*
+  ls -la "${packaging_dir}"
 
   docker buildx create --use
   docker buildx build --platform "$platforms" --tag "$image_tag" "${packaging_dir}"
