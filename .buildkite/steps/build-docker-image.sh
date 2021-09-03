@@ -22,6 +22,13 @@ build_docker_image() {
   local platforms="$1"
   local image_tag="$2"
   local packaging_dir="$3"
+  local push="$4"
+
+  output_type="docker"
+  if [ "$push" = "true" ]
+  then
+    output_type="registry"
+  fi
 
   echo "--- Building :docker: $image_tag"
   cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
@@ -31,7 +38,7 @@ build_docker_image() {
   ls -la "${packaging_dir}"
 
   docker buildx create --use
-  docker buildx build --platform "$platforms" --tag "$image_tag" "${packaging_dir}"
+  docker buildx build --platform "$platforms" --tag "$image_tag" "${packaging_dir}" --output="type=${output_type}"
 }
 
 test_docker_image() {
@@ -111,19 +118,19 @@ fi
 
 case $variant in
 alpine)
-  build_docker_image "$platforms" "$image_tag" "packaging/docker/alpine-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/alpine-linux" "$push"
   ;;
 ubuntu-18.04)
-  build_docker_image "$platforms" "$image_tag" "packaging/docker/ubuntu-18.04-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/ubuntu-18.04-linux" "$push"
   ;;
 ubuntu-20.04)
-  build_docker_image "$platforms" "$image_tag" "packaging/docker/ubuntu-20.04-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/ubuntu-20.04-linux" "$push"
   ;;
 centos)
-  build_docker_image "$platforms" "$image_tag" "packaging/docker/centos-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/centos-linux" "$push"
   ;;
 sidecar)
-  build_docker_image "$platforms" "$image_tag" "packaging/docker/sidecar"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/sidecar" "$push"
   ;;
 *)
   echo "Unknown variant $variant"
@@ -139,7 +146,3 @@ sidecar)
   test_docker_image "$image_tag"
   ;;
 esac
-
-if [[ $push == "true" ]] ; then
-  push_docker_image "$image_tag"
-fi
