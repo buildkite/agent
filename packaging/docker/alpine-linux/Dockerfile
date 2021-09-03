@@ -1,5 +1,7 @@
 FROM alpine:3.12
 
+ARG TARGETARCH
+
 RUN apk add --no-cache \
       bash \
       curl \
@@ -24,7 +26,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
-COPY ./buildkite-agent /usr/local/bin/buildkite-agent
+COPY ./buildkite-agent-${TARGETARCH} /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite

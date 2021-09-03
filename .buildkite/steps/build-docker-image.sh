@@ -19,16 +19,18 @@ dry_run() {
 }
 
 build_docker_image() {
-  local platform="$1"
-  local image_tag="$1"
+  local platforms="$1"
+  local image_tag="$2"
   local packaging_dir="$3"
 
   echo "--- Building :docker: $image_tag"
   cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
-  cp pkg/buildkite-agent-linux-amd64 "${packaging_dir}/buildkite-agent"
-  chmod +x "${packaging_dir}/buildkite-agent"
+
+  cp pkg/* "${packaging_dir}"
+  chmod +x ${packaging_dir}/buildkite-agent-*
+
   docker buildx create --use
-  docker buildx build --platform "$platform" --tag "$image_tag" "${packaging_dir}"
+  docker buildx build --platform "$platforms" --tag "$image_tag" "${packaging_dir}"
 }
 
 test_docker_image() {
@@ -51,7 +53,7 @@ push_docker_image() {
 }
 
 variant="${1:-}"
-platform="${2:-linux/amd64}"
+platforms="${2:-linux/amd64}"
 image_tag="${3:-}"
 codename="${4:-}"
 version="${5:-}"
@@ -70,14 +72,20 @@ fi
 rm -rf pkg
 mkdir -p pkg
 
-if [[ -z "$version" ]] ; then
-  echo '--- Downloading :linux: binaries from artifacts'
-  buildkite-agent artifact download "pkg/buildkite-agent-linux-${arch}" .
-else
-  echo "--- Downloading :linux: binaries for version $version"
-  curl -Lf -o "pkg/buildkite-agent-linux-${arch}" \
-    "https://download.buildkite.com/agent/${codename}/${version}/buildkite-agent-linux-${arch}"
-fi
+for platform in ${platforms//,/ }
+do
+  echo "--- Downloading binaries for ${platform}"
+  arch="$(echo $platform | cut -d/ -f2)"
+
+  if [[ -z "$version" ]] ; then
+    echo "--- Downloading ${platform} binaries from artifacts"
+    buildkite-agent artifact download "pkg/buildkite-agent-linux-${arch}" .
+  else
+    echo "--- Downloading ${platform} binaries for version ${version}"
+    curl -Lf -o "pkg/buildkite-agent-linux-${arch}" \
+      "https://download.buildkite.com/agent/${codename}/${version}/buildkite-agent-linux-${arch}"
+  fi
+done
 
 if [[ -z "$image_tag" ]] ; then
   echo "--- Getting docker image tag for $variant from build meta data"
@@ -87,19 +95,19 @@ fi
 
 case $variant in
 alpine)
-  build_docker_image "$platform" "$image_tag" "packaging/docker/alpine-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/alpine-linux"
   ;;
 ubuntu-18.04)
-  build_docker_image "$platform" "$image_tag" "packaging/docker/ubuntu-18.04-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/ubuntu-18.04-linux"
   ;;
 ubuntu-20.04)
-  build_docker_image "$platform" "$image_tag" "packaging/docker/ubuntu-20.04-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/ubuntu-20.04-linux"
   ;;
 centos)
-  build_docker_image "$platform" "$image_tag" "packaging/docker/centos-linux"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/centos-linux"
   ;;
 sidecar)
-  build_docker_image "$platform" "$image_tag" "packaging/docker/sidecar"
+  build_docker_image "$platforms" "$image_tag" "packaging/docker/sidecar"
   ;;
 *)
   echo "Unknown variant $variant"
