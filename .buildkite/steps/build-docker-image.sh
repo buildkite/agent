@@ -107,7 +107,11 @@ do
   fi
 
   # Move it where the platform installer will look for it
-  mv "pkg/${download_query}" "pkg/buildkite-agent-linux-${platform_arch}${platform_variant}"
+  expected="pkg/buildkite-agent-linux-${platform_arch}${platform_variant}"
+  if [ "pkg/${download_query}" != "$expected" ]
+  then
+    mv "pkg/${download_query}" "$expected"
+  fi
 done
 
 if [[ -z "$image_tag" ]] ; then
