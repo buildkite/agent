@@ -31,7 +31,12 @@ RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
     curl -Lfs -o /sbin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${tini_arch} \
     && chmod +x /sbin/tini
 
-RUN curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${TARGETARCH} -o /usr/local/bin/docker-compose \
+RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
+    "amd64")    docker_arch=amd64 ;; \
+    "arm64/v8") docker_arch=arm64 ;; \
+    "arm/v7")   docker_arch=armv7 ;; \
+    esac && \
+    curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${docker_arch} -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg \
