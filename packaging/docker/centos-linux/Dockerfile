@@ -24,19 +24,19 @@ RUN yum -y install \
     && rm -rf /var/cache/yum*
 
 RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
-    "amd64/")   tini_arch=amd64 ;; \
-    "arm64/v8") tini_arch=arm64 ;; \
-    "arm/v7")   tini_arch=armhf ;; \
+    "amd64/") tini_arch=amd64 ;; \
+    "arm64/") tini_arch=arm64 ;; \
+    "arm/v7") tini_arch=armhf ;; \
     "*") echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT"; exit 1 ;; \
     esac && \
     curl -Lfs -o /sbin/tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${tini_arch} \
     && chmod +x /sbin/tini
 
 RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
-    "amd64/")   docker_arch=amd64 ;; \
-    "arm64/v8") docker_arch=arm64 ;; \
-    "arm/v7")   docker_arch=armv7 ;; \
-    "*")        echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT"; exit 1 ;; \
+    "amd64/") docker_arch=amd64 ;; \
+    "arm64/") docker_arch=arm64 ;; \
+    "arm/v7") docker_arch=armv7 ;; \
+    "*")      echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT"; exit 1 ;; \
     esac && \
     curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${docker_arch} -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
