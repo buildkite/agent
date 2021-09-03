@@ -73,19 +73,34 @@ fi
 rm -rf pkg
 mkdir -p pkg
 
+# e.g. linux/amd64,linux/arm64/v8,linux/arm/v7
 for platform in ${platforms//,/ }
 do
   echo "--- Downloading binaries for ${platform}"
-  arch="$(echo $platform | cut -d/ -f2)"
 
+  # What the platform is looking for
+  platform_arch="$(echo $platform | cut -d/ -f2)"
+  platform_variant="$(echo "$platform" | cut -d/ -f3)"
+
+  # What we call it
+  download_query="buildkite-agent-linux-${platform_arch}"
+  if [ "$platform_arch" = "arm" && "$platform_variant" = "v7" ]
+  then
+    download_query="buildkite-agent-linux-armhf"
+  fi
+
+  # Download what we call it
   if [[ -z "$version" ]] ; then
     echo "--- Downloading ${platform} binaries from artifacts"
-    buildkite-agent artifact download "pkg/buildkite-agent-linux-${arch}" .
+    buildkite-agent artifact download "pkg/${download_query}" .
   else
     echo "--- Downloading ${platform} binaries for version ${version}"
-    curl -Lf -o "pkg/buildkite-agent-linux-${arch}" \
-      "https://download.buildkite.com/agent/${codename}/${version}/buildkite-agent-linux-${arch}"
+    curl -Lf -o "pkg/${download_query}" \
+      "https://download.buildkite.com/agent/${codename}/${version}/${download_query}"
   fi
+
+  # Move it where the platform installer will look for it
+  mv "pkg/${download_query}" "pkg/buildkite-agent-linux-${platform_arch}${platform_variant}"
 done
 
 if [[ -z "$image_tag" ]] ; then

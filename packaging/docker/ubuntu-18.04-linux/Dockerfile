@@ -1,6 +1,7 @@
 FROM ubuntu:18.04
 
 ARG TARGETARCH
+ARG TARGETVARIANT
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_COMPOSE_VERSION=v2.0.0-rc.3
@@ -26,8 +27,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -Lfs -o /sbin/tini https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini-${TARGETARCH} \
-    && chmod +x /sbin/tini \
-    && curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${TARGETARCH} -o /usr/local/bin/docker-compose \
+    && chmod +x /sbin/tini
+
+RUN curl -Lfs https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-linux-${TARGETARCH} -o /usr/local/bin/docker-compose \
     && chmod +x /usr/local/bin/docker-compose
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg \
@@ -38,7 +40,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
-COPY ./buildkite-agent-linux-${TARGETARCH} /usr/local/bin/buildkite-agent
+COPY ./buildkite-agent-linux-${TARGETARCH}${TARGETVARIANT} /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite

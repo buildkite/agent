@@ -1,6 +1,7 @@
 FROM alpine:3.12
 
 ARG TARGETARCH
+ARG TARGETVARIANT
 
 RUN mkdir /buildkite \
           /buildkite/builds \
@@ -9,7 +10,7 @@ RUN mkdir /buildkite \
           /buildkite/bin
 
 COPY buildkite-agent.cfg /buildkite/
-COPY buildkite-agent-linux-${TARGETARCH} /buildkite/bin/
+COPY buildkite-agent-linux-${TARGETARCH}${TARGETVARIANT} /buildkite/bin/buildkite-agent
 
 FROM busybox:musl
 COPY --from=0 /buildkite /buildkite
