@@ -44,7 +44,7 @@ build_docker_image() {
 test_docker_image() {
   local image_tag="$1"
 
-  echo "--- :hammer: Testing $image_tag can run"
+  echo "--- :hammer: Testing $image_tag can run the buildkite-agent"
   docker run --rm "$image_tag" --version
 
   echo "--- :hammer: Testing $image_tag can access docker socket"
