@@ -90,7 +90,7 @@ do
 
   # What we call it
   download_query="buildkite-agent-linux-${platform_arch}"
-  if [ "$platform_arch" = "arm" && "$platform_variant" = "v7" ]
+  if [ "$platform_arch" = "arm" -a "$platform_variant" = "v7" ]
   then
     download_query="buildkite-agent-linux-armhf"
   fi
