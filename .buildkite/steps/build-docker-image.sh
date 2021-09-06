@@ -48,14 +48,24 @@ test_docker_image() {
   # e.g. linux/amd64,linux/arm64/v8,linux/arm/v7
   for platform in ${platforms//,/ }
   do
-    echo "--- :hammer: Testing $image_tag $platform can run the buildkite-agent"
-    docker run --rm --platform "$platform" "$image_tag" --version
+    case "$platform" in
+    "linux/amd64")
+      queue="elastic-runners-edge"
+      ;;
+    "linux/arm64")
+      queue="elastic-runners-arm"
+      ;;
+    *)
+      queue=""
+      ;;
+    esac
 
-    echo "--- :hammer: Testing $image_tag $platform can access docker socket"
-    docker run --rm --platform "$platform" --entrypoint "docker" -v /var/run/docker.sock:/var/run/docker.sock "$image_tag" version
-
-    echo "--- :hammer: Testing $image_tag $platform has docker-compose"
-    docker run --rm --platform "$platform" --entrypoint "docker-compose" "$image_tag" version
+    if [ -n "$queue" ]
+    then
+      QUEUE="$queue" IMAGE="$image_tag" PLATFORM="$platform" buildkite-agent pipeline upload .buildkite/pipeline.test-image.yml
+    else
+      echo "Cannot test $platform containers, no suitable docker host environment to schedule the container"
+    fi
   done
 }
 

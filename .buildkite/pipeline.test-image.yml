@@ -1,0 +1,6 @@
+---
+steps:
+  - name: ":docker: $IMAGE $PLATFORM"
+    command: .buildkite/steps/test-image.sh $IMAGE $PLATFORM
+    agents:
+      queue: $QUEUE
