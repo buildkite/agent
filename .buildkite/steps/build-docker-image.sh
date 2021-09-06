@@ -53,7 +53,7 @@ test_docker_image() {
       queue="elastic-runners-edge"
       ;;
     "linux/arm64")
-      queue="elastic-runners-arm"
+      queue="elastic-runners-arm64"
       ;;
     *)
       queue=""
