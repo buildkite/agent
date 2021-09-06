@@ -43,15 +43,20 @@ build_docker_image() {
 
 test_docker_image() {
   local image_tag="$1"
+  local platforms="$2"
 
-  echo "--- :hammer: Testing $image_tag can run the buildkite-agent"
-  docker run --rm "$image_tag" --version
+  # e.g. linux/amd64,linux/arm64/v8,linux/arm/v7
+  for platform in ${platforms//,/ }
+  do
+    echo "--- :hammer: Testing $image_tag $platform can run the buildkite-agent"
+    docker run --rm --platform "$platform" "$image_tag" --version
 
-  echo "--- :hammer: Testing $image_tag can access docker socket"
-  docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --entrypoint "docker" "$image_tag" version
+    echo "--- :hammer: Testing $image_tag $platform can access docker socket"
+    docker run --rm --platform "$platform" --entrypoint "docker" -v /var/run/docker.sock:/var/run/docker.sock "$image_tag" version
 
-  echo "--- :hammer: Testing $image_tag has docker-compose"
-  docker run --rm --entrypoint "docker-compose" "$image_tag" version
+    echo "--- :hammer: Testing $image_tag $platform has docker-compose"
+    docker run --rm --platform "$platform" --entrypoint "docker-compose" "$image_tag" version
+  done
 }
 
 variant="${1:-}"
@@ -141,6 +146,6 @@ sidecar)
   echo "Skipping tests for sidecar variant"
   ;;
 *)
-  test_docker_image "$image_tag"
+  test_docker_image "$image_tag" "$platforms"
   ;;
 esac
