@@ -38,7 +38,7 @@ build_docker_image() {
   ls -la "${packaging_dir}"
 
   docker buildx create --use
-  docker buildx build --platform "$platforms" --tag "$image_tag" "${packaging_dir}" --output="type=${output_type}"
+  docker buildx build --platform "$platforms" --tag "$image_tag" --output="type=${output_type}" "${packaging_dir}"
 }
 
 test_docker_image() {
@@ -52,12 +52,6 @@ test_docker_image() {
 
   echo "--- :hammer: Testing $image_tag has docker-compose"
   docker run --rm --entrypoint "docker-compose" "$image_tag" version
-}
-
-push_docker_image() {
-  local image_tag="$1"
-  echo "--- Pushing :docker: image to $image_tag"
-  docker push "$image_tag"
 }
 
 variant="${1:-}"
