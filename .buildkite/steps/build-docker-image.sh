@@ -51,7 +51,7 @@ test_docker_image() {
   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --entrypoint "docker" "$image_tag" version
 
   echo "--- :hammer: Testing $image_tag has docker-compose"
-  docker run --rm --entrypoint "docker-compose" "$image_tag" --version
+  docker run --rm --entrypoint "docker-compose" "$image_tag" version
 }
 
 push_docker_image() {
