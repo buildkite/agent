@@ -314,7 +314,7 @@ steps:
       - build-binary-linux-armhf
       - build-binary-linux-arm64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh alpine linux/arm64,linux/amd64"
+    command: ".buildkite/steps/build-docker-image.sh alpine linux/arm/v7,linux/arm64,linux/amd64"
 
   - name: ":docker: ubuntu 18.04 build"
     key: build-docker-ubuntu-bionic-beaver
@@ -323,7 +323,7 @@ steps:
       - build-binary-linux-armhf
       - build-binary-linux-arm64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh ubuntu-18.04 linux/arm64,linux/amd64"
+    command: ".buildkite/steps/build-docker-image.sh ubuntu-18.04 linux/arm/v7,linux/arm64,linux/amd64"
 
   - name: ":docker: ubuntu 20.04 build"
     key: build-docker-ubuntu-focal-fossa
@@ -332,7 +332,7 @@ steps:
       - build-binary-linux-armhf
       - build-binary-linux-arm64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh ubuntu-20.04 linux/arm64,linux/amd64"
+    command: ".buildkite/steps/build-docker-image.sh ubuntu-20.04 linux/arm/v7,linux/arm64,linux/amd64"
 
   - name: ":docker: centos build"
     key: build-docker-centos
@@ -341,7 +341,7 @@ steps:
       - build-binary-linux-armhf
       - build-binary-linux-arm64
       - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh centos linux/arm64,linux/amd64"
+    command: ".buildkite/steps/build-docker-image.sh centos linux/arm/v7,linux/arm64,linux/amd64"
 
   - name: ":docker: sidecar build"
     key: build-docker-sidecar
