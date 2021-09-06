@@ -7,7 +7,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DOCKER_COMPOSE_VERSION=v2.0.0-rc.3
 ENV TINI_VERSION=v0.19.0
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN case "${TARGETARCH}/${TARGETVARIANT}" in \
+    "amd64/") deb_arch=amd64 ;; \
+    "arm64/") deb_arch=arm64 ;; \
+    "arm/v7") deb_arch=armhf ;; \
+    "*") echo "unknown target arch/variant $TARGETARCH/$TARGETVARIANT"; exit 1 ;; \
+    esac && \
+    apt-get update && apt-get install -y --no-install-recommends \
       apt-transport-https \
       curl \
       ca-certificates \
@@ -21,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       software-properties-common \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - \
     && add-apt-repository \
-      "deb [arch=${TARGETARCH}] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+      "deb [arch=$deb_arch] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
