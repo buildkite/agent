@@ -2,9 +2,11 @@ package agent
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
@@ -45,4 +47,11 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestGetDownloadDestination(t *testing.T) {
+	workingDirectory, _ := filepath.Abs(".")
+	assert.Equal(t, workingDirectory + "/a", getDownloadDestination("a"))
+	assert.Equal(t, workingDirectory + "/a/", getDownloadDestination("a/"))
+	assert.Equal(t, "/", getDownloadDestination("/"))
 }
