@@ -98,7 +98,7 @@ var AnnotationRemoveCommand = cli.Command{
       resp, err := client.AnnotationRemove(cfg.Job, cfg.Context)
 
       // Don't bother retrying if the response was one of these statuses
-      if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
+      if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400 || resp.StatusCode == 410) {
         s.Break()
         return err
       }
