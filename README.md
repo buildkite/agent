@@ -114,12 +114,12 @@ support guidance).
 #### Tier 1, guaranteed to work
 
 - linux x86_64
+- linux arm64
 - windows x86_64
 
 #### Tier 2, guaranteed to build
 
 - linux x86
-- linux arm64
 - windows x86
 - darwin x86_64
 - darwin arm64
