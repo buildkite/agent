@@ -58,7 +58,7 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 			"LLAMAS": "rock",
 			"Alpacas": "are ok",
 		},
-		Changed: map[string]env.Pair{},
+		Changed: map[string]env.DiffPair{},
 		Removed: map[string]struct{}{},
 	})
 
