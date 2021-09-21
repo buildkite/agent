@@ -158,3 +158,11 @@ func TestEnvironmentDiffRemove(t *testing.T) {
 		Removed: map[string]struct{}{},
 	}, diff)
 }
+
+func TestEmptyDiff(t *testing.T) {
+	t.Parallel()
+
+	empty := Diff{}
+
+	assert.Equal(t, true, empty.Empty())
+}

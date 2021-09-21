@@ -29,6 +29,10 @@ func (diff *Diff) Remove(key string) {
 	delete(diff.Removed, key)
 }
 
+func (diff *Diff) Empty() bool {
+	return len(diff.Added) == 0 && len(diff.Changed) == 0 && len(diff.Removed) == 0
+}
+
 func New() *Environment {
 	return &Environment{env: map[string]string{}}
 }
