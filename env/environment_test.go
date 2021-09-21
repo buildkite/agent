@@ -129,3 +129,32 @@ func TestEnvironmentDiff(t *testing.T) {
 		Removed: map[string]struct{}{},
 	}, ba)
 }
+
+func TestEnvironmentDiffRemove(t *testing.T) {
+	t.Parallel()
+
+	diff := Diff {
+		Added: map[string]string {
+			"A": "new",
+		},
+		Changed: map[string]Pair {
+			"B": Pair {
+				Old: "old",
+				New: "new",
+			},
+		},
+		Removed: map[string]struct{} {
+			"C": struct{}{},
+		},
+	}
+
+	diff.Remove("A")
+	diff.Remove("B")
+	diff.Remove("C")
+
+	assert.Equal(t, Diff {
+		Added: map[string]string {},
+		Changed: map[string]Pair {},
+		Removed: map[string]struct{}{},
+	}, diff)
+}

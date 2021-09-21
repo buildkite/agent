@@ -23,6 +23,12 @@ type Diff struct {
 	Removed map[string]struct{}
 }
 
+func (diff *Diff) Remove(key string) {
+	delete(diff.Added, key)
+	delete(diff.Changed, key)
+	delete(diff.Removed, key)
+}
+
 func New() *Environment {
 	return &Environment{env: map[string]string{}}
 }
