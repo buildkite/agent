@@ -390,21 +390,21 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 	}
 
 	// Finally, apply changes to the current shell and config
-	b.applyEnvironmentChanges(changes.Env, changes.Dir, redactors)
+	b.applyEnvironmentChanges(changes, redactors)
 	return nil
 }
 
-func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string, redactors RedactorMux) {
-	if dir != b.shell.Getwd() {
-		_ = b.shell.Chdir(dir)
+func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors RedactorMux) {
+	if changes.Dir != b.shell.Getwd() {
+		_ = b.shell.Chdir(changes.Dir)
 	}
 
 	// Do we even have any environment variables to change?
-	if environ == nil || environ.Length() == 0 {
+	if changes.Diff.Empty() {
 		return
 	}
 
-	mergedEnv := b.shell.Env.Merge(environ)
+	mergedEnv := b.shell.Env.Merge(changes.Diff)
 
 	// reset output redactors based on new environment variable values
 	redactors.Flush()
@@ -412,7 +412,7 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
-	bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(environ)
+	bootstrapConfigEnvChanges := b.Config.ReadFromEnvironment(mergedEnv)
 
 	// Print out the env vars that changed. As we go through each
 	// one, we'll determine if it was a special "bootstrap"
@@ -424,11 +424,25 @@ func (b *Bootstrap) applyEnvironmentChanges(environ *env.Environment, dir string
 	// environment variable contains sensitive information (i.e.
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
-	for k, v := range environ.ToMap() {
+	for k, v := range changes.Diff.Added {
+		if _, ok := bootstrapConfigEnvChanges[k]; ok {
+			b.shell.Commentf("%s is now %q", k, v)
+		} else {
+			b.shell.Commentf("%s added", k)
+		}
+	}
+	for k, v := range changes.Diff.Changed {
 		if _, ok := bootstrapConfigEnvChanges[k]; ok {
 			b.shell.Commentf("%s is now %q", k, v)
 		} else {
 			b.shell.Commentf("%s changed", k)
+		}
+	}
+	for k, v := range changes.Diff.Removed {
+		if _, ok := bootstrapConfigEnvChanges[k]; ok {
+			b.shell.Commentf("%s is now %q", k, v)
+		} else {
+			b.shell.Commentf("%s removed", k)
 		}
 	}
 
