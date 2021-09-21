@@ -20,7 +20,7 @@ type Pair struct {
 type Diff struct {
 	Added map[string]string
 	Changed map[string]Pair
-	Removed []string
+	Removed map[string]struct{}
 }
 
 func New() *Environment {
@@ -94,7 +94,7 @@ func (e *Environment) Diff(other *Environment) Diff {
 	diff := Diff{
 		Added: make(map[string]string),
 		Changed: make(map[string]Pair),
-		Removed: make([]string, 0),
+		Removed: make(map[string]struct{}, 0),
 	}
 
 	for k, v := range e.env {
@@ -115,7 +115,7 @@ func (e *Environment) Diff(other *Environment) Diff {
 
 	for k, _ := range other.env {
 		if _, ok := e.Get(k); !ok {
-			diff.Removed = append(diff.Removed, k)
+			diff.Removed[k] = struct{}{}
 		}
 	}
 

@@ -108,9 +108,9 @@ func TestEnvironmentDiff(t *testing.T) {
 				New: "world",
 			},
 		},
-		Removed: []string{
-			"C",
-			"D",
+		Removed: map[string]struct{} {
+			"C": struct{}{},
+			"D": struct{}{},
 		},
 	}, ab)
 
@@ -126,6 +126,6 @@ func TestEnvironmentDiff(t *testing.T) {
 				New: "there",
 			},
 		},
-		Removed: []string{},
+		Removed: map[string]struct{}{},
 	}, ba)
 }
