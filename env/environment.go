@@ -151,10 +151,10 @@ func (e *Environment) Apply(diff Diff) *Environment {
 	c := e.Copy()
 
 	for k, v := range diff.Added {
-		c.env[k] = v
+		c.Set(k, v)
 	}
 	for k, v := range diff.Changed {
-		c.env[k] = v.New
+		c.Set(k, v.New)
 	}
 	for k, _ := range diff.Removed {
 		delete(c.env, k)
