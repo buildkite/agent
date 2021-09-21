@@ -39,7 +39,7 @@ type ScriptWrapper struct {
 }
 
 type hookScriptChanges struct {
-	Env *env.Environment
+	Diff env.Diff
 	Dir string
 }
 
@@ -172,10 +172,25 @@ func (wrap *ScriptWrapper) Changes() (hookScriptChanges, error) {
 	beforeEnv := env.FromExport(string(beforeEnvContents))
 	afterEnv := env.FromExport(string(afterEnvContents))
 	diff := afterEnv.Diff(beforeEnv)
-	wd, _ := diff.Get(hookWorkingDirEnv)
+
+	wd := wrap.getAfterWd(diff)
 
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
 
-	return hookScriptChanges{Env: diff, Dir: wd}, nil
+	return hookScriptChanges{Diff: diff, Dir: wd}, nil
+}
+
+func (wrap *ScriptWrapper) getAfterWd(diff env.Diff) string {
+	addedVar, ok := diff.Added[hookWorkingDirEnv]
+	if ok {
+		return addedVar
+	}
+
+	changedVar, ok := diff.Changed[hookWorkingDirEnv]
+	if ok {
+		return changedVar.New
+	}
+
+	return wrap.beforeWd
 }
