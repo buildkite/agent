@@ -6,12 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
@@ -50,9 +50,14 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(changes.Env, env.FromSlice([]string{"LLAMAS=rock", "Alpacas=are ok"})) {
-		t.Fatalf("Unexpected env in %#v", changes.Env)
-	}
+	assert.Equal(t, env.Diff {
+		Added: map[string]string {
+			"LLAMAS": "rock",
+			"Alpacas": "are ok",
+		},
+		Changed: map[string]env.Pair{},
+		Removed: map[string]struct{}{},
+	}, changes.Diff)
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {

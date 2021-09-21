@@ -178,6 +178,9 @@ func (wrap *ScriptWrapper) Changes() (hookScriptChanges, error) {
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
 
+	// Bash sets this, but we don't care about it
+	diff.Remove("_")
+
 	return hookScriptChanges{Diff: diff, Dir: wd}, nil
 }
 
