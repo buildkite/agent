@@ -404,7 +404,7 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 		return
 	}
 
-	mergedEnv := b.shell.Env.Merge(changes.Diff)
+	mergedEnv := b.shell.Env.Apply(changes.Diff)
 
 	// reset output redactors based on new environment variable values
 	redactors.Flush()
