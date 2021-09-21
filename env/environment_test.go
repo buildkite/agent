@@ -166,3 +166,46 @@ func TestEmptyDiff(t *testing.T) {
 
 	assert.Equal(t, true, empty.Empty())
 }
+
+func TestEnvironmentApply(t *testing.T) {
+	t.Parallel()
+
+	env := &Environment{}
+	env = env.Apply(Diff {
+		Added: map[string]string{
+			"LLAMAS_ENABLED": "1",
+		},
+		Changed: map[string]Pair{},
+		Removed: map[string]struct{}{},
+	})
+	assert.Equal(t, FromSlice([]string{
+		"LLAMAS_ENABLED=1",
+	}), env)
+
+	env = env.Apply(Diff {
+		Added: map[string]string{
+			"ALPACAS_ENABLED": "1",
+		},
+		Changed: map[string]Pair{
+			"LLAMAS_ENABLED": Pair {
+				Old: "1",
+				New: "0",
+			},
+		},
+		Removed: map[string]struct{}{},
+	})
+	assert.Equal(t, FromSlice([]string{
+		"ALPACAS_ENABLED=1",
+		"LLAMAS_ENABLED=0",
+	}), env)
+
+	env = env.Apply(Diff {
+		Added: map[string]string{},
+		Changed: map[string]Pair{},
+		Removed: map[string]struct{} {
+			"LLAMAS_ENABLED": struct{}{},
+			"ALPACAS_ENABLED": struct{}{},
+		},
+	})
+	assert.Equal(t, FromSlice([]string{}), env)
+}

@@ -147,6 +147,22 @@ func (e *Environment) Merge(other *Environment) *Environment {
 	return c
 }
 
+func (e *Environment) Apply(diff Diff) *Environment {
+	c := e.Copy()
+
+	for k, v := range diff.Added {
+		c.env[k] = v
+	}
+	for k, v := range diff.Changed {
+		c.env[k] = v.New
+	}
+	for k, _ := range diff.Removed {
+		delete(c.env, k)
+	}
+
+	return c
+}
+
 // Copy returns a copy of the env
 func (e *Environment) Copy() *Environment {
 	c := make(map[string]string)
