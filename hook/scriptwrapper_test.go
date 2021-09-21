@@ -50,17 +50,24 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The strict equals check here also ensures we aren't bubbling up the
-	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
-	// environment variables
-	assert.Equal(t, env.Diff {
+	// Windows’ batch 'SET >' normalises environment variables case so we apply
+	// the 'expected' and 'actual' diffs to a blank Environment which handles
+	// case normalisation for us
+	expected := (&env.Environment{}).Apply(env.Diff {
 		Added: map[string]string {
 			"LLAMAS": "rock",
 			"Alpacas": "are ok",
 		},
 		Changed: map[string]env.Pair{},
 		Removed: map[string]struct{}{},
-	}, changes.Diff)
+	})
+
+	actual := (&env.Environment{}).Apply(changes.Diff)
+
+	// The strict equals check here also ensures we aren't bubbling up the
+	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
+	// environment variables
+	assert.Equal(t, expected, actual)
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
