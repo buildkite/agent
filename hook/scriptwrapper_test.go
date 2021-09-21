@@ -50,6 +50,9 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The strict equals check here also ensures we aren't bubbling up the
+	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
+	// environment variables
 	assert.Equal(t, env.Diff {
 		Added: map[string]string {
 			"LLAMAS": "rock",
