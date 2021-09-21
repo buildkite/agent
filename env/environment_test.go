@@ -98,12 +98,114 @@ func TestEnvironmentDiff(t *testing.T) {
 	t.Parallel()
 	a := FromSlice([]string{"A=hello", "B=world"})
 	b := FromSlice([]string{"A=hello", "B=there", "C=new", "D="})
-	ab := a.Diff(b).ToMap()
-	ba := b.Diff(a).ToMap()
 
-	// a.Diff(b) gives us the key:values from a that are different in b
-	assert.Equal(t, map[string]string{"B": "world"}, ab)
+	ab := a.Diff(b)
+	assert.Equal(t, Diff {
+		Added: map[string]string{},
+		Changed: map[string]DiffPair{
+			"B": DiffPair {
+				Old: "there",
+				New: "world",
+			},
+		},
+		Removed: map[string]struct{} {
+			"C": struct{}{},
+			"D": struct{}{},
+		},
+	}, ab)
 
-	// b.Diff(a) gives us the key:values from b that are different in a
-	assert.Equal(t, map[string]string{"B": "there", "C": "new", "D": ""}, ba)
+	ba := b.Diff(a)
+	assert.Equal(t, Diff {
+		Added: map[string]string{
+			"C": "new",
+			"D": "",
+		},
+		Changed: map[string]DiffPair {
+			"B": DiffPair {
+				Old: "world",
+				New: "there",
+			},
+		},
+		Removed: map[string]struct{}{},
+	}, ba)
+}
+
+func TestEnvironmentDiffRemove(t *testing.T) {
+	t.Parallel()
+
+	diff := Diff {
+		Added: map[string]string {
+			"A": "new",
+		},
+		Changed: map[string]DiffPair {
+			"B": DiffPair {
+				Old: "old",
+				New: "new",
+			},
+		},
+		Removed: map[string]struct{} {
+			"C": struct{}{},
+		},
+	}
+
+	diff.Remove("A")
+	diff.Remove("B")
+	diff.Remove("C")
+
+	assert.Equal(t, Diff {
+		Added: map[string]string {},
+		Changed: map[string]DiffPair {},
+		Removed: map[string]struct{}{},
+	}, diff)
+}
+
+func TestEmptyDiff(t *testing.T) {
+	t.Parallel()
+
+	empty := Diff{}
+
+	assert.Equal(t, true, empty.Empty())
+}
+
+func TestEnvironmentApply(t *testing.T) {
+	t.Parallel()
+
+	env := &Environment{}
+	env = env.Apply(Diff {
+		Added: map[string]string{
+			"LLAMAS_ENABLED": "1",
+		},
+		Changed: map[string]DiffPair{},
+		Removed: map[string]struct{}{},
+	})
+	assert.Equal(t, FromSlice([]string{
+		"LLAMAS_ENABLED=1",
+	}), env)
+
+	env = env.Apply(Diff {
+		Added: map[string]string{
+			"ALPACAS_ENABLED": "1",
+		},
+		Changed: map[string]DiffPair{
+			"LLAMAS_ENABLED": DiffPair {
+				Old: "1",
+				New: "0",
+			},
+		},
+		Removed: map[string]struct{}{},
+	})
+	assert.Equal(t, FromSlice([]string{
+		"ALPACAS_ENABLED=1",
+		"LLAMAS_ENABLED=0",
+	}), env)
+
+	env = env.Apply(Diff {
+		Added: map[string]string{},
+		Changed: map[string]DiffPair{},
+		Removed: map[string]struct{} {
+			"LLAMAS_ENABLED": struct{}{},
+			"ALPACAS_ENABLED": struct{}{},
+		},
+	})
+	assert.Equal(t, FromSlice([]string{}), env)
 }

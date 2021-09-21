@@ -38,8 +38,8 @@ type ScriptWrapper struct {
 	beforeWd      string
 }
 
-type hookScriptChanges struct {
-	Env *env.Environment
+type HookScriptChanges struct {
+	Diff env.Diff
 	Dir string
 }
 
@@ -158,24 +158,42 @@ func (wrap *ScriptWrapper) Close() {
 }
 
 // Changes returns the changes in the environment and working dir after the hook script runs
-func (wrap *ScriptWrapper) Changes() (hookScriptChanges, error) {
+func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	beforeEnvContents, err := ioutil.ReadFile(wrap.beforeEnvFile.Name())
 	if err != nil {
-		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
 	}
 
 	afterEnvContents, err := ioutil.ReadFile(wrap.afterEnvFile.Name())
 	if err != nil {
-		return hookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
+		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
 	}
 
 	beforeEnv := env.FromExport(string(beforeEnvContents))
 	afterEnv := env.FromExport(string(afterEnvContents))
 	diff := afterEnv.Diff(beforeEnv)
-	wd, _ := diff.Get(hookWorkingDirEnv)
+
+	wd := wrap.getAfterWd(diff)
 
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
 
-	return hookScriptChanges{Env: diff, Dir: wd}, nil
+	// Bash sets this, but we don't care about it
+	diff.Remove("_")
+
+	return HookScriptChanges{Diff: diff, Dir: wd}, nil
+}
+
+func (wrap *ScriptWrapper) getAfterWd(diff env.Diff) string {
+	addedVar, ok := diff.Added[hookWorkingDirEnv]
+	if ok {
+		return addedVar
+	}
+
+	changedVar, ok := diff.Changed[hookWorkingDirEnv]
+	if ok {
+		return changedVar.New
+	}
+
+	return wrap.beforeWd
 }

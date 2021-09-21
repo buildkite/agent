@@ -6,12 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
@@ -50,9 +50,24 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(changes.Env, env.FromSlice([]string{"LLAMAS=rock", "Alpacas=are ok"})) {
-		t.Fatalf("Unexpected env in %#v", changes.Env)
-	}
+	// Windows’ batch 'SET >' normalises environment variables case so we apply
+	// the 'expected' and 'actual' diffs to a blank Environment which handles
+	// case normalisation for us
+	expected := (&env.Environment{}).Apply(env.Diff {
+		Added: map[string]string {
+			"LLAMAS": "rock",
+			"Alpacas": "are ok",
+		},
+		Changed: map[string]env.DiffPair{},
+		Removed: map[string]struct{}{},
+	})
+
+	actual := (&env.Environment{}).Apply(changes.Diff)
+
+	// The strict equals check here also ensures we aren't bubbling up the
+	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
+	// environment variables
+	assert.Equal(t, expected, actual)
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {

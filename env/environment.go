@@ -79,13 +79,35 @@ func (e *Environment) Length() int {
 
 // Diff returns a new environment with the keys and values from this
 // environment which are different in the other one.
-func (e *Environment) Diff(other *Environment) *Environment {
-	diff := &Environment{env: make(map[string]string)}
+func (e *Environment) Diff(other *Environment) Diff {
+	diff := Diff {
+		Added: make(map[string]string),
+		Changed: make(map[string]DiffPair),
+		Removed: make(map[string]struct{}, 0),
+	}
+
 	for k, v := range e.env {
-		if other, ok := other.Get(k); !ok || other != v {
-			diff.Set(k, v)
+		other, ok := other.Get(k)
+		if !ok {
+			// This environment has added this key to other
+			diff.Added[k] = v
+			continue
+		}
+
+		if other != v {
+			diff.Changed[k] = DiffPair {
+				Old: other,
+				New: v,
+			}
 		}
 	}
+
+	for k, _ := range other.env {
+		if _, ok := e.Get(k); !ok {
+			diff.Removed[k] = struct{}{}
+		}
+	}
+
 	return diff
 }
 
@@ -99,6 +121,22 @@ func (e *Environment) Merge(other *Environment) *Environment {
 
 	for k, v := range other.ToMap() {
 		c.Set(k, v)
+	}
+
+	return c
+}
+
+func (e *Environment) Apply(diff Diff) *Environment {
+	c := e.Copy()
+
+	for k, v := range diff.Added {
+		c.Set(k, v)
+	}
+	for k, v := range diff.Changed {
+		c.Set(k, v.New)
+	}
+	for k, _ := range diff.Removed {
+		delete(c.env, k)
 	}
 
 	return c
@@ -164,4 +202,25 @@ func normalizeKeyName(key string) string {
 	} else {
 		return key
 	}
+}
+
+type Diff struct {
+	Added map[string]string
+	Changed map[string]DiffPair
+	Removed map[string]struct{}
+}
+
+type DiffPair struct {
+	Old string
+	New string
+}
+
+func (diff *Diff) Remove(key string) {
+	delete(diff.Added, key)
+	delete(diff.Changed, key)
+	delete(diff.Removed, key)
+}
+
+func (diff *Diff) Empty() bool {
+	return len(diff.Added) == 0 && len(diff.Changed) == 0 && len(diff.Removed) == 0
 }
