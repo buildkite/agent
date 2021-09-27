@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
@@ -45,4 +47,15 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestGetDownloadDestination(t *testing.T) {
+	workingDirectory, _ := filepath.Abs(".")
+	assert.Equal(t, workingDirectory + string(os.PathSeparator) + "a", getDownloadDestination("a"))
+	assert.Equal(t, workingDirectory + string(os.PathSeparator) + "a" + string(os.PathSeparator), getDownloadDestination("a" + string(os.PathSeparator)))
+
+	// Test that we don't get a double // on unix, must use filepath.Abs
+	// to handle the Windows case which normalises to C:\
+	root, _ := filepath.Abs("/")
+	assert.Equal(t, root, getDownloadDestination("/"))
 }
