@@ -53,5 +53,9 @@ func TestGetDownloadDestination(t *testing.T) {
 	workingDirectory, _ := filepath.Abs(".")
 	assert.Equal(t, workingDirectory + string(os.PathSeparator) + "a", getDownloadDestination("a"))
 	assert.Equal(t, workingDirectory + string(os.PathSeparator) + "a" + string(os.PathSeparator), getDownloadDestination("a" + string(os.PathSeparator)))
-	assert.Equal(t, "/", getDownloadDestination("/"))
+
+	// Test that we don't get a double // on unix, must use filepath.Abs
+	// to handle the Windows case which normalises to C:\
+	root, _ := filepath.Abs("/")
+	assert.Equal(t, root, getDownloadDestination("/"))
 }
