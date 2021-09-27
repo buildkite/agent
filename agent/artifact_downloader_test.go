@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
