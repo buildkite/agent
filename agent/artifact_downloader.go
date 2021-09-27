@@ -57,8 +57,8 @@ func getDownloadDestination(destination string) string {
 	// trailing forward slash. We will then retain any trailing forward slash
 	// as it may indicate path merging behavior for download.getTargetPath.
 	downloadDestination, _ := filepath.Abs(destination)
-	if strings.HasSuffix(destination, "/") && len(destination) > 1 {
-		downloadDestination += "/"
+	if strings.HasSuffix(destination, string(os.PathSeparator)) && len(destination) > 1 {
+		downloadDestination += string(os.PathSeparator)
 	}
 	return downloadDestination
 }
