@@ -51,7 +51,7 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 
 func TestGetDownloadDestination(t *testing.T) {
 	workingDirectory, _ := filepath.Abs(".")
-	assert.Equal(t, workingDirectory + "/a", getDownloadDestination("a"))
-	assert.Equal(t, workingDirectory + "/a/", getDownloadDestination("a/"))
+	assert.Equal(t, workingDirectory + string(os.PathSeparator) + "a", getDownloadDestination("a"))
+	assert.Equal(t, workingDirectory + string(os.PathSeparator) + "a" + string(os.PathSeparator), getDownloadDestination("a" + string(os.PathSeparator)))
 	assert.Equal(t, "/", getDownloadDestination("/"))
 }
