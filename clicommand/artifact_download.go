@@ -37,7 +37,7 @@ Description:
 
 Example:
 
-   $ buildkite-agent artifact download "pkg/*.tar.gz" . --build xxx
+   $ buildkite-agent artifact download --build xxx "pkg/*.tar.gz" .
 
    This will search across all the artifacts for the build with files that match that part.
    The first argument is the search query, and the second argument is the download destination.
@@ -45,9 +45,14 @@ Example:
    If you're trying to download a specific file, and there are multiple artifacts from different
    jobs, you can target the particular job you want to download the artifact from:
 
-   $ buildkite-agent artifact download "pkg/*.tar.gz" . --step "tests" --build xxx
+   $ buildkite-agent artifact download --step "tests" --build xxx "pkg/*.tar.gz" .
 
-   You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)`
+   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)
+
+   By default, only artifacts from the most recent job in a chain of retried jobs are downloaded.
+   To include artifacts from previous retried jobs, use the "--include-retried-jobs" flag:
+
+   $ buildkite-agent artifact download --include-retried-jobs "pkg/*.tar.gz" .`
 
 type ArtifactDownloadConfig struct {
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
@@ -88,7 +93,7 @@ var ArtifactDownloadCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from retried jobs in the search",
+			Usage:  "Include artifacts from previous retried jobs in the search",
 		},
 
 		// API Flags
