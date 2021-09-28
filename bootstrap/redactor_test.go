@@ -9,6 +9,8 @@ import (
 )
 
 func TestRedactorEmpty(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{})
@@ -20,6 +22,8 @@ func TestRedactorEmpty(t *testing.T) {
 }
 
 func TestRedactorSingle(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ipsum"})
@@ -33,6 +37,8 @@ func TestRedactorSingle(t *testing.T) {
 }
 
 func TestRedactorMulti(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ipsum", "amet"})
@@ -46,6 +52,8 @@ func TestRedactorMulti(t *testing.T) {
 }
 
 func TestRedactorWriteBoundaries(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ipsum"})
@@ -60,6 +68,8 @@ func TestRedactorWriteBoundaries(t *testing.T) {
 }
 
 func TestRedactorResetMidStream(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"secret1111"})
 
@@ -80,6 +90,8 @@ func TestRedactorResetMidStream(t *testing.T) {
 }
 
 func TestRedactorSlowLoris(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"secret1111"})
 
@@ -101,6 +113,8 @@ func TestRedactorSlowLoris(t *testing.T) {
 }
 
 func TestRedactorSubsetSecrets(t *testing.T) {
+	t.Parallel()
+
 	/*
 		This probably isn't a desired behaviour but I wanted to document it.
 
@@ -127,6 +141,8 @@ func TestRedactorSubsetSecrets(t *testing.T) {
 }
 
 func TestRedactorLatin1(t *testing.T) {
+	t.Parallel()
+
 	var buf bytes.Buffer
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ÿ"})
 
