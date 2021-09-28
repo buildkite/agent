@@ -4,7 +4,20 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestRedactorEmpty(t *testing.T) {
+	var buf bytes.Buffer
+
+	redactor := NewRedactor(&buf, "[REDACTED]", []string{})
+
+	fmt.Fprint(redactor, "Lorem ipsum dolor sit amet")
+	redactor.Flush()
+
+	assert.Equal(t, "Lorem ipsum dolor sit amet", buf.String())
+}
 
 func TestRedactorSingle(t *testing.T) {
 	var buf bytes.Buffer
