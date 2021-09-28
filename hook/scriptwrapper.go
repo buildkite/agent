@@ -170,7 +170,16 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	}
 
 	beforeEnv := env.FromExport(string(beforeEnvContents))
+
 	afterEnv := env.FromExport(string(afterEnvContents))
+	if afterEnv.Length() == 0 {
+		// If the after env is completely empty it is likely because the hook
+		// ran exit(). Instead of falling over and breaking any subsequent
+		// commands, lets fall back to the original before env since we can’t
+		// extract a meaningful diff.
+		afterEnv = beforeEnv
+	}
+
 	diff := afterEnv.Diff(beforeEnv)
 
 	wd := wrap.getAfterWd(diff)
