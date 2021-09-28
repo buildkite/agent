@@ -23,7 +23,7 @@ Description:
    or Artifactory as per the examples below. This may be specified in the
    'destination' argument, or in the 'BUILDKITE_ARTIFACT_UPLOAD_DESTINATION'
    environment variable.  Otherwise, artifacts are uploaded to a
-   Buildkite-managed Amazon S3 bucket.
+   Buildkite-managed Amazon S3 bucket, where they’re retained for six months.
 
 Example:
 
