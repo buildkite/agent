@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.33.0](https://github.com/buildkite/agent/compare/v3.32.3...v3.33.0) (2021-09-27)
+
+### Added
+
+* Support for `unset` environment variables in Job Lifecycle Hooks [#1488](https://github.com/buildkite/agent/pull/1488)
+
+### Changed
+
+* Remove retry handling when deleting annotations that are already deleted [#1507](https://github.com/buildkite/agent/pull/1507) ([@lox](https://github.com/lox))
+* Alpine base image from 3.14.0 to 3.14.2 [#1499](https://github.com/buildkite/agent/pull/1499)
+
+### Fixed
+
+* Support for trailing slash path behaviour in artifact download [#1504](https://github.com/buildkite/agent/pull/1504) ([@jonathan-brand](https://github.com/jonathan-brand))
+
 ## [v3.32.3](https://github.com/buildkite/agent/compare/v3.32.2...v3.32.3) (2021-09-01)
 
 ### Fixed
