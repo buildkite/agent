@@ -39,7 +39,26 @@ type ScriptWrapper struct {
 
 type HookScriptChanges struct {
 	Diff env.Diff
-	Dir string
+}
+
+func (changes *HookScriptChanges) GetAfterWd() (string, error) {
+	if addedVar, ok := changes.Diff.Added[hookWorkingDirEnv]; ok {
+		return addedVar, nil
+	}
+
+	if changedVar, ok := changes.Diff.Changed[hookWorkingDirEnv]; ok {
+		return changedVar.New, nil
+	}
+
+	return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
+}
+
+type HookExitError struct {
+	hookPath string
+}
+
+func (e *HookExitError) Error() string {
+	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory")
 }
 
 // CreateScriptWrapper creates and configures a ScriptWrapper.
@@ -164,19 +183,13 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	}
 
 	beforeEnv := env.FromExport(string(beforeEnvContents))
-
 	afterEnv := env.FromExport(string(afterEnvContents))
+
 	if afterEnv.Length() == 0 {
-		// If the after env is completely empty it is likely because the hook
-		// ran exit(). Instead of falling over and breaking any subsequent
-		// commands, lets fall back to the original before env since we can’t
-		// extract a meaningful diff.
-		afterEnv = beforeEnv
+		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
-
-	wd, _ := wrap.getAfterWd(diff)
 
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
@@ -184,19 +197,5 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	// Bash sets this, but we don't care about it
 	diff.Remove("_")
 
-	return HookScriptChanges{Diff: diff, Dir: wd}, nil
-}
-
-func (wrap *ScriptWrapper) getAfterWd(diff env.Diff) (string, err) {
-	addedVar, ok := diff.Added[hookWorkingDirEnv]
-	if ok {
-		return addedVar, nil
-	}
-
-	changedVar, ok := diff.Changed[hookWorkingDirEnv]
-	if ok {
-		return changedVar.New, nil
-	}
-
-	return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
+	return HookScriptChanges{Diff: diff}, nil
 }

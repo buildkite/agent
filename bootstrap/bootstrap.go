@@ -411,17 +411,32 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 	// Get changed environment
 	changes, err := script.Changes()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get environment")
+		// Could not compute the changes in environment or working directory
+		// for some reason...
+
+		switch err.(type) {
+		case *hook.HookExitError:
+			// ...because the hook called exit(), tsk we ignore any changes
+			// since we can't discern them but continue on with the job
+			break;
+		default:
+			// ...because something else happened, report it and stop the job
+			return errors.Wrapf(err, "Failed to get environment")
+		}
+	} else {
+		// Hook exited successfully (and not early!) We have an environment and
+		// wd change we can apply to our subsequent phases
+		b.applyEnvironmentChanges(changes, redactors)
 	}
 
-	// Finally, apply changes to the current shell and config
-	b.applyEnvironmentChanges(changes, redactors)
 	return nil
 }
 
 func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors RedactorMux) {
-	if changes.Dir != b.shell.Getwd() {
-		_ = b.shell.Chdir(changes.Dir)
+	if afterWd, err := changes.GetAfterWd(); err == nil {
+		if afterWd != b.shell.Getwd() {
+			_ = b.shell.Chdir(afterWd)
+		}
 	}
 
 	// Do we even have any environment variables to change?
