@@ -102,6 +102,43 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
+func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("Not implemented for windows yet")
+	}
+
+	var script = []string{
+		"#!/bin/bash",
+		"mkdir -p ./mysubdir",
+		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
+		"cd ./mysubdir",
+		"exit 0",
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH") != c.Dir {
+			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"), c.Dir)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+}
+
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	t.Parallel()
 
