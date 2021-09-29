@@ -35,7 +35,6 @@ type ScriptWrapper struct {
 	scriptFile    *os.File
 	beforeEnvFile *os.File
 	afterEnvFile  *os.File
-	beforeWd      string
 }
 
 type HookScriptChanges struct {
@@ -95,11 +94,6 @@ func CreateScriptWrapper(hookPath string) (*ScriptWrapper, error) {
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", wrap.hookPath, err)
-	}
-
-	wrap.beforeWd, err = os.Getwd()
-	if err != nil {
-		return nil, err
 	}
 
 	// Create the hook runner code
@@ -182,7 +176,7 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 
 	diff := afterEnv.Diff(beforeEnv)
 
-	wd := wrap.getAfterWd(diff)
+	wd, _ := wrap.getAfterWd(diff)
 
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
@@ -193,16 +187,16 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	return HookScriptChanges{Diff: diff, Dir: wd}, nil
 }
 
-func (wrap *ScriptWrapper) getAfterWd(diff env.Diff) string {
+func (wrap *ScriptWrapper) getAfterWd(diff env.Diff) (string, err) {
 	addedVar, ok := diff.Added[hookWorkingDirEnv]
 	if ok {
-		return addedVar
+		return addedVar, nil
 	}
 
 	changedVar, ok := diff.Changed[hookWorkingDirEnv]
 	if ok {
-		return changedVar.New
+		return changedVar.New, nil
 	}
 
-	return wrap.beforeWd
+	return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
 }
