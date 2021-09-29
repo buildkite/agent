@@ -58,7 +58,7 @@ type HookExitError struct {
 }
 
 func (e *HookExitError) Error() string {
-	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory")
+	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory", e.hookPath)
 }
 
 // CreateScriptWrapper creates and configures a ScriptWrapper.
