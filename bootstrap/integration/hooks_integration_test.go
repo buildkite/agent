@@ -58,8 +58,9 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
+		} else {
+			c.Exit(0)
 		}
-		c.Exit(0)
 	})
 
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
@@ -93,8 +94,9 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		if c.GetEnv("MY_CUSTOM_SUBDIR") != c.Dir {
 			fmt.Fprintf(c.Stderr, "Expected current dir to be %q, got %q\n", c.GetEnv("MY_CUSTOM_SUBDIR"), c.Dir)
 			c.Exit(1)
+		} else {
+			c.Exit(0)
 		}
-		c.Exit(0)
 	})
 
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
@@ -145,9 +147,9 @@ func TestReplacingCheckoutHook(t *testing.T) {
 		fmt.Fprint(c.Stderr, out)
 		if err != nil {
 			c.Exit(1)
-			return
+		} else {
+			c.Exit(0)
 		}
-		c.Exit(0)
 	})
 
 	tester.ExpectGlobalHook("pre-checkout").Once()
