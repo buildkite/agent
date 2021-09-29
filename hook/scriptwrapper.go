@@ -39,18 +39,15 @@ type ScriptWrapper struct {
 
 type HookScriptChanges struct {
 	Diff env.Diff
+	afterWd string
 }
 
 func (changes *HookScriptChanges) GetAfterWd() (string, error) {
-	if addedVar, ok := changes.Diff.Added[hookWorkingDirEnv]; ok {
-		return addedVar, nil
+	if changes.afterWd == "" {
+		return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
 	}
 
-	if changedVar, ok := changes.Diff.Changed[hookWorkingDirEnv]; ok {
-		return changedVar.New, nil
-	}
-
-	return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
+	return changes.afterWd, nil
 }
 
 type HookExitError struct {
@@ -191,11 +188,22 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 
 	diff := afterEnv.Diff(beforeEnv)
 
+	// Pluck the after wd from the diff before removing the key from the diff
+	afterWd := ""
+	if afterWd == "" {
+		afterWd, _ = diff.Added[hookWorkingDirEnv]
+	}
+	if afterWd == "" {
+		if change, ok := diff.Changed[hookWorkingDirEnv]; ok {
+			afterWd = change.New
+		}
+	}
+
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
 
 	// Bash sets this, but we don't care about it
 	diff.Remove("_")
 
-	return HookScriptChanges{Diff: diff}, nil
+	return HookScriptChanges{Diff: diff, afterWd: afterWd}, nil
 }
