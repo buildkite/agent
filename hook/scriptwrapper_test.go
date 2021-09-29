@@ -120,7 +120,12 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changesDir, err := filepath.EvalSymlinks(changes.Dir)
+	afterWd, err := changes.GetAfterWd()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	changesDir, err := filepath.EvalSymlinks(afterWd)
 	if err != nil {
 		t.Fatal(err)
 	}
