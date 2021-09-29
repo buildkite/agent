@@ -35,12 +35,27 @@ type ScriptWrapper struct {
 	scriptFile    *os.File
 	beforeEnvFile *os.File
 	afterEnvFile  *os.File
-	beforeWd      string
 }
 
 type HookScriptChanges struct {
 	Diff env.Diff
-	Dir string
+	afterWd string
+}
+
+func (changes *HookScriptChanges) GetAfterWd() (string, error) {
+	if changes.afterWd == "" {
+		return "", fmt.Errorf("%q was not present in the hook after environment", hookWorkingDirEnv)
+	}
+
+	return changes.afterWd, nil
+}
+
+type HookExitError struct {
+	hookPath string
+}
+
+func (e *HookExitError) Error() string {
+	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory", e.hookPath)
 }
 
 // CreateScriptWrapper creates and configures a ScriptWrapper.
@@ -95,11 +110,6 @@ func CreateScriptWrapper(hookPath string) (*ScriptWrapper, error) {
 	absolutePathToHook, err := filepath.Abs(wrap.hookPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", wrap.hookPath, err)
-	}
-
-	wrap.beforeWd, err = os.Getwd()
-	if err != nil {
-		return nil, err
 	}
 
 	// Create the hook runner code
@@ -170,19 +180,24 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	}
 
 	beforeEnv := env.FromExport(string(beforeEnvContents))
-
 	afterEnv := env.FromExport(string(afterEnvContents))
+
 	if afterEnv.Length() == 0 {
-		// If the after env is completely empty it is likely because the hook
-		// ran exit(). Instead of falling over and breaking any subsequent
-		// commands, lets fall back to the original before env since we can’t
-		// extract a meaningful diff.
-		afterEnv = beforeEnv
+		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
 
-	wd := wrap.getAfterWd(diff)
+	// Pluck the after wd from the diff before removing the key from the diff
+	afterWd := ""
+	if afterWd == "" {
+		afterWd, _ = diff.Added[hookWorkingDirEnv]
+	}
+	if afterWd == "" {
+		if change, ok := diff.Changed[hookWorkingDirEnv]; ok {
+			afterWd = change.New
+		}
+	}
 
 	diff.Remove(hookExitStatusEnv)
 	diff.Remove(hookWorkingDirEnv)
@@ -190,19 +205,5 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	// Bash sets this, but we don't care about it
 	diff.Remove("_")
 
-	return HookScriptChanges{Diff: diff, Dir: wd}, nil
-}
-
-func (wrap *ScriptWrapper) getAfterWd(diff env.Diff) string {
-	addedVar, ok := diff.Added[hookWorkingDirEnv]
-	if ok {
-		return addedVar
-	}
-
-	changedVar, ok := diff.Changed[hookWorkingDirEnv]
-	if ok {
-		return changedVar.New
-	}
-
-	return wrap.beforeWd
+	return HookScriptChanges{Diff: diff, afterWd: afterWd}, nil
 }
