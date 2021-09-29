@@ -52,20 +52,9 @@ func NewArtifactDownloader(l logger.Logger, ac APIClient, c ArtifactDownloaderCo
 	}
 }
 
-func getDownloadDestination(destination string) string {
-	// Filepath.Abs calls filepath.Clean on the result, which removes any
-	// trailing forward slash. We will then retain any trailing forward slash
-	// as it may indicate path merging behavior for download.getTargetPath.
-	downloadDestination, _ := filepath.Abs(destination)
-	if strings.HasSuffix(destination, string(os.PathSeparator)) && len(destination) > 1 {
-		downloadDestination += string(os.PathSeparator)
-	}
-	return downloadDestination
-}
-
 func (a *ArtifactDownloader) Download() error {
 	// Turn the download destination into an absolute path and confirm it exists
-	downloadDestination := getDownloadDestination(a.conf.Destination)
+	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
 	if err != nil {
 		return fmt.Errorf("Could not find information about destination: %s %v",
