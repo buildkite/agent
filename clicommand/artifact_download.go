@@ -26,11 +26,6 @@ Description:
    'foo/app' will write any matched artifact files to 'foo/app/logs/', relative
    to the current working directory.
 
-   To avoid this behaviour, use a <destination> argument with a trailing slash.
-   For example, a query of 'app/logs/*' and a destination of 'foo/app/' will
-   write the matched artifact files to 'foo/app/app/logs/', relative to the
-   current working directory.
-
    You can also change working directory to the intended destination and use a
    <destination> of '.' to always create a directory hierarchy matching the
    artifact paths.
