@@ -66,6 +66,74 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
+func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	if runtime.GOOS == "windows" {
+		var preCommand = []string{
+			"@echo off",
+			"set LLAMAS_ROCK=absolutely",
+		}
+		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command.bat"),
+			[]byte(strings.Join(preCommand, "\r\n")), 0700); err != nil {
+			t.Fatal(err)
+		}
+
+		var postCommand = []string{
+			"@echo off",
+			"set LLAMAS_ROCK=",
+		}
+		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "post-command.bat"),
+			[]byte(strings.Join(postCommand, "\n")), 0700); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		var preCommand = []string{
+			"#!/bin/bash",
+			"export LLAMAS_ROCK=absolutely",
+		}
+		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command"),
+			[]byte(strings.Join(preCommand, "\n")), 0700); err != nil {
+			t.Fatal(err)
+		}
+
+		var postCommand = []string{
+			"#!/bin/bash",
+			"unset LLAMAS_ROCK",
+		}
+		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "post-command"),
+			[]byte(strings.Join(postCommand, "\n")), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if c.GetEnv("LLAMAS_ROCK") != "absolutely" {
+			fmt.Fprintf(c.Stderr, "Expected command hook to have environment variable LLAMAS_ROCK be %q, got %q\n", "absolutely", c.GetEnv("LLAMAS_ROCK"))
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.ExpectGlobalHook("pre-exit").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if c.GetEnv("LLAMAS_ROCK") != "" {
+			fmt.Fprintf(c.Stderr, "Expected pre-exit hook to have environment variable LLAMAS_ROCK be empty, got %q\n", c.GetEnv("LLAMAS_ROCK"))
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+}
+
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
