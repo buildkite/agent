@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.33.3](https://github.com/buildkite/agent/compare/v3.33.2...v3.33.3) (2021-09-29)
+
+### Fixed
+
+* Fix erroneous working directory change for hooks that early exit [#1520](https://github.com/buildkite/agent/pull/1520)
+
 ## [v3.33.2](https://github.com/buildkite/agent/compare/v3.33.1...v3.33.2) (2021-09-29)
 
 ### Fixed
