@@ -49,11 +49,12 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath        string `cli:"arg:0" label:"upload paths"`
-	Replace         bool   `cli:"replace"`
-	Job             string `cli:"job"`
-	DryRun          bool   `cli:"dry-run"`
-	NoInterpolation bool   `cli:"no-interpolation"`
+	FilePath        string 	 `cli:"arg:0" label:"upload paths"`
+	Replace         bool   	 `cli:"replace"`
+	Job             string 	 `cli:"job"`
+	DryRun          bool   	 `cli:"dry-run"`
+	NoInterpolation bool   	 `cli:"no-interpolation"`
+	RedactedVars	 []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -106,6 +107,7 @@ var PipelineUploadCommand = cli.Command{
 		DebugFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		RedactedVars,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
