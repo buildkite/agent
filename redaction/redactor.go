@@ -3,6 +3,9 @@ package redaction
 import (
 	"bytes"
 	"io"
+	"path"
+
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a
@@ -291,4 +294,32 @@ func (mux RedactorMux) Reset(needles []string) {
 	for _, r := range mux {
 		r.Reset(needles)
 	}
+}
+
+// Given a redaction config string and an environment map, return the list of values to be redacted.
+// Lifted out of Bootstrap.setupRedactors to facilitate testing
+func GetValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
+	var valuesToRedact []string
+
+	for varName, varValue := range environment {
+		for _, pattern := range patterns {
+			matched, err := path.Match(pattern, varName)
+			if err != nil {
+				// path.ErrBadPattern is the only error returned by path.Match
+				logger.Warningf("Bad redacted vars pattern: %s", pattern)
+				continue
+			}
+
+			if matched {
+				if len(varValue) < RedactLengthMin {
+					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
+				} else {
+					valuesToRedact = append(valuesToRedact, varValue)
+				}
+				break // Break pattern loop, continue to next env var
+			}
+		}
+	}
+
+	return valuesToRedact
 }

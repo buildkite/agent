@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -442,7 +441,7 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 
 	// reset output redactors based on new environment variable values
 	redactors.Flush()
-	redactors.Reset(getValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv.ToMap()))
+	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv.ToMap()))
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
@@ -1842,7 +1841,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 // matching environment vars.
 // redaction.RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
-	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+	valuesToRedact := redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
 	if len(valuesToRedact) == 0 {
 		return nil
 	}
@@ -1888,34 +1887,6 @@ func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
 	}
 
 	return mux
-}
-
-// Given a redaction config string and an environment map, return the list of values to be redacted.
-// Lifted out of Bootstrap.setupRedactors to facilitate testing
-func getValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
-	var valuesToRedact []string
-
-	for varName, varValue := range environment {
-		for _, pattern := range patterns {
-			matched, err := path.Match(pattern, varName)
-			if err != nil {
-				// path.ErrBadPattern is the only error returned by path.Match
-				logger.Warningf("Bad redacted vars pattern: %s", pattern)
-				continue
-			}
-
-			if matched {
-				if len(varValue) < redaction.RedactLengthMin {
-					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
-				} else {
-					valuesToRedact = append(valuesToRedact, varValue)
-				}
-				break // Break pattern loop, continue to next env var
-			}
-		}
-	}
-
-	return valuesToRedact
 }
 
 type pluginCheckout struct {
