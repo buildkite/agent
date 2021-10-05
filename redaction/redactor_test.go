@@ -1,4 +1,4 @@
-package bootstrap
+package redaction
 
 import (
 	"bytes"

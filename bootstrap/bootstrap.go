@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/utils"
@@ -32,13 +33,6 @@ import (
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
-
-// RedactLengthMin is the shortest string length that will be considered a
-// potential secret by the environment redactor. e.g. if the redactor is
-// configured to filter out environment variables matching *_TOKEN, and
-// API_TOKEN is set to "none", this minimum length will prevent the word "none"
-// from being redacted from useful log output.
-const RedactLengthMin = 6
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
 // as a sub-process of the buildkite-agent and finishes at the conclusion of a job.
@@ -432,7 +426,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 	return nil
 }
 
-func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors RedactorMux) {
+func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, redactors redaction.RedactorMux) {
 	if afterWd, err := changes.GetAfterWd(); err == nil {
 		if afterWd != b.shell.Getwd() {
 			_ = b.shell.Chdir(afterWd)
@@ -1846,8 +1840,8 @@ func (b *Bootstrap) ignoredEnv() []string {
 // setupRedactors wraps shell output and logging in Redactor if any redaction
 // is necessary based on RedactedVars configuration and the existence of
 // matching environment vars.
-// RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
-func (b *Bootstrap) setupRedactors() RedactorMux {
+// redaction.RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
+func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
 	valuesToRedact := getValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
 	if len(valuesToRedact) == 0 {
 		return nil
@@ -1857,16 +1851,16 @@ func (b *Bootstrap) setupRedactors() RedactorMux {
 		b.shell.Commentf("Enabling output redaction for values from environment variables matching: %v", b.Config.RedactedVars)
 	}
 
-	var mux RedactorMux
+	var mux redaction.RedactorMux
 
 	// If the shell Writer is already a Redactor, reset the values to redact.
-	if redactor, ok := b.shell.Writer.(*Redactor); ok {
+	if redactor, ok := b.shell.Writer.(*redaction.Redactor); ok {
 		redactor.Reset(valuesToRedact)
 		mux = append(mux, redactor)
 	} else if len(valuesToRedact) == 0 {
 		// skip
 	} else {
-		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		redactor := redaction.NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
 		b.shell.Writer = redactor
 		mux = append(mux, redactor)
 	}
@@ -1875,10 +1869,10 @@ func (b *Bootstrap) setupRedactors() RedactorMux {
 	// (maybe there's a better way to do two levels of type assertion? ...
 	// shell.Logger may be a WriterLogger, and its Writer may be a Redactor)
 	var shellWriterLogger *shell.WriterLogger
-	var shellLoggerRedactor *Redactor
+	var shellLoggerRedactor *redaction.Redactor
 	if logger, ok := b.shell.Logger.(*shell.WriterLogger); ok {
 		shellWriterLogger = logger
-		if redactor, ok := logger.Writer.(*Redactor); ok {
+		if redactor, ok := logger.Writer.(*redaction.Redactor); ok {
 			shellLoggerRedactor = redactor
 		}
 	}
@@ -1888,7 +1882,7 @@ func (b *Bootstrap) setupRedactors() RedactorMux {
 	} else if len(valuesToRedact) == 0 {
 		// skip
 	} else if shellWriterLogger != nil {
-		redactor := NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
+		redactor := redaction.NewRedactor(b.shell.Writer, "[REDACTED]", valuesToRedact)
 		shellWriterLogger.Writer = redactor
 		mux = append(mux, redactor)
 	}
@@ -1911,7 +1905,7 @@ func getValuesToRedact(logger shell.Logger, patterns []string, environment map[s
 			}
 
 			if matched {
-				if len(varValue) < RedactLengthMin {
+				if len(varValue) < redaction.RedactLengthMin {
 					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
 				} else {
 					valuesToRedact = append(valuesToRedact, varValue)
