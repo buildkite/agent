@@ -185,7 +185,7 @@ var BootstrapCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "artifact-upload-destination",
 			Value:  "",
-			Usage:  "A custom location to upload artifact paths to (i.e. s3://my-custom-bucket)",
+			Usage:  "A custom location to upload artifact paths to (e.g. s3://my-custom-bucket/and/prefix)",
 			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_DESTINATION",
 		},
 		cli.BoolFlag{
