@@ -23,6 +23,6 @@ func Find(hookDir string, name string) (string, error) {
 		return p, nil
 	}
 	// don't wrap os.ErrNotExist without checking callers handle it.
-	// e.g. os.IfNotExist(err) does not handle wrapped errors.
+	// for example, os.IfNotExist(err) does not handle wrapped errors.
 	return "", os.ErrNotExist
 }

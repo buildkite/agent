@@ -254,7 +254,7 @@ func (r *JobRunner) Run() error {
 
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
-	// up like started log streamer workers, etc.
+	// up like started log streamer workers, and so on.
 	if err := r.startJob(startedAt); err != nil {
 		return err
 	}

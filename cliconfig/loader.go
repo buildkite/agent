@@ -190,7 +190,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 
 	var value interface{}
 
-	// See the if the cli option is using the arg format i.e. (arg:1)
+	// See the if the cli option is using the arg format (arg:1)
 	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
 	if len(argMatch) > 0 {
 		argNum := argMatch[1]

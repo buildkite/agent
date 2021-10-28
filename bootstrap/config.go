@@ -116,7 +116,7 @@ type Config struct {
 	// Paths to automatically upload as artifacts when the build finishes
 	AutomaticArtifactUploadPaths string `env:"BUILDKITE_ARTIFACT_PATHS"`
 
-	// A custom destination to upload artifacts to (i.e. s3://...)
+	// A custom destination to upload artifacts to (for example, s3://...)
 	ArtifactUploadDestination string `env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 
 	// Whether ssh-keyscan is run on ssh hosts before checkout

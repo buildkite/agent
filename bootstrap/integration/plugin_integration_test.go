@@ -149,7 +149,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 // A job may have multiple plugins that provide multiple hooks of a given type.
 // For a while (late 2019 / early 2020) we disallowed duplicate checkout and
 // command hooks from plugins; only the first would execute.  We since decided
-// to roll that back and permit e.g. multiple checkout plugin hooks.
+// to roll that back and permit, for example, multiple checkout plugin hooks.
 func TestOverlappingPluginHooks(t *testing.T) {
 	t.Parallel()
 
