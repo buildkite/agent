@@ -46,7 +46,7 @@ func GetPgid(pid int) (int, error) {
 }
 
 // SignalString returns the name of the given signal.
-// e.g. SignalString(syscall.Signal(15)) // "SIGTERM"
+// For example, SignalString(syscall.Signal(15)) // "SIGTERM"
 func SignalString(s syscall.Signal) string {
 	name := unix.SignalName(s)
 	if name == "" {

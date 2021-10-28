@@ -150,7 +150,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 * Add support for agent tracing using Datadog APM [#1273](https://github.com/buildkite/agent/pull/1273) ([goodspark](https://github.com/goodspark), [Sam Schlegel](https://github.com/samschlegel))
-* Improvements to ARM64 support (i.e. Apple Silicon/M1) [#1346](https://github.com/buildkite/agent/pull/1346), [#1354](https://github.com/buildkite/agent/pull/1354), [#1343](https://github.com/buildkite/agent/pull/1343) ([ticky](https://github.com/ticky))
+* Improvements to ARM64 support (Apple Silicon/M1) [#1346](https://github.com/buildkite/agent/pull/1346), [#1354](https://github.com/buildkite/agent/pull/1354), [#1343](https://github.com/buildkite/agent/pull/1343) ([ticky](https://github.com/ticky))
 * Add a Linux ppc64 build to the pipeline [#1362](https://github.com/buildkite/agent/pull/1362) ([ticky](https://github.com/ticky))
 * Agent can now upload artifacts using AssumedRoles using `BUILDKITE_S3_SESSION_TOKEN` [#1359](https://github.com/buildkite/agent/pull/1359) ([grahamc](https://github.com/grahamc))
 * Agent name `%spawn` interpolation to deprecate/replace `%n` [#1377](https://github.com/buildkite/agent/pull/1377) ([ticky](https://github.com/ticky))
@@ -221,7 +221,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ![image](https://user-images.githubusercontent.com/30171259/92212159-e32bd700-eed4-11ea-9af8-2ad024eaecc1.png)
 * Add sidecar agent suitable for being shared via volume in ECS or Kubernetes [#1218](https://github.com/buildkite/agent/pull/1218) ([keithduncan](https://github.com/keithduncan)) [#1263](https://github.com/buildkite/agent/pull/1263) ([yob](https://github.com/yob))
 * We now fetch amd64 binaries on Apple Silicon Macs in anticipation of new macOS ARM computers [#1237](https://github.com/buildkite/agent/pull/1237) ([ticky](https://github.com/ticky))
-* Opt-in experimental `resolve-commit-after-checkout` flag to resolve `BUILDKITE_COMMIT` refs (e.g. "HEAD") to a commit hash [#1256](https://github.com/buildkite/agent/pull/1256) ([jayco](https://github.com/jayco))
+* Opt-in experimental `resolve-commit-after-checkout` flag to resolve `BUILDKITE_COMMIT` refs (for example, "HEAD") to a commit hash [#1256](https://github.com/buildkite/agent/pull/1256) ([jayco](https://github.com/jayco))
 * Experimental: Build & publish RPM ARM64 package for aarch64 [#1243](https://github.com/buildkite/agent/pull/1243) ([chloeruka](https://github.com/chloeruka)) [#1241](https://github.com/buildkite/agent/pull/1241) ([chloeruka](https://github.com/chloeruka))
 
 ### Changed

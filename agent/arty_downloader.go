@@ -14,7 +14,7 @@ import (
 )
 
 type ArtifactoryDownloaderConfig struct {
-	// The Artifactory repository name and the path, e.g rt://my-repo-name/foo/bar
+	// The Artifactory repository name and the path, for example, rt://my-repo-name/foo/bar
 	Repository string
 
 	// The root directory of the download

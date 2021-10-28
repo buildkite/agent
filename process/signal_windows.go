@@ -89,7 +89,7 @@ func GetPgid(pid int) (int, error) {
 }
 
 // SignalString returns the name of the given signal.
-// e.g. SignalString(syscall.Signal(15)) // "terminated"
+// For example, SignalString(syscall.Signal(15)) // "terminated"
 func SignalString(s syscall.Signal) string {
 	return fmt.Sprintf("%v", s)
 }

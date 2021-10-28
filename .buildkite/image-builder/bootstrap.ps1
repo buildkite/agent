@@ -2,7 +2,7 @@ Write-Output "Installing Go"
 choco install golang --yes --version 1.15.1
 $Env:Path = "C:\Go\bin;" + $Env:Path
 
-# Set up a system-wide GOPATH so that e.g. Administrator can pre-fetch Go modules
+# Set up a system-wide GOPATH so that Administrator accounts can pre-fetch Go modules
 # which are later used by buildkite-agent.
 Write-Output "Configuring shared GOPATH for all users"
 $Env:GOPATH = "C:\GoPath"
