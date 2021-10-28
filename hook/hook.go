@@ -22,7 +22,7 @@ func Find(hookDir string, name string) (string, error) {
 	if p := filepath.Join(hookDir, name); utils.FileExists(p) {
 		return p, nil
 	}
-	// don't wrap os.ErrNotExist without checking callers handle it.
-	// for example, os.IfNotExist(err) does not handle wrapped errors.
+	// Don't wrap os.ErrNotExist without checking callers handle it.
+	// For example, os.IfNotExist(err) does not handle wrapped errors.
 	return "", os.ErrNotExist
 }

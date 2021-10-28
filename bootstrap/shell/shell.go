@@ -98,7 +98,7 @@ func NewWithContext(ctx context.Context) (*Shell, error) {
 
 // WithStdin returns a copy of the Shell with the provided io.Reader set as the
 // Stdin for the next command. The copy should be discarded after one command.
-// for example, sh.WithStdin(strings.NewReader("hello world")).Run("cat")
+// For example, sh.WithStdin(strings.NewReader("hello world")).Run("cat")
 func (s *Shell) WithStdin(r io.Reader) *Shell {
 	// cargo-culted cmdLock, not sure if it's needed
 	s.cmdLock.Lock()
