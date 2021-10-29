@@ -97,6 +97,7 @@ type AgentStartConfig struct {
 	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
 	TracingBackend              string   `cli:"tracing-backend"`
 	Spawn                       int      `cli:"spawn"`
+	SpawnSplayPriority          bool     `cli:"spawn-splay-priority"`
 	LogFormat                   string   `cli:"log-format"`
 	CancelSignal                string   `cli:"cancel-signal"`
 	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
@@ -428,6 +429,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The number of agents to spawn in parallel",
 			Value:  1,
 			EnvVar: "BUILDKITE_AGENT_SPAWN",
+		},
+		cli.BoolFlag{
+			Name:   "spawn-splay-priority",
+			Usage:  "Assign priorities to every spawned agent (when using --spawn) equal to the agent's index",
+			EnvVar: "BUILDKITE_AGENT_SPAWN_SPLAY_PRIORITY",
 		},
 		cli.StringFlag{
 			Name:   "cancel-signal",
@@ -778,6 +784,11 @@ var AgentStartCommand = cli.Command{
 
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
 			registerReq.Name = strings.ReplaceAll(cfg.Name, "%spawn", strconv.Itoa(i))
+
+			if cfg.SpawnSplayPriority {
+				l.Info("Assigning priority %s for agent %d", strconv.Itoa(i), i)
+				registerReq.Priority = strconv.Itoa(i)
+			}
 
 			// Register the agent with the buildkite API
 			ag, err := agent.Register(l, client, registerReq)

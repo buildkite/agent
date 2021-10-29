@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
+set -x
 ## This script can be run locally like this:
 ##
 ## .buildkite/steps/build-docker-image.sh (alpine|ubuntu|centos) (image tag) (codename) (version)
