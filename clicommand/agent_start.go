@@ -253,7 +253,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "tags-from-ec2-meta-data-paths",
 			Value:  &cli.StringSlice{},
-			Usage:  "Include additional tags fetched from EC2 meta-data via tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
+			Usage:  "Include additional tags fetched from EC2 meta-data using tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA_PATHS",
 		},
 		cli.BoolFlag{
@@ -270,7 +270,7 @@ var AgentStartCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "tags-from-gcp-meta-data-paths",
 			Value:  &cli.StringSlice{},
-			Usage:  "Include additional tags fetched from Google Cloud instance meta-data via tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
+			Usage:  "Include additional tags fetched from Google Cloud instance meta-data using tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA_PATHS",
 		},
 		cli.BoolFlag{
@@ -408,7 +408,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "metrics-datadog-host",
-			Usage:  "The dogstatsd instance to send metrics to via udp",
+			Usage:  "The dogstatsd instance to send metrics to using udp",
 			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
 			Value:  "127.0.0.1:8125",
 		},
