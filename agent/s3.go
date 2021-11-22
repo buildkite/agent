@@ -10,7 +10,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/credentials/stscreds"
 	"github.com/aws/aws-sdk-go/aws/defaults"
-	"github.com/aws/aws-sdk-go/aws/endpoints"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -52,30 +51,6 @@ func (e *credentialsProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
-func awsS3RegionFromEnv() (region string, err error) {
-	regionName := os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
-	if regionName == "" {
-		regionName, err = awsRegion()
-		if err != nil {
-			return "", err
-		}
-	}
-
-	// Check to make sure the region exists.
-	resolver := endpoints.DefaultResolver()
-	partitions := resolver.(endpoints.EnumPartitions).Partitions()
-
-	for _, p := range partitions {
-		for id := range p.Regions() {
-			if id == regionName {
-				return regionName, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("Unknown AWS S3 Region %q", regionName)
-}
-
 func awsS3Session(region string) (*session.Session, error) {
 	// Chicken and egg... but this is kinda how they do it in the sdk
 	sess, err := session.NewSession()
@@ -107,27 +82,43 @@ func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRolePro
 }
 
 func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
-	region, err := awsS3RegionFromEnv()
-	if err != nil {
-		// Fallback region guess
-		region = "us-east-1"
-	}
+	var sess *session.Session
 
-	// Using the guess region, construct a session and ask that region where the
-	// bucket lives
-	sess, err := awsS3Session(region)
-	if err != nil {
-		return nil, err
-	}
-	bucketRegion, err := s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, region)
-	if err != nil {
-		return nil, err
-	}
+	regionHint := os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
+	if regionHint != "" {
+		// If there is a region hint provided, we use it unconditionally
+		session, err := awsS3Session(regionHint)
+		if err != nil {
+			return nil, err
+		}
 
-	// Construct the final session for the bucket region
-	sess, err = awsS3Session(bucketRegion)
-	if err != nil {
-		return nil, err
+		sess = session
+	} else {
+		// Otherwise, use the current region (or a guess) to dynamically find
+		// where the bucket lives.
+		region, err := awsRegion()
+		if err != nil {
+			region = "us-east-1"
+		}
+
+		// Using the guess region, construct a session and ask that region where the
+		// bucket lives
+		session, err := awsS3Session(region)
+		if err != nil {
+			return nil, err
+		}
+		bucketRegion, err := s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, region)
+		if err != nil {
+			return nil, err
+		}
+
+		// Construct the final session for the bucket region
+		session, err = awsS3Session(bucketRegion)
+		if err != nil {
+			return nil, err
+		}
+
+		sess = session
 	}
 
 	l.Debug("Testing AWS S3 credentials for bucket %q in region %q...", bucket, *sess.Config.Region)
@@ -135,7 +126,7 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	s3client := s3.New(sess)
 
 	// Test the authentication by trying to list the first 0 objects in the bucket.
-	_, err = s3client.ListObjects(&s3.ListObjectsInput{
+	_, err := s3client.ListObjects(&s3.ListObjectsInput{
 		Bucket:  aws.String(bucket),
 		MaxKeys: aws.Int64(0),
 	})
