@@ -1,7 +1,9 @@
 package clicommand
 
 import (
-	"github.com/buildkite/agent/v3/agent"
+	"strings"
+	"fmt"
+	agent "github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/urfave/cli"
@@ -113,13 +115,14 @@ var ArtifactUploadCommand = cli.Command{
 		FollowSymlinksFlag,
 	},
 	Action: func(c *cli.Context) {
+		var err error
 		// The configuration will be loaded into this struct
 		cfg := ArtifactUploadConfig{}
 
 		l := CreateLogger(&cfg)
 
 		// Load the configuration
-		if err := cliconfig.Load(c, l, &cfg); err != nil {
+		if err = cliconfig.Load(c, l, &cfg); err != nil {
 			l.Fatal("%s", err)
 		}
 
@@ -130,18 +133,58 @@ var ArtifactUploadCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
-		// Setup the uploader
-		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{
+		// Create a new uploader client (S3, GS, Artifactory) to perform the upload.
+		var uploaderClient agent.Uploader
+
+		uploaderConfig := agent.ArtifactUploaderConfig{
 			JobID:          cfg.Job,
 			Paths:          cfg.UploadPaths,
 			Destination:    cfg.Destination,
 			ContentType:    cfg.ContentType,
 			DebugHTTP:      cfg.DebugHTTP,
 			FollowSymlinks: cfg.FollowSymlinks,
-		})
+		}
+
+		// Determine what uploader to use
+		if uploaderConfig.Destination != "" {
+			if strings.HasPrefix(uploaderConfig.Destination, "s3://") {
+				uploaderClient, err = agent.NewS3Uploader(l, agent.S3UploaderConfig{
+					Destination: uploaderConfig.Destination,
+					DebugHTTP:   uploaderConfig.DebugHTTP,
+				})
+			} else if strings.HasPrefix(uploaderConfig.Destination, "gs://") {
+				uploaderClient, err = agent.NewGSUploader(l, agent.GSUploaderConfig{
+					Destination: uploaderConfig.Destination,
+					DebugHTTP:   uploaderConfig.DebugHTTP,
+				})
+			} else if strings.HasPrefix(uploaderConfig.Destination, "rt://") {
+				uploaderClient, err = agent.NewArtifactoryUploader(l, agent.ArtifactoryUploaderConfig{
+					Destination: uploaderConfig.Destination,
+					DebugHTTP:   uploaderConfig.DebugHTTP,
+				})
+			} else {
+				l.Fatal(fmt.Sprintf("Invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", uploaderConfig.Destination))
+			}
+
+			l.Info("Uploading to %q, using your agent configuration", uploaderConfig.Destination)
+		} else {
+			uploaderClient = agent.NewFormUploader(l, agent.FormUploaderConfig{
+				DebugHTTP: uploaderConfig.DebugHTTP,
+			})
+
+			l.Info("Uploading to default Buildkite artifact storage")
+		}
+
+		// Check if creation caused an error
+		if err != nil {
+			l.Fatal(fmt.Sprintf("Error creating uploader: %v", err))
+		}
+
+		// Setup the uploader
+		uploader := agent.NewArtifactUploader(l, client, uploaderConfig)
 
 		// Upload the artifacts
-		if err := uploader.Upload(); err != nil {
+		if err := uploader.Upload(uploaderClient); err != nil {
 			l.Fatal("Failed to upload artifacts: %s", err)
 		}
 	},

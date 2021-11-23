@@ -2,7 +2,6 @@ package agent
 
 import (
 	"crypto/sha1"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -65,7 +64,7 @@ func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig
 	}
 }
 
-func (a *ArtifactUploader) Upload() error {
+func (a *ArtifactUploader) Upload(uploader Uploader) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
@@ -77,7 +76,7 @@ func (a *ArtifactUploader) Upload() error {
 	} else {
 		a.logger.Info("Found %d files that match \"%s\"", len(artifacts), a.conf.Paths)
 
-		err := a.upload(artifacts)
+		err := a.upload(artifacts, uploader)
 		if err != nil {
 			return err
 		}
@@ -226,44 +225,8 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
-	var uploader Uploader
+func (a *ArtifactUploader) upload(artifacts []*api.Artifact, uploader Uploader) error {
 	var err error
-
-	// Determine what uploader to use
-	if a.conf.Destination != "" {
-		if strings.HasPrefix(a.conf.Destination, "s3://") {
-			uploader, err = NewS3Uploader(a.logger, S3UploaderConfig{
-				Destination: a.conf.Destination,
-				DebugHTTP:   a.conf.DebugHTTP,
-			})
-		} else if strings.HasPrefix(a.conf.Destination, "gs://") {
-			uploader, err = NewGSUploader(a.logger, GSUploaderConfig{
-				Destination: a.conf.Destination,
-				DebugHTTP:   a.conf.DebugHTTP,
-			})
-		} else if strings.HasPrefix(a.conf.Destination, "rt://") {
-			uploader, err = NewArtifactoryUploader(a.logger, ArtifactoryUploaderConfig{
-				Destination: a.conf.Destination,
-				DebugHTTP:   a.conf.DebugHTTP,
-			})
-		} else {
-			return errors.New(fmt.Sprintf("Invalid upload destination: '%v'. Only s3://, gs:// or rt:// upload destinations are allowed. Did you forget to surround your artifact upload pattern in double quotes?", a.conf.Destination))
-		}
-
-		a.logger.Info("Uploading to %q, using your agent configuration", a.conf.Destination)
-	} else {
-		uploader = NewFormUploader(a.logger, FormUploaderConfig{
-			DebugHTTP: a.conf.DebugHTTP,
-		})
-
-		a.logger.Info("Uploading to default Buildkite artifact storage")
-	}
-
-	// Check if creation caused an error
-	if err != nil {
-		return fmt.Errorf("Error creating uploader: %v", err)
-	}
 
 	// Set the URLs of the artifacts based on the uploader
 	for _, artifact := range artifacts {
