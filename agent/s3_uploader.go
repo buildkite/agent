@@ -20,6 +20,8 @@ type S3UploaderConfig struct {
 
 	// Whether or not HTTP calls should be debugged
 	DebugHTTP bool
+
+	DefaultObjectACL string
 }
 
 type S3Uploader struct {

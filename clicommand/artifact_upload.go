@@ -66,6 +66,7 @@ type ArtifactUploadConfig struct {
 	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 	Job         string `cli:"job" validate:"required"`
 	ContentType string `cli:"content-type"`
+	S3ACL 		string `cli:"s3-acl" env:"BUILDKITE_S3_ACL"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -99,6 +100,12 @@ var ArtifactUploadCommand = cli.Command{
 			Value:  "",
 			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
 			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
+		},
+		cli.StringFlag {
+			Name: "s3-acl",
+			Value: "public-read",
+			Usage: "Set the ACL for objects uploaded to S3",
+			EnvVar: "BUILDKITE_S3_ACL",
 		},
 
 		// API Flags
@@ -151,6 +158,7 @@ var ArtifactUploadCommand = cli.Command{
 				uploaderClient, err = agent.NewS3Uploader(l, agent.S3UploaderConfig{
 					Destination: uploaderConfig.Destination,
 					DebugHTTP:   uploaderConfig.DebugHTTP,
+					DefaultObjectACL: cfg.S3ACL,
 				})
 			} else if strings.HasPrefix(uploaderConfig.Destination, "gs://") {
 				uploaderClient, err = agent.NewGSUploader(l, agent.GSUploaderConfig{
