@@ -17,6 +17,8 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 )
 
+var regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
+
 type credentialsProvider struct {
 	retrieved bool
 }
@@ -84,7 +86,7 @@ func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRolePro
 func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	var sess *session.Session
 
-	regionHint := os.Getenv("BUILDKITE_S3_DEFAULT_REGION")
+	regionHint := os.Getenv(regionHintEnvVar)
 	if regionHint != "" {
 		// If there is a region hint provided, we use it unconditionally
 		session, err := awsS3Session(regionHint)
@@ -101,21 +103,21 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 			region = "us-east-1"
 		}
 
+		l.Debug("Discovered current region as %q\n", region)
+
 		// Using the guess region, construct a session and ask that region where the
 		// bucket lives
 		session, err := awsS3Session(region)
 		if err != nil {
 			return nil, err
 		}
-		bucketRegion, err := s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, region)
-		if err != nil {
-			return nil, err
-		}
 
-		// Construct the final session for the bucket region
-		session, err = awsS3Session(bucketRegion)
-		if err != nil {
-			return nil, err
+		bucketRegion, bucketRegionErr := s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, region)
+		if bucketRegionErr == nil && bucketRegion != "" {
+			l.Debug("Discovered %q bucket region as %q\n", bucket, bucketRegion)
+			session.Config.Region = &bucketRegion
+		} else {
+			l.Error("Could not discover region for bucket %q. Using the %q region as a fallback, if this is not correct configure a bucket region using the %q environment variable. (%v)\n", bucket, *sess.Config.Region, regionHintEnvVar, err)
 		}
 
 		sess = session
