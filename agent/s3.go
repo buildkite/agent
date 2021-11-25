@@ -112,7 +112,7 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 			return nil, fmt.Errorf("Could not load the AWS SDK config (%v)", err)
 		}
 
-		bucketRegion, bucketRegionErr := s3manager.GetBucketRegion(aws.BackgroundContext(), sess, bucket, region)
+		bucketRegion, bucketRegionErr := s3manager.GetBucketRegion(aws.BackgroundContext(), session, bucket, region)
 		if bucketRegionErr == nil && bucketRegion != "" {
 			l.Debug("Discovered %q bucket region as %q\n", bucket, bucketRegion)
 			session.Config.Region = &bucketRegion
