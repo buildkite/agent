@@ -209,6 +209,11 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
+		src := filename
+		if src == "" {
+			src = "(stdin)"
+		}
+
 		// Parse the pipeline
 		result, err := agent.PipelineParser{
 			Env:             environ,
@@ -217,10 +222,6 @@ var PipelineUploadCommand = cli.Command{
 			NoInterpolation: cfg.NoInterpolation,
 		}.Parse()
 		if err != nil {
-			src := filename
-			if src == "" {
-				src = "(stdin)"
-			}
 			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
 		}
 
