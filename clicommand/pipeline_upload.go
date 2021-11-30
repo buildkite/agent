@@ -14,7 +14,9 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/stdin"
 	"github.com/urfave/cli"
 )
@@ -237,6 +239,23 @@ var PipelineUploadCommand = cli.Command{
 			}
 
 			return
+		}
+
+		if len(cfg.RedactedVars) > 0 {
+			needles := redaction.GetValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).ToMap())
+			serialisedPipeline, err := result.MarshalJSON()
+
+			if err != nil {
+				l.Fatal("Pipeline serialization of \"%s\" failed (%s)", src, err)
+			}
+
+			stringifiedserialisedPipeline := string(serialisedPipeline)
+
+			for _, needle := range needles {
+				if strings.Contains(stringifiedserialisedPipeline, needle) {
+					l.Fatal("Couldn't upload %q pipeline. Refusing to upload pipeline containing redacted vars. Ensure your pipeline does not include secret values or interpolated secret values", src)
+				}
+			}
 		}
 
 		// Check we have a job id set if not in dry run
