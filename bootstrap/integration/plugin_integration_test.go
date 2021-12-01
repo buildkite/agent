@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -205,6 +206,65 @@ func TestOverlappingPluginHooks(t *testing.T) {
 	env := []string{
 		`MY_CUSTOM_ENV=1`,
 		`BUILDKITE_PLUGINS=` + string(pluginsJSON),
+	}
+
+	tester.RunAndCheck(t, env...)
+}
+
+func TestPluginCloneRetried(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	var p *testPlugin
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": []string{
+				"@echo off",
+				"set LLAMAS_ROCK=absolutely",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": []string{
+				"#!/bin/bash",
+				"export LLAMAS_ROCK=absolutely",
+			},
+		})
+	}
+
+	callCount := 0
+
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	git := tester.MustMock(t, "git")
+
+	git.Expect("clone", "-v", "--", p.Path, bintest.MatchAny()).Exactly(2).AndCallFunc(func (c *bintest.Call) {
+		callCount = callCount + 1
+
+		if callCount == 1 {
+			c.Exit(1)
+		} else {
+			c.Passthrough(realGit)
+		}
+	})
+
+	git.IgnoreUnexpectedInvocations()
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`BUILDKITE_PLUGINS=` + json,
 	}
 
 	tester.RunAndCheck(t, env...)
