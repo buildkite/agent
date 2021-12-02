@@ -19,7 +19,7 @@ Description:
    Retrieve the value of an attribute in a step. If no attribute is passed, the
    entire step will be returned.
 
-   In the event a complex object is returned (i.e. an object or an array),
+   In the event a complex object is returned (an object or an array),
    you'll need to supply the --format option to tell the agent how it should
    output the data (currently only JSON is supported).
 

@@ -255,7 +255,7 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 //   no slash-separated component can begin with a dot .  or end with the
 //   sequence .lock
 //   2. They must contain at least one /. This enforces the presence of a
-//   category like heads/, tags/ etc. but the actual names are not
+//   category like heads/, tags/, and so on, but the actual names are not
 //   restricted. If the --allow-onelevel option is used, this rule is waived
 //   5. They cannot have question-mark ?, asterisk *, or open bracket [
 //   anywhere. See the --refspec-pattern option below for an exception to
@@ -266,7 +266,7 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 //   8. They cannot contain a sequence @{.
 var gitCheckRefFormatDenyRegexp = regexp.MustCompile(strings.Join([]string{
 	`\.\.`,        //  3. cannot have two consecutive dots .. anywhere
-	`[[:cntrl:]]`, //  4. cannot have ASCII control characters (i.e. bytes whose values are lower than \040, or \177 DEL) ...
+	`[[:cntrl:]]`, //  4. cannot have ASCII control characters (In other words, bytes whose values are lower than \040, or \177 DEL) ...
 	`[ ~^:]`,      //  4. cannot have ... space, tilde ~, caret ^, or colon : anywhere
 	`\.$`,         //  7. cannot end with a dot .
 	`^@$`,         //  9. cannot be the single character @.
@@ -275,7 +275,7 @@ var gitCheckRefFormatDenyRegexp = regexp.MustCompile(strings.Join([]string{
 }, "|"))
 
 // gitCheckRefFormat is a simplified version of `git check-ref-format`.
-// It mostly assumes --allow-onelevel i.e. no need for refs/heads/… prefix.
+// It mostly assumes --allow-onelevel. In other words, no need for refs/heads/… prefix.
 // It is more permissive than the canonical implementation.
 // https://git-scm.com/docs/git-check-ref-format
 func gitCheckRefFormat(ref string) bool {

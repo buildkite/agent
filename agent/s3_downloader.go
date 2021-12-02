@@ -12,7 +12,7 @@ import (
 )
 
 type S3DownloaderConfig struct {
-	// The S3 bucket name and the path, e.g s3://my-bucket-name/foo/bar
+	// The S3 bucket name and the path, for example, s3://my-bucket-name/foo/bar
 	Bucket string
 
 	// The root directory of the download

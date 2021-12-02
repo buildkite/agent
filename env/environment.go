@@ -183,7 +183,7 @@ func (e *Environment) ToMap() map[string]string {
 //
 // There's a mix of both CamelCase and UPPERCASE, but the can all be accessed
 // regardless of the case you use. So PATH is the same as Path, PAth, pATH,
-// etc.
+// and so on.
 //
 // os.Environ() in Golang returns key/values in the original casing, so it
 // returns a slice like this:

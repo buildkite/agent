@@ -454,7 +454,7 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 	//
 	// If it's "special", we'll show the value it was changed to -
 	// otherwise we'll hide it. Since we don't know if an
-	// environment variable contains sensitive information (i.e.
+	// environment variable contains sensitive information (such as
 	// THIRD_PARTY_API_KEY) we'll just not show any values for
 	// anything not controlled by us.
 	for k, v := range changes.Diff.Added {
@@ -1327,7 +1327,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	gitFetchFlags := b.GitFetchFlags
 
 	// If a refspec is provided then use it instead.
-	// i.e. `refs/not/a/head`
+	// For example, `refs/not/a/head`
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
 		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
@@ -1822,7 +1822,7 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 }
 
 // Check for ignored env variables from the job runner. Some
-// env (e.g BUILDKITE_BUILD_PATH) can only be set from config or by hooks.
+// env (for example, BUILDKITE_BUILD_PATH) can only be set from config or by hooks.
 // If these env are set at a pipeline level, we rewrite them to BUILDKITE_X_BUILD_PATH
 // and warn on them here so that users know what is going on
 func (b *Bootstrap) ignoredEnv() []string {

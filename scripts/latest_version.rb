@@ -25,7 +25,7 @@ def parse(version_string)
   if m = pattern.match(version_string)
     {
       # Parse all the integer strings. If it's nil, make it 0
-      # (i.e. "2" becomes "2,0,0,0,nil,0,0,0,0")
+      # (for example, "2" becomes "2,0,0,0,nil,0,0,0,0")
       major:            m[:major].to_i,
       minor:            m[:minor].to_i,
       patch:            m[:patch].to_i,

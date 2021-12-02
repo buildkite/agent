@@ -140,7 +140,7 @@ func unquoteShell(value string) string {
 	value = strings.Replace(value, `\$`, `$`, -1)
 
 	// They also escape double quotes when showing a value within double
-	// quotes, i.e. "this is a \" quote string"
+	// quotes, for example, "this is a \" quote string"
 	value = strings.Replace(value, `\"`, `"`, -1)
 
 	return value

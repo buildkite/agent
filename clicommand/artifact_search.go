@@ -68,6 +68,29 @@ var ArtifactSearchCommand = cli.Command{
 	Name:        "search",
 	Usage:       "Searches artifacts in Buildkite",
 	Description: SearchHelpDescription,
+	CustomHelpTemplate: `{{.Description}}
+
+Options:
+
+   {{range .VisibleFlags}}{{.}}
+   {{end}}
+
+Format specifiers:
+
+	%i		UUID of the artifact
+
+	%p		Artifact path
+
+	%c		Artifact creation time (an ISO 8601 / RFC-3339 formatted UTC timestamp)
+
+	%j		UUID of the job that uploaded the artifact, helpful for subsequent artifact downloads
+
+	%s		File size of the artifact in bytes
+
+	%S		SHA1 checksum of the artifact
+
+	%u		Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead
+`,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",
@@ -88,24 +111,7 @@ var ArtifactSearchCommand = cli.Command{
 		cli.StringFlag{
 			Name:  "format",
 			Value: "%j %p %c\n",
-			Usage: `Output formatting of results. Defaults to "%j %p %c\n" (Job ID, path, created at time).
-
-				The following directives are available:
-
-				%i		UUID of the artifact
-
-				%p		Artifact path
-
-				%c		Artifact creation time (an ISO 8601 / RFC-3339 formatted UTC timestamp)
-
-				%j		UUID of the job that uploaded the artifact, helpful for subsequent artifact downloads
-
-				%s		File size of the artifact in bytes
-
-				%S		SHA1 checksum of the artifact
-
-				%u		Download URL for the artifact, though consider using 'buildkite-agent artifact download' instead
-			`,
+			Usage: `Output formatting of results. See below for listing of available format specifiers.`,
 		},
 
 		// API Flags

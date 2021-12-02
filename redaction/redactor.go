@@ -115,7 +115,7 @@ func (redactor *Redactor) Reset(needles []string) {
 }
 
 func (redactor *Redactor) Write(input []byte) (int, error) {
-	// This is the no needles case e.g. Reset([]string{})
+	// This is the no needles case, for example, Reset([]string{})
 	if redactor.minlen == 0 && redactor.maxlen == 0 {
 		return redactor.output.Write(input)
 	}
