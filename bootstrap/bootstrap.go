@@ -418,7 +418,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 		case *hook.HookExitError:
 			// ...because the hook called exit(), tsk we ignore any changes
 			// since we can't discern them but continue on with the job
-			break;
+			break
 		default:
 			// ...because something else happened, report it and stop the job
 			return errors.Wrapf(err, "Failed to get environment")
@@ -959,7 +959,10 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	defer b.shell.Chdir(previousWd)
 
 	// Plugin clones shouldn't use custom GitCloneFlags
-	if err = b.shell.Run("git", "clone", "-v", "--", repo, "."); err != nil {
+	err = retry.Do(func(s *retry.Stats) error {
+		return b.shell.Run("git", "clone", "-v", "--", repo, ".")
+	}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+	if err != nil {
 		return nil, err
 	}
 
