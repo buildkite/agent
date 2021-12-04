@@ -75,8 +75,11 @@ func TestResolvePermission(t *testing.T) {
 		{"bucket-owner-full-control", "bucket-owner-full-control", false},
 		{"foo", "", true},
 	} {
-		uploader := &S3Uploader{}
-		os.Setenv("BUILDKITE_S3_ACL", tc.Permission)
+		uploader := &S3Uploader{
+			conf: &S3UploaderConfig{
+				DefaultObjectACL: tc.Permission
+			}
+		}
 		config, err := uploader.resolvePermission()
 
 		// if it should error we just look at the error
@@ -86,7 +89,5 @@ func TestResolvePermission(t *testing.T) {
 			assert.Nil(err)
 			assert.Equal(tc.ExpectedResult, config)
 		}
-
-		os.Unsetenv("BUILDKITE_S3_ACL")
 	}
 }
