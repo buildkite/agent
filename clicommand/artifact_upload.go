@@ -103,8 +103,8 @@ var ArtifactUploadCommand = cli.Command{
 		},
 		cli.StringFlag {
 			Name: "s3-acl",
-			Value: "public-read",
-			Usage: "Set the ACL for objects uploaded to S3",
+			Value: "",
+			Usage: "Set the ACL for objects uploaded to S3 (defaults to public-read)",
 			EnvVar: "BUILDKITE_S3_ACL",
 		},
 

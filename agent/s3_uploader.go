@@ -127,8 +127,8 @@ func (u *S3Uploader) artifactPath(artifact *api.Artifact) string {
 
 func (u *S3Uploader) resolvePermission() (string, error) {
 	permission := "public-read"
-	if os.Getenv("BUILDKITE_S3_ACL") != "" {
-		permission = os.Getenv("BUILDKITE_S3_ACL")
+	if u.conf.DefaultObjectACL != "" {
+		permission = u.conf.DefaultObjectACL
 	} else if os.Getenv("AWS_S3_ACL") != "" {
 		permission = os.Getenv("AWS_S3_ACL")
 	}
