@@ -246,7 +246,7 @@ var PipelineUploadCommand = cli.Command{
 			serialisedPipeline, err := result.MarshalJSON()
 
 			if err != nil {
-				l.Fatal("Pipeline serialization of \"%s\" failed (%s)", src, err)
+				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
 			}
 
 			stringifiedserialisedPipeline := string(serialisedPipeline)
