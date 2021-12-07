@@ -17,7 +17,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 )
 
-var regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
+const regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
 
 type credentialsProvider struct {
 	retrieved bool
