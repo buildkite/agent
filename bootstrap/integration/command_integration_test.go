@@ -20,6 +20,9 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	}
 	defer tester.Close()
 
+	tester.MustMock(t, "Setup.cmd")
+	tester.MustMock(t, "BuildProject.cmd")
+
 	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nBuildProject.cmd")
 }
 
