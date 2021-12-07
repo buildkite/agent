@@ -1756,15 +1756,16 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	}
 	defer scriptFile.Close()
 
-	var scriptContents = "@echo off\n"
+	var scriptContents = []string{"@echo off"}
 
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
-			scriptContents += "call " + line + "\n" + "if %errorlevel% neq 0 exit /b %errorlevel%\n"
+			scriptContents = append(scriptContents, "call " + line)
+			scriptContents = append(scriptContents, "if %errorlevel% neq 0 exit /b %errorlevel%")
 		}
 	}
 
-	_, err = io.WriteString(scriptFile, scriptContents)
+	_, err = io.WriteString(scriptFile, strings.Join(scriptContents, "\n"))
 	if err != nil {
 		return "", err
 	}
