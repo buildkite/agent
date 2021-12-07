@@ -1760,7 +1760,7 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
-			scriptContents += line + "\n" + "if %errorlevel% neq 0 exit /b %errorlevel%\n"
+			scriptContents += "call " + line + "\n" + "if %errorlevel% neq 0 exit /b %errorlevel%\n"
 		}
 	}
 
