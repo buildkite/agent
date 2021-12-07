@@ -6,6 +6,25 @@ import (
 	"github.com/buildkite/bintest/v3"
 )
 
+func TestMultilineCommandRunUnderBatch(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS != "windows" {
+		t.Skip("batch test only applies to Windows")
+	}
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	err = tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nBuildProject.cmd")
+	if err != nil {
+		t.Fatalf("bootstrap failed %v", err)
+	}
+}
+
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
