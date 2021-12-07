@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/buildkite/bintest/v3"
@@ -19,10 +20,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	}
 	defer tester.Close()
 
-	err = tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nBuildProject.cmd")
-	if err != nil {
-		t.Fatalf("bootstrap failed %v", err)
-	}
+	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nBuildProject.cmd")
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
