@@ -253,7 +253,7 @@ var PipelineUploadCommand = cli.Command{
 
 			for needleKey, needle := range needles {
 				if strings.Contains(stringifiedserialisedPipeline, needle) {
-					l.Fatal("Couldn't upload %q pipeline. Refusing to upload pipeline containing interpolated values of the %q. Ensure your pipeline does not include secret values or interpolated secret values", src, needleKey)
+					l.Fatal("Couldn’t upload the %q pipeline. Refusing to upload pipeline containing the value interpolated from the %q environment variable. Ensure your pipeline does not include secret values or interpolated secret values.", src, needleKey)
 				}
 			}
 		}
