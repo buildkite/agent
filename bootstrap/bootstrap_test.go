@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/redaction"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
@@ -40,7 +41,7 @@ func TestGetValuesToRedact(t *testing.T) {
 		"DATABASE_PASSWORD":  "hunter2",
 	}
 
-	valuesToRedact := getValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	valuesToRedact := redaction.GetValuesToRedact(shell.DiscardLogger, redactConfig, environment)
 
 	assert.Equal(t, []string{"hunter2"}, valuesToRedact)
 }
@@ -54,7 +55,7 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 
-	valuesToRedact := getValuesToRedact(shell.DiscardLogger, redactConfig, environment)
+	valuesToRedact := redaction.GetValuesToRedact(shell.DiscardLogger, redactConfig, environment)
 
 	var expected []string
 	assert.Equal(t, expected, valuesToRedact)

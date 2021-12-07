@@ -77,6 +77,13 @@ var ExperimentsFlag = cli.StringSliceFlag{
 	EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
 }
 
+var RedactedVars = cli.StringSliceFlag{
+	Name:   "redacted-vars",
+	Usage:  "Pattern of environment variable names containing sensitive values",
+	EnvVar: "BUILDKITE_REDACTED_VARS",
+	Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN", "*_ACCESS_KEY", "*_SECRET_KEY"},
+}
+
 func CreateLogger(cfg interface{}) logger.Logger {
 	var l logger.Logger
 	logFormat := `text`

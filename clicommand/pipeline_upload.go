@@ -14,7 +14,9 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/stdin"
 	"github.com/urfave/cli"
 )
@@ -49,11 +51,12 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath        string `cli:"arg:0" label:"upload paths"`
-	Replace         bool   `cli:"replace"`
-	Job             string `cli:"job"`
-	DryRun          bool   `cli:"dry-run"`
-	NoInterpolation bool   `cli:"no-interpolation"`
+	FilePath        string 	 `cli:"arg:0" label:"upload paths"`
+	Replace         bool   	 `cli:"replace"`
+	Job             string 	 `cli:"job"`
+	DryRun          bool   	 `cli:"dry-run"`
+	NoInterpolation bool   	 `cli:"no-interpolation"`
+	RedactedVars	 []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -106,6 +109,7 @@ var PipelineUploadCommand = cli.Command{
 		DebugFlag,
 		ExperimentsFlag,
 		ProfileFlag,
+		RedactedVars,
 	},
 	Action: func(c *cli.Context) {
 		// The configuration will be loaded into this struct
@@ -207,6 +211,11 @@ var PipelineUploadCommand = cli.Command{
 			}
 		}
 
+		src := filename
+		if src == "" {
+			src = "(stdin)"
+		}
+
 		// Parse the pipeline
 		result, err := agent.PipelineParser{
 			Env:             environ,
@@ -215,10 +224,6 @@ var PipelineUploadCommand = cli.Command{
 			NoInterpolation: cfg.NoInterpolation,
 		}.Parse()
 		if err != nil {
-			src := filename
-			if src == "" {
-				src = "(stdin)"
-			}
 			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
 		}
 
@@ -234,6 +239,23 @@ var PipelineUploadCommand = cli.Command{
 			}
 
 			return
+		}
+
+		if len(cfg.RedactedVars) > 0 {
+			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).ToMap())
+			serialisedPipeline, err := result.MarshalJSON()
+
+			if err != nil {
+				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
+			}
+
+			stringifiedserialisedPipeline := string(serialisedPipeline)
+
+			for needleKey, needle := range needles {
+				if strings.Contains(stringifiedserialisedPipeline, needle) {
+					l.Fatal("Couldn’t upload the %q pipeline. Refusing to upload pipeline containing the value interpolated from the %q environment variable. Ensure your pipeline does not include secret values or interpolated secret values.", src, needleKey)
+				}
+			}
 		}
 
 		// Check we have a job id set if not in dry run
