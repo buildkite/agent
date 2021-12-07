@@ -242,7 +242,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		if len(cfg.RedactedVars) > 0 {
-			needles := redaction.GetValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).ToMap())
+			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).ToMap())
 			serialisedPipeline, err := result.MarshalJSON()
 
 			if err != nil {
@@ -251,9 +251,9 @@ var PipelineUploadCommand = cli.Command{
 
 			stringifiedserialisedPipeline := string(serialisedPipeline)
 
-			for _, needle := range needles {
+			for needleKey, needle := range needles {
 				if strings.Contains(stringifiedserialisedPipeline, needle) {
-					l.Fatal("Couldn't upload %q pipeline. Refusing to upload pipeline containing redacted vars. Ensure your pipeline does not include secret values or interpolated secret values", src)
+					l.Fatal("Couldn't upload %q pipeline. Refusing to upload pipeline containing interpolated values of the %q. Ensure your pipeline does not include secret values or interpolated secret values", src, needleKey)
 				}
 			}
 		}

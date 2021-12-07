@@ -296,10 +296,19 @@ func (mux RedactorMux) Reset(needles []string) {
 	}
 }
 
-// Given a redaction config string and an environment map, return the list of values to be redacted.
-// Lifted out of Bootstrap.setupRedactors to facilitate testing
 func GetValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
 	var valuesToRedact []string
+		for _, varValue := range GetKeyValuesToRedact(logger, patterns, environment) {
+			valuesToRedact = append(valuesToRedact, varValue)
+		}
+
+		return valuesToRedact
+}
+
+// Given a redaction config string and an environment map, return the list of values to be redacted.
+// Lifted out of Bootstrap.setupRedactors to facilitate testing
+func GetKeyValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) map[string]string {
+	valuesToRedact := make(map[string]string)
 
 	for varName, varValue := range environment {
 		for _, pattern := range patterns {
@@ -314,7 +323,7 @@ func GetValuesToRedact(logger shell.Logger, patterns []string, environment map[s
 				if len(varValue) < RedactLengthMin {
 					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
 				} else {
-					valuesToRedact = append(valuesToRedact, varValue)
+					valuesToRedact[varName] = varValue
 				}
 				break // Break pattern loop, continue to next env var
 			}
