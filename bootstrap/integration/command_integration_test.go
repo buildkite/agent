@@ -1,10 +1,46 @@
 package integration
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/buildkite/bintest/v3"
 )
+
+func TestMultilineCommandRunUnderBatch(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS != "windows" {
+		t.Skip("batch test only applies to Windows")
+	}
+
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	setup := tester.MustMock(t, "Setup.cmd")
+	build := tester.MustMock(t, "BuildProject.cmd")
+
+	setup.Expect().Once()
+	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+		llamas := c.GetEnv(`LLAMAS`)
+		if llamas != "COOL" {
+			t.Errorf("Expected LLAMAS=COOL, got %s", llamas)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	env := []string{
+		"BUILDKITE_COMMAND=Setup.cmd\nset LLAMAS=COOL\nBuildProject.cmd",
+		`BUILDKITE_SHELL=C:\Windows\System32\CMD.exe /S /C`,
+	}
+
+	tester.RunAndCheck(t, env...)
+}
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	tester, err := NewBootstrapTester()

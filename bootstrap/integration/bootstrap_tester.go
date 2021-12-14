@@ -303,10 +303,13 @@ func (b *BootstrapTester) ReadEnvFromOutput(key string) (string, bool) {
 
 // Run the bootstrap and then check the mocks
 func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
-	if err := b.Run(t, env...); err != nil {
-		t.Logf("Bootstrap output:\n%s", b.Output)
+	err := b.Run(t, env...)
+	t.Logf("Bootstrap output:\n%s", b.Output)
+
+	if err != nil {
 		t.Fatal(err)
 	}
+
 	b.CheckMocks(t)
 }
 
