@@ -1747,6 +1747,36 @@ func isPosixShell(shell []string) bool {
 	}
 }
 
+/*
+	If line is another batch script, it should be prefixed with `call ` so that
+	the second batch script doesn’t early exit our calling script.
+
+	See https://www.robvanderwoude.com/call.php
+*/
+func shouldCallBatchLine(line string) bool {
+	// "  	gubiwargiub.bat /S  /e -e foo"
+	// "    "
+
+	/*
+		1. Trim leading whitespace characters
+		2. Split on whitespace into an array
+		3. Take the first element
+		4. If element ends in .bat or .cmd (case insensitive), the line should be prefixed, else not.
+	*/
+
+	trim := strings.TrimSpace(line) // string
+
+	elements := strings.Fields(trim) // []string
+
+	if len(elements) < 1 {
+		return false
+	}
+
+	first := strings.ToLower(elements[0]) // string
+
+	return (strings.HasSuffix(first, ".bat") || strings.HasSuffix(first, ".cmd"))
+}
+
 func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	scriptFile, err := shell.TempFileWithExtension(
 		`buildkite-script.bat`,
@@ -1760,7 +1790,11 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
-			scriptContents = append(scriptContents, "call " + line)
+			if shouldCallBatchLine(line) {
+				scriptContents = append(scriptContents, "call " + line)
+			} else {
+				scriptContents = append(scriptContents, line)
+			}
 			scriptContents = append(scriptContents, "if %errorlevel% neq 0 exit /b %errorlevel%")
 		}
 	}
