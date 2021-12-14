@@ -35,6 +35,8 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	})
 
 	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nset LLAMAS=COOL\nBuildProject.cmd")
+
+	t.Fatal("testing")
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
