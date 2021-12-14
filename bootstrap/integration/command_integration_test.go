@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"fmt"
 	"runtime"
 	"testing"
 
@@ -27,7 +26,8 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	setup.Expect().Once()
 	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 		llamas := c.GetEnv(`LLAMAS`)
-		t.Fatal(fmt.Printf("LLAMAS was %s", llamas))
+		t.Errorf("LLAMAS was %s", llamas)
+		c.Exit(1)
 
 		if llamas != "COOL" {
 			t.Errorf("Expected LLAMAS=COOL, got %s", llamas)
