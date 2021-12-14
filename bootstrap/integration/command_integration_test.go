@@ -20,10 +20,21 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	}
 	defer tester.Close()
 
-	tester.MustMock(t, "Setup.cmd").Expect().Once()
-	tester.MustMock(t, "BuildProject.cmd").Expect().Once()
+	setup := tester.MustMock(t, "Setup.cmd")
+	build := tester.MustMock(t, "BuildProject.cmd")
 
-	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nset foo=bar\nBuildProject.cmd")
+	setup.Expect().Once()
+	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+		llamas := c.GetEnv(`LLAMAS`)
+		if llamas != "COOL" {
+			t.Errorf("Expected LLAMAS=COOL, got %s", llamas)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nset LLAMAS=COOL\nBuildProject.cmd")
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
