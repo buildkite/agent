@@ -26,9 +26,6 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	setup.Expect().Once()
 	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 		llamas := c.GetEnv(`LLAMAS`)
-		t.Errorf("LLAMAS was %s", llamas)
-		c.Exit(1)
-
 		if llamas != "COOL" {
 			t.Errorf("Expected LLAMAS=COOL, got %s", llamas)
 			c.Exit(1)
@@ -43,8 +40,6 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	}
 
 	tester.RunAndCheck(t, env...)
-
-	t.Fatal("test")
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
