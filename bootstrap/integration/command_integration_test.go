@@ -40,6 +40,8 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	}
 
 	tester.RunAndCheck(t, env...)
+
+	t.Fatal("test")
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
