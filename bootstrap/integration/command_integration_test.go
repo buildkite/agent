@@ -34,7 +34,12 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nset LLAMAS=COOL\nBuildProject.cmd")
+	env := []string{
+		"BUILDKITE_COMMAND=Setup.cmd\nset LLAMAS=COOL\nBuildProject.cmd",
+		`BUILDKITE_SHELL=C:\Windows\System32\CMD.exe /S /C`,
+	}
+
+	tester.RunAndCheck(t, env...)
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
