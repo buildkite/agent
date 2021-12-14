@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"runtime"
 	"testing"
 
@@ -23,9 +24,11 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	setup := tester.MustMock(t, "Setup.cmd")
 	build := tester.MustMock(t, "BuildProject.cmd")
 
-	setup.Expect().Exactly(2)
+	setup.Expect().Once()
 	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 		llamas := c.GetEnv(`LLAMAS`)
+		t.Fatal(fmt.Printf("LLAMAS was %s", llamas))
+
 		if llamas != "COOL" {
 			t.Errorf("Expected LLAMAS=COOL, got %s", llamas)
 			c.Exit(1)
