@@ -23,7 +23,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	tester.MustMock(t, "Setup.cmd").Expect().Once()
 	tester.MustMock(t, "BuildProject.cmd").Expect().Once()
 
-	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nBuildProject.cmd")
+	tester.RunAndCheck(t, "BUILDKITE_COMMAND=Setup.cmd\nset foo=bar\nBuildProject.cmd")
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
