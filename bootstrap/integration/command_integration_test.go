@@ -23,7 +23,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	setup := tester.MustMock(t, "Setup.cmd")
 	build := tester.MustMock(t, "BuildProject.cmd")
 
-	setup.Expect().Once()
+	setup.Expect().Exactly(2)
 	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
 		llamas := c.GetEnv(`LLAMAS`)
 		if llamas != "COOL" {
