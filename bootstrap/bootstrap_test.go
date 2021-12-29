@@ -2,13 +2,14 @@ package bootstrap
 
 import (
 	"context"
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/redaction"
-	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 )
 
 var agentNameTests = []struct {
@@ -51,7 +52,7 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 
 	redactConfig := []string{}
 	environment := map[string]string{
-		"FOO": "BAR",
+		"FOO":                "BAR",
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 
@@ -67,30 +68,35 @@ func TestStartTracing(t *testing.T) {
 	var err error
 
 	// When there's no Datadog tracing address, the tracer should be a no-op.
-	cfg := Config{}
 	b := New(Config{})
 	b.shell, err = shell.NewWithContext(oriCtx)
 	if err != nil {
 		assert.FailNow(t, "Unexpected error while createing shell: %v", err)
 	}
 	span, ctx, stopper := b.startTracing(oriCtx)
-	assert.IsType(t, opentracing.NoopTracer{}, opentracing.GlobalTracer())
-	span.Finish()
+	assert.IsType(t, trace.NewNoopTracerProvider(), otel.GetTracerProvider())
+	span.End()
 	stopper()
-	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
+	assert.Equal(t, span, trace.SpanFromContext(ctx))
+}
+
+func TestStartTracingDatadog(t *testing.T) {
+	oriCtx := context.Background()
+	var err error
 
 	// With the Datadog tracing backend, the global tracer should be from Datadog.
-	cfg = Config{
+	cfg := Config{
 		TracingBackend: "datadog",
 	}
-	b = New(cfg)
+	b := New(cfg)
 	b.shell, err = shell.NewWithContext(oriCtx)
 	if err != nil {
 		assert.FailNow(t, "Unexpected error while createing shell: %v", err)
 	}
-	span, ctx, stopper = b.startTracing(oriCtx)
-	assert.IsType(t, opentracer.New(), opentracing.GlobalTracer())
-	span.Finish()
+	span, ctx, stopper := b.startTracing(oriCtx)
+	tracerProvider := sdktrace.TracerProvider{}
+	assert.IsType(t, &tracerProvider, otel.GetTracerProvider())
+	span.End()
 	stopper()
-	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
+	assert.Equal(t, span, trace.SpanFromContext(ctx))
 }

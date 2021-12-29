@@ -15,12 +15,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
-
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
@@ -285,22 +282,6 @@ func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
 	return strings.TrimSpace(b.String()), nil
 }
 
-// injectTraceCtx adds tracing information to the given env vars to support
-// distributed tracing across jobs/builds.
-func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
-	span := opentracing.SpanFromContext(ctx)
-	// Not all shell runs will have tracing (nor do they really need to).
-	if span == nil {
-		return
-	}
-	if err := tracetools.EncodeTraceContext(span, env.ToMap()); err != nil {
-		if s.Debug {
-			s.Logger.Warningf("Failed to encode trace context: %v", err)
-		}
-		return
-	}
-}
-
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
 // can also be passed the the script
@@ -417,9 +398,6 @@ type executeFlags struct {
 
 func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
 	// Combine the two slices of env, let the latter overwrite the former
-	tracedEnv := env.FromSlice(cmd.Env)
-	s.injectTraceCtx(ctx, tracedEnv)
-	cmd.Env = tracedEnv.ToSlice()
 
 	s.cmdLock.Lock()
 	s.cmd = cmd
