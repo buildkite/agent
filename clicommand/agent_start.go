@@ -83,7 +83,7 @@ type AgentStartConfig struct {
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsUseExisting       bool     `cli:"git-mirrors-use-existing"`
+	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval               bool     `cli:"no-command-eval"`
@@ -335,9 +335,9 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		},
 		cli.BoolFlag{
-			Name:   "git-mirrors-use-existing",
-			Usage:  "Use existing Git mirror rather than creating a new mirror",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_USE_EXISTING",
+			Name:   "git-mirrors-skip-update",
+			Usage:  "Skip updating the Git mirror",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -644,7 +644,7 @@ var AgentStartCommand = cli.Command{
 			BuildPath:                  cfg.BuildPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
-			GitMirrorsUseExisting:      cfg.GitMirrorsUseExisting,
+			GitMirrorsSkipUpdate:       cfg.GitMirrorsSkipUpdate,
 			HooksPath:                  cfg.HooksPath,
 			PluginsPath:                cfg.PluginsPath,
 			GitCloneFlags:              cfg.GitCloneFlags,

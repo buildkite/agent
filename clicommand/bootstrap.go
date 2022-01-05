@@ -68,7 +68,7 @@ type BootstrapConfig struct {
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsUseExisting        bool     `cli:"git-mirrors-use-existing"`
+	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -231,9 +231,9 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		},
 		cli.BoolFlag{
-			Name:   "git-mirrors-use-existing",
-			Usage:  "Use existing Git mirror or create one",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_USE_EXISTING",
+			Name:   "git-mirrors-skip-update",
+			Usage:  "Skip updating the Git mirror",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		},
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -399,7 +399,7 @@ var BootstrapCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
-			GitMirrorsUseExisting:        cfg.GitMirrorsUseExisting,
+			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,

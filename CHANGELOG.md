@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
-- Update Git mirror functionality to support using an existing mirror rather than creating a new one. Enabled via the `BUILDKITE_GIT_MIRRORS_USE_EXISTING` flag.
+- Update Git mirror functionality to support skipping the update of the Git mirror. This is useful is the Git mirror is mounted from an external volume, NFS mount etc. Enabled via the `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE` flag or `git-mirrors-skip-update` cli flag.
 
 ## [v3.33.3](https://github.com/buildkite/agent/compare/v3.33.2...v3.33.3) (2021-09-29)
 
