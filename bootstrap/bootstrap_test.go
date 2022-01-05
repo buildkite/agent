@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
+	"go.elastic.co/apm/module/apmot"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 )
 
@@ -51,7 +52,7 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 
 	redactConfig := []string{}
 	environment := map[string]string{
-		"FOO": "BAR",
+		"FOO":                "BAR",
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 
@@ -93,4 +94,20 @@ func TestStartTracing(t *testing.T) {
 	span.Finish()
 	stopper()
 	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
+
+	// With the Elastic tracing backend, the global tracer should be from Elastic APM.
+	cfg = Config{
+		TracingBackend: "elastic",
+	}
+	b = New(cfg)
+	b.shell, err = shell.NewWithContext(oriCtx)
+	if err != nil {
+		assert.FailNow(t, "Unexpected error while createing shell: %v", err)
+	}
+	span, ctx, stopper = b.startTracing(oriCtx)
+	assert.IsType(t, apmot.New(), opentracing.GlobalTracer())
+	span.Finish()
+	stopper()
+	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
+
 }

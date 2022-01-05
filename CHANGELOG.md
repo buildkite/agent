@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Support for job tracing via [Elastic APM](https://www.elastic.co/observability/application-performance-monitoring). To enable, either set the `tracing-backend` config or the `BUILDKITE_TRACING_BACKEND` env var to `elastic`. By default the agent will attempt to send traces to the default agent address and APM port (`127.0.0.1:8200`), but this can be configured with the `ELASTIC_APM_SERVER_URL` env var.
+
 ## [v3.33.3](https://github.com/buildkite/agent/compare/v3.33.2...v3.33.3) (2021-09-29)
 
 ### Fixed

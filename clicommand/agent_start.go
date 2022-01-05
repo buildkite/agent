@@ -180,6 +180,7 @@ func DefaultConfigFilePaths() (paths []string) {
 var validTracingBackends = map[string]struct{}{
 	"":        struct{}{},
 	"datadog": struct{}{},
+	"elastic": struct{}{},
 }
 
 var AgentStartCommand = cli.Command{
@@ -684,7 +685,7 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
+		l.Notice("Starting buildkite-agent v%s-%s with PID: %s", agent.Version(), agent.BuildVersion(), fmt.Sprintf("%d", os.Getpid()))
 		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 

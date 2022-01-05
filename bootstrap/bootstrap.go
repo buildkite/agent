@@ -28,6 +28,8 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
+	"go.elastic.co/apm"
+	"go.elastic.co/apm/module/apmot"
 	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
@@ -55,6 +57,11 @@ type Bootstrap struct {
 
 	// A channel to track cancellation
 	cancelCh chan struct{}
+}
+
+func init() {
+	// Need to close the "default" tracer that gets created by the "apm" package
+	apm.DefaultTracer.Close()
 }
 
 // New returns a new Bootstrap instance
@@ -299,10 +306,31 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 			tracer.WithGlobalTag(ddext.SamplingPriority, ddext.PriorityUserKeep),
 		)
 		stopper = tracer.Stop
+
+	case "elastic":
+		apmTracer, err := apm.NewTracerOptions(apm.TracerOptions{
+			ServiceName:    "buildkite_agent",
+			ServiceVersion: agent.Version(),
+		})
+		if err != nil {
+			b.shell.Commentf("Error encountered building Elastic APM tracer: %s", err)
+		}
+
+		t = apmot.New(apmot.WithTracer(apmTracer))
+
+		stopper = func() {
+			// Flush any spans or metrics not currently sent...
+			apmTracer.Flush(b.cancelCh)
+			// ... and then close the tracer
+			apmTracer.Close()
+		}
+
 	default:
 		b.shell.Commentf("An invalid tracing backend was given: %s. Tracing will not occur.", b.Config.TracingBackend)
 		fallthrough
+
 	case "":
+		b.shell.Commentf("Setting up noop tracer")
 		t = opentracing.NoopTracer{}
 		stopper = func() {}
 	}
@@ -320,13 +348,37 @@ func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
 	// Some tracer-specific span code.
-	if b.Config.TracingBackend == "datadog" {
+	switch b.Config.TracingBackend {
+	case "datadog":
 		// Datadog uses 'resource' instead of opentracing's 'component'. And it's not
 		// smart enough to automatically remap component tags so we have to be
 		// different here.
 		span.SetTag(ddext.ResourceName, resourceName)
 		span.SetTag(ddext.AnalyticsEvent, true)
-	} else {
+
+	case "elastic":
+		// Elastic APM client doesn't currently support "global" tags, so
+		// specify them at the span level.
+		span.SetTag("buildkite.agent", b.AgentName)
+		span.SetTag("buildkite.agent_version", agent.Version())
+		span.SetTag("buildkite.queue", b.Queue)
+		span.SetTag("buildkite.org", b.OrganizationSlug)
+		span.SetTag("buildkite.pipeline", b.PipelineSlug)
+		span.SetTag("buildkite.branch", b.Branch)
+		span.SetTag("buildkite.job_id", b.JobID)
+		span.SetTag("buildkite.job_url", jobURL)
+		span.SetTag("buildkite.build_id", buildID)
+		span.SetTag("buildkite.build_number", buildNumber)
+		span.SetTag("buildkite.build_url", buildURL)
+		span.SetTag("buildkite.source", source)
+		span.SetTag("buildkite.retry", retry)
+		span.SetTag("buildkite.parallel", parallel)
+		span.SetTag("buildkite.rebuilt_from_id", rebuiltFromID)
+		span.SetTag("buildkite.triggered_from_id", triggeredFromID)
+
+		// Specify the 'component'
+		ext.Component.Set(span, resourceName)
+	default:
 		ext.Component.Set(span, resourceName)
 	}
 
@@ -1791,7 +1843,7 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
 			if shouldCallBatchLine(line) {
-				scriptContents = append(scriptContents, "call " + line)
+				scriptContents = append(scriptContents, "call "+line)
 			} else {
 				scriptContents = append(scriptContents, line)
 			}
