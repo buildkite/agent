@@ -1286,7 +1286,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
 
-		// Use an existing mirror if requested instead of creating a new mirror
+		// Skip updating the Git mirror before using it?
 		if b.Config.GitMirrorsSkipUpdate {
 			mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
 		} else {
