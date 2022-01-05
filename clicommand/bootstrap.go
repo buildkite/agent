@@ -68,6 +68,7 @@ type BootstrapConfig struct {
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsUseExisting        bool     `cli:"git-mirrors-use-existing"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -228,6 +229,11 @@ var BootstrapCommand = cli.Command{
 			Value:  300,
 			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		},
+		cli.BoolFlag{
+			Name:   "git-mirrors-use-existing",
+			Usage:  "Use existing Git mirror or create one",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_USE_EXISTING",
 		},
 		cli.StringFlag{
 			Name:   "bin-path",
@@ -393,6 +399,7 @@ var BootstrapCommand = cli.Command{
 			BuildPath:                    cfg.BuildPath,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
+			GitMirrorsUseExisting:        cfg.GitMirrorsUseExisting,
 			BinPath:                      cfg.BinPath,
 			HooksPath:                    cfg.HooksPath,
 			PluginsPath:                  cfg.PluginsPath,

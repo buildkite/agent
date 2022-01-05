@@ -83,6 +83,7 @@ type AgentStartConfig struct {
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsUseExisting       bool     `cli:"git-mirrors-use-existing"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
 	NoCommandEval               bool     `cli:"no-command-eval"`
@@ -178,8 +179,8 @@ func DefaultConfigFilePaths() (paths []string) {
 // checked during agent startup so that bootstrapped jobs don't silently have
 // no tracing if an invalid value is given.
 var validTracingBackends = map[string]struct{}{
-	"":        struct{}{},
-	"datadog": struct{}{},
+	"":        {},
+	"datadog": {},
 }
 
 var AgentStartCommand = cli.Command{
@@ -332,6 +333,11 @@ var AgentStartCommand = cli.Command{
 			Value:  300,
 			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
 			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		},
+		cli.BoolFlag{
+			Name:   "git-mirrors-use-existing",
+			Usage:  "Use existing Git mirror rather than creating a new mirror",
+			EnvVar: "BUILDKITE_GIT_MIRRORS_USE_EXISTING",
 		},
 		cli.StringFlag{
 			Name:   "bootstrap-script",
@@ -638,6 +644,7 @@ var AgentStartCommand = cli.Command{
 			BuildPath:                  cfg.BuildPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
 			GitMirrorsLockTimeout:      cfg.GitMirrorsLockTimeout,
+			GitMirrorsUseExisting:      cfg.GitMirrorsUseExisting,
 			HooksPath:                  cfg.HooksPath,
 			PluginsPath:                cfg.PluginsPath,
 			GitCloneFlags:              cfg.GitCloneFlags,

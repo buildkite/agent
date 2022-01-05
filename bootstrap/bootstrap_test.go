@@ -28,6 +28,22 @@ func TestDirForAgentName(t *testing.T) {
 	}
 }
 
+var repositoryNameTests = []struct {
+	repositoryName string
+	expected       string
+}{
+	{"git@github.com:acme-inc/my-project.git", "git-github-com-acme-inc-my-project-git"},
+	{"https://github.com/acme-inc/my-project.git", "https---github-com-acme-inc-my-project-git"},
+}
+
+func TestDirForRepository(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range repositoryNameTests {
+		assert.Equal(t, test.expected, dirForRepository(test.repositoryName))
+	}
+}
+
 func TestGetValuesToRedact(t *testing.T) {
 	t.Parallel()
 
@@ -51,7 +67,7 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 
 	redactConfig := []string{}
 	environment := map[string]string{
-		"FOO": "BAR",
+		"FOO":                "BAR",
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 

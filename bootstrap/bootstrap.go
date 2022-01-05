@@ -1279,16 +1279,23 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
+	var err error
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
-		var err error
-		mirrorDir, err = b.updateGitMirror()
-		if err != nil {
-			return err
+
+		// Use an existing mirror if requested instead of creating a new mirror
+		if b.Config.GitMirrorsUseExisting {
+			mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
+		} else {
+			mirrorDir, err = b.updateGitMirror()
+			if err != nil {
+				return err
+			}
 		}
+
 		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
@@ -1791,7 +1798,7 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
 			if shouldCallBatchLine(line) {
-				scriptContents = append(scriptContents, "call " + line)
+				scriptContents = append(scriptContents, "call "+line)
 			} else {
 				scriptContents = append(scriptContents, line)
 			}

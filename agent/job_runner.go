@@ -483,6 +483,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 		`BUILDKITE_CONFIG_PATH`,
 		`BUILDKITE_BUILD_PATH`,
 		`BUILDKITE_GIT_MIRRORS_PATH`,
+		`BUILDKITE_GIT_MIRRORS_USE_EXISTING`,
 		`BUILDKITE_HOOKS_PATH`,
 		`BUILDKITE_PLUGINS_PATH`,
 		`BUILDKITE_SSH_KEYSCAN`,
@@ -538,6 +539,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	env["BUILDKITE_CONFIG_PATH"] = r.conf.AgentConfiguration.ConfigPath
 	env["BUILDKITE_BUILD_PATH"] = r.conf.AgentConfiguration.BuildPath
 	env["BUILDKITE_GIT_MIRRORS_PATH"] = r.conf.AgentConfiguration.GitMirrorsPath
+	env["BUILDKITE_GIT_MIRRORS_USE_EXISTING"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.GitMirrorsUseExisting)
 	env["BUILDKITE_HOOKS_PATH"] = r.conf.AgentConfiguration.HooksPath
 	env["BUILDKITE_PLUGINS_PATH"] = r.conf.AgentConfiguration.PluginsPath
 	env["BUILDKITE_SSH_KEYSCAN"] = fmt.Sprintf("%t", r.conf.AgentConfiguration.SSHKeyscan)
@@ -629,7 +631,7 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
+func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 	r.logger.Info("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New()
@@ -641,7 +643,7 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	// to the pre-bootstrap hook.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
-	sh.Writer = LogWriter {
+	sh.Writer = LogWriter{
 		l: r.logger,
 	}
 

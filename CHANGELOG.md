@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Update Git mirror functionality to support using an existing mirror rather than creating a new one. Enabled via the `BUILDKITE_GIT_MIRRORS_USE_EXISTING` flag.
+
 ## [v3.33.3](https://github.com/buildkite/agent/compare/v3.33.2...v3.33.3) (2021-09-29)
 
 ### Fixed

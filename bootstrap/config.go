@@ -104,6 +104,9 @@ type Config struct {
 	// Seconds to wait before allowing git mirror clone lock to be acquired
 	GitMirrorsLockTimeout int
 
+	// Use existing Git mirror rather than creating one
+	GitMirrorsUseExisting bool `env:"BUILDKITE_GIT_MIRRORS_USE_EXISTING"`
+
 	// Path to the buildkite-agent binary
 	BinPath string
 
