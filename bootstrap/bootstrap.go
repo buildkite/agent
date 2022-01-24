@@ -1290,7 +1290,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		if b.Config.GitMirrorsSkipUpdate {
 			mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
 			// Check if specified mirrorDir exists, otherwise the clone will fail.
-			if _, err = os.Stat(mirrorDir); os.IsNotExist(err) {
+			if !utils.FileExists(mirrorDir) {
 				// Fall back to a clean clone, rather than failing the clone and therefore the build
 				b.shell.Commentf("No existing mirror found for repository %s at %s.", b.Repository, mirrorDir)
 				mirrorDir = ""
