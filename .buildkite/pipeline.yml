@@ -325,13 +325,6 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh ubuntu-20.04"
 
-  - name: ":docker: centos build"
-    key: build-docker-centos
-    depends_on:
-      - build-binary-linux-amd64
-      - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh centos"
-
   - name: ":docker: sidecar build"
     key: build-docker-sidecar
     depends_on:
@@ -404,7 +397,6 @@ steps:
       - build-docker-alpine
       - build-docker-ubuntu-bionic-beaver
       - build-docker-ubuntu-focal-fossa
-      - build-docker-centos
       - build-docker-sidecar
       - build-github-release
     command: ".buildkite/steps/upload-release-steps.sh"
