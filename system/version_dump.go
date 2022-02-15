@@ -16,8 +16,10 @@ func VersionDump(l logger.Logger) (string, error) {
 		return process.Run(l, "sw_vers")
 	case "linux":
 		return process.Cat("/etc/*-release")
-	case "freebsd", "openbsd", "netbsd", "dragonfly":
+	case "freebsd", "openbsd", "netbsd", "dragonfly", "solaris":
 		return process.Run(l, "uname", "-sr")
+	case "aix":
+		return process.Run(l, "oslevel", "-s")
 	default:
 		return "", nil
 	}
