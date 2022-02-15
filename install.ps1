@@ -61,7 +61,7 @@ WARNING: Consider only allowing administrators access to this directory.
         "
     }
 } else {
-    Write-Host "Restricting installation directory access to administrators"
+    Write-Host "Restricting installation directory access to Administrators: '$installDir'"
     New-Item -ItemType "directory" -Path $installDir | Out-Null
     $acl = Get-Acl $installDir
     # Disable ACL inheritance and remove existing inherited rules
