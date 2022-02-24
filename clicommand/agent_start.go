@@ -62,6 +62,7 @@ type AgentStartConfig struct {
 	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
 	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
+	EnableJobLogFile            bool     `cli:"enable-job-log-file"`
 	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
 	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
 	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
@@ -228,6 +229,11 @@ var AgentStartCommand = cli.Command{
 			Value:  10,
 			Usage:  "The number of seconds a canceled or timed out job is given to gracefully terminate and upload its artifacts",
 			EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
+		},
+		cli.BoolFlag{
+			Name:   "enable-job-log-file",
+			Usage:  "Store the job logs in a temporary file `BUILDKITE_JOB_LOG_FILE` that is accessible during the job and removed at the end of the job",
+			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_FILE",
 		},
 		cli.StringFlag{
 			Name:   "shell",
@@ -662,6 +668,7 @@ var AgentStartCommand = cli.Command{
 			DisconnectAfterJob:         cfg.DisconnectAfterJob,
 			DisconnectAfterIdleTimeout: cfg.DisconnectAfterIdleTimeout,
 			CancelGracePeriod:          cfg.CancelGracePeriod,
+			EnableJobLogFile:           cfg.EnableJobLogFile,
 			Shell:                      cfg.Shell,
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
