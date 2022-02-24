@@ -49,6 +49,31 @@ foreach ($line in $resp.Content.Split("`n")) {
 Write-Host "Downloading $($releaseInfo.url)"
 Invoke-WebRequest -Uri $releaseInfo.url -OutFile 'buildkite-agent.zip'
 
+if (Test-Path -Path $installDir) {
+    $permissions = (Get-Acl $installDir).Access |
+        where {$_.IdentityReference -match 'BUILTIN\\Users' -and `
+            $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow}
+    if ($permissions) {
+        Write-Host "
+WARNING: All users have the following access to the installation directory '$installDir':
+WARNING:   $($permissions.FileSystemRights)
+WARNING: Consider only allowing administrators access to this directory.
+        "
+    }
+} else {
+    Write-Host "Restricting installation directory access to Administrators: '$installDir'"
+    New-Item -ItemType "directory" -Path $installDir | Out-Null
+    $acl = Get-Acl $installDir
+    # Disable ACL inheritance and remove existing inherited rules
+    $acl.SetAccessRuleProtection($true,$false)
+    # Allow System and Administrators full access
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("NT AUTHORITY\SYSTEM","FullControl","Allow")
+    $acl.AddAccessRule($rule)
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule("BUILTIN\Administrators","FullControl","Allow")
+    $acl.AddAccessRule($rule)
+    $acl | Set-Acl $installDir
+}
+
 Write-Host 'Expanding buildkite-agent.zip'
 Expand-Archive -Force -Path buildkite-agent.zip -DestinationPath $installDir
 Remove-Item buildkite-agent.zip -Force
