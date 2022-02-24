@@ -232,7 +232,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "enable-job-log-file",
-			Usage:  "Store the job logs in a temporary file `BUILDKITE_JOB_LOG_FILE` that is accessible during the job and removed at the end of the job",
+			Usage:  "Store the job logs in a temporary file `BUILDKITE_JOB_LOG` that is accessible during the job and removed at the end of the job",
 			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_FILE",
 		},
 		cli.StringFlag{
