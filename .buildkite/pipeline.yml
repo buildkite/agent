@@ -66,7 +66,7 @@ steps:
         - with: { os: darwin, arch: "386" }
           skip: "macOS no longer supports x86 binaries"
 
-        - with: { os: dragonfly, arch: amd64 }
+        # - with: { os: dragonfly, arch: amd64 }
 
         - with: { os: freebsd, arch: arm64 }
           skip: "arm64 FreeBSD is not currently supported"
@@ -78,7 +78,7 @@ steps:
         - with: { os: linux, arch: mips64le }
         - with: { os: linux, arch: s390x }
 
-        - with: { os: netbsd, arch: amd64 }
+        # - with: { os: netbsd, arch: amd64 }
 
         - with: { os: openbsd, arch: arm64 }
           skip: "arm64 OpenBSD is not currently supported"
