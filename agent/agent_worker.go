@@ -205,6 +205,18 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 						return nil
 					}
 					lastActionTime = time.Now()
+
+					// Observation: jobs are rarely the last within a pipeline,
+					// thus if this worker just completed a job,
+					// there is likely another immediately available.
+					// Skip waiting for the ping interval until
+					// a ping without a job has occurred,
+					// but in exchange, ensure the next ping must wait a full
+					// pingInterval to avoid too much server load.
+
+					pingTicker.Reset(pingInterval)
+
+					continue
 				}
 			}
 
