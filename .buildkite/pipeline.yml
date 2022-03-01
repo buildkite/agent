@@ -38,8 +38,8 @@ steps:
       - junit-annotate#v1.6.0:
           artifacts: junit-*.xml
 
-  - name: ":{matrix.os}: {matrix.arch}"
-    command: ".buildkite/steps/build-binary.sh {matrix.os} {matrix.arch}"
+  - name: ":{{matrix.os}}: {{matrix.arch}}"
+    command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
     key: build-binary
     depends_on:
       # don't wait for slower windows tests
