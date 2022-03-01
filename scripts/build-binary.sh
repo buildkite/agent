@@ -21,6 +21,10 @@ if [[ "$GOARCH" = "armhf" ]]; then
   export GOARM="7"
 fi
 
+if [[ "$GOOS" = "dragonflybsd" ]]; then
+  export GOOS="dragonfly"
+fi
+
 echo -e "Building $NAME with:\n"
 
 echo "GOOS=$GOOS"
