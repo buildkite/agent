@@ -88,7 +88,7 @@ steps:
 
   - name: ":hammer: bk cli & agent cli"
     key: test-bk-cli
-    depends_on: build-binary-linux-amd64
+    depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
       docker-compose#v3.0.0:
@@ -108,41 +108,35 @@ steps:
   - name: ":docker: alpine build"
     key: build-docker-alpine
     depends_on:
-      - build-binary-linux-amd64
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh alpine"
 
   - name: ":docker: ubuntu 18.04 build"
     key: build-docker-ubuntu-bionic-beaver
     depends_on:
-      - build-binary-linux-amd64
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh ubuntu-18.04"
 
   - name: ":docker: ubuntu 20.04 build"
     key: build-docker-ubuntu-focal-fossa
     depends_on:
-      - build-binary-linux-amd64
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh ubuntu-20.04"
 
   - name: ":docker: sidecar build"
     key: build-docker-sidecar
     depends_on:
-      - build-binary-linux-amd64
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-docker-image.sh sidecar"
 
   - name: ":debian: build"
     key: build-debian-packages
     depends_on:
-      - build-binary-linux-amd64
-      - build-binary-linux-386
-      - build-binary-linux-arm
-      - build-binary-linux-armhf
-      - build-binary-linux-arm64
-      - build-binary-linux-ppc64
-      - build-binary-linux-ppc64le
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
@@ -150,11 +144,7 @@ steps:
   - name: ":redhat: build"
     key: build-rpm-packages
     depends_on:
-      - build-binary-linux-amd64
-      - build-binary-linux-386
-      - build-binary-linux-arm64
-      - build-binary-linux-ppc64
-      - build-binary-linux-ppc64le
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
@@ -162,24 +152,7 @@ steps:
   - name: ":github: :hammer:"
     key: build-github-release
     depends_on:
-      - build-binary-windows-386
-      - build-binary-windows-amd64
-      - build-binary-linux-amd64
-      - build-binary-linux-386
-      - build-binary-linux-arm
-      - build-binary-linux-armhf
-      - build-binary-linux-arm64
-      - build-binary-linux-ppc64le
-      - build-binary-linux-mips64le
-      - build-binary-linux-s390x
-      - build-binary-darwin-amd64
-      - build-binary-darwin-arm64
-      - build-binary-freebsd-amd64
-      - build-binary-freebsd-386
-      - build-binary-openbsd-amd64
-      - build-binary-openbsd-386
-      - build-binary-dragonfly-amd64
-      - build-binary-netbsd-amd64
+      - build-binary
       - set-metadata
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
