@@ -105,18 +105,20 @@ steps:
     key: set-metadata
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
-  - name: ":docker: {{matrix}} build"
-    key: build-docker
-    depends_on:
-      - build-binary
-      - set-metadata
-    command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
-    matrix:
-      setup:
-        - "alpine"
-        - "ubuntu-18.04"
-        - "ubuntu-20.04"
-        - "sidecar"
+  - group: ":docker: builds"
+    steps:
+      - name: ":docker: {{matrix}} build"
+        key: build-docker
+        depends_on:
+          - build-binary
+          - set-metadata
+        command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
+        matrix:
+          setup:
+            - "alpine"
+            - "ubuntu-18.04"
+            - "ubuntu-20.04"
+            - "sidecar"
 
   - name: ":debian: build"
     key: build-debian-packages
