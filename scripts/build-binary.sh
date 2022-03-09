@@ -13,6 +13,10 @@ export GOARCH=${2}
 BUILD_VERSION=${3}
 NAME="buildkite-agent"
 
+if [[ "$GOOS" = "dragonflybsd" ]]; then
+  export GOOS="dragonfly"
+fi
+
 BUILD_PATH="pkg"
 BINARY_FILENAME="$NAME-$GOOS-$GOARCH"
 
