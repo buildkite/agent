@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,7 +118,86 @@ func (a *ArtifactUploader) Collect(ctx context.Context) (artifacts []*api.Artifa
 	// file paths are deduplicated after resolving globs etc
 	seenPaths := make(map[string]bool)
 
-	for _, globPath := range strings.Split(a.conf.Paths, ArtifactPathDelimiter) {
+	prospects := strings.Split(a.conf.Paths, ArtifactPathDelimiter)
+
+	// Handle directories first
+	for _, literalPath := range prospects {
+		// I think this is a bug; '  name.ext  ' is a valid filepath.
+		// Keeping it because it was handled in the globbing case.
+		literalPath = strings.TrimSpace(literalPath)
+		if literalPath == "" {
+			continue
+		}
+
+		a.logger.Debug("Searching for %s", literalPath)
+
+		absolutePath, err := filepath.Abs(literalPath)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := seenPaths[absolutePath]; ok {
+			a.logger.Debug("Skipping duplicate path %s", literalPath)
+			continue
+		}
+
+		if isDir(absolutePath) {
+			a.logger.Debug("Searching for %s", literalPath)
+
+			err := filepath.WalkDir(absolutePath, func(p string, d fs.DirEntry, error error) error {
+				if error != nil {
+					return error
+				}
+
+				if _, ok := seenPaths[p]; ok {
+					a.logger.Debug("Skipping duplicate path %s", p);
+					return nil
+				}
+
+				if d.IsDir() {
+					return nil
+				}
+
+				path := p
+
+				if a.conf.GlobResolveFollowSymlinks {
+					resolvedLink, err := filepath.EvalSymlinks(path)
+					if err != nil {
+						return err
+					}
+					path = resolvedLink
+				}
+
+				seenPaths[p] = true
+
+				path, err := filepath.Rel(wd, path)
+				if err != nil {
+					return err
+				}
+
+				if experiments.IsEnabled(`normalised-upload-paths`) {
+					// Convert any Windows paths to Unix/URI form
+					path = filepath.ToSlash(path)
+				}
+
+				// Build an artifact object using the paths we have.
+				artifact, err := a.build(path, p, literalPath)
+				if err != nil {
+					return err
+				}
+
+				artifacts = append(artifacts, artifact)
+
+
+				return nil
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	for _, globPath := range prospects {
 		globPath = strings.TrimSpace(globPath)
 		if globPath == "" {
 			continue
