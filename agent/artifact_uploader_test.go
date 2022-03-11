@@ -80,12 +80,29 @@ func TestCollect(t *testing.T) {
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
 			Sha256Sum:    "fc5e8608c7772e4ae834fbc47eec3d902099eb3599f5191e40d9e3d9b3764b0e",
 		},
+		{
+			Name:         "output.log",
+			Path:         []string{"test", "fixtures", "artifacts", "nested", "output.log"},
+			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "nested", "output.log"),
+			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "nested"),
+			FileSize:     14,
+			Sha1Sum:      "1ec2e13e3871a980eaee0f11c6f47ad1d1f97b3e",
+		},
+		{
+			Name:         "logfile.out",
+			Path:         []string{"test", "fixtures", "artifacts", "nested", "nested0", "logfile.out"},
+			AbsolutePath: filepath.Join(root, "test", "fixtures", "artifacts", "nested", "nested0", "logfile.out"),
+			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "nested"),
+			FileSize:     19,
+			Sha1Sum:      "e30f8100faed6430e6fd617da8ea17100ac97188",
+		},
 	}
 
 	uploader := NewArtifactUploader(logger.Discard, nil, ArtifactUploaderConfig{
-		Paths: fmt.Sprintf("%s;%s",
+		Paths: fmt.Sprintf("%s;%s;%s",
 			filepath.Join("test", "fixtures", "artifacts", "**/*.jpg"),
 			filepath.Join(root, "test", "fixtures", "artifacts", "**/*.gif"),
+			filepath.Join("test", "fixtures", "artifacts", "nested"),
 		),
 	})
 
@@ -108,13 +125,13 @@ func TestCollect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
-	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
+	assert.Equal(t, 7, len(artifactsWithoutExperimentEnabled))
 
 	artifactsWithExperimentEnabled, err := uploader.Collect(ctxExpEnabled)
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
-	assert.Equal(t, 5, len(artifactsWithExperimentEnabled))
+	assert.Equal(t, 7, len(artifactsWithExperimentEnabled))
 
 	// These test cases use filepath.Join, which uses per-OS path separators;
 	// this is the behaviour without normalised-upload-paths.
