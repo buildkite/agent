@@ -5,7 +5,7 @@ go 1.14
 require (
 	cloud.google.com/go v0.0.0-20170217213217-65216237311a
 	github.com/DataDog/datadog-go v3.7.2+incompatible
-	github.com/aws/aws-sdk-go v1.32.10
+	github.com/aws/aws-sdk-go v1.43.18
 	github.com/buildkite/bintest/v3 v3.1.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
@@ -13,6 +13,7 @@ require (
 	github.com/creack/pty v1.1.12
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.0
+	github.com/go-sql-driver/mysql v1.5.0 // indirect
 	github.com/google/go-querystring v0.0.0-20170111101155-53e6ce116135
 	github.com/google/uuid v1.1.2 // indirect
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e // indirect
@@ -33,7 +34,7 @@ require (
 	github.com/urfave/cli v1.22.4
 	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073
 	golang.org/x/oauth2 v0.0.0-20181003184128-c57b0facaced
-	golang.org/x/sys v0.0.0-20200122134326-e047566fdf82
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7 // indirect
 	google.golang.org/api v0.0.0-20181016191922-cc9bd73d51b4
