@@ -18,7 +18,7 @@ require (
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-zglob v0.0.0-20180803001819-2ea3427bfa53
-	github.com/mitchellh/go-homedir v1.0.0
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/nightlyone/lockfile v0.0.0-20180618180623-0ad87eef1443
 	github.com/oleiade/reflections v0.0.0-20160817071559-0e86b3c98b2f
 	github.com/opentracing/opentracing-go v1.2.0
