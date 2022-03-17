@@ -888,7 +888,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Ensure the plugin directory exists, otherwise we can't create the lock
-	err = os.MkdirAll(b.PluginsPath, 0777)
+	err = os.MkdirAll(b.PluginsPath, 0770)
 	if err != nil {
 		return nil, err
 	}
@@ -1005,7 +1005,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 
 	if !utils.FileExists(checkoutPath) {
 		b.shell.Commentf("Creating \"%s\"", checkoutPath)
-		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
+		if err := os.MkdirAll(checkoutPath, 0770); err != nil {
 			return err
 		}
 	}
@@ -1191,7 +1191,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
 		b.shell.Commentf("Creating \"%s\"", baseDir)
-		if err := os.MkdirAll(baseDir, 0777); err != nil {
+		if err := os.MkdirAll(baseDir, 0770); err != nil {
 			return "", err
 		}
 	}
@@ -1791,7 +1791,7 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
 			if shouldCallBatchLine(line) {
-				scriptContents = append(scriptContents, "call " + line)
+				scriptContents = append(scriptContents, "call "+line)
 			} else {
 				scriptContents = append(scriptContents, line)
 			}

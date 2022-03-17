@@ -133,7 +133,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		if err = os.MkdirAll(tempDir, 0777); err != nil {
+		if err = os.MkdirAll(tempDir, 0770); err != nil {
 			return nil, err
 		}
 	}
@@ -629,7 +629,7 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
+func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 	r.logger.Info("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New()
@@ -641,7 +641,7 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	// to the pre-bootstrap hook.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
-	sh.Writer = LogWriter {
+	sh.Writer = LogWriter{
 		l: r.logger,
 	}
 
