@@ -41,6 +41,7 @@ func TestCollect(t *testing.T) {
 		GlobPath     string
 		FileSize     int
 		Sha1Sum      string
+		Sha256Sum    string
 	}{
 		{
 			Name:         "Mr Freeze.jpg",
@@ -49,6 +50,7 @@ func TestCollect(t *testing.T) {
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     362371,
 			Sha1Sum:      "f5bc7bc9f5f9c3e543dde0eb44876c6f9acbfb6b",
+			Sha256Sum:    "0c657a363d92093e68224e0716ed8b8b5d4bbc3dfe9b026e32b241fc9b369d47",
 		},
 		{
 			Name:         "Commando.jpg",
@@ -57,6 +59,7 @@ func TestCollect(t *testing.T) {
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     113000,
 			Sha1Sum:      "811d7cb0317582e22ebfeb929d601cdabea4b3c0",
+			Sha256Sum:    "fcfbe62fd7b6638165a61e8de901ac9df93fc1389906f2772bdefed5de115426",
 		},
 		{
 			Name:         "The Terminator.jpg",
@@ -65,6 +68,7 @@ func TestCollect(t *testing.T) {
 			GlobPath:     filepath.Join("test", "fixtures", "artifacts", "**", "*.jpg"),
 			FileSize:     47301,
 			Sha1Sum:      "ed76566ede9cb6edc975fcadca429665aad8785a",
+			Sha256Sum:    "5b4228a4bbef3d9f676e0a2e8cf6ea06759124ef0fbdb27a6c35df8759fcd39d",
 		},
 		{
 			Name:         "Smile.gif",
@@ -73,6 +77,7 @@ func TestCollect(t *testing.T) {
 			GlobPath:     filepath.Join(root, "test", "fixtures", "artifacts", "**", "*.gif"),
 			FileSize:     2038453,
 			Sha1Sum:      "bd4caf2e01e59777744ac1d52deafa01c2cb9bfd",
+			Sha256Sum:    "fc5e8608c7772e4ae834fbc47eec3d902099eb3599f5191e40d9e3d9b3764b0e",
 		},
 	}
 
@@ -132,6 +137,7 @@ func TestCollect(t *testing.T) {
 			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
+			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
 		})
 	}
 
@@ -155,6 +161,7 @@ func TestCollect(t *testing.T) {
 			assert.Equal(t, tc.GlobPath, a.GlobPath)
 			assert.Equal(t, tc.FileSize, int(a.FileSize))
 			assert.Equal(t, tc.Sha1Sum, a.Sha1Sum)
+			assert.Equal(t, tc.Sha256Sum, a.Sha256Sum)
 		})
 	}
 }

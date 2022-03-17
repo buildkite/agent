@@ -15,7 +15,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
 		case "/builds/buildid/artifacts/search?query=foo.%2A&state=finished":
-			io.WriteString(rw, `[{"path": "foo.txt", "sha1sum": "theshastring"}]`)
+			io.WriteString(rw, `[{"path": "foo.txt", "sha1sum": "theshastring", "sha256sum": "thesha256string"}]`)
 		default:
 			t.Errorf("unexpected HTTP request: %s %v", req.Method, req.URL.RequestURI())
 		}
@@ -35,9 +35,31 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintSha1Sum(cfg, l, stdout)
+	searchAndPrintShaSum(cfg, l, stdout)
 
 	assert.Equal(t, "theshastring\n", stdout.String())
+
+	assert.Contains(t, l.Messages, `[info] Searching for artifacts: "foo.*"`)
+	assert.Contains(t, l.Messages, `[debug] Artifact "foo.txt" found`)
+}
+
+func TestSearchAndPrintSha256Sum(t *testing.T) {
+	server := newTestServer(t)
+	defer server.Close()
+
+	cfg := ArtifactShasumConfig{
+		Query:            "foo.*",
+		Build:            "buildid",
+		Sha256:           true,
+		AgentAccessToken: "agentaccesstoken",
+		Endpoint:         server.URL,
+	}
+	l := logger.NewBuffer()
+	stdout := new(bytes.Buffer)
+
+	searchAndPrintShaSum(cfg, l, stdout)
+
+	assert.Equal(t, "thesha256string\n", stdout.String())
 
 	assert.Contains(t, l.Messages, `[info] Searching for artifacts: "foo.*"`)
 	assert.Contains(t, l.Messages, `[debug] Artifact "foo.txt" found`)

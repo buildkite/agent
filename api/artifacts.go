@@ -23,8 +23,11 @@ type Artifact struct {
 	// The size of the file in bytes
 	FileSize int64 `json:"file_size"`
 
-	// A Sha1Sum calculation of the file
+	// A SHA-1 hash of the uploaded file
 	Sha1Sum string `json:"sha1sum"`
+
+	// A SHA-2 256-bit hash of the uploaded file, possibly empty
+	Sha256Sum string `json:"sha256sum"`
 
 	// ID of the job that created this artifact (from API)
 	JobID string `json:"job_id"`
