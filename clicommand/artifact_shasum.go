@@ -18,10 +18,11 @@ var ShasumHelpDescription = `Usage:
 
 Description:
 
-   Prints the SHA-1 hash for the single artifact specified by a search query.
+   Prints the SHA-1 or SHA-256 hash for the single artifact specified by a
+   search query.
 
-   The SHA-1 hash is fetched from Buildkite's API, having been generated
-   client-side by the agent during artifact upload.
+   The hash is fetched from Buildkite's API, having been generated client-side
+   by the agent during artifact upload.
 
    A search query that does not match exactly one artifact results in an error.
 
@@ -42,10 +43,15 @@ Example:
 
    $ buildkite-agent artifact shasum "pkg/release.tar.gz" --step "release" --build xxx
 
-   You can also use the step's job ID (provided by the environment variable $BUILDKITE_JOB_ID)`
+   You can also use the step's job ID (provided by the environment variable $BUILDKITE_JOB_ID)
+
+   The --sha256 argument requests SHA-256 instead of SHA-1; this is only
+   available for artifacts uploaded since SHA-256 support was added to the
+   agent.`
 
 type ArtifactShasumConfig struct {
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
+	Sha256             bool   `cli:"sha256"`
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
@@ -68,6 +74,10 @@ var ArtifactShasumCommand = cli.Command{
 	Usage:       "Prints the SHA-1 hash for a single artifact specified by a search query",
 	Description: ShasumHelpDescription,
 	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "sha256",
+			Usage: "Request SHA-256 instead of SHA-1, errors if SHA-256 not available",
+		},
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
@@ -112,13 +122,13 @@ var ArtifactShasumCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		if err := searchAndPrintSha1Sum(cfg, l, os.Stdout); err != nil {
+		if err := searchAndPrintShaSum(cfg, l, os.Stdout); err != nil {
 			l.Fatal(err.Error())
 		}
 	},
 }
 
-func searchAndPrintSha1Sum(cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
+func searchAndPrintShaSum(cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
 	// Create the API client
 	client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
@@ -137,9 +147,19 @@ func searchAndPrintSha1Sum(cfg ArtifactShasumConfig, l logger.Logger, stdout io.
 	} else if artifactsFoundLength > 1 {
 		return fmt.Errorf("Multiple artifacts were found. Try being more specific with the search or scope by step")
 	} else {
-		l.Debug("Artifact \"%s\" found", artifacts[0].Path)
+		a := artifacts[0]
+		l.Debug("Artifact \"%s\" found", a.Path)
 
-		fmt.Fprintf(stdout, "%s\n", artifacts[0].Sha1Sum)
+		var sha string
+		if cfg.Sha256 {
+			if a.Sha256Sum == "" {
+				return fmt.Errorf("SHA-256 requested but was not generated at upload time")
+			}
+			sha = a.Sha256Sum
+		} else {
+			sha = a.Sha1Sum
+		}
+		fmt.Fprintf(stdout, "%s\n", sha)
 	}
 	return nil
 }
