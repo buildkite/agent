@@ -563,8 +563,16 @@ var AgentStartCommand = cli.Command{
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
 		}
 
+		isSetNoPlugins := c.IsSet("no-plugins")
+		if loader.File != nil {
+			if _, exists := loader.File.Config["no-plugins"]; exists {
+				isSetNoPlugins = true
+			}
+		}
+
+
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
-		if c.IsSet("no-plugins") && cfg.NoPlugins == false {
+		if isSetNoPlugins && cfg.NoPlugins == false {
 			msg := `Plugins have been specifically enabled, despite %s being enabled. ` +
 				`Plugins can execute arbitrary hooks and commands, make sure you are ` +
 				`whitelisting your plugins in ` +
@@ -580,7 +588,7 @@ var AgentStartCommand = cli.Command{
 
 		// Turning off command eval or local hooks will also turn off plugins unless
 		// `--no-plugins=false` is provided specifically
-		if (cfg.NoCommandEval || cfg.NoLocalHooks) && !c.IsSet("no-plugins") {
+		if (cfg.NoCommandEval || cfg.NoLocalHooks) && !isSetNoPlugins {
 			cfg.NoPlugins = true
 		}
 
