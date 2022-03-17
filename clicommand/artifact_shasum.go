@@ -2,10 +2,13 @@ package clicommand
 
 import (
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/urfave/cli"
 )
 
@@ -109,27 +112,34 @@ var ArtifactShasumCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
-
-		// Find the artifact we want to show the SHASUM for
-		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
-		if err != nil {
-			l.Fatal("Error searching for artifacts: %s", err)
-		}
-
-		artifactsFoundLength := len(artifacts)
-
-		if artifactsFoundLength == 0 {
-			l.Fatal("No artifacts matched the search query")
-		} else if artifactsFoundLength > 1 {
-			l.Fatal("Multiple artifacts were found. Try being more specific with the search or scope by step")
-		} else {
-			l.Debug("Artifact \"%s\" found", artifacts[0].Path)
-
-			fmt.Printf("%s\n", artifacts[0].Sha1Sum)
+		if err := searchAndPrintSha1Sum(cfg, l, os.Stdout); err != nil {
+			l.Fatal(err.Error())
 		}
 	},
+}
+
+func searchAndPrintSha1Sum(cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
+	// Create the API client
+	client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+
+	// Find the artifact we want to show the SHASUM for
+	searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
+
+	artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
+	if err != nil {
+		return fmt.Errorf("Error searching for artifacts: %s", err)
+	}
+
+	artifactsFoundLength := len(artifacts)
+
+	if artifactsFoundLength == 0 {
+		return fmt.Errorf("No artifacts matched the search query")
+	} else if artifactsFoundLength > 1 {
+		return fmt.Errorf("Multiple artifacts were found. Try being more specific with the search or scope by step")
+	} else {
+		l.Debug("Artifact \"%s\" found", artifacts[0].Path)
+
+		fmt.Fprintf(stdout, "%s\n", artifacts[0].Sha1Sum)
+	}
+	return nil
 }
