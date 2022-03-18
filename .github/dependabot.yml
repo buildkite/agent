@@ -4,3 +4,8 @@ updates:
     directory: "/.buildkite"
     schedule:
       interval: "monthly"
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2

@@ -73,6 +73,7 @@ type ArtifactBatchCreateResponse struct {
 type ArtifactSearchOptions struct {
 	Query              string `url:"query,omitempty"`
 	Scope              string `url:"scope,omitempty"`
+	State              string `url:"state,omitempty"`
 	IncludeRetriedJobs bool   `url:"include_retried_jobs,omitempty"`
 	IncludeDuplicates  bool   `url:"include_duplicates,omitempty"`
 }

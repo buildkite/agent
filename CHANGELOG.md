@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Update Git mirror functionality to support skipping the update of the Git mirror. This is useful is the Git mirror is mounted from an external volume, NFS mount etc. Enabled via the `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE` flag or `git-mirrors-skip-update` cli flag.
 
+## [v3.34.0](https://github.com/buildkite/agent/compare/v3.33.3...v3.34.0) (2022-03-01)
+
+### Added
+
+* Introduce `spawn-with-priority` option [#1530](https://github.com/buildkite/agent/pull/1530) ([sema](https://github.com/sema))
+
+### Fixed
+
+* Retry 500 responses when batch creating artifacts [#1568](https://github.com/buildkite/agent/pull/1568) ([moskyb](https://github.com/moskyb))
+* Report OS versions when running on AIX and Solaris [#1559](https://github.com/buildkite/agent/pull/1559) ([yob](https://github.com/yob))
+* Support multiple commands on Windows [#1543](https://github.com/buildkite/agent/pull/1543) ([keithduncan](https://github.com/keithduncan))
+* Allow `BUILDKITE_S3_DEFAULT_REGION` to be used for unconditional bucket region [#1535](https://github.com/buildkite/agent/pull/1535) ([keithduncan](https://github.com/keithduncan))
+
+### Changed
+
+* Go version upgraded from 1.16 to 1.17 [#1557](https://github.com/buildkite/agent/pull/1557) [#1549](https://github.com/buildkite/agent/pull/1549)
+* Remove the CentOS (end-of-life) docker image [#1561](https://github.com/buildkite/agent/pull/1561) ([tessereth](https://github.com/tessereth))
+* Plugin `git clone` is retried up to 3 times [#1539](https://github.com/buildkite/agent/pull/1539) ([pzeballos](https://github.com/pzeballos))
+* Docker image alpine upgraded from 3.14.2 to 3.15.0 [#1541](https://github.com/buildkite/agent/pull/1541)
+
+### Security
+
+* Lock down file permissions on windows [#1562](https://github.com/buildkite/agent/pull/1562) ([tessereth](https://github.com/tessereth))
+* Reject pipeline uploads containing redacted vars [#1523](https://github.com/buildkite/agent/pull/1523) ([keithduncan](https://github.com/keithduncan))
+
 ## [v3.33.3](https://github.com/buildkite/agent/compare/v3.33.2...v3.33.3) (2021-09-29)
 
 ### Fixed

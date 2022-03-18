@@ -46,15 +46,11 @@ For example, agent version 3.30.0 is published as:
 - 3.30-ubuntu-20.04, tracks bugfix updates in version 3.30 installed in Ubuntu 20.04
 - 3.30.0-ubuntu-20.04, tracks the exact version installed in Ubuntu 20.04
 
-#### Tier 1, guaranteed to work
+#### Supported operating systems
 
 - Alpine 3.12
 - Ubuntu 18.04 LTS (x86_64), supported to end of life for 18.04
 - Ubuntu 20.04 LTS (x86_64), supported to end of life for 20.04
-
-#### Tier 2, guaranteed to build
-
-- CentOS 8
 
 ## Starting
 
