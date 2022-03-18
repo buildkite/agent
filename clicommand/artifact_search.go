@@ -98,15 +98,15 @@ Format specifiers:
 			Usage: "Scope the search to a particular step by using either its name or job ID",
 		},
 		cli.StringFlag{
-			Name:    "build",
-			Value:   "",
+			Name:   "build",
+			Value:  "",
 			EnvVar: "BUILDKITE_BUILD_ID",
-			Usage:   "The build that the artifacts were uploaded to",
+			Usage:  "The build that the artifacts were uploaded to",
 		},
 		cli.BoolFlag{
-			Name:    "include-retried-jobs",
-			EnvVar:  "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:   "Include artifacts from retried jobs in the search",
+			Name:   "include-retried-jobs",
+			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
+			Usage:  "Include artifacts from retried jobs in the search",
 		},
 		cli.StringFlag{
 			Name:  "format",
@@ -146,7 +146,8 @@ Format specifiers:
 
 		// Setup the searcher and try get the artifacts
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
+		state := "" // any state
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, state, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
 		}
