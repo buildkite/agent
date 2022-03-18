@@ -15,8 +15,8 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 	defer os.Remove("llamas.txt")
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		switch req.URL.Path {
-		case `/builds/my-build/artifacts/search`:
+		switch req.URL.RequestURI() {
+		case `/builds/my-build/artifacts/search?state=finished`:
 			fmt.Fprintf(rw, `[{
 				"id": "4600ac5c-5a13-4e92-bb83-f86f218f7b32",
 				"file_size": 3,

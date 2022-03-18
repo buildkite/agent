@@ -114,8 +114,8 @@ var ArtifactShasumCommand = cli.Command{
 
 		// Find the artifact we want to show the SHASUM for
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
+		state := "finished"
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, state, cfg.IncludeRetriedJobs, false)
 		if err != nil {
 			l.Fatal("Error searching for artifacts: %s", err)
 		}
