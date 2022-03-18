@@ -15,8 +15,12 @@ var ShasumHelpDescription = `Usage:
 
 Description:
 
-   Prints to STDOUT the SHA-1 for the artifact provided. If your search query
-   for artifacts matches multiple agents, and error will be raised.
+   Prints the SHA-1 hash for the single artifact specified by a search query.
+
+   The SHA-1 hash is fetched from Buildkite's API, having been generated
+   client-side by the agent during artifact upload.
+
+   A search query that does not match exactly one artifact results in an error.
 
    Note: You need to ensure that your search query is surrounded by quotes if
    using a wild card as the built-in shell path globbing will provide files,
@@ -26,15 +30,16 @@ Example:
 
    $ buildkite-agent artifact shasum "pkg/release.tar.gz" --build xxx
 
-   This will search for all the files in the build with the path "pkg/release.tar.gz" and will
-   print the SHA-1 checksum of each one to STDOUT.
+   This will search for all files in the build with path "pkg/release.tar.gz",
+   and if exactly one match is found, the SHA-1 hash generated during upload
+   is printed.
 
    If you would like to target artifacts from a specific build step, you can do
    so by using the --step argument.
 
    $ buildkite-agent artifact shasum "pkg/release.tar.gz" --step "release" --build xxx
 
-   You can also use the step's job id (provided by the environment variable $BUILDKITE_JOB_ID)`
+   You can also use the step's job ID (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 type ArtifactShasumConfig struct {
 	Query              string `cli:"arg:0" label:"artifact search query" validate:"required"`
@@ -57,19 +62,19 @@ type ArtifactShasumConfig struct {
 
 var ArtifactShasumCommand = cli.Command{
 	Name:        "shasum",
-	Usage:       "Prints the SHA-1 checksum for the artifact provided to STDOUT",
+	Usage:       "Prints the SHA-1 hash for a single artifact specified by a search query",
 	Description: ShasumHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
-			Usage: "Scope the search to a particular step by using either its name of job ID",
+			Usage: "Scope the search to a particular step by its name or job ID",
 		},
 		cli.StringFlag{
 			Name:   "build",
 			Value:  "",
 			EnvVar: "BUILDKITE_BUILD_ID",
-			Usage:  "The build that the artifacts were uploaded to",
+			Usage:  "The build that the artifact was uploaded to",
 		},
 		cli.BoolFlag{
 			Name:   "include-retried-jobs",
@@ -112,13 +117,13 @@ var ArtifactShasumCommand = cli.Command{
 
 		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
 		if err != nil {
-			l.Fatal("Failed to find artifacts: %s", err)
+			l.Fatal("Error searching for artifacts: %s", err)
 		}
 
 		artifactsFoundLength := len(artifacts)
 
 		if artifactsFoundLength == 0 {
-			l.Fatal("No artifacts found for downloading")
+			l.Fatal("No artifacts matched the search query")
 		} else if artifactsFoundLength > 1 {
 			l.Fatal("Multiple artifacts were found. Try being more specific with the search or scope by step")
 		} else {
