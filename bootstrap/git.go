@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"net"
 	"net/url"
 	"path/filepath"
 	"regexp"
@@ -239,7 +240,7 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 		}
 
 		// otherwise, output it in hostname:port form
-		return fmt.Sprintf("%s:%s", hostname, port)
+		return net.JoinHostPort(hostname, port)
 	}
 
 	// if we got here, either the `-G` flag was unsupported, or ssh -G
