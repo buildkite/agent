@@ -121,7 +121,7 @@ func (d Download) try() error {
 			responseDump, err := httputil.DumpResponse(response, true)
 			if err != nil {
 				d.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
-			}  else {
+			} else {
 				d.logger.Debug("\n%s", string(responseDump))
 			}
 		}
@@ -130,7 +130,7 @@ func (d Download) try() error {
 	}
 
 	// Now make the folder for our file
-	err = os.MkdirAll(targetDirectory, 0777)
+	err = os.MkdirAll(targetDirectory, 0770)
 	if err != nil {
 		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
 	}

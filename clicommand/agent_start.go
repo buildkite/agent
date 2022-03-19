@@ -730,7 +730,7 @@ var AgentStartCommand = cli.Command{
 		// so we may as well check that'll work now and fail early if it's a problem
 		if !utils.FileExists(agentConf.BuildPath) {
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
-			if err := os.MkdirAll(agentConf.BuildPath, 0777); err != nil {
+			if err := os.MkdirAll(agentConf.BuildPath, 0770); err != nil {
 				l.Fatal("Failed to create builds path: %v", err)
 			}
 		}
