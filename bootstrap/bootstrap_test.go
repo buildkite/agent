@@ -51,7 +51,7 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 
 	redactConfig := []string{}
 	environment := map[string]string{
-		"FOO": "BAR",
+		"FOO":                "BAR",
 		"BUILDKITE_PIPELINE": "unit-test",
 	}
 

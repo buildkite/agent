@@ -38,7 +38,7 @@ type ScriptWrapper struct {
 }
 
 type HookScriptChanges struct {
-	Diff env.Diff
+	Diff    env.Diff
 	afterWd string
 }
 

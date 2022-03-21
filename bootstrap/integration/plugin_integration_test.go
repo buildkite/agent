@@ -250,7 +250,7 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	git := tester.MustMock(t, "git")
 
-	git.Expect("clone", "-v", "--", p.Path, bintest.MatchAny()).Exactly(2).AndCallFunc(func (c *bintest.Call) {
+	git.Expect("clone", "-v", "--", p.Path, bintest.MatchAny()).Exactly(2).AndCallFunc(func(c *bintest.Call) {
 		callCount = callCount + 1
 
 		if callCount == 1 {

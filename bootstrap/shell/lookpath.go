@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 // This file (along with its Windows counterpart) have been taken from:

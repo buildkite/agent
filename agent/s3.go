@@ -88,7 +88,7 @@ func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 
 	regionHint := os.Getenv(regionHintEnvVar)
 	if regionHint != "" {
-        l.Debug("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar)
+		l.Debug("Using bucket region %q from environment variable %q", regionHint, regionHintEnvVar)
 		// If there is a region hint provided, we use it unconditionally
 		session, err := awsS3Session(regionHint)
 		if err != nil {
