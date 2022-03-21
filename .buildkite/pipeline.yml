@@ -2,6 +2,14 @@ env:
   DRY_RUN: false # set to true to disable publishing releases
 
 steps:
+  - name: ":go: fmt"
+    key: test-go-fmt
+    command: ".buildkite/steps/test-go-fmt.sh"
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
   - name: ":hammer: :linux: amd64"
     key: test-linux-amd64
     command: ".buildkite/steps/tests.sh"
