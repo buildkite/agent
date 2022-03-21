@@ -169,12 +169,12 @@ func TestFormUploadFileMissing(t *testing.T) {
 func TestFormUploadTooBig(t *testing.T) {
 	uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
 	artifact := &api.Artifact{
-		ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
-		Path:         "llamas.txt",
-		AbsolutePath: "/llamas.txt",
-		GlobPath:     "llamas.txt",
-		ContentType:  "text/plain",
-		FileSize:     int64(6442450944), // 6Gb
+		ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
+		Path:               "llamas.txt",
+		AbsolutePath:       "/llamas.txt",
+		GlobPath:           "llamas.txt",
+		ContentType:        "text/plain",
+		FileSize:           int64(6442450944), // 6Gb
 		UploadInstructions: &api.ArtifactUploadInstructions{},
 	}
 

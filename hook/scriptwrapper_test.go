@@ -53,9 +53,9 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	// Windows’ batch 'SET >' normalises environment variables case so we apply
 	// the 'expected' and 'actual' diffs to a blank Environment which handles
 	// case normalisation for us
-	expected := (&env.Environment{}).Apply(env.Diff {
-		Added: map[string]string {
-			"LLAMAS": "rock",
+	expected := (&env.Environment{}).Apply(env.Diff{
+		Added: map[string]string{
+			"LLAMAS":  "rock",
 			"Alpacas": "are ok",
 		},
 		Changed: map[string]env.DiffPair{},

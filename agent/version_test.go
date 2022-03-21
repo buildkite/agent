@@ -1,9 +1,9 @@
 package agent
 
 import (
-  "testing"
+	"testing"
 
-  "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestVersionIsValid(t *testing.T) {

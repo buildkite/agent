@@ -80,8 +80,8 @@ func (e *Environment) Length() int {
 // Diff returns a new environment with the keys and values from this
 // environment which are different in the other one.
 func (e *Environment) Diff(other *Environment) Diff {
-	diff := Diff {
-		Added: make(map[string]string),
+	diff := Diff{
+		Added:   make(map[string]string),
 		Changed: make(map[string]DiffPair),
 		Removed: make(map[string]struct{}, 0),
 	}
@@ -95,7 +95,7 @@ func (e *Environment) Diff(other *Environment) Diff {
 		}
 
 		if other != v {
-			diff.Changed[k] = DiffPair {
+			diff.Changed[k] = DiffPair{
 				Old: other,
 				New: v,
 			}
@@ -205,7 +205,7 @@ func normalizeKeyName(key string) string {
 }
 
 type Diff struct {
-	Added map[string]string
+	Added   map[string]string
 	Changed map[string]DiffPair
 	Removed map[string]struct{}
 }

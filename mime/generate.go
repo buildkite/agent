@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 // Generates the mime type mappings.

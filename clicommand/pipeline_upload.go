@@ -12,11 +12,11 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/stdin"
 	"github.com/urfave/cli"
 )
@@ -51,12 +51,12 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath        string 	 `cli:"arg:0" label:"upload paths"`
-	Replace         bool   	 `cli:"replace"`
-	Job             string 	 `cli:"job"`
-	DryRun          bool   	 `cli:"dry-run"`
-	NoInterpolation bool   	 `cli:"no-interpolation"`
-	RedactedVars	 []string `cli:"redacted-vars" normalize:"list"`
+	FilePath        string   `cli:"arg:0" label:"upload paths"`
+	Replace         bool     `cli:"replace"`
+	Job             string   `cli:"job"`
+	DryRun          bool     `cli:"dry-run"`
+	NoInterpolation bool     `cli:"no-interpolation"`
+	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`

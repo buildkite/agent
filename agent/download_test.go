@@ -1,10 +1,11 @@
+//go:build !windows
 // +build !windows
 
 package agent
 
 import (
-	"testing"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestGetTargetPath(t *testing.T) {
@@ -36,13 +37,13 @@ func TestGetTargetPath(t *testing.T) {
 		getTargetPath(
 			"a/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/x/b",
 			"b/a"),
-		)
+	)
 	// Gotcha: this is not what you want.
 	assert.Equal(t, "a/lambda.zip/a/lambda.zip", getTargetPath("a/lambda.zip", "a/lambda.zip"))
 
 	// Test absolute paths
-	assert.Equal(t, "/var/logs/app/a.log", getTargetPath("app/a.log", "/var/logs")) // no match, no trailing
-	assert.Equal(t, "/var/logs/app/a.log", getTargetPath("app/a.log", "/var/logs/app")) // match, no trailing
+	assert.Equal(t, "/var/logs/app/a.log", getTargetPath("app/a.log", "/var/logs"))          // no match, no trailing
+	assert.Equal(t, "/var/logs/app/a.log", getTargetPath("app/a.log", "/var/logs/app"))      // match, no trailing
 	assert.Equal(t, "/var/logs/app/app/a.log", getTargetPath("app/a.log", "/var/logs/app/")) // match, trailing
 
 	// artifact_download documentation examples

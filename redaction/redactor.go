@@ -298,11 +298,11 @@ func (mux RedactorMux) Reset(needles []string) {
 
 func GetValuesToRedact(logger shell.Logger, patterns []string, environment map[string]string) []string {
 	var valuesToRedact []string
-		for _, varValue := range GetKeyValuesToRedact(logger, patterns, environment) {
-			valuesToRedact = append(valuesToRedact, varValue)
-		}
+	for _, varValue := range GetKeyValuesToRedact(logger, patterns, environment) {
+		valuesToRedact = append(valuesToRedact, varValue)
+	}
 
-		return valuesToRedact
+	return valuesToRedact
 }
 
 // Given a redaction config string and an environment map, return the list of values to be redacted.
