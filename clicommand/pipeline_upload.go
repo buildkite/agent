@@ -294,22 +294,26 @@ var PipelineUploadCommand = cli.Command{
 		uuid := api.NewUUID()
 
 		// Retry the pipeline upload a few times before giving up
-		err = retry.Do(func(s *retry.Stats) error {
+		err = retry.NewRetrier(
+			retry.WithMaxAttempts(60),
+			retry.WithStrategy(retry.Constant(5*time.Second)),
+		).Do(func(r *retry.Retrier) error {
 			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 
 				// 422 responses will always fail no need to retry
 				if apierr, ok := err.(*api.ErrorResponse); ok && apierr.Response.StatusCode == 422 {
 					l.Error("Unrecoverable error, skipping retries")
-					s.Break()
+					r.Break()
 				}
 			}
 
 			return err
 			// On a server error, it means there is downtime or other problems, we
 			// need to retry. Let's retry every 5 seconds, for a total of 5 minutes.
-		}, &retry.Config{Maximum: 60, Interval: 5 * time.Second})
+		})
+
 		if err != nil {
 			l.Fatal("Failed to upload and process pipeline: %s", err)
 		}

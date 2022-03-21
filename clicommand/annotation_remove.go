@@ -93,23 +93,27 @@ var AnnotationRemoveCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Retry the removal a few times before giving up
-		err = retry.Do(func(s *retry.Stats) error {
+		err = retry.NewRetrier(
+			retry.WithMaxAttempts(5),
+			retry.WithStrategy(retry.Constant(1*time.Second)),
+			retry.WithJitter(),
+		).Do(func(r *retry.Retrier) error {
 			// Attempt to remove the annotation
 			resp, err := client.AnnotationRemove(cfg.Job, cfg.Context)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400 || resp.StatusCode == 410) {
-				s.Break()
+				r.Break()
 				return err
 			}
 
 			// Show the unexpected error
 			if err != nil {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+		})
 
 		// Show a fatal error if we gave up trying to create the annotation
 		if err != nil {

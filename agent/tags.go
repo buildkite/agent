@@ -88,20 +88,24 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	if conf.TagsFromEC2MetaData {
 		l.Info("Fetching EC2 meta-data...")
 
-		err := retry.Do(func(s *retry.Stats) error {
+		err := retry.NewRetrier(
+			retry.WithMaxAttempts(5),
+			retry.WithStrategy(retry.Constant(conf.WaitForEC2MetaDataTimeout/5)),
+			retry.WithJitter(),
+		).Do(func(r *retry.Retrier) error {
 			ec2Tags, err := t.ec2MetaDataDefault()
 			if err != nil {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 			} else {
 				l.Info("Successfully fetched EC2 meta-data")
 				for tag, value := range ec2Tags {
 					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
 				}
-				s.Break()
+				r.Break()
 			}
 
 			return err
-		}, &retry.Config{Maximum: 5, Interval: conf.WaitForEC2MetaDataTimeout / 5, Jitter: true})
+		})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
@@ -131,7 +135,11 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	if conf.TagsFromEC2Tags {
 		l.Info("Fetching EC2 tags...")
 
-		err := retry.Do(func(s *retry.Stats) error {
+		err := retry.NewRetrier(
+			retry.WithMaxAttempts(5),
+			retry.WithStrategy(retry.Constant(conf.WaitForEC2TagsTimeout/5)),
+			retry.WithJitter(),
+		).Do(func(r *retry.Retrier) error {
 			ec2Tags, err := t.ec2Tags()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
 			// to be applied to instances. This error will cause retries.
@@ -139,16 +147,16 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 				err = errors.New("EC2 tags are empty")
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 			} else {
 				l.Info("Successfully fetched EC2 tags")
 				for tag, value := range ec2Tags {
 					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
 				}
-				s.Break()
+				r.Break()
 			}
 			return err
-		}, &retry.Config{Maximum: 5, Interval: conf.WaitForEC2TagsTimeout / 5, Jitter: true})
+		})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
@@ -160,7 +168,11 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	if conf.TagsFromGCPMetaData {
 		l.Info("Fetching GCP meta-data...")
 
-		err := retry.Do(func(s *retry.Stats) error {
+		err := retry.NewRetrier(
+			retry.WithMaxAttempts(5),
+			retry.WithStrategy(retry.Constant(1*time.Second)),
+			retry.WithJitter(),
+		).Do(func(_ *retry.Retrier) error {
 			gcpTags, err := t.gcpMetaDataDefault()
 			if err != nil {
 				// Don't blow up if we can't find them, just show a nasty error.
@@ -173,7 +185,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			}
 
 			return nil
-		}, &retry.Config{Maximum: 5, Interval: 1 * time.Second, Jitter: true})
+		})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
@@ -202,22 +214,26 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 	// Attempt to add the Google Compute instance labels
 	if conf.TagsFromGCPLabels {
 		l.Info("Fetching GCP instance labels...")
-		err := retry.Do(func(s *retry.Stats) error {
+		err := retry.NewRetrier(
+			retry.WithMaxAttempts(5),
+			retry.WithStrategy(retry.Constant(conf.WaitForGCPLabelsTimeout/5)),
+			retry.WithJitter(),
+		).Do(func(r *retry.Retrier) error {
 			labels, err := t.gcpLabels()
 			if err == nil && len(labels) == 0 {
 				err = errors.New("GCP instance labels are empty")
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 			} else {
 				l.Info("Successfully fetched GCP instance labels")
 				for label, value := range labels {
 					tags = append(tags, fmt.Sprintf("%s=%s", label, value))
 				}
-				s.Break()
+				r.Break()
 			}
 			return err
-		}, &retry.Config{Maximum: 5, Interval: conf.WaitForGCPLabelsTimeout / 5, Jitter: true})
+		})
 
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
