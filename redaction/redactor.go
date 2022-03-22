@@ -321,7 +321,7 @@ func GetKeyValuesToRedact(logger shell.Logger, patterns []string, environment ma
 
 			if matched {
 				if len(varValue) < RedactLengthMin {
-					logger.Warningf("Value of %s below minimum length and will not be redacted", varName)
+					logger.Warningf("Value of %s below minimum length (%d bytes) and will not be redacted", varName, RedactLengthMin)
 				} else {
 					valuesToRedact[varName] = varValue
 				}
