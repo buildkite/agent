@@ -12,11 +12,11 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/retry"
-	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/stdin"
 	"github.com/urfave/cli"
 )
@@ -51,12 +51,13 @@ Example:
    $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 type PipelineUploadConfig struct {
-	FilePath        string 	 `cli:"arg:0" label:"upload paths"`
-	Replace         bool   	 `cli:"replace"`
-	Job             string 	 `cli:"job"`
-	DryRun          bool   	 `cli:"dry-run"`
-	NoInterpolation bool   	 `cli:"no-interpolation"`
-	RedactedVars	 []string `cli:"redacted-vars" normalize:"list"`
+	FilePath        string   `cli:"arg:0" label:"upload paths"`
+	Replace         bool     `cli:"replace"`
+	Job             string   `cli:"job"`
+	DryRun          bool     `cli:"dry-run"`
+	NoInterpolation bool     `cli:"no-interpolation"`
+	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
+	RejectSecrets   bool     `cli:"reject-secrets"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -73,7 +74,7 @@ type PipelineUploadConfig struct {
 
 var PipelineUploadCommand = cli.Command{
 	Name:        "upload",
-	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job.",
+	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
 	Description: PipelineUploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
@@ -96,6 +97,11 @@ var PipelineUploadCommand = cli.Command{
 			Name:   "no-interpolation",
 			Usage:  "Skip variable interpolation the pipeline when uploaded",
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
+		},
+		cli.BoolFlag{
+			Name:   "reject-secrets",
+			Usage:  "When true, fail the pipeline upload early if the the pipeline contains secrets",
+			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
 
 		// API Flags
@@ -227,6 +233,34 @@ var PipelineUploadCommand = cli.Command{
 			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
 		}
 
+		if len(cfg.RedactedVars) > 0 {
+			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).ToMap())
+			serialisedPipeline, err := result.MarshalJSON()
+
+			if err != nil {
+				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
+			}
+
+			stringifiedserialisedPipeline := string(serialisedPipeline)
+
+			secretsFound := make([]string, 0, len(needles))
+			for needleKey, needle := range needles {
+				if strings.Contains(stringifiedserialisedPipeline, needle) {
+					secretsFound = append(secretsFound, needleKey)
+				}
+			}
+
+			if len(secretsFound) > 0 {
+				if cfg.RejectSecrets {
+					l.Fatal("Pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
+				} else {
+					l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
+					l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
+					l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
+				}
+			}
+		}
+
 		// In dry-run mode we just output the generated pipeline to stdout
 		if cfg.DryRun {
 			enc := json.NewEncoder(os.Stdout)
@@ -239,23 +273,6 @@ var PipelineUploadCommand = cli.Command{
 			}
 
 			return
-		}
-
-		if len(cfg.RedactedVars) > 0 {
-			needles := redaction.GetKeyValuesToRedact(shell.StderrLogger, cfg.RedactedVars, env.FromSlice(os.Environ()).ToMap())
-			serialisedPipeline, err := result.MarshalJSON()
-
-			if err != nil {
-				l.Fatal("Couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%s)", src, err)
-			}
-
-			stringifiedserialisedPipeline := string(serialisedPipeline)
-
-			for needleKey, needle := range needles {
-				if strings.Contains(stringifiedserialisedPipeline, needle) {
-					l.Fatal("Couldn’t upload the %q pipeline. Refusing to upload pipeline containing the value interpolated from the %q environment variable. Ensure your pipeline does not include secret values or interpolated secret values.", src, needleKey)
-				}
-			}
 		}
 
 		// Check we have a job id set if not in dry run
