@@ -131,7 +131,7 @@ if [ "$OPERATION" = "upgrade" ] ; then
   done
 fi
 
-# Make sure all the the folders created are owned by the buildkite-agent user #
+# Make sure all the folders created are owned by the buildkite-agent user #
 # on install
 if [ "$OPERATION" = "install" ] ; then
   if [ "$BK_USER_EXISTS" = "true" ]; then

@@ -50,7 +50,7 @@ type Config struct {
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
-	// The provider of the the pipeline
+	// The provider of the pipeline
 	PipelineProvider string
 
 	// Slug of the current organization

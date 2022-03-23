@@ -100,7 +100,7 @@ var PipelineUploadCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "reject-secrets",
-			Usage:  "When true, fail the pipeline upload early if the the pipeline contains secrets",
+			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
 			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
 		},
 
