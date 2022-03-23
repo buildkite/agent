@@ -25,7 +25,8 @@ Example:
 type MetaDataGetConfig struct {
 	Key     string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Default string `cli:"default"`
-	Job     string `cli:"job" validate:"required"`
+	Job     string `cli:"job"`
+	Build   string `cli:"build"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -56,6 +57,11 @@ var MetaDataGetCommand = cli.Command{
 			Usage:  "Which job's build should the meta-data be retrieved from",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
+		cli.StringFlag{
+			Name:  "build",
+			Value: "",
+			Usage: "Which build should the meta-data be retrieved from",
+		},
 
 		// API Flags
 		AgentAccessTokenFlag,
@@ -80,6 +86,11 @@ var MetaDataGetCommand = cli.Command{
 			l.Fatal("%s", err)
 		}
 
+		// We need either a build id or a job id to lookup
+		if cfg.Build == "" && cfg.Job == "" {
+			l.Fatal("Must provide eitehr a build or a job")
+		}
+
 		// Setup any global configuration options
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
@@ -87,12 +98,18 @@ var MetaDataGetCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
+		// We will lookup by job id by default, or switch to build if specified
+		var getMetaDataFunc = client.GetMetaData
+		if cfg.Build != "" {
+			getMetaDataFunc = client.GetMetaDataByBuild
+		}
+
 		// Find the meta data value
 		var metaData *api.MetaData
 		var err error
 		var resp *api.Response
 		err = retry.Do(func(s *retry.Stats) error {
-			metaData, resp, err = client.GetMetaData(cfg.Job, cfg.Key)
+			metaData, resp, err = getMetaDataFunc(cfg.Job, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				s.Break()

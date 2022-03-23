@@ -46,6 +46,24 @@ func (c *Client) GetMetaData(jobId string, key string) (*MetaData, *Response, er
 	return m, resp, err
 }
 
+// Gets the meta data value by build
+func (c *Client) GetMetaDataByBuild(buildId string, key string) (*MetaData, *Response, error) {
+	u := fmt.Sprintf("build/%s/data/get", buildId)
+	m := &MetaData{Key: key}
+
+	req, err := c.newRequest("POST", u, m)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resp, err := c.doRequest(req, m)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return m, resp, err
+}
+
 // Returns true if the meta data key has been set, false if it hasn't.
 func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/exists", jobId)
