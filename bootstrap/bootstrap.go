@@ -1250,7 +1250,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 
 	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
 
-	// Update the the origin of the repository so we can gracefully handle repository renames
+	// Update the origin of the repository so we can gracefully handle repository renames
 	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
 		return "", err
 	}
@@ -1320,7 +1320,7 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 	// Does the git directory exist?
 	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
 	if utils.FileExists(existingGitDir) {
-		// Update the the origin of the repository so we can gracefully handle repository renames
+		// Update the origin of the repository so we can gracefully handle repository renames
 		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
 			return err
 		}

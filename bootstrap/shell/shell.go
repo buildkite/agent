@@ -303,7 +303,7 @@ func (s *Shell) injectTraceCtx(ctx context.Context, env *env.Environment) {
 
 // RunScript is like Run, but the target is an interpreted script which has
 // some extra checks to ensure it gets to the correct interpreter. Extra environment vars
-// can also be passed the the script
+// can also be passed the script
 func (s *Shell) RunScript(ctx context.Context, path string, extra *env.Environment) error {
 	var command string
 	var args []string
