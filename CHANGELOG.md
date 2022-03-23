@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Update Git mirror functionality to support skipping the update of the Git mirror. This is useful is the Git mirror is mounted from an external volume, NFS mount etc. Enabled via the `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE` flag or `git-mirrors-skip-update` cli flag.
 
+## [v3.34.1](https://github.com/buildkite/agent/compare/v3.34.0...v3.34.1) (2022-03-23)
+
+### Fixed
+
+- Make secret value rejection on pipeline upload optional. **This undoes a breaking change accidentally included in v3.34.0** [#1589](https://github.com/buildkite/agent/pull/1589) (@moskyb)
+
 ## [v3.34.0](https://github.com/buildkite/agent/compare/v3.33.3...v3.34.0) (2022-03-01)
 
 ### Added
