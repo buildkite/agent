@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.34.1](https://github.com/buildkite/agent/compare/v3.34.0...v3.34.1) (2022-03-23)
+
+### Fixed
+
+- Make secret value rejection on pipeline upload optional. **This undoes a breaking change accidentally included in v3.34.0** [#1589](https://github.com/buildkite/agent/pull/1589) (@moskyb)
+
 ## [v3.34.0](https://github.com/buildkite/agent/compare/v3.33.3...v3.34.0) (2022-03-01)
 
 ### Added
@@ -146,7 +152,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * Build with Golang 1.16.3 [#1412](https://github.com/buildkite/agent/pull/1412) ([dependabot[bot]](https://github.com/apps/dependabot))
 * Update [Buildkite CLI](https://github.com/buildkite/cli) release from 1.0.0 to 1.2.0 [#1403](https://github.com/buildkite/agent/pull/1403) ([yob](https://github.com/yob))
 
-### Fixed 
+### Fixed
 * Avoid occasional failure to run jobs when working directory is missing [#1402](https://github.com/buildkite/agent/pull/1402) ([yob](https://github.com/yob))
 * Avoid a rare panic when running `buildkite-agent pipeline upload` [#1406](https://github.com/buildkite/agent/pull/1406) ([yob](https://github.com/yob))
 
