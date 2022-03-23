@@ -57,7 +57,7 @@ type PipelineUploadConfig struct {
 	DryRun          bool     `cli:"dry-run"`
 	NoInterpolation bool     `cli:"no-interpolation"`
 	RedactedVars    []string `cli:"redacted-vars" normalize:"list"`
-	RejectSecrets   bool     `cli:"reject-secrets"`
+	AllowSecrets    bool     `cli:"allow-secrets"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -99,9 +99,9 @@ var PipelineUploadCommand = cli.Command{
 			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
 		},
 		cli.BoolFlag{
-			Name:   "reject-secrets",
-			Usage:  "When true, fail the pipeline upload early if the the pipeline contains secrets",
-			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+			Name:   "allow-secrets",
+			Usage:  "When true, allows the uploaded pipeline to be uploaded when it has interpolated secrets. Included for compatibility with Agent v3, using this flag is insecure.",
+			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_ALLOW_SECRETS",
 		},
 
 		// API Flags
@@ -251,12 +251,12 @@ var PipelineUploadCommand = cli.Command{
 			}
 
 			if len(secretsFound) > 0 {
-				if cfg.RejectSecrets {
-					l.Fatal("Pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
+				if cfg.AllowSecrets {
+					l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI", src, secretsFound)
+					l.Warn("This pipeline will still be uploaded, because you've used the `--allow-secrets flag or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_ALLOW_SECRETS` environment variable.")
+					l.Warn("This behaviour is insecure, and may be removed in a future version of the agent")
 				} else {
-					l.Warn("Pipeline %q contains values interpolated from the following secret environment variables: %v, which could leak sensitive information into the Buildkite UI.", src, secretsFound)
-					l.Warn("This pipeline will still be uploaded, but if you'd like to to prevent this from happening, you can use the `--reject-secrets` cli flag, or the `BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS` environment variable, which will make the `buildkite-agent pipeline upload` command fail if it finds secrets in the pipeline.")
-					l.Warn("The behaviour in the above flags will become default in Buildkite Agent v4")
+					l.Fatal("Pipeline %q contains values interpolated from the following secret environment variables: %v, and cannot be uploaded to Buildkite", src, secretsFound)
 				}
 			}
 		}
