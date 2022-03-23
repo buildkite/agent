@@ -1279,16 +1279,31 @@ func (b *Bootstrap) defaultCheckoutPhase() error {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
+	var err error
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
-		var err error
-		mirrorDir, err = b.updateGitMirror()
-		if err != nil {
-			return err
+
+		// Skip updating the Git mirror before using it?
+		if b.Config.GitMirrorsSkipUpdate {
+			mirrorDir = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
+			b.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", b.Repository, mirrorDir)
+
+			// Check if specified mirrorDir exists, otherwise the clone will fail.
+			if !utils.FileExists(mirrorDir) {
+				// Fall back to a clean clone, rather than failing the clone and therefore the build
+				b.shell.Commentf("No existing mirror found for repository %s at %s.", b.Repository, mirrorDir)
+				mirrorDir = ""
+			}
+		} else {
+			mirrorDir, err = b.updateGitMirror()
+			if err != nil {
+				return err
+			}
 		}
+
 		b.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
