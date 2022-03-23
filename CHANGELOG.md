@@ -5,11 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v3.35.0](https://github.com/buildkite/agent/tree/v3.35.0) (2022-03-23)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.34.0...v3.35.0)
+
+### Changed
+
+- Make `go fmt` mandatory in this repo [#1587](https://github.com/buildkite/agent/pull/1587) (@moskyb)
+- Only search for finished artifact uploads when using `buildkite-agent artifact download` and `artifact shasum` [#1584](https://github.com/buildkite/agent/pull/1584) (@pda)
+- Improve help/usage/errors for `buildkite-agent artifact shasum` [#1581](https://github.com/buildkite/agent/pull/1581) (@pda)
+- Make the agent look for work immediately after completing a job, rather than waiting the ping interval [#1567](https://github.com/buildkite/agent/pull/1567) (@extemporalgenome)
+- Update github.com/aws/aws-sdk-go to the latest v1 release [#1573](https://github.com/buildkite/agent/pull/1573) (@yob)
+- Enable dependabot for go.mod [#1574](https://github.com/buildkite/agent/pull/1574) (@yob)
+- Use build matrix feature to simplify CI pipeline [#1566](https://github.com/buildkite/agent/pull/1566) (@ticky)
+  - Interested in using Build Matrices yourself? Check out [our docs!](https://buildkite.com/docs/pipelines/build-matrix)
+
+### Fixed
+
+- Use `net.JoinHostPort()` to join host/port combos, rather than `fmt.Sprintf()` [#1585](https://github.com/buildkite/agent/pull/1585) (@pda)
+- Fix minor typo in help text for `buildkite-agent pipeline upload [#1595](https://github.com/buildkite/agent/pull/1595) (@bmosky)
 
 ### Added
 
-- Update Git mirror functionality to support skipping the update of the Git mirror. This is useful is the Git mirror is mounted from an external volume, NFS mount etc. Enabled via the `BUILDKITE_GIT_MIRRORS_SKIP_UPDATE` flag or `git-mirrors-skip-update` cli flag.
+- Add option to skip updating the mirror when using git mirrors. Useful when git is mounted from an external volume, NFS mount etc [#1552](https://github.com/buildkite/agent/pull/1552) (@fatmcgav)
+
+### Security
+
+- When creating directories, make them only accessible by current user and group [#1580](https://github.com/buildkite/agent/pull/1580) (@pda)
 
 ## [v3.34.1](https://github.com/buildkite/agent/compare/v3.34.0...v3.34.1) (2022-03-23)
 
@@ -158,7 +179,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * Build with Golang 1.16.3 [#1412](https://github.com/buildkite/agent/pull/1412) ([dependabot[bot]](https://github.com/apps/dependabot))
 * Update [Buildkite CLI](https://github.com/buildkite/cli) release from 1.0.0 to 1.2.0 [#1403](https://github.com/buildkite/agent/pull/1403) ([yob](https://github.com/yob))
 
-### Fixed 
+### Fixed
 * Avoid occasional failure to run jobs when working directory is missing [#1402](https://github.com/buildkite/agent/pull/1402) ([yob](https://github.com/yob))
 * Avoid a rare panic when running `buildkite-agent pipeline upload` [#1406](https://github.com/buildkite/agent/pull/1406) ([yob](https://github.com/yob))
 
