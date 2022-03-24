@@ -2,6 +2,7 @@ package agent
 
 import (
 	"crypto/sha1"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -196,10 +197,11 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 		return nil, err
 	}
 
-	// Generate a sha1 checksum for the file
-	hash := sha1.New()
-	io.Copy(hash, file)
-	checksum := fmt.Sprintf("%x", hash.Sum(nil))
+	// Generate a SHA-1 and SHA-256 checksums for the file
+	hash1, hash256 := sha1.New(), sha256.New()
+	io.Copy(io.MultiWriter(hash1, hash256), file)
+	sha1sum := fmt.Sprintf("%040x", hash1.Sum(nil))
+	sha256sum := fmt.Sprintf("%064x", hash256.Sum(nil))
 
 	// Determine the Content-Type to send
 	contentType := a.conf.ContentType
@@ -219,7 +221,8 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 		AbsolutePath: absolutePath,
 		GlobPath:     globPath,
 		FileSize:     fileInfo.Size(),
-		Sha1Sum:      checksum,
+		Sha1Sum:      sha1sum,
+		Sha256Sum:    sha256sum,
 		ContentType:  contentType,
 	}
 
