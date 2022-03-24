@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 
 - Add option to skip updating the mirror when using git mirrors. Useful when git is mounted from an external volume, NFS mount etc [#1552](https://github.com/buildkite/agent/pull/1552) (@fatmcgav)
+- Use the more secure SHA256 hashing algorithm alongside SHA1 when working with artifacts [#1582](https://github.com/buildkite/agent/pull/1582) [#1583](https://github.com/buildkite/agent/pull/1583) [#1584](https://github.com/buildkite/agent/pull/1584) (@pda)
 
 ### Security
 
