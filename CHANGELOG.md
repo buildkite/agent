@@ -18,15 +18,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Enable dependabot for go.mod [#1574](https://github.com/buildkite/agent/pull/1574) (@yob)
 - Use build matrix feature to simplify CI pipeline [#1566](https://github.com/buildkite/agent/pull/1566) (@ticky)
   - Interested in using Build Matrices yourself? Check out [our docs!](https://buildkite.com/docs/pipelines/build-matrix)
+- Buildkite pipeline adjustments [#1597](https://github.com/buildkite/agent/pull/1597) (@moskyb)
 
 ### Fixed
 
 - Use `net.JoinHostPort()` to join host/port combos, rather than `fmt.Sprintf()` [#1585](https://github.com/buildkite/agent/pull/1585) (@pda)
-- Fix minor typo in help text for `buildkite-agent pipeline upload [#1595](https://github.com/buildkite/agent/pull/1595) (@bmosky)
+- Fix minor typo in help text for `buildkite-agent pipeline upload [#1595](https://github.com/buildkite/agent/pull/1595) (@moskyb)
 
 ### Added
 
 - Add option to skip updating the mirror when using git mirrors. Useful when git is mounted from an external volume, NFS mount etc [#1552](https://github.com/buildkite/agent/pull/1552) (@fatmcgav)
+- Use the more secure SHA256 hashing algorithm alongside SHA1 when working with artifacts [#1582](https://github.com/buildkite/agent/pull/1582) [#1583](https://github.com/buildkite/agent/pull/1583) [#1584](https://github.com/buildkite/agent/pull/1584) (@pda)
 
 ### Security
 
