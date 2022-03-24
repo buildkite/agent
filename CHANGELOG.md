@@ -18,11 +18,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Enable dependabot for go.mod [#1574](https://github.com/buildkite/agent/pull/1574) (@yob)
 - Use build matrix feature to simplify CI pipeline [#1566](https://github.com/buildkite/agent/pull/1566) (@ticky)
   - Interested in using Build Matrices yourself? Check out [our docs!](https://buildkite.com/docs/pipelines/build-matrix)
+- Buildkite pipeline adjustments [#1597](https://github.com/buildkite/agent/pull/1597) (@moskyb)
 
 ### Fixed
 
 - Use `net.JoinHostPort()` to join host/port combos, rather than `fmt.Sprintf()` [#1585](https://github.com/buildkite/agent/pull/1585) (@pda)
-- Fix minor typo in help text for `buildkite-agent pipeline upload [#1595](https://github.com/buildkite/agent/pull/1595) (@bmosky)
+- Fix minor typo in help text for `buildkite-agent pipeline upload [#1595](https://github.com/buildkite/agent/pull/1595) (@moskyb)
 
 ### Added
 
