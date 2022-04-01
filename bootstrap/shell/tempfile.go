@@ -16,7 +16,7 @@ func TempFileWithExtension(filename string) (*os.File, error) {
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
-		if err = os.MkdirAll(tempDir, 0770); err != nil {
+		if err = os.MkdirAll(tempDir, 0777); err != nil {
 			return nil, err
 		}
 	}
