@@ -121,7 +121,7 @@ func (d Download) try() error {
 			responseDump, err := httputil.DumpResponse(response, true)
 			if err != nil {
 				d.logger.Debug("\nERR: %s\n%s", err, string(responseDump))
-			}  else {
+			} else {
 				d.logger.Debug("\n%s", string(responseDump))
 			}
 		}

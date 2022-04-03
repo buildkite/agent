@@ -1806,7 +1806,7 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	for _, line := range strings.Split(cmd, "\n") {
 		if line != "" {
 			if shouldCallBatchLine(line) {
-				scriptContents = append(scriptContents, "call " + line)
+				scriptContents = append(scriptContents, "call "+line)
 			} else {
 				scriptContents = append(scriptContents, line)
 			}

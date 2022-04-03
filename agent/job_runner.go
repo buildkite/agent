@@ -631,7 +631,7 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
+func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 	r.logger.Info("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New()
@@ -643,7 +643,7 @@ func (r *JobRunner)executePreBootstrapHook(hook string) (bool, error) {
 	// to the pre-bootstrap hook.
 	sh.Env.Set("BUILDKITE_ENV_FILE", r.envFile.Name())
 
-	sh.Writer = LogWriter {
+	sh.Writer = LogWriter{
 		l: r.logger,
 	}
 
