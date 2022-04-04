@@ -10,7 +10,7 @@ import "runtime"
 //
 // Pre-release builds' versions must be in the format `x.y-beta`, `x.y-beta.z` or `x.y-beta.z.a`
 
-var baseVersion string = "3.35.0"
+var baseVersion string = "3.35.1"
 var buildVersion string = ""
 
 func Version() string {
