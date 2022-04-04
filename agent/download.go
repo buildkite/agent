@@ -130,7 +130,7 @@ func (d Download) try() error {
 	}
 
 	// Now make the folder for our file
-	err = os.MkdirAll(targetDirectory, 0770)
+	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
 		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
 	}
