@@ -81,6 +81,11 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.InterruptSignal = b.Config.CancelSignal
 	}
 
+	span, ctx, stopper := b.startTracing(ctx)
+	defer stopper()
+	var err error
+	defer func() { tracetools.FinishWithError(span, err) }()
+
 	// Listen for cancellation
 	go func() {
 		select {
@@ -92,11 +97,6 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 			b.shell.Interrupt()
 		}
 	}()
-
-	span, ctx, stopper := b.startTracing(ctx)
-	defer stopper()
-	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
