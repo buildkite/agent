@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.35.2](https://github.com/buildkite/agent/tree/v3.35.2) (2022-04-13)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.35.1...v3.35.2)
+
+### Fixed
+- Fix race condition in bootstrap.go [#1606](https://github.com/buildkite/agent/pull/1606) (@moskyb)
+
+### Changed
+- Bump some dependency versions - thanks @dependabot!
+  - github.com/stretchr/testify: 1.5.1 -> 1.7.1 [#1608](https://github.com/buildkite/agent/pull/1608)
+  - github.com/mitchellh/go-homedir: 1.0.0 -> 1.1.0 [#1576](https://github.com/buildkite/agent/pull/1576)
+
 ## [v3.35.1](https://github.com/buildkite/agent/tree/v3.35.1) (2022-04-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.35.0...v3.35.1)
 
