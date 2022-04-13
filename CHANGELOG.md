@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.35.1](https://github.com/buildkite/agent/tree/v3.35.1) (2022-04-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.35.0...v3.35.1)
+
+### Fixed
+
+- Revert file permission changes made in [#1580](https://github.com/buildkite/agent/pull/1580). They were creating issues with docker-based workflows [#1601](https://github.com/buildkite/agent/pull/1601) (@pda + @moskyb)
+
 ## [v3.35.0](https://github.com/buildkite/agent/tree/v3.35.0) (2022-03-23)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.34.0...v3.35.0)
 
