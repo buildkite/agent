@@ -4,7 +4,7 @@ set -euo pipefail
 go version
 echo arch is "$(uname -m)"
 
-GO111MODULE=off go get gotest.tools/gotestsum
+go install gotest.tools/gotestsum@v1.8.0
 
 echo '+++ Running tests'
 gotestsum --junitfile "junit-${OSTYPE}.xml" -- -count=1 -failfast "$@" ./...
