@@ -27,6 +27,7 @@ type AgentConfiguration struct {
 	DisconnectAfterJob         bool
 	DisconnectAfterIdleTimeout int
 	CancelGracePeriod          int
+	EnableJobLogTmpfile        bool
 	Shell                      string
 	Profile                    string
 	RedactedVars               []string
