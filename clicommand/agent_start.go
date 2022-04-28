@@ -215,13 +215,13 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "disconnect-after-job",
-			Usage:  "Disconnect the agent after running a job",
+			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the --spawn flag, each worker booted will run exactly one job",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
 		},
 		cli.IntFlag{
 			Name:   "disconnect-after-idle-timeout",
 			Value:  0,
-			Usage:  "If no jobs have come in for the specified number of seconds, disconnect the agent",
+			Usage:  "The maximum idle time in seconds to wait for a job before disconnecting. The default of 0 means no timeout",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
 		},
 		cli.IntFlag{
