@@ -91,7 +91,7 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 
 func (kh *knownHosts) Add(host string) error {
 	// Use a lockfile to prevent parallel processes stepping on each other
-	lock, err := kh.Shell.LockFile(kh.Path+".lock", time.Second*30)
+	lock, err := kh.Shell.Flock(kh.Path+".lock", time.Second*30)
 	if err != nil {
 		return err
 	}

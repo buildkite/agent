@@ -22,7 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
-	"github.com/nightlyone/lockfile"
+	"github.com/gofrs/flock"
 	"github.com/pkg/errors"
 )
 
@@ -179,30 +179,31 @@ func (s *Shell) Terminate() {
 	}
 }
 
-// LockFile is a pid-based lock for cross-process locking
-type LockFile interface {
+// Flock is a pid-based lock for cross-process locking
+type Flock interface {
 	Unlock() error
 }
 
 // Create a cross-process file-based lock based on pid files
-func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
+func (s *Shell) Flock(path string, timeout time.Duration) (Flock, error) {
 	absolutePathToLock, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
 	}
 
-	lock, err := lockfile.New(absolutePathToLock)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
-	}
+	lock := flock.New(absolutePathToLock)
 
 	ctx, cancel := context.WithTimeout(s.ctx, timeout)
 	defer cancel()
 
 	for {
 		// Keep trying the lock until we get it
-		if err := lock.TryLock(); err != nil {
-			s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
+		if gotLock, err := lock.TryLock(); !gotLock || err != nil {
+			if !gotLock {
+				s.Commentf("Could not acquire lock on \"%s\" (Locked by other process)", absolutePathToLock)
+			} else {
+				s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
+			}
 			s.Commentf("Trying again in %s...", lockRetryDuration)
 			time.Sleep(lockRetryDuration)
 		} else {
@@ -217,7 +218,7 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
 		}
 	}
 
-	return &lock, err
+	return lock, err
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
