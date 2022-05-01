@@ -5,20 +5,20 @@ ENV DOCKER_COMPOSE_VERSION=1.27.4
 ENV TINI_VERSION=0.19.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      apt-transport-https \
-      curl \
-      ca-certificates \
-      bash \
-      git \
-      gnupg-agent \
-      jq \
-      openssh-client \
-      perl \
-      rsync \
-      software-properties-common \
+    apt-transport-https \
+    curl \
+    ca-certificates \
+    bash \
+    git \
+    gnupg-agent \
+    jq \
+    openssh-client \
+    perl \
+    rsync \
+    software-properties-common \
     && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - \
     && add-apt-repository \
-      "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+    "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*

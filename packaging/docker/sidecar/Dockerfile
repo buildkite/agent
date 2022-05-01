@@ -1,10 +1,10 @@
-FROM alpine:3.12
+FROM alpine:3.15.4
 
 RUN mkdir /buildkite \
-          /buildkite/builds \
-          /buildkite/hooks \
-          /buildkite/plugins \
-          /buildkite/bin
+  /buildkite/builds \
+  /buildkite/hooks \
+  /buildkite/plugins \
+  /buildkite/bin
 
 COPY buildkite-agent.cfg /buildkite/
 COPY buildkite-agent /buildkite/bin/
