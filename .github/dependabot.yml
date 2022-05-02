@@ -1,6 +1,10 @@
 version: 2
 updates:
   - package-ecosystem: "docker"
+    directory: "/packaging/docker"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "docker"
     directory: "/.buildkite"
     schedule:
       interval: "monthly"
