@@ -308,14 +308,16 @@ func (a *AgentWorker) Stop(graceful bool) {
 func (a *AgentWorker) Connect() error {
 	a.logger.Info("Connecting to Buildkite...")
 
-	return retry.Do(func(s *retry.Stats) error {
+	return retry.NewRetrier(
+		retry.WithMaxAttempts(10),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(r *retry.Retrier) error {
 		_, err := a.apiClient.Connect()
 		if err != nil {
-			a.logger.Warn("%s (%s)", err, s)
+			a.logger.Warn("%s (%s)", err, r)
 		}
-
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+	})
 }
 
 // Performs a heatbeat
@@ -324,13 +326,16 @@ func (a *AgentWorker) Heartbeat() error {
 	var err error
 
 	// Retry the heartbeat a few times
-	err = retry.Do(func(s *retry.Stats) error {
+	err = retry.NewRetrier(
+		retry.WithMaxAttempts(10),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(r *retry.Retrier) error {
 		beat, _, err = a.apiClient.Heartbeat()
 		if err != nil {
-			a.logger.Warn("%s (%s)", err, s)
+			a.logger.Warn("%s (%s)", err, r)
 		}
 		return err
-	}, &retry.Config{Maximum: 5, Interval: 5 * time.Second})
+	})
 
 	a.stats.Lock()
 	defer a.stats.Unlock()
@@ -415,11 +420,14 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 	// Acquire the job using the ID we were provided. We'll retry as best
 	// we can on non 422 error.
 	var acquiredJob *api.Job
-	err := retry.Do(func(s *retry.Stats) error {
+	err := retry.NewRetrier(
+		retry.WithMaxAttempts(10),
+		retry.WithStrategy(retry.Constant(3*time.Second)),
+	).Do(func(r *retry.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
-			s.Break()
+			r.Break()
 		}
 
 		var err error
@@ -432,14 +440,14 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 			// Buildkite rejected the finish for some reason.
 			if response != nil && response.StatusCode == 422 {
 				a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
-				s.Break()
+				r.Break()
 			} else {
-				a.logger.Warn("%s (%s)", err, s)
+				a.logger.Warn("%s (%s)", err, r)
 			}
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 3 * time.Second})
+	})
 
 	// If `acquiredJob` is nil, then the job was never acquired
 	if acquiredJob == nil {
@@ -458,20 +466,23 @@ func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
 	// re-ping, and try the whole process again.
 	var accepted *api.Job
-	err := retry.Do(func(s *retry.Stats) error {
+	err := retry.NewRetrier(
+		retry.WithMaxAttempts(30),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(r *retry.Retrier) error {
 		var err error
 		accepted, _, err = a.apiClient.AcceptJob(job)
 		if err != nil {
 			if api.IsRetryableError(err) {
-				a.logger.Warn("%s (%s)", err, s)
+				a.logger.Warn("%s (%s)", err, r)
 			} else {
 				a.logger.Warn("Buildkite rejected the call to accept the job (%s)", err)
-				s.Break()
+				r.Break()
 			}
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
+	})
 
 	// If `accepted` is nil, then the job was never accepted
 	if accepted == nil {

@@ -952,9 +952,12 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	defer b.shell.Chdir(previousWd)
 
 	// Plugin clones shouldn't use custom GitCloneFlags
-	err = retry.Do(func(s *retry.Stats) error {
+	err = retry.NewRetrier(
+		retry.WithMaxAttempts(3),
+		retry.WithStrategy(retry.Constant(2*time.Second)),
+	).Do(func(r *retry.Retrier) error {
 		return b.shell.Run("git", "clone", "-v", "--", repo, ".")
-	}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1074,7 +1077,10 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 		}
 	default:
 		if b.Config.Repository != "" {
-			err = retry.Do(func(s *retry.Stats) error {
+			err = retry.NewRetrier(
+				retry.WithMaxAttempts(3),
+				retry.WithStrategy(retry.Constant(2*time.Second)),
+			).Do(func(r *retry.Retrier) error {
 				err := b.defaultCheckoutPhase()
 				if err == nil {
 					return nil
@@ -1083,14 +1089,14 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 				switch {
 				case shell.IsExitError(err) && shell.GetExitCode(err) == -1:
 					b.shell.Warningf("Checkout was interrupted by a signal")
-					s.Break()
+					r.Break()
 
 				case errors.Cause(err) == context.Canceled:
 					b.shell.Warningf("Checkout was cancelled")
-					s.Break()
+					r.Break()
 
 				default:
-					b.shell.Warningf("Checkout failed! %s (%s)", err, s)
+					b.shell.Warningf("Checkout failed! %s (%s)", err, r)
 
 					// Specifically handle git errors
 					if ge, ok := err.(*gitError); ok {
@@ -1123,7 +1129,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 				}
 
 				return err
-			}, &retry.Config{Maximum: 3, Interval: 2 * time.Second})
+			})
 			if err != nil {
 				return err
 			}

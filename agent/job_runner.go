@@ -680,20 +680,23 @@ func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
-	return retry.Do(func(s *retry.Stats) error {
+	return retry.NewRetrier(
+		retry.WithMaxAttempts(30),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(rtr *retry.Retrier) error {
 		_, err := r.apiClient.StartJob(r.job)
 
 		if err != nil {
 			if api.IsRetryableError(err) {
-				r.logger.Warn("%s (%s)", err, s)
+				r.logger.Warn("%s (%s)", err, rtr)
 			} else {
 				r.logger.Warn("Buildkite rejected the call to start the job (%s)", err)
-				s.Break()
+				rtr.Break()
 			}
 		}
 
 		return err
-	}, &retry.Config{Maximum: 30, Interval: 5 * time.Second})
+	})
 }
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
@@ -708,7 +711,10 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
 
-	return retry.Do(func(s *retry.Stats) error {
+	return retry.NewRetrier(
+		retry.TryForever(),
+		retry.WithStrategy(retry.Constant(1*time.Second)),
+	).Do(func(retrier *retry.Retrier) error {
 		response, err := r.apiClient.FinishJob(r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
@@ -722,14 +728,14 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 			// go find some more work to do.
 			if response != nil && response.StatusCode == 422 {
 				r.logger.Warn("Buildkite rejected the call to finish the job (%s)", err)
-				s.Break()
+				retrier.Break()
 			} else {
-				r.logger.Warn("%s (%s)", err, s)
+				r.logger.Warn("%s (%s)", err, retrier)
 			}
 		}
 
 		return err
-	}, &retry.Config{Forever: true, Interval: 1 * time.Second})
+	})
 }
 
 func (r *JobRunner) onProcessStartCallback() {
@@ -799,19 +805,22 @@ func (r *JobRunner) onProcessStartCallback() {
 }
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
-	retry.Do(func(s *retry.Stats) error {
+	retry.NewRetrier(
+		retry.WithMaxAttempts(10),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(retrier *retry.Retrier) error {
 		response, err := r.apiClient.SaveHeaderTimes(r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the header times (%s)", err)
-				s.Break()
+				retrier.Break()
 			} else {
-				r.logger.Warn("%s (%s)", err, s)
+				r.logger.Warn("%s (%s)", err, retrier)
 			}
 		}
 
 		return err
-	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+	})
 }
 
 // Call when a chunk is ready for upload.
@@ -824,7 +833,11 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	// This code will retry forever until we get back a successful response
 	// from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
-	return retry.Do(func(s *retry.Stats) error {
+	return retry.NewRetrier(
+		retry.TryForever(),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+		retry.WithJitter(),
+	).Do(func(retrier *retry.Retrier) error {
 		response, err := r.apiClient.UploadChunk(r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
@@ -834,12 +847,12 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the chunk upload (%s)", err)
-				s.Break()
+				retrier.Break()
 			} else {
-				r.logger.Warn("%s (%s)", err, s)
+				r.logger.Warn("%s (%s)", err, retrier)
 			}
 		}
 
 		return err
-	}, &retry.Config{Forever: true, Jitter: true, Interval: 5 * time.Second})
+	})
 }

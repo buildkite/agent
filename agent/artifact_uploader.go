@@ -326,14 +326,17 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				}
 
 				// Update the states of the artifacts in bulk.
-				err = retry.Do(func(s *retry.Stats) error {
+				err = retry.NewRetrier(
+					retry.WithMaxAttempts(10),
+					retry.WithStrategy(retry.Constant(5*time.Second)),
+				).Do(func(r *retry.Retrier) error {
 					_, err = a.apiClient.UpdateArtifacts(a.conf.JobID, statesToUpload)
 					if err != nil {
-						a.logger.Warn("%s (%s)", err, s)
+						a.logger.Warn("%s (%s)", err, r)
 					}
 
 					return err
-				}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+				})
 
 				if err != nil {
 					a.logger.Error("Error uploading artifact states: %s", err)
@@ -368,14 +371,17 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
 			// a couple of times before giving up.
-			err = retry.Do(func(s *retry.Stats) error {
+			err = retry.NewRetrier(
+				retry.WithMaxAttempts(10),
+				retry.WithStrategy(retry.Constant(5*time.Second)),
+			).Do(func(r *retry.Retrier) error {
 				err := uploader.Upload(artifact)
 				if err != nil {
-					a.logger.Warn("%s (%s)", err, s)
+					a.logger.Warn("%s (%s)", err, r)
 				}
 
 				return err
-			}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+			})
 
 			var state string
 

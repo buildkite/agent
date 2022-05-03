@@ -70,17 +70,20 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		var err error
 
 		// Retry the batch upload a couple of times
-		err = retry.Do(func(s *retry.Stats) error {
+		err = retry.NewRetrier(
+			retry.WithMaxAttempts(10),
+			retry.WithStrategy(retry.Constant(5*time.Second)),
+		).Do(func(r *retry.Retrier) error {
 			creation, resp, err = a.apiClient.CreateArtifacts(a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
-				s.Break()
+				r.Break()
 			}
 			if err != nil {
-				a.logger.Warn("%s (%s)", err, s)
+				a.logger.Warn("%s (%s)", err, r)
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+		})
 
 		// Did the batch creation eventually fail?
 		if err != nil {

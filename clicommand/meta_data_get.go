@@ -91,19 +91,23 @@ var MetaDataGetCommand = cli.Command{
 		var metaData *api.MetaData
 		var err error
 		var resp *api.Response
-		err = retry.Do(func(s *retry.Stats) error {
+
+		err = retry.NewRetrier(
+			retry.WithMaxAttempts(10),
+			retry.WithStrategy(retry.Constant(5*time.Second)),
+		).Do(func(r *retry.Retrier) error {
 			metaData, resp, err = client.GetMetaData(cfg.Job, cfg.Key)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-				s.Break()
+				r.Break()
 				return err
 			}
 			if err != nil {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 			}
 
 			return err
-		}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+		})
 
 		// Deal with the error if we got one
 		if err != nil {

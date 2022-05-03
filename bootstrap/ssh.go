@@ -26,7 +26,10 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 	hostParts := strings.Split(host, ":")
 	sshKeyScanOutput := ""
 
-	err = retry.Do(func(s *retry.Stats) error {
+	err = retry.NewRetrier(
+		retry.WithMaxAttempts(3),
+		retry.WithStrategy(retry.Constant(sshKeyscanRetryInterval)),
+	).Do(func(r *retry.Retrier) error {
 		// `ssh-keyscan` needs `-p` when scanning a host with a port
 		var sshKeyScanCommand string
 		if len(hostParts) == 2 {
@@ -39,7 +42,7 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 
 		if err != nil {
 			keyScanError := fmt.Errorf("`%s` failed", sshKeyScanCommand)
-			sh.Warningf("%s (%s)", keyScanError, s)
+			sh.Warningf("%s (%s)", keyScanError, r)
 			return keyScanError
 		} else if strings.TrimSpace(sshKeyScanOutput) == "" {
 			// Older versions of ssh-keyscan would exit 0 but not
@@ -48,12 +51,12 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 			// (maybe networking related?). In any case, no
 			// response, means an error.
 			keyScanError := fmt.Errorf("`%s` returned nothing", sshKeyScanCommand)
-			sh.Warningf("%s (%s)", keyScanError, s)
+			sh.Warningf("%s (%s)", keyScanError, r)
 			return keyScanError
 		}
 
 		return nil
-	}, &retry.Config{Maximum: 3, Interval: sshKeyscanRetryInterval})
+	})
 
 	return sshKeyScanOutput, err
 }

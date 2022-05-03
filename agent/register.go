@@ -40,14 +40,14 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 	req.Hostname = hostname
 	req.OS = osVersionDump
 
-	register := func(s *retry.Stats) error {
+	register := func(r *retry.Retrier) error {
 		registered, resp, err = ac.Register(&req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				l.Warn("Buildkite rejected the registration (%s)", err)
-				s.Break()
+				r.Break()
 			} else {
-				l.Warn("%s (%s)", err, s)
+				l.Warn("%s (%s)", err, r)
 			}
 		}
 
@@ -55,7 +55,10 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 	}
 
 	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
-	err = retry.Do(register, &retry.Config{Maximum: 30, Interval: 10 * time.Second})
+	err = retry.NewRetrier(
+		retry.WithMaxAttempts(30),
+		retry.WithStrategy(retry.Constant(10*time.Second)),
+	).Do(register)
 	if err == nil {
 		l.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
 			strings.Join(registered.Tags, ", "))

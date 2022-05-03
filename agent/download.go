@@ -54,13 +54,16 @@ func NewDownload(l logger.Logger, client *http.Client, c DownloadConfig) *Downlo
 }
 
 func (d Download) Start() error {
-	return retry.Do(func(s *retry.Stats) error {
+	return retry.NewRetrier(
+		retry.WithMaxAttempts(d.conf.Retries),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(r *retry.Retrier) error {
 		err := d.try()
 		if err != nil {
-			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, s)
+			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)
 		}
 		return err
-	}, &retry.Config{Maximum: d.conf.Retries, Interval: 5 * time.Second})
+	})
 }
 
 func getTargetPath(path string, destination string) string {

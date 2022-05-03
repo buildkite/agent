@@ -37,7 +37,10 @@ func (a *ArtifactSearcher) Search(query, scope, state string, includeRetriedJobs
 	var artifacts []*api.Artifact
 
 	// Retry on transport errors, a failed search will return 0 artifacts
-	err := retry.Do(func(s *retry.Stats) error {
+	err := retry.NewRetrier(
+		retry.WithMaxAttempts(10),
+		retry.WithStrategy(retry.Constant(5*time.Second)),
+	).Do(func(*retry.Retrier) error {
 		var searchErr error
 		artifacts, _, searchErr = a.apiClient.SearchArtifacts(a.buildID, &api.ArtifactSearchOptions{
 			Query:              query,
@@ -47,7 +50,7 @@ func (a *ArtifactSearcher) Search(query, scope, state string, includeRetriedJobs
 			IncludeDuplicates:  includeDuplicates,
 		})
 		return searchErr
-	}, &retry.Config{Maximum: 10, Interval: 5 * time.Second})
+	})
 
 	return artifacts, err
 }
