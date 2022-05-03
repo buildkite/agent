@@ -905,7 +905,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
-	pluginCheckoutHook, err := b.shell.Flock(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
 	if err != nil {
 		return nil, err
 	}
@@ -1205,7 +1205,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 
 	// Lock the mirror dir to prevent concurrent clones
-	mirrorCloneLock, err := b.shell.Flock(mirrorDir+".clonelock", lockTimeout)
+	mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -1236,7 +1236,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 
 	// Lock the mirror dir to prevent concurrent updates
-	mirrorUpdateLock, err := b.shell.Flock(mirrorDir+".updatelock", lockTimeout)
+	mirrorUpdateLock, err := b.shell.LockFile(mirrorDir+".updatelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}

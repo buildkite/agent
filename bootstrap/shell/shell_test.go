@@ -295,7 +295,7 @@ func TestFlockRetriesAndTimesOut(t *testing.T) {
 	defer cmd.Process.Kill()
 
 	// acquire lock
-	_, err = sh.Flock(lockPath, time.Second*2)
+	_, err = sh.LockFile(lockPath, time.Second*2)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Expected DeadlineExceeded error, got %v", err)
 	}
@@ -332,7 +332,7 @@ func TestAcquiringLockHelperProcess(t *testing.T) {
 	sh := newShellForTest(t)
 
 	log.Printf("Locking %s", fileName)
-	if _, err := sh.Flock(fileName, time.Second*10); err != nil {
+	if _, err := sh.LockFile(fileName, time.Second*10); err != nil {
 		os.Exit(1)
 	}
 

@@ -185,7 +185,7 @@ type Flock interface {
 }
 
 // Create a cross-process file-based lock based on pid files
-func (s *Shell) Flock(path string, timeout time.Duration) (Flock, error) {
+func (s *Shell) LockFile(path string, timeout time.Duration) (Flock, error) {
 	absolutePathToLock, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
