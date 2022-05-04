@@ -15,9 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nightlyone/lockfile"
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -180,12 +182,45 @@ func (s *Shell) Terminate() {
 }
 
 // Flock is a pid-based lock for cross-process locking
-type Flock interface {
+type LockFile interface {
 	Unlock() error
 }
 
-// Create a cross-process file-based lock based on pid files
-func (s *Shell) LockFile(path string, timeout time.Duration) (Flock, error) {
+func (s *Shell) lockfile(path string, timeout time.Duration) (LockFile, error) {
+	absolutePathToLock, err := filepath.Abs(path)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
+	}
+
+	lock, err := lockfile.New(absolutePathToLock)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	defer cancel()
+
+	for {
+		// Keep trying the lock until we get it
+		if err := lock.TryLock(); err != nil {
+			s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
+			s.Commentf("Trying again in %s...", lockRetryDuration)
+			time.Sleep(lockRetryDuration)
+		} else {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+			// No value ready, moving on
+		}
+	}
+
+	return &lock, err
+}
+
+func (s *Shell) flock(path string, timeout time.Duration) (LockFile, error) {
 	absolutePathToLock, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
@@ -219,6 +254,15 @@ func (s *Shell) LockFile(path string, timeout time.Duration) (Flock, error) {
 	}
 
 	return lock, err
+}
+
+// Create a cross-process file-based lock based on pid files
+func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
+	if experiments.IsEnabled("flock-file-locks") {
+		return s.flock(path, timeout)
+	} else {
+		return s.lockfile(path, timeout)
+	}
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
