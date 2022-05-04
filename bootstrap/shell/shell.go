@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nightlyone/lockfile"
 	"github.com/opentracing/opentracing-go"
 
 	"github.com/buildkite/agent/v3/env"
@@ -25,6 +24,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
+	"github.com/nightlyone/lockfile"
 	"github.com/pkg/errors"
 )
 
@@ -181,7 +181,7 @@ func (s *Shell) Terminate() {
 	}
 }
 
-// Flock is a pid-based lock for cross-process locking
+// LockFile is a pid-based lock for cross-process locking
 type LockFile interface {
 	Unlock() error
 }
@@ -209,6 +209,7 @@ func (s *Shell) lockfile(path string, timeout time.Duration) (LockFile, error) {
 		} else {
 			break
 		}
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
