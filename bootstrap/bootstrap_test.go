@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/redaction"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
@@ -78,35 +79,41 @@ func TestGetValuesToRedactEmpty(t *testing.T) {
 	assert.Equal(t, 0, len(valuesToRedact))
 }
 
-func TestStartTracing(t *testing.T) {
-	oriCtx := context.Background()
+func TestStartTracing_NoTracingBackend(t *testing.T) {
 	var err error
 
-	// When there's no Datadog tracing address, the tracer should be a no-op.
-	cfg := Config{}
+	// When there's no tracing backend, the tracer should be a no-op.
 	b := New(Config{})
+
+	oriCtx := context.Background()
 	b.shell, err = shell.NewWithContext(oriCtx)
-	if err != nil {
-		assert.FailNow(t, "Unexpected error while createing shell: %v", err)
-	}
-	span, ctx, stopper := b.startTracing(oriCtx)
+	assert.NoError(t, err)
+
+	span, _, stopper := b.startTracing(oriCtx)
+	assert.Nil(t, span)
+	tracetools.FinishWithError(span, nil) // Finish the nil span, just for completeness' sake
+
+	// If you call opentracing.DefaultTracer() without having set it first, it returns a NoopTracer
+	// In this test case, we haven't touched opentracingt at all, so we get the NoopTracer
 	assert.IsType(t, opentracing.NoopTracer{}, opentracing.GlobalTracer())
-	span.Finish()
 	stopper()
-	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
+}
+
+func TestStartTracing_Datadog(t *testing.T) {
+	var err error
 
 	// With the Datadog tracing backend, the global tracer should be from Datadog.
-	cfg = Config{
-		TracingBackend: "datadog",
-	}
-	b = New(cfg)
+	cfg := Config{TracingBackend: "datadog"}
+	b := New(cfg)
+
+	oriCtx := context.Background()
 	b.shell, err = shell.NewWithContext(oriCtx)
-	if err != nil {
-		assert.FailNow(t, "Unexpected error while createing shell: %v", err)
-	}
-	span, ctx, stopper = b.startTracing(oriCtx)
+	assert.NoError(t, err)
+
+	span, ctx, stopper := b.startTracing(oriCtx)
+	tracetools.FinishWithError(span, nil)
+
 	assert.IsType(t, opentracer.New(), opentracing.GlobalTracer())
-	span.Finish()
-	stopper()
 	assert.Equal(t, span, opentracing.SpanFromContext(ctx))
+	stopper()
 }

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
@@ -26,11 +25,7 @@ import (
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/shellwords"
 	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
 	"github.com/pkg/errors"
-	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
@@ -81,9 +76,14 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.InterruptSignal = b.Config.CancelSignal
 	}
 
-	span, ctx, stopper := b.startTracing(ctx)
+	var (
+		err     error
+		span    any // Could be an opentracing span or a opentel span, we'll have to check each time we do anything with it
+		stopper func()
+	)
+
+	span, ctx, stopper = b.startTracing(ctx)
 	defer stopper()
-	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
 	// Listen for cancellation
@@ -174,7 +174,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		// shouldn't override each other in reporting.
 		if commandErr != nil {
 			b.shell.Printf("user command error: %v", commandErr)
-			ext.LogError(span, commandErr)
+			tracetools.RecordError(span, commandErr)
 		}
 
 		// Only upload artifacts as part of the command phase
@@ -226,121 +226,16 @@ func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
 	}
 }
 
-// stopper lets us abstract the tracer wrap up code so we can plug in different tracing
-// library implementations that are opentracing compatible. Opentracing itself
-// doesn't have a Stop function on its Tracer interface.
-type stopper func()
-
-// startTracing sets up tracing based on the config values. It uses opentracing as an
-// abstraction so the agent can support multiple libraries if needbe.
-func (b *Bootstrap) startTracing(ctx context.Context) (opentracing.Span, context.Context, stopper) {
-	// Newer versions of the tracing libs print out diagnostic info which spams the
-	// Buildkite agent logs. Disable it by default unless it's been explicitly set.
-	if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
-		os.Setenv("DD_TRACE_STARTUP_LOGS", "false")
-	}
-
-	buildID, _ := b.shell.Env.Get("BUILDKITE_BUILD_ID")
-	buildNumber, _ := b.shell.Env.Get("BUILDKITE_BUILD_NUMBER")
-	buildURL, _ := b.shell.Env.Get("BUILDKITE_BUILD_URL")
-	jobURL := fmt.Sprintf("%s#%s", buildURL, b.JobID)
-	source, _ := b.shell.Env.Get("BUILDKITE_SOURCE")
-	label, hasLabel := b.shell.Env.Get("BUILDKITE_LABEL")
-	if !hasLabel {
-		label = "job"
-	}
-	retry := int64(0)
-	if attemptStr, has := b.shell.Env.Get("BUILDKITE_RETRY_COUNT"); has {
-		if parsedRetry, err := strconv.ParseInt(attemptStr, 10, 64); err == nil {
-			retry = parsedRetry
-		}
-	}
-	parallel := int64(0)
-	if parallelStr, has := b.shell.Env.Get("BUILDKITE_PARALLEL_JOB"); has {
-		if parsedParallel, err := strconv.ParseInt(parallelStr, 10, 64); err == nil {
-			parallel = parsedParallel
-		}
-	}
-	rebuiltFromID, has := b.shell.Env.Get("BUILDKITE_REBUILT_FROM_BUILD_NUMBER")
-	if !has || rebuiltFromID == "" {
-		rebuiltFromID = "n/a"
-	}
-	triggeredFromID, has := b.shell.Env.Get("BUILDKITE_TRIGGERED_FROM_BUILD_ID")
-	if !has || triggeredFromID == "" {
-		triggeredFromID = "n/a"
-	}
-
-	// Set specific tracing library here. Everything else should be using opentracing.
-	// Use a constant sampler - CI runs aren't high traffic.
-	var t opentracing.Tracer
-	var stopper stopper
-	switch b.Config.TracingBackend {
-	case "datadog":
-		t = opentracer.New(
-			tracer.WithServiceName("buildkite_agent"),
-			tracer.WithSampler(tracer.NewAllSampler()),
-			tracer.WithAnalytics(true),
-			tracer.WithGlobalTag("buildkite.agent", b.AgentName),
-			tracer.WithGlobalTag("buildkite.version", agent.Version()),
-			tracer.WithGlobalTag("buildkite.queue", b.Queue),
-			tracer.WithGlobalTag("buildkite.org", b.OrganizationSlug),
-			tracer.WithGlobalTag("buildkite.pipeline", b.PipelineSlug),
-			tracer.WithGlobalTag("buildkite.branch", b.Branch),
-			tracer.WithGlobalTag("buildkite.job_id", b.JobID),
-			tracer.WithGlobalTag("buildkite.job_url", jobURL),
-			tracer.WithGlobalTag("buildkite.build_id", buildID),
-			tracer.WithGlobalTag("buildkite.build_number", buildNumber),
-			tracer.WithGlobalTag("buildkite.build_url", buildURL),
-			tracer.WithGlobalTag("buildkite.source", source),
-			tracer.WithGlobalTag("buildkite.retry", retry),
-			tracer.WithGlobalTag("buildkite.parallel", parallel),
-			tracer.WithGlobalTag("buildkite.rebuilt_from_id", rebuiltFromID),
-			tracer.WithGlobalTag("buildkite.triggered_from_id", triggeredFromID),
-			tracer.WithGlobalTag(ddext.SamplingPriority, ddext.PriorityUserKeep),
-		)
-		stopper = tracer.Stop
-	default:
-		b.shell.Commentf("An invalid tracing backend was given: %s. Tracing will not occur.", b.Config.TracingBackend)
-		fallthrough
-	case "":
-		t = opentracing.NoopTracer{}
-		stopper = func() {}
-	}
-	opentracing.SetGlobalTracer(t)
-
-	wireContext := b.extractTraceCtx()
-
-	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + label
-	span := opentracing.StartSpan(
-		"job.run",
-		// The span setup code will properly handle this if it's nil
-		opentracing.ChildOf(wireContext),
-	)
-
-	ctx = opentracing.ContextWithSpan(ctx, span)
-
-	// Some tracer-specific span code.
-	if b.Config.TracingBackend == "datadog" {
-		// Datadog uses 'resource' instead of opentracing's 'component'. And it's not
-		// smart enough to automatically remap component tags so we have to be
-		// different here.
-		span.SetTag(ddext.ResourceName, resourceName)
-		span.SetTag(ddext.AnalyticsEvent, true)
-	} else {
-		ext.Component.Set(span, resourceName)
-	}
-
-	return span, ctx, stopper
-}
-
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron *env.Environment) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
-	span.SetTag("hook.type", scope)
-	span.SetTag("hook.name", name)
-	span.SetTag("hook.command", hookPath)
+	tracetools.AddAttributesToSpan(span, map[string]string{
+		"hook.type":    scope,
+		"hook.name":    name,
+		"hook.command": hookPath,
+	})
 
 	name = scope + " " + name
 
@@ -576,7 +471,7 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 // setUp is run before all the phases run. It's responsible for initializing the
 // bootstrap environment
 func (b *Bootstrap) setUp(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "environment")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -638,7 +533,7 @@ func (b *Bootstrap) setUp(ctx context.Context) error {
 
 // tearDown is called before the bootstrap exits, even on error
 func (b *Bootstrap) tearDown(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1025,7 +920,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1514,7 +1409,7 @@ func (b *Bootstrap) resolveCommit() {
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command hooks", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1532,7 +1427,7 @@ func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 
 // runCommand runs the command and adds tracing spans.
 func (b *Bootstrap) runCommand(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "command")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1552,7 +1447,7 @@ func (b *Bootstrap) runCommand(ctx context.Context) error {
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command hooks", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
@@ -1612,11 +1507,13 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
-	span.SetTag("hook.name", "command")
-	span.SetTag("hook.type", "default")
+	tracetools.AddAttributesToSpan(span, map[string]string{
+		"hook.name": "command",
+		"hook.type": "default",
+	})
 
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(b.Command) == "" {
@@ -1626,7 +1523,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(b.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && utils.FileExists(pathToCommand)
-	span.SetTag("hook.command", pathToCommand)
+	tracetools.AddAttributesToSpan(span, map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
@@ -1834,7 +1731,7 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		return nil
 	}
 
-	span, ctx := tracetools.StartSpanFromContext(ctx, "upload artifacts")
+	span, ctx := tracetools.StartSpanFromContext(ctx, "upload artifacts", b.Config.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
 
