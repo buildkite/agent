@@ -311,7 +311,6 @@ func TestFlockRetriesAndTimesOut(t *testing.T) {
 }
 
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
-
 	flockExperimentEnabled := false
 	expectedLockPath := lockfile
 	if experiments.IsEnabled("flock-file-locks") {
