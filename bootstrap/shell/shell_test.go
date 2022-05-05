@@ -272,16 +272,6 @@ func TestWorkingDir(t *testing.T) {
 	}
 }
 
-func experimentWithUndo(name string) func() {
-	prev := experiments.IsEnabled(name)
-	experiments.Enable(name)
-	return func() {
-		if !prev {
-			experiments.Disable(name)
-		}
-	}
-}
-
 func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Flakey on windows")
@@ -314,7 +304,8 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 }
 
 func TestFlockRetriesAndTimesOut(t *testing.T) {
-	defer experimentWithUndo("flock-file-locks")()
+	experiments.Enable("flock-file-locks")
+	defer experiments.Disable("flock-file-locks")
 
 	TestLockFileRetriesAndTimesOut(t)
 }

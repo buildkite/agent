@@ -222,7 +222,7 @@ func (s *Shell) lockfile(path string, timeout time.Duration) (LockFile, error) {
 }
 
 func (s *Shell) flock(path string, timeout time.Duration) (LockFile, error) {
-	absolutePathToLock, err := filepath.Abs(path)
+	absolutePathToLock, err := filepath.Abs(path + "f") // + "f" to ensure that flocks and lockfiles never share a filename
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
 	}
