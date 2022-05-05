@@ -311,8 +311,16 @@ func TestFlockRetriesAndTimesOut(t *testing.T) {
 }
 
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
+
+	flockExperimentEnabled := false
+	expectedLockPath := lockfile
+	if experiments.IsEnabled("flock-file-locks") {
+		flockExperimentEnabled = true
+		expectedLockPath = lockfile + "f" // flock-locked files are created with the suffix 'f'
+	}
+
 	cmd := exec.Command(os.Args[0], "-test.run=TestAcquiringLockHelperProcess", "--", lockfile)
-	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1", "FLOCK_EXPERIMENT_ENABLED=" + strconv.FormatBool(experiments.IsEnabled("flock-file-locks"))}
+	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1", "FLOCK_EXPERIMENT_ENABLED=" + strconv.FormatBool(flockExperimentEnabled)}
 
 	err := cmd.Start()
 	if err != nil {
@@ -321,7 +329,7 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 
 	// wait for the above process to get a lock
 	for {
-		if _, err = os.Stat(lockfile); os.IsNotExist(err) {
+		if _, err = os.Stat(expectedLockPath); os.IsNotExist(err) {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
