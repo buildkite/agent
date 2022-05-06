@@ -90,8 +90,8 @@ func TestStartTracing_NoTracingBackend(t *testing.T) {
 	assert.NoError(t, err)
 
 	span, _, stopper := b.startTracing(oriCtx)
-	assert.Nil(t, span)
-	tracetools.FinishWithError(span, nil) // Finish the nil span, just for completeness' sake
+	assert.Equal(t, span, &tracetools.NoopSpan{})
+	span.FinishWithError(nil) // Finish the nil span, just for completeness' sake
 
 	// If you call opentracing.DefaultTracer() without having set it first, it returns a NoopTracer
 	// In this test case, we haven't touched opentracingt at all, so we get the NoopTracer
@@ -111,7 +111,7 @@ func TestStartTracing_Datadog(t *testing.T) {
 	assert.NoError(t, err)
 
 	span, ctx, stopper := b.startTracing(oriCtx)
-	tracetools.FinishWithError(span, nil)
+	span.FinishWithError(nil)
 
 	assert.IsType(t, opentracer.New(), opentracing.GlobalTracer())
 	assert.Equal(t, span, opentracing.SpanFromContext(ctx))

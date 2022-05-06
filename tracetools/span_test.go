@@ -38,8 +38,8 @@ func (t *TestOpenTracingSpan) LogEvent(_ string)                           {}
 func (t *TestOpenTracingSpan) LogEventWithPayload(_ string, _ interface{}) {}
 func (t *TestOpenTracingSpan) Log(_ opentracing.LogData)                   {}
 
-func newOpenTracingSpan() *TestOpenTracingSpan {
-	return &TestOpenTracingSpan{tags: map[string]interface{}{}}
+func newOpenTracingSpan() *OpenTracingSpan {
+	return &OpenTracingSpan{span: &TestOpenTracingSpan{tags: map[string]interface{}{}}}
 }
 
 type TestOtelSpan struct {
@@ -73,93 +73,80 @@ func (t *TestOtelSpan) AddEvent(name string, _ ...trace.EventOption) {
 	t.events = append(t.events, name)
 }
 
-func newOtelSpan() *TestOtelSpan {
-	return &TestOtelSpan{events: []string{}, attributes: []attribute.KeyValue{}}
+func newOtelSpan() *OpenTelemetrySpan {
+	return &OpenTelemetrySpan{span: &TestOtelSpan{events: []string{}, attributes: []attribute.KeyValue{}}}
 }
 
-func TestAddAttributeToSpan_OpenTracing(t *testing.T) {
+func TestAddAttribute_OpenTracing(t *testing.T) {
 	t.Parallel()
-	span := newOpenTracingSpan()
-	assert.Empty(t, span.tags)
 
-	AddAttributesToSpan(span, map[string]string{"colour": "green", "flavour": "spicy"})
-	assert.Equal(t, map[string]interface{}{"colour": "green", "flavour": "spicy"}, span.tags)
+	span := newOpenTracingSpan()
+	implSpan, ok := span.span.(*TestOpenTracingSpan)
+	assert.True(t, ok)
+
+	assert.Empty(t, implSpan.tags)
+
+	span.AddAttributes(map[string]string{"colour": "green", "flavour": "spicy"})
+	assert.Equal(t, map[string]interface{}{"colour": "green", "flavour": "spicy"}, implSpan.tags)
 }
 
 func TestAddAttributeToSpan_OpenTelemetry(t *testing.T) {
 	t.Parallel()
+
 	span := newOtelSpan()
-	assert.Empty(t, span.attributes)
+	implSpan, ok := span.span.(*TestOtelSpan)
+	assert.True(t, ok)
 
-	AddAttributesToSpan(span, map[string]string{"colour": "green", "flavour": "spicy"})
-	assert.Contains(t, span.attributes, attribute.String("colour", "green"))
-	assert.Contains(t, span.attributes, attribute.String("flavour", "spicy"))
-}
+	assert.Empty(t, implSpan.attributes)
 
-func TestAddAttributeToSpan_InvalidType(t *testing.T) {
-	t.Parallel()
-	assert.Panics(t, func() {
-		AddAttributesToSpan(12345, map[string]string{"color": "green"})
-	})
-}
-
-func TestAddAttributeToSpan_Nil(t *testing.T) {
-	// AddAttributesToSpan(nil, anything) is a noop, so there's nothing to actually assert, but it is a valid usecase
-	// If the tracing backend is "" (ie, tracing is disabled), tracetools.StartSpanFromContext returns a nil span
-	// So the tracetools functions that interact with these spans need to be able to handle them
-	t.Parallel()
-	AddAttributesToSpan(nil, map[string]string{"colour": "green", "flavour": "spicy"})
+	span.AddAttributes(map[string]string{"colour": "green", "flavour": "spicy"})
+	assert.Contains(t, implSpan.attributes, attribute.String("colour", "green"))
+	assert.Contains(t, implSpan.attributes, attribute.String("flavour", "spicy"))
 }
 
 func TestFinishWithError_OpenTracing(t *testing.T) {
 	t.Parallel()
-	err := errors.New("asd")
+	err := errors.New("test error")
+
 	span := newOpenTracingSpan()
-	FinishWithError(span, err)
-	assert.True(t, span.finished)
-	assert.Equal(t, true, span.tags["error"])
-	assert.Equal(t, []log.Field{log.Event("error"), log.Error(err)}, span.fields)
+	implSpan, ok := span.span.(*TestOpenTracingSpan)
+	assert.True(t, ok)
+
+	span.FinishWithError(err)
+	assert.True(t, implSpan.finished)
+	assert.Equal(t, true, implSpan.tags["error"])
+	assert.Equal(t, []log.Field{log.Event("error"), log.Error(err)}, implSpan.fields)
 
 	span = newOpenTracingSpan()
-	FinishWithError(span, nil)
-	assert.True(t, span.finished)
-	assert.NotContains(t, span.tags, "error")
-	assert.Empty(t, span.fields)
+	implSpan, ok = span.span.(*TestOpenTracingSpan)
+	assert.True(t, ok)
+
+	span.FinishWithError(nil)
+	assert.True(t, implSpan.finished)
+	assert.NotContains(t, implSpan.tags, "error")
+	assert.Empty(t, implSpan.fields)
 }
 
 func TestFinishWithError_OpenTelemetry(t *testing.T) {
 	t.Parallel()
 	err := errors.New("test error")
+
 	span := newOtelSpan()
-	FinishWithError(span, err)
-	assert.True(t, span.finished)
-	assert.ErrorIs(t, span.err, err)
-	assert.Equal(t, span.statusCode, codes.Error)
-	assert.Equal(t, span.statusDesc, "failed")
+	implSpan, ok := span.span.(*TestOtelSpan)
+	assert.True(t, ok)
+
+	span.FinishWithError(err)
+	assert.True(t, implSpan.finished)
+	assert.ErrorIs(t, implSpan.err, err)
+	assert.Equal(t, implSpan.statusCode, codes.Error)
+	assert.Equal(t, implSpan.statusDesc, "failed")
 
 	span = newOtelSpan()
-	FinishWithError(span, nil)
-	assert.True(t, span.finished)
-	assert.NoError(t, span.err)
-	assert.Equal(t, span.statusCode, codes.Unset)
-}
+	implSpan, ok = span.span.(*TestOtelSpan)
+	assert.True(t, ok)
 
-func TestFinishWithError_InvalidType(t *testing.T) {
-	t.Parallel()
-	assert.Panics(t, func() {
-		FinishWithError("this is an invalid type to call with FinishWithError", errors.New("test error"))
-	})
-
-	assert.Panics(t, func() {
-		FinishWithError("this is an invalid type to call with FinishWithError", nil)
-	})
-}
-
-func TestFinishWithError_Nil(t *testing.T) {
-	// FinishWithError(nil, anything) is a noop, so there's nothing to actually assert, but it is a valid usecase
-	// If the tracing backend is "" (ie, tracing is disabled), tracetools.StartSpanFromContext returns a nil span
-	// So the tracetools functions that interact with these spans need to be able to handle them
-	t.Parallel()
-	FinishWithError(nil, nil)
-	FinishWithError(nil, errors.New("test error"))
+	span.FinishWithError(nil)
+	assert.True(t, implSpan.finished)
+	assert.NoError(t, implSpan.err)
+	assert.Equal(t, implSpan.statusCode, codes.Unset)
 }

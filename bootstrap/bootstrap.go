@@ -76,15 +76,11 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.InterruptSignal = b.Config.CancelSignal
 	}
 
-	var (
-		err     error
-		span    any // Could be an opentracing span or a opentel span, we'll have to check each time we do anything with it
-		stopper func()
-	)
+	var err error
 
-	span, ctx, stopper = b.startTracing(ctx)
+	span, ctx, stopper := b.startTracing(ctx)
 	defer stopper()
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	// Listen for cancellation
 	go func() {
@@ -174,7 +170,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		// shouldn't override each other in reporting.
 		if commandErr != nil {
 			b.shell.Printf("user command error: %v", commandErr)
-			tracetools.RecordError(span, commandErr)
+			span.RecordError(commandErr)
 		}
 
 		// Only upload artifacts as part of the command phase
@@ -230,8 +226,8 @@ func (b *Bootstrap) extractTraceCtx() opentracing.SpanContext {
 func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron *env.Environment) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
-	tracetools.AddAttributesToSpan(span, map[string]string{
+	defer func() { span.FinishWithError(err) }()
+	span.AddAttributes(map[string]string{
 		"hook.type":    scope,
 		"hook.name":    name,
 		"hook.command": hookPath,
@@ -473,7 +469,7 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 func (b *Bootstrap) setUp(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	// Create an empty env for us to keep track of our env changes in
 	b.shell.Env = env.FromSlice(os.Environ())
@@ -535,7 +531,7 @@ func (b *Bootstrap) setUp(ctx context.Context) error {
 func (b *Bootstrap) tearDown(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	if err = b.executeGlobalHook(ctx, "pre-exit"); err != nil {
 		return err
@@ -922,7 +918,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	if err = b.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
@@ -1411,7 +1407,7 @@ func (b *Bootstrap) resolveCommit() {
 func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command hooks", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	if err = b.executeGlobalHook(ctx, "pre-command"); err != nil {
 		return err
@@ -1429,7 +1425,7 @@ func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 func (b *Bootstrap) runCommand(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
@@ -1449,7 +1445,7 @@ func (b *Bootstrap) runCommand(ctx context.Context) error {
 func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command hooks", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	if err = b.executeGlobalHook(ctx, "post-command"); err != nil {
 		return err
@@ -1509,8 +1505,8 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
-	tracetools.AddAttributesToSpan(span, map[string]string{
+	defer func() { span.FinishWithError(err) }()
+	span.AddAttributes(map[string]string{
 		"hook.name": "command",
 		"hook.type": "default",
 	})
@@ -1523,7 +1519,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	scriptFileName := strings.Replace(b.Command, "\n", "", -1)
 	pathToCommand, err := filepath.Abs(filepath.Join(b.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && utils.FileExists(pathToCommand)
-	tracetools.AddAttributesToSpan(span, map[string]string{"hook.command": pathToCommand})
+	span.AddAttributes(map[string]string{"hook.command": pathToCommand})
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
@@ -1733,7 +1729,7 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 
 	span, ctx := tracetools.StartSpanFromContext(ctx, "upload artifacts", b.Config.TracingBackend)
 	var err error
-	defer func() { tracetools.FinishWithError(span, err) }()
+	defer func() { span.FinishWithError(err) }()
 
 	// Run pre-artifact hooks
 	if err = b.executeGlobalHook(ctx, "pre-artifact"); err != nil {

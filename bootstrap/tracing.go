@@ -8,6 +8,7 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/exp/slices"
 	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
@@ -22,28 +23,28 @@ type stopper func()
 
 func noopStopper() {}
 
-func (b *Bootstrap) startTracing(ctx context.Context) (any, context.Context, stopper) {
+func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	switch b.Config.TracingBackend {
-	case "datadog":
+	case tracetools.BackendDatadog:
 		return b.startTracingDatadog(ctx)
 
-	case "opentelemetry-experimental":
+	case tracetools.BackendOpenTelemetry_Experimental:
 		// TODO
-		return nil, ctx, noopStopper
+		return &tracetools.NoopSpan{}, ctx, noopStopper
 
-	case "":
-		return nil, ctx, noopStopper
+	case tracetools.BackendNone:
+		return &tracetools.NoopSpan{}, ctx, noopStopper
 
 	default:
 		b.shell.Commentf("An invalid tracing backend was provided: %q. Tracing will not occur.", b.Config.TracingBackend)
 		b.Config.TracingBackend = "" // Ensure that we don't do any tracing after this, some of the stuff in tracetools uses the bootstrap's tracking backend
-		return nil, ctx, noopStopper
+		return &tracetools.NoopSpan{}, ctx, noopStopper
 	}
 }
 
 // startTracingDatadog sets up tracing based on the config values. It uses opentracing as an
 // abstraction so the agent can support multiple libraries if needbe.
-func (b *Bootstrap) startTracingDatadog(ctx context.Context) (opentracing.Span, context.Context, stopper) {
+func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	// Newer versions of the tracing libs print out diagnostic info which spams the
 	// Buildkite agent logs. Disable it by default unless it's been explicitly set.
 	if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
@@ -76,7 +77,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (opentracing.Span, 
 	span := opentracing.StartSpan("job.run", opentracing.ChildOf(wireContext))
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
-	return span, ctx, tracer.Stop
+	return tracetools.NewOpenTracingSpan(span), ctx, tracer.Stop
 }
 
 func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
