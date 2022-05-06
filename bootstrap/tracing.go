@@ -10,6 +10,19 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/contrib/propagators/aws/xray"
+	"go.opentelemetry.io/contrib/propagators/b3"
+	"go.opentelemetry.io/contrib/propagators/jaeger"
+	"go.opentelemetry.io/contrib/propagators/ot"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slices"
 	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
@@ -26,11 +39,16 @@ func noopStopper() {}
 func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	switch b.Config.TracingBackend {
 	case tracetools.BackendDatadog:
+		// Newer versions of the tracing libs print out diagnostic info which spams the
+		// Buildkite agent logs. Disable it by default unless it's been explicitly set.
+		if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
+			os.Setenv("DD_TRACE_STARTUP_LOGS", "false")
+		}
+
 		return b.startTracingDatadog(ctx)
 
 	case tracetools.BackendOpenTelemetry_Experimental:
-		// TODO
-		return &tracetools.NoopSpan{}, ctx, noopStopper
+		return b.startTracingOpenTelemetry(ctx)
 
 	case tracetools.BackendNone:
 		return &tracetools.NoopSpan{}, ctx, noopStopper
@@ -42,21 +60,19 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 	}
 }
 
-// startTracingDatadog sets up tracing based on the config values. It uses opentracing as an
-// abstraction so the agent can support multiple libraries if needbe.
-func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	// Newer versions of the tracing libs print out diagnostic info which spams the
-	// Buildkite agent logs. Disable it by default unless it's been explicitly set.
-	if _, has := os.LookupEnv("DD_TRACE_STARTUP_LOGS"); !has {
-		os.Setenv("DD_TRACE_STARTUP_LOGS", "false")
-	}
-
-	label, hasLabel := b.shell.Env.Get("BUILDKITE_LABEL")
-	if !hasLabel {
+func (b *Bootstrap) getLabel() string {
+	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
+	if !ok {
 		label = "job"
 	}
 
-	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + label
+	return label
+}
+
+// startTracingDatadog sets up tracing based on the config values. It uses opentracing as an
+// abstraction so the agent can support multiple libraries if needbe.
+func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + b.getLabel()
 	opts := []tracer.StartOption{
 		tracer.WithServiceName("buildkite_agent"),
 		tracer.WithSampler(tracer.NewAllSampler()),
@@ -78,6 +94,59 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
 	return tracetools.NewOpenTracingSpan(span), ctx, tracer.Stop
+}
+
+func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+	client := otlptracegrpc.NewClient()
+	exporter, err := otlptrace.New(ctx, client)
+	if err != nil {
+		b.shell.Errorf("Error creating OTLP trace exporter %s", err)
+	}
+
+	attributes := []attribute.KeyValue{
+		semconv.ServiceNameKey.String("buildkite_agent"),
+		semconv.ServiceVersionKey.String(agent.Version()),
+	}
+
+	attributes = append(attributes, b.toAttributes(GenericTracingExtras(b, *b.shell.Env))...)
+
+	resources := resource.NewWithAttributes(semconv.SchemaURL, attributes...)
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(resources),
+	)
+
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+		b3.New(),
+		&jaeger.Jaeger{},
+		&ot.OT{},
+		&xray.Propagator{},
+	))
+
+	tracer := tracerProvider.Tracer(
+		"buildkite_agent",
+		trace.WithInstrumentationVersion(agent.Version()),
+		trace.WithSchemaURL(semconv.SchemaURL),
+	)
+
+	ctx, span := tracer.Start(ctx, "job.run")
+
+	resourceName := b.OrganizationSlug + "/" + b.PipelineSlug + "/" + b.getLabel()
+	span.SetAttributes(
+		attribute.String("resource.name", resourceName),
+		attribute.String("analytics.event", "true"),
+	)
+
+	stop := func() {
+		ctx := context.Background()
+		_ = tracerProvider.ForceFlush(ctx)
+		_ = tracerProvider.Shutdown(ctx)
+	}
+
+	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
 }
 
 func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
@@ -124,8 +193,8 @@ func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
 		"buildkite.build_number":      buildNumber,
 		"buildkite.build_url":         buildURL,
 		"buildkite.source":            source,
-		"buildkite.retry":             strconv.Itoa(retry),
-		"buildkite.parallel":          strconv.Itoa(parallel),
+		"buildkite.retry":             retry,
+		"buildkite.parallel":          parallel,
 		"buildkite.rebuilt_from_id":   rebuiltFromID,
 		"buildkite.triggered_from_id": triggeredFromID,
 	}
@@ -145,7 +214,6 @@ func Merge(maps ...map[string]any) map[string]any {
 	}
 
 	merged := make(map[string]any, fullCap)
-
 	for _, m := range maps {
 		for key, val := range m {
 			merged[key] = val
@@ -153,4 +221,23 @@ func Merge(maps ...map[string]any) map[string]any {
 	}
 
 	return merged
+}
+
+func (b *Bootstrap) toAttributes(extras map[string]any) []attribute.KeyValue {
+	attrs := make([]attribute.KeyValue, 0, len(extras))
+	for k, v := range extras {
+		switch v := v.(type) {
+		case string:
+			attrs = append(attrs, attribute.String(k, v))
+		case int:
+			attrs = append(attrs, attribute.Int(k, v))
+		case bool:
+			attrs = append(attrs, attribute.Bool(k, v))
+		default:
+			b.shell.Warningf("Unknown attribute type (key: %v, value: %v, value type: %T) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", v, k, v)
+			b.shell.Warningf("OpenTelemetry will still work as intended, but the attribute %v and its value above will not be included", v)
+		}
+	}
+
+	return attrs
 }

@@ -55,9 +55,7 @@ func NewOpenTracingSpan(base opentracing.Span) *OpenTracingSpan {
 	return &OpenTracingSpan{span: base}
 }
 
-// Adds context to the span, either as opentracing tags, or as opentelemetry attributes
-// Will panic if span is anything other than an opentracing.Span, a trace.Span, or nil
-// Noop when span is nil
+// AddAttributes adds the given map of attributes to the span as OpenTracing tags
 func (s *OpenTracingSpan) AddAttributes(attributes map[string]string) {
 	for k, v := range attributes {
 		s.span.SetTag(k, v)
@@ -70,9 +68,7 @@ func (s *OpenTracingSpan) FinishWithError(err error) {
 	s.span.Finish()
 }
 
-// RecordError records an error on the given span.
-// Will panic if span is anything other than an opentracing.Span, a trace.Span, or nil
-// noop when span or error are nil
+// RecordError records an error on the given span
 func (s *OpenTracingSpan) RecordError(err error) {
 	if err == nil {
 		return
@@ -89,19 +85,14 @@ func NewOpenTelemetrySpan(base trace.Span) *OpenTelemetrySpan {
 	return &OpenTelemetrySpan{span: base}
 }
 
-// Adds context to the span, either as opentracing tags, or as opentelemetry attributes
-// Will panic if span is anything other than an opentracing.Span, a trace.Span, or nil
-// Noop when span is nil
+// AddAttributes adds the given attributes to the OpenTelemetrySpan. Only string attributes are accepted.
 func (s *OpenTelemetrySpan) AddAttributes(attributes map[string]string) {
 	for k, v := range attributes {
 		s.span.SetAttributes(attribute.String(k, v))
 	}
 }
 
-// FinishWithError is syntactic sugar for opentracing APIs to add errors to a span
-// and then finishing it. If the error is nil, the span will only be finished.
-// Will panic if span is anything other than an opentracing.Span, a trace.Span, or nil
-// Noop when span is nil
+// FinishWithError adds error information to the OpentelemetrySpan if error isn't nil, and records the span as having finished
 func (s *OpenTelemetrySpan) FinishWithError(err error) {
 	s.RecordError(err)
 	s.span.End()
