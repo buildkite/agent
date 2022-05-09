@@ -25,9 +25,11 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
+	"golang.org/x/exp/maps"
 )
 
 var StartDescription = `Usage:
@@ -174,14 +176,6 @@ func DefaultConfigFilePaths() (paths []string) {
 	}
 
 	return
-}
-
-// validTracingBackends is a list of valid backends for tracing. This is sanity
-// checked during agent startup so that bootstrapped jobs don't silently have
-// no tracing if an invalid value is given.
-var validTracingBackends = map[string]struct{}{
-	"":        {},
-	"datadog": {},
 }
 
 var AgentStartCommand = cli.Command{
@@ -646,9 +640,9 @@ var AgentStartCommand = cli.Command{
 			DatadogDistributions: cfg.MetricsDatadogDistributions,
 		})
 
-		// Sanity check supported tracing backends
-		if _, has := validTracingBackends[cfg.TracingBackend]; !has {
-			l.Fatal("The given tracing backend is not supported: %s", cfg.TracingBackend)
+		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
+		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
+			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
 
 		// AgentConfiguration is the runtime configuration for an agent

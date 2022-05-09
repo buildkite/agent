@@ -13,6 +13,11 @@ const (
 	BackendNone    = ""
 )
 
+var ValidTracingBackends = map[string]struct{}{
+	BackendDatadog: {},
+	BackendNone:    {},
+}
+
 // StartSpanFromContext will start a span appropriate to the given tracing backend from the given context with the given
 // operation name. It will also do some common/repeated setup on the span to keep code a little more DRY.
 // If an unknown tracing backend is specified, it will return a span that noops on every operation
