@@ -8,8 +8,22 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/contrib/propagators/aws/xray"
+	"go.opentelemetry.io/contrib/propagators/b3"
+	"go.opentelemetry.io/contrib/propagators/jaeger"
+	"go.opentelemetry.io/contrib/propagators/ot"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/exp/slices"
 	ddext "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
@@ -33,6 +47,15 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 		}
 
 		return b.startTracingDatadog(ctx)
+
+	case tracetools.BackendOpenTelemetry:
+		if !experiments.IsEnabled("opentelemetry-tracing") {
+			b.shell.Warningf("You've used the OpenTelemetry tracing backend, but the `opentelemetry-tracing` experiment isn't enabled. No tracing will occur.")
+			b.shell.Warningf("To enable OpenTelemetry tracing, use the `opentelemetry` tracing backend, as well as the `opentelemetry-tracing` experiment.")
+			return &tracetools.NoopSpan{}, ctx, noopStopper
+		}
+
+		return b.startTracingOpenTelemetry(ctx)
 
 	case tracetools.BackendNone:
 		return &tracetools.NoopSpan{}, ctx, noopStopper
@@ -90,6 +113,65 @@ func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
 		return nil
 	}
 	return sctx
+}
+
+func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
+	client := otlptracegrpc.NewClient()
+	exporter, err := otlptrace.New(ctx, client)
+	if err != nil {
+		b.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
+		return &tracetools.NoopSpan{}, ctx, noopStopper
+	}
+
+	attributes := []attribute.KeyValue{
+		semconv.ServiceNameKey.String("buildkite_agent"),
+		semconv.ServiceVersionKey.String(agent.Version()),
+	}
+
+	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(b, *b.shell.Env))
+	for k, v := range warnings {
+		b.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
+		b.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)
+	}
+
+	attributes = append(attributes, extras...)
+
+	resources := resource.NewWithAttributes(semconv.SchemaURL, attributes...)
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(resources),
+	)
+
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+		b3.New(),
+		&jaeger.Jaeger{},
+		&ot.OT{},
+		&xray.Propagator{},
+	))
+
+	tracer := tracerProvider.Tracer(
+		"buildkite_agent",
+		trace.WithInstrumentationVersion(agent.Version()),
+		trace.WithSchemaURL(semconv.SchemaURL),
+	)
+
+	ctx, span := tracer.Start(ctx, "job.run")
+
+	span.SetAttributes(
+		attribute.String("resource.name", b.tracingResourceName()),
+		attribute.String("analytics.event", "true"),
+	)
+
+	stop := func() {
+		ctx := context.Background()
+		_ = tracerProvider.ForceFlush(ctx)
+		_ = tracerProvider.Shutdown(ctx)
+	}
+
+	return tracetools.NewOpenTelemetrySpan(span), ctx, stop
 }
 
 func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
@@ -164,4 +246,23 @@ func Merge(maps ...map[string]any) map[string]any {
 	}
 
 	return merged
+}
+
+func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map[string]any) {
+	attrs := make([]attribute.KeyValue, 0, len(extras))
+	unknownAttrTypes := make(map[string]any, len(extras))
+	for k, v := range extras {
+		switch v := v.(type) {
+		case string:
+			attrs = append(attrs, attribute.String(k, v))
+		case int:
+			attrs = append(attrs, attribute.Int(k, v))
+		case bool:
+			attrs = append(attrs, attribute.Bool(k, v))
+		default:
+			unknownAttrTypes[k] = v
+		}
+	}
+
+	return attrs, unknownAttrTypes
 }

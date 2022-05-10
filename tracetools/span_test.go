@@ -38,7 +38,7 @@ func (t *TestOpenTracingSpan) LogEvent(_ string)                           {}
 func (t *TestOpenTracingSpan) LogEventWithPayload(_ string, _ interface{}) {}
 func (t *TestOpenTracingSpan) Log(_ opentracing.LogData)                   {}
 
-func newOpenTracingSpan() *OpenTracingSpan {
+func newTestOpenTracingSpan() *OpenTracingSpan {
 	return &OpenTracingSpan{Span: &TestOpenTracingSpan{tags: map[string]interface{}{}}}
 }
 
@@ -73,14 +73,14 @@ func (t *TestOtelSpan) AddEvent(name string, _ ...trace.EventOption) {
 	t.events = append(t.events, name)
 }
 
-func newOtelSpan() *OpenTelemetrySpan {
-	return &OpenTelemetrySpan{span: &TestOtelSpan{events: []string{}, attributes: []attribute.KeyValue{}}}
+func newTestOtelSpan() *OpenTelemetrySpan {
+	return &OpenTelemetrySpan{Span: &TestOtelSpan{events: []string{}, attributes: []attribute.KeyValue{}}}
 }
 
 func TestAddAttribute_OpenTracing(t *testing.T) {
 	t.Parallel()
 
-	span := newOpenTracingSpan()
+	span := newTestOpenTracingSpan()
 	implSpan, ok := span.Span.(*TestOpenTracingSpan)
 	assert.True(t, ok)
 
@@ -93,8 +93,8 @@ func TestAddAttribute_OpenTracing(t *testing.T) {
 func TestAddAttributeToSpan_OpenTelemetry(t *testing.T) {
 	t.Parallel()
 
-	span := newOtelSpan()
-	implSpan, ok := span.span.(*TestOtelSpan)
+	span := newTestOtelSpan()
+	implSpan, ok := span.Span.(*TestOtelSpan)
 	assert.True(t, ok)
 
 	assert.Empty(t, implSpan.attributes)
@@ -108,7 +108,7 @@ func TestFinishWithError_OpenTracing(t *testing.T) {
 	t.Parallel()
 	err := errors.New("test error")
 
-	span := newOpenTracingSpan()
+	span := newTestOpenTracingSpan()
 	implSpan, ok := span.Span.(*TestOpenTracingSpan)
 	assert.True(t, ok)
 
@@ -117,7 +117,7 @@ func TestFinishWithError_OpenTracing(t *testing.T) {
 	assert.Equal(t, true, implSpan.tags["error"])
 	assert.Equal(t, []log.Field{log.Event("error"), log.Error(err)}, implSpan.fields)
 
-	span = newOpenTracingSpan()
+	span = newTestOpenTracingSpan()
 	implSpan, ok = span.Span.(*TestOpenTracingSpan)
 	assert.True(t, ok)
 
@@ -131,8 +131,8 @@ func TestFinishWithError_OpenTelemetry(t *testing.T) {
 	t.Parallel()
 	err := errors.New("test error")
 
-	span := newOtelSpan()
-	implSpan, ok := span.span.(*TestOtelSpan)
+	span := newTestOtelSpan()
+	implSpan, ok := span.Span.(*TestOtelSpan)
 	assert.True(t, ok)
 
 	span.FinishWithError(err)
@@ -141,8 +141,8 @@ func TestFinishWithError_OpenTelemetry(t *testing.T) {
 	assert.Equal(t, implSpan.statusCode, codes.Error)
 	assert.Equal(t, implSpan.statusDesc, "failed")
 
-	span = newOtelSpan()
-	implSpan, ok = span.span.(*TestOtelSpan)
+	span = newTestOtelSpan()
+	implSpan, ok = span.Span.(*TestOtelSpan)
 	assert.True(t, ok)
 
 	span.FinishWithError(nil)

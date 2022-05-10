@@ -14,7 +14,7 @@ import (
 
 const (
 	BackendDatadog       = "datadog"
-	BackendOpenTelemetry = "opentelemetry-experimental"
+	BackendOpenTelemetry = "opentelemetry"
 	BackendNone          = ""
 )
 
@@ -37,7 +37,7 @@ func StartSpanFromContext(ctx context.Context, operation string, tracingBackend 
 	case BackendOpenTelemetry:
 		ctx, span := otel.Tracer("buildkite_agent").Start(ctx, operation)
 		span.SetAttributes(attribute.String("analytics.event", "true"))
-		return &OpenTelemetrySpan{span: span}, ctx
+		return &OpenTelemetrySpan{Span: span}, ctx
 
 	case BackendNone:
 		fallthrough
@@ -84,24 +84,24 @@ func (s *OpenTracingSpan) RecordError(err error) {
 }
 
 type OpenTelemetrySpan struct {
-	span trace.Span
+	Span trace.Span
 }
 
 func NewOpenTelemetrySpan(base trace.Span) *OpenTelemetrySpan {
-	return &OpenTelemetrySpan{span: base}
+	return &OpenTelemetrySpan{Span: base}
 }
 
 // AddAttributes adds the given attributes to the OpenTelemetry span. Only string attributes are accepted.
 func (s *OpenTelemetrySpan) AddAttributes(attributes map[string]string) {
 	for k, v := range attributes {
-		s.span.SetAttributes(attribute.String(k, v))
+		s.Span.SetAttributes(attribute.String(k, v))
 	}
 }
 
 // FinishWithError adds error information to the OpenTelemetry span if error isn't nil, and records the span as having finished
 func (s *OpenTelemetrySpan) FinishWithError(err error) {
 	s.RecordError(err)
-	s.span.End()
+	s.Span.End()
 }
 
 // RecordError records an error on the given OpenTelemetry span. No-op when error is nil
@@ -110,8 +110,8 @@ func (s *OpenTelemetrySpan) RecordError(err error) {
 		return
 	}
 
-	s.span.RecordError(err)
-	s.span.SetStatus(codes.Error, "failed")
+	s.Span.RecordError(err)
+	s.Span.SetStatus(codes.Error, "failed")
 }
 
 // NoopSpan is an implementation of the Span interface that does nothing for every method implemented
