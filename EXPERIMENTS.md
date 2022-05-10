@@ -50,3 +50,11 @@ Take `buildkite-agent artifact upload coverage\report.xml` as an example:
 After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This makes `BUILDKITE_COMMIT` useful for builds triggered against non-commit-hash refs such as `HEAD`.
 
 **Status**: broadly useful, we'd like this to be the standard behaviour in 4.0. 👍👍
+
+### `flock-file-locks`
+
+Changes the file lock implementation from github.com/nightlyone/lockfile to github.com/gofrs/flock to address an issue where file locks are never released by agents in Docker container that are hard killed while holding the lock.
+
+When the experiment is enabled the agent will use different lock files from agents where the experiment is disabled, so agents with this experiment enabled should not be run on the same host as agents where the experiment is disabled.
+
+**Status**: this is a new experiment and is currently being testing.

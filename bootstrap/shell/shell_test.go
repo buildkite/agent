@@ -10,11 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -301,9 +303,23 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	}
 }
 
+func TestFlockRetriesAndTimesOut(t *testing.T) {
+	experiments.Enable("flock-file-locks")
+	defer experiments.Disable("flock-file-locks")
+
+	TestLockFileRetriesAndTimesOut(t)
+}
+
 func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
+	flockExperimentEnabled := false
+	expectedLockPath := lockfile
+	if experiments.IsEnabled("flock-file-locks") {
+		flockExperimentEnabled = true
+		expectedLockPath = lockfile + "f" // flock-locked files are created with the suffix 'f'
+	}
+
 	cmd := exec.Command(os.Args[0], "-test.run=TestAcquiringLockHelperProcess", "--", lockfile)
-	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1"}
+	cmd.Env = []string{"GO_WANT_HELPER_PROCESS=1", "FLOCK_EXPERIMENT_ENABLED=" + strconv.FormatBool(flockExperimentEnabled)}
 
 	err := cmd.Start()
 	if err != nil {
@@ -312,7 +328,7 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 
 	// wait for the above process to get a lock
 	for {
-		if _, err = os.Stat(lockfile); os.IsNotExist(err) {
+		if _, err = os.Stat(expectedLockPath); os.IsNotExist(err) {
 			time.Sleep(time.Millisecond * 10)
 			continue
 		}
@@ -326,6 +342,12 @@ func acquireLockInOtherProcess(lockfile string) (*exec.Cmd, error) {
 func TestAcquiringLockHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
 		return
+	}
+
+	if os.Getenv("FLOCK_EXPERIMENT_ENABLED") == "true" {
+		experiments.Enable("flock-file-locks")
+	} else {
+		experiments.Disable("flock-file-locks")
 	}
 
 	fileName := os.Args[len(os.Args)-1]
