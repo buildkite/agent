@@ -48,7 +48,7 @@ steps:
     command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: buildkite-agent-windows
+      queue: buildkite-windows-agent
 
   - label: ":junit:"
     depends_on:
