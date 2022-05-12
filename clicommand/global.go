@@ -48,8 +48,15 @@ var NoHTTP2Flag = cli.BoolFlag{
 
 var DebugFlag = cli.BoolFlag{
 	Name:   "debug",
-	Usage:  "Enable debug mode",
+	Usage:  "Enable debug mode. Synonym for `--log-level debug`. Takes precedence over `--log-level`",
 	EnvVar: "BUILDKITE_AGENT_DEBUG",
+}
+
+var LogLevelFlag = cli.StringFlag{
+	Name:   "log-level",
+	Value:  "notice",
+	Usage:  "Set the log level for the agent, making logging more or less verbose. Defaults to notice",
+	EnvVar: "BUILDKITE_LOG_LEVEL",
 }
 
 var ProfileFlag = cli.StringFlag{
@@ -126,6 +133,19 @@ func CreateLogger(cfg interface{}) logger.Logger {
 		os.Exit(1)
 	}
 
+	l.SetLevel(logger.NOTICE)
+
+	err := handleLogLevelFlag(l, cfg)
+	if err != nil {
+		l.Warn("Error when setting log level: %v. Defaulting log level to NOTICE", err)
+	}
+
+	// Enable debugging if a Debug option is present
+	debugI, _ := reflections.GetField(cfg, "Debug")
+	if debug, ok := debugI.(bool); ok && debug {
+		l.SetLevel(logger.DEBUG)
+	}
+
 	return l
 }
 
@@ -139,14 +159,6 @@ func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
 }
 
 func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
-	// Enable debugging if a Debug option is present
-	debug, _ := reflections.GetField(cfg, "Debug")
-	if debug == true {
-		l.SetLevel(logger.DEBUG)
-	} else {
-		l.SetLevel(logger.NOTICE)
-	}
-
 	// Enable experiments
 	experimentNames, err := reflections.GetField(cfg, "Experiments")
 	if err == nil {
@@ -161,6 +173,26 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 
 	// Handle profiling flag
 	return HandleProfileFlag(l, cfg)
+}
+
+func handleLogLevelFlag(l logger.Logger, cfg interface{}) error {
+	logLevel, err := reflections.GetField(cfg, "LogLevel")
+	if err != nil {
+		return err
+	}
+
+	llStr, ok := logLevel.(string)
+	if !ok {
+		return fmt.Errorf("log level %v (%T) couldn't be cast to string", logLevel, logLevel)
+	}
+
+	level, err := logger.LevelFromString(llStr)
+	if err != nil {
+		return err
+	}
+
+	l.SetLevel(level)
+	return nil
 }
 
 func UnsetConfigFromEnvironment(c *cli.Context) error {
