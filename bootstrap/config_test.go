@@ -50,8 +50,8 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	}
 
 	if expected := true; config.CleanCheckout != expected {
-		t.Fatalf("Expected Repository to be %v, got %v",
-			expected, config.Repository)
+		t.Fatalf("Expected CleanCheckout to be %v, got %v",
+			expected, config.CleanCheckout)
 	}
 }
 
