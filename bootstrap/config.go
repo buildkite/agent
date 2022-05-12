@@ -15,7 +15,7 @@ import (
 // that mapping along with some reflection. It's a little bit magical but it's
 // less work to maintain in the long run.
 //
-// To add a new config option that is mapped from an env, add an struct tag and it's done
+// To add a new config option that is mapped from an env, add a struct tag and it's done
 type Config struct {
 	// The command to run
 	Command string
