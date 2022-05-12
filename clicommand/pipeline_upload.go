@@ -61,6 +61,7 @@ type PipelineUploadConfig struct {
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
 	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
 	Profile     string   `cli:"profile"`
@@ -113,6 +114,7 @@ var PipelineUploadCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
 		RedactedVars,
