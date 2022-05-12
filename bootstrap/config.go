@@ -89,6 +89,9 @@ type Config struct {
 	// Are plugins enabled?
 	PluginsEnabled bool
 
+	// Should we always force a fresh clone of plugins, even if we have a local checkout?
+	PluginsAlwaysCloneFresh bool `env:"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH"`
+
 	// Whether to validate plugin configuration
 	PluginValidation bool
 

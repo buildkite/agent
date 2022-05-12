@@ -76,6 +76,7 @@ type BootstrapConfig struct {
 	CommandEval                  bool     `cli:"command-eval"`
 	PluginsEnabled               bool     `cli:"plugins-enabled"`
 	PluginValidation             bool     `cli:"plugin-validation"`
+	PluginsAlwaysCloneFresh      bool     `cli:"plugins-always-clone-fresh"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
 	PTY                          bool     `cli:"pty"`
 	Debug                        bool     `cli:"debug"`
@@ -274,6 +275,11 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Validate plugin configuration",
 			EnvVar: "BUILDKITE_PLUGIN_VALIDATION",
 		},
+		cli.BoolFlag{
+			Name:   "plugins-always-clone-fresh",
+			Usage:  "Always make a new clone of plugin source, even if already present",
+			EnvVar: "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH",
+		},
 		cli.BoolTFlag{
 			Name:   "local-hooks-enabled",
 			Usage:  "Allow local hooks to be run",
@@ -404,6 +410,7 @@ var BootstrapCommand = cli.Command{
 			PluginValidation:             cfg.PluginValidation,
 			Plugins:                      cfg.Plugins,
 			PluginsEnabled:               cfg.PluginsEnabled,
+			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
 			PullRequest:                  cfg.PullRequest,
 			Queue:                        cfg.Queue,
