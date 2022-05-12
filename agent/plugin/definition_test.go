@@ -87,3 +87,63 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 		`/: {"llamas":"always"} "alpacas" value is required`,
 	})
 }
+
+func TestDefinitionWithoutAdditionalProperties(t *testing.T) {
+	validator := &Validator{
+		commandExists: func(cmd string) bool {
+			return false
+		},
+	}
+
+	def := &Definition{
+		Configuration: jsonschema.Must(`{
+			"type": "object",
+			"properties": {
+				"alpacas": {
+					"type": "string"
+				}
+			},
+			"required": ["alpacas"],
+			"additionalProperties": false
+		}`),
+	}
+
+	res := validator.Validate(def, map[string]interface{}{
+		"alpacas": "definitely",
+		"camels":  "never",
+	})
+
+	assert.False(t, res.Valid())
+	assert.Equal(t, res.Errors, []string{
+		`/camels: "never" cannot match schema`,
+	})
+}
+
+func TestDefinitionWithAdditionalProperties(t *testing.T) {
+	validator := &Validator{
+		commandExists: func(cmd string) bool {
+			return false
+		},
+	}
+
+	def := &Definition{
+		Configuration: jsonschema.Must(`{
+			"type": "object",
+			"properties": {
+				"alpacas": {
+					"type": "string"
+				}
+			},
+			"required": ["alpacas"],
+			"additionalProperties": true
+		}`),
+	}
+
+	res := validator.Validate(def, map[string]interface{}{
+		"alpacas": "definitely",
+		"camels":  "never",
+	})
+
+	assert.True(t, res.Valid())
+	assert.Equal(t, res.Errors, []string{})
+}
