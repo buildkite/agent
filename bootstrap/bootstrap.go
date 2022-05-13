@@ -911,38 +911,28 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 	defer pluginCheckoutHook.Unlock()
 
-	// XXX(pd) 20220512: man, neither option here is nice.  Either we git-fetch and git-checkout on
-	// existing repos, which is probably fast, but then we're duplicating a bunch of machinery and
-	// perhaps missing things (like `addRepositoryHostToSSHKnownHosts`), or we DRY it up and simply
-	// rm -rf the plugin directory if it exists, but that means a potentially slow and unnecessary
-	// clone on every build step.  Sigh.
-
-	// If there is already a clone, the user may want to ensure it's fresh.
+	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
+	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
+	//
+	// Neither of the obvious options here is very nice.  Either we git-fetch and git-checkout on
+	// existing repos, which is probably fast, but it's _surprisingly hard_ to write a really robust
+	// chain of Git commands that'll definitely get you a clean version of a given upstream branch
+	// ref (the branch might have been force-pushed, the checkout might have become dirty and
+	// unmergeable, etc.).  Plus, then we're duplicating a bunch of fetch/checkout machinery and
+	// perhaps missing things (like `addRepositoryHostToSSHKnownHosts` which is called down below).
+	// Alternatively, we can DRY it up and simply `rm -rf` the plugin directory if it exists, but
+	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
+	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
+	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
 	if b.Config.PluginsAlwaysCloneFresh && utils.FileExists(pluginDirectory) {
-		b.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; ensuring a clean checkout of plugin %s", p.Label())
-		// It'd be great if we could do fancy footwork to use a preexisting clone of a plugin and
-		// just `git fetch && git checkout`, but it's not always that simple it would seem.  There
-		// could be a force-pushed branch, the checkout might have become dirty for whatever
-		// reason...  So for now, let's just throw away the existing checkout and rely on the
-		// existing fresh-clone behaviour below...
+		b.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
 		err = os.RemoveAll(pluginDirectory)
 		if err != nil {
-			b.shell.Errorf("Oh no, something went wrong deleting %s", pluginDirectory)
+			b.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
 			return nil, err
 		}
 	}
 
-	// Has it already been checked out?
-	//
-	// XXX(pd) 20220512: Danger!  What if we have a long-lived Buildkite agent that has
-	// org/plugin#v1 available, and the user wants to switch to org/plugin#v2 -- it looks to me like
-	// this code is fairly naive, and will go "there's already _some_ version of org/plugin
-	// available, so i'll just move on" instead of making sure the version is right...!
-	//
-	// Answer: nope, the pluginDirectory cannily includes the name of the tag/branch/sha.  So this
-	// will necessarily change and cause a fresh checkout to happen.  We really only need to worry
-	// about the case where a tag has been changed or we're specifically wanting remote's branch
-	// HEAD.
 	if utils.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
