@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.36.0](https://github.com/buildkite/agent/tree/v3.36.0) (UNRELEASED) (2022-05-17)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.35.2...v3.36.0)
+
+### Added
+
+- Add experiment to use kernel-based flocks instead of lockfiles [#1624](https://github.com/buildkite/agent/pull/1624) (@KevinGreen)
+- Add option to enable temporary job log file [#1564](https://github.com/buildkite/agent/pull/1564) (@albertywu)
+
+### Fixed
+
+- The `no-plugins` option now works correctly when set in the config file [#1579](https://github.com/buildkite/agent/pull/1579) (@elruwen)
+- Clear up usage instructions around --disconnect-after-idle-timeout and --disconnect-after-job [#1599](https://github.com/buildkite/agent/pull/1599) (@moskyb)
+
+### Changed
+- Refactor retry machinery to allow the use of exponential backoff [#1588](https://github.com/buildkite/agent/pull/1588) (@moskyb)
+- Create all directories with 0775 permissions [#1616](https://github.com/buildkite/agent/pull/1616) (@moskyb)
+- Dependency Updates:
+  - github.com/urfave/cli: 1.22.4 ->  1.22.7 [#1619](https://github.com/buildkite/agent/pull/1619) (@dependabot[bot])
+  - Golang: 1.17.6 -> 1.18.1 (yay, generics!) [#1603](https://github.com/buildkite/agent/pull/1603) [#1627](https://github.com/buildkite/agent/pull/1627) (@dependabot[bot])
+  - Alpine Release Images: 3.12 -> 3.15.4 [#1628](https://github.com/buildkite/agent/pull/1628) (@moskyb)
+
+### Internal
+- Install gotestsum in CI in the recommended way for Go 1.17+ [#1612](https://github.com/buildkite/agent/pull/1612) (@moskyb)
+- Update windows test queue name to point at new widows elastic stack [#1633](https://github.com/buildkite/agent/pull/1633) (@moskyb)
+
+
 ## [v3.35.2](https://github.com/buildkite/agent/tree/v3.35.2) (2022-04-13)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.35.1...v3.35.2)
 
