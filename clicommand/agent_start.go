@@ -582,7 +582,6 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
 		if isSetNoPlugins && cfg.NoPlugins == false {
 			msg := `Plugins have been specifically enabled, despite %s being enabled. ` +
