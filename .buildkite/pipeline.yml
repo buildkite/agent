@@ -32,12 +32,10 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":linux: Linux ARM64 Tests (with race detector)"
+  - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
     command: ".buildkite/steps/tests.sh -race"
     artifact_paths: junit-*.xml
-    soft_fail:
-      - exit_status: "*"
     agents:
       queue: agent-runners-linux-arm64
     plugins:
@@ -45,7 +43,7 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":windows: Windows ARM64 Tests"
+  - name: ":windows: Windows AMD64 Tests"
     key: test-windows
     command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
