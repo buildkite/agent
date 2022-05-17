@@ -43,6 +43,22 @@ func TestCreateFromJSON(t *testing.T) {
 				Configuration: map[string]interface{}{},
 			}},
 		},
+		{`[{"https://gitlab.example.com/path/to/repo#main":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `gitlab.example.com/path/to/repo`,
+				Version:       `main`,
+				Scheme:        `https`,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{`[{"https://gitlab.com/group/team/path/to/repo#main":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `gitlab.com/group/team/path/to/repo`,
+				Version:       `main`,
+				Scheme:        `https`,
+				Configuration: map[string]interface{}{},
+			}},
+		},
 		{
 			`["ssh://git:foo@github.com/buildkite-plugins/docker-compose#a34fa34"]`,
 			[]*Plugin{{
@@ -215,21 +231,21 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	repo, err = plugin.Repository()
 	assert.Equal(t, repo, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete github.com path "github.com/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "github.com/buildkite"`)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete github.com path "github.com/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "github.com/buildkite"`)
 
 	plugin = &Plugin{Location: "bitbucket.org/buildkite"}
 	repo, err = plugin.Repository()
 	assert.Equal(t, repo, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete bitbucket.org path "bitbucket.org/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "bitbucket.org/buildkite"`)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete bitbucket.org path "bitbucket.org/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "bitbucket.org/buildkite"`)
 
 	plugin = &Plugin{Location: "bitbucket.org/user/project/sub/directory"}
 	repo, err = plugin.Repository()

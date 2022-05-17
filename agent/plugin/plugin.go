@@ -279,7 +279,6 @@ func (p *Plugin) Label() string {
 		return p.Location
 	}
 }
-
 func (p *Plugin) constructRepositoryHost() (string, error) {
 	if p.Location == "" {
 		return "", fmt.Errorf("Missing plugin location")
@@ -289,16 +288,18 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 	if len(parts) < 2 {
 		return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
 	}
-
-	var s string
-
-	if parts[0] == "github.com" || parts[0] == "bitbucket.org" || parts[0] == "gitlab.com" {
+	switch parts[0] {
+	case "github.com", "bitbucket.org":
 		if len(parts) < 3 {
-			return "", fmt.Errorf("Incomplete %s path \"%s\"", parts[0], p.Location)
+			return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
 		}
-
-		s = strings.Join(parts[:3], "/")
-	} else {
+		return strings.Join(parts[:3], "/"), nil
+	case "gitlab.com":
+		if len(parts) < 3 {
+			return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
+		}
+		return strings.Join(parts, "/"), nil
+	default:
 		repo := []string{}
 
 		for _, p := range parts {
@@ -309,8 +310,6 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 			}
 		}
 
-		s = strings.Join(repo, "/")
+		return strings.Join(repo, "/"), nil
 	}
-
-	return s, nil
 }
