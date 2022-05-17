@@ -297,7 +297,7 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 			return "", fmt.Errorf("Incomplete %s path \"%s\"", parts[0], p.Location)
 		}
 
-		s = strings.Join(parts[:3], "/")
+		s = strings.Join(parts, "/")
 	} else {
 		repo := []string{}
 
