@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
@@ -11,7 +12,6 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/experiments"
-	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/urfave/cli"
 )
@@ -78,6 +78,7 @@ type BootstrapConfig struct {
 	PluginValidation             bool     `cli:"plugin-validation"`
 	LocalHooksEnabled            bool     `cli:"local-hooks-enabled"`
 	PTY                          bool     `cli:"pty"`
+	LogLevel                     string   `cli:"log-level"`
 	Debug                        bool     `cli:"debug"`
 	Shell                        string   `cli:"shell"`
 	Experiments                  []string `cli:"experiment" normalize:"list"`
@@ -323,6 +324,7 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 		},
 		DebugFlag,
+		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
 	},
@@ -330,21 +332,23 @@ var BootstrapCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := BootstrapConfig{}
 
+		loader := cliconfig.Loader{CLI: c, Config: &cfg}
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
 		l := CreateLogger(&cfg)
 
-		// Load the configuration
-		if err := cliconfig.Load(c, l, &cfg); err != nil {
-			l.Fatal("%s", err)
+		// Now that we have a logger, log out the warnings that loading config generated
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Enable experiments
 		for _, name := range cfg.Experiments {
 			experiments.Enable(name)
-		}
-
-		// Enable debug if set
-		if cfg.Debug {
-			l.SetLevel(logger.DEBUG)
 		}
 
 		// Handle profiling flag

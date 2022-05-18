@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -35,6 +36,7 @@ type StepUpdateConfig struct {
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
+	LogLevel    string   `cli:"log-level"`
 	NoColor     bool     `cli:"no-color"`
 	Experiments []string `cli:"experiment" normalize:"list"`
 	Profile     string   `cli:"profile"`
@@ -78,6 +80,7 @@ var StepUpdateCommand = cli.Command{
 		// Global flags
 		NoColorFlag,
 		DebugFlag,
+		LogLevelFlag,
 		ExperimentsFlag,
 		ProfileFlag,
 	},
@@ -85,11 +88,18 @@ var StepUpdateCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := StepUpdateConfig{}
 
+		loader := cliconfig.Loader{CLI: c, Config: &cfg}
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
 		l := CreateLogger(&cfg)
 
-		// Load the configuration
-		if err := cliconfig.Load(c, l, &cfg); err != nil {
-			l.Fatal("%s", err)
+		// Now that we have a logger, log out the warnings that loading config generated
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Setup any global configuration options
@@ -125,7 +135,7 @@ var StepUpdateCommand = cli.Command{
 		}
 
 		// Post the change
-		err := retry.NewRetrier(
+		err = retry.NewRetrier(
 			retry.WithMaxAttempts(10),
 			retry.WithStrategy(retry.Constant(5*time.Second)),
 		).Do(func(r *retry.Retrier) error {
