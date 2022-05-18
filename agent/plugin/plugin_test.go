@@ -44,6 +44,15 @@ func TestCreateFromJSON(t *testing.T) {
 			}},
 		},
 		{
+			`[{"https://gitlab.fipps.de/contao/contao4/isotope-colorattribute-bundle#32a1397bee5f57b332c57a9d85ccd95208dc56b5":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `gitlab.fipps.de/contao/contao4/isotope-colorattribute-bundle`,
+				Version:       `32a1397bee5f57b332c57a9d85ccd95208dc56b5`,
+				Scheme:        `https`,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{
 			`["ssh://git:foo@github.com/buildkite-plugins/docker-compose#a34fa34"]`,
 			[]*Plugin{&Plugin{
 				Location:       `github.com/buildkite-plugins/docker-compose`,
