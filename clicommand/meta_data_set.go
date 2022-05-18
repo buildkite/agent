@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -76,11 +77,18 @@ var MetaDataSetCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := MetaDataSetConfig{}
 
+		loader := cliconfig.Loader{CLI: c, Config: &cfg}
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
 		l := CreateLogger(&cfg)
 
-		// Load the configuration
-		if err := cliconfig.Load(c, l, &cfg); err != nil {
-			l.Fatal("%s", err)
+		// Now that we have a logger, log out the warnings that loading config generated
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Setup any global configuration options
@@ -108,7 +116,7 @@ var MetaDataSetCommand = cli.Command{
 		}
 
 		// Set the meta data
-		err := retry.NewRetrier(
+		err = retry.NewRetrier(
 			retry.WithMaxAttempts(10),
 			retry.WithStrategy(retry.Constant(5*time.Second)),
 		).Do(func(r *retry.Retrier) error {

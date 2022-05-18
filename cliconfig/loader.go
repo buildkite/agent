@@ -33,19 +33,6 @@ type Loader struct {
 
 var argCliNameRegexp = regexp.MustCompile(`arg:(\d+)`)
 
-// A shortcut for loading a config from the CLI
-func Load(c *cli.Context, l logger.Logger, cfg interface{}) error {
-	loader := Loader{CLI: c, Config: cfg}
-	warnings, err := loader.Load()
-	if err != nil {
-		return err
-	}
-	for _, warning := range warnings {
-		l.Warn("%s", warning)
-	}
-	return nil
-}
-
 // Loads the config from the CLI and config files that are present and returns
 // any warnings or errors
 func (l *Loader) Load() (warnings []string, err error) {

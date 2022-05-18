@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -70,11 +71,18 @@ var MetaDataExistsCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := MetaDataExistsConfig{}
 
+		loader := cliconfig.Loader{CLI: c, Config: &cfg}
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
 		l := CreateLogger(&cfg)
 
-		// Load the configuration
-		if err := cliconfig.Load(c, l, &cfg); err != nil {
-			l.Fatal("%s", err)
+		// Now that we have a logger, log out the warnings that loading config generated
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Setup any global configuration options
@@ -85,7 +93,6 @@ var MetaDataExistsCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Find the meta data value
-		var err error
 		var exists *api.MetaDataExists
 		var resp *api.Response
 

@@ -1,6 +1,8 @@
 package clicommand
 
 import (
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -78,18 +80,23 @@ var AnnotationRemoveCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := AnnotationRemoveConfig{}
 
+		loader := cliconfig.Loader{CLI: c, Config: &cfg}
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
 		l := CreateLogger(&cfg)
 
-		// Load the configuration
-		if err := cliconfig.Load(c, l, &cfg); err != nil {
-			l.Fatal("%s", err)
+		// Now that we have a logger, log out the warnings that loading config generated
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
 		}
 
 		// Setup any global configuration options
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
-
-		var err error
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
