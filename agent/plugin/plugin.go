@@ -295,13 +295,11 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 	var s string
 	switch parts[0] {
 	case "github.com", "bitbucket.org":
-
-
 		s = strings.Join(parts[:3], "/")
 	case "gitlab.com":
 		s = strings.Join(parts, "/")
 	default:
-				repo := []string{}
+		repo := []string{}
 
 		for _, p := range parts {
 			repo = append(repo, p)
