@@ -53,8 +53,14 @@ After repository checkout, resolve `BUILDKITE_COMMIT` to a commit hash. This mak
 
 ### `flock-file-locks`
 
-Changes the file lock implementation from github.com/nightlyone/lockfile to github.com/gofrs/flock to address an issue where file locks are never released by agents in Docker container that are hard killed while holding the lock.
+Changes the file lock implementation from github.com/nightlyone/lockfile to github.com/gofrs/flock to address an issue where file locks are never released by agents that don't shut down cleanly.
 
 When the experiment is enabled the agent will use different lock files from agents where the experiment is disabled, so agents with this experiment enabled should not be run on the same host as agents where the experiment is disabled.
 
-**Status**: this is a new experiment and is currently being testing.
+**Status**: Being tested, but it's looking good. We plan to switch lock implementations over the course of a couple of releases, switching over in such a way that nothing gets broken.
+
+### `opentelemetry-tracing`
+
+Allows the use of the `opentelemetry` tracing backend, which won't work otherwise. OpenTelemetry tracing will definitely be a mainline feature of the agent in the future, but there may be intricacies in its implementation that we won't fully understand until after we've tested it in prod a little.
+
+**Status:** Being tested, will be a non-experiment feature at some point soon.
