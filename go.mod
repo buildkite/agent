@@ -25,7 +25,7 @@ require (
 	github.com/rjeczalik/interfaces v0.1.1
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/stretchr/testify v1.7.1
-	github.com/urfave/cli v1.22.7
+	github.com/urfave/cli v1.22.9
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9
