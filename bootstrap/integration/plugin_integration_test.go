@@ -30,7 +30,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		p = createTestPlugin(t, map[string][]string{
-			"environment.bat": []string{
+			"environment.bat": {
 				"@echo off",
 				"set LLAMAS_ROCK=absolutely",
 				pluginMock.Path + " testing",
@@ -38,7 +38,7 @@ func TestRunningPlugins(t *testing.T) {
 		})
 	} else {
 		p = createTestPlugin(t, map[string][]string{
-			"environment": []string{
+			"environment": {
 				"#!/bin/bash",
 				"export LLAMAS_ROCK=absolutely",
 				pluginMock.Path + " testing",
@@ -90,14 +90,14 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		p = createTestPlugin(t, map[string][]string{
-			"environment.bat": []string{
+			"environment.bat": {
 				"@echo off",
 				"exit 5",
 			},
 		})
 	} else {
 		p = createTestPlugin(t, map[string][]string{
-			"environment": []string{
+			"environment": {
 				"#!/bin/bash",
 				"exit 5",
 			},
@@ -227,14 +227,14 @@ func TestPluginCloneRetried(t *testing.T) {
 	var p *testPlugin
 	if runtime.GOOS == "windows" {
 		p = createTestPlugin(t, map[string][]string{
-			"environment.bat": []string{
+			"environment.bat": {
 				"@echo off",
 				"set LLAMAS_ROCK=absolutely",
 			},
 		})
 	} else {
 		p = createTestPlugin(t, map[string][]string{
-			"environment": []string{
+			"environment": {
 				"#!/bin/bash",
 				"export LLAMAS_ROCK=absolutely",
 			},
