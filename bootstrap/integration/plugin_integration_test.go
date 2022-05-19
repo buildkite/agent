@@ -313,6 +313,27 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 	return &testPlugin{repo, commitHash}
 }
 
+// modifyTestPlugin applies a change to a plugin's contents and makes a commit.  This is useful for
+// testing BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH behaviour.
+func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testPlugin) {
+	repo := testPlugin.gitRepository
+
+	for hook, lines := range hooks {
+		data := []byte(strings.Join(lines, "\n"))
+		if err := ioutil.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := repo.Add("."); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.Commit("Updating content of plugin"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // ToJSON turns a single testPlugin into a single-item JSON
 // array suitable for BUILDKITE_PLUGINS
 func (tp *testPlugin) ToJSON() (string, error) {
