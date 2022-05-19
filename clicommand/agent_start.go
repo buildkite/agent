@@ -450,7 +450,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "tracing-backend",
-			Usage:  "The name of the tracing backend to use.",
+			Usage:  fmt.Sprintf("The name of the tracing backend to use. Valid values are: %q", maps.Keys(tracetools.ValidTracingBackends)),
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
