@@ -386,6 +386,111 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	tester2.RunAndCheck(t, env...)
 }
+
+// As described above the previous integration test, this time we want to run the build both before
+// and after modifying a plugin's source, but this time with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH
+// set to true.  So, we expect the upstream plugin changes to take effect on our second build.
+func TestModifiedPluginWithForcePull(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// Let's set a fixed location for plugins, otherwise it'll be a random new tempdir every time
+	// which defeats our test.
+	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Same resetting code for BUILDKITE_PLUGINS_PATH as in the previous test
+	tester.PluginsDir = pluginsDir
+	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
+
+	var p *testPlugin
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set OSTRICH_EGGS=quite_large",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": {
+				"#!/bin/bash",
+				"export OSTRICH_EGGS=quite_large",
+			},
+		})
+	}
+
+	// Same branch-name jiggery pokery as in the previous integration test
+	p.gitRepository.CreateBranch("something-fixed")
+	p.versionTag = "something-fixed"
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`BUILDKITE_PLUGINS=` + json,
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, env...)
+
+	tester2, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester2.Close()
+
+	tester2.PluginsDir = pluginsDir
+	tester2.Env = replacePluginPathInEnv(tester2.Env, pluginsDir)
+
+	// Notice the all-important setting, BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH, being enabled.
+	tester2.Env = append(tester2.Env, "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true")
+
+	if runtime.GOOS == "windows" {
+		modifyTestPlugin(t, map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set OSTRICH_EGGS=huge_actually",
+			},
+		}, p)
+	} else {
+		modifyTestPlugin(t, map[string][]string{
+			"environment": {
+				"#!/bin/bash",
+				"export OSTRICH_EGGS=huge_actually",
+			},
+		}, p)
+	}
+
+	// This time, we expect the value of OSTRICH_EGGS to have changed compared to the first test
+	// run.
+	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=huge_actually`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester2.RunAndCheck(t, env...)
+}
+
 type testPlugin struct {
 	*gitRepository
 
