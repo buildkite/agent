@@ -276,6 +276,9 @@ func TestPluginCloneRetried(t *testing.T) {
 
 type testPlugin struct {
 	*gitRepository
+
+	// What version of this mock plugin do we want?  Defaults to `git rev-parse HEAD`
+	versionTag string
 }
 
 func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
@@ -303,7 +306,11 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 		t.Fatal(err)
 	}
 
-	return &testPlugin{repo}
+	commitHash, err := repo.RevParse("HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &testPlugin{repo, commitHash}
 }
 
 // ToJSON turns a single testPlugin into a single-item JSON
@@ -320,14 +327,10 @@ func (tp *testPlugin) ToJSON() (string, error) {
 // BUILDKITE_PLUGINS expects an array of these, so it would
 // generally be used on a []testPlugin slice.
 func (tp *testPlugin) MarshalJSON() ([]byte, error) {
-	commitHash, err := tp.RevParse("HEAD")
-	if err != nil {
-		return nil, err
-	}
 	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
 
 	p := map[string]interface{}{
-		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(commitHash)): map[string]string{
+		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{
 			"settings": "blah",
 		},
 	}
