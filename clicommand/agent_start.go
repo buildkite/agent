@@ -450,7 +450,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "tracing-backend",
-			Usage:  fmt.Sprintf("The name of the tracing backend to use. Valid values are: %q", maps.Keys(tracetools.ValidTracingBackends)),
+			Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry" (experimental, requires --experiment opentelemetry-tracing)`,
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
