@@ -48,7 +48,7 @@ var NoHTTP2Flag = cli.BoolFlag{
 
 var DebugFlag = cli.BoolFlag{
 	Name:   "debug",
-	Usage:  "Enable debug mode. Synonym for `--log-level debug`. Takes precedence over `--log-level`",
+	Usage:  "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′",
 	EnvVar: "BUILDKITE_AGENT_DEBUG",
 }
 

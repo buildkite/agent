@@ -210,7 +210,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "disconnect-after-job",
-			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the --spawn flag, each worker booted will run exactly one job",
+			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the ′--spawn′ flag, each worker booted will run exactly one job",
 			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
 		},
 		cli.IntFlag{
@@ -227,7 +227,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "enable-job-log-tmpfile",
-			Usage:  "Store the job logs in a temporary file `BUILDKITE_JOB_LOG_TMPFILE` that is accessible during the job and removed at the end of the job",
+			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
 			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
 		},
 		cli.StringFlag{
@@ -450,7 +450,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "tracing-backend",
-			Usage:  "The name of the tracing backend to use.",
+			Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry" (experimental, requires --experiment opentelemetry-tracing)`,
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},

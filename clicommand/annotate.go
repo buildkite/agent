@@ -81,7 +81,7 @@ var AnnotateCommand = cli.Command{
 		},
 		cli.StringFlag{
 			Name:   "style",
-			Usage:  "The style of the annotation (`success`, `info`, `warning` or `error`)",
+			Usage:  "The style of the annotation (′success′, ′info′, ′warning′ or ′error′)",
 			EnvVar: "BUILDKITE_ANNOTATION_STYLE",
 		},
 		cli.BoolFlag{
