@@ -13,6 +13,8 @@ steps:
   - name: ":hammer: :linux: amd64"
     key: test-linux-amd64
     command: ".buildkite/steps/tests.sh"
+    env:
+      TEST_ANALYTICS_TOKEN_ENV_KEY: "TA_SUITE_AGENT_AMD64"
     artifact_paths: junit-*.xml
     plugins:
       docker-compose#v3.0.0:
@@ -36,6 +38,8 @@ steps:
     key: test-linux-arm64
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
+    env:
+      TEST_ANALYTICS_TOKEN_ENV_KEY: "TA_SUITE_AGENT_ARM64"
     agents:
       queue: elastic-runners-arm64
     plugins:
@@ -46,6 +50,8 @@ steps:
   - name: ":hammer: :windows:"
     key: test-windows
     command: "bash .buildkite\\steps\\tests.sh"
+    env:
+      TEST_ANALYTICS_TOKEN_ENV_KEY: "TA_SUITE_AGENT_MSYS"
     artifact_paths: junit-*.xml
     agents:
       queue: buildkite-windows-agent
