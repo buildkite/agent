@@ -37,12 +37,24 @@ steps:
     artifact_paths: junit-*.xml
     soft_fail:
       - exit_status: "*"
+    env:
+      TEST_ANALYTICS_TOKEN_ENV_KEY: "TA_SUITE_AGENT_ARM64_RACE"
     agents:
       queue: elastic-runners-arm64
     plugins:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+        env:
+          - TEST_ANALYTICS_TOKEN_ENV_KEY
+          - TA_SUITE_AGENT_ARM64_RACE
+          - BUILDKITE_BUILD_ID
+          - BUILDKITE_BUILD_NUMBER
+          - BUILDKITE_JOB_ID
+          - BUILDKITE_BRANCH
+          - BUILDKITE_COMMIT
+          - BUILDKITE_MESSAGE
+          - BUILDKITE_BUILD_URL
 
   - name: ":hammer: :linux: arm64"
     key: test-linux-arm64
