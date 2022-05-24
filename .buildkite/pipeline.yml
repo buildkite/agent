@@ -20,6 +20,16 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+        env:
+          - TEST_ANALYTICS_TOKEN_ENV_KEY
+          - TA_SUITE_AGENT_AMD64
+          - BUILDKITE_BUILD_ID
+          - BUILDKITE_BUILD_NUMBER
+          - BUILDKITE_JOB_ID
+          - BUILDKITE_BRANCH
+          - BUILDKITE_COMMIT
+          - BUILDKITE_MESSAGE
+          - BUILDKITE_BUILD_URL
 
   - name: ":hammer: :oncoming_automobile: :linux: arm64"
     key: test-race-linux-arm64
@@ -46,6 +56,16 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+        env:
+          - TEST_ANALYTICS_TOKEN_ENV_KEY
+          - TA_SUITE_AGENT_ARM64
+          - BUILDKITE_BUILD_ID
+          - BUILDKITE_BUILD_NUMBER
+          - BUILDKITE_JOB_ID
+          - BUILDKITE_BRANCH
+          - BUILDKITE_COMMIT
+          - BUILDKITE_MESSAGE
+          - BUILDKITE_BUILD_URL
 
   - name: ":hammer: :windows:"
     key: test-windows
