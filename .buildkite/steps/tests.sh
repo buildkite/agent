@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 go version
 echo arch is "$(uname -m)"
