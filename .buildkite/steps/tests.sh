@@ -14,7 +14,7 @@ TEST_EXPERIMENT=git-mirrors gotestsum --junitfile "junit-${OSTYPE}-git-mirrors.x
 
 echo '+++ Test Analytics'
 
-if [[ -n $TEST_ANALYTICS_TOKEN_ENV_KEY ]]; then
+if [[ -n "${TEST_ANALYTICS_TOKEN_ENV_KEY-}" ]]; then
   cat "junit-${OSTYPE}.xml" | TEST_ANALYTICS_TOKEN=${!TEST_ANALYTICS_TOKEN_ENV_KEY} bash -c "`curl -sL https://raw.githubusercontent.com/buildkite/collector-junit/main/collect.sh`"
 else
   echo "No TEST_ANALYTICS_TOKEN_ENV_KEY is present, skipping..."
