@@ -127,7 +127,6 @@ func CreateLogger(cfg interface{}) logger.Logger {
 
 		l = logger.NewConsoleLogger(printer, os.Exit)
 	case `json`:
-		l.Warn("FORMAT IS JSON")
 		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
 	default:
 		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
