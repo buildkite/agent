@@ -461,6 +461,34 @@ type executeFlags struct {
 	PTY bool
 }
 
+func round(d time.Duration) time.Duration {
+	// The idea here is to show 5 significant digits worth of time.
+	// If your build takes 2 hours, you probably don't care about the timing
+	// being reported down to the microsecond.
+	switch {
+	case d < 100*time.Microsecond:
+		return d
+	case d < time.Millisecond:
+		return d.Round(10 * time.Nanosecond)
+	case d < 10*time.Millisecond:
+		return d.Round(100 * time.Nanosecond)
+	case d < 100*time.Millisecond:
+		return d.Round(time.Microsecond)
+	case d < time.Second:
+		return d.Round(10 * time.Microsecond)
+	case d < 10*time.Second:
+		return d.Round(100 * time.Microsecond)
+	case d < time.Minute:
+		return d.Round(time.Millisecond)
+	case d < 10*time.Minute:
+		return d.Round(10 * time.Millisecond)
+	case d < time.Hour:
+		return d.Round(100 * time.Millisecond)
+	default:
+		return d.Round(10 * time.Second)
+	}
+}
+
 func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, flags executeFlags) error {
 	// Combine the two slices of env, let the latter overwrite the former
 	tracedEnv := env.FromSlice(cmd.Env)
@@ -476,7 +504,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, f
 	if s.Debug {
 		t := time.Now()
 		defer func() {
-			s.Commentf("↳ Command completed in %v", time.Now().Sub(t))
+			s.Commentf("↳ Command completed in %v", round(time.Since(t)))
 		}()
 	}
 
