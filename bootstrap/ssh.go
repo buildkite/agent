@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 )
 
 var (
@@ -26,10 +26,10 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 	hostParts := strings.Split(host, ":")
 	sshKeyScanOutput := ""
 
-	err = retry.NewRetrier(
-		retry.WithMaxAttempts(3),
-		retry.WithStrategy(retry.Constant(sshKeyscanRetryInterval)),
-	).Do(func(r *retry.Retrier) error {
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.Constant(sshKeyscanRetryInterval)),
+	).Do(func(r *roko.Retrier) error {
 		// `ssh-keyscan` needs `-p` when scanning a host with a port
 		var sshKeyScanCommand string
 		if len(hostParts) == 2 {

@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/stdin"
+	"github.com/buildkite/roko"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/retry"
 	"github.com/urfave/cli"
 )
 
@@ -159,11 +159,11 @@ var AnnotateCommand = cli.Command{
 		}
 
 		// Retry the annotation a few times before giving up
-		err = retry.NewRetrier(
-			retry.WithMaxAttempts(5),
-			retry.WithStrategy(retry.Constant(1*time.Second)),
-			retry.WithJitter(),
-		).Do(func(r *retry.Retrier) error {
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.Constant(1*time.Second)),
+			roko.WithJitter(),
+		).Do(func(r *roko.Retrier) error {
 			// Attempt to create the annotation
 			resp, err := client.Annotate(cfg.Job, annotation)
 

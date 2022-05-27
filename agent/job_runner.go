@@ -18,7 +18,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
 
@@ -680,10 +680,10 @@ func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
-	return retry.NewRetrier(
-		retry.WithMaxAttempts(30),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(rtr *retry.Retrier) error {
+	return roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(rtr *roko.Retrier) error {
 		_, err := r.apiClient.StartJob(r.job)
 
 		if err != nil {
@@ -711,10 +711,10 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
 
-	return retry.NewRetrier(
-		retry.TryForever(),
-		retry.WithStrategy(retry.Constant(1*time.Second)),
-	).Do(func(retrier *retry.Retrier) error {
+	return roko.NewRetrier(
+		roko.TryForever(),
+		roko.WithStrategy(roko.Constant(1*time.Second)),
+	).Do(func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.FinishJob(r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
@@ -805,10 +805,10 @@ func (r *JobRunner) onProcessStartCallback() {
 }
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
-	retry.NewRetrier(
-		retry.WithMaxAttempts(10),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(retrier *retry.Retrier) error {
+	roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.SaveHeaderTimes(r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
@@ -833,11 +833,11 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 	// This code will retry forever until we get back a successful response
 	// from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
-	return retry.NewRetrier(
-		retry.TryForever(),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-		retry.WithJitter(),
-	).Do(func(retrier *retry.Retrier) error {
+	return roko.NewRetrier(
+		roko.TryForever(),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+		roko.WithJitter(),
+	).Do(func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.UploadChunk(r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,

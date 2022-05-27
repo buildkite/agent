@@ -20,9 +20,9 @@ import (
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/redaction"
-	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 	"github.com/pkg/errors"
 )
@@ -851,10 +851,10 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	defer b.shell.Chdir(previousWd)
 
 	// Plugin clones shouldn't use custom GitCloneFlags
-	err = retry.NewRetrier(
-		retry.WithMaxAttempts(3),
-		retry.WithStrategy(retry.Constant(2*time.Second)),
-	).Do(func(r *retry.Retrier) error {
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.Constant(2*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		return b.shell.Run("git", "clone", "-v", "--", repo, ".")
 	})
 	if err != nil {
@@ -976,10 +976,10 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 		}
 	default:
 		if b.Config.Repository != "" {
-			err = retry.NewRetrier(
-				retry.WithMaxAttempts(3),
-				retry.WithStrategy(retry.Constant(2*time.Second)),
-			).Do(func(r *retry.Retrier) error {
+			err = roko.NewRetrier(
+				roko.WithMaxAttempts(3),
+				roko.WithStrategy(roko.Constant(2*time.Second)),
+			).Do(func(r *roko.Retrier) error {
 				err := b.defaultCheckoutPhase()
 				if err == nil {
 					return nil

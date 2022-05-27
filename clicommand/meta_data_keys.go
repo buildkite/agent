@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -95,10 +95,10 @@ var MetaDataKeysCommand = cli.Command{
 		var keys []string
 		var resp *api.Response
 
-		err = retry.NewRetrier(
-			retry.WithMaxAttempts(10),
-			retry.WithStrategy(retry.Constant(5*time.Second)),
-		).Do(func(r *retry.Retrier) error {
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(10),
+			roko.WithStrategy(roko.Constant(5*time.Second)),
+		).Do(func(r *roko.Retrier) error {
 			keys, resp, err = client.MetaDataKeys(cfg.Job)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()

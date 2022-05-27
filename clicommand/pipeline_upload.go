@@ -17,8 +17,8 @@ import (
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/redaction"
-	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/stdin"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -303,10 +303,10 @@ var PipelineUploadCommand = cli.Command{
 		uuid := api.NewUUID()
 
 		// Retry the pipeline upload a few times before giving up
-		err = retry.NewRetrier(
-			retry.WithMaxAttempts(60),
-			retry.WithStrategy(retry.Constant(5*time.Second)),
-		).Do(func(r *retry.Retrier) error {
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(60),
+			roko.WithStrategy(roko.Constant(5*time.Second)),
+		).Do(func(r *roko.Retrier) error {
 			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, r)

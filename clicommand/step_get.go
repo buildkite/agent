@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -123,10 +123,10 @@ var StepGetCommand = cli.Command{
 		// Find the step attribute
 		var resp *api.Response
 		var stepExportResponse *api.StepExportResponse
-		err = retry.NewRetrier(
-			retry.WithMaxAttempts(10),
-			retry.WithStrategy(retry.Constant(5*time.Second)),
-		).Do(func(r *retry.Retrier) error {
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(10),
+			roko.WithStrategy(roko.Constant(5*time.Second)),
+		).Do(func(r *roko.Retrier) error {
 			stepExportResponse, resp, err = client.StepExport(cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {

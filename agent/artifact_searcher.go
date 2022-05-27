@@ -5,7 +5,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 )
 
 type ArtifactSearcher struct {
@@ -37,10 +37,10 @@ func (a *ArtifactSearcher) Search(query, scope, state string, includeRetriedJobs
 	var artifacts []*api.Artifact
 
 	// Retry on transport errors, a failed search will return 0 artifacts
-	err := retry.NewRetrier(
-		retry.WithMaxAttempts(10),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(*retry.Retrier) error {
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(*roko.Retrier) error {
 		var searchErr error
 		artifacts, _, searchErr = a.apiClient.SearchArtifacts(a.buildID, &api.ArtifactSearchOptions{
 			Query:              query,
