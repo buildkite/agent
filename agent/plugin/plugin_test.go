@@ -281,7 +281,7 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 func TestConfigurationToEnvironment(t *testing.T) {
 	t.Parallel()
 
-	var envMap *env.Environment
+	var envMap env.Environment
 	var err error
 
 	envMap, err = pluginEnvFromConfig(t, `{ "config-key": 42 }`)
@@ -384,7 +384,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 	}, envMap2.ToSlice())
 }
 
-func pluginEnvFromConfig(t *testing.T, configJson string) (*env.Environment, error) {
+func pluginEnvFromConfig(t *testing.T, configJson string) (env.Environment, error) {
 	var config map[string]interface{}
 
 	json.Unmarshal([]byte(configJson), &config)

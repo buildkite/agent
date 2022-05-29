@@ -170,7 +170,7 @@ func TestEmptyDiff(t *testing.T) {
 func TestEnvironmentApply(t *testing.T) {
 	t.Parallel()
 
-	env := &Environment{}
+	env := Environment{}
 	env = env.Apply(Diff{
 		Added: map[string]string{
 			"LLAMAS_ENABLED": "1",

@@ -195,7 +195,7 @@ func TestFromExportFromWindowsWithLeadingAndTrailingSpaces(t *testing.T) {
 	assertEqualEnv(t, `USERDOMAIN`, "IE11WIN10", env)
 }
 
-func assertEqualEnv(t *testing.T, key string, expected string, env *Environment) {
+func assertEqualEnv(t *testing.T, key string, expected string, env Environment) {
 	t.Helper()
 	v, _ := env.Get(key)
 	if !assert.Equal(t, expected, v) {

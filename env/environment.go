@@ -8,22 +8,20 @@ import (
 
 // Environment is a map of environment variables, with the keys normalized
 // for case-insensitive operating systems
-type Environment struct {
-	env map[string]string
-}
+type Environment map[string]string
 
-func New() *Environment {
-	return &Environment{env: map[string]string{}}
+func New() Environment {
+	return Environment{}
 }
 
 // FromSlice creates a new environment from a string slice of KEY=VALUE
-func FromSlice(s []string) *Environment {
-	env := &Environment{env: make(map[string]string, len(s))}
+func FromSlice(s []string) Environment {
+	env := make(Environment, len(s))
 
 	for _, l := range s {
-		parts := strings.SplitN(l, "=", 2)
-		if len(parts) == 2 {
-			env.Set(parts[0], parts[1])
+		key, val, ok := strings.Cut(l, "=")
+		if ok {
+			env.Set(key, val)
 		}
 	}
 
@@ -31,13 +29,13 @@ func FromSlice(s []string) *Environment {
 }
 
 // Get returns a key from the environment
-func (e *Environment) Get(key string) (string, bool) {
-	v, ok := e.env[normalizeKeyName(key)]
+func (e Environment) Get(key string) (string, bool) {
+	v, ok := e[normalizeKeyName(key)]
 	return v, ok
 }
 
 // Get a boolean value from environment, with a default for empty. Supports true|false, on|off, 1|0
-func (e *Environment) GetBool(key string, defaultValue bool) bool {
+func (e Environment) GetBool(key string, defaultValue bool) bool {
 	v, _ := e.Get(key)
 
 	switch strings.ToLower(v) {
@@ -51,42 +49,42 @@ func (e *Environment) GetBool(key string, defaultValue bool) bool {
 }
 
 // Exists returns true/false depending on whether or not the key exists in the env
-func (e *Environment) Exists(key string) bool {
-	_, ok := e.env[normalizeKeyName(key)]
+func (e Environment) Exists(key string) bool {
+	_, ok := e[normalizeKeyName(key)]
 	return ok
 }
 
 // Set sets a key in the environment
-func (e *Environment) Set(key string, value string) string {
-	e.env[normalizeKeyName(key)] = value
+func (e Environment) Set(key string, value string) string {
+	e[normalizeKeyName(key)] = value
 
 	return value
 }
 
 // Remove a key from the Environment and return its value
-func (e *Environment) Remove(key string) string {
+func (e Environment) Remove(key string) string {
 	value, ok := e.Get(key)
 	if ok {
-		delete(e.env, normalizeKeyName(key))
+		delete(e, normalizeKeyName(key))
 	}
 	return value
 }
 
 // Length returns the length of the environment
-func (e *Environment) Length() int {
-	return len(e.env)
+func (e Environment) Length() int {
+	return len(e)
 }
 
 // Diff returns a new environment with the keys and values from this
 // environment which are different in the other one.
-func (e *Environment) Diff(other *Environment) Diff {
+func (e Environment) Diff(other Environment) Diff {
 	diff := Diff{
 		Added:   make(map[string]string),
 		Changed: make(map[string]DiffPair),
 		Removed: make(map[string]struct{}, 0),
 	}
 
-	for k, v := range e.env {
+	for k, v := range e {
 		other, ok := other.Get(k)
 		if !ok {
 			// This environment has added this key to other
@@ -102,7 +100,7 @@ func (e *Environment) Diff(other *Environment) Diff {
 		}
 	}
 
-	for k, _ := range other.env {
+	for k := range other {
 		if _, ok := e.Get(k); !ok {
 			diff.Removed[k] = struct{}{}
 		}
@@ -112,21 +110,21 @@ func (e *Environment) Diff(other *Environment) Diff {
 }
 
 // Merge merges another env into this one and returns the result
-func (e *Environment) Merge(other *Environment) *Environment {
+func (e Environment) Merge(other Environment) Environment {
 	c := e.Copy()
 
 	if other == nil {
 		return c
 	}
 
-	for k, v := range other.ToMap() {
+	for k, v := range other {
 		c.Set(k, v)
 	}
 
 	return c
 }
 
-func (e *Environment) Apply(diff Diff) *Environment {
+func (e Environment) Apply(diff Diff) Environment {
 	c := e.Copy()
 
 	for k, v := range diff.Added {
@@ -135,28 +133,28 @@ func (e *Environment) Apply(diff Diff) *Environment {
 	for k, v := range diff.Changed {
 		c.Set(k, v.New)
 	}
-	for k, _ := range diff.Removed {
-		delete(c.env, k)
+	for k := range diff.Removed {
+		delete(c, k)
 	}
 
 	return c
 }
 
 // Copy returns a copy of the env
-func (e *Environment) Copy() *Environment {
+func (e Environment) Copy() Environment {
 	c := make(map[string]string)
 
-	for k, v := range e.env {
+	for k, v := range e {
 		c[k] = v
 	}
 
-	return &Environment{env: c}
+	return c
 }
 
 // ToSlice returns a sorted slice representation of the environment
-func (e *Environment) ToSlice() []string {
+func (e Environment) ToSlice() []string {
 	s := []string{}
-	for k, v := range e.env {
+	for k, v := range e {
 		s = append(s, k+"="+v)
 	}
 
@@ -164,11 +162,6 @@ func (e *Environment) ToSlice() []string {
 	sort.Strings(s)
 
 	return s
-}
-
-// ToMap returns a map representation of the environment
-func (e *Environment) ToMap() map[string]string {
-	return e.env
 }
 
 // Environment variables on Windows are case-insensitive. When you run `SET`

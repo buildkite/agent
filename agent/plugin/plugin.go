@@ -244,7 +244,7 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 }
 
 // Converts the plugin configuration values to environment variables
-func (p *Plugin) ConfigurationToEnvironment() (*env.Environment, error) {
+func (p *Plugin) ConfigurationToEnvironment() (env.Environment, error) {
 	envSlice := []string{}
 	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
 

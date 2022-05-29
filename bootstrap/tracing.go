@@ -85,7 +85,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 		tracer.WithAnalytics(true),
 	}
 
-	tags := Merge(GenericTracingExtras(b, *b.shell.Env), DDTracingExtras())
+	tags := Merge(GenericTracingExtras(b, b.shell.Env), DDTracingExtras())
 	opts = slices.Grow(opts, len(tags))
 	for k, v := range tags {
 		opts = append(opts, tracer.WithGlobalTag(k, v))
@@ -107,7 +107,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.ToMap())
+	sctx, err := tracetools.DecodeTraceContext(b.shell.Env)
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil
@@ -128,7 +128,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 		semconv.ServiceVersionKey.String(agent.Version()),
 	}
 
-	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(b, *b.shell.Env))
+	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(b, b.shell.Env))
 	for k, v := range warnings {
 		b.shell.Warningf("Unknown attribute type (key: %v, value: %v (%T)) passed when initialising OpenTelemetry. This is a bug, submit this error message at https://github.com/buildkite/agent/issues", k, v, v)
 		b.shell.Warningf("OpenTelemetry will still work, but the attribute %v and its value above will not be included", v)

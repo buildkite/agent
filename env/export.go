@@ -35,9 +35,9 @@ var endsWithUnescapedQuoteRegex = regexp.MustCompile("([^\\\\]\"\\z|\\A\"\\z)")
 //     TMP=C:\Users\IEUser\AppData\Local\Temp
 //     USERDOMAIN=IE11WIN10
 //
-func FromExport(body string) *Environment {
+func FromExport(body string) Environment {
 	// Create the environment that we'll load values into
-	env := &Environment{env: make(map[string]string)}
+	env := Environment{}
 
 	// Remove any white space at the start and the end of the export string
 	body = strings.TrimSpace(body)
