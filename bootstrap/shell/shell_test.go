@@ -406,3 +406,36 @@ func TestRunWithoutPromptWithContext(t *testing.T) {
 	err = sh.RunWithoutPromptWithContext(ctx, "asdasdasdasdzxczxczxzxc")
 	assert.Error(t, err)
 }
+
+var roundTests = []struct {
+	in     time.Duration
+	want   time.Duration
+	outStr string
+}{
+	{3 * time.Nanosecond, 3 * time.Nanosecond, "3ns"},
+	{32 * time.Nanosecond, 32 * time.Nanosecond, "32ns"},
+	{321 * time.Nanosecond, 321 * time.Nanosecond, "321ns"},
+	{4321 * time.Nanosecond, 4321 * time.Nanosecond, "4.321µs"},
+	{54321 * time.Nanosecond, 54321 * time.Nanosecond, "54.321µs"},
+	{654321 * time.Nanosecond, 654320 * time.Nanosecond, "654.32µs"},
+	{7654321 * time.Nanosecond, 7654300 * time.Nanosecond, "7.6543ms"},
+	{87654321 * time.Nanosecond, 87654000 * time.Nanosecond, "87.654ms"},
+	{987654321 * time.Nanosecond, 987650000 * time.Nanosecond, "987.65ms"},
+	{1987654321 * time.Nanosecond, 1987700000 * time.Nanosecond, "1.9877s"},
+	{21987654321 * time.Nanosecond, 21988000000 * time.Nanosecond, "21.988s"},
+	{321987654321 * time.Nanosecond, 321990000000 * time.Nanosecond, "5m21.99s"},
+	{4321987654321 * time.Nanosecond, 4320000000000 * time.Nanosecond, "1h12m0s"},
+	{54321987654321 * time.Nanosecond, 54320000000000 * time.Nanosecond, "15h5m20s"},
+}
+
+func TestRound(t *testing.T) {
+	for _, tt := range roundTests {
+		got := shell.Round(tt.in)
+		if got != tt.want {
+			t.Errorf("round(%v): got %v, want %v", tt.in, got, tt.want)
+		}
+		if got.String() != tt.outStr {
+			t.Errorf("round(%v): got %q, want %v", tt.in, got.String(), tt.outStr)
+		}
+	}
+}
