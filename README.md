@@ -76,7 +76,7 @@ cd agent
 mkdir /tmp/buildkite-builds
 
 # Build an agent binary and start the agent
-go build -i -o /usr/local/bin/buildkite-agent .
+go build -o /usr/local/bin/buildkite-agent .
 buildkite-agent start --debug --build-path=/tmp/buildkite-builds --token "abc"
 
 # Or, run the agent directly and skip the build step

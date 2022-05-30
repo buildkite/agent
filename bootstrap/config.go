@@ -15,7 +15,10 @@ import (
 // that mapping along with some reflection. It's a little bit magical but it's
 // less work to maintain in the long run.
 //
-// To add a new config option that is mapped from an env, add an struct tag and it's done
+// To add a new config option that is mapped from an environment variable, add a
+// struct tag, then don't forget to add a corresponding CLI flag over in the
+// clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
+
 type Config struct {
 	// The command to run
 	Command string
@@ -88,6 +91,9 @@ type Config struct {
 
 	// Are plugins enabled?
 	PluginsEnabled bool
+
+	// Should we always force a fresh clone of plugins, even if we have a local checkout?
+	PluginsAlwaysCloneFresh bool `env:"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH"`
 
 	// Whether to validate plugin configuration
 	PluginValidation bool

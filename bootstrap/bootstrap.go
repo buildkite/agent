@@ -772,12 +772,12 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Create a path to the plugin
-	directory := filepath.Join(b.PluginsPath, id)
-	pluginGitDirectory := filepath.Join(directory, ".git")
+	pluginDirectory := filepath.Join(b.PluginsPath, id)
+	pluginGitDirectory := filepath.Join(pluginDirectory, ".git")
 	checkout := &pluginCheckout{
 		Plugin:      p,
-		CheckoutDir: directory,
-		HooksDir:    filepath.Join(directory, "hooks"),
+		CheckoutDir: pluginDirectory,
+		HooksDir:    filepath.Join(pluginDirectory, "hooks"),
 	}
 
 	// Try and lock this particular plugin while we check it out (we create
@@ -789,11 +789,32 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 	defer pluginCheckoutHook.Unlock()
 
-	// Has it already been checked out?
+	// If there is already a clone, the user may want to ensure it's fresh (e.g., by setting
+	// BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true).
+	//
+	// Neither of the obvious options here is very nice.  Either we git-fetch and git-checkout on
+	// existing repos, which is probably fast, but it's _surprisingly hard_ to write a really robust
+	// chain of Git commands that'll definitely get you a clean version of a given upstream branch
+	// ref (the branch might have been force-pushed, the checkout might have become dirty and
+	// unmergeable, etc.).  Plus, then we're duplicating a bunch of fetch/checkout machinery and
+	// perhaps missing things (like `addRepositoryHostToSSHKnownHosts` which is called down below).
+	// Alternatively, we can DRY it up and simply `rm -rf` the plugin directory if it exists, but
+	// that means a potentially slow and unnecessary clone on every build step.  Sigh.  I think the
+	// tradeoff is favourable for just blowing away an existing clone if we want least-hassle
+	// guarantee that the user will get the latest version of their plugin branch/tag/whatever.
+	if b.Config.PluginsAlwaysCloneFresh && utils.FileExists(pluginDirectory) {
+		b.shell.Commentf("BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH is true; removing previous checkout of plugin %s", p.Label())
+		err = os.RemoveAll(pluginDirectory)
+		if err != nil {
+			b.shell.Errorf("Oh no, something went wrong removing %s", pluginDirectory)
+			return nil, err
+		}
+	}
+
 	if utils.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
-		headCommit, err := gitRevParseInWorkingDirectory(b.shell, directory, "--short=7", "HEAD")
+		headCommit, err := gitRevParseInWorkingDirectory(b.shell, pluginDirectory, "--short=7", "HEAD")
 		if err != nil {
 			b.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
 		} else {
@@ -803,7 +824,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		return checkout, nil
 	}
 
-	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, directory)
+	b.shell.Commentf("Plugin \"%s\" will be checked out to \"%s\"", p.Location, pluginDirectory)
 
 	repo, err := p.Repository()
 	if err != nil {
@@ -849,7 +870,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	b.shell.Commentf("Moving temporary plugin directory to final location")
-	err = os.Rename(tempDir, directory)
+	err = os.Rename(tempDir, pluginDirectory)
 	if err != nil {
 		return nil, err
 	}

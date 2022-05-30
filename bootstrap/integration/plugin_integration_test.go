@@ -30,7 +30,7 @@ func TestRunningPlugins(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		p = createTestPlugin(t, map[string][]string{
-			"environment.bat": []string{
+			"environment.bat": {
 				"@echo off",
 				"set LLAMAS_ROCK=absolutely",
 				pluginMock.Path + " testing",
@@ -38,7 +38,7 @@ func TestRunningPlugins(t *testing.T) {
 		})
 	} else {
 		p = createTestPlugin(t, map[string][]string{
-			"environment": []string{
+			"environment": {
 				"#!/bin/bash",
 				"export LLAMAS_ROCK=absolutely",
 				pluginMock.Path + " testing",
@@ -90,14 +90,14 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	if runtime.GOOS == "windows" {
 		p = createTestPlugin(t, map[string][]string{
-			"environment.bat": []string{
+			"environment.bat": {
 				"@echo off",
 				"exit 5",
 			},
 		})
 	} else {
 		p = createTestPlugin(t, map[string][]string{
-			"environment": []string{
+			"environment": {
 				"#!/bin/bash",
 				"exit 5",
 			},
@@ -227,14 +227,14 @@ func TestPluginCloneRetried(t *testing.T) {
 	var p *testPlugin
 	if runtime.GOOS == "windows" {
 		p = createTestPlugin(t, map[string][]string{
-			"environment.bat": []string{
+			"environment.bat": {
 				"@echo off",
 				"set LLAMAS_ROCK=absolutely",
 			},
 		})
 	} else {
 		p = createTestPlugin(t, map[string][]string{
-			"environment": []string{
+			"environment": {
 				"#!/bin/bash",
 				"export LLAMAS_ROCK=absolutely",
 			},
@@ -274,8 +274,228 @@ func TestPluginCloneRetried(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+// We want to support the situation where a user wants a plugin from a particular Git branch, e.g.,
+// org/repo#my-dev-feature.  By default, if the Buildkite agent finds a plugin Git clone that
+// matches the org, repo and ref, it will not try to pull or update it in any way, meaning that if
+// the ref is a branch, and upstream has new commits, they will not get pulled in.  For that, we're
+// introducing the BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH setting, which allows a user to force the
+// agent to always make a fresh clone of any plugins.  This integration test and the one after test
+// that a plugin modified upstream is treated as expected.  That is, by default, the updates won't
+// take effect, but with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH set, they will.
+func TestModifiedPluginNoForcePull(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// Let's set a fixed location for plugins, otherwise NewBootstrapTester() gives us a random new
+	// tempdir every time, which defeats our test.  Later we'll use this pluginsDir for the second
+	// test run, too.
+	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tester.PluginsDir = pluginsDir
+
+	// There's a bit of machinery in replacePluginPathInEnv to modify only the
+	// BUILDKITE_PLUGINS_PATH, leaving the rest of the environment variables NewBootstrapTester()
+	// gave us as-is.
+	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
+
+	// Create a test plugin that sets an environment variable.
+	var p *testPlugin
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set OSTRICH_EGGS=quite_large",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": {
+				"#!/bin/bash",
+				"export OSTRICH_EGGS=quite_large",
+			},
+		})
+	}
+
+	// You may be surprised that we're creating a branch here.  This is so we can test the behaviour
+	// when a branch has had new commits added to it.
+	p.gitRepository.CreateBranch("something-fixed")
+	// To test this, we also set our testPlugin to version "something-fixed", so that the agent will
+	// check out that ref.
+	p.versionTag = "something-fixed"
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`BUILDKITE_PLUGINS=` + json,
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, env...)
+
+	// Now, we want to "repeat" the test build, having modified the plugin's contents.
+	tester2, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester2.Close()
+
+	// Same modification of BUILDKITE_PLUGINS_PATH.
+	tester2.PluginsDir = pluginsDir
+	tester2.Env = replacePluginPathInEnv(tester2.Env, pluginsDir)
+
+	if runtime.GOOS == "windows" {
+		modifyTestPlugin(t, map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set OSTRICH_EGGS=huge_actually",
+			},
+		}, p)
+	} else {
+		modifyTestPlugin(t, map[string][]string{
+			"environment": {
+				"#!/bin/bash",
+				"export OSTRICH_EGGS=huge_actually",
+			},
+		}, p)
+	}
+
+	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester2.RunAndCheck(t, env...)
+}
+
+// As described above the previous integration test, this time we want to run the build both before
+// and after modifying a plugin's source, but this time with BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH
+// set to true.  So, we expect the upstream plugin changes to take effect on our second build.
+func TestModifiedPluginWithForcePull(t *testing.T) {
+	tester, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	// Let's set a fixed location for plugins, otherwise it'll be a random new tempdir every time
+	// which defeats our test.
+	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Same resetting code for BUILDKITE_PLUGINS_PATH as in the previous test
+	tester.PluginsDir = pluginsDir
+	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
+
+	var p *testPlugin
+	if runtime.GOOS == "windows" {
+		p = createTestPlugin(t, map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set OSTRICH_EGGS=quite_large",
+			},
+		})
+	} else {
+		p = createTestPlugin(t, map[string][]string{
+			"environment": {
+				"#!/bin/bash",
+				"export OSTRICH_EGGS=quite_large",
+			},
+		})
+	}
+
+	// Same branch-name jiggery pokery as in the previous integration test
+	p.gitRepository.CreateBranch("something-fixed")
+	p.versionTag = "something-fixed"
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env := []string{
+		`BUILDKITE_PLUGINS=` + json,
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, env...)
+
+	tester2, err := NewBootstrapTester()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester2.Close()
+
+	tester2.PluginsDir = pluginsDir
+	tester2.Env = replacePluginPathInEnv(tester2.Env, pluginsDir)
+
+	// Notice the all-important setting, BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH, being enabled.
+	tester2.Env = append(tester2.Env, "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true")
+
+	if runtime.GOOS == "windows" {
+		modifyTestPlugin(t, map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set OSTRICH_EGGS=huge_actually",
+			},
+		}, p)
+	} else {
+		modifyTestPlugin(t, map[string][]string{
+			"environment": {
+				"#!/bin/bash",
+				"export OSTRICH_EGGS=huge_actually",
+			},
+		}, p)
+	}
+
+	// This time, we expect the value of OSTRICH_EGGS to have changed compared to the first test
+	// run.
+	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=huge_actually`); err != nil {
+			fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester2.RunAndCheck(t, env...)
+}
+
 type testPlugin struct {
 	*gitRepository
+
+	// What version of this mock plugin do we want?  Defaults to `git rev-parse HEAD`
+	versionTag string
 }
 
 func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
@@ -303,7 +523,32 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 		t.Fatal(err)
 	}
 
-	return &testPlugin{repo}
+	commitHash, err := repo.RevParse("HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &testPlugin{repo, commitHash}
+}
+
+// modifyTestPlugin applies a change to a plugin's contents and makes a commit.  This is useful for
+// testing BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH behaviour.
+func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testPlugin) {
+	repo := testPlugin.gitRepository
+
+	for hook, lines := range hooks {
+		data := []byte(strings.Join(lines, "\n"))
+		if err := ioutil.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := repo.Add("."); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := repo.Commit("Updating content of plugin"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // ToJSON turns a single testPlugin into a single-item JSON
@@ -320,14 +565,10 @@ func (tp *testPlugin) ToJSON() (string, error) {
 // BUILDKITE_PLUGINS expects an array of these, so it would
 // generally be used on a []testPlugin slice.
 func (tp *testPlugin) MarshalJSON() ([]byte, error) {
-	commitHash, err := tp.RevParse("HEAD")
-	if err != nil {
-		return nil, err
-	}
 	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
 
 	p := map[string]interface{}{
-		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(commitHash)): map[string]string{
+		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{
 			"settings": "blah",
 		},
 	}
@@ -336,4 +577,18 @@ func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	return b, nil
+}
+
+// replacePluginPathInEnv is useful for modifying the Env blob of a tester created with
+// NewBootstrapTester().  We need to do that because the tester relies on BUILDKITE_PLUGINS_PATH,
+// not on the .PluginsDir field as one might expect.
+func replacePluginPathInEnv(originalEnv []string, pluginsDir string) (newEnv []string) {
+	newEnv = []string{}
+	for _, val := range originalEnv {
+		if !strings.HasPrefix(val, "BUILDKITE_PLUGINS_PATH=") {
+			newEnv = append(newEnv, val)
+		}
+	}
+	newEnv = append(newEnv, "BUILDKITE_PLUGINS_PATH="+pluginsDir)
+	return newEnv
 }
