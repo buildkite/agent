@@ -210,7 +210,7 @@ func (b *Bootstrap) Cancel() error {
 }
 
 // executeHook runs a hook script with the hookRunner
-func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron *env.Environment) error {
+func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron env.Environment) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
@@ -319,7 +319,7 @@ func (b *Bootstrap) applyEnvironmentChanges(changes hook.HookScriptChanges, reda
 
 	// reset output redactors based on new environment variable values
 	redactors.Flush()
-	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv.ToMap()))
+	redactors.Reset(redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, mergedEnv))
 
 	// First, let see any of the environment variables are supposed
 	// to change the bootstrap configuration at run time.
@@ -1801,7 +1801,7 @@ func (b *Bootstrap) ignoredEnv() []string {
 // matching environment vars.
 // redaction.RedactorMux (possibly empty) is returned so the caller can `defer redactor.Flush()`
 func (b *Bootstrap) setupRedactors() redaction.RedactorMux {
-	valuesToRedact := redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env.ToMap())
+	valuesToRedact := redaction.GetValuesToRedact(b.shell, b.Config.RedactedVars, b.shell.Env)
 	if len(valuesToRedact) == 0 {
 		return nil
 	}

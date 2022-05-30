@@ -149,7 +149,7 @@ type Config struct {
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
 // of the env keys that changed and the new values
-func (c *Config) ReadFromEnvironment(environ *env.Environment) map[string]string {
+func (c *Config) ReadFromEnvironment(environ env.Environment) map[string]string {
 	changed := map[string]string{}
 
 	// Use reflection for the type and values

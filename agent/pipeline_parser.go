@@ -16,7 +16,7 @@ import (
 )
 
 type PipelineParser struct {
-	Env             *env.Environment
+	Env             env.Environment
 	Filename        string
 	Pipeline        []byte
 	NoInterpolation bool
