@@ -45,13 +45,15 @@ block_step() {
 YAML
 }
 
-output_steps_yaml() {
+edge_steps_yaml() {
   echo "steps:"
 
   trigger_step \
     "edge ${agent_version}.${build_version}" \
     "agent-release-edge"
+}
 
+output_steps_yaml() {
   block_step "beta?"
 
   trigger_step \
@@ -80,6 +82,8 @@ agent_docker_image_ubuntu_bionic=$(buildkite-agent meta-data get "agent-docker-i
 agent_docker_image_ubuntu_focal=$(buildkite-agent meta-data get "agent-docker-image-ubuntu-20.04")
 agent_docker_image_sidecar=$(buildkite-agent meta-data get "agent-docker-image-sidecar")
 agent_is_prerelease=$(buildkite-agent meta-data get "agent-is-prerelease")
+
+edge_steps_yaml | buildkite-agent pipeline upload
 
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
