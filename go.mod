@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/DataDog/datadog-go v4.8.2+incompatible
-	github.com/aws/aws-sdk-go v1.43.18
+	github.com/aws/aws-sdk-go v1.44.25
 	github.com/buildkite/bintest/v3 v3.1.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
