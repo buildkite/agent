@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DataDog/datadog-go/statsd"
+	"github.com/DataDog/datadog-go/v5/statsd"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -50,12 +50,13 @@ func (c *Collector) Start() error {
 		c.logger.Info("Starting datadog metrics collection to %s", c.config.DatadogHost)
 
 		var err error
-		c.client, err = statsd.NewBuffered(c.config.DatadogHost, statsdBufferLen)
+		c.client, err = statsd.New(c.config.DatadogHost,
+			statsd.WithMaxMessagesPerPayload(statsdBufferLen),
+			statsd.WithNamespace("buildkite."),
+		)
 		if err != nil {
 			return err
 		}
-
-		c.client.Namespace = "buildkite."
 	}
 	return nil
 }
