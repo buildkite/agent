@@ -133,6 +133,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// TempDir is not guaranteed to exist
 	tempDir := os.TempDir()
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err = os.MkdirAll(tempDir, 0777); err != nil {
 			return nil, err
 		}

@@ -766,6 +766,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Ensure the plugin directory exists, otherwise we can't create the lock
+	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 	err = os.MkdirAll(b.PluginsPath, 0777)
 	if err != nil {
 		return nil, err
@@ -907,6 +908,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 
 	if !utils.FileExists(checkoutPath) {
 		b.shell.Commentf("Creating \"%s\"", checkoutPath)
+		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(checkoutPath, 0777); err != nil {
 			return err
 		}
@@ -1096,6 +1098,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !utils.FileExists(baseDir) {
 		b.shell.Commentf("Creating \"%s\"", baseDir)
+		// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(baseDir, 0777); err != nil {
 			return "", err
 		}
