@@ -23,7 +23,7 @@ require (
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
 	github.com/rjeczalik/interfaces v0.1.1
 	github.com/sergi/go-diff v1.0.0 // indirect
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	github.com/urfave/cli v1.22.9
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
@@ -91,5 +91,5 @@ require (
 	google.golang.org/genproto v0.0.0-20220523171625-347a074981d8 // indirect
 	google.golang.org/grpc v1.46.2 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
