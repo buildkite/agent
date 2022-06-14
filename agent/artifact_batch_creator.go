@@ -5,7 +5,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 )
 
 type ArtifactBatchCreatorConfig struct {
@@ -70,10 +70,10 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 		var err error
 
 		// Retry the batch upload a couple of times
-		err = retry.NewRetrier(
-			retry.WithMaxAttempts(10),
-			retry.WithStrategy(retry.Constant(5*time.Second)),
-		).Do(func(r *retry.Retrier) error {
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(10),
+			roko.WithStrategy(roko.Constant(5*time.Second)),
+		).Do(func(r *roko.Retrier) error {
 			creation, resp, err = a.apiClient.CreateArtifacts(a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()

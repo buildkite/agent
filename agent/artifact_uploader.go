@@ -18,7 +18,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/mime"
 	"github.com/buildkite/agent/v3/pool"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 	zglob "github.com/mattn/go-zglob"
 )
 
@@ -326,10 +326,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				}
 
 				// Update the states of the artifacts in bulk.
-				err = retry.NewRetrier(
-					retry.WithMaxAttempts(10),
-					retry.WithStrategy(retry.Constant(5*time.Second)),
-				).Do(func(r *retry.Retrier) error {
+				err = roko.NewRetrier(
+					roko.WithMaxAttempts(10),
+					roko.WithStrategy(roko.Constant(5*time.Second)),
+				).Do(func(r *roko.Retrier) error {
 					_, err = a.apiClient.UpdateArtifacts(a.conf.JobID, statesToUpload)
 					if err != nil {
 						a.logger.Warn("%s (%s)", err, r)
@@ -371,10 +371,10 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
 			// a couple of times before giving up.
-			err = retry.NewRetrier(
-				retry.WithMaxAttempts(10),
-				retry.WithStrategy(retry.Constant(5*time.Second)),
-			).Do(func(r *retry.Retrier) error {
+			err = roko.NewRetrier(
+				roko.WithMaxAttempts(10),
+				roko.WithStrategy(roko.Constant(5*time.Second)),
+			).Do(func(r *roko.Retrier) error {
 				err := uploader.Upload(artifact)
 				if err != nil {
 					a.logger.Warn("%s (%s)", err, r)

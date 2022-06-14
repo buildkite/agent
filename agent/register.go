@@ -9,8 +9,8 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/retry"
 	"github.com/buildkite/agent/v3/system"
+	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
 )
 
@@ -40,7 +40,7 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 	req.Hostname = hostname
 	req.OS = osVersionDump
 
-	register := func(r *retry.Retrier) error {
+	register := func(r *roko.Retrier) error {
 		registered, resp, err = ac.Register(&req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
@@ -55,9 +55,9 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 	}
 
 	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
-	err = retry.NewRetrier(
-		retry.WithMaxAttempts(30),
-		retry.WithStrategy(retry.Constant(10*time.Second)),
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(10*time.Second)),
 	).Do(register)
 	if err == nil {
 		l.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,

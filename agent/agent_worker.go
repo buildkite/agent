@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 )
 
 type AgentWorkerConfig struct {
@@ -308,10 +308,10 @@ func (a *AgentWorker) Stop(graceful bool) {
 func (a *AgentWorker) Connect() error {
 	a.logger.Info("Connecting to Buildkite...")
 
-	return retry.NewRetrier(
-		retry.WithMaxAttempts(10),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(r *retry.Retrier) error {
+	return roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		_, err := a.apiClient.Connect()
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
@@ -326,10 +326,10 @@ func (a *AgentWorker) Heartbeat() error {
 	var err error
 
 	// Retry the heartbeat a few times
-	err = retry.NewRetrier(
-		retry.WithMaxAttempts(10),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(r *retry.Retrier) error {
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		beat, _, err = a.apiClient.Heartbeat()
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
@@ -420,10 +420,10 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 	// Acquire the job using the ID we were provided. We'll retry as best
 	// we can on non 422 error.
 	var acquiredJob *api.Job
-	err := retry.NewRetrier(
-		retry.WithMaxAttempts(10),
-		retry.WithStrategy(retry.Constant(3*time.Second)),
-	).Do(func(r *retry.Retrier) error {
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Constant(3*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
@@ -466,10 +466,10 @@ func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 	// Buildkite returns a 422 or 500 for example, we'll just bail out,
 	// re-ping, and try the whole process again.
 	var accepted *api.Job
-	err := retry.NewRetrier(
-		retry.WithMaxAttempts(30),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(r *retry.Retrier) error {
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		var err error
 		accepted, _, err = a.apiClient.AcceptJob(job)
 		if err != nil {

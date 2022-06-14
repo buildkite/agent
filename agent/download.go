@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 )
 
 type DownloadConfig struct {
@@ -54,10 +54,10 @@ func NewDownload(l logger.Logger, client *http.Client, c DownloadConfig) *Downlo
 }
 
 func (d Download) Start() error {
-	return retry.NewRetrier(
-		retry.WithMaxAttempts(d.conf.Retries),
-		retry.WithStrategy(retry.Constant(5*time.Second)),
-	).Do(func(r *retry.Retrier) error {
+	return roko.NewRetrier(
+		roko.WithMaxAttempts(d.conf.Retries),
+		roko.WithStrategy(roko.Constant(5*time.Second)),
+	).Do(func(r *roko.Retrier) error {
 		err := d.try()
 		if err != nil {
 			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)

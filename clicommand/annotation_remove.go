@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/retry"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
 )
 
@@ -102,11 +102,11 @@ var AnnotationRemoveCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
 
 		// Retry the removal a few times before giving up
-		err = retry.NewRetrier(
-			retry.WithMaxAttempts(5),
-			retry.WithStrategy(retry.Constant(1*time.Second)),
-			retry.WithJitter(),
-		).Do(func(r *retry.Retrier) error {
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.Constant(1*time.Second)),
+			roko.WithJitter(),
+		).Do(func(r *roko.Retrier) error {
 			// Attempt to remove the annotation
 			resp, err := client.AnnotationRemove(cfg.Job, cfg.Context)
 
