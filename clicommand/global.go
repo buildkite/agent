@@ -55,7 +55,7 @@ var DebugFlag = cli.BoolFlag{
 var LogLevelFlag = cli.StringFlag{
 	Name:   "log-level",
 	Value:  "notice",
-	Usage:  "Set the log level for the agent, making logging more or less verbose. Defaults to notice",
+	Usage:  "Set the log level for the agent, making logging more or less verbose. Defaults to notice. Allowed values are: debug, info, error, warn, fatal",
 	EnvVar: "BUILDKITE_AGENT_LOG_LEVEL",
 }
 
