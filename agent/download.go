@@ -133,7 +133,8 @@ func (d Download) try() error {
 	}
 
 	// Now make the folder for our file
-	err = os.MkdirAll(targetDirectory, 0775)
+	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
+	err = os.MkdirAll(targetDirectory, 0777)
 	if err != nil {
 		return fmt.Errorf("Failed to create folder for %s (%T: %v)", targetFile, err, err)
 	}
