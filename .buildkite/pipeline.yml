@@ -1,5 +1,7 @@
 env:
   DRY_RUN: false # set to true to disable publishing releases
+agents:
+  queue: agent-runners-linux-amd64
 
 steps:
   - name: ":go: fmt"
@@ -26,7 +28,7 @@ steps:
     soft_fail:
       - exit_status: "*"
     agents:
-      queue: elastic-runners-arm64
+      queue: agent-runners-linux-arm64
     plugins:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
@@ -37,7 +39,7 @@ steps:
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: elastic-runners-arm64
+      queue: agent-runners-linux-arm64
     plugins:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
@@ -48,7 +50,7 @@ steps:
     command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
     agents:
-      queue: buildkite-windows-agent
+      queue: agent-runners-windows-amd64
 
   - label: ":junit:"
     depends_on:
