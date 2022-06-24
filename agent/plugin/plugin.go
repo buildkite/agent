@@ -45,6 +45,7 @@ type Plugin struct {
 var (
 	locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
 	vendoredRegex       = regexp.MustCompile(`^\.`)
+	constraintRegex     = regexp.MustCompile(`^[~^]`)
 )
 
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
@@ -57,18 +58,20 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 
 	plugin.Scheme = u.Scheme
 	plugin.Location = u.Host + u.Path
-	plugin.Version = u.Fragment
 
-	// If a constraint has been specified
-	if constraint := u.Query().Get("constraint"); constraint != "" {
-		plugin.Constraint, err = semver.NewConstraint(constraint)
+	// "^" and "~" are illegal in git branch/tag names, but are used to
+	// specify semver constraints. So if the fragment starts with those
+	// characters, presume a constraint, and negotiate a version
+	// e.g. #^v1, #~v1.2.3)
+	if constraintRegex.MatchString(u.Fragment) {
+		plugin.Constraint, err = semver.NewConstraint(u.Fragment)
 		if err != nil {
-			return nil, fmt.Errorf("Cannot parse plugin version constraint %q: %s", constraint, err)
+			return nil, fmt.Errorf("Cannot parse plugin version constraint %q: %s", u.Fragment, err)
 		}
-		if plugin.Version != "" {
-			return nil, fmt.Errorf("Cannot specify both version and constraint")
-		}
+	} else {
+		plugin.Version = u.Fragment
 	}
+
 	plugin.Vendored = vendoredRegex.MatchString(plugin.Location)
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {

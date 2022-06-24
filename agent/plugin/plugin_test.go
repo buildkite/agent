@@ -45,7 +45,7 @@ func TestResolveConstraint(t *testing.T) {
 
 	t.Run("version-match", func(tt *testing.T) {
 		tt.Parallel()
-		jsonText := `[{"https://github.com/buildkite-plugins/docker-compose?constraint=~1.2.x":{"container":"app"}}]`
+		jsonText := `[{"https://github.com/buildkite-plugins/docker-compose#~1.2.x":{"container":"app"}}]`
 
 		plugins, err := CreateFromJSON(jsonText)
 		if err != nil {
@@ -175,11 +175,7 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 			"Too many #'s in \"github.com/buildkite-plugins/ping#master#lololo\"",
 		},
 		{
-			`[{"https://github.com/buildkite-plugins/docker-compose?constraint=^2.x#a34fa34":{"container":"app"}}]`,
-			"Cannot specify both version and constraint",
-		},
-		{
-			`[{"https://github.com/buildkite-plugins/docker-compose?constraint=something bad":{"container":"app"}}]`,
+			`[{"https://github.com/buildkite-plugins/docker-compose#~~":{"container":"app"}}]`,
 			"improper constraint",
 		},
 	} {
