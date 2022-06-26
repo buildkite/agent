@@ -97,7 +97,7 @@ Format specifiers:
 		cli.StringFlag{
 			Name:  "step",
 			Value: "",
-			Usage: "Scope the search to a particular step by using either its name or job ID",
+			Usage: "Scope the search to a particular step by using either its name or job ID. See [section](/docs/agent/v3/cli-artifact#parallelized-steps) for parralelized steps.",
 		},
 		cli.StringFlag{
 			Name:   "build",
