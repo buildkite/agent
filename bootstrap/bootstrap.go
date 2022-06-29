@@ -1124,6 +1124,10 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		flags := "--mirror " + b.GitCloneMirrorFlags
 		if err := gitClone(b.shell, flags, b.Repository, mirrorDir); err != nil {
+			b.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
+			if err := os.RemoveAll(mirrorDir); err != nil {
+				b.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
+			}
 			return "", err
 		}
 
