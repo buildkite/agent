@@ -45,6 +45,7 @@ func TestFromExportHandlesEscapedCharacters(t *testing.T) {
 		`declare -x WITH_NEW_LINE="i have a \\n new line"`,
 		`declare -x CARRIAGE_RETURN="i have a \\r carriage"`,
 		`declare -x TOTES="with a \" quote"`,
+		"declare -x ESCAPED_BACKTICK=\"escaped -----> \\` <----- backtick\"",
 	}
 
 	env := FromExport(strings.Join(lines, "\n"))
@@ -53,6 +54,7 @@ func TestFromExportHandlesEscapedCharacters(t *testing.T) {
 	assertEqualEnv(t, `WITH_NEW_LINE`, `i have a \n new line`, env)
 	assertEqualEnv(t, `CARRIAGE_RETURN`, `i have a \r carriage`, env)
 	assertEqualEnv(t, `TOTES`, `with a " quote`, env)
+	assertEqualEnv(t, `ESCAPED_BACKTICK`, "escaped -----> ` <----- backtick", env)
 }
 
 func TestFromExportWithVariablesWithoutEquals(t *testing.T) {
