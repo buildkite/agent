@@ -48,7 +48,7 @@ func FromExport(body string) Environment {
 	// Split up the export into lines
 	lines := strings.Split(body, "\n")
 
-	// No lines! An empty environment it is@
+	// No lines! An empty environment it is!
 	if len(lines) == 0 {
 		return env
 	}
@@ -142,6 +142,11 @@ func unquoteShell(value string) string {
 	// They also escape double quotes when showing a value within double
 	// quotes, for example, "this is a \" quote string"
 	value = strings.Replace(value, `\"`, `"`, -1)
+
+	// Replace a literal escaped backtick (\`) with just a backtick (`)
+	// Some variables (like passwords) can contain backticks that should be interpreted as literal backticks, rather than
+	// as the beginning of a subcommand
+	value = strings.Replace(value, "\\`", "`", -1)
 
 	return value
 }
