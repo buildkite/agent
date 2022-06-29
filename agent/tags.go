@@ -76,6 +76,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 		tags = append(tags,
 			fmt.Sprintf("hostname=%s", hostname),
 			fmt.Sprintf("os=%s", runtime.GOOS),
+			fmt.Sprintf("arch=%s", runtime.GOARCH),
 		)
 
 		machineID, _ := machineid.ProtectedID("buildkite-agent")
