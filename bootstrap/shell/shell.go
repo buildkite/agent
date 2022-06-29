@@ -235,10 +235,10 @@ func (s *Shell) flock(path string, timeout time.Duration) (LockFile, error) {
 	for {
 		// Keep trying the lock until we get it
 		if gotLock, err := lock.TryLock(); !gotLock || err != nil {
-			if !gotLock {
-				s.Commentf("Could not acquire lock on \"%s\" (Locked by other process)", absolutePathToLock)
-			} else {
+			if err != nil {
 				s.Commentf("Could not acquire lock on \"%s\" (%s)", absolutePathToLock, err)
+			} else {
+				s.Commentf("Could not acquire lock on \"%s\" (Locked by other process)", absolutePathToLock)
 			}
 			s.Commentf("Trying again in %s...", lockRetryDuration)
 			time.Sleep(lockRetryDuration)
