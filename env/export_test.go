@@ -29,15 +29,17 @@ func TestFromExportHandlesNewlines(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\n"))
 
-	assertEqualEnv(t, `SOMETHING`, `0`, env)
-	assertEqualEnv(t, `USER`, `keithpitt`, env)
-	assertEqualEnv(t, `VAR1`, "boom\\nboom\\nshake\\nthe\\nroom", env)
-	assertEqualEnv(t, `VAR2`, "hello\nfriends", env)
-	assertEqualEnv(t, `VAR3`, "hello\nfriends\nOMG=foo\ntest", env)
-	assertEqualEnv(t, `VAR4`, `ends with a space `, env)
-	assertEqualEnv(t, `VAR5`, "ends with\nanother space ", env)
-	assertEqualEnv(t, `VAR6`, "ends with a quote \"\nand a new line \"", env)
-	assertEqualEnv(t, `_`, `/usr/local/bin/watch`, env)
+	assert.Equal(t, Environment{
+		"SOMETHING": `0`,
+		"USER":      `keithpitt`,
+		"VAR1":      "boom\\nboom\\nshake\\nthe\\nroom",
+		"VAR2":      "hello\nfriends",
+		"VAR3":      "hello\nfriends\nOMG=foo\ntest",
+		"VAR4":      `ends with a space `,
+		"VAR5":      "ends with\nanother space ",
+		"VAR6":      "ends with a quote \"\nand a new line \"",
+		"_":         `/usr/local/bin/watch`,
+	}, env)
 }
 
 func TestFromExportHandlesEscapedCharacters(t *testing.T) {
@@ -51,11 +53,13 @@ func TestFromExportHandlesEscapedCharacters(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\n"))
 
-	assertEqualEnv(t, `DOLLARS`, `i love $money`, env)
-	assertEqualEnv(t, `WITH_NEW_LINE`, `i have a \n new line`, env)
-	assertEqualEnv(t, `CARRIAGE_RETURN`, `i have a \r carriage`, env)
-	assertEqualEnv(t, `TOTES`, `with a " quote`, env)
-	assertEqualEnv(t, `COOL_BACKTICK`, "look at this -----> ` <----- cool backtick", env)
+	assert.Equal(t, Environment{
+		"DOLLARS":         `i love $money`,
+		"WITH_NEW_LINE":   `i have a \n new line`,
+		"CARRIAGE_RETURN": `i have a \r carriage`,
+		"TOTES":           `with a " quote`,
+		"COOL_BACKTICK":   "look at this -----> ` <----- cool backtick",
+	}, env)
 }
 
 func TestFromExport_IgnoresArrays_Links_Refs_AndIntegers(t *testing.T) {
@@ -113,16 +117,20 @@ func TestFromExportWithVariablesWithoutEquals(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\n"))
 
-	assertEqualEnv(t, "LANG", "en_US.UTF-8", env)
-	assertEqualEnv(t, "LOGNAME", `buildkite-agent`, env)
-	assertEqualEnv(t, "SOME_VALUE", `this is my value`, env)
-	assertEqualEnv(t, "OLDPWD", ``, env)
-	assertEqualEnv(t, "SOME_OTHER_VALUE", "this is my value across\nnew\nlines", env)
-	assertEqualEnv(t, "OLDPWD2", ``, env)
-	assertEqualEnv(t, "SPACES", `this   one has      a bunch of spaces      in it`, env)
-	assertEqualEnv(t, "GONNA_TRICK_YOU", "the next line is a string\ndeclare -x WITH_A_STRING=\"I'm a string!!\n", env)
-	assertEqualEnv(t, "PATH", `/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, env)
-	assertEqualEnv(t, "PWD", `/`, env)
+	assert.Equal(t, Environment{
+		"THING_TOTES":      "",
+		"HTTP_PROXY":       "http://proxy.example.com:1234/",
+		"LANG":             "en_US.UTF-8",
+		"LOGNAME":          `buildkite-agent`,
+		"SOME_VALUE":       `this is my value`,
+		"OLDPWD":           ``,
+		"SOME_OTHER_VALUE": "this is my value across\nnew\nlines",
+		"SPACES":           `this   one has      a bunch of spaces      in it`,
+		"OLDPWD2":          ``,
+		"GONNA_TRICK_YOU":  "the next line is a string\ndeclare -x WITH_A_STRING=\"I'm a string!!\n",
+		"PATH":             `/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
+		"PWD":              `/`,
+	}, env)
 }
 
 func TestFromExportWithLeadingAndTrailingWhitespace(t *testing.T) {
@@ -145,10 +153,12 @@ func TestFromExportWithLeadingAndTrailingWhitespace(t *testing.T) {
 		t.Fatalf("Expected length of 4, got %d", env.Length())
 	}
 
-	assertEqualEnv(t, `DOLLARS`, "i love $money", env)
-	assertEqualEnv(t, `WITH_NEW_LINE`, `i have a \n new line`, env)
-	assertEqualEnv(t, `CARRIAGE_RETURN`, `i have a \r carriage`, env)
-	assertEqualEnv(t, `TOTES`, `with a " quote`, env)
+	assert.Equal(t, Environment{
+		"DOLLARS":         "i love $money",
+		"WITH_NEW_LINE":   `i have a \n new line`,
+		"CARRIAGE_RETURN": `i have a \r carriage`,
+		"TOTES":           `with a " quote`,
+	}, env)
 }
 
 func TestFromExportJSONInside(t *testing.T) {
@@ -176,7 +186,7 @@ func TestFromExportJSONInside(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\n"))
 
-	assertEqualEnv(t, `FOO`, strings.Join(expected, "\n"), env)
+	assert.Equal(t, Environment{"FOO": strings.Join(expected, "\n")}, env)
 }
 
 func TestFromExportFromWindows(t *testing.T) {
@@ -191,16 +201,12 @@ func TestFromExportFromWindows(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\r\n"))
 
-	if !assert.Equal(t, env.Length(), 6) {
-		t.FailNow()
-	}
-
-	assertEqualEnv(t, `SESSIONNAME`, "Console", env)
-	assertEqualEnv(t, `SystemDrive`, "C:", env)
-	assertEqualEnv(t, `SystemRoot`, "C:\\Windows", env)
-	assertEqualEnv(t, `TEMP`, "C:\\Users\\IEUser\\AppData\\Local\\Temp", env)
-	assertEqualEnv(t, `TMP`, "C:\\Users\\IEUser\\AppData\\Local\\Temp", env)
-	assertEqualEnv(t, `USERDOMAIN`, "IE11WIN10", env)
+	assertEnvHas(t, env, "SESSIONNAME", "Console")
+	assertEnvHas(t, env, "SystemDrive", "C:")
+	assertEnvHas(t, env, "SystemRoot", `C:\Windows`)
+	assertEnvHas(t, env, "TEMP", `C:\Users\IEUser\AppData\Local\Temp`)
+	assertEnvHas(t, env, "TMP", `C:\Users\IEUser\AppData\Local\Temp`)
+	assertEnvHas(t, env, "USERDOMAIN", "IE11WIN10")
 }
 
 func TestFromExportFromWindowsWithLeadingAndTrailingSpaces(t *testing.T) {
@@ -221,22 +227,19 @@ func TestFromExportFromWindowsWithLeadingAndTrailingSpaces(t *testing.T) {
 
 	env := FromExport(strings.Join(lines, "\r\n"))
 
-	if !assert.Equal(t, env.Length(), 6) {
-		t.FailNow()
-	}
-
-	assertEqualEnv(t, `SESSIONNAME`, "Console", env)
-	assertEqualEnv(t, `SystemDrive`, "C:", env)
-	assertEqualEnv(t, `SystemRoot`, "C:\\Windows", env)
-	assertEqualEnv(t, `TEMP`, "C:\\Users\\IEUser\\AppData\\Local\\Temp", env)
-	assertEqualEnv(t, `TMP`, "C:\\Users\\IEUser\\AppData\\Local\\Temp", env)
-	assertEqualEnv(t, `USERDOMAIN`, "IE11WIN10", env)
+	assertEnvHas(t, env, "SESSIONNAME", "Console")
+	assertEnvHas(t, env, "SystemDrive", "C:")
+	assertEnvHas(t, env, "SystemRoot", `C:\Windows`)
+	assertEnvHas(t, env, "TEMP", `C:\Users\IEUser\AppData\Local\Temp`)
+	assertEnvHas(t, env, "TMP", `C:\Users\IEUser\AppData\Local\Temp`)
+	assertEnvHas(t, env, "USERDOMAIN", "IE11WIN10")
 }
 
-func assertEqualEnv(t *testing.T, key string, expected string, env Environment) {
+// How we case the environment is different per platform - on linux we leave it alone, on windows we upcase it
+// So when we're testing windowsy env vars (ie, ones that might be not all uppercase), test using env.Get(), which
+// normalises everything for us
+func assertEnvHas(t *testing.T, env Environment, key string, expectedVal string) {
 	t.Helper()
 	v, _ := env.Get(key)
-	if !assert.Equal(t, expected, v) {
-		t.FailNow()
-	}
+	assert.Equal(t, expectedVal, v)
 }
