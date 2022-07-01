@@ -96,31 +96,31 @@ func FromExport(body string) Environment {
 			//     2. `FOO="open quote for new lines`
 			//     3. `FOO`
 			//
-			parts := strings.SplitN(line, "=\"", 2)
-			if len(parts) == 2 {
+			key, val, ok := strings.Cut(line, `="`)
+			if ok {
 				// If the value ends with an unescaped quote,
 				// then we know it's a single line environment
 				// variable (see example 1)
-				if endsWithUnescapedQuoteRegex.MatchString(parts[1]) {
+				if endsWithUnescapedQuoteRegex.MatchString(val) {
 					// Remove the `"` at the end
-					singleLineValueWithQuoteRemoved := strings.TrimSuffix(parts[1], `"`)
+					singleLineValueWithQuoteRemoved := strings.TrimSuffix(val, `"`)
 
 					// Set the single line env var
-					env.Set(parts[0], unquoteShell(singleLineValueWithQuoteRemoved))
+					env.Set(key, unquoteShell(singleLineValueWithQuoteRemoved))
 				} else {
 					// We're in an example 2 situation,
 					// where we need to keep keep the
 					// environment variable open until we
 					// encounter a line that ends with an
 					// unescaped quote
-					openKeyName = parts[0]
-					openKeyValue = []string{parts[1]}
+					openKeyName = key
+					openKeyValue = []string{val}
 				}
 			} else {
 				// Since there wasn't an `=` sign, we assume
 				// it's just an environment variable without a
 				// value (see example 3)
-				env.Set(parts[0], "")
+				env.Set(key, "")
 			}
 		}
 
