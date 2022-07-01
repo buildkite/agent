@@ -5,8 +5,22 @@ import (
 	"strings"
 )
 
-var posixExportLineRegex = regexp.MustCompile("\\Adeclare \\-x ([a-zA-Z_]+[a-zA-Z0-9_]*)(=\")?(.+)?\\z")
-var endsWithUnescapedQuoteRegex = regexp.MustCompile("([^\\\\]\"\\z|\\A\"\\z)")
+var (
+	posixExportLineRegex = regexp.MustCompile("\\Adeclare \\-[aAfFgiIlnrtux]+ ([a-zA-Z_]+[a-zA-Z0-9_]*)(=\")?(.+)?\\z")
+	//                                                             ^
+	//                                                             |
+	//                                           all of the available options for declare
+	endsWithUnescapedQuoteRegex = regexp.MustCompile("([^\\\\]\"\\z|\\A\"\\z)")
+
+	// There are a bunch of types of bash variable that we want to ignore, becuase supporting them
+	// is either a pain, or useless, or both.
+	disallowedDeclareOpts = map[rune]struct{}{
+		'a': {}, // declare -a - it's an array, and can't be used in the environment anyway
+		'A': {}, // declare -A - it's an associative array, and also can't be used in the environment
+		'n': {}, // declare -n - it's a reference to another variable, and will be a pain to sort out
+		'i': {}, // declare -i - it's an integer, and will break our parser. We theoretically could support this, but it's a pain
+	}
+)
 
 // FromExport parses environment variables from a shell export of environment variables. On
 // *nix it looks like this:
@@ -87,8 +101,29 @@ func FromExport(body string) Environment {
 				continue
 			}
 
-			// Trim the `declare -x ` off the start of the line
-			line = strings.TrimPrefix(line, "declare -x ")
+			if strings.HasPrefix(line, "declare") {
+				command := strings.SplitN(line, " ", 3)
+				if len(command) < 3 {
+					// There should be at least three elements to the command; the format is:
+					// declare -x VARNAME="VALUE"
+					// If there's anything less than that, something is seriously wonky with this line and we won't be able to parse it anyway, so just skip it
+					continue
+				}
+
+				// Massive assumption here! We're assuming that that the options passed to declare have been coalesced -
+				// ie, that the command looks like `declare -axtn VARNAME="BLARGH"` rather than `declare -x -a -t -n VARNAME="BLARGH"`
+				// However, the output of `export -p` (which is what we're parsing here) is pretty consistent in coalescing the args
+				// God willing, this shouldn't change.
+				declareOpts := command[1]
+
+				if containsDisallowedOpts(declareOpts) {
+					// The opts contain an option that we can't parse, so skip parsing this line
+					continue
+				}
+
+				// Remove "declare" and any declare args from the command
+				line = command[2]
+			}
 
 			// We now have a line that can either be one of these:
 			//
@@ -130,6 +165,16 @@ func FromExport(body string) Environment {
 
 	// Windows exports are easy since they can just be handled by our built-in FromSlice gear
 	return FromSlice(lines)
+}
+
+func containsDisallowedOpts(opts string) bool {
+	for _, opt := range opts {
+		if _, present := disallowedDeclareOpts[opt]; present {
+			return true
+		}
+	}
+
+	return false
 }
 
 func unquoteShell(value string) string {

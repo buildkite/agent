@@ -1,6 +1,7 @@
 package env
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 )
 
 func TestFromExportHandlesNewlines(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		`declare -x USER="keithpitt"`,
 		`declare -x VAR1="boom\nboom\nshake\nthe\nroom"`,
 		`declare -x VAR2="hello`,
@@ -40,7 +41,7 @@ func TestFromExportHandlesNewlines(t *testing.T) {
 }
 
 func TestFromExportHandlesEscapedCharacters(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		`declare -x DOLLARS="i love \$money"`,
 		`declare -x WITH_NEW_LINE="i have a \\n new line"`,
 		`declare -x CARRIAGE_RETURN="i have a \\r carriage"`,
@@ -57,8 +58,41 @@ func TestFromExportHandlesEscapedCharacters(t *testing.T) {
 	assertEqualEnv(t, `COOL_BACKTICK`, "look at this -----> ` <----- cool backtick", env)
 }
 
+func TestFromExport_IgnoresArrays_Links_Refs_AndIntegers(t *testing.T) {
+	lines := []string{
+		`declare -ax COLOURS=("red" "green" "blue")`,             // Indexed array
+		`declare -Ax SCORES=(["keith"]=100 ["other_keith"]=200)`, // Associative array
+		`declare -nx REF=HELLO`,                                  // Reference variable
+		`declare -ix TIMS_SCORE=500`,                             // Integer variable
+		`declare -x HELLO="there"`,                               // Nice, normal string variable. We like this one, keep it around.
+	}
+
+	env := FromExport(strings.Join(lines, "\n"))
+	assert.Equal(t, Environment{"HELLO": "there"}, env)
+}
+
+func TestFromExport_AllowsWeirdoVariableTypes_WhenTheyreInsideMultilineVars(t *testing.T) {
+	scriptVariable := `#!/bin/bash
+declare -ax COLOURS=("red" "green" "blue"),
+declare -Ax SCORES=(["keith"]=100 ["other_keith"]=200),
+declare -nx REF=HELLO,
+declare -ix TIMS_SCORE=500,
+	`
+
+	lines := []string{
+		fmt.Sprintf(`declare -x COOL_SCRIPT="%s"`, scriptVariable),
+		`declare -x HELLO="there"`,
+	}
+
+	env := FromExport(strings.Join(lines, "\n"))
+	assert.Equal(t, Environment{
+		"HELLO":       "there",
+		"COOL_SCRIPT": scriptVariable,
+	}, env)
+}
+
 func TestFromExportWithVariablesWithoutEquals(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		`declare -x THING_TOTES`,
 		`declare -x HTTP_PROXY="http://proxy.example.com:1234/"`,
 		`declare -x LANG="en_US.UTF-8"`,
@@ -69,6 +103,7 @@ func TestFromExportWithVariablesWithoutEquals(t *testing.T) {
 		`new`,
 		`lines"`,
 		`declare -x OLDPWD2`,
+		`declare -x SPACES="this   one has      a bunch of spaces      in it"`,
 		`declare -x GONNA_TRICK_YOU="the next line is a string`,
 		`declare -x WITH_A_STRING="I'm a string!!`,
 		`"`,
@@ -84,13 +119,14 @@ func TestFromExportWithVariablesWithoutEquals(t *testing.T) {
 	assertEqualEnv(t, "OLDPWD", ``, env)
 	assertEqualEnv(t, "SOME_OTHER_VALUE", "this is my value across\nnew\nlines", env)
 	assertEqualEnv(t, "OLDPWD2", ``, env)
+	assertEqualEnv(t, "SPACES", `this   one has      a bunch of spaces      in it`, env)
 	assertEqualEnv(t, "GONNA_TRICK_YOU", "the next line is a string\ndeclare -x WITH_A_STRING=\"I'm a string!!\n", env)
 	assertEqualEnv(t, "PATH", `/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`, env)
 	assertEqualEnv(t, "PWD", `/`, env)
 }
 
 func TestFromExportWithLeadingAndTrailingWhitespace(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		``,
 		``,
 		``,
@@ -116,7 +152,7 @@ func TestFromExportWithLeadingAndTrailingWhitespace(t *testing.T) {
 }
 
 func TestFromExportJSONInside(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		`declare -x FOO="{`,
 		`	\"key\": \"test\",`,
 		`	\"hello\": [`,
@@ -144,7 +180,7 @@ func TestFromExportJSONInside(t *testing.T) {
 }
 
 func TestFromExportFromWindows(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		`SESSIONNAME=Console`,
 		`SystemDrive=C:`,
 		`SystemRoot=C:\Windows`,
@@ -168,7 +204,7 @@ func TestFromExportFromWindows(t *testing.T) {
 }
 
 func TestFromExportFromWindowsWithLeadingAndTrailingSpaces(t *testing.T) {
-	var lines = []string{
+	lines := []string{
 		``,
 		``,
 		``,
