@@ -28,3 +28,7 @@ services:
 
 volumes:
   ruby-2-6-agent-gem-cache: ~
+
+networks:
+  default:
+    name: buildkite-agent-${RAND}
