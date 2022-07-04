@@ -5,7 +5,6 @@ set -euo pipefail
 
 compose_file="$(dirname "$0")/../.buildkite/docker-compose.yml"
 
-RAND=$(random)
-export RAND
+export COMPOSE_PROJECT_NAME="buildkite${BUILDKITE_JOB_ID//-}"
 
 docker-compose -f "$compose_file" run --rm ruby "${@-bash}"
