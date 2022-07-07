@@ -220,6 +220,16 @@ func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
 		triggeredFromID = "n/a"
 	}
 
+	jobLabel, has := env.Get("BUILDKITE_LABEL")
+	if !has || jobLabel == "" {
+		jobLabel = "n/a"
+	}
+
+	jobKey, has := env.Get("BUILDKITE_STEP_KEY")
+	if !has || jobKey == "" {
+		jobKey = "n/a"
+	}
+
 	return map[string]any{
 		"buildkite.agent":             b.AgentName,
 		"buildkite.version":           agent.Version(),
@@ -227,6 +237,8 @@ func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
 		"buildkite.org":               b.OrganizationSlug,
 		"buildkite.pipeline":          b.PipelineSlug,
 		"buildkite.branch":            b.Branch,
+		"buildkite.job_label":         jobLabel,
+		"buildkite.job_key":           jobKey,
 		"buildkite.job_id":            b.JobID,
 		"buildkite.job_url":           jobURL,
 		"buildkite.build_id":          buildID,
