@@ -14,7 +14,7 @@ trigger_step() {
   fi
 
   cat <<YAML
-  - name: ":rocket: ${name}${message_suffix}"
+  - name: ":rocket: Release ${name}${message_suffix}"
     trigger: "${trigger_pipeline}"
     async: false
     branches: "${branch}"
