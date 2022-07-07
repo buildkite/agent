@@ -126,6 +126,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	attributes := []attribute.KeyValue{
 		semconv.ServiceNameKey.String("buildkite_agent"),
 		semconv.ServiceVersionKey.String(agent.Version()),
+		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
 
 	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(b, b.shell.Env))
