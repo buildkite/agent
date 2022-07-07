@@ -1,7 +1,7 @@
 steps:
   - wait
 
-  - name: ":s3: publish binaries"
+  - name: ":s3: Publish Edge Binaries"
     command: ".buildkite/steps/publish-to-s3.sh"
     env:
       CODENAME: "experimental"
@@ -15,7 +15,7 @@ steps:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2020.03"
           propagate-environment: true
 
-  - name: ":redhat: publish rpms"
+  - name: ":redhat: Publish Edge RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
       CODENAME: "experimental"
@@ -32,7 +32,7 @@ steps:
           volumes:
             - "/yum.buildkite.com"
 
-  - name: ":debian: publish debs"
+  - name: ":debian: Publish Edge Debian Package"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
       CODENAME: "experimental"
@@ -49,7 +49,7 @@ steps:
           tmpfs:
             - "/root/.gnupg"
 
-  - name: ":docker:"
+  - name: ":docker: Publish Edge Docker Images"
     command: ".buildkite/steps/publish-docker-images.sh"
     env:
       CODENAME: "experimental"

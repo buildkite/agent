@@ -4,7 +4,7 @@ agents:
   queue: agent-runners-linux-amd64
 
 steps:
-  - name: ":go: fmt"
+  - name: ":go: go fmt"
     key: test-go-fmt
     command: ".buildkite/steps/test-go-fmt.sh"
     plugins:
@@ -12,7 +12,7 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":hammer: :linux: amd64"
+  - name: ":linux: Linux AMD64 Tests"
     key: test-linux-amd64
     command: ".buildkite/steps/tests.sh"
     artifact_paths: junit-*.xml
@@ -21,7 +21,18 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":hammer: :oncoming_automobile: :linux: arm64"
+  - name: ":linux: Linux ARM64 Tests"
+    key: test-linux-arm64
+    command: ".buildkite/steps/tests.sh"
+    artifact_paths: junit-*.xml
+    agents:
+      queue: agent-runners-linux-arm64
+    plugins:
+      docker-compose#v3.0.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - name: ":linux: Linux ARM64 Tests (with race detector)"
     key: test-race-linux-arm64
     command: ".buildkite/steps/tests.sh -race"
     artifact_paths: junit-*.xml
@@ -34,36 +45,26 @@ steps:
         config: .buildkite/docker-compose.yml
         run: agent
 
-  - name: ":hammer: :linux: arm64"
-    key: test-linux-arm64
-    command: ".buildkite/steps/tests.sh"
-    artifact_paths: junit-*.xml
-    agents:
-      queue: agent-runners-linux-arm64
-    plugins:
-      docker-compose#v3.0.0:
-        config: .buildkite/docker-compose.yml
-        run: agent
-
-  - name: ":hammer: :windows:"
+  - name: ":windows: Windows ARM64 Tests"
     key: test-windows
     command: "bash .buildkite\\steps\\tests.sh"
     artifact_paths: junit-*.xml
     agents:
       queue: agent-runners-windows-amd64
 
-  - label: ":junit:"
+  - label: ":writing_hand: Annotate with Test Failures"
     depends_on:
       - test-linux-amd64
+      - test-race-linux-arm64
       - test-linux-arm64
       - test-windows
     plugins:
       - junit-annotate#v1.6.0:
           artifacts: junit-*.xml
 
-  - group: "Binary builds"
+  - group: ":hammer_and_wrench: Binary builds"
     steps:
-    - name: ":{{matrix.os}}: {{matrix.arch}}"
+    - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
       command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
       key: build-binary
       depends_on:
@@ -111,7 +112,7 @@ steps:
           - with: { os: windows, arch: arm64 }
             skip: "arm64 Windows is not currently supported"
 
-  - name: ":hammer: bk cli & agent cli"
+  - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
     depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
@@ -126,13 +127,13 @@ steps:
         volumes:
           - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
 
-  - name: ":mag:"
+  - name: ":mag: Extract Agent Version Metadata"
     key: set-metadata
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
-  - group: ":docker: builds"
+  - group: ":docker: Docker Container Builds"
     steps:
-      - name: ":docker: {{matrix}} build"
+      - name: ":docker: {{matrix}} container build"
         key: build-docker
         agents:
           queue: elastic-builders
@@ -147,7 +148,7 @@ steps:
             - "ubuntu-20.04"
             - "sidecar"
 
-  - name: ":debian: build"
+  - name: ":debian: Debian package build"
     key: build-debian-packages
     depends_on:
       - build-binary
@@ -155,7 +156,7 @@ steps:
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
 
-  - name: ":redhat: build"
+  - name: ":redhat: RPM Package build"
     key: build-rpm-packages
     depends_on:
       - build-binary
@@ -163,7 +164,7 @@ steps:
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
 
-  - name: ":github: :hammer:"
+  - name: ":github: Build Github Release"
     key: build-github-release
     depends_on:
       - build-binary
@@ -175,7 +176,7 @@ steps:
         config: .buildkite/docker-compose.release.yml
         run: github-release
 
-  - name: ":pipeline:"
+  - name: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
       - test-windows
