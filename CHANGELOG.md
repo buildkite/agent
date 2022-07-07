@@ -5,7 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [v3.37.0](https://github.com/buildkite/agent/compare/v3.36.1...v3.37.0) (2022-07-06)
+## [v3.37.0](https://github.com/buildkite/tree/v3.37.0) (2022-07-06)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.36.1...v3.37.0)
 
 ### Added
 
@@ -14,7 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Fixed
 
-* Don't blow up when a hook exports an array [#1692](https://github.com/buildkite/agent/pull/1692) ([moskyb](https://github.com/moskyb))
+* Environment modification in hooks that set bash arrays [#1692](https://github.com/buildkite/agent/pull/1692) ([moskyb](https://github.com/moskyb))
 * Unescape backticks when parsing env from export -p output [#1687](https://github.com/buildkite/agent/pull/1687) ([moskyb](https://github.com/moskyb))
 * Log “Using flock-file-locks experiment 🧪” when enabled [#1688](https://github.com/buildkite/agent/pull/1688) ([lox](https://github.com/lox))
 * flock-file-locks experiment: errors logging [#1689](https://github.com/buildkite/agent/pull/1689) ([KevinGreen](https://github.com/KevinGreen))
@@ -26,7 +27,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * datadog-go major version upgrade to v5.1.1 [#1666](https://github.com/buildkite/agent/pull/1666) ([moskyb](https://github.com/moskyb))
 * Revert to delegating directory creation permissions to system umask [#1667](https://github.com/buildkite/agent/pull/1667) ([moskyb](https://github.com/moskyb))
 * Replace retry code with [roko](https://github.com/buildkite/roko) [#1675](https://github.com/buildkite/agent/pull/1675) ([moskyb](https://github.com/moskyb))
-* Refactor env.Environment from wrapping a map to being a map [#1655](https://github.com/buildkite/agent/pull/1655) ([moskyb](https://github.com/moskyb))
 * bootstrap/shell: round command durations to 5 significant digits [#1651](https://github.com/buildkite/agent/pull/1651) ([kevinburkesegment](https://github.com/kevinburkesegment))
 
 
