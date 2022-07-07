@@ -67,7 +67,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 	}
 }
 
-func (b *Bootstrap) tracingResourceName() string {
+func (b *Bootstrap) ddResourceName() string {
 	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
 	if !ok {
 		label = "job"
@@ -97,7 +97,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 
 	span := opentracing.StartSpan("job.run",
 		opentracing.ChildOf(wireContext),
-		opentracing.Tag{Key: ddext.ResourceName, Value: b.tracingResourceName()},
+		opentracing.Tag{Key: ddext.ResourceName, Value: b.ddResourceName()},
 	)
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
@@ -113,6 +113,21 @@ func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
 		return nil
 	}
 	return sctx
+}
+
+func (b *Bootstrap) otRootSpanName() string {
+	base := b.OrganizationSlug + "/" + b.PipelineSlug + "/"
+	key, ok := b.shell.Env.Get("BUILDKITE_STEP_KEY")
+	if ok && key != "" {
+		return base + key
+	}
+
+	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
+	if ok && label != "" {
+		return base + label
+	}
+
+	return base + "job"
 }
 
 func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
@@ -159,11 +174,10 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
-	ctx, span := tracer.Start(ctx, "job.run")
-
-	span.SetAttributes(
-		attribute.String("resource.name", b.tracingResourceName()),
-		attribute.String("analytics.event", "true"),
+	ctx, span := tracer.Start(ctx, b.otRootSpanName(),
+		trace.WithAttributes(
+			attribute.String("analytics.event", "true"),
+		),
 	)
 
 	stop := func() {
