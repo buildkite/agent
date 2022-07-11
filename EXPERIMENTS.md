@@ -58,9 +58,3 @@ Changes the file lock implementation from github.com/nightlyone/lockfile to gith
 When the experiment is enabled the agent will use different lock files from agents where the experiment is disabled, so agents with this experiment enabled should not be run on the same host as agents where the experiment is disabled.
 
 **Status**: Being tested, but it's looking good. We plan to switch lock implementations over the course of a couple of releases, switching over in such a way that nothing gets broken.
-
-### `opentelemetry-tracing`
-
-Allows the use of the `opentelemetry` tracing backend, which won't work otherwise. OpenTelemetry tracing will definitely be a mainline feature of the agent in the future, but there may be intricacies in its implementation that we won't fully understand until after we've tested it in prod a little.
-
-**Status:** Being tested, will be a non-experiment feature at some point soon.

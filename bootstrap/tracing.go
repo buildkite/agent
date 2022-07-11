@@ -8,7 +8,6 @@ import (
 
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/opentracing/opentracing-go"
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
@@ -49,12 +48,6 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 		return b.startTracingDatadog(ctx)
 
 	case tracetools.BackendOpenTelemetry:
-		if !experiments.IsEnabled("opentelemetry-tracing") {
-			b.shell.Warningf("You've used the OpenTelemetry tracing backend, but the `opentelemetry-tracing` experiment isn't enabled. No tracing will occur.")
-			b.shell.Warningf("To enable OpenTelemetry tracing, use the `opentelemetry` tracing backend, as well as the `opentelemetry-tracing` experiment.")
-			return &tracetools.NoopSpan{}, ctx, noopStopper
-		}
-
 		return b.startTracingOpenTelemetry(ctx)
 
 	case tracetools.BackendNone:
