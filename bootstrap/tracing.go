@@ -67,7 +67,7 @@ func (b *Bootstrap) startTracing(ctx context.Context) (tracetools.Span, context.
 	}
 }
 
-func (b *Bootstrap) tracingResourceName() string {
+func (b *Bootstrap) ddResourceName() string {
 	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
 	if !ok {
 		label = "job"
@@ -97,7 +97,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 
 	span := opentracing.StartSpan("job.run",
 		opentracing.ChildOf(wireContext),
-		opentracing.Tag{Key: ddext.ResourceName, Value: b.tracingResourceName()},
+		opentracing.Tag{Key: ddext.ResourceName, Value: b.ddResourceName()},
 	)
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
@@ -115,6 +115,21 @@ func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
 	return sctx
 }
 
+func (b *Bootstrap) otRootSpanName() string {
+	base := b.OrganizationSlug + "/" + b.PipelineSlug + "/"
+	key, ok := b.shell.Env.Get("BUILDKITE_STEP_KEY")
+	if ok && key != "" {
+		return base + key
+	}
+
+	label, ok := b.shell.Env.Get("BUILDKITE_LABEL")
+	if ok && label != "" {
+		return base + label
+	}
+
+	return base + "job"
+}
+
 func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	client := otlptracegrpc.NewClient()
 	exporter, err := otlptrace.New(ctx, client)
@@ -126,6 +141,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	attributes := []attribute.KeyValue{
 		semconv.ServiceNameKey.String("buildkite_agent"),
 		semconv.ServiceVersionKey.String(agent.Version()),
+		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
 
 	extras, warnings := toOpenTelemetryAttributes(GenericTracingExtras(b, b.shell.Env))
@@ -158,11 +174,10 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
-	ctx, span := tracer.Start(ctx, "job.run")
-
-	span.SetAttributes(
-		attribute.String("resource.name", b.tracingResourceName()),
-		attribute.String("analytics.event", "true"),
+	ctx, span := tracer.Start(ctx, b.otRootSpanName(),
+		trace.WithAttributes(
+			attribute.String("analytics.event", "true"),
+		),
 	)
 
 	stop := func() {
@@ -205,6 +220,16 @@ func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
 		triggeredFromID = "n/a"
 	}
 
+	jobLabel, has := env.Get("BUILDKITE_LABEL")
+	if !has || jobLabel == "" {
+		jobLabel = "n/a"
+	}
+
+	jobKey, has := env.Get("BUILDKITE_STEP_KEY")
+	if !has || jobKey == "" {
+		jobKey = "n/a"
+	}
+
 	return map[string]any{
 		"buildkite.agent":             b.AgentName,
 		"buildkite.version":           agent.Version(),
@@ -212,6 +237,8 @@ func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
 		"buildkite.org":               b.OrganizationSlug,
 		"buildkite.pipeline":          b.PipelineSlug,
 		"buildkite.branch":            b.Branch,
+		"buildkite.job_label":         jobLabel,
+		"buildkite.job_key":           jobKey,
 		"buildkite.job_id":            b.JobID,
 		"buildkite.job_url":           jobURL,
 		"buildkite.build_id":          buildID,
