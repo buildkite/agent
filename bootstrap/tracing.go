@@ -286,3 +286,14 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 
 	return attrs, unknownAttrTypes
 }
+
+func (b *Bootstrap) implementationSpecificSpanName(otelName, ddName string) string {
+	switch b.TracingBackend {
+	case tracetools.BackendDatadog:
+		return ddName
+	case tracetools.BackendOpenTelemetry:
+		fallthrough
+	default:
+		return otelName
+	}
+}

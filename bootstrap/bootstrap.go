@@ -209,9 +209,11 @@ func (b *Bootstrap) Cancel() error {
 	return nil
 }
 
+
 // executeHook runs a hook script with the hookRunner
-func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron env.Environment) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
+func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
+	spanName := b.implementationSpecificSpanName(fmt.Sprintf("hook.%s.%s", hookCfg.Scope, hookCfg.Name), "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -1518,7 +1520,8 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("hook.default.command", "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -1742,16 +1745,7 @@ func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 		return nil
 	}
 
-	var spanName string
-	switch b.TracingBackend {
-	case tracetools.BackendDatadog:
-		spanName = "artifact upload"
-	case tracetools.BackendOpenTelemetry:
-		fallthrough
-	default:
-		spanName = "artifact"
-	}
-
+	spanName := b.implementationSpecificSpanName("artifact", "artifact upload")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
