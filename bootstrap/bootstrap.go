@@ -173,7 +173,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 
 		// Only upload artifacts as part of the command phase
-		if err = b.uploadArtifacts(ctx); err != nil {
+		if err = b.artifactPhase(ctx); err != nil {
 			b.shell.Errorf("%v", err)
 
 			if commandErr != nil {
@@ -1737,16 +1737,49 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 }
 
-func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
+func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 	if b.AutomaticArtifactUploadPaths == "" {
 		return nil
 	}
 
-	span, ctx := tracetools.StartSpanFromContext(ctx, "upload artifacts", b.Config.TracingBackend)
+	var spanName string
+	switch b.TracingBackend {
+	case tracetools.BackendDatadog:
+		spanName = "artifact upload"
+	case tracetools.BackendOpenTelemetry:
+		fallthrough
+	default:
+		spanName = "artifact"
+	}
+
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	// Run pre-artifact hooks
+	err = b.preArtifactHooks(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = b.uploadArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = b.postArtifactHooks(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Run the pre-artifact hooks
+func (b *Bootstrap) preArtifactHooks(ctx context.Context) error {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	if err = b.executeGlobalHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
@@ -1759,7 +1792,15 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		return err
 	}
 
-	// Run the artifact upload command
+	return nil
+}
+
+// Run the artifact upload command
+func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	b.shell.Headerf("Uploading artifacts")
 	args := []string{"artifact", "upload", b.AutomaticArtifactUploadPaths}
 
@@ -1772,7 +1813,15 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		return err
 	}
 
-	// Run post-artifact hooks
+	return nil
+}
+
+// Run the post-artifact hooks
+func (b *Bootstrap) postArtifactHooks(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	if err = b.executeGlobalHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
