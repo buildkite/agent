@@ -472,7 +472,8 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 // setUp is run before all the phases run. It's responsible for initializing the
 // bootstrap environment
 func (b *Bootstrap) setUp(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("phase/environment", "environment")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -952,7 +953,8 @@ func (b *Bootstrap) createCheckoutDir() error {
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("phase/checkout", "checkout")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -1504,6 +1506,9 @@ func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
 
 // CommandPhase determines how to run the build, and then runs it
 func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "phase/command", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
 	// Run pre-command hooks
 	if err := b.runPreCommandHooks(ctx); err != nil {
 		return err, nil
@@ -1771,7 +1776,7 @@ func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 		return nil
 	}
 
-	spanName := b.implementationSpecificSpanName("artifact", "artifact upload")
+	spanName := b.implementationSpecificSpanName("phase/artifact", "artifact upload")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
