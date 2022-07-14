@@ -1446,7 +1446,8 @@ func (b *Bootstrap) resolveCommit() {
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command hooks", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("pre-command", "pre-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -1484,7 +1485,8 @@ func (b *Bootstrap) runCommand(ctx context.Context) error {
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command hooks", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("post-command", "post-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
