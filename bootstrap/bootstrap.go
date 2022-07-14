@@ -1010,7 +1010,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 				roko.WithMaxAttempts(3),
 				roko.WithStrategy(roko.Constant(2*time.Second)),
 			).Do(func(r *roko.Retrier) error {
-				err := b.defaultCheckoutPhase()
+				err := b.defaultCheckoutPhase(ctx)
 				if err == nil {
 					return nil
 				}
@@ -1214,17 +1214,26 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
-func (b *Bootstrap) defaultCheckoutPhase() error {
+func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", b.Config.TracingBackend)
+	span.AddAttributes(map[string]string{
+		"checkout.repo_name": b.Repository,
+		"checkout.refspec":   b.RefSpec,
+		"checkout.commit":    b.Commit,
+	})
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
-	var err error
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
+		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
 
 		// Skip updating the Git mirror before using it?
 		if b.Config.GitMirrorsSkipUpdate {
