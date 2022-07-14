@@ -209,6 +209,12 @@ func (b *Bootstrap) Cancel() error {
 	return nil
 }
 
+type HookConfig struct {
+	Name  string
+	Scope string
+	Path  string
+	Env   env.Environment
+}
 
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
@@ -217,41 +223,41 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
-		"hook.type":    scope,
-		"hook.name":    name,
-		"hook.command": hookPath,
+		"hook.type":    hookCfg.Scope,
+		"hook.name":    hookCfg.Name,
+		"hook.command": hookCfg.Path,
 	})
 
-	name = scope + " " + name
+	hookName := hookCfg.Scope + " " + hookCfg.Name
 
-	if !utils.FileExists(hookPath) {
+	if !utils.FileExists(hookCfg.Path) {
 		if b.Debug {
-			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", name, hookPath)
+			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
 		return nil
 	}
 
-	b.shell.Headerf("Running %s hook", name)
+	b.shell.Headerf("Running %s hook", hookName)
 
 	redactors := b.setupRedactors()
 	defer redactors.Flush()
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script, err := hook.CreateScriptWrapper(hookPath)
+	script, err := hook.CreateScriptWrapper(hookCfg.Path)
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)
 		return err
 	}
 	defer script.Close()
 
-	cleanHookPath := hookPath
+	cleanHookPath := hookCfg.Path
 
 	// Show a relative path if we can
-	if strings.HasPrefix(hookPath, b.shell.Getwd()) {
+	if strings.HasPrefix(hookCfg.Path, b.shell.Getwd()) {
 		var err error
-		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookPath); err != nil {
-			cleanHookPath = hookPath
+		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookCfg.Path); err != nil {
+			cleanHookPath = hookCfg.Path
 		}
 	}
 
@@ -264,7 +270,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 	}
 
 	// Run the wrapper script
-	if err = b.shell.RunScript(ctx, script.Path(), extraEnviron); err != nil {
+	if err = b.shell.RunScript(ctx, script.Path(), hookCfg.Env); err != nil {
 		exitCode := shell.GetExitCode(err)
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
@@ -272,7 +278,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code:    exitCode,
-				Message: fmt.Sprintf("The %s hook exited with status %d", name, exitCode),
+				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
 			}
 		}
 		return err
@@ -384,7 +390,11 @@ func (b *Bootstrap) executeGlobalHook(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	return b.executeHook(ctx, "global", name, p, nil)
+	return b.executeHook(ctx, HookConfig{
+		Scope: "global",
+		Name:  name,
+		Path:  p,
+	})
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
@@ -422,7 +432,11 @@ func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
 		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
-	return b.executeHook(ctx, "local", name, localHookPath, nil)
+	return b.executeHook(ctx, HookConfig{
+		Scope: "local",
+		Name:  name,
+		Path:  localHookPath,
+	})
 }
 
 func dirForAgentName(agentName string) string {
@@ -725,18 +739,20 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
 	for _, p := range checkouts {
 		hookPath, err := hook.Find(p.HooksDir, name)
-		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
-		// agent is still go pre-1.13 compatible (I think) so we're avoiding errors.Is().
-		// In future somebody should check if os.IsNotExist() has added support for
-		// error unwrapping, or change this code to errors.Is(err, os.ErrNotExist)
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			continue // this plugin does not implement this hook
 		} else if err != nil {
 			return err
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
-		if err := b.executeHook(ctx, "plugin", p.Plugin.Name()+" "+name, hookPath, env); err != nil {
+		err = b.executeHook(ctx, HookConfig{
+			Scope: "plugin",
+			Name:  p.Plugin.Name() + " " + name,
+			Path:  hookPath,
+			Env:   env,
+		})
+		if err != nil {
 			return err
 		}
 	}
