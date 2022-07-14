@@ -472,8 +472,7 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 // setUp is run before all the phases run. It's responsible for initializing the
 // bootstrap environment
 func (b *Bootstrap) setUp(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("phase/environment", "environment")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -953,8 +952,7 @@ func (b *Bootstrap) createCheckoutDir() error {
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("phase/checkout", "checkout")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -1476,7 +1474,8 @@ func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 
 // runCommand runs the command and adds tracing spans.
 func (b *Bootstrap) runCommand(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("command-exec", "command")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -1515,7 +1514,7 @@ func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
 
 // CommandPhase determines how to run the build, and then runs it
 func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "phase/command", b.Config.TracingBackend)
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	// Run pre-command hooks
@@ -1785,7 +1784,7 @@ func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 		return nil
 	}
 
-	spanName := b.implementationSpecificSpanName("phase/artifact", "artifact upload")
+	spanName := b.implementationSpecificSpanName("artifact", "artifact upload")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
