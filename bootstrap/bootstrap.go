@@ -210,10 +210,11 @@ func (b *Bootstrap) Cancel() error {
 }
 
 type HookConfig struct {
-	Name  string
-	Scope string
-	Path  string
-	Env   env.Environment
+	Name           string
+	Scope          string
+	Path           string
+	Env            env.Environment
+	SpanAttributes map[string]string
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -227,6 +228,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 		"hook.name":    hookCfg.Name,
 		"hook.command": hookCfg.Path,
 	})
+	span.AddAttributes(hookCfg.SpanAttributes)
 
 	hookName := hookCfg.Scope + " " + hookCfg.Name
 
@@ -751,6 +753,12 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 			Name:  p.Plugin.Name() + " " + name,
 			Path:  hookPath,
 			Env:   env,
+			SpanAttributes: map[string]string{
+				"plugin.name":        p.Plugin.Name(),
+				"plugin.version":     p.Plugin.Version,
+				"plugin.location":    p.Plugin.Location,
+				"plugin.is_vendored": strconv.FormatBool(p.Vendored),
+			},
 		})
 		if err != nil {
 			return err
