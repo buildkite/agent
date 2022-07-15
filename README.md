@@ -60,6 +60,10 @@ To start an agent all you need is your agent token, which you can find on your A
 buildkite-agent start --token
 ```
 
+### Telemetry
+
+By default, the agent sends some information back to the Buildkite mothership on what features are in use on that agent. Nothing sensitive or identifying is sent back to Buildkite, but if you want, you can disable this telemetry by adding the `--no-telemetry` flag to your `buildkite-agent start` call. A full list of the features that we track can be found [here](https://github.com/buildkite/agent/blob/main/clicommand/agent_start.go#L768=).
+
 ## Development
 
 These instructions assume you are running a recent macOS, but could easily be adapted to Linux and Windows.
