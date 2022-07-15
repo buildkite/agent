@@ -120,18 +120,7 @@ support guidance).
 
 #### Tier 3, community supported
 
-- linux arm
-- linux armf
-- linux ppc64
-- linux ppc64le
-- linux mips64
-- linux s390x
-- netbsd x86_64
-- freebsd x86
-- freebsd x86_64
-- openbsd x86
-- openbsd x84_64
-- dragonfly x86_64
+We release binaries for various other platforms, and it should be possible to build it anywhere Go compiles, but official support is not provided for these Tier 3 platforms.
 
 ### Operating System Support
 
