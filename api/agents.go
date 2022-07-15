@@ -14,6 +14,7 @@ type AgentRegisterRequest struct {
 	Tags               []string `json:"meta_data"`
 	PID                int      `json:"pid,omitempty"`
 	MachineID          string   `json:"machine_id,omitempty"`
+	Features           []string `json:"features"`
 }
 
 // AgentRegisterResponse is the response from the Buildkite Agent API

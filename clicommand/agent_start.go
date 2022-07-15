@@ -517,6 +517,9 @@ var AgentStartCommand = cli.Command{
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
+		// Keep track of features used by this agent
+		features := []string{}
+
 		// Setup the config loader. You'll see that we also path paths to
 		// potential config files. The loader will use the first one it finds.
 		loader := cliconfig.Loader{
@@ -552,6 +555,8 @@ var AgentStartCommand = cli.Command{
 
 		// Check if git-mirrors are enabled
 		if experiments.IsEnabled(`git-mirrors`) {
+			features = append(features, "git-mirrors")
+
 			if cfg.GitMirrorsPath == `` {
 				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
 			}
@@ -760,6 +765,7 @@ var AgentStartCommand = cli.Command{
 		registerReq := api.AgentRegisterRequest{
 			Name:              cfg.Name,
 			Priority:          cfg.Priority,
+			Features:          features,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
 			Tags: agent.FetchTags(l, agent.FetchTagsConfig{
 				Tags:                      cfg.Tags,
