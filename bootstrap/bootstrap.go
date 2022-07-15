@@ -1805,7 +1805,7 @@ func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 		return nil
 	}
 
-	spanName := b.implementationSpecificSpanName("artifact", "artifact upload")
+	spanName := b.implementationSpecificSpanName("artifacts", "artifact upload")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
