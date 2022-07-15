@@ -94,6 +94,7 @@ type AgentStartConfig struct {
 	NoPlugins                   bool     `cli:"no-plugins"`
 	NoPluginValidation          bool     `cli:"no-plugin-validation"`
 	NoPTY                       bool     `cli:"no-pty"`
+	NoTelemetry                 bool     `cli:"no-telemetry"`
 	TimestampLines              bool     `cli:"timestamp-lines"`
 	HealthCheckAddr             string   `cli:"health-check-addr"`
 	MetricsDatadog              bool     `cli:"metrics-datadog"`
@@ -413,6 +414,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "metrics-datadog",
 			Usage:  "Send metrics to DogStatsD for Datadog",
 			EnvVar: "BUILDKITE_METRICS_DATADOG",
+		},
+		cli.BoolFlag{
+			Name:   "no-telemetry",
+			Usage:  "Disables sending usage statistics back to the buildkite mothership. We use the information gathered from telemetry to figure out what features are getting used.",
+			EnvVar: "BUILDKITE_AGENT_NO_TELEMETRY",
 		},
 		cli.StringFlag{
 			Name:   "metrics-datadog-host",
@@ -756,6 +762,20 @@ var AgentStartCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
 
+		var featureUsage *api.FeatureUsage
+
+		if !cfg.NoTelemetry {
+			featureUsage = &api.FeatureUsage{
+				TracingBackend:             cfg.TracingBackend,
+				Experiments:                experiments.Enabled(),
+				DisconnectAfterJobEnabled:  cfg.DisconnectAfterJob,
+				DisconnectAfterIdleEnabled: cfg.DisconnectAfterIdleTimeout != 0,
+				Shell:                      cfg.Shell,
+				PluginsEnabled:             !cfg.NoPlugins,
+				AcquireJobEnabled:          cfg.AcquireJob != "",
+			}
+		}
+
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
 			Name:              cfg.Name,
@@ -778,6 +798,7 @@ var AgentStartCommand = cli.Command{
 			// dispatches if it's being booted to acquire a
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",
+			FeatureUsage:       featureUsage,
 		}
 
 		// Spawning multiple agents doesn't work if the agent is being

@@ -2,18 +2,29 @@ package api
 
 // AgentRegisterRequest is a call to register on the Buildkite Agent API
 type AgentRegisterRequest struct {
-	Name               string   `json:"name"`
-	Hostname           string   `json:"hostname"`
-	OS                 string   `json:"os"`
-	Arch               string   `json:"arch"`
-	ScriptEvalEnabled  bool     `json:"script_eval_enabled"`
-	IgnoreInDispatches bool     `json:"ignore_in_dispatches"`
-	Priority           string   `json:"priority,omitempty"`
-	Version            string   `json:"version"`
-	Build              string   `json:"build"`
-	Tags               []string `json:"meta_data"`
-	PID                int      `json:"pid,omitempty"`
-	MachineID          string   `json:"machine_id,omitempty"`
+	Name               string        `json:"name"`
+	Hostname           string        `json:"hostname"`
+	OS                 string        `json:"os"`
+	Arch               string        `json:"arch"`
+	ScriptEvalEnabled  bool          `json:"script_eval_enabled"`
+	IgnoreInDispatches bool          `json:"ignore_in_dispatches"`
+	Priority           string        `json:"priority,omitempty"`
+	Version            string        `json:"version"`
+	Build              string        `json:"build"`
+	Tags               []string      `json:"meta_data"`
+	PID                int           `json:"pid,omitempty"`
+	MachineID          string        `json:"machine_id,omitempty"`
+	FeatureUsage       *FeatureUsage `json:"feature_usage"`
+}
+
+type FeatureUsage struct {
+	TracingBackend             string   `json:"tracing_backend"`
+	Experiments                []string `json:"experiments"`
+	DisconnectAfterJobEnabled  bool     `json:"disconnect_after_job_enabled"`
+	DisconnectAfterIdleEnabled bool     `json:"disconnect_after_idle_timeout_enabled"`
+	Shell                      string   `json:"shell"`
+	PluginsEnabled             bool     `json:"plugins_enabled"`
+	AcquireJobEnabled          bool     `json:"acquire_job_enabled"`
 }
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
