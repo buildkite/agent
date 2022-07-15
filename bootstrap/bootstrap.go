@@ -1499,11 +1499,7 @@ func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 
 // runCommand runs the command and adds tracing spans.
 func (b *Bootstrap) runCommand(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("command-exec", "command")
-	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
-
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case b.hasPluginHook("command"):
