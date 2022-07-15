@@ -175,7 +175,7 @@ Buildkite Agent for versions of macOS prior to those listed above.
 
 ## Contributors
 
-Many thanks to our fine contributors! @adill, @airhorns, @alexjurkiewicz, @bendrucker, @bradfeehan, @byroot, @cab, @caiofbpa, @colinrymer, @cysp, @daveoflynn, @daveoxley, @daveslutzkin, @davidk-zenefits, @DazWorrall, @dch, @deoxxa, @dgoodlad, @donpinkster, @essen, @grosskur, @jgavris, @joelmoss, @jules2689, @julianwa, @kouky, @marius92mc, @mirdhyn, @mousavian, @nikyoudale, @pda, @rprieto, @samritchie, @silarsis, @skevy, @stefanmb, @tekacs, @theojulienne, @tommeier, @underscorediscovery, and @wolfeidau.
+Many thanks to our fine contributors! A full list can be found [here](https://github.com/buildkite/agent/graphs/contributors), but you're all amazing, and we greatly appreciate your input ❤️
 
 ## Copyright
 
