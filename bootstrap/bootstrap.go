@@ -215,22 +215,46 @@ type HookConfig struct {
 	Path           string
 	Env            env.Environment
 	SpanAttributes map[string]string
+	PluginName     string
+}
+
+func (b *Bootstrap) tracingImplementationSpecificHookScope(scope string) string {
+	if b.TracingBackend != tracetools.BackendOpenTelemetry {
+		return scope
+	}
+
+	// The scope names local and global are confusing, and different to what we document, so we should use the
+	// documented names (repository and agent, respectively) in OpenTelemetry.
+	// However, we need to keep the OpenTracing/Datadog implementation the same, hence this horrible function
+	switch scope {
+	case "local":
+		return "repository"
+	case "global":
+		return "agent"
+	default:
+		return scope
+	}
 }
 
 // executeHook runs a hook script with the hookRunner
 func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
-	spanName := b.implementationSpecificSpanName(fmt.Sprintf("hook.%s.%s", hookCfg.Scope, hookCfg.Name), "hook.execute")
+	scopeName := b.tracingImplementationSpecificHookScope(hookCfg.Scope)
+	spanName := b.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
-		"hook.type":    hookCfg.Scope,
+		"hook.type":    scopeName,
 		"hook.name":    hookCfg.Name,
 		"hook.command": hookCfg.Path,
 	})
 	span.AddAttributes(hookCfg.SpanAttributes)
 
-	hookName := hookCfg.Scope + " " + hookCfg.Name
+	hookName := hookCfg.Scope
+	if hookCfg.PluginName != "" {
+		hookName += " " + hookCfg.PluginName
+	}
+	hookName += " " + hookCfg.Name
 
 	if !utils.FileExists(hookCfg.Path) {
 		if b.Debug {
@@ -749,10 +773,11 @@ func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkout
 
 		env, _ := p.ConfigurationToEnvironment()
 		err = b.executeHook(ctx, HookConfig{
-			Scope: "plugin",
-			Name:  p.Plugin.Name() + " " + name,
-			Path:  hookPath,
-			Env:   env,
+			Scope:      "plugin",
+			Name:       name,
+			Path:       hookPath,
+			Env:        env,
+			PluginName: p.Plugin.Name(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
 				"plugin.version":     p.Plugin.Version,
@@ -1559,7 +1584,7 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
-	spanName := b.implementationSpecificSpanName("hook.default.command", "hook.execute")
+	spanName := b.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
