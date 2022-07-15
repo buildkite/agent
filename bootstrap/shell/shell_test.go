@@ -17,6 +17,7 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/race"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -160,6 +161,10 @@ func TestContextCancelTerminates(t *testing.T) {
 func TestInterrupt(t *testing.T) {
 	if runtime.GOOS == `windows` {
 		t.Skip("Not supported in windows")
+	}
+
+	if race.Enabled {
+		t.Skip("Bintest has a race condition that we run into here, we should fix it, but it only shows up in tests")
 	}
 
 	sleepCmd, err := bintest.CompileProxy("sleep")
