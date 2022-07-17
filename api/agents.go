@@ -14,7 +14,7 @@ type AgentRegisterRequest struct {
 	Tags               []string      `json:"meta_data"`
 	PID                int           `json:"pid,omitempty"`
 	MachineID          string        `json:"machine_id,omitempty"`
-	FeatureUsage       *FeatureUsage `json:"feature_usage"`
+	FeatureUsage       *FeatureUsage `json:"feature_usage,omitempty"`
 }
 
 type FeatureUsage struct {
