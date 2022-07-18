@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/tracetools"
+	"golang.org/x/exp/slices"
 )
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run
@@ -46,6 +47,13 @@ func New(conf Config) *Bootstrap {
 		Config:   conf,
 		cancelCh: make(chan struct{}),
 	}
+}
+
+func (b *Bootstrap) hasPhase(phase string) bool {
+	if len(b.Phases) == 0 {
+		return true
+	}
+	return slices.Contains(b.Phases, phase)
 }
 
 // Run the bootstrap and return the exit code
@@ -98,22 +106,10 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		return shell.GetExitCode(err)
 	}
 
-	var includePhase = func(phase string) bool {
-		if len(b.Phases) == 0 {
-			return true
-		}
-		for _, include := range b.Phases {
-			if include == phase {
-				return true
-			}
-		}
-		return false
-	}
-
 	//  Execute the bootstrap phases in order
 	var phaseErr error
 
-	if includePhase(`plugin`) {
+	if b.hasPhase("plugin") {
 		phaseErr = b.preparePlugins()
 
 		if phaseErr == nil {
@@ -121,20 +117,20 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	if phaseErr == nil && includePhase(`checkout`) {
+	if phaseErr == nil && b.hasPhase("checkout") {
 		phaseErr = b.CheckoutPhase(ctx)
 	} else {
-		checkoutDir, exists := b.shell.Env.Get(`BUILDKITE_BUILD_CHECKOUT_PATH`)
+		checkoutDir, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
 			_ = b.shell.Chdir(checkoutDir)
 		}
 	}
 
-	if phaseErr == nil && includePhase(`plugin`) {
+	if phaseErr == nil && b.hasPhase("plugin") {
 		phaseErr = b.VendoredPluginPhase(ctx)
 	}
 
-	if phaseErr == nil && includePhase(`command`) {
+	if phaseErr == nil && b.hasPhase("command") {
 		var commandErr error
 		phaseErr, commandErr = b.CommandPhase(ctx)
 		/*
@@ -186,7 +182,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	// Use the exit code from the command phase
-	exitStatus, _ := b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`)
+	exitStatus, _ := b.shell.Env.Get("BUILDKITE_COMMAND_EXIT_STATUS")
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
