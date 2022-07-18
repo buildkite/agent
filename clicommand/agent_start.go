@@ -94,6 +94,7 @@ type AgentStartConfig struct {
 	NoPlugins                   bool     `cli:"no-plugins"`
 	NoPluginValidation          bool     `cli:"no-plugin-validation"`
 	NoPTY                       bool     `cli:"no-pty"`
+	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
 	TimestampLines              bool     `cli:"timestamp-lines"`
 	HealthCheckAddr             string   `cli:"health-check-addr"`
 	MetricsDatadog              bool     `cli:"metrics-datadog"`
@@ -128,6 +129,52 @@ type AgentStartConfig struct {
 	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
+}
+
+func (asc AgentStartConfig) Features() []string {
+	if asc.NoFeatureReporting {
+		return []string{}
+	}
+
+	features := make([]string, 0, 8)
+
+	if asc.GitMirrorsPath != "" {
+		features = append(features, "git-mirrors")
+	}
+
+	if asc.AcquireJob != "" {
+		features = append(features, "acquire-job")
+	}
+
+	if asc.TracingBackend == tracetools.BackendDatadog {
+		features = append(features, "datadog-tracing")
+	}
+
+	if asc.TracingBackend == tracetools.BackendOpenTelemetry {
+		features = append(features, "opentelemetry-tracing")
+	}
+
+	if asc.DisconnectAfterJob {
+		features = append(features, "disconnect-after-job")
+	}
+
+	if asc.DisconnectAfterIdleTimeout != 0 {
+		features = append(features, "disconnect-after-idle")
+	}
+
+	if asc.NoPlugins {
+		features = append(features, "no-plugins")
+	}
+
+	if asc.NoCommandEval {
+		features = append(features, "no-script-eval")
+	}
+
+	for _, exp := range experiments.Enabled() {
+		features = append(features, fmt.Sprintf("experiment-%s", exp))
+	}
+
+	return features
 }
 
 func DefaultShell() string {
@@ -413,6 +460,11 @@ var AgentStartCommand = cli.Command{
 			Name:   "metrics-datadog",
 			Usage:  "Send metrics to DogStatsD for Datadog",
 			EnvVar: "BUILDKITE_METRICS_DATADOG",
+		},
+		cli.BoolFlag{
+			Name:   "no-feature-reporting",
+			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :)",
+			EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
 		},
 		cli.StringFlag{
 			Name:   "metrics-datadog-host",
@@ -778,6 +830,7 @@ var AgentStartCommand = cli.Command{
 			// dispatches if it's being booted to acquire a
 			// specific job.
 			IgnoreInDispatches: cfg.AcquireJob != "",
+			Features:           cfg.Features(),
 		}
 
 		// Spawning multiple agents doesn't work if the agent is being
