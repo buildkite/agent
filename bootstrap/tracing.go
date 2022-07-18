@@ -73,7 +73,7 @@ func (b *Bootstrap) ddResourceName() string {
 // abstraction so the agent can support multiple libraries if needbe.
 func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
-		tracer.WithServiceName("buildkite_agent"),
+		tracer.WithServiceName("buildkite-agent"),
 		tracer.WithSampler(tracer.NewAllSampler()),
 		tracer.WithAnalytics(true),
 	}
@@ -132,7 +132,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String("buildkite_agent"),
+		semconv.ServiceNameKey.String("buildkite-agent"),
 		semconv.ServiceVersionKey.String(agent.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
@@ -162,7 +162,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	))
 
 	tracer := tracerProvider.Tracer(
-		"buildkite_agent",
+		"buildkite-agent",
 		trace.WithInstrumentationVersion(agent.Version()),
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
@@ -285,4 +285,15 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 	}
 
 	return attrs, unknownAttrTypes
+}
+
+func (b *Bootstrap) implementationSpecificSpanName(otelName, ddName string) string {
+	switch b.TracingBackend {
+	case tracetools.BackendDatadog:
+		return ddName
+	case tracetools.BackendOpenTelemetry:
+		fallthrough
+	default:
+		return otelName
+	}
 }

@@ -35,7 +35,7 @@ func StartSpanFromContext(ctx context.Context, operation string, tracingBackend 
 		return NewOpenTracingSpan(span), ctx
 
 	case BackendOpenTelemetry:
-		ctx, span := otel.Tracer("buildkite_agent").Start(ctx, operation)
+		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, operation)
 		span.SetAttributes(attribute.String("analytics.event", "true"))
 		return &OpenTelemetrySpan{Span: span}, ctx
 

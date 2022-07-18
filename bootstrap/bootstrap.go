@@ -173,7 +173,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 
 		// Only upload artifacts as part of the command phase
-		if err = b.uploadArtifacts(ctx); err != nil {
+		if err = b.artifactPhase(ctx); err != nil {
 			b.shell.Errorf("%v", err)
 
 			if commandErr != nil {
@@ -209,47 +209,81 @@ func (b *Bootstrap) Cancel() error {
 	return nil
 }
 
+type HookConfig struct {
+	Name           string
+	Scope          string
+	Path           string
+	Env            env.Environment
+	SpanAttributes map[string]string
+	PluginName     string
+}
+
+func (b *Bootstrap) tracingImplementationSpecificHookScope(scope string) string {
+	if b.TracingBackend != tracetools.BackendOpenTelemetry {
+		return scope
+	}
+
+	// The scope names local and global are confusing, and different to what we document, so we should use the
+	// documented names (repository and agent, respectively) in OpenTelemetry.
+	// However, we need to keep the OpenTracing/Datadog implementation the same, hence this horrible function
+	switch scope {
+	case "local":
+		return "repository"
+	case "global":
+		return "agent"
+	default:
+		return scope
+	}
+}
+
 // executeHook runs a hook script with the hookRunner
-func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, hookPath string, extraEnviron env.Environment) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
+func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
+	scopeName := b.tracingImplementationSpecificHookScope(hookCfg.Scope)
+	spanName := b.implementationSpecificSpanName(fmt.Sprintf("%s %s hook", scopeName, hookCfg.Name), "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
-		"hook.type":    scope,
-		"hook.name":    name,
-		"hook.command": hookPath,
+		"hook.type":    scopeName,
+		"hook.name":    hookCfg.Name,
+		"hook.command": hookCfg.Path,
 	})
+	span.AddAttributes(hookCfg.SpanAttributes)
 
-	name = scope + " " + name
+	hookName := hookCfg.Scope
+	if hookCfg.PluginName != "" {
+		hookName += " " + hookCfg.PluginName
+	}
+	hookName += " " + hookCfg.Name
 
-	if !utils.FileExists(hookPath) {
+	if !utils.FileExists(hookCfg.Path) {
 		if b.Debug {
-			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", name, hookPath)
+			b.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
 		return nil
 	}
 
-	b.shell.Headerf("Running %s hook", name)
+	b.shell.Headerf("Running %s hook", hookName)
 
 	redactors := b.setupRedactors()
 	defer redactors.Flush()
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script, err := hook.CreateScriptWrapper(hookPath)
+	script, err := hook.CreateScriptWrapper(hookCfg.Path)
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)
 		return err
 	}
 	defer script.Close()
 
-	cleanHookPath := hookPath
+	cleanHookPath := hookCfg.Path
 
 	// Show a relative path if we can
-	if strings.HasPrefix(hookPath, b.shell.Getwd()) {
+	if strings.HasPrefix(hookCfg.Path, b.shell.Getwd()) {
 		var err error
-		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookPath); err != nil {
-			cleanHookPath = hookPath
+		if cleanHookPath, err = filepath.Rel(b.shell.Getwd(), hookCfg.Path); err != nil {
+			cleanHookPath = hookCfg.Path
 		}
 	}
 
@@ -262,7 +296,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 	}
 
 	// Run the wrapper script
-	if err = b.shell.RunScript(ctx, script.Path(), extraEnviron); err != nil {
+	if err = b.shell.RunScript(ctx, script.Path(), hookCfg.Env); err != nil {
 		exitCode := shell.GetExitCode(err)
 		b.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", fmt.Sprintf("%d", exitCode))
 
@@ -270,7 +304,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, scope string, name string, 
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code:    exitCode,
-				Message: fmt.Sprintf("The %s hook exited with status %d", name, exitCode),
+				Message: fmt.Sprintf("The %s hook exited with status %d", hookName, exitCode),
 			}
 		}
 		return err
@@ -382,7 +416,11 @@ func (b *Bootstrap) executeGlobalHook(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	return b.executeHook(ctx, "global", name, p, nil)
+	return b.executeHook(ctx, HookConfig{
+		Scope: "global",
+		Name:  name,
+		Path:  p,
+	})
 }
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
@@ -420,7 +458,11 @@ func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
 		return fmt.Errorf("Refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
-	return b.executeHook(ctx, "local", name, localHookPath, nil)
+	return b.executeHook(ctx, HookConfig{
+		Scope: "local",
+		Name:  name,
+		Path:  localHookPath,
+	})
 }
 
 func dirForAgentName(agentName string) string {
@@ -723,18 +765,27 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 func (b *Bootstrap) executePluginHook(ctx context.Context, name string, checkouts []*pluginCheckout) error {
 	for _, p := range checkouts {
 		hookPath, err := hook.Find(p.HooksDir, name)
-		// os.IsNotExist() doesn't unwrap wrapped errors (as at Go 1.13).
-		// agent is still go pre-1.13 compatible (I think) so we're avoiding errors.Is().
-		// In future somebody should check if os.IsNotExist() has added support for
-		// error unwrapping, or change this code to errors.Is(err, os.ErrNotExist)
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			continue // this plugin does not implement this hook
 		} else if err != nil {
 			return err
 		}
 
 		env, _ := p.ConfigurationToEnvironment()
-		if err := b.executeHook(ctx, "plugin", p.Plugin.Name()+" "+name, hookPath, env); err != nil {
+		err = b.executeHook(ctx, HookConfig{
+			Scope:      "plugin",
+			Name:       name,
+			Path:       hookPath,
+			Env:        env,
+			PluginName: p.Plugin.Name(),
+			SpanAttributes: map[string]string{
+				"plugin.name":        p.Plugin.Name(),
+				"plugin.version":     p.Plugin.Version,
+				"plugin.location":    p.Plugin.Location,
+				"plugin.is_vendored": strconv.FormatBool(p.Vendored),
+			},
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -982,7 +1033,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 				roko.WithMaxAttempts(3),
 				roko.WithStrategy(roko.Constant(2*time.Second)),
 			).Do(func(r *roko.Retrier) error {
-				err := b.defaultCheckoutPhase()
+				err := b.defaultCheckoutPhase(ctx)
 				if err == nil {
 					return nil
 				}
@@ -1186,17 +1237,26 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config
-func (b *Bootstrap) defaultCheckoutPhase() error {
+func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", b.Config.TracingBackend)
+	span.AddAttributes(map[string]string{
+		"checkout.repo_name": b.Repository,
+		"checkout.refspec":   b.RefSpec,
+		"checkout.commit":    b.Commit,
+	})
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	if b.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
 	}
 
-	var err error
 	var mirrorDir string
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if experiments.IsEnabled(`git-mirrors`) && b.Config.GitMirrorsPath != "" && b.Config.Repository != "" {
 		b.shell.Commentf("Using git-mirrors experiment 🧪")
+		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
 
 		// Skip updating the Git mirror before using it?
 		if b.Config.GitMirrorsSkipUpdate {
@@ -1420,7 +1480,8 @@ func (b *Bootstrap) resolveCommit() {
 
 // runPreCommandHooks runs the pre-command hooks and adds tracing spans.
 func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-command hooks", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("pre-command", "pre-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -1438,10 +1499,7 @@ func (b *Bootstrap) runPreCommandHooks(ctx context.Context) error {
 
 // runCommand runs the command and adds tracing spans.
 func (b *Bootstrap) runCommand(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
 	var err error
-	defer func() { span.FinishWithError(err) }()
-
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case b.hasPluginHook("command"):
@@ -1458,7 +1516,8 @@ func (b *Bootstrap) runCommand(ctx context.Context) error {
 
 // runPostCommandHooks runs the post-command hooks and adds tracing spans.
 func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "post-command hooks", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("post-command", "post-command hooks")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
@@ -1476,6 +1535,9 @@ func (b *Bootstrap) runPostCommandHooks(ctx context.Context) error {
 
 // CommandPhase determines how to run the build, and then runs it
 func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "command", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
 	// Run pre-command hooks
 	if err := b.runPreCommandHooks(ctx); err != nil {
 		return err, nil
@@ -1518,7 +1580,8 @@ func (b *Bootstrap) CommandPhase(ctx context.Context) (error, error) {
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
-	span, ctx := tracetools.StartSpanFromContext(ctx, "hook.execute", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("default command hook", "hook.execute")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 	span.AddAttributes(map[string]string{
@@ -1737,16 +1800,40 @@ func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 
 }
 
-func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
+func (b *Bootstrap) artifactPhase(ctx context.Context) error {
 	if b.AutomaticArtifactUploadPaths == "" {
 		return nil
 	}
 
-	span, ctx := tracetools.StartSpanFromContext(ctx, "upload artifacts", b.Config.TracingBackend)
+	spanName := b.implementationSpecificSpanName("artifacts", "artifact upload")
+	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, b.Config.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
 
-	// Run pre-artifact hooks
+	err = b.preArtifactHooks(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = b.uploadArtifacts(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = b.postArtifactHooks(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Run the pre-artifact hooks
+func (b *Bootstrap) preArtifactHooks(ctx context.Context) error {
+	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-artifact", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	if err = b.executeGlobalHook(ctx, "pre-artifact"); err != nil {
 		return err
 	}
@@ -1759,7 +1846,15 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		return err
 	}
 
-	// Run the artifact upload command
+	return nil
+}
+
+// Run the artifact upload command
+func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "artifact-upload", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	b.shell.Headerf("Uploading artifacts")
 	args := []string{"artifact", "upload", b.AutomaticArtifactUploadPaths}
 
@@ -1772,7 +1867,15 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		return err
 	}
 
-	// Run post-artifact hooks
+	return nil
+}
+
+// Run the post-artifact hooks
+func (b *Bootstrap) postArtifactHooks(ctx context.Context) error {
+	span, _ := tracetools.StartSpanFromContext(ctx, "post-artifact", b.Config.TracingBackend)
+	var err error
+	defer func() { span.FinishWithError(err) }()
+
 	if err = b.executeGlobalHook(ctx, "post-artifact"); err != nil {
 		return err
 	}
