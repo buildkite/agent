@@ -323,7 +323,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 		case *hook.HookExitError:
 			// ...because the hook called exit(), tsk we ignore any changes
 			// since we can't discern them but continue on with the job
-			break
+			err = nil // set err to nil, otherwise the HookExitError will be captured by tracing
 		default:
 			// ...because something else happened, report it and stop the job
 			return errors.Wrapf(err, "Failed to get environment")
