@@ -132,7 +132,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String("buildkite_agent"),
+		semconv.ServiceNameKey.String("buildkite-agent"),
 		semconv.ServiceVersionKey.String(agent.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
@@ -162,7 +162,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	))
 
 	tracer := tracerProvider.Tracer(
-		"buildkite_agent",
+		"buildkite-agent",
 		trace.WithInstrumentationVersion(agent.Version()),
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
