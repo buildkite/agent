@@ -154,7 +154,7 @@ func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 
 	hookFile.Close()
 
-	wrapper, err := CreateScriptWrapper(hookFile.Name())
+	wrapper, err := NewScriptWrapper(WithHookPath(hookFile.Name()))
 	if err != nil {
 		t.Fatal(err)
 	}

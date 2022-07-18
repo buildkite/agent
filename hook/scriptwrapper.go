@@ -13,29 +13,10 @@ import (
 )
 
 const (
-	hookExitStatusEnv = `BUILDKITE_HOOK_EXIT_STATUS`
-	hookWorkingDirEnv = `BUILDKITE_HOOK_WORKING_DIR`
+	hookExitStatusEnv = "BUILDKITE_HOOK_EXIT_STATUS"
+	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
+
 )
-
-// Hooks get "sourced" into the bootstrap in the sense that they get the
-// environment set for them and then we capture any extra environment variables
-// that are exported in the script.
-
-// The tricky thing is that it's impossible to grab the ENV of a child process
-// before it finishes, so we've got an awesome (ugly) hack to get around this.
-// We write the ENV to file, run the hook and then write the ENV back to another file.
-// Then we can use the diff of the two to figure out what changes to make to the
-// bootstrap. Horrible, but effective.
-
-// ScriptWrapper wraps a hook script with env collection and then provides
-// a way to get the difference between the environment before the hook is run and
-// after it
-type ScriptWrapper struct {
-	hookPath      string
-	scriptFile    *os.File
-	beforeEnvFile *os.File
-	afterEnvFile  *os.File
-}
 
 type HookScriptChanges struct {
 	Diff    env.Diff
@@ -58,25 +39,69 @@ func (e *HookExitError) Error() string {
 	return fmt.Sprintf("Hook %q early exited, could not record after environment or working directory", e.hookPath)
 }
 
-// CreateScriptWrapper creates and configures a ScriptWrapper.
+type scriptWrapperOpt func(*ScriptWrapper)
+
+// Hooks get "sourced" into the bootstrap in the sense that they get the
+// environment set for them and then we capture any extra environment variables
+// that are exported in the script.
+
+// The tricky thing is that it's impossible to grab the ENV of a child process
+// before it finishes, so we've got an awesome (ugly) hack to get around this.
+// We write the ENV to file, run the hook and then write the ENV back to another file.
+// Then we can use the diff of the two to figure out what changes to make to the
+// bootstrap. Horrible, but effective.
+
+// ScriptWrapper wraps a hook script with env collection and then provides
+// a way to get the difference between the environment before the hook is run and
+// after it
+type ScriptWrapper struct {
+	hookPath      string
+	os            string
+	scriptFile    *os.File
+	beforeEnvFile *os.File
+	afterEnvFile  *os.File
+}
+
+func WithHookPath(path string) scriptWrapperOpt {
+	return func(wrap *ScriptWrapper) {
+		wrap.hookPath = path
+	}
+}
+
+func WithOS(os string) scriptWrapperOpt {
+	return func(wrap *ScriptWrapper) {
+		wrap.os = os
+	}
+}
+
+// NewScriptWrapper creates and configures a ScriptWrapper.
 // Writes temporary files to the filesystem.
-func CreateScriptWrapper(hookPath string) (*ScriptWrapper, error) {
-	var wrap = &ScriptWrapper{
-		hookPath: hookPath,
+func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
+	wrap := &ScriptWrapper{
+		os: runtime.GOOS,
+	}
+
+	for _, o := range opts {
+		o(wrap)
+	}
+
+	if wrap.hookPath == "" {
+		return nil, fmt.Errorf("Hook path was not provided")
 	}
 
 	var err error
-	var scriptFileName string = `buildkite-agent-bootstrap-hook-runner`
 	var isBashHook bool
 	var isPwshHook bool
-	var isWindows = runtime.GOOS == "windows"
+
+	scriptFileName := `buildkite-agent-bootstrap-hook-runner`
+	isWindows := wrap.os == "windows"
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
 	// we probably need a .bat extension
-	if filepath.Ext(hookPath) == ".ps1" {
+	if filepath.Ext(wrap.hookPath) == ".ps1" {
 		isPwshHook = true
 		scriptFileName += ".ps1"
-	} else if filepath.Ext(hookPath) == "" {
+	} else if filepath.Ext(wrap.hookPath) == "" {
 		isBashHook = true
 	} else if isWindows {
 		scriptFileName += ".bat"

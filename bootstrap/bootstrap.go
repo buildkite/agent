@@ -270,7 +270,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 
 	// We need a script to wrap the hook script so that we can snaffle the changed
 	// environment variables
-	script, err := hook.CreateScriptWrapper(hookCfg.Path)
+	script, err := hook.NewScriptWrapper(hook.WithHookPath(hookCfg.Path))
 	if err != nil {
 		b.shell.Errorf("Error creating hook script: %v", err)
 		return err
