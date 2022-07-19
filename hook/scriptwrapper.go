@@ -1,11 +1,13 @@
 package hook
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
+	"text/template"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
@@ -16,7 +18,42 @@ const (
 	hookExitStatusEnv = "BUILDKITE_HOOK_EXIT_STATUS"
 	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
 
+	batchScript = `@echo off
+SETLOCAL ENABLEDELAYEDEXPANSION
+SET > "{{.BeforeEnvFileName}}"
+CALL "{{.PathToHook}}"
+SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
+SET BUILDKITE_HOOK_WORKING_DIR=%CD%
+SET > "{{.AfterEnvFileName}}"
+EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
+
+	powershellScript = `$ErrorActionPreference = "STOP"
+Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.BeforeEnvFileName}}"
+{{.PathToHook}}
+if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
+$Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
+Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.AfterEnvFileName}}"
+exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
+
+	bashScript = `export -p > "{{.BeforeEnvFileName}}"
+. "{{.PathToHook}}"
+export BUILDKITE_HOOK_EXIT_STATUS=$?
+export BUILDKITE_HOOK_WORKING_DIR=$PWD
+export -p > "{{.AfterEnvFileName}}"
+exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
+
+var (
+	batchScriptTmpl      = template.Must(template.New("batch").Parse(batchScript))
+	powershellScriptTmpl = template.Must(template.New("pwsh").Parse(powershellScript))
+	bashScriptTmpl       = template.Must(template.New("bash").Parse(bashScript))
+)
+
+type scriptTemplateInput struct {
+	BeforeEnvFileName string
+	AfterEnvFileName  string
+	PathToHook        string
+}
 
 type HookScriptChanges struct {
 	Diff    env.Diff
@@ -137,33 +174,22 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 		return nil, fmt.Errorf("Failed to find absolute path to \"%s\" (%s)", wrap.hookPath, err)
 	}
 
-	// Create the hook runner code
-	var script string
-	if isWindows && !isBashHook && !isPwshHook {
-		script = "@echo off\n" +
-			"SETLOCAL ENABLEDELAYEDEXPANSION\n" +
-			"SET > \"" + wrap.beforeEnvFile.Name() + "\"\n" +
-			"CALL \"" + absolutePathToHook + "\"\n" +
-			"SET " + hookExitStatusEnv + "=!ERRORLEVEL!\n" +
-			"SET " + hookWorkingDirEnv + "=%CD%\n" +
-			"SET > \"" + wrap.afterEnvFile.Name() + "\"\n" +
-			"EXIT %" + hookExitStatusEnv + "%"
-	} else if isWindows && isPwshHook {
-		script = `$ErrorActionPreference = "STOP"` + "\n" +
-			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.beforeEnvFile.Name() + `"` + "\n" +
-			absolutePathToHook + "\n" +
-			`if ($LASTEXITCODE -eq $null) {$Env:` + hookExitStatusEnv + ` = 0} else {$Env:` + hookExitStatusEnv + ` = $LASTEXITCODE}` + "\n" +
-			`$Env:` + hookWorkingDirEnv + ` = $PWD | Select-Object -ExpandProperty Path` + "\n" +
-			`Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "` + wrap.afterEnvFile.Name() + `"` + "\n" +
-			`exit $Env:` + hookExitStatusEnv
-	} else {
-		script = "export -p > \"" + filepath.ToSlash(wrap.beforeEnvFile.Name()) + "\"\n" +
-			". \"" + filepath.ToSlash(absolutePathToHook) + "\"\n" +
-			"export " + hookExitStatusEnv + "=$?\n" +
-			"export " + hookWorkingDirEnv + "=$PWD\n" +
-			"export -p > \"" + filepath.ToSlash(wrap.afterEnvFile.Name()) + "\"\n" +
-			"exit $" + hookExitStatusEnv
+	tmplInput := scriptTemplateInput{
+		BeforeEnvFileName: wrap.beforeEnvFile.Name(),
+		AfterEnvFileName:  wrap.afterEnvFile.Name(),
+		PathToHook:        absolutePathToHook,
 	}
+
+	// Create the hook runner code
+	buf := &bytes.Buffer{}
+	if isWindows && !isBashHook && !isPwshHook {
+		batchScriptTmpl.Execute(buf, tmplInput)
+	} else if isWindows && isPwshHook {
+		powershellScriptTmpl.Execute(buf, tmplInput)
+	} else {
+		bashScriptTmpl.Execute(buf, tmplInput)
+	}
+	script := buf.String()
 
 	// Write the hook script to the runner then close the file so we can run it
 	_, err = wrap.scriptFile.WriteString(script)
