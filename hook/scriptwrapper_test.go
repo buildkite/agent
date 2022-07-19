@@ -70,6 +70,98 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	assert.Equal(t, expected, actual)
 }
 
+func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
+	t.Parallel()
+
+	hookFile, err := shell.TempFileWithExtension("hookName.bat")
+	assert.NoError(t, err)
+
+	_, err = fmt.Fprintln(hookFile, `echo Hello There!`)
+	assert.NoError(t, err)
+
+	hookFile.Close()
+
+	wrapper, err := NewScriptWrapper(
+		WithHookPath(hookFile.Name()),
+		WithOS("windows"),
+	)
+	assert.NoError(t, err)
+
+	defer wrapper.Close()
+
+	// The double percent signs %% are sprintf-escaped literal percent signs. Escaping hell is impossible to get out of.
+	// See: https://pkg.go.dev/fmt > ctrl-f for "%%"
+	scriptTemplate := `@echo off
+SETLOCAL ENABLEDELAYEDEXPANSION
+SET > "%s"
+CALL "%s"
+SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
+SET BUILDKITE_HOOK_WORKING_DIR=%%CD%%
+SET > "%s"
+EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
+
+	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
+}
+
+func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
+	t.Parallel()
+
+	hookFile, err := shell.TempFileWithExtension("hookName.ps1")
+	assert.NoError(t, err)
+
+	_, err = fmt.Fprintln(hookFile, `Write-Output "Hello There!"`)
+	assert.NoError(t, err)
+
+	hookFile.Close()
+
+	wrapper, err := NewScriptWrapper(
+		WithHookPath(hookFile.Name()),
+		WithOS("windows"),
+	)
+	assert.NoError(t, err)
+
+	defer wrapper.Close()
+
+	scriptTemplate := `$ErrorActionPreference = "STOP"
+Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
+%s
+if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
+$Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
+Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
+exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
+
+	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
+}
+
+func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
+	t.Parallel()
+
+	hookFile, err := shell.TempFileWithExtension("hookName")
+	assert.NoError(t, err)
+
+	_, err = fmt.Fprintln(hookFile, `echo "Hello There!"`)
+	assert.NoError(t, err)
+
+	hookFile.Close()
+
+	wrapper, err := NewScriptWrapper(
+		WithHookPath(hookFile.Name()),
+		WithOS("linux"),
+	)
+	assert.NoError(t, err)
+
+	defer wrapper.Close()
+
+	scriptTemplate := `export -p > "%s"
+. "%s"
+export BUILDKITE_HOOK_EXIT_STATUS=$?
+export BUILDKITE_HOOK_WORKING_DIR=$PWD
+export -p > "%s"
+exit $BUILDKITE_HOOK_EXIT_STATUS`
+
+	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
+}
+
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	t.Parallel()
 
@@ -142,22 +234,31 @@ func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
 	}
 
 	hookFile, err := shell.TempFileWithExtension(hookName)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	for _, line := range script {
-		if _, err = fmt.Fprintln(hookFile, line); err != nil {
-			t.Fatal(err)
-		}
+		_, err = fmt.Fprintln(hookFile, line)
+		assert.NoError(t, err)
 	}
 
 	hookFile.Close()
 
-	wrapper, err := CreateScriptWrapper(hookFile.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
+	wrapper, err := NewScriptWrapper(WithHookPath(hookFile.Name()))
+	assert.NoError(t, err)
 
 	return wrapper
+}
+
+func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper *ScriptWrapper) {
+	file, err := os.Open(wrapper.scriptFile.Name())
+	assert.NoError(t, err)
+
+	defer file.Close()
+
+	wrapperScriptContents, err := ioutil.ReadAll(file)
+	assert.NoError(t, err)
+
+	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvFile.Name(), hookFileName, wrapper.afterEnvFile.Name())
+
+	assert.Equal(t, expected, string(wrapperScriptContents))
 }
