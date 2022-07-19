@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.38.0](https://github.com/buildkite/agent/tree/3.38.0) (2022-07-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.37.0...3.38.0)
+
+### Changed
+- Include a list of enabled features in the register request [#1706](https://github.com/buildkite/agent/pull/1706) (@moskyb)
+- Promote opentelemetry tracing to mainline feature status [#1702](https://github.com/buildkite/agent/pull/1702) (@moskyb)
+- Improve opentelemetry implementation [#1699](https://github.com/buildkite/agent/pull/1699) [#1705](https://github.com/buildkite/agent/pull/1705) (@moskyb)
+
 ## [v3.37.0](https://github.com/buildkite/tree/v3.37.0) (2022-07-06)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.36.1...v3.37.0)
 
