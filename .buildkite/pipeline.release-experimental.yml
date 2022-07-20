@@ -12,7 +12,7 @@ steps:
           login: true
           account-ids: "032379705303"
       - docker#v3.5.0:
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2020.03"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
 
   - name: ":redhat: Publish Edge RPM Package"
@@ -27,7 +27,7 @@ steps:
           login: true
           account-ids: "032379705303"
       - docker#v3.5.0:
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2020.03"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
           volumes:
             - "/yum.buildkite.com"
@@ -44,7 +44,7 @@ steps:
           login: true
           account-ids: "032379705303"
       - docker#v3.5.0:
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2020.03"
+          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
           tmpfs:
             - "/root/.gnupg"
