@@ -19,6 +19,10 @@ var StepUpdateHelpDescription = `Usage:
 Description:
 
    Update an attribute of a step in the build
+	 
+	 Note that step labels are used in commit status updates, so if you change the
+	 label of a running build, you may end up with an 'orphaned' status update
+	 under the old label, as well as new ones using the updated label.
 
 Example:
 
