@@ -21,8 +21,17 @@ Description:
    Update an attribute of a step in the build
 	 
 	 Note that step labels are used in commit status updates, so if you change the
-	 label of a running build, you may end up with an 'orphaned' status update
+	 label of a running step, you may end up with an 'orphaned' status update
 	 under the old label, as well as new ones using the updated label.
+	 
+	 To avoid orphaned status updates, pick one of the following options in your
+	 Pipeline Settings > GitHub:
+
+	 * Make sure Update commit statuses is not selected. Note that this prevents
+	 	 Buildkite from automatically creating and sending statuses for this pipeline,
+		 meaning you will have to handle all commit statuses through the pipeline.yml
+	 * Enable both Update commit statuses and Create a status for each job.
+	   Buildkite sends its default statuses as well as your custom status.
 
 Example:
 
