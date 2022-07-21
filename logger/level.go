@@ -11,8 +11,8 @@ const (
 	DEBUG Level = iota
 	NOTICE
 	INFO
-	ERROR
 	WARN
+	ERROR
 	FATAL
 )
 
