@@ -15,10 +15,10 @@ services:
       - "BUILDKITE_BUILD_PATH=/buildkite"
 
   ruby:
-    image: ruby:2.6
+    image: ruby:2.7.6
     volumes:
       - ..:/work
-      - ruby-2-6-agent-gem-cache:/usr/local/bundle
+      - ruby-2-7-6-agent-gem-cache:/usr/local/bundle
     working_dir: /work
     command: /bin/bash
     environment:
@@ -27,4 +27,4 @@ services:
       - BUILD_VERSION
 
 volumes:
-  ruby-2-6-agent-gem-cache: ~
+  ruby-2-7-6-agent-gem-cache: ~
