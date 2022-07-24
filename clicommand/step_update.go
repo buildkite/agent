@@ -19,6 +19,16 @@ var StepUpdateHelpDescription = `Usage:
 Description:
 
    Update an attribute of a step in the build
+	 
+	 Note that step labels are used in commit status updates, so if you change the
+	 label of a running step, you may end up with an 'orphaned' status update
+	 under the old label, as well as new ones using the updated label.
+	 
+	 To avoid orphaned status updates, in your Pipeline Settings > GitHub:
+	 
+	 * Make sure Update commit statuses is not selected. Note that this prevents
+	 	 Buildkite from automatically creating and sending statuses for this pipeline,
+		 meaning you will have to handle all commit statuses through the pipeline.yml
 
 Example:
 
