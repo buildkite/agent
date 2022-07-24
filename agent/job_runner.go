@@ -693,6 +693,7 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 			} else {
 				r.logger.Warn("Buildkite rejected the call to start the job (%s)", err)
 				rtr.Break()
+				return err
 			}
 		}
 
