@@ -40,9 +40,9 @@ require (
 	go.opentelemetry.io/contrib/propagators/jaeger v1.7.0
 	go.opentelemetry.io/contrib/propagators/ot v1.7.0
 	go.opentelemetry.io/otel v1.8.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.7.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.7.0
-	go.opentelemetry.io/otel/sdk v1.7.0
+	go.opentelemetry.io/otel/sdk v1.8.0
 	go.opentelemetry.io/otel/trace v1.8.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 )
@@ -79,8 +79,8 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/tinylib/msgp v1.1.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.7.0 // indirect
-	go.opentelemetry.io/proto/otlp v0.16.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.8.0 // indirect
+	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e // indirect
