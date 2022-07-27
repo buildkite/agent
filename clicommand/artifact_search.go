@@ -156,8 +156,7 @@ Format specifiers:
 
 		// Setup the searcher and try get the artifacts
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-		state := "" // any state
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, state, cfg.IncludeRetriedJobs, true)
+		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
 		}
