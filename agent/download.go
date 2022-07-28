@@ -58,7 +58,7 @@ func (d Download) Start() error {
 		roko.WithMaxAttempts(d.conf.Retries),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).Do(func(r *roko.Retrier) error {
-		err := d.try()
+		err := d.try(r)
 		if err != nil {
 			d.logger.Warn("Error trying to download %s (%s) %s", d.conf.URL, err, r)
 		}
@@ -96,7 +96,7 @@ func getTargetPath(path string, destination string) string {
 	return targetFile
 }
 
-func (d Download) try() error {
+func (d Download) try(r *retry.Retrier) error {
 	targetFile := getTargetPath(d.conf.Path, d.conf.Destination)
 	targetDirectory, _ := filepath.Split(targetFile)
 
@@ -127,6 +127,11 @@ func (d Download) try() error {
 			} else {
 				d.logger.Debug("\n%s", string(responseDump))
 			}
+		}
+
+		// Skip retry on 404 as this is unnecessary
+		if response.StatusCode == 404 {
+			r.Break()
 		}
 
 		return &downloadError{response.Status}
