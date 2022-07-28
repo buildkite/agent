@@ -12,8 +12,11 @@ import (
 )
 
 type S3DownloaderConfig struct {
+	//
+	S3Client *s3.S3
+
 	// The S3 bucket name and the path, for example, s3://my-bucket-name/foo/bar
-	Bucket string
+	S3Path string
 
 	// The root directory of the download
 	Destination string
@@ -88,7 +91,7 @@ func (d S3Downloader) BucketName() string {
 }
 
 func (d S3Downloader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(d.conf.Bucket, "s3://")
+	trimmed := strings.TrimPrefix(d.conf.S3Path, "s3://")
 
 	return strings.Split(trimmed, "/")
 }
