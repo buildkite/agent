@@ -66,12 +66,21 @@ func awsS3Session(region string) (*session.Session, error) {
 		[]credentials.Provider{
 			&credentialsProvider{},
 			&credentials.EnvProvider{},
+			sharedCredentialsProvider(),
 			webIdentityRoleProvider(sess),
 			// EC2 and ECS meta-data providers
 			defaults.RemoteCredProvider(*sess.Config, sess.Handlers),
 		})
 
 	return sess, nil
+}
+
+func sharedCredentialsProvider() credentials.Provider {
+	// If empty SDK will default to environment variable "AWS_PROFILE"
+	// or "default" if environment variable is also not set.
+	awsProfile := os.Getenv("BUILDKITE_S3_PROFILE")
+
+	return &credentials.SharedCredentialsProvider{Filename: "", Profile: awsProfile}
 }
 
 func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
