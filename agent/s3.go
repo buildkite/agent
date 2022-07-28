@@ -83,7 +83,7 @@ func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRolePro
 	)
 }
 
-func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
+func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	var sess *session.Session
 
 	regionHint := os.Getenv(regionHintEnvVar)

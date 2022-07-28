@@ -43,7 +43,7 @@ func NewS3Uploader(l logger.Logger, c S3UploaderConfig) (*S3Uploader, error) {
 	bucketName, bucketPath := ParseS3Destination(c.Destination)
 
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(l, bucketName)
+	s3Client, err := NewS3Client(l, bucketName)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func ParseS3Destination(destination string) (name string, path string) {
 	destinationWithNoTrailingSlash := strings.TrimSuffix(string(destination), "/")
 	destinationWithNoProtocol := strings.TrimPrefix(destinationWithNoTrailingSlash, "s3://")
 	parts := strings.Split(destinationWithNoProtocol, "/")
-	path = strings.Join(parts[1:len(parts)], "/")
+	path = strings.Join(parts[1:], "/")
 	name = parts[0]
 	return
 }

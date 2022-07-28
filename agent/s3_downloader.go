@@ -49,7 +49,7 @@ func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
 
 func (d S3Downloader) Start() error {
 	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(d.logger, d.BucketName())
+	s3Client, err := NewS3Client(d.logger, d.BucketName())
 	if err != nil {
 		return err
 	}
