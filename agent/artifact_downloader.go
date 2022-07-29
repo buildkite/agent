@@ -123,7 +123,7 @@ func (a *ArtifactDownloader) Download() error {
 				}
 
 				err = NewS3Downloader(a.logger, S3DownloaderConfig{
-					S3Client:    s3Clients[artifact.UploadDestination],
+					S3Client:    s3Clients[bucketName],
 					Path:        path,
 					S3Path:      artifact.UploadDestination,
 					Destination: downloadDestination,

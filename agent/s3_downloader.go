@@ -12,7 +12,7 @@ import (
 )
 
 type S3DownloaderConfig struct {
-	//
+	// The client for interacting with S3
 	S3Client *s3.S3
 
 	// The S3 bucket name and the path, for example, s3://my-bucket-name/foo/bar
