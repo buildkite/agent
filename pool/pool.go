@@ -17,7 +17,10 @@ const (
 
 func New(concurrencyLimit int) *Pool {
 	if concurrencyLimit == MaxConcurrencyLimit {
-		concurrencyLimit = runtime.NumCPU()
+		// Completely arbitrary. Most of the time we could probably have unbounded concurrency, but the situations where we use
+		// this pool is basically just S3 uploading and downloading, so this number is kind of a proxy for "What won't rate limit us"
+		// TODO: Make artifact uploads and downloads gracefully handle rate limiting, remove this pool entirely, and use unbounded concurrency via a WaitGroup
+		concurrencyLimit = runtime.NumCPU() * 10
 	}
 
 	wg := sync.WaitGroup{}
