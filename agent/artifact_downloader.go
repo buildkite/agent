@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/pool"
 )
@@ -76,74 +77,96 @@ func (a *ArtifactDownloader) Download() error {
 
 	if artifactCount == 0 {
 		return errors.New("No artifacts found for downloading")
-	} else {
-		a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
+	}
 
-		p := pool.New(pool.MaxConcurrencyLimit)
-		errors := []error{}
+	a.logger.Info("Found %d artifacts. Starting to download to: %s", artifactCount, downloadDestination)
 
-		for _, artifact := range artifacts {
-			// Create new instance of the artifact for the goroutine
-			// See: http://golang.org/doc/effective_go.html#channels
-			artifact := artifact
+	p := pool.New(pool.MaxConcurrencyLimit)
+	errors := []error{}
+	s3Clients := map[string]*s3.S3{}
 
-			p.Spawn(func() {
-				var err error
-				var path string = artifact.Path
+	for _, artifact := range artifacts {
+		// Create new instance of the artifact for the goroutine
+		// See: http://golang.org/doc/effective_go.html#channels
+		artifact := artifact
 
-				// Convert windows paths to slashes, otherwise we get a literal
-				// download of "dir/dir/file" vs sub-directories on non-windows agents
-				if runtime.GOOS != `windows` {
-					path = strings.Replace(path, `\`, `/`, -1)
-				}
+		p.Spawn(func() {
+			var err error
+			var path string = artifact.Path
 
-				// Handle downloading from S3, GS, or RT
-				if strings.HasPrefix(artifact.UploadDestination, "s3://") {
-					err = NewS3Downloader(a.logger, S3DownloaderConfig{
-						Path:        path,
-						Bucket:      artifact.UploadDestination,
-						Destination: downloadDestination,
-						Retries:     5,
-						DebugHTTP:   a.conf.DebugHTTP,
-					}).Start()
-				} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
-					err = NewGSDownloader(a.logger, GSDownloaderConfig{
-						Path:        path,
-						Bucket:      artifact.UploadDestination,
-						Destination: downloadDestination,
-						Retries:     5,
-						DebugHTTP:   a.conf.DebugHTTP,
-					}).Start()
-				} else if strings.HasPrefix(artifact.UploadDestination, "rt://") {
-					err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
-						Path:        path,
-						Repository:  artifact.UploadDestination,
-						Destination: downloadDestination,
-						Retries:     5,
-						DebugHTTP:   a.conf.DebugHTTP,
-					}).Start()
-				} else {
-					err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
-						URL:         artifact.URL,
-						Path:        path,
-						Destination: downloadDestination,
-						Retries:     5,
-						DebugHTTP:   a.conf.DebugHTTP,
-					}).Start()
-				}
+			// Convert windows paths to slashes, otherwise we get a literal
+			// download of "dir/dir/file" vs sub-directories on non-windows agents
+			if runtime.GOOS != `windows` {
+				path = strings.Replace(path, `\`, `/`, -1)
+			}
 
-				// If the downloaded encountered an error, lock
-				// the pool, collect it, then unlock the pool
-				// again.
-				if err != nil {
-					a.logger.Error("Failed to download artifact: %s", err)
-
+			// Handle downloading from S3, GS, or RT
+			if strings.HasPrefix(artifact.UploadDestination, "s3://") {
+				// We want to have as few S3 clients as possible, as creating them is kind of an expensive operation
+				// But it's also theoretically possible that we'll have multiple artifacts with different S3 buckets, and each
+				// S3Client only applies to one bucket, so we need to store the S3 clients in a map, one for each bucket
+				bucketName, _ := ParseS3Destination(artifact.UploadDestination)
+				if _, has := s3Clients[bucketName]; !has {
 					p.Lock()
-					errors = append(errors, err)
+					client, err := NewS3Client(a.logger, bucketName)
+					if err != nil {
+						err = fmt.Errorf("Failed to create S3 client for bucket %s: %w", bucketName, err)
+						a.logger.Error("%v", err)
+
+						errors = append(errors, err)
+						p.Unlock()
+						return
+					}
+
+					s3Clients[bucketName] = client
 					p.Unlock()
 				}
-			})
-		}
+
+				err = NewS3Downloader(a.logger, S3DownloaderConfig{
+					S3Client:    s3Clients[artifact.UploadDestination],
+					Path:        path,
+					S3Path:      artifact.UploadDestination,
+					Destination: downloadDestination,
+					Retries:     5,
+					DebugHTTP:   a.conf.DebugHTTP,
+				}).Start()
+			} else if strings.HasPrefix(artifact.UploadDestination, "gs://") {
+				err = NewGSDownloader(a.logger, GSDownloaderConfig{
+					Path:        path,
+					Bucket:      artifact.UploadDestination,
+					Destination: downloadDestination,
+					Retries:     5,
+					DebugHTTP:   a.conf.DebugHTTP,
+				}).Start()
+			} else if strings.HasPrefix(artifact.UploadDestination, "rt://") {
+				err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
+					Path:        path,
+					Repository:  artifact.UploadDestination,
+					Destination: downloadDestination,
+					Retries:     5,
+					DebugHTTP:   a.conf.DebugHTTP,
+				}).Start()
+			} else {
+				err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+					URL:         artifact.URL,
+					Path:        path,
+					Destination: downloadDestination,
+					Retries:     5,
+					DebugHTTP:   a.conf.DebugHTTP,
+				}).Start()
+			}
+
+			// If the downloaded encountered an error, lock
+			// the pool, collect it, then unlock the pool
+			// again.
+			if err != nil {
+				a.logger.Error("Failed to download artifact: %s", err)
+
+				p.Lock()
+				errors = append(errors, err)
+				p.Unlock()
+			}
+		})
 
 		p.Wait()
 
