@@ -20,8 +20,8 @@ var levelNames = []string{
 	"DEBUG",
 	"NOTICE",
 	"INFO",
-	"ERROR",
 	"WARN",
+	"ERROR",
 	"FATAL",
 }
 
@@ -33,10 +33,10 @@ func LevelFromString(s string) (Level, error) {
 		return NOTICE, nil
 	case "info":
 		return INFO, nil
-	case "error":
-		return ERROR, nil
 	case "warn", "warning":
 		return WARN, nil
+	case "error":
+		return ERROR, nil
 	case "fatal":
 		return FATAL, nil
 	default:
