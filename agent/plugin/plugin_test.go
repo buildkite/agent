@@ -63,9 +63,9 @@ func TestCreateFromJSON(t *testing.T) {
 			}},
 		},
 		{
-			`["github.com/buildkite-unofficial/ping#master"]`,
 			[]*Plugin{&Plugin{
-				Location:      `github.com/buildkite-unofficial/ping`,
+			`["github.com/buildkite-plugins/fake-plugin#master"]`,
+				Location:      `github.com/buildkite-plugins/fake-plugin`,
 				Version:       `master`,
 				Scheme:        ``,
 				Configuration: map[string]interface{}{},
