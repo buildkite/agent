@@ -19,11 +19,13 @@ import (
 
 const regionHintEnvVar = "BUILDKITE_S3_DEFAULT_REGION"
 
-type credentialsProvider struct {
+type buildkiteEnvProvider struct {
 	retrieved bool
 }
 
-func (e *credentialsProvider) Retrieve() (creds credentials.Value, err error) {
+func (e *buildkiteEnvProvider) Retrieve() (credentials.Value, error) {
+	creds := credentials.Value{}
+
 	e.retrieved = false
 
 	creds.AccessKeyID = os.Getenv("BUILDKITE_S3_ACCESS_KEY_ID")
@@ -39,17 +41,18 @@ func (e *credentialsProvider) Retrieve() (creds credentials.Value, err error) {
 	creds.SessionToken = os.Getenv("BUILDKITE_S3_SESSION_TOKEN")
 
 	if creds.AccessKeyID == "" {
-		err = errors.New("BUILDKITE_S3_ACCESS_KEY_ID or BUILDKITE_S3_ACCESS_KEY not found in environment")
+		return credentials.Value{}, errors.New("BUILDKITE_S3_ACCESS_KEY_ID or BUILDKITE_S3_ACCESS_KEY not found in environment")
 	}
+
 	if creds.SecretAccessKey == "" {
-		err = errors.New("BUILDKITE_S3_SECRET_ACCESS_KEY or BUILDKITE_S3_SECRET_KEY not found in environment")
+		return credentials.Value{}, errors.New("BUILDKITE_S3_SECRET_ACCESS_KEY or BUILDKITE_S3_SECRET_KEY not found in environment")
 	}
 
 	e.retrieved = true
-	return
+	return creds, nil
 }
 
-func (e *credentialsProvider) IsExpired() bool {
+func (e *buildkiteEnvProvider) IsExpired() bool {
 	return !e.retrieved
 }
 
@@ -64,7 +67,7 @@ func awsS3Session(region string) (*session.Session, error) {
 
 	sess.Config.Credentials = credentials.NewChainCredentials(
 		[]credentials.Provider{
-			&credentialsProvider{},
+			&buildkiteEnvProvider{},
 			&credentials.EnvProvider{},
 			webIdentityRoleProvider(sess),
 			// EC2 and ECS meta-data providers
@@ -83,7 +86,7 @@ func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRolePro
 	)
 }
 
-func newS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
+func NewS3Client(l logger.Logger, bucket string) (*s3.S3, error) {
 	var sess *session.Session
 
 	regionHint := os.Getenv(regionHintEnvVar)
