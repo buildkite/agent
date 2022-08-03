@@ -18,7 +18,7 @@ func TestCreateFromJSON(t *testing.T) {
 	}{
 		{
 			`[{"https://github.com/buildkite-plugins/docker-compose#a34fa34":{"container":"app"}}]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `github.com/buildkite-plugins/docker-compose`,
 				Version:       `a34fa34`,
 				Scheme:        `https`,
@@ -27,7 +27,7 @@ func TestCreateFromJSON(t *testing.T) {
 		},
 		{
 			`[{"github.com/buildkite-plugins/docker-compose#a34fa34":{}}]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `github.com/buildkite-plugins/docker-compose`,
 				Version:       `a34fa34`,
 				Scheme:        ``,
@@ -36,7 +36,7 @@ func TestCreateFromJSON(t *testing.T) {
 		},
 		{
 			`[{"http://github.com/buildkite-plugins/docker-compose#a34fa34":{}}]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `github.com/buildkite-plugins/docker-compose`,
 				Version:       `a34fa34`,
 				Scheme:        `http`,
@@ -45,7 +45,7 @@ func TestCreateFromJSON(t *testing.T) {
 		},
 		{
 			`["ssh://git:foo@github.com/buildkite-plugins/docker-compose#a34fa34"]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:       `github.com/buildkite-plugins/docker-compose`,
 				Version:        `a34fa34`,
 				Scheme:         `ssh`,
@@ -55,7 +55,7 @@ func TestCreateFromJSON(t *testing.T) {
 		},
 		{
 			`["file://github.com/buildkite-plugins/docker-compose#a34fa34"]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `github.com/buildkite-plugins/docker-compose`,
 				Version:       `a34fa34`,
 				Scheme:        `file`,
@@ -63,9 +63,9 @@ func TestCreateFromJSON(t *testing.T) {
 			}},
 		},
 		{
-			`["github.com/buildkite-unofficial/ping#master"]`,
-			[]*Plugin{&Plugin{
-				Location:      `github.com/buildkite-unofficial/ping`,
+			`["github.com/buildkite-plugins/fake-plugin#master"]`,
+			[]*Plugin{{
+				Location:      `github.com/buildkite-plugins/fake-plugin`,
 				Version:       `master`,
 				Scheme:        ``,
 				Configuration: map[string]interface{}{},
@@ -73,7 +73,7 @@ func TestCreateFromJSON(t *testing.T) {
 		},
 		{
 			`[{"./.buildkite/plugins/llamas":{}}]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `./.buildkite/plugins/llamas`,
 				Scheme:        ``,
 				Vendored:      true,
