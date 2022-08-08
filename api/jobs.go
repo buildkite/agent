@@ -11,6 +11,7 @@ type Job struct {
 	State              string            `json:"state,omitempty"`
 	Env                map[string]string `json:"env,omitempty"`
 	ChunksMaxSizeBytes int               `json:"chunks_max_size_bytes,omitempty"`
+	Token              string            `json:"token,omitempty"`
 	ExitStatus         string            `json:"exit_status,omitempty"`
 	Signal             string            `json:"signal,omitempty"`
 	SignalReason       string            `json:"signal_reason,omitempty"`
