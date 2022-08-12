@@ -289,7 +289,6 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 		return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
 	}
 
-	var s string
 	switch parts[0] {
 	case "github.com", "bitbucket.org":
 		if len(parts) < 3 {
