@@ -285,19 +285,16 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 	}
 
 	parts := strings.Split(p.Location, "/")
-	if len(parts) < 3 {
-		return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
-	}
 
 	switch parts[0] {
 	case "github.com", "bitbucket.org":
 		if len(parts) < 3 {
-			return "", fmt.Errorf("Incomplete %s path \"%s\"", parts[0], p.Location)
+			return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
 		}
 		return strings.Join(parts[:3], "/"), nil
 	case "gitlab.com":
 		if len(parts) < 3 {
-			return "", fmt.Errorf("Incomplete %s path \"%s\"", parts[0], p.Location)
+			return "", fmt.Errorf("Incomplete plugin path \"%s\"", p.Location)
 		}
 		return strings.Join(parts, "/"), nil
 	default:

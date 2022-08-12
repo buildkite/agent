@@ -231,21 +231,21 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	repo, err = plugin.Repository()
 	assert.Equal(t, repo, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete github.com path "github.com/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "github.com/buildkite"`)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete github.com path "github.com/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "github.com/buildkite"`)
 
 	plugin = &Plugin{Location: "bitbucket.org/buildkite"}
 	repo, err = plugin.Repository()
 	assert.Equal(t, repo, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete bitbucket.org path "bitbucket.org/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "bitbucket.org/buildkite"`)
 	sub, err = plugin.RepositorySubdirectory()
 	assert.Equal(t, sub, "")
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), `Incomplete bitbucket.org path "bitbucket.org/buildkite"`)
+	assert.Equal(t, err.Error(), `Incomplete plugin path "bitbucket.org/buildkite"`)
 
 	plugin = &Plugin{Location: "bitbucket.org/user/project/sub/directory"}
 	repo, err = plugin.Repository()
