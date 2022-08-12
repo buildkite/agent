@@ -43,11 +43,18 @@ func TestCreateFromJSON(t *testing.T) {
 				Configuration: map[string]interface{}{},
 			}},
 		},
-		{
-			`[{"https://gitlab.fipps.de/contao/contao4/isotope-colorattribute-bundle#32a1397bee5f57b332c57a9d85ccd95208dc56b5":{}}]`,
+		{`[{"https://gitlab.example.com/path/to/repo#main":{}}]`,
 			[]*Plugin{&Plugin{
-				Location:      `gitlab.fipps.de/contao/contao4/isotope-colorattribute-bundle`,
-				Version:       `32a1397bee5f57b332c57a9d85ccd95208dc56b5`,
+				Location:      `gitlab.example.com/path/to/repo`,
+				Version:       `main`,
+				Scheme:        `https`,
+				Configuration: map[string]interface{}{},
+			}},
+		},
+		{`[{"https://gitlab.com/group/team/path/to/repo#main":{}}]`,
+			[]*Plugin{&Plugin{
+				Location:      `gitlab.com/group/team/path/to/repo`,
+				Version:       `main`,
 				Scheme:        `https`,
 				Configuration: map[string]interface{}{},
 			}},
