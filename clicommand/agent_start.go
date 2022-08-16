@@ -357,6 +357,10 @@ var AgentStartCommand = cli.Command{
 			Value:  "-ffxdq",
 			Usage:  "Flags to pass to \"git clean\" command",
 			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+			// -ff: delete files and directories, including untracked nested git repositories
+			// -x: don't use .gitignore rules
+			// -d: recurse into untracked directories
+			// -q: quiet, only report errors
 		},
 		cli.StringFlag{
 			Name:   "git-fetch-flags",
