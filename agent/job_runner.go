@@ -108,14 +108,22 @@ type JobRunner struct {
 }
 
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, j *api.Job, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, job *api.Job, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
 	runner := &JobRunner{
 		agent:     ag,
-		job:       j,
+		job:       job,
 		logger:    l,
 		conf:      conf,
 		metrics:   scope,
 		apiClient: apiClient,
+	}
+
+	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
+	// our current apiClient is using
+	if job.Token != "" {
+		clientConf := apiClient.Config()
+		clientConf.Token = job.Token
+		runner.apiClient = api.NewClient(l, clientConf)
 	}
 
 	runner.context, runner.contextCancel = context.WithCancel(context.Background())
@@ -127,7 +135,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// the Buildkite Agent API
 	runner.logStreamer = NewLogStreamer(l, runner.onUploadChunk, LogStreamerConfig{
 		Concurrency:       3,
-		MaxChunkSizeBytes: j.ChunksMaxSizeBytes,
+		MaxChunkSizeBytes: job.ChunksMaxSizeBytes,
 	})
 
 	// TempDir is not guaranteed to exist
@@ -140,7 +148,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	// Prepare a file to recieve the given job environment
-	if file, err := ioutil.TempFile(tempDir, fmt.Sprintf("job-env-%s", j.ID)); err != nil {
+	if file, err := ioutil.TempFile(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
 		return runner, err
 	} else {
 		l.Debug("[JobRunner] Created env file: %s", file.Name())
