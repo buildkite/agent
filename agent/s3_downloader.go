@@ -12,8 +12,11 @@ import (
 )
 
 type S3DownloaderConfig struct {
+	// The client for interacting with S3
+	S3Client *s3.S3
+
 	// The S3 bucket name and the path, for example, s3://my-bucket-name/foo/bar
-	Bucket string
+	S3Path string
 
 	// The root directory of the download
 	Destination string
@@ -45,13 +48,11 @@ func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
 }
 
 func (d S3Downloader) Start() error {
-	// Initialize the s3 client, and authenticate it
-	s3Client, err := newS3Client(d.logger, d.BucketName())
-	if err != nil {
-		return err
+	if d.conf.S3Client == nil {
+		return fmt.Errorf("S3Downloader for %s: S3Client is nil", d.conf.S3Path)
 	}
 
-	req, _ := s3Client.GetObjectRequest(&s3.GetObjectInput{
+	req, _ := d.conf.S3Client.GetObjectRequest(&s3.GetObjectInput{
 		Bucket: aws.String(d.BucketName()),
 		Key:    aws.String(d.BucketFileLocation()),
 	})
@@ -88,7 +89,7 @@ func (d S3Downloader) BucketName() string {
 }
 
 func (d S3Downloader) destinationParts() []string {
-	trimmed := strings.TrimPrefix(d.conf.Bucket, "s3://")
+	trimmed := strings.TrimPrefix(d.conf.S3Path, "s3://")
 
 	return strings.Split(trimmed, "/")
 }

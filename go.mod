@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/DataDog/datadog-go/v5 v5.1.1
-	github.com/aws/aws-sdk-go v1.44.56
+	github.com/aws/aws-sdk-go v1.44.66
 	github.com/buildkite/bintest/v3 v3.1.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
@@ -23,27 +23,27 @@ require (
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792
 	github.com/rjeczalik/interfaces v0.1.1
 	github.com/sergi/go-diff v1.0.0 // indirect
-	github.com/stretchr/testify v1.7.3
+	github.com/stretchr/testify v1.8.0
 	github.com/urfave/cli v1.22.9
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	golang.org/x/oauth2 v0.0.0-20220622183110-fd043fe589d2
 	golang.org/x/sys v0.0.0-20220624220833-87e55d714810
 	google.golang.org/api v0.86.0
-	gopkg.in/DataDog/dd-trace-go.v1 v1.40.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.40.1
 )
 
 require (
 	cloud.google.com/go/compute v1.7.0
 	github.com/buildkite/roko v1.0.0
-	go.opentelemetry.io/contrib/propagators/aws v1.7.0
-	go.opentelemetry.io/contrib/propagators/b3 v1.7.0
-	go.opentelemetry.io/contrib/propagators/jaeger v1.7.0
-	go.opentelemetry.io/contrib/propagators/ot v1.7.0
-	go.opentelemetry.io/otel v1.8.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.7.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.7.0
-	go.opentelemetry.io/otel/sdk v1.7.0
-	go.opentelemetry.io/otel/trace v1.8.0
+	go.opentelemetry.io/contrib/propagators/aws v1.8.0
+	go.opentelemetry.io/contrib/propagators/b3 v1.8.0
+	go.opentelemetry.io/contrib/propagators/jaeger v1.8.0
+	go.opentelemetry.io/contrib/propagators/ot v1.8.0
+	go.opentelemetry.io/otel v1.9.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.8.0
+	go.opentelemetry.io/otel/sdk v1.8.0
+	go.opentelemetry.io/otel/trace v1.9.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 )
 
@@ -79,8 +79,8 @@ require (
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/tinylib/msgp v1.1.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.7.0 // indirect
-	go.opentelemetry.io/proto/otlp v0.16.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.8.0 // indirect
+	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e // indirect

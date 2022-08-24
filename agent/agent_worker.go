@@ -493,12 +493,12 @@ func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 	return a.RunJob(accepted)
 }
 
-func (a *AgentWorker) RunJob(job *api.Job) error {
+func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
 	jobMetricsScope := a.metrics.With(metrics.Tags{
-		`pipeline`: job.Env[`BUILDKITE_PIPELINE_SLUG`],
-		`org`:      job.Env[`BUILDKITE_ORGANIZATION_SLUG`],
-		`branch`:   job.Env[`BUILDKITE_BRANCH`],
-		`source`:   job.Env[`BUILDKITE_SOURCE`],
+		`pipeline`: acceptResponse.Env[`BUILDKITE_PIPELINE_SLUG`],
+		`org`:      acceptResponse.Env[`BUILDKITE_ORGANIZATION_SLUG`],
+		`branch`:   acceptResponse.Env[`BUILDKITE_BRANCH`],
+		`source`:   acceptResponse.Env[`BUILDKITE_SOURCE`],
 	})
 
 	defer func() {
@@ -508,7 +508,7 @@ func (a *AgentWorker) RunJob(job *api.Job) error {
 
 	// Now that we've got a job to do, we can start it.
 	var err error
-	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, job, a.apiClient, JobRunnerConfig{
+	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, acceptResponse, a.apiClient, JobRunnerConfig{
 		Debug:              a.debug,
 		DebugHTTP:          a.debugHTTP,
 		CancelSignal:       a.cancelSig,

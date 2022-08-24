@@ -13,6 +13,34 @@ import (
 	"github.com/buildkite/bintest/v3"
 )
 
+func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
+	agentAccessToken := "llamasrock"
+	jobToken := "actually-llamas-are-only-okay"
+
+	ag := &api.AgentRegisterResponse{
+		AccessToken: agentAccessToken,
+	}
+
+	j := &api.Job{
+		ID:                 `my-job-id`,
+		ChunksMaxSizeBytes: 1024,
+		Token:              jobToken,
+		Env: map[string]string{
+			`BUILDKITE_COMMAND`: `echo hello world`,
+		},
+	}
+
+	cfg := agent.AgentConfiguration{}
+
+	runJob(t, ag, j, cfg, func(c *bintest.Call) {
+		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != jobToken {
+			t.Errorf("Expected access token to be %q, got %q\n",
+				jobToken, c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		}
+		c.Exit(0)
+	})
+}
+
 func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	ag := &api.AgentRegisterResponse{
 		AccessToken: "llamasrock",

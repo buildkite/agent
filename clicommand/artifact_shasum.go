@@ -143,8 +143,7 @@ func searchAndPrintShaSum(cfg ArtifactShasumConfig, l logger.Logger, stdout io.W
 
 	// Find the artifact we want to show the SHASUM for
 	searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-	state := "finished"
-	artifacts, err := searcher.Search(cfg.Query, cfg.Step, state, cfg.IncludeRetriedJobs, false)
+	artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, false)
 	if err != nil {
 		return fmt.Errorf("Error searching for artifacts: %s", err)
 	}
