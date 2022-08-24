@@ -80,7 +80,7 @@ func sharedCredentialsProvider() credentials.Provider {
 	// or "default" if environment variable is also not set.
 	awsProfile := os.Getenv("BUILDKITE_S3_PROFILE")
 
-	return &credentials.SharedCredentialsProvider{Filename: "", Profile: awsProfile}
+	return &credentials.SharedCredentialsProvider{Profile: awsProfile}
 }
 
 func webIdentityRoleProvider(sess *session.Session) *stscreds.WebIdentityRoleProvider {
