@@ -35,6 +35,12 @@ func (e GCPMetaData) Get() (map[string]string, error) {
 	}
 	result["gcp:instance-id"] = instanceId
 
+	instanceName, err := metadata.Get("instance/name")
+	if err != nil {
+		return result, err
+	}
+	result["gcp:instance-name"] = instanceName
+
 	machineType, err := machineType()
 	if err != nil {
 		return result, err
@@ -47,11 +53,11 @@ func (e GCPMetaData) Get() (map[string]string, error) {
 	}
 	result["gcp:preemptible"] = strings.ToLower(preemptible)
 
-	projectId, err := metadata.ProjectID()
+	projectID, err := metadata.ProjectID()
 	if err != nil {
 		return result, err
 	}
-	result["gcp:project-id"] = projectId
+	result["gcp:project-id"] = projectID
 
 	zone, err := metadata.Zone()
 	if err != nil {
