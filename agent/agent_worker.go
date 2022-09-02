@@ -83,6 +83,11 @@ type AgentWorker struct {
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
 	jobRunner *JobRunner
+
+	// retrySleepFunc is useful for testing retry loops fast
+	// Hopefully this can be replaced with a global setting for tests in future:
+	// https://github.com/buildkite/roko/issues/2
+	retrySleepFunc func(time.Duration)
 }
 
 // Creates the agent worker and initializes its API Client
@@ -98,6 +103,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 		stop:               make(chan struct{}),
 		cancelSig:          c.CancelSignal,
 		spawnIndex:         c.SpawnIndex,
+		retrySleepFunc:     time.Sleep, // https://github.com/buildkite/roko/issues/2
 	}
 }
 
@@ -528,17 +534,34 @@ func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
 	return nil
 }
 
-// Disconnects the agent from the Buildkite Agent API, doesn't bother retrying
-// because we want to disconnect as fast as possible.
+// Disconnect notifies the Buildkite API that this agent worker/session is
+// permanently disconnecting. Don't spend long retrying, because we want to
+// disconnect as fast as possible.
 func (a *AgentWorker) Disconnect() error {
 	a.logger.Info("Disconnecting...")
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(4),
+		roko.WithStrategy(roko.Constant(1*time.Second)),
+		roko.WithSleepFunc(a.retrySleepFunc),
+	).Do(func(r *roko.Retrier) error {
+		if _, err := a.apiClient.Disconnect(); err != nil {
+			a.logger.Warn("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
+			return err
+		}
+		return nil
+	})
 
-	_, err := a.apiClient.Disconnect()
 	if err != nil {
-		a.logger.Warn("There was an error sending the disconnect API call to Buildkite. If this agent still appears online, you may have to manually stop it (%s)", err)
+		// none of the retries worked
+		a.logger.Warn(
+			"There was an error sending the disconnect API call to Buildkite. "+
+				"If this agent still appears online, you may have to manually stop it (%s)",
+			err,
+		)
+		return err
 	}
-
-	return err
+	a.logger.Info("Disconnected")
+	return nil
 }
 
 type IdleMonitor struct {
