@@ -124,7 +124,15 @@ func (b *Bootstrap) otRootSpanName() string {
 }
 
 func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.Span, context.Context, stopper) {
-	client := otlptracegrpc.NewClient()
+	var otlpOptions []otlptracegrpc.Option
+	if endpoint, has := os.LookupEnv("OTEL_EXPORTER_OTLP_ENDPOINT"); has {
+		otlpOptions = append(otlpOptions, otlptracegrpc.WithEndpoint(endpoint))
+	}
+	if val, has := os.LookupEnv("OTEL_EXPORTER_OTLP_INSECURE"); has && val == "true" {
+		otlpOptions = append(otlpOptions, otlptracegrpc.WithInsecure())
+	}
+
+	client := otlptracegrpc.NewClient(otlpOptions...)
 	exporter, err := otlptrace.New(ctx, client)
 	if err != nil {
 		b.shell.Errorf("Error creating OTLP trace exporter %s. Disabling tracing.", err)
