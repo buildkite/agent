@@ -5,8 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [3.38.0](https://github.com/buildkite/agent/tree/3.38.0) (2022-07-20)
-[Full Changelog](https://github.com/buildkite/agent/compare/v3.37.0...3.38.0)
+## [v3.39.0](https://github.com/buildkite/agent/tree/v3.39.0) (2022-09-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.38.0...v3.39.0)
+
+### Added
+- gcp:instance-name and tweak GCP labels fetching [#1742](https://github.com/buildkite/agent/pull/1742) (@pda)
+- Support for not-yet-released per-job agent tokens [#1745](https://github.com/buildkite/agent/pull/1745) (@moskyb)
+
+### Changed
+- Retry Disconnect API calls [#1761](https://github.com/buildkite/agent/pull/1761) (@pda)
+- Only search for finished artifacts [#1728](https://github.com/buildkite/agent/pull/1728) (@moskyb)
+- Cache S3 clients between artifact downloads [#1732](https://github.com/buildkite/agent/pull/1732) (@moskyb)
+- Document label edge case [#1718](https://github.com/buildkite/agent/pull/1718) (@plaindocs)
+
+### Fixed
+- Docker: run /sbin/tini without -g for graceful termination [#1763](https://github.com/buildkite/agent/pull/1763) (@pda)
+- Fix multiple-nested plugin repos on gitlab [#1746](https://github.com/buildkite/agent/pull/1746) (@moskyb)
+- Fix unowned plugin reference [#1733](https://github.com/buildkite/agent/pull/1733) (@moskyb)
+- Fix order of level names for logger.Level.String() [#1722](https://github.com/buildkite/agent/pull/1722) (@moskyb)
+- Fix warning log level [#1721](https://github.com/buildkite/agent/pull/1721) (@ChrisBr)
+
+## [v3.38.0](https://github.com/buildkite/agent/tree/v3.38.0) (2022-07-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.37.0...v3.38.0)
 
 ### Changed
 - Include a list of enabled features in the register request [#1706](https://github.com/buildkite/agent/pull/1706) (@moskyb)
