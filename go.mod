@@ -35,15 +35,15 @@ require (
 require (
 	cloud.google.com/go/compute v1.9.0
 	github.com/buildkite/roko v1.0.0
-	go.opentelemetry.io/contrib/propagators/aws v1.8.0
+	go.opentelemetry.io/contrib/propagators/aws v1.10.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.8.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.8.0
 	go.opentelemetry.io/contrib/propagators/ot v1.8.0
-	go.opentelemetry.io/otel v1.9.0
+	go.opentelemetry.io/otel v1.10.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.8.0
-	go.opentelemetry.io/otel/sdk v1.8.0
-	go.opentelemetry.io/otel/trace v1.9.0
+	go.opentelemetry.io/otel/sdk v1.10.0
+	go.opentelemetry.io/otel/trace v1.10.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 )
 
