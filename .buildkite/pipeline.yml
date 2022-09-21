@@ -107,9 +107,6 @@ steps:
           - with: { os: openbsd, arch: arm64 }
             skip: "arm64 OpenBSD is not currently supported"
 
-          - with: { os: windows, arch: arm64 }
-            skip: "arm64 Windows is not currently supported"
-
   - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
     depends_on: build-binary
