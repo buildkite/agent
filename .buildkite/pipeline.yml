@@ -139,6 +139,7 @@ steps:
         matrix:
           setup:
             - "alpine"
+            - "alpine-k8s"
             - "ubuntu-18.04"
             - "ubuntu-20.04"
             - "sidecar"

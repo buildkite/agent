@@ -54,7 +54,7 @@ codename="${3:-}"
 version="${4:-}"
 push="${PUSH_IMAGE:-true}"
 
-if [[ ! "$variant" =~ ^(alpine|ubuntu-18\.04|ubuntu-20\.04|sidecar)$ ]] ; then
+if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-18\.04|ubuntu-20\.04|sidecar)$ ]] ; then
   echo "Unknown docker variant $variant"
   exit 1
 fi
@@ -85,6 +85,9 @@ fi
 case $variant in
 alpine)
   build_docker_image "$image_tag" "packaging/docker/alpine-linux"
+  ;;
+alpine-k8s)
+  build_docker_image "$image_tag" "packaging/docker/alpine-linux-k8s"
   ;;
 ubuntu-18.04)
   build_docker_image "$image_tag" "packaging/docker/ubuntu-18.04-linux"
