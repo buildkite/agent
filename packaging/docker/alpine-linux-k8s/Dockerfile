@@ -1,4 +1,4 @@
-FROM alpine:3.16.1
+FROM alpine:3.16.1 AS base
 
 RUN apk update && apk add --no-cache \
     bash \
@@ -17,11 +17,19 @@ RUN apk update && apk add --no-cache \
     tini \
     tzdata
 
-RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" &&\
-    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl &&\
-    rm kubectl
+FROM base AS downloader
 
-RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s "/usr/local/bin/"
+WORKDIR /downloads
+
+RUN curl -fL "https://storage.googleapis.com/kubernetes-release/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o kubectl && \
+    chmod +x kubectl
+
+RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s "/downloads"
+
+FROM base AS runtime
+
+COPY --from=downloader /downloads/kubectl /usr/local/bin/kubectl
+COPY --from=downloader /downloads/kustomize /usr/local/bin/kustomize
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
