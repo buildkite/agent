@@ -21,6 +21,8 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl &&\
     rm kubectl
 
+RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s "/usr/local/bin/"
+
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
 RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
