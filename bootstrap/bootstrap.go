@@ -79,6 +79,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.PTY = b.Config.RunInPty
 		b.shell.Debug = b.Config.Debug
 		b.shell.InterruptSignal = b.Config.CancelSignal
+		b.shell.UseJsonTraceContext = b.Config.UseJsonTraceContext
 	}
 	if experiments.IsEnabled("kubernetes-exec") {
 		kubernetesClient := &kubernetes.Client{}

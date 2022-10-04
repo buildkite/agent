@@ -100,7 +100,7 @@ func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, c
 // extractTraceCtx pulls encoded distributed tracing information from the env vars.
 // Note: This should match the injectTraceCtx code in shell.
 func (b *Bootstrap) extractDDTraceCtx() opentracing.SpanContext {
-	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.Dump())
+	sctx, err := tracetools.DecodeTraceContext(b.shell.Env.Dump(), b.shell.UseJsonTraceContext)
 	if err != nil {
 		// Return nil so a new span will be created
 		return nil

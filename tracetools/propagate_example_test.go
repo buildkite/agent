@@ -35,7 +35,7 @@ func ExampleEncodeTraceContext() {
 
 		// Now say we want to launch a child process.
 		// Prepare it's env vars. This will be the carrier for the tracing data.
-		if err := EncodeTraceContext(span, childEnv); err != nil {
+		if err := EncodeTraceContext(span, childEnv, true); err != nil {
 			fmt.Println("oops an error for parent process trace injection")
 		}
 		// Now childEnv will contain the encoded data set with the env var key.
@@ -58,7 +58,7 @@ func ExampleEncodeTraceContext() {
 		// Make sure tracing is setup the same way (same env var key)
 		// Normally you'd use os.Environ or similar here (the list of strings is
 		// supported). We're just reusing childEnv for test simplicity.
-		sctx, err := DecodeTraceContext(childEnv)
+		sctx, err := DecodeTraceContext(childEnv, true)
 		if err != nil {
 			fmt.Println("oops an error for child process trace extraction")
 		} else {

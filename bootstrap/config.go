@@ -157,6 +157,9 @@ type Config struct {
 
 	// Service name to use when reporting traces.
 	TracingServiceName string
+
+	// When true, base64-JSON encoding is used for trace context propagation. Else, base64-golang-binary.
+	UseJsonTraceContext bool
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map
