@@ -1740,10 +1740,10 @@ func isPosixShell(shell []string) bool {
 }
 
 /*
-	If line is another batch script, it should be prefixed with `call ` so that
-	the second batch script doesn’t early exit our calling script.
+If line is another batch script, it should be prefixed with `call ` so that
+the second batch script doesn’t early exit our calling script.
 
-	See https://www.robvanderwoude.com/call.php
+See https://www.robvanderwoude.com/call.php
 */
 func shouldCallBatchLine(line string) bool {
 	// "  	gubiwargiub.bat /S  /e -e foo"

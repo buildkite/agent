@@ -25,30 +25,29 @@ var (
 // FromExport parses environment variables from a shell export of environment variables. On
 // *nix it looks like this:
 //
-//     $ export -p
-//     declare -x USER="keithpitt"
-//     declare -x VAR1="boom\\nboom\\nshake\\nthe\\nroom"
-//     declare -x VAR2="hello
-//     friends"
-//     declare -x VAR3="hello
-//     friends
-//     OMG=foo
-//     test"
-//     declare -x VAR4="great
-//     typeset -x TOTES=''
-//     lollies"
-//     declare -x XPC_FLAGS="0x0"
+//	$ export -p
+//	declare -x USER="keithpitt"
+//	declare -x VAR1="boom\\nboom\\nshake\\nthe\\nroom"
+//	declare -x VAR2="hello
+//	friends"
+//	declare -x VAR3="hello
+//	friends
+//	OMG=foo
+//	test"
+//	declare -x VAR4="great
+//	typeset -x TOTES=''
+//	lollies"
+//	declare -x XPC_FLAGS="0x0"
 //
 // And on Windowws...
 //
-//     $ SET
-//     SESSIONNAME=Console
-//     SystemDrive=C:
-//     SystemRoot=C:\Windows
-//     TEMP=C:\Users\IEUser\AppData\Local\Temp
-//     TMP=C:\Users\IEUser\AppData\Local\Temp
-//     USERDOMAIN=IE11WIN10
-//
+//	$ SET
+//	SESSIONNAME=Console
+//	SystemDrive=C:
+//	SystemRoot=C:\Windows
+//	TEMP=C:\Users\IEUser\AppData\Local\Temp
+//	TMP=C:\Users\IEUser\AppData\Local\Temp
+//	USERDOMAIN=IE11WIN10
 func FromExport(body string) Environment {
 	// Create the environment that we'll load values into
 	env := Environment{}

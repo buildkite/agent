@@ -23,7 +23,7 @@ import (
 // Commit:     Example Human <legit@example.com>
 // CommitDate: Thu Jan 15 11:05:16 2015 +0800
 //
-//     hello world
+//	hello world
 var commitPattern = bintest.MatchPattern(`(?ms)\Acommit [0-9a-f]+\n.*^Author:`)
 
 // Enable an experiment, returning a function to restore the previous state.
