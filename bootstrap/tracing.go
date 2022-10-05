@@ -73,7 +73,7 @@ func (b *Bootstrap) ddResourceName() string {
 // abstraction so the agent can support multiple libraries if needbe.
 func (b *Bootstrap) startTracingDatadog(ctx context.Context) (tracetools.Span, context.Context, stopper) {
 	opts := []tracer.StartOption{
-		tracer.WithServiceName("buildkite-agent"),
+		tracer.WithServiceName(b.Config.TracingServiceName),
 		tracer.WithSampler(tracer.NewAllSampler()),
 		tracer.WithAnalytics(true),
 	}
@@ -132,7 +132,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 	}
 
 	attributes := []attribute.KeyValue{
-		semconv.ServiceNameKey.String("buildkite-agent"),
+		semconv.ServiceNameKey.String(b.Config.TracingServiceName),
 		semconv.ServiceVersionKey.String(agent.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}

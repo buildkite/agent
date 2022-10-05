@@ -145,6 +145,9 @@ type Config struct {
 
 	// Backend to use for tracing. If an empty string, no tracing will occur.
 	TracingBackend string
+
+	// Service name to use when reporting traces.
+	TracingServiceName string
 }
 
 // ReadFromEnvironment reads configuration from the Environment, returns a map

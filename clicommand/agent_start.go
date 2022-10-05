@@ -101,6 +101,7 @@ type AgentStartConfig struct {
 	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
 	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
 	TracingBackend              string   `cli:"tracing-backend"`
+	TracingServiceName          string   `cli:"tracing-service-name"`
 	Spawn                       int      `cli:"spawn"`
 	SpawnWithPriority           bool     `cli:"spawn-with-priority"`
 	LogFormat                   string   `cli:"log-format"`
@@ -510,6 +511,12 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
+		cli.StringFlag{
+			Name:   "tracing-service-name",
+			Usage:  "Service name to use when reporting traces.",
+			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
+			Value:  "buildkite-agent",
+		},
 
 		// API Flags
 		AgentRegisterTokenFlag,
@@ -732,6 +739,7 @@ var AgentStartCommand = cli.Command{
 			RedactedVars:               cfg.RedactedVars,
 			AcquireJob:                 cfg.AcquireJob,
 			TracingBackend:             cfg.TracingBackend,
+			TracingServiceName:         cfg.TracingServiceName,
 		}
 
 		if loader.File != nil {

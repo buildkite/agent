@@ -88,6 +88,7 @@ type BootstrapConfig struct {
 	CancelSignal                 string   `cli:"cancel-signal"`
 	RedactedVars                 []string `cli:"redacted-vars" normalize:"list"`
 	TracingBackend               string   `cli:"tracing-backend"`
+	TracingServiceName           string   `cli:"tracing-service-name"`
 }
 
 var BootstrapCommand = cli.Command{
@@ -329,6 +330,12 @@ var BootstrapCommand = cli.Command{
 			EnvVar: "BUILDKITE_TRACING_BACKEND",
 			Value:  "",
 		},
+		cli.StringFlag{
+			Name:   "tracing-service-name",
+			Usage:  "Service name to use when reporting traces.",
+			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
+			Value:  "buildkite-agent",
+		},
 		DebugFlag,
 		LogLevelFlag,
 		ExperimentsFlag,
@@ -426,6 +433,7 @@ var BootstrapCommand = cli.Command{
 			Shell:                        cfg.Shell,
 			Tag:                          cfg.Tag,
 			TracingBackend:               cfg.TracingBackend,
+			TracingServiceName:           cfg.TracingServiceName,
 		})
 
 		ctx, cancel := context.WithCancel(context.Background())

@@ -33,4 +33,5 @@ type AgentConfiguration struct {
 	RedactedVars               []string
 	AcquireJob                 string
 	TracingBackend             string
+	TracingServiceName         string
 }
