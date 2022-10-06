@@ -348,6 +348,7 @@ func (r *JobRunner) Run() error {
 
 			// Collect the finished process' exit status
 			exitStatus = fmt.Sprintf("%d", r.process.WaitStatus().ExitStatus())
+			r.logger.Warn("Process exited with status %s", exitStatus)
 			if ws := r.process.WaitStatus(); ws.Signaled() {
 				signal = process.SignalString(ws.Signal())
 			}
@@ -444,9 +445,9 @@ func (r *JobRunner) Cancel() error {
 	r.cancelled = true
 
 	// First we interrupt the process (ctrl-c or SIGINT)
-	if err := r.process.Interrupt(); err != nil {
-		return err
-	}
+	// if err := r.process.Interrupt(); err != nil {
+	// 	return err
+	// }
 
 	select {
 	// Grace period for cancelling
