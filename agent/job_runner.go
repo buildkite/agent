@@ -683,20 +683,22 @@ func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 }
 
 // Starts the job in the Buildkite Agent API. We'll retry on connection-related
-// issues, but if a connection succeeds and we get an error response back from
+// issues, but if a connection succeeds and we get an client error response back from
 // Buildkite, we won't bother retrying. For example, a "no such host" will
-// retry, but a 422 from Buildkite won't.
+// retry, but an HTTP response from Buildkite that isn't retryable won't.
 func (r *JobRunner) startJob(startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
 	return roko.NewRetrier(
-		roko.WithMaxAttempts(30),
-		roko.WithStrategy(roko.Constant(5*time.Second)),
+		roko.WithMaxAttempts(7),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 	).Do(func(rtr *roko.Retrier) error {
-		_, err := r.apiClient.StartJob(r.job)
+		response, err := r.apiClient.StartJob(r.job)
 
 		if err != nil {
-			if api.IsRetryableError(err) {
+			if response != nil && api.IsRetryableStatus(response) {
+				r.logger.Warn("%s (%s)", err, rtr)
+			} else if api.IsRetryableError(err) {
 				r.logger.Warn("%s (%s)", err, rtr)
 			} else {
 				r.logger.Warn("Buildkite rejected the call to start the job (%s)", err)
