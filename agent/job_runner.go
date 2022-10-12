@@ -658,7 +658,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	if r.conf.AgentConfiguration.UseJsonTraceContext {
-		env["BUILDKITE_USE_JSON_TRACING_CONTEXT"] = "true"
+		env["BUILDKITE_USE_JSON_TRACE_CONTEXT"] = "true"
 	}
 
 	// see documentation for BuildkiteMessageMax

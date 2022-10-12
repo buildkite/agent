@@ -361,7 +361,7 @@ var BootstrapCommand = cli.Command{
 		cli.BoolFlag{
 			Name:   "use-json-trace-context",
 			Usage:  "Uses base-64 JSON encoding when propagating traces through environment variables. When false, base64 golang-binary encoding will be used.",
-			EnvVar: "BUILDKITE_USE_JSON_TRACING_CONTEXT",
+			EnvVar: "BUILDKITE_USE_JSON_TRACE_CONTEXT",
 		},
 		DebugFlag,
 		LogLevelFlag,
