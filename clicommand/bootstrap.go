@@ -359,7 +359,7 @@ var BootstrapCommand = cli.Command{
 			Value:  "buildkite-agent",
 		},
 		cli.BoolFlag{
-			Name:   "use-json-tracing-context",
+			Name:   "use-json-trace-context",
 			Usage:  "Uses base-64 JSON encoding when propagating traces through environment variables. When false, base64 golang-binary encoding will be used.",
 			EnvVar: "BUILDKITE_USE_JSON_TRACING_CONTEXT",
 		},
