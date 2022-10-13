@@ -179,6 +179,11 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	}
 	defer tester.Close()
 
+	agent := tester.MockAgent(t)
+	agent.
+		Expect("meta-data", "exists", "buildkite:git:commit").
+		AndExitWith(0)
+
 	if runtime.GOOS == "windows" {
 		t.Skip("Not implemented for windows yet")
 	}
@@ -367,7 +372,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			}
 			defer tester.Close()
 
-			agent := tester.MustMock(t, "buildkite-agent")
+			agent := tester.MockAgent(t)
 
 			tester.ExpectGlobalHook(tc.failingHook).
 				Once().
