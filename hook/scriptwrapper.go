@@ -2,8 +2,8 @@ package hook
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,26 +20,26 @@ const (
 
 	batchScript = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-SET > "{{.BeforeEnvFileName}}"
+buildkite-agent env > "{{.BeforeEnvFileName}}"
 CALL "{{.PathToHook}}"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%CD%
-SET > "{{.AfterEnvFileName}}"
+buildkite-agent env > "{{.AfterEnvFileName}}"
 EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
 
 	powershellScript = `$ErrorActionPreference = "STOP"
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.BeforeEnvFileName}}"
+buildkite-agent env | Set-Content "{{.BeforeEnvFileName}}"
 {{.PathToHook}}
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.AfterEnvFileName}}"
+buildkite-agent env | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
-	bashScript = `export -p > "{{.BeforeEnvFileName}}"
+	bashScript = `buildkite-agent env > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR=$PWD
-export -p > "{{.AfterEnvFileName}}"
+buildkite-agent env > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
@@ -220,18 +220,29 @@ func (wrap *ScriptWrapper) Close() {
 
 // Changes returns the changes in the environment and working dir after the hook script runs
 func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
-	beforeEnvContents, err := ioutil.ReadFile(wrap.beforeEnvFile.Name())
+	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvFile.Name())
 	if err != nil {
 		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
 	}
 
-	afterEnvContents, err := ioutil.ReadFile(wrap.afterEnvFile.Name())
+	afterEnvContents, err := os.ReadFile(wrap.afterEnvFile.Name())
 	if err != nil {
 		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
 	}
 
-	beforeEnv := env.FromExport(string(beforeEnvContents))
-	afterEnv := env.FromExport(string(afterEnvContents))
+	var (
+		beforeEnv env.Environment
+		afterEnv  env.Environment
+	)
+	err = json.Unmarshal(beforeEnvContents, &beforeEnv)
+	if err != nil {
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %q", err, string(beforeEnvContents))
+	}
+
+	err = json.Unmarshal(afterEnvContents, &afterEnv)
+	if err != nil {
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %q", err, string(afterEnvContents))
+	}
 
 	if afterEnv.Length() == 0 {
 		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
@@ -242,7 +253,7 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	// Pluck the after wd from the diff before removing the key from the diff
 	afterWd := ""
 	if afterWd == "" {
-		afterWd, _ = diff.Added[hookWorkingDirEnv]
+		afterWd = diff.Added[hookWorkingDirEnv]
 	}
 	if afterWd == "" {
 		if change, ok := diff.Changed[hookWorkingDirEnv]; ok {
