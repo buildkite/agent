@@ -158,17 +158,6 @@ func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 	return mock, err
 }
 
-// MockAgent creates a mock for the buildkite-agent binary
-func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
-	agent := b.MustMock(t, "buildkite-agent")
-	agent.Expect("env").
-		Min(0).
-		Max(bintest.InfiniteTimes).
-		AndCallFunc(mockEnvAsJSONOnStdout(b))
-
-	return agent
-}
-
 // MustMock will fail the test if creating the mock fails
 func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	mock, err := b.Mock(name)
@@ -186,6 +175,17 @@ func (b *BootstrapTester) HasMock(name string) bool {
 		}
 	}
 	return false
+}
+
+// MockAgent creates a mock for the buildkite-agent binary
+func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
+	agent := b.MustMock(t, "buildkite-agent")
+	agent.Expect("env").
+		Min(0).
+		Max(bintest.InfiniteTimes).
+		AndCallFunc(mockEnvAsJSONOnStdout(b))
+
+	return agent
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
