@@ -505,6 +505,7 @@ func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
 		`org`:      acceptResponse.Env[`BUILDKITE_ORGANIZATION_SLUG`],
 		`branch`:   acceptResponse.Env[`BUILDKITE_BRANCH`],
 		`source`:   acceptResponse.Env[`BUILDKITE_SOURCE`],
+		`queue`:    acceptResponse.Env[`BUILDKITE_AGENT_META_DATA_QUEUE`],
 	})
 
 	defer func() {
