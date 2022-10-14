@@ -171,8 +171,6 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
-	t.Parallel()
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
@@ -367,7 +365,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			}
 			defer tester.Close()
 
-			agent := tester.MustMock(t, "buildkite-agent")
+			agent := tester.MockAgent(t)
 
 			tester.ExpectGlobalHook(tc.failingHook).
 				Once().

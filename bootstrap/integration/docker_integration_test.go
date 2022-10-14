@@ -24,7 +24,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -57,7 +57,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -91,7 +91,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -130,7 +130,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -163,7 +163,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -203,7 +203,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -237,7 +237,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)

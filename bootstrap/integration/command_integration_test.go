@@ -50,7 +50,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)

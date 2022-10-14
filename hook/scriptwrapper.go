@@ -2,8 +2,8 @@ package hook
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -35,11 +35,11 @@ $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
 Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
-	bashScript = `export -p > "{{.BeforeEnvFileName}}"
+	bashScript = `buildkite-agent env > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR=$PWD
-export -p > "{{.AfterEnvFileName}}"
+buildkite-agent env > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
@@ -220,21 +220,42 @@ func (wrap *ScriptWrapper) Close() {
 
 // Changes returns the changes in the environment and working dir after the hook script runs
 func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
-	beforeEnvContents, err := ioutil.ReadFile(wrap.beforeEnvFile.Name())
+	beforeEnvContents, err := os.ReadFile(wrap.beforeEnvFile.Name())
 	if err != nil {
 		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.beforeEnvFile.Name(), err)
 	}
 
-	afterEnvContents, err := ioutil.ReadFile(wrap.afterEnvFile.Name())
+	afterEnvContents, err := os.ReadFile(wrap.afterEnvFile.Name())
 	if err != nil {
 		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
 	}
 
-	beforeEnv := env.FromExport(string(beforeEnvContents))
-	afterEnv := env.FromExport(string(afterEnvContents))
-
-	if afterEnv.Length() == 0 {
+	// An empty afterEnvFile indicates that the hook early-exited from within the
+	// ScriptWrapper, so the working directory and environment changes weren't
+	// captured.
+	if len(afterEnvContents) == 0 {
 		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
+	}
+
+	var (
+		beforeEnv env.Environment
+		afterEnv  env.Environment
+	)
+
+	if runtime.GOOS == "windows" {
+		// TODO: Delete this code branch and parse everything from `buildkite-agent env` output. Everything should work fine on Windows.
+		beforeEnv = env.FromExport(string(beforeEnvContents))
+		afterEnv = env.FromExport(string(afterEnvContents))
+	} else {
+		err = json.Unmarshal(beforeEnvContents, &beforeEnv)
+		if err != nil {
+			return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %q", err, string(beforeEnvContents))
+		}
+
+		err = json.Unmarshal(afterEnvContents, &afterEnv)
+		if err != nil {
+			return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %q", err, string(afterEnvContents))
+		}
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
@@ -242,7 +263,7 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	// Pluck the after wd from the diff before removing the key from the diff
 	afterWd := ""
 	if afterWd == "" {
-		afterWd, _ = diff.Added[hookWorkingDirEnv]
+		afterWd = diff.Added[hookWorkingDirEnv]
 	}
 	if afterWd == "" {
 		if change, ok := diff.Changed[hookWorkingDirEnv]; ok {
