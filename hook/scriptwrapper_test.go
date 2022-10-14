@@ -38,10 +38,15 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		}
 	}
 
-	agent, cleanup, err := mockAgent()
-	require.NoError(t, err)
+	var agent *bintest.Mock
+	if runtime.GOOS != "windows" {
+		var cleanup func()
+		var err error
+		agent, cleanup, err = mockAgent()
+		require.NoError(t, err)
 
-	defer cleanup()
+		defer cleanup()
+	}
 
 	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
@@ -76,8 +81,10 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	// environment variables
 	assert.Equal(t, expected, actual)
 
-	err = agent.CheckAndClose(t)
-	require.NoError(t, err)
+	if runtime.GOOS != "windows" {
+		err = agent.CheckAndClose(t)
+		require.NoError(t, err)
+	}
 }
 
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
@@ -103,11 +110,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	// See: https://pkg.go.dev/fmt > ctrl-f for "%%"
 	scriptTemplate := `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-buildkite-agent env > "%s"
+SET > "%s"
 CALL "%s"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%%CD%%
-buildkite-agent env > "%s"
+SET > "%s"
 EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -133,11 +140,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	defer wrapper.Close()
 
 	scriptTemplate := `$ErrorActionPreference = "STOP"
-buildkite-agent env | Set-Content "%s"
+Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
 %s
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-buildkite-agent env | Set-Content "%s"
+Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -173,10 +180,15 @@ exit $BUILDKITE_HOOK_EXIT_STATUS`
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
-	agent, cleanup, err := mockAgent()
-	require.NoError(t, err)
+	var agent *bintest.Mock
+	if runtime.GOOS != "windows" {
+		var cleanup func()
+		var err error
+		agent, cleanup, err = mockAgent()
+		require.NoError(t, err)
 
-	defer cleanup()
+		defer cleanup()
+	}
 
 	tempDir, err := ioutil.TempDir("", "hookwrapperdir")
 	if err != nil {
@@ -239,8 +251,10 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		t.Fatalf("Expected working dir of %q, got %q", expected, changesDir)
 	}
 
-	err = agent.CheckAndClose(t)
-	require.NoError(t, err)
+	if runtime.GOOS != "windows" {
+		err = agent.CheckAndClose(t)
+		require.NoError(t, err)
+	}
 }
 
 func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
