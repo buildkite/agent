@@ -53,12 +53,18 @@ var EnvCommand = cli.Command{
 			envJSON, err = json.Marshal(envMap)
 		}
 
+		// let's be polite to interactive shells etc.
+		envJSON = append(envJSON, '\n')
+
 		if err != nil {
-			fmt.Printf("Error marshalling JSON: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error marshalling JSON: %v\n", err)
 			os.Exit(1)
 		}
 
-		fmt.Println(string(envJSON))
+		if _, err := os.Stdout.Write(envJSON); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing JSON to stdout: %v\n", err)
+			os.Exit(1)
+		}
 
 		return nil
 	},
