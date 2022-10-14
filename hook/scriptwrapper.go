@@ -230,6 +230,13 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 		return HookScriptChanges{}, fmt.Errorf("Failed to read \"%s\" (%s)", wrap.afterEnvFile.Name(), err)
 	}
 
+	// An empty afterEnvFile indicates that the hook early-exited from within the
+	// ScriptWrapper, so the working directory and environment changes weren't
+	// captured.
+	if len(afterEnvContents) == 0 {
+		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
+	}
+
 	var (
 		beforeEnv env.Environment
 		afterEnv  env.Environment
@@ -249,10 +256,6 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 		if err != nil {
 			return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %q", err, string(afterEnvContents))
 		}
-	}
-
-	if afterEnv.Length() == 0 {
-		return HookScriptChanges{}, &HookExitError{hookPath: wrap.hookPath}
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
