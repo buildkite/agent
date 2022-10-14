@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.39.0...v3.39.1)
 
 ### Security
-- Replace use of export -p with a dedicated agent command for printing environment [#1781](https://github.com/buildkite/agent/pull/1781) (@moskyb)
+- Fix security issue where in certain situations, agents using bash v5.2 could have some environment variables leak to job logs. See the [issue](https://github.com/buildkite/agent/issues/1780) and [our security advisory](https://buildkite.com/changelog/167-security-advisory-for-buildkite-agent-and-bash-5-dot-2) for more information. [#1781](https://github.com/buildkite/agent/pull/1781) (@moskyb)
 
 ## [v3.39.0](https://github.com/buildkite/agent/tree/v3.39.0) (2022-09-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.38.0...v3.39.0)
