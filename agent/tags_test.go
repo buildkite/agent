@@ -82,6 +82,32 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 		[]string{"custom_tag=true"})
 }
 
+func TestFetchingTagsFromECS(t *testing.T) {
+	fetcher := &tagFetcher{
+		ecsMetaDataDefault: func() (map[string]string, error) {
+			return map[string]string{
+				`ecs:container-name`: "ecs-buildkite-agent-blahblah",
+				`ecs:image`:          "buildkite/agent",
+				"ecs:task-arn":       "arn:aws:ecs:us-east-1:123456789012:task/MyCluster/4d590253bb114126b7afa7b58EXAMPLE",
+			}, nil
+		},
+	}
+
+	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
+		Tags:                []string{"llamas", "rock"},
+		TagsFromECSMetaData: true,
+	})
+
+	assert.ElementsMatch(t, tags,
+		[]string{
+			"llamas",
+			"rock",
+			"ecs:container-name=ecs-buildkite-agent-blahblah",
+			"ecs:image=buildkite/agent",
+			"ecs:task-arn=arn:aws:ecs:us-east-1:123456789012:task/MyCluster/4d590253bb114126b7afa7b58EXAMPLE",
+		})
+}
+
 func TestFetchingTagsFromGCP(t *testing.T) {
 	// Force test coverage of retry code, at the cost of 1000-2000ms.
 	// This could be removed/improved later if we want faster tests.
@@ -132,6 +158,9 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		ec2MetaDataDefault: func() (map[string]string, error) {
 			return map[string]string{`ec2_metadata`: "true"}, nil
 		},
+		ecsMetaDataDefault: func() (map[string]string, error) {
+			return map[string]string{`ecs_metadata`: "true"}, nil
+		},
 		ec2MetaDataPaths: func(paths map[string]string) (map[string]string, error) {
 			assert.Equal(t, paths, map[string]string{"tag": "some/ec2/value"})
 			return map[string]string{`ec2_metadata_paths`: "true"}, nil
@@ -145,6 +174,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		TagsFromGCPLabels:        true,
 		TagsFromHost:             true,
 		TagsFromEC2MetaData:      true,
+		TagsFromECSMetaData:      true,
 		TagsFromEC2MetaDataPaths: []string{"tag=some/ec2/value"},
 		TagsFromEC2Tags:          true,
 	})
@@ -161,6 +191,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 	assert.Contains(t, tags, "gcp_labels=true")
 	assert.Contains(t, tags, "ec2_tags=true")
 	assert.Contains(t, tags, "ec2_metadata=true")
+	assert.Contains(t, tags, "ecs_metadata=true")
 	assert.Contains(t, tags, "ec2_metadata_paths=true")
 	assert.Contains(t, tags, "hostname="+hostname)
 	assert.Contains(t, tags, "os="+runtime.GOOS)

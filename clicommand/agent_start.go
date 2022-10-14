@@ -75,12 +75,14 @@ type AgentStartConfig struct {
 	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
 	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
 	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
+	TagsFromECSMetaData         bool     `cli:"tags-from-ecs-meta-data"`
 	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
 	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
 	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
 	TagsFromHost                bool     `cli:"tags-from-host"`
 	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
 	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForECSMetaDataTimeout   string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
 	GitCloneFlags               string   `cli:"git-clone-flags"`
 	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
@@ -314,6 +316,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Include the host's EC2 tags as tags",
 			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
 		},
+		cli.BoolFlag{
+			Name:   "tags-from-ecs-meta-data",
+			Usage:  "Include the host's ECS meta-data as tags (container-name, image, and task-arn)",
+			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_ECS_META_DATA",
+		},
 		cli.StringSliceFlag{
 			Name:   "tags-from-gcp-meta-data",
 			Value:  &cli.StringSlice{},
@@ -341,6 +348,12 @@ var AgentStartCommand = cli.Command{
 			Name:   "wait-for-ec2-meta-data-timeout",
 			Usage:  "The amount of time to wait for meta-data from EC2 before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_META_DATA_TIMEOUT",
+			Value:  time.Second * 10,
+		},
+		cli.DurationFlag{
+			Name:   "wait-for-ecs-meta-data-timeout",
+			Usage:  "The amount of time to wait for meta-data from ECS before proceeding",
+			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_ECS_META_DATA_TIMEOUT",
 			Value:  time.Second * 10,
 		},
 		cli.DurationFlag{
@@ -694,6 +707,15 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
+		var ecsMetaDataTimeout time.Duration
+		if t := cfg.WaitForECSMetaDataTimeout; t != "" {
+			var err error
+			ecsMetaDataTimeout, err = time.ParseDuration(t)
+			if err != nil {
+				l.Fatal("Failed to parse ecs meta-data timeout: %v", err)
+			}
+		}
+
 		var gcpLabelsTimeout time.Duration
 		if t := cfg.WaitForGCPLabelsTimeout; t != "" {
 			var err error
@@ -834,12 +856,14 @@ var AgentStartCommand = cli.Command{
 				TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
 				TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 				TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
+				TagsFromECSMetaData:       cfg.TagsFromECSMetaData,
 				TagsFromGCPMetaData:       (cfg.TagsFromGCPMetaData || cfg.TagsFromGCP),
 				TagsFromGCPMetaDataPaths:  cfg.TagsFromGCPMetaDataPaths,
 				TagsFromGCPLabels:         cfg.TagsFromGCPLabels,
 				TagsFromHost:              cfg.TagsFromHost,
 				WaitForEC2TagsTimeout:     ec2TagTimeout,
 				WaitForEC2MetaDataTimeout: ec2MetaDataTimeout,
+				WaitForECSMetaDataTimeout: ecsMetaDataTimeout,
 				WaitForGCPLabelsTimeout:   gcpLabelsTimeout,
 			}),
 			// We only want this agent to be ingored in Buildkite

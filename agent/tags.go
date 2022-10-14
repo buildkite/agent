@@ -21,12 +21,14 @@ type FetchTagsConfig struct {
 	TagsFromEC2MetaData       bool
 	TagsFromEC2MetaDataPaths  []string
 	TagsFromEC2Tags           bool
+	TagsFromECSMetaData       bool
 	TagsFromGCPMetaData       bool
 	TagsFromGCPMetaDataPaths  []string
 	TagsFromGCPLabels         bool
 	TagsFromHost              bool
 	WaitForEC2TagsTimeout     time.Duration
 	WaitForEC2MetaDataTimeout time.Duration
+	WaitForECSMetaDataTimeout time.Duration
 	WaitForGCPLabelsTimeout   time.Duration
 }
 
@@ -41,6 +43,9 @@ func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []str
 		},
 		ec2Tags: func() (map[string]string, error) {
 			return EC2Tags{}.Get()
+		},
+		ecsMetaDataDefault: func() (map[string]string, error) {
+			return ECSMetadata{}.Get()
 		},
 		gcpMetaDataDefault: func() (map[string]string, error) {
 			return GCPMetaData{}.Get()
@@ -59,6 +64,7 @@ type tagFetcher struct {
 	ec2MetaDataDefault func() (map[string]string, error)
 	ec2MetaDataPaths   func(map[string]string) (map[string]string, error)
 	ec2Tags            func() (map[string]string, error)
+	ecsMetaDataDefault func() (map[string]string, error)
 	gcpMetaDataDefault func() (map[string]string, error)
 	gcpMetaDataPaths   func(map[string]string) (map[string]string, error)
 	gcpLabels          func() (map[string]string, error)
@@ -163,6 +169,35 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 		// Don't blow up if we can't find them, just show a nasty error.
 		if err != nil {
 			l.Error(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
+		}
+	}
+
+	// Attempt to add the default ECS meta-data tags
+	if conf.TagsFromECSMetaData {
+		l.Info("Fetching ECS meta-data...")
+
+		err := roko.NewRetrier(
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.Constant(conf.WaitForECSMetaDataTimeout/5)),
+			roko.WithJitter(),
+		).Do(func(r *roko.Retrier) error {
+			ecsTags, err := t.ecsMetaDataDefault()
+			if err != nil {
+				l.Warn("%s (%s)", err, r)
+			} else {
+				l.Info("Successfully fetched ECS meta-data")
+				for tag, value := range ecsTags {
+					tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
+				}
+				r.Break()
+			}
+
+			return err
+		})
+
+		// Don't blow up if we can't find them, just show a nasty error.
+		if err != nil {
+			l.Error(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
 		}
 	}
 
