@@ -27,7 +27,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 	})
 
 	// Mock out the artifact calls
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -56,7 +56,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	})
 
 	// Mock out the artifact calls
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)
@@ -91,7 +91,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	})
 
 	// Mock out the artifact calls
-	agent := tester.MustMock(t, "buildkite-agent")
+	agent := tester.MockAgent(t)
 	agent.
 		Expect("meta-data", "exists", "buildkite:git:commit").
 		AndExitWith(0)

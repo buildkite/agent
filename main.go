@@ -105,6 +105,7 @@ func main() {
 				clicommand.StepUpdateCommand,
 			},
 		},
+		clicommand.EnvCommand,
 		clicommand.BootstrapCommand,
 	}
 

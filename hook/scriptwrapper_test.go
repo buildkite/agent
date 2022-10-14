@@ -2,21 +2,23 @@ package hook
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
-	t.Parallel()
-
 	ctx := context.Background()
 	var script []string
 
@@ -34,6 +36,16 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 			"set Alpacas=are ok",
 			"echo hello world",
 		}
+	}
+
+	var agent *bintest.Mock
+	if runtime.GOOS != "windows" {
+		var cleanup func()
+		var err error
+		agent, cleanup, err = mockAgent()
+		require.NoError(t, err)
+
+		defer cleanup()
 	}
 
 	wrapper := newTestScriptWrapper(t, script)
@@ -68,6 +80,11 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	// internal BUILDKITE_HOOK_EXIT_STATUS and BUILDKITE_HOOK_WORKING_DIR
 	// environment variables
 	assert.Equal(t, expected, actual)
+
+	if runtime.GOOS != "windows" {
+		err = agent.CheckAndClose(t)
+		require.NoError(t, err)
+	}
 }
 
 func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
@@ -152,18 +169,26 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 
 	defer wrapper.Close()
 
-	scriptTemplate := `export -p > "%s"
+	scriptTemplate := `buildkite-agent env > "%s"
 . "%s"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR=$PWD
-export -p > "%s"
+buildkite-agent env > "%s"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
-	t.Parallel()
+	var agent *bintest.Mock
+	if runtime.GOOS != "windows" {
+		var cleanup func()
+		var err error
+		agent, cleanup, err = mockAgent()
+		require.NoError(t, err)
+
+		defer cleanup()
+	}
 
 	tempDir, err := ioutil.TempDir("", "hookwrapperdir")
 	if err != nil {
@@ -225,6 +250,11 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	if changesDir != expected {
 		t.Fatalf("Expected working dir of %q, got %q", expected, changesDir)
 	}
+
+	if runtime.GOOS != "windows" {
+		err = agent.CheckAndClose(t)
+		require.NoError(t, err)
+	}
 }
 
 func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
@@ -261,4 +291,53 @@ func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper
 	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvFile.Name(), hookFileName, wrapper.afterEnvFile.Name())
 
 	assert.Equal(t, expected, string(wrapperScriptContents))
+}
+
+func mockAgent() (*bintest.Mock, func(), error) {
+	tmpPathDir, err := os.MkdirTemp("", "scriptwrapper-path")
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	oldPath := os.Getenv("PATH")
+	os.Setenv("PATH", tmpPathDir+string(os.PathListSeparator)+oldPath)
+
+	cleanup := func() {
+		err := os.Setenv("PATH", oldPath)
+		if err != nil {
+			panic(err)
+		}
+
+		err = os.RemoveAll(tmpPathDir)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	agent, err := bintest.NewMock(filepath.Join(tmpPathDir, "buildkite-agent"))
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	agent.Expect("env").
+		Exactly(2).
+		AndCallFunc(func(c *bintest.Call) {
+			envMap := map[string]string{}
+
+			for _, e := range c.Env { // The env from the call
+				k, v, _ := strings.Cut(e, "=")
+				envMap[k] = v
+			}
+
+			envJSON, err := json.Marshal(envMap)
+			if err != nil {
+				fmt.Println("Failed to marshal env map in mocked agent call:", err)
+				c.Exit(1)
+			}
+
+			c.Stdout.Write(envJSON)
+			c.Exit(0)
+		})
+
+	return agent, cleanup, nil
 }

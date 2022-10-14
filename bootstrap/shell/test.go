@@ -21,6 +21,7 @@ func NewTestShell(t *testing.T) *Shell {
 
 	if os.Getenv(`DEBUG_SHELL`) == "1" {
 		sh.Logger = TestingLogger{T: t}
+		sh.Writer = os.Stdout
 	}
 
 	// Windows requires certain env variables to be present

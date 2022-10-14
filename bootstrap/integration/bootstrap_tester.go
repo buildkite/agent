@@ -3,6 +3,7 @@ package integration
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -176,6 +177,17 @@ func (b *BootstrapTester) HasMock(name string) bool {
 	return false
 }
 
+// MockAgent creates a mock for the buildkite-agent binary
+func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
+	agent := b.MustMock(t, "buildkite-agent")
+	agent.Expect("env").
+		Min(0).
+		Max(bintest.InfiniteTimes).
+		AndCallFunc(mockEnvAsJSONOnStdout(b))
+
+	return agent
+}
+
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
 func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir string, args ...string) (string, error) {
 	hookScript := filepath.Join(dir, name)
@@ -234,7 +246,7 @@ func (b *BootstrapTester) ExpectGlobalHook(name string) *bintest.Expectation {
 func (b *BootstrapTester) Run(t *testing.T, env ...string) error {
 	// Mock out the meta-data calls to the agent after checkout
 	if !b.HasMock("buildkite-agent") {
-		agent := b.MustMock(t, "buildkite-agent")
+		agent := b.MockAgent(t)
 		agent.
 			Expect("meta-data", "exists", "buildkite:git:commit").
 			Optionally().
@@ -346,6 +358,31 @@ func (b *BootstrapTester) Close() error {
 		}
 	}
 	return nil
+}
+
+func mockEnvAsJSONOnStdout(b *BootstrapTester) func(c *bintest.Call) {
+	return func(c *bintest.Call) {
+		envMap := map[string]string{}
+
+		for _, e := range b.Env { // The env from the bootstrap tester
+			k, v, _ := strings.Cut(e, "=")
+			envMap[k] = v
+		}
+
+		for _, e := range c.Env { // The env from the call
+			k, v, _ := strings.Cut(e, "=")
+			envMap[k] = v
+		}
+
+		envJSON, err := json.Marshal(envMap)
+		if err != nil {
+			fmt.Println("Failed to marshal env map in mocked agent call:", err)
+			c.Exit(1)
+		}
+
+		c.Stdout.Write(envJSON)
+		c.Exit(0)
+	}
 }
 
 type testLogWriter struct {
