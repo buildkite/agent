@@ -10,7 +10,11 @@ import "runtime"
 //
 // Pre-release builds' versions must be in the format `x.y-beta`, `x.y-beta.z` or `x.y-beta.z.a`
 
-var baseVersion string = "3.39.0"
+var baseVersion string = "3.39.1"
+
+// This comment is needed to prevent formatters from combining this `var` with the one above
+// a step in the pipeline parses this file (as text) for lines of the form `var baseVersion string = `
+// See .builkite/steps/extract-base-version-metadata.sh:4
 var buildVersion string = ""
 
 func Version() string {
