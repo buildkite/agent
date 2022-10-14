@@ -171,8 +171,6 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
-	t.Parallel()
-
 	tester, err := NewBootstrapTester()
 	if err != nil {
 		t.Fatal(err)
