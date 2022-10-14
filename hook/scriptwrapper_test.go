@@ -329,13 +329,13 @@ func mockAgent() (*bintest.Mock, func(), error) {
 				envMap[k] = v
 			}
 
-			envJson, err := json.Marshal(envMap)
+			envJSON, err := json.Marshal(envMap)
 			if err != nil {
 				fmt.Println("Failed to marshal env map in mocked agent call:", err)
 				c.Exit(1)
 			}
 
-			c.Stdout.Write(envJson)
+			c.Stdout.Write(envJSON)
 			c.Exit(0)
 		})
 

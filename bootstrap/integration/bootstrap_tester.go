@@ -164,7 +164,7 @@ func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
 	agent.Expect("env").
 		Min(0).
 		Max(bintest.InfiniteTimes).
-		AndCallFunc(kindaMockedBuildkiteAgentEnv(b))
+		AndCallFunc(mockEnvAsJSONOnStdout(b))
 
 	return agent
 }
@@ -360,7 +360,7 @@ func (b *BootstrapTester) Close() error {
 	return nil
 }
 
-func kindaMockedBuildkiteAgentEnv(b *BootstrapTester) func(c *bintest.Call) {
+func mockEnvAsJSONOnStdout(b *BootstrapTester) func(c *bintest.Call) {
 	return func(c *bintest.Call) {
 		envMap := map[string]string{}
 
@@ -374,13 +374,13 @@ func kindaMockedBuildkiteAgentEnv(b *BootstrapTester) func(c *bintest.Call) {
 			envMap[k] = v
 		}
 
-		envJson, err := json.Marshal(envMap)
+		envJSON, err := json.Marshal(envMap)
 		if err != nil {
 			fmt.Println("Failed to marshal env map in mocked agent call:", err)
 			c.Exit(1)
 		}
 
-		c.Stdout.Write(envJson)
+		c.Stdout.Write(envJSON)
 		c.Exit(0)
 	}
 }
