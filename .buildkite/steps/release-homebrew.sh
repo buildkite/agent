@@ -131,7 +131,7 @@ if [[ "${DRY_RUN:-}" == "false" ]] ; then
       -H "Authorization: token ${GITHUB_RELEASE_ACCESS_TOKEN}" \
       -H "Content-Type: application/json" \
       --data-binary "@pkg/github_post_data.json" \
-      --fail
+      --fail-with-body
 else
   echo "Dry Run Mode: skipping commit on github"
 fi
