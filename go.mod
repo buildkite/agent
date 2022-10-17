@@ -27,7 +27,7 @@ require (
 	github.com/urfave/cli v1.22.9
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	golang.org/x/oauth2 v0.0.0-20220622183110-fd043fe589d2
-	golang.org/x/sys v0.0.0-20220624220833-87e55d714810
+	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8
 	google.golang.org/api v0.91.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.40.1
 )
@@ -35,15 +35,15 @@ require (
 require (
 	cloud.google.com/go/compute v1.9.0
 	github.com/buildkite/roko v1.0.0
-	go.opentelemetry.io/contrib/propagators/aws v1.8.0
+	go.opentelemetry.io/contrib/propagators/aws v1.11.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.8.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.8.0
 	go.opentelemetry.io/contrib/propagators/ot v1.8.0
-	go.opentelemetry.io/otel v1.9.0
+	go.opentelemetry.io/otel v1.11.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.8.0
-	go.opentelemetry.io/otel/sdk v1.8.0
-	go.opentelemetry.io/otel/trace v1.9.0
+	go.opentelemetry.io/otel/sdk v1.11.0
+	go.opentelemetry.io/otel/trace v1.11.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 )
 
