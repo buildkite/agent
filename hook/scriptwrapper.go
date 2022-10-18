@@ -20,19 +20,19 @@ const (
 
 	batchScript = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-SET > "{{.BeforeEnvFileName}}"
+buildkite-agent env > "{{.BeforeEnvFileName}}"
 CALL "{{.PathToHook}}"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%CD%
-SET > "{{.AfterEnvFileName}}"
+buildkite-agent env > "{{.AfterEnvFileName}}"
 EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
 
 	powershellScript = `$ErrorActionPreference = "STOP"
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.BeforeEnvFileName}}"
+buildkite-agent env | Set-Content "{{.BeforeEnvFileName}}"
 {{.PathToHook}}
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "{{.AfterEnvFileName}}"
+buildkite-agent env | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	bashScript = `buildkite-agent env > "{{.BeforeEnvFileName}}"
@@ -242,20 +242,14 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 		afterEnv  env.Environment
 	)
 
-	if runtime.GOOS == "windows" {
-		// TODO: Delete this code branch and parse everything from `buildkite-agent env` output. Everything should work fine on Windows.
-		beforeEnv = env.FromExport(string(beforeEnvContents))
-		afterEnv = env.FromExport(string(afterEnvContents))
-	} else {
-		err = json.Unmarshal(beforeEnvContents, &beforeEnv)
-		if err != nil {
-			return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %q", err, string(beforeEnvContents))
-		}
+	err = json.Unmarshal(beforeEnvContents, &beforeEnv)
+	if err != nil {
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal before env file: %w, file contents: %q", err, string(beforeEnvContents))
+	}
 
-		err = json.Unmarshal(afterEnvContents, &afterEnv)
-		if err != nil {
-			return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %q", err, string(afterEnvContents))
-		}
+	err = json.Unmarshal(afterEnvContents, &afterEnv)
+	if err != nil {
+		return HookScriptChanges{}, fmt.Errorf("failed to unmarshal after env file: %w, file contents: %q", err, string(afterEnvContents))
 	}
 
 	diff := afterEnv.Diff(beforeEnv)
