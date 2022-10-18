@@ -255,10 +255,7 @@ func (wrap *ScriptWrapper) Changes() (HookScriptChanges, error) {
 	diff := afterEnv.Diff(beforeEnv)
 
 	// Pluck the after wd from the diff before removing the key from the diff
-	afterWd := ""
-	if afterWd == "" {
-		afterWd = diff.Added[hookWorkingDirEnv]
-	}
+	afterWd := diff.Added[hookWorkingDirEnv]
 	if afterWd == "" {
 		if change, ok := diff.Changed[hookWorkingDirEnv]; ok {
 			afterWd = change.New
