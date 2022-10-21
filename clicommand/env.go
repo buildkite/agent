@@ -10,6 +10,7 @@ import (
 )
 
 const envDescription = `Usage:
+
   buildkite-agent env [options]
 
 Description:
