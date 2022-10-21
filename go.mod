@@ -34,7 +34,7 @@ require (
 
 require (
 	cloud.google.com/go/compute v1.9.0
-	github.com/buildkite/roko v1.0.0
+	github.com/buildkite/roko v1.0.1
 	go.opentelemetry.io/contrib/propagators/aws v1.8.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.11.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.8.0
