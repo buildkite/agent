@@ -97,7 +97,7 @@ func TestDisconnectRetry(t *testing.T) {
 
 	require.Equal(t, 4, len(l.Messages))
 	assert.Equal(t, "[info] Disconnecting...", l.Messages[0])
-	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 0/4`), l.Messages[1])
-	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 1/4`), l.Messages[2])
+	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 1/4`), l.Messages[1])
+	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 2/4`), l.Messages[2])
 	assert.Equal(t, "[info] Disconnected", l.Messages[3])
 }
