@@ -167,12 +167,12 @@ func (e Environment) ToSlice() []string {
 // Environment variables on Windows are case-insensitive. When you run `SET`
 // within a Windows command prompt, you'll see variables like this:
 //
-//     ...
-//     Path=C:\Program Files (x86)\Parallels\Parallels Tools\Applications;...
-//     PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 94 Stepping 3, GenuineIntel
-//     SystemDrive=C:
-//     SystemRoot=C:\Windows
-//     ...
+//	...
+//	Path=C:\Program Files (x86)\Parallels\Parallels Tools\Applications;...
+//	PROCESSOR_IDENTIFIER=Intel64 Family 6 Model 94 Stepping 3, GenuineIntel
+//	SystemDrive=C:
+//	SystemRoot=C:\Windows
+//	...
 //
 // There's a mix of both CamelCase and UPPERCASE, but the can all be accessed
 // regardless of the case you use. So PATH is the same as Path, PAth, pATH,
@@ -181,7 +181,7 @@ func (e Environment) ToSlice() []string {
 // os.Environ() in Golang returns key/values in the original casing, so it
 // returns a slice like this:
 //
-//     { "Path=...", "PROCESSOR_IDENTIFIER=...", "SystemRoot=..." }
+//	{ "Path=...", "PROCESSOR_IDENTIFIER=...", "SystemRoot=..." }
 //
 // Users of env.Environment shouldn't need to care about this.
 // env.Get("PATH") should "just work" on Windows. This means on Windows

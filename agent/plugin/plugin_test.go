@@ -44,7 +44,7 @@ func TestCreateFromJSON(t *testing.T) {
 			}},
 		},
 		{`[{"https://gitlab.example.com/path/to/repo#main":{}}]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `gitlab.example.com/path/to/repo`,
 				Version:       `main`,
 				Scheme:        `https`,
@@ -52,7 +52,7 @@ func TestCreateFromJSON(t *testing.T) {
 			}},
 		},
 		{`[{"https://gitlab.com/group/team/path/to/repo#main":{}}]`,
-			[]*Plugin{&Plugin{
+			[]*Plugin{{
 				Location:      `gitlab.com/group/team/path/to/repo`,
 				Version:       `main`,
 				Scheme:        `https`,

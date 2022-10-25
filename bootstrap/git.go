@@ -252,19 +252,19 @@ func resolveGitHost(sh *shell.Shell, host string) string {
 // gitCheckRefFormatDenyRegexp is a pattern used by gitCheckRefFormat().
 // Numbered rules are from git 2.28.0's `git help check-ref-format`.
 // Not covered by this implementation:
-//   1. They can include slash / for hierarchical (directory) grouping, but
-//   no slash-separated component can begin with a dot .  or end with the
-//   sequence .lock
-//   2. They must contain at least one /. This enforces the presence of a
-//   category like heads/, tags/, and so on, but the actual names are not
-//   restricted. If the --allow-onelevel option is used, this rule is waived
-//   5. They cannot have question-mark ?, asterisk *, or open bracket [
-//   anywhere. See the --refspec-pattern option below for an exception to
-//   this rule
-//   6. They cannot begin or end with a slash / or contain multiple
-//   consecutive slashes (see the --normalize option below for an exception
-//   to this rule)
-//   8. They cannot contain a sequence @{.
+//  1. They can include slash / for hierarchical (directory) grouping, but
+//     no slash-separated component can begin with a dot .  or end with the
+//     sequence .lock
+//  2. They must contain at least one /. This enforces the presence of a
+//     category like heads/, tags/, and so on, but the actual names are not
+//     restricted. If the --allow-onelevel option is used, this rule is waived
+//  5. They cannot have question-mark ?, asterisk *, or open bracket [
+//     anywhere. See the --refspec-pattern option below for an exception to
+//     this rule
+//  6. They cannot begin or end with a slash / or contain multiple
+//     consecutive slashes (see the --normalize option below for an exception
+//     to this rule)
+//  8. They cannot contain a sequence @{.
 var gitCheckRefFormatDenyRegexp = regexp.MustCompile(strings.Join([]string{
 	`\.\.`,        //  3. cannot have two consecutive dots .. anywhere
 	`[[:cntrl:]]`, //  4. cannot have ASCII control characters (In other words, bytes whose values are lower than \040, or \177 DEL) ...
