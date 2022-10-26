@@ -66,7 +66,7 @@ func NewGSUploader(l logger.Logger, c GSUploaderConfig) (*GSUploader, error) {
 
 func ParseGSDestination(destination string) (name string, path string) {
 	parts := strings.Split(strings.TrimPrefix(string(destination), "gs://"), "/")
-	path = strings.Join(parts[1:len(parts)], "/")
+	path = strings.Join(parts[1:], "/")
 	name = parts[0]
 	return
 }
