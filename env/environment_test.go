@@ -103,14 +103,14 @@ func TestEnvironmentDiff(t *testing.T) {
 	assert.Equal(t, Diff{
 		Added: map[string]string{},
 		Changed: map[string]DiffPair{
-			"B": DiffPair{
+			"B": {
 				Old: "there",
 				New: "world",
 			},
 		},
 		Removed: map[string]struct{}{
-			"C": struct{}{},
-			"D": struct{}{},
+			"C": {},
+			"D": {},
 		},
 	}, ab)
 
@@ -121,7 +121,7 @@ func TestEnvironmentDiff(t *testing.T) {
 			"D": "",
 		},
 		Changed: map[string]DiffPair{
-			"B": DiffPair{
+			"B": {
 				Old: "world",
 				New: "there",
 			},
@@ -138,13 +138,13 @@ func TestEnvironmentDiffRemove(t *testing.T) {
 			"A": "new",
 		},
 		Changed: map[string]DiffPair{
-			"B": DiffPair{
+			"B": {
 				Old: "old",
 				New: "new",
 			},
 		},
 		Removed: map[string]struct{}{
-			"C": struct{}{},
+			"C": {},
 		},
 	}
 
@@ -187,7 +187,7 @@ func TestEnvironmentApply(t *testing.T) {
 			"ALPACAS_ENABLED": "1",
 		},
 		Changed: map[string]DiffPair{
-			"LLAMAS_ENABLED": DiffPair{
+			"LLAMAS_ENABLED": {
 				Old: "1",
 				New: "0",
 			},
@@ -203,8 +203,8 @@ func TestEnvironmentApply(t *testing.T) {
 		Added:   map[string]string{},
 		Changed: map[string]DiffPair{},
 		Removed: map[string]struct{}{
-			"LLAMAS_ENABLED":  struct{}{},
-			"ALPACAS_ENABLED": struct{}{},
+			"LLAMAS_ENABLED":  {},
+			"ALPACAS_ENABLED": {},
 		},
 	})
 	assert.Equal(t, FromSlice([]string{}), env)
