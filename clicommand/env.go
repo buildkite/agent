@@ -3,6 +3,7 @@ package clicommand
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -45,9 +46,14 @@ var EnvCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		var envMap map[string]string
+		var err error
 
 		if c.Bool("from-env-file") {
-			envMap = mustLoadEnvFile(os.Getenv("BUILDKITE_ENV_FILE"))
+			envMap, err = loadEnvFile(os.Getenv("BUILDKITE_ENV_FILE"))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error loading BUILDKITE_ENV_FILE: %v\n", err)
+				os.Exit(1)
+			}
 		} else {
 			env := os.Environ()
 			envMap = make(map[string]string, len(env))
@@ -63,10 +69,7 @@ var EnvCommand = cli.Command{
 			return nil
 		}
 
-		var (
-			envJSON []byte
-			err     error
-		)
+		var envJSON []byte
 
 		if c.Bool("pretty") {
 			envJSON, err = json.MarshalIndent(envMap, "", "  ")
@@ -91,23 +94,24 @@ var EnvCommand = cli.Command{
 	},
 }
 
-func mustLoadEnvFile(path string) map[string]string {
+func loadEnvFile(path string) (map[string]string, error) {
 	envMap := make(map[string]string)
 
 	if path == "" {
-		fmt.Fprintln(os.Stderr, "BUILDKITE_ENV_FILE not set")
-		os.Exit(1)
+		return nil, errors.New("no path specified")
 	}
 
 	f, err := os.Open(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not open BUILDKITE_ENV_FILE: %v\n", err)
-		os.Exit(1)
+		return nil, err
 	}
 
 	scanner := bufio.NewScanner(f)
 
+	lineNo := 0
 	for scanner.Scan() {
+		lineNo++
+
 		line := scanner.Text()
 		if line == "" {
 			continue
@@ -115,18 +119,16 @@ func mustLoadEnvFile(path string) map[string]string {
 
 		name, quotedValue, ok := strings.Cut(line, "=")
 		if !ok {
-			fmt.Fprintf(os.Stderr, "Unexpected format in BUILDKITE_ENV_FILE %s\n", path)
-			os.Exit(1)
+			return nil, fmt.Errorf("Unexpected format in %s:%d", path, lineNo)
 		}
 
 		value, err := strconv.Unquote(quotedValue)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error unquoting value: %v\n", err)
-			os.Exit(1)
+			return nil, fmt.Errorf("unquoting value in %s:%d: %w", path, lineNo, err)
 		}
 
 		envMap[name] = value
 	}
 
-	return envMap
+	return envMap, nil
 }
