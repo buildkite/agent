@@ -97,7 +97,7 @@ func (redactor *Redactor) Reset(needles []string) {
 	}
 
 	for _, needle := range needles {
-		for i, ch := range needle {
+		for i, ch := range []byte(needle) {
 			// For bytes that do exist in search strings, find the shortest distance
 			// between that byte appearing to the end of the same search string
 			skip := len(needle) - i - 1

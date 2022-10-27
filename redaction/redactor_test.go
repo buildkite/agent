@@ -140,12 +140,16 @@ func TestRedactorSubsetSecrets(t *testing.T) {
 	}
 }
 
-func TestRedactorLatin1(t *testing.T) {
+func TestRedactorMultibyte(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ÿ"})
 
-	redactor.Write([]byte("foo"))
+	redactor.Write([]byte("fooÿbar"))
 	redactor.Flush()
+
+	if got, want := buf.Bytes(), []byte("foo[REDACTED]bar"); !bytes.Equal(got, want) {
+		t.Errorf("post-redaction buf.Bytes() = %q, want %q", got, want)
+	}
 }
