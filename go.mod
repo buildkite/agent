@@ -35,6 +35,7 @@ require (
 require (
 	cloud.google.com/go/compute v1.9.0
 	github.com/buildkite/roko v1.0.1
+	github.com/kr/pretty v0.2.1
 	go.opentelemetry.io/contrib/propagators/aws v1.11.1
 	go.opentelemetry.io/contrib/propagators/b3 v1.11.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.11.1
@@ -69,6 +70,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect

@@ -2,10 +2,12 @@ package redaction
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"path"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/kr/pretty"
 )
 
 // RedactLengthMin is the shortest string length that will be considered a
@@ -14,6 +16,42 @@ import (
 // API_TOKEN is set to "none", this minimum length will prevent the word "none"
 // from being redacted from useful log output.
 const RedactLengthMin = 6
+
+type skipTable struct {
+	skips       map[rune]int
+	needles     map[rune][][]byte
+	defaultSkip int
+}
+
+const defaultSkipTableSize = 256 // Start at 256 since ASCII is _most_ of what we're interested in. The map will resize if necessary.
+
+func newSkipTable(defaultSkip int) *skipTable {
+	return &skipTable{
+		skips:       make(map[rune]int, defaultSkipTableSize),
+		needles:     make(map[rune][][]byte, defaultSkipTableSize),
+		defaultSkip: defaultSkip,
+	}
+}
+
+func (st *skipTable) Skip(ch rune) int {
+	if skip, ok := st.skips[ch]; ok {
+		return skip
+	}
+
+	return st.defaultSkip
+}
+
+func (st *skipTable) Needles(ch rune) [][]byte {
+	return st.needles[ch]
+}
+
+func (st *skipTable) SetSkip(ch rune, skip int) {
+	st.skips[ch] = skip
+}
+
+func (st *skipTable) SetNeedles(ch rune, needles [][]byte) {
+	st.needles[ch] = needles
+}
 
 type Redactor struct {
 	replacement []byte
@@ -26,10 +64,7 @@ type Redactor struct {
 	maxlen int
 
 	// Table of Boyer-Moore skip distances, and values to redact matching this end byte
-	table [256]struct {
-		skip    int
-		needles [][]byte
-	}
+	table *skipTable
 
 	// Internal buffer for building redacted input into
 	// Also holds the final portion of the previous Write call, in case of
@@ -91,23 +126,21 @@ func (redactor *Redactor) Reset(needles []string) {
 	// for, it's safe to skip forward the length of the shortest search
 	// string.
 	// Start by setting this as a default for all bytes
-	for i := range redactor.table {
-		redactor.table[i].skip = minNeedleLen
-		redactor.table[i].needles = nil
-	}
+	redactor.table = newSkipTable(minNeedleLen)
 
 	for _, needle := range needles {
 		for i, ch := range needle {
 			// For bytes that do exist in search strings, find the shortest distance
 			// between that byte appearing to the end of the same search string
 			skip := len(needle) - i - 1
-			if skip < redactor.table[ch].skip {
-				redactor.table[ch].skip = skip
+			if skip < redactor.table.Skip(ch) {
+				redactor.table.SetSkip(ch, skip)
 			}
 
 			// Build a cache of which search substrings end in which bytes
 			if skip == 0 {
-				redactor.table[ch].needles = append(redactor.table[ch].needles, []byte(needle))
+				prevNeedles := redactor.table.Needles(ch)
+				redactor.table.SetNeedles(ch, append(prevNeedles, []byte(needle)))
 			}
 		}
 	}
@@ -134,10 +167,13 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 	// May lag behind cursor by up to the length of the longest search string
 	doneTo := 0
 
+	pretty.Println(redactor.table)
+
 	// For so long as the safe consumption index is inside the current input array
 	for cursor < len(input) {
 		ch := input[cursor]
-		skip := redactor.table[ch].skip
+		fmt.Printf("ch: %c\n", rune(ch))
+		skip := redactor.table.Skip(rune(ch))
 
 		possibleNeedleEnd := skip == 0
 
@@ -184,7 +220,7 @@ func (redactor *Redactor) Write(input []byte) (int, error) {
 		// Since Go slice syntax is not inclusive of the end index, moving it
 		// forward now reduces the need to use `cursor-1` everywhere
 		cursor++
-		for _, needle := range redactor.table[ch].needles {
+		for _, needle := range redactor.table.Needles(rune(ch)) {
 			// Since we're working backwards from what may be the end of a
 			// string, it's possible that the start would be out of bounds
 			startSubstr := cursor - len(needle)

@@ -51,6 +51,18 @@ func TestRedactorMulti(t *testing.T) {
 	}
 }
 
+func TestRedactorWithNonASCIISecrets(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	redactor := NewRedactor(&buf, "[REDACTED]", []string{"é", "H🫥llo"})
+
+	redactor.Write([]byte("H🫥llo, é"))
+	redactor.Flush()
+
+	assert.Equal(t, "[REDACTED], [REDACTED]", buf.String())
+}
+
 func TestRedactorWriteBoundaries(t *testing.T) {
 	t.Parallel()
 
@@ -146,6 +158,6 @@ func TestRedactorLatin1(t *testing.T) {
 	var buf bytes.Buffer
 	redactor := NewRedactor(&buf, "[REDACTED]", []string{"ÿ"})
 
-	redactor.Write([]byte("foo"))
+	redactor.Write([]byte("ÿ"))
 	redactor.Flush()
 }
