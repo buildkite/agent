@@ -56,56 +56,57 @@ Example:
 // - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
 
 type AgentStartConfig struct {
-	Config                      string   `cli:"config"`
-	Name                        string   `cli:"name"`
-	Priority                    string   `cli:"priority"`
-	AcquireJob                  string   `cli:"acquire-job"`
-	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
-	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
-	CancelGracePeriod           int      `cli:"cancel-grace-period"`
-	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
-	BuildPath                   string   `cli:"build-path" normalize:"filepath" validate:"required"`
-	HooksPath                   string   `cli:"hooks-path" normalize:"filepath"`
-	PluginsPath                 string   `cli:"plugins-path" normalize:"filepath"`
-	Shell                       string   `cli:"shell"`
-	Tags                        []string `cli:"tags" normalize:"list"`
-	TagsFromEC2MetaData         bool     `cli:"tags-from-ec2-meta-data"`
-	TagsFromEC2MetaDataPaths    []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
-	TagsFromEC2Tags             bool     `cli:"tags-from-ec2-tags"`
-	TagsFromGCPMetaData         bool     `cli:"tags-from-gcp-meta-data"`
-	TagsFromGCPMetaDataPaths    []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
-	TagsFromGCPLabels           bool     `cli:"tags-from-gcp-labels"`
-	TagsFromHost                bool     `cli:"tags-from-host"`
-	WaitForEC2TagsTimeout       string   `cli:"wait-for-ec2-tags-timeout"`
-	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
-	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
-	GitCloneFlags               string   `cli:"git-clone-flags"`
-	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
-	GitCleanFlags               string   `cli:"git-clean-flags"`
-	GitFetchFlags               string   `cli:"git-fetch-flags"`
-	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
-	NoGitSubmodules             bool     `cli:"no-git-submodules"`
-	NoSSHKeyscan                bool     `cli:"no-ssh-keyscan"`
-	NoCommandEval               bool     `cli:"no-command-eval"`
-	NoLocalHooks                bool     `cli:"no-local-hooks"`
-	NoPlugins                   bool     `cli:"no-plugins"`
-	NoPluginValidation          bool     `cli:"no-plugin-validation"`
-	NoPTY                       bool     `cli:"no-pty"`
-	NoFeatureReporting          bool     `cli:"no-feature-reporting"`
-	TimestampLines              bool     `cli:"timestamp-lines"`
-	HealthCheckAddr             string   `cli:"health-check-addr"`
-	MetricsDatadog              bool     `cli:"metrics-datadog"`
-	MetricsDatadogHost          string   `cli:"metrics-datadog-host"`
-	MetricsDatadogDistributions bool     `cli:"metrics-datadog-distributions"`
-	TracingBackend              string   `cli:"tracing-backend"`
-	Spawn                       int      `cli:"spawn"`
-	SpawnWithPriority           bool     `cli:"spawn-with-priority"`
-	LogFormat                   string   `cli:"log-format"`
-	CancelSignal                string   `cli:"cancel-signal"`
-	RedactedVars                []string `cli:"redacted-vars" normalize:"list"`
+	Config                           string   `cli:"config"`
+	Name                             string   `cli:"name"`
+	Priority                         string   `cli:"priority"`
+	AcquireJob                       string   `cli:"acquire-job"`
+	DisconnectAfterJob               bool     `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout       int      `cli:"disconnect-after-idle-timeout"`
+	BootstrapScript                  string   `cli:"bootstrap-script" normalize:"commandpath"`
+	CancelGracePeriod                int      `cli:"cancel-grace-period"`
+	EnableJobLogTmpfile              bool     `cli:"enable-job-log-tmpfile"`
+	BuildPath                        string   `cli:"build-path" normalize:"filepath" validate:"required"`
+	HooksPath                        string   `cli:"hooks-path" normalize:"filepath"`
+	PluginsPath                      string   `cli:"plugins-path" normalize:"filepath"`
+	Shell                            string   `cli:"shell"`
+	Tags                             []string `cli:"tags" normalize:"list"`
+	TagsFromEC2MetaData              bool     `cli:"tags-from-ec2-meta-data"`
+	TagsFromEC2MetaDataPaths         []string `cli:"tags-from-ec2-meta-data-paths" normalize:"list"`
+	TagsFromEC2Tags                  bool     `cli:"tags-from-ec2-tags"`
+	TagsFromGCPMetaData              bool     `cli:"tags-from-gcp-meta-data"`
+	TagsFromGCPMetaDataPaths         []string `cli:"tags-from-gcp-meta-data-paths" normalize:"list"`
+	TagsFromGCPLabels                bool     `cli:"tags-from-gcp-labels"`
+	TagsFromHost                     bool     `cli:"tags-from-host"`
+	WaitForEC2TagsTimeout            string   `cli:"wait-for-ec2-tags-timeout"`
+	WaitForEC2MetaDataTimeout        string   `cli:"wait-for-ec2-meta-data-timeout"`
+	WaitForGCPLabelsTimeout          string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCloneFlags                    string   `cli:"git-clone-flags"`
+	GitCloneMirrorFlags              string   `cli:"git-clone-mirror-flags"`
+	GitCleanFlags                    string   `cli:"git-clean-flags"`
+	GitFetchFlags                    string   `cli:"git-fetch-flags"`
+	GitMirrorsPath                   string   `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorsLockTimeout            int      `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate             bool     `cli:"git-mirrors-skip-update"`
+	NoGitSubmodules                  bool     `cli:"no-git-submodules"`
+	NoSSHKeyscan                     bool     `cli:"no-ssh-keyscan"`
+	NoCommandEval                    bool     `cli:"no-command-eval"`
+	NoLocalHooks                     bool     `cli:"no-local-hooks"`
+	NoPlugins                        bool     `cli:"no-plugins"`
+	NoPluginValidation               bool     `cli:"no-plugin-validation"`
+	NoPTY                            bool     `cli:"no-pty"`
+	NoFeatureReporting               bool     `cli:"no-feature-reporting"`
+	TimestampLines                   bool     `cli:"timestamp-lines"`
+	HealthCheckAddr                  string   `cli:"health-check-addr"`
+	MetricsDatadog                   bool     `cli:"metrics-datadog"`
+	MetricsDatadogHost               string   `cli:"metrics-datadog-host"`
+	MetricsDatadogDistributions      bool     `cli:"metrics-datadog-distributions"`
+	TracingBackend                   string   `cli:"tracing-backend"`
+	Spawn                            int      `cli:"spawn"`
+	SpawnWithPriority                bool     `cli:"spawn-with-priority"`
+	LogFormat                        string   `cli:"log-format"`
+	CancelSignal                     string   `cli:"cancel-signal"`
+	RedactedVars                     []string `cli:"redacted-vars" normalize:"list"`
+	ElasticStackASGLifecycleHookName string   `cli:aws-asg-lifecycle-hook-name`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
@@ -876,6 +877,28 @@ var AgentStartCommand = cli.Command{
 						DebugHTTP:          cfg.DebugHTTP,
 						SpawnIndex:         i,
 					}))
+		}
+
+		// All agents are registered so transition to "InService" state
+		if cfg.ElasticStackASGLifecycleHookName != "" {
+			l.Info(
+				"Assming this is an instance in the Buildkite Elastic Stack for AWS with ASG lifecycle hook %s",
+				cfg.ElasticStackASGLifecycleHookName,
+			)
+
+			asg, err := agent.NewAutoScalingFromTags()
+			if err != nil {
+				l.Error("could not create aws autoscaling client: %e", err)
+			}
+
+			l.Info(
+				"Calling ASG lifecycle hook %s to transition to Pending:Proceed state",
+				cfg.ElasticStackASGLifecycleHookName,
+			)
+
+			if err := asg.CompleteLifecycleAction(l, cfg.ElasticStackASGLifecycleHookName, "COMPLETE"); err != nil {
+				l.Error("could not complete lifecycle hook: %e", err)
+			}
 		}
 
 		// Setup the agent pool that spawns agent workers
