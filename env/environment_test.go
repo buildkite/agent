@@ -209,3 +209,26 @@ func TestEnvironmentApply(t *testing.T) {
 	})
 	assert.Equal(t, FromSlice([]string{}), env)
 }
+
+func TestSplit(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		in          string
+		name, value string
+		ok          bool
+	}{
+		{"key=value", "key", "value", true},
+		{"equalsign==", "equalsign", "=", true},
+		{"=Windows=Nonsense", "=Windows", "Nonsense", true},
+		{"=Bonus=Windows=Nonsense", "=Bonus", "Windows=Nonsense", true},
+		{"NotValid", "", "", false},
+		{"=AlsoInvalid", "", "", false},
+	}
+
+	for _, test := range tests {
+		gotName, gotValue, gotOK := Split(test.in)
+		if gotName != test.name || gotValue != test.value || gotOK != test.ok {
+			t.Errorf("Split(%q) = (%q, %q, %t), want (%q, %q, %t)", test.in, gotName, gotValue, gotOK, test.name, test.value, test.ok)
+		}
+	}
+}
