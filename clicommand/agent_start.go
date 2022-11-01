@@ -106,7 +106,7 @@ type AgentStartConfig struct {
 	LogFormat                        string   `cli:"log-format"`
 	CancelSignal                     string   `cli:"cancel-signal"`
 	RedactedVars                     []string `cli:"redacted-vars" normalize:"list"`
-	ElasticStackASGLifecycleHookName string   `cli:aws-asg-lifecycle-hook-name`
+	ElasticStackASGLifecycleHookName string   `cli:"aws-asg-lifecycle-hook-name"`
 
 	// Global flags
 	Debug       bool     `cli:"debug"`
