@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/experiments"
-	"github.com/buildkite/agent/v3/race"
 	"github.com/buildkite/bintest/v3"
 	"github.com/stretchr/testify/assert"
 )
@@ -163,10 +161,6 @@ func TestInterrupt(t *testing.T) {
 		t.Skip("Not supported in windows")
 	}
 
-	if race.Enabled {
-		t.Skip("Bintest has a race condition that we run into here, we should fix it, but it only shows up in tests")
-	}
-
 	sleepCmd, err := bintest.CompileProxy("sleep")
 	if err != nil {
 		t.Fatal(err)
@@ -214,7 +208,7 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 }
 
 func TestWorkingDir(t *testing.T) {
-	tempDir, err := ioutil.TempDir("", "shelltest")
+	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +276,7 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 		t.Skip("Flakey on windows")
 	}
 
-	dir, err := ioutil.TempDir("", "shelltest")
+	dir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
 		t.Fatal(err)
 	}
