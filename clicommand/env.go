@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/urfave/cli"
 )
 
@@ -13,8 +13,9 @@ const envDescription = `Usage:
   buildkite-agent env [options]
 
 Description:
-   Prints out the environment of the current process as a JSON object, easily parsable by other programs. Used when
-   executing hooks to discover changes that hooks make to the environment.
+   Prints out the environment of the current process as a JSON object, easily
+   parsable by other programs. Used when executing hooks to discover changes
+   that hooks make to the environment.
 
 Example:
    $ buildkite-agent env
@@ -34,38 +35,24 @@ var EnvCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) error {
-		env := os.Environ()
-		envMap := make(map[string]string, len(env))
+		envn := os.Environ()
+		envMap := make(map[string]string, len(envn))
 
-		for _, e := range env {
-			k, v, _ := strings.Cut(e, "=")
-			envMap[k] = v
+		for _, e := range envn {
+			if k, v, ok := env.Split(e); ok {
+				envMap[k] = v
+			}
 		}
 
-		var (
-			envJSON []byte
-			err     error
-		)
-
+		enc := json.NewEncoder(c.App.Writer)
 		if c.Bool("pretty") {
-			envJSON, err = json.MarshalIndent(envMap, "", "  ")
-		} else {
-			envJSON, err = json.Marshal(envMap)
+			enc.SetIndent("", "  ")
 		}
 
-		// let's be polite to interactive shells etc.
-		envJSON = append(envJSON, '\n')
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error marshalling JSON: %v\n", err)
+		if err := enc.Encode(envMap); err != nil {
+			fmt.Fprintf(c.App.ErrWriter, "Error marshalling JSON: %v\n", err)
 			os.Exit(1)
 		}
-
-		if _, err := os.Stdout.Write(envJSON); err != nil {
-			fmt.Fprintf(os.Stderr, "Error writing JSON to stdout: %v\n", err)
-			os.Exit(1)
-		}
-
 		return nil
 	},
 }
