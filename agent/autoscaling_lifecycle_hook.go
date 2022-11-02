@@ -2,6 +2,7 @@ package agent
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -11,12 +12,23 @@ import (
 	"github.com/buildkite/roko"
 )
 
-type Autoscaling struct {
+type AutoscalingCompleteLifecycleHook struct {
 	AutoscalingGroupName string
+	InstanceId           string
 }
 
 // Determines ASG name from tags on EC2 instance
-func NewAutoScalingFromTags() (*Autoscaling, error) {
+func NewAutoScalingCompleteLifecycleHookFromMetadataAndTags() (*AutoscalingCompleteLifecycleHook, error) {
+	metadata, err := (EC2MetaData{}).GetPaths(map[string]string{"instance-id": "instance-id"})
+	if err != nil {
+		return nil, err
+	}
+
+	instanceId, exists := metadata["instance-id"]
+	if !exists {
+		return nil, fmt.Errorf("InstanceId not found in metadata: %#v", metadata)
+	}
+
 	tags, err := (EC2Tags{}).Get()
 	if err != nil {
 		return nil, err
@@ -27,12 +39,13 @@ func NewAutoScalingFromTags() (*Autoscaling, error) {
 		return nil, errors.New("ASG not tagged")
 	}
 
-	return &Autoscaling{
+	return &AutoscalingCompleteLifecycleHook{
+		InstanceId:           instanceId,
 		AutoscalingGroupName: asgName,
 	}, nil
 }
 
-func (a *Autoscaling) CompleteLifecycleAction(
+func (a *AutoscalingCompleteLifecycleHook) CompleteLifecycleAction(
 	l logger.Logger,
 	lifecycleHookName, actionResult string,
 ) error {
@@ -43,6 +56,7 @@ func (a *Autoscaling) CompleteLifecycleAction(
 
 	svc := autoscaling.New(session)
 	input := &autoscaling.CompleteLifecycleActionInput{
+		InstanceId:            aws.String(a.InstanceId),
 		AutoScalingGroupName:  aws.String(a.AutoscalingGroupName),
 		LifecycleActionResult: aws.String(actionResult),
 		LifecycleHookName:     aws.String(lifecycleHookName),

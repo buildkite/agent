@@ -886,7 +886,7 @@ var AgentStartCommand = cli.Command{
 				cfg.ElasticStackASGLifecycleHookName,
 			)
 
-			asg, err := agent.NewAutoScalingFromTags()
+			asg, err := agent.NewAutoScalingCompleteLifecycleHookFromMetadataAndTags()
 			if err != nil {
 				l.Error("could not create aws autoscaling client: %e", err)
 			}
