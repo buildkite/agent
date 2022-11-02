@@ -39,12 +39,9 @@ var EnvCommand = cli.Command{
 		envMap := make(map[string]string, len(envn))
 
 		for _, e := range envn {
-			k, v, ok := env.Split(e)
-			if !ok {
-				fmt.Fprintf(c.App.ErrWriter, "Invalid environment variable from os.Environ: %q\n", e)
-				os.Exit(2)
+			if k, v, ok := env.Split(e); ok {
+				envMap[k] = v
 			}
-			envMap[k] = v
 		}
 
 		enc := json.NewEncoder(c.App.Writer)
