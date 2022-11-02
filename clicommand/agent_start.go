@@ -896,7 +896,7 @@ var AgentStartCommand = cli.Command{
 				cfg.ElasticStackASGLifecycleHookName,
 			)
 
-			if err := asg.CompleteLifecycleAction(l, cfg.ElasticStackASGLifecycleHookName, "COMPLETE"); err != nil {
+			if err := asg.CompleteLifecycleAction(l, cfg.ElasticStackASGLifecycleHookName, "CONTINUE"); err != nil {
 				l.Error("could not complete lifecycle hook: %e", err)
 			}
 		}
