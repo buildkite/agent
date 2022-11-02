@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
 
 	"github.com/buildkite/bintest/v3"
@@ -364,12 +365,12 @@ func mockEnvAsJSONOnStdout(b *BootstrapTester) func(c *bintest.Call) {
 		envMap := map[string]string{}
 
 		for _, e := range b.Env { // The env from the bootstrap tester
-			k, v, _ := strings.Cut(e, "=")
+			k, v, _ := env.Split(e)
 			envMap[k] = v
 		}
 
 		for _, e := range c.Env { // The env from the call
-			k, v, _ := strings.Cut(e, "=")
+			k, v, _ := env.Split(e)
 			envMap[k] = v
 		}
 

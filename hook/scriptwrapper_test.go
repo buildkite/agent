@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
@@ -313,7 +312,7 @@ func mockAgent() (*bintest.Mock, func(), error) {
 			envMap := map[string]string{}
 
 			for _, e := range c.Env {
-				k, v, _ := strings.Cut(e, "=")
+				k, v, _ := env.Split(e)
 				envMap[k] = v
 			}
 
