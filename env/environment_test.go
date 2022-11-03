@@ -219,8 +219,8 @@ func TestSplit(t *testing.T) {
 	}{
 		{"key=value", "key", "value", true},
 		{"equalsign==", "equalsign", "=", true},
-		{"=Windows=Nonsense", "=Windows", "Nonsense", true},
-		{"=Bonus=Windows=Nonsense", "=Bonus", "Windows=Nonsense", true},
+		{"=Windows=Nonsense", "", "", false},
+		{"=Bonus=Windows=Nonsense", "", "", false},
 		{"no_value=", "no_value", "", true},
 		{"NotValid", "", "", false},
 		{"=AlsoInvalid", "", "", false},
