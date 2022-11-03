@@ -15,21 +15,15 @@ func New() Environment {
 }
 
 // Split splits an environment variable (in the form "name=value") into the name
-// and value substrings. Names starting with a single '=' are allowed but a
-// second '=' is required later in the string.
-// If there is no '=', or the only '=' is at the start, it returns
-// `"", "", false`.
+// and value substrings. If there is no '=', or the first '=' is at the start,
+// it returns `"", "", false`.
 func Split(l string) (name, value string, ok bool) {
 	// Variable names should not contain '=' on any platform...and yet Windows
 	// creates environment variables beginning with '=' in some circumstances.
 	// See https://github.com/golang/go/issues/49886.
-	// Values can contain '=' anywhere, so a variant of strings.Cut that
-	// uses strings.LastIndex is not enough.
+	// Dropping them matches the previous behaviour on Windows, which used SET
+	// to obtain the state of environment variables.
 	i := strings.IndexRune(l, '=')
-	if i == 0 {
-		// l began with '=', so split on the next '='.
-		i = strings.IndexRune(l[1:], '=') + 1
-	}
 	// Either there is no '=', or it is at the start of the string.
 	// Both are disallowed.
 	if i <= 0 {
