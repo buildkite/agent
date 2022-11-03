@@ -142,5 +142,5 @@ func TestBootstrapRunsJobAPI(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }

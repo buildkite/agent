@@ -62,7 +62,7 @@ func TestWithResolvingCommitExperiment(t *testing.T) {
 		{"rev-parse", "HEAD"},
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestCheckingOutLocalGitProject(t *testing.T) {
@@ -97,11 +97,11 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
@@ -163,11 +163,11 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
@@ -224,11 +224,11 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
@@ -263,11 +263,11 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
@@ -278,7 +278,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	defer tester.Close()
 
 	// Do one checkout
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 
 	// Create another commit on the same branch in the remote repo
 	err = tester.Repo.ExecuteAll([][]string{
@@ -308,14 +308,14 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	env := []string{
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", shortCommitHash),
 	}
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -345,7 +345,7 @@ func TestCheckingOutGitHubPullRequestWithCommitHash(t *testing.T) {
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -375,7 +375,7 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", strings.TrimSpace(commitHash)),
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -429,7 +429,7 @@ func TestCheckingOutGitHubPullRequestWithCommitHashAfterForcePush(t *testing.T) 
 	_, err = tester.Repo.Execute("update-ref", "refs/pull/123/head", "HEAD")
 	assert.NilError(t, err)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -459,7 +459,7 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", shortCommitHash),
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -488,7 +488,7 @@ func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 		"BUILDKITE_COMMIT=HEAD",
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -521,7 +521,7 @@ func TestCheckingOutGitHubPullRequestAtHeadFromFork(t *testing.T) {
 		"BUILDKITE_COMMIT=HEAD",
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 
 	// Check state of the checkout directory
 	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
@@ -586,11 +586,11 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestFetchErrorIsRetried(t *testing.T) {
@@ -648,11 +648,11 @@ func TestFetchErrorIsRetried(t *testing.T) {
 	})
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
@@ -664,11 +664,11 @@ func TestCheckingOutSetsCorrectGitMetadataAndSendsItToBuildkite(t *testing.T) {
 	}
 	defer tester.Close()
 
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(ctx, t)
 }
 
 func TestCheckingOutWithSSHKeyscan(t *testing.T) {
@@ -696,7 +696,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 		"BUILDKITE_SSH_KEYSCAN=true",
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
@@ -717,7 +717,7 @@ func TestCheckingOutWithoutSSHKeyscan(t *testing.T) {
 		"BUILDKITE_SSH_KEYSCAN=false",
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
@@ -744,7 +744,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 		"BUILDKITE_SSH_KEYSCAN=true",
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 func TestCleaningAnExistingCheckout(t *testing.T) {
@@ -769,12 +769,12 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 	}
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(ctx, t)
 
 	// This used to check if os.IsExist(err) == true.
 	// Unfortunately, os.IsExist(err) is not the same as !os.IsNotExist(err)
@@ -795,12 +795,12 @@ func TestForcingACleanCheckout(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
-	tester.RunAndCheck(t, "BUILDKITE_CLEAN_CHECKOUT=true")
+	tester.RunAndCheck(ctx, t, "BUILDKITE_CLEAN_CHECKOUT=true")
 
 	if !strings.Contains(tester.Output, "Cleaning pipeline checkout") {
 		t.Fatal(`tester.Output does not contain "Cleaning pipeline checkout"`)
@@ -826,12 +826,12 @@ func TestCheckoutOnAnExistingRepositoryWithoutAGitFolder(t *testing.T) {
 		t.Fatalf("os.RemoveAll(.git/refs) = %v", err)
 	}
 
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(ctx, t)
 }
 
 func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
@@ -859,7 +859,7 @@ func TestCheckoutRetriesOnCleanFailure(t *testing.T) {
 	})
 
 	git.Expect().AtLeastOnce().WithAnyArguments()
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
@@ -885,7 +885,7 @@ func TestCheckoutRetriesOnCloneFailure(t *testing.T) {
 	})
 
 	git.Expect().AtLeastOnce().WithAnyArguments()
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
@@ -910,7 +910,7 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 		}
 	})
 
-	if err := tester.Run(t); err == nil {
+	if err := tester.Run(mainCtx, t); err == nil {
 		t.Fatalf("tester.Run(t) = %v, want non-nil error", err)
 	}
 
@@ -947,7 +947,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 	tester.ExpectGlobalHook("post-command").Once()
 	tester.ExpectGlobalHook("pre-exit").Once()
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestGitCheckoutWithCommitResolved(t *testing.T) {
@@ -971,10 +971,10 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 		{"clean", "-ffxdq"},
 	})
 
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Exactly(0)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
@@ -998,10 +998,10 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 		{"clean", "-ffxdq"},
 	})
 
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0).Exactly(1)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
@@ -1026,11 +1026,11 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1).Exactly(1)
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 type subDirMatcher struct {

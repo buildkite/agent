@@ -143,7 +143,7 @@ func WithOS(o string) WrapperOpt {
 
 // NewWrapper creates and configures a hook.Wrapper.
 // Writes temporary files to the filesystem.
-func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
+func NewWrapper(ctx context.Context, opts ...WrapperOpt) (*Wrapper, error) {
 	wrap := &Wrapper{
 		os: runtime.GOOS,
 	}
@@ -239,7 +239,7 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	}
 
 	templateInput := WrapperTemplateInput{
-		AgentBinary:       self.Path(context.TODO()),
+		AgentBinary:       self.Path(ctx),
 		ShebangLine:       shebang,
 		BeforeEnvFileName: wrap.beforeEnvPath,
 		AfterEnvFileName:  wrap.afterEnvPath,

@@ -57,7 +57,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+	tester.RunAndCheck(mainCtx, t, "MY_CUSTOM_ENV=1")
 }
 
 func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
@@ -117,7 +117,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+	tester.RunAndCheck(mainCtx, t, "MY_CUSTOM_ENV=1")
 }
 
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
@@ -153,7 +153,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+	tester.RunAndCheck(mainCtx, t, "MY_CUSTOM_ENV=1")
 }
 
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
@@ -188,7 +188,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
+	tester.RunAndCheck(mainCtx, t, "MY_CUSTOM_ENV=1")
 }
 
 func TestCheckingOutFiresCorrectHooks(t *testing.T) {
@@ -218,7 +218,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestReplacingCheckoutHook(t *testing.T) {
@@ -247,7 +247,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestReplacingGlobalCommandHook(t *testing.T) {
@@ -272,7 +272,7 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestReplacingLocalCommandHook(t *testing.T) {
@@ -298,7 +298,7 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(mainCtx, t)
 }
 
 func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
@@ -313,7 +313,7 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	if err := tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
+	if err := tester.Run(mainCtx, t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=false) = %v, want non-nil error", err)
 	}
 
@@ -332,7 +332,7 @@ func TestPreExitHooksDoesNotFireWithoutCommandPhase(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").NotCalled()
 	tester.ExpectLocalHook("pre-exit").NotCalled()
 
-	tester.RunAndCheck(t, "BUILDKITE_BOOTSTRAP_PHASES=plugin,checkout")
+	tester.RunAndCheck(mainCtx, t, "BUILDKITE_BOOTSTRAP_PHASES=plugin,checkout")
 }
 
 func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
@@ -422,7 +422,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 			}
 			defer tester.Close()
 
-			agent := tester.MockAgent(t)
+			ctx, agent := tester.MockAgent(ctx, t)
 
 			tester.ExpectGlobalHook(tc.failingHook).
 				Once().
@@ -454,7 +454,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 					AndExitWith(0)
 			}
 
-			if err := tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
+			if err := tester.Run(ctx, t, "BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
 				t.Fatalf("tester.Run(t, BUILDKITE_ARTIFACT_PATHS=test.txt) = %v, want non-nil error", err)
 			}
 
@@ -477,7 +477,7 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	tester.ExpectGlobalHook("pre-command").Once()
 	tester.ExpectLocalHook("pre-command").NotCalled()
 
-	if err = tester.Run(t, "BUILDKITE_COMMAND=true"); err == nil {
+	if err = tester.Run(mainCtx, t, "BUILDKITE_COMMAND=true"); err == nil {
 		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=true) = %v, want non-nil error", err)
 	}
 
@@ -510,7 +510,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 
 			tester.ExpectGlobalHook(hook).Once().AndExitWith(5)
 
-			err = tester.Run(t)
+			err = tester.Run(ctx, t)
 
 			if err == nil {
 				t.Fatalf("tester.Run(t) = %v, want non-nil error", err)
@@ -546,7 +546,7 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		if err := tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
+		if err := tester.Run(mainCtx, t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
 			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=sleep 5") = %v, want non-nil error`, err)
 		}
 		t.Logf("Command finished")
@@ -595,7 +595,7 @@ func TestPolyglotScriptHooksCanBeRun(t *testing.T) {
 		t.Fatalf("os.WriteFile(%q, script, 0o755) = %v", filename, err)
 	}
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(ctx, t)
 
 	if !strings.Contains(tester.Output, "ohai, it's ruby!") {
 		t.Fatalf("tester.Output %q does not contain expected output: %q", tester.Output, "ohai, it's ruby!")
@@ -639,7 +639,7 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t)
+	tester.RunAndCheck(ctx, t)
 
 	if !strings.Contains(tester.Output, "hi there from golang 🌊") {
 		t.Fatalf("tester.Output %s does not contain expected output: %q", tester.Output, "hi there from golang 🌊")

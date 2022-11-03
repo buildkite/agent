@@ -73,7 +73,7 @@ func TestRunningPlugins(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
@@ -111,7 +111,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 		"BUILDKITE_PLUGINS=" + json,
 	}
 
-	err = tester.Run(t, env...)
+	err = tester.Run(mainCtx, t, env...)
 
 	if err == nil {
 		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
@@ -136,7 +136,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 		`BUILDKITE_PLUGINS=["sdgmdgn.@$!sdf,asdf#llamas"]`,
 	}
 
-	if err := tester.Run(t, env...); err == nil {
+	if err := tester.Run(mainCtx, t, env...); err == nil {
 		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
 
@@ -204,7 +204,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 		"BUILDKITE_PLUGINS=" + string(pluginsJSON),
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 func TestPluginCloneRetried(t *testing.T) {
@@ -267,7 +267,7 @@ func TestPluginCloneRetried(t *testing.T) {
 		"BUILDKITE_PLUGINS=" + json,
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 // We want to support the situation where a user wants a plugin from a particular Git branch, e.g.,
@@ -347,7 +347,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
 	tester2, err := NewExecutorTester(ctx)
@@ -385,7 +385,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 		}
 	})
 
-	tester2.RunAndCheck(t, env...)
+	tester2.RunAndCheck(ctx, t, env...)
 }
 
 // As described above the previous integration test, this time we want to run the build both before
@@ -451,7 +451,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 		}
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 
 	tester2, err := NewExecutorTester(ctx)
 	if err != nil {
@@ -492,7 +492,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 		}
 	})
 
-	tester2.RunAndCheck(t, env...)
+	tester2.RunAndCheck(ctx, t, env...)
 }
 
 type testPlugin struct {

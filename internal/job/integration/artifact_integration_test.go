@@ -27,7 +27,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 	})
 
 	// Mock out the artifact calls
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -35,7 +35,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 		Expect("artifact", "upload", "llamas.txt").
 		AndExitWith(0)
 
-	tester.RunAndCheck(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt")
+	tester.RunAndCheck(ctx, t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt")
 }
 
 func TestArtifactsUploadAfterCommandFails(t *testing.T) {
@@ -56,7 +56,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	})
 
 	// Mock out the artifact calls
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -64,7 +64,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 		Expect("artifact", "upload", "llamas.txt").
 		AndExitWith(0)
 
-	err = tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt", "BUILDKITE_COMMAND=my-command")
+	err = tester.Run(ctx, t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt", "BUILDKITE_COMMAND=my-command")
 	if err == nil {
 		t.Fatalf("Expected command to fail")
 	}
@@ -91,7 +91,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	})
 
 	// Mock out the artifact calls
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -99,7 +99,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 		Expect("artifact", "upload", "llamas.txt").
 		AndExitWith(0)
 
-	if err := tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt"); err == nil {
+	if err := tester.Run(ctx, t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt"); err == nil {
 		t.Fatalf("tester.Run(BUILDKITE_ARTIFACT_PATHS=llamas.txt) = %v, want non-nil error", err)
 	}
 

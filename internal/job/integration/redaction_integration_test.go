@@ -24,7 +24,7 @@ func TestRedactorRedactsAgentToken(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t)
+	err = tester.Run(mainCtx, t)
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestRedactorDoesNotRedactAgentToken_WhenNotInRedactedVars(t *testing.T) {
 		c.Exit(0)
 	})
 
-	err = tester.Run(t, `BUILDKITE_REDACTED_VARS=""`)
+	err = tester.Run(mainCtx, t, `BUILDKITE_REDACTED_VARS=""`)
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestRedactorAdd_RedactsVarsAfterUse(t *testing.T) {
 	secret := "hunter2"
 	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
 
-	err = tester.Run(t)
+	err = tester.Run(mainCtx, t)
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestRegression_TestRedactorAdd_StillWorksWhenNoInitialRedactedVarsAreProvid
 	secret := "hunter2"
 	tester.ExpectGlobalHook("command").AndCallFunc(redactionTestCommandHook(t, secret))
 
-	err = tester.Run(t, `BUILDKITE_REDACTED_VARS=""`)
+	err = tester.Run(mainCtx, t, `BUILDKITE_REDACTED_VARS=""`)
 	if err != nil {
 		t.Fatalf("running executor tester: %v", err)
 	}

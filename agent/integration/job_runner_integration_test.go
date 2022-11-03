@@ -77,7 +77,11 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ctx := context.Background()
+
+			testMainPath, err := os.Executable()
+			assert.NilError(t, err)
+
+			ctx := self.OverridePath(context.Background(), testMainPath)
 
 			hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 			assert.NilError(t, err, "making bootstrap-hooks directory: %v", err)

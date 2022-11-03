@@ -39,7 +39,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 		`BUILDKITE_SHELL=C:\Windows\System32\CMD.exe /S /C`,
 	}
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(mainCtx, t, env...)
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
@@ -52,7 +52,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -67,7 +67,7 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 
-	if err := tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
+	if err := tester.Run(ctx, t, "BUILDKITE_COMMAND=false"); err == nil {
 		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=false) = %v, want non-nil error", err)
 	}
 

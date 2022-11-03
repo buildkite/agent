@@ -25,7 +25,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -47,7 +47,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
@@ -58,7 +58,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -81,7 +81,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestRunningFailingCommandWithDocker(t *testing.T) {
@@ -92,7 +92,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -116,7 +116,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 
 	expectCommandHooks("1", t, tester)
 
-	if err = tester.Run(t, env...); err == nil {
+	if err = tester.Run(ctx, t, env...); err == nil {
 		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
 
@@ -131,7 +131,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -153,7 +153,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
@@ -164,7 +164,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -189,7 +189,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 
 	expectCommandHooks("1", t, tester)
 
-	if err = tester.Run(t, env...); err == nil {
+	if err = tester.Run(ctx, t, env...); err == nil {
 		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
 
@@ -204,7 +204,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -227,7 +227,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 
 	expectCommandHooks("0", t, tester)
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
@@ -238,7 +238,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	defer tester.Close()
 
 	// Mock out the meta-data calls to the agent after checkout
-	agent := tester.MockAgent(t)
+	ctx, agent := tester.MockAgent(mainCtx, t)
 	agent.
 		Expect("meta-data", "exists", job.CommitMetadataKey).
 		AndExitWith(0)
@@ -252,7 +252,7 @@ func TestRunningCommandWithDockerComposeAndBuildAll(t *testing.T) {
 	dockerCompose.IgnoreUnexpectedInvocations()
 	dockerCompose.Expect("-f", "docker-compose.yml", "-p", "buildkite1111111111111111", "--verbose", "build", "--pull").Once()
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(ctx, t, env...)
 }
 
 func expectCommandHooks(exitStatus string, t *testing.T, tester *ExecutorTester) {

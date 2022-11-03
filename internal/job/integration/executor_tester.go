@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"gotest.tools/v3/assert"
 
@@ -88,7 +89,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 	}
 
 	bt := &ExecutorTester{
-		Name: os.Args[0],
+		Name: self.Path(ctx),
 		Args: []string{"bootstrap"},
 		Repo: repo,
 		Env: []string{
@@ -194,16 +195,17 @@ func (e *ExecutorTester) HasMock(name string) bool {
 	return false
 }
 
-// MockAgent creates a mock for the buildkite-agent binary
-func (e *ExecutorTester) MockAgent(t *testing.T) *bintest.Mock {
+// MockAgent creates a context and mock for the buildkite-agent binary
+func (e *ExecutorTester) MockAgent(parent context.Context, t *testing.T) (context.Context, *bintest.Mock) {
 	t.Helper()
 	agent := e.MustMock(t, "buildkite-agent")
+	ctx := self.OverridePath(parent, agent.Path)
 	agent.Expect("env", "dump").
 		Min(0).
 		Max(bintest.InfiniteTimes).
 		AndCallFunc(mockEnvAsJSONOnStdout(e))
 
-	return agent
+	return ctx, agent
 }
 
 // writeHookScript generates a buildkite-agent hook script that calls a mock binary
@@ -261,25 +263,21 @@ func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 }
 
 // Run the bootstrap and return any errors
-func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
+func (e *ExecutorTester) Run(ctx context.Context, t *testing.T, env ...string) error {
 	t.Helper()
 
 	// Mock out the meta-data calls to the agent after checkout
 	if !e.HasMock("buildkite-agent") {
-		agent := e.MockAgent(t)
+		cctx, agent := e.MockAgent(ctx, t)
 		agent.
 			Expect("meta-data", "exists", job.CommitMetadataKey).
 			Optionally().
 			AndExitWith(0)
-	}
-
-	path, err := exec.LookPath(e.Name)
-	if err != nil {
-		return err
+		ctx = cctx
 	}
 
 	e.cmdLock.Lock()
-	e.cmd = exec.Command(path, e.Args...)
+	e.cmd = exec.Command(self.Path(ctx), e.Args...)
 
 	buf := &buffer{}
 
@@ -294,15 +292,14 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 
 	e.cmd.Env = append(e.Env, env...)
 
-	err = e.cmd.Start()
-	if err != nil {
+	if err := e.cmd.Start(); err != nil {
 		e.cmdLock.Unlock()
 		return err
 	}
 
 	e.cmdLock.Unlock()
 
-	err = e.cmd.Wait()
+	err := e.cmd.Wait()
 	e.Output = buf.String()
 	return err
 }
@@ -335,10 +332,10 @@ func (e *ExecutorTester) ReadEnvFromOutput(key string) (string, bool) {
 }
 
 // Run the bootstrap and then check the mocks
-func (e *ExecutorTester) RunAndCheck(t *testing.T, env ...string) {
+func (e *ExecutorTester) RunAndCheck(ctx context.Context, t *testing.T, env ...string) {
 	t.Helper()
 
-	if err := e.Run(t, env...); shell.ExitCode(err) != 0 {
+	if err := e.Run(ctx, t, env...); shell.ExitCode(err) != 0 {
 		assert.NilError(t, err, "bootstrap output:\n%s", e.Output)
 	}
 

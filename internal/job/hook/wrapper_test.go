@@ -73,7 +73,7 @@ echo "hello world"
 			ctx := context.Background()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
-			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
+			wrapper, err := hook.NewWrapper(ctx, hook.WithPath(hookFilename), hook.WithOS(tc.os))
 			assert.NilError(t, err, "failed to create hook wrapper: %v", err)
 
 			sh := shell.NewTestShell(t)
@@ -166,7 +166,7 @@ echo hello world
 			ctx := context.Background()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
-			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
+			wrapper, err := hook.NewWrapper(ctx, hook.WithPath(hookFilename), hook.WithOS(tc.os))
 			assert.NilError(t, err, "failed to create hook wrapper: %v", err)
 
 			sh := shell.NewTestShell(t)
@@ -209,7 +209,7 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 
 	hookFilename := writeTestHook(t, "hook", "#!/usr/bin/env ruby\nputs 'hello world'")
 
-	_, err := hook.NewWrapper(
+	_, err := hook.NewWrapper(context.Background(),
 		hook.WithPath(hookFilename),
 		hook.WithOS("linux"),
 	)
