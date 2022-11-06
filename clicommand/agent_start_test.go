@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,7 +11,7 @@ import (
 )
 
 func setupHooksPath(t *testing.T) (string, func()) {
-	hooksPath, err := ioutil.TempDir("", "")
+	hooksPath, err := os.MkdirTemp("", "")
 	if err != nil {
 		assert.FailNow(t, "failed to create temp file: %v", err)
 	}
@@ -29,7 +28,7 @@ func writeAgentShutdownHook(t *testing.T, dir string) string {
 		script = "echo hello world"
 	}
 	filepath := filepath.Join(dir, filename)
-	if err := ioutil.WriteFile(filepath, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(filepath, []byte(script), 0755); err != nil {
 		assert.FailNow(t, "failed to write agent-shutdown hook: %v", err)
 	}
 	return filepath

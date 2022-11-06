@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"regexp"
 	"runtime"
@@ -42,7 +41,7 @@ var StderrLogger = &WriterLogger{
 
 // DiscardLogger discards all log messages
 var DiscardLogger = &WriterLogger{
-	Writer: ioutil.Discard,
+	Writer: io.Discard,
 }
 
 // WriterLogger provides a logger that writes to an io.Writer

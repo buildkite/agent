@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,7 +51,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
            [-w local_tun[:remote_tun]] [user@]hostname [command]`).
 				AndExitWith(255)
 
-			f, err := ioutil.TempFile("", "known-hosts")
+			f, err := os.CreateTemp("", "known-hosts")
 			if err != nil {
 				t.Fatal(err)
 			}

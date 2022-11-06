@@ -2,7 +2,7 @@ package integration
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -29,7 +29,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 			"export LLAMAS_ROCK=absolutely",
 		}
 
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"),
+		if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"),
 			[]byte(strings.Join(script, "\n")), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -39,7 +39,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 			"set LLAMAS_ROCK=absolutely",
 		}
 
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment.bat"),
+		if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment.bat"),
 			[]byte(strings.Join(script, "\r\n")), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -80,7 +80,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 			"@echo off",
 			"set LLAMAS_ROCK=absolutely",
 		}
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command.bat"),
+		if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command.bat"),
 			[]byte(strings.Join(preCommand, "\r\n")), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -89,7 +89,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 			"@echo off",
 			"set LLAMAS_ROCK=",
 		}
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "post-command.bat"),
+		if err := os.WriteFile(filepath.Join(tester.HooksDir, "post-command.bat"),
 			[]byte(strings.Join(postCommand, "\n")), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -98,7 +98,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 			"#!/bin/bash",
 			"export LLAMAS_ROCK=absolutely",
 		}
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command"),
+		if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"),
 			[]byte(strings.Join(preCommand, "\n")), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +107,7 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 			"#!/bin/bash",
 			"unset LLAMAS_ROCK",
 		}
-		if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "post-command"),
+		if err := os.WriteFile(filepath.Join(tester.HooksDir, "post-command"),
 			[]byte(strings.Join(postCommand, "\n")), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -154,7 +154,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		"cd ./mysubdir",
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -189,7 +189,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 		"exit 0",
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
 		t.Fatal(err)
 	}
 

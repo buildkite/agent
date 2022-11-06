@@ -2,7 +2,6 @@ package stdin_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -66,7 +65,7 @@ func TestIsStdinIsReadableWithAPipe(t *testing.T) {
 }
 
 func TestIsStdinIsReadableWithOutputRedirection(t *testing.T) {
-	tmpfile, err := ioutil.TempFile("", "output-redirect")
+	tmpfile, err := os.CreateTemp("", "output-redirect")
 	if err != nil {
 		log.Fatal(err)
 	}

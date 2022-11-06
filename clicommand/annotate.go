@@ -2,7 +2,7 @@ package clicommand
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 
@@ -139,7 +139,7 @@ var AnnotateCommand = cli.Command{
 			l.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN
-			stdin, err := ioutil.ReadAll(os.Stdin)
+			stdin, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				l.Fatal("Failed to read from STDIN: %s", err)
 			}

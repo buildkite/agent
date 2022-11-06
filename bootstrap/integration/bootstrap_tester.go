@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -44,27 +43,27 @@ type BootstrapTester struct {
 }
 
 func NewBootstrapTester() (*BootstrapTester, error) {
-	homeDir, err := ioutil.TempDir("", "home")
+	homeDir, err := os.MkdirTemp("", "home")
 	if err != nil {
 		return nil, err
 	}
 
-	pathDir, err := ioutil.TempDir("", "bootstrap-path")
+	pathDir, err := os.MkdirTemp("", "bootstrap-path")
 	if err != nil {
 		return nil, err
 	}
 
-	buildDir, err := ioutil.TempDir("", "bootstrap-builds")
+	buildDir, err := os.MkdirTemp("", "bootstrap-builds")
 	if err != nil {
 		return nil, err
 	}
 
-	hooksDir, err := ioutil.TempDir("", "bootstrap-hooks")
+	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {
 		return nil, err
 	}
 
-	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +109,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		bt.Env = append(bt.Env, `BUILDKITE_AGENT_EXPERIMENT=`+strings.Join(exp, ","))
 
 		if experiments.IsEnabled(`git-mirrors`) {
-			gitMirrorsDir, err := ioutil.TempDir("", "bootstrap-git-mirrors")
+			gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
 			if err != nil {
 				return nil, err
 			}
@@ -204,7 +203,7 @@ func (b *BootstrapTester) writeHookScript(m *bintest.Mock, name string, dir stri
 		return "", err
 	}
 
-	return hookScript, ioutil.WriteFile(hookScript, []byte(body), 0600)
+	return hookScript, os.WriteFile(hookScript, []byte(body), 0600)
 }
 
 // ExpectLocalHook creates a mock object and a script in the git repository's buildkite hooks dir

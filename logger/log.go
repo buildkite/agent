@@ -3,7 +3,6 @@ package logger
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
@@ -259,6 +258,6 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 
 var Discard = &ConsoleLogger{
 	printer: &TextPrinter{
-		Writer: ioutil.Discard,
+		Writer: io.Discard,
 	},
 }

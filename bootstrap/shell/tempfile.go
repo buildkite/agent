@@ -2,7 +2,6 @@ package shell
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +22,7 @@ func TempFileWithExtension(filename string) (*os.File, error) {
 	}
 
 	// Create the file
-	tempFile, err := ioutil.TempFile(tempDir, basename+"-")
+	tempFile, err := os.CreateTemp(tempDir, basename+"-")
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create temporary file \"%s\" (%s)", filename, err)
 	}

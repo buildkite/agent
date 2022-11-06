@@ -3,7 +3,6 @@ package agent
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -70,7 +69,7 @@ func TestFormUploading(t *testing.T) {
 	}))
 	defer server.Close()
 
-	temp, err := ioutil.TempDir("", "agent")
+	temp, err := os.MkdirTemp("", "agent")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +84,7 @@ func TestFormUploading(t *testing.T) {
 
 	runtest := func(wd string) {
 		abspath := filepath.Join(wd, "llamas.txt")
-		err = ioutil.WriteFile(abspath, []byte("llamas"), 0700)
+		err = os.WriteFile(abspath, []byte("llamas"), 0700)
 		defer os.Remove(abspath)
 
 		uploader := NewFormUploader(logger.Discard, FormUploaderConfig{})
@@ -129,7 +128,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	temp, err := ioutil.TempDir("", "agent")
+	temp, err := os.MkdirTemp("", "agent")
 	if err != nil {
 		t.Fatal(err)
 	}

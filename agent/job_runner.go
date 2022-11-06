@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,7 +147,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	}
 
 	// Prepare a file to recieve the given job environment
-	if file, err := ioutil.TempFile(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
+	if file, err := os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", job.ID)); err != nil {
 		return runner, err
 	} else {
 		l.Debug("[JobRunner] Created env file: %s", file.Name())
@@ -224,7 +223,7 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the path to this temporary file.
 	var tmpFile *os.File
 	if conf.AgentConfiguration.EnableJobLogTmpfile {
-		tmpFile, err = ioutil.TempFile("", "buildkite_job_log")
+		tmpFile, err = os.CreateTemp("", "buildkite_job_log")
 		if err != nil {
 			return nil, err
 		}
