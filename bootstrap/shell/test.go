@@ -1,7 +1,7 @@
 package shell
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 	"runtime"
 	"testing"
@@ -17,7 +17,7 @@ func NewTestShell(t *testing.T) *Shell {
 	}
 
 	sh.Logger = DiscardLogger
-	sh.Writer = ioutil.Discard
+	sh.Writer = io.Discard
 
 	if os.Getenv(`DEBUG_SHELL`) == "1" {
 		sh.Logger = TestingLogger{T: t}

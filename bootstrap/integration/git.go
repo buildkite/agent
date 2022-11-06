@@ -2,7 +2,6 @@ package integration
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,7 +17,7 @@ func createTestGitRespository() (*gitRepository, error) {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test"), 0600); err != nil {
 		return nil, err
 	}
 
@@ -34,7 +33,7 @@ func createTestGitRespository() (*gitRepository, error) {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test pull request"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(repo.Path, "test.txt"), []byte("This is a test pull request"), 0600); err != nil {
 		return nil, err
 	}
 
@@ -62,7 +61,7 @@ type gitRepository struct {
 }
 
 func newGitRepository() (*gitRepository, error) {
-	tempDirRaw, err := ioutil.TempDir("", "git-repo")
+	tempDirRaw, err := os.MkdirTemp("", "git-repo")
 	if err != nil {
 		return nil, fmt.Errorf("Error creating temp dir: %v", err)
 	}

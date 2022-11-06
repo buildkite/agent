@@ -1,7 +1,7 @@
 package integration
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -19,7 +19,7 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
-		err := ioutil.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
+		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
 			t.Fatalf("Write failed with %v", err)
 		}
@@ -48,7 +48,7 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 	defer tester.Close()
 
 	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *bintest.Call) {
-		err := ioutil.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
+		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
 			t.Fatalf("Write failed with %v", err)
 		}
@@ -83,7 +83,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
-		err := ioutil.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
+		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
 			t.Fatalf("Write failed with %v", err)
 		}

@@ -2,7 +2,7 @@ package clicommand
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"time"
 
@@ -99,7 +99,7 @@ var MetaDataSetCommand = cli.Command{
 		if len(c.Args()) < 2 {
 			l.Info("Reading meta-data value from STDIN")
 
-			input, err := ioutil.ReadAll(os.Stdin)
+			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				l.Fatal("Failed to read from STDIN: %s", err)
 			}

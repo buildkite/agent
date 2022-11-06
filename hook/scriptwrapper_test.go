@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -190,7 +190,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		defer cleanup()
 	}
 
-	tempDir, err := ioutil.TempDir("", "hookwrapperdir")
+	tempDir, err := os.MkdirTemp("", "hookwrapperdir")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func assertScriptLike(t *testing.T, scriptTemplate, hookFileName string, wrapper
 
 	defer file.Close()
 
-	wrapperScriptContents, err := ioutil.ReadAll(file)
+	wrapperScriptContents, err := io.ReadAll(file)
 	assert.NoError(t, err)
 
 	expected := fmt.Sprintf(scriptTemplate, wrapper.beforeEnvFile.Name(), hookFileName, wrapper.afterEnvFile.Name())

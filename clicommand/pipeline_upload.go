@@ -3,7 +3,7 @@ package clicommand
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -151,7 +151,7 @@ var PipelineUploadCommand = cli.Command{
 			l.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
 
 			filename = filepath.Base(cfg.FilePath)
-			input, err = ioutil.ReadFile(cfg.FilePath)
+			input, err = os.ReadFile(cfg.FilePath)
 			if err != nil {
 				l.Fatal("Failed to read file: %s", err)
 			}
@@ -159,7 +159,7 @@ var PipelineUploadCommand = cli.Command{
 			l.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
-			input, err = ioutil.ReadAll(os.Stdin)
+			input, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				l.Fatal("Failed to read from STDIN: %s", err)
 			}
@@ -200,7 +200,7 @@ var PipelineUploadCommand = cli.Command{
 
 			// Read the default file
 			filename = path.Base(found)
-			input, err = ioutil.ReadFile(found)
+			input, err = os.ReadFile(found)
 			if err != nil {
 				l.Fatal("Failed to read file \"%s\" (%s)", found, err)
 			}

@@ -1,7 +1,6 @@
 package clicommand
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -60,7 +59,7 @@ func (p *profiler) Stop() {
 
 // Start starts a new profiling session.
 func (p *profiler) Start() {
-	path, err := ioutil.TempDir("", "profile")
+	path, err := os.MkdirTemp("", "profile")
 	if err != nil {
 		p.logger.Fatal("Could not create initial output directory: %v", err)
 	}

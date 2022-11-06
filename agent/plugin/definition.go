@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -54,7 +53,7 @@ func LoadDefinitionFromDir(dir string) (*Definition, error) {
 		return nil, err
 	}
 
-	b, err := ioutil.ReadFile(f)
+	b, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err
 	}

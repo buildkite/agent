@@ -3,7 +3,6 @@ package integration
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -508,7 +507,7 @@ func TestCleaningAnExistingCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Clone failed with %s", out)
 	}
-	err = ioutil.WriteFile(filepath.Join(tester.CheckoutDir(), "test.txt"), []byte("llamas"), 0700)
+	err = os.WriteFile(filepath.Join(tester.CheckoutDir(), "test.txt"), []byte("llamas"), 0700)
 	if err != nil {
 		t.Fatalf("Write failed with %s", out)
 	}
@@ -667,7 +666,7 @@ func TestRepositorylessCheckout(t *testing.T) {
 		"export BUILDKITE_REPO=",
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(tester.HooksDir, "environment"),
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"),
 		[]byte(strings.Join(script, "\n")), 0700); err != nil {
 		t.Fatal(err)
 	}

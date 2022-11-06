@@ -3,7 +3,6 @@ package integration
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -292,7 +291,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// Let's set a fixed location for plugins, otherwise NewBootstrapTester() gives us a random new
 	// tempdir every time, which defeats our test.  Later we'll use this pluginsDir for the second
 	// test run, too.
-	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +398,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	// Let's set a fixed location for plugins, otherwise it'll be a random new tempdir every time
 	// which defeats our test.
-	pluginsDir, err := ioutil.TempDir("", "bootstrap-plugins")
+	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +509,7 @@ func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
-		if err := ioutil.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -537,7 +536,7 @@ func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testP
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
-		if err := ioutil.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}

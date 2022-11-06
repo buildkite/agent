@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -888,7 +887,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	// Make the directory
-	tempDir, err := ioutil.TempDir(b.PluginsPath, id)
+	tempDir, err := os.MkdirTemp(b.PluginsPath, id)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,7 +1001,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 	// If we have a blank repository then use a temp dir for builds
 	if b.Config.Repository == "" {
 		var buildDir string
-		buildDir, err = ioutil.TempDir("", "buildkite-job-"+b.Config.JobID)
+		buildDir, err = os.MkdirTemp("", "buildkite-job-"+b.Config.JobID)
 		if err != nil {
 			return err
 		}
@@ -1638,7 +1637,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 
 		b.shell.Headerf("Running batch script")
 		if b.Debug {
-			contents, err := ioutil.ReadFile(batchScript)
+			contents, err := os.ReadFile(batchScript)
 			if err != nil {
 				return err
 			}
