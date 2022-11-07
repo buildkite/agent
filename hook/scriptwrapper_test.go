@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
@@ -38,15 +37,10 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 		}
 	}
 
-	var agent *bintest.Mock
-	if runtime.GOOS != "windows" {
-		var cleanup func()
-		var err error
-		agent, cleanup, err = mockAgent()
-		require.NoError(t, err)
+	agent, cleanup, err := mockAgent()
+	require.NoError(t, err)
 
-		defer cleanup()
-	}
+	defer cleanup()
 
 	wrapper := newTestScriptWrapper(t, script)
 	defer os.Remove(wrapper.Path())
@@ -110,11 +104,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	// See: https://pkg.go.dev/fmt > ctrl-f for "%%"
 	scriptTemplate := `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-SET > "%s"
+buildkite-agent env > "%s"
 CALL "%s"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%%CD%%
-SET > "%s"
+buildkite-agent env > "%s"
 EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -140,11 +134,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	defer wrapper.Close()
 
 	scriptTemplate := `$ErrorActionPreference = "STOP"
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
+buildkite-agent env | Set-Content "%s"
 %s
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-Get-ChildItem Env: | Foreach-Object {"$($_.Name)=$($_.Value)"} | Set-Content "%s"
+buildkite-agent env | Set-Content "%s"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -180,15 +174,10 @@ exit $BUILDKITE_HOOK_EXIT_STATUS`
 }
 
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
-	var agent *bintest.Mock
-	if runtime.GOOS != "windows" {
-		var cleanup func()
-		var err error
-		agent, cleanup, err = mockAgent()
-		require.NoError(t, err)
+	agent, cleanup, err := mockAgent()
+	require.NoError(t, err)
 
-		defer cleanup()
-	}
+	defer cleanup()
 
 	tempDir, err := os.MkdirTemp("", "hookwrapperdir")
 	if err != nil {
@@ -251,10 +240,8 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 		t.Fatalf("Expected working dir of %q, got %q", expected, changesDir)
 	}
 
-	if runtime.GOOS != "windows" {
-		err = agent.CheckAndClose(t)
-		require.NoError(t, err)
-	}
+	err = agent.CheckAndClose(t)
+	require.NoError(t, err)
 }
 
 func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {
@@ -324,8 +311,8 @@ func mockAgent() (*bintest.Mock, func(), error) {
 		AndCallFunc(func(c *bintest.Call) {
 			envMap := map[string]string{}
 
-			for _, e := range c.Env { // The env from the call
-				k, v, _ := strings.Cut(e, "=")
+			for _, e := range c.Env {
+				k, v, _ := env.Split(e)
 				envMap[k] = v
 			}
 

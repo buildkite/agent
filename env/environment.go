@@ -1,6 +1,7 @@
 package env
 
 import (
+	"encoding/json"
 	"runtime"
 	"sort"
 	"strings"
@@ -179,6 +180,29 @@ func (e Environment) ToSlice() []string {
 	sort.Strings(s)
 
 	return s
+}
+
+func (e Environment) MarshalJSON() ([]byte, error) {
+	normalised := make(map[string]string, len(e))
+	for k, v := range e {
+		normalised[normalizeKeyName(k)] = v
+	}
+
+	return json.Marshal(normalised)
+}
+
+func (e *Environment) UnmarshalJSON(data []byte) error {
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*e = make(Environment, len(raw))
+	for k, v := range raw {
+		e.Set(k, v)
+	}
+
+	return nil
 }
 
 // Environment variables on Windows are case-insensitive. When you run `SET`
