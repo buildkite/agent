@@ -4,30 +4,25 @@ import (
 	"testing"
 )
 
-func TestParseGSDestinationBucketPath(t *testing.T) {
-	for _, tc := range []struct {
-		Destination, Path string
+func TestParseGSDestination(t *testing.T) {
+	tests := []struct {
+		dest, bucket, path string
 	}{
-		{"gs://my-bucket-name/foo/bar", "foo/bar"},
-		{"gs://starts-with-an-s/and-this-is-its/folder", "and-this-is-its/folder"},
-	} {
-		_, path := ParseGSDestination(tc.Destination)
-		if path != tc.Path {
-			t.Fatalf("Expected %q, got %q", tc.Path, path)
-		}
+		{
+			dest:   "gs://my-bucket-name/foo/bar",
+			bucket: "my-bucket-name",
+			path:   "foo/bar",
+		},
+		{
+			dest:   "gs://starts-with-an-s/and-this-is-its/folder",
+			bucket: "starts-with-an-s",
+			path:   "and-this-is-its/folder",
+		},
 	}
-}
-
-func TestParseGSDestinationBucketName(t *testing.T) {
-	for _, tc := range []struct {
-		Destination, Bucket string
-	}{
-		{"gs://my-bucket-name/foo/bar", "my-bucket-name"},
-		{"gs://starts-with-an-s", "starts-with-an-s"},
-	} {
-		bucket, _ := ParseGSDestination(tc.Destination)
-		if bucket != tc.Bucket {
-			t.Fatalf("Expected %q, got %q", tc.Bucket, bucket)
+	for _, tc := range tests {
+		bucket, path := ParseGSDestination(tc.dest)
+		if bucket != tc.bucket || path != tc.path {
+			t.Errorf("ParseGSDestination(%q) = (%q, %q), want (%q, %q)", tc.dest, bucket, path, tc.bucket, tc.path)
 		}
 	}
 }

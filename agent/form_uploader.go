@@ -54,7 +54,7 @@ func (u *FormUploader) URL(artifact *api.Artifact) string {
 
 func (u *FormUploader) Upload(artifact *api.Artifact) error {
 	if artifact.FileSize > maxFormUploadedArtifactSize {
-		return errors.New(fmt.Sprintf("File size (%d bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files.", artifact.FileSize))
+		return errArtifactTooLarge{Size: artifact.FileSize}
 	}
 
 	// Create a HTTP request for uploading the file
@@ -258,4 +258,14 @@ type multipartReadCloser struct {
 
 func (mrc *multipartReadCloser) Close() error {
 	return mrc.fh.Close()
+}
+
+type errArtifactTooLarge struct {
+	Size int64
+}
+
+func (e errArtifactTooLarge) Error() string {
+	// TODO: Clean up error strings
+	// https://github.com/golang/go/wiki/CodeReviewComments#error-strings
+	return fmt.Sprintf("File size (%d bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files.", e.Size)
 }

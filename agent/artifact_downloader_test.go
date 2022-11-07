@@ -41,8 +41,7 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 		BuildID: "my-build",
 	})
 
-	err := d.Download()
-	if err != nil {
-		t.Fatal(err)
+	if err := d.Download(); err != nil {
+		t.Errorf("d.Download() = %v", err)
 	}
 }

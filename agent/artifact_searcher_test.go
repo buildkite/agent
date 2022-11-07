@@ -41,7 +41,7 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 
 	artifacts, err := s.Search("llamas.txt", "my-build", false, false)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`s.Search("llamas.txt", "my-build", false, false) error = %v`, err)
 	}
 
 	assert.Equal(t, []*api.Artifact{{
