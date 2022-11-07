@@ -3,11 +3,11 @@ package agent
 import (
 	"errors"
 	"os"
-	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -16,8 +16,8 @@ func TestFetchingTags(t *testing.T) {
 		Tags: []string{"llamas", "rock"},
 	})
 
-	if !reflect.DeepEqual(tags, []string{"llamas", "rock"}) {
-		t.Fatalf("bad tags: %#v", tags)
+	if diff := cmp.Diff(tags, []string{"llamas", "rock"}); diff != "" {
+		t.Errorf("(*tagFetcher).Fetch() diff (-got +want):\n%v", diff)
 	}
 }
 
@@ -32,7 +32,7 @@ func TestFetchingTagsWithHostTags(t *testing.T) {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.Hostname() error = %v", err)
 	}
 
 	assert.Contains(t, tags, "hostname="+hostname)
@@ -150,7 +150,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.Hostname() error = %v", err)
 	}
 
 	assert.Contains(t, tags, "llamas")

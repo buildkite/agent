@@ -4,30 +4,25 @@ import (
 	"testing"
 )
 
-func TestParseArtifactoryDestinationBucketPath(t *testing.T) {
-	for _, tc := range []struct {
-		Destination, Path string
+func TestParseArtifactoryDestination(t *testing.T) {
+	tests := []struct {
+		dest, bucket, path string
 	}{
-		{"rt://my-bucket-name/foo/bar", "foo/bar"},
-		{"rt://stats-with-an-s/and-this-is-its/folder", "and-this-is-its/folder"},
-	} {
-		_, path := ParseArtifactoryDestination(tc.Destination)
-		if path != tc.Path {
-			t.Fatalf("Expected %q, got %q", tc.Path, path)
-		}
+		{
+			dest:   "rt://my-bucket-name/foo/bar",
+			bucket: "my-bucket-name",
+			path:   "foo/bar",
+		},
+		{
+			dest:   "rt://starts-with-an-s/and-this-is-its/folder",
+			bucket: "starts-with-an-s",
+			path:   "and-this-is-its/folder",
+		},
 	}
-}
-
-func TestParseArtifactoryDestinationBucketName(t *testing.T) {
-	for _, tc := range []struct {
-		Destination, Bucket string
-	}{
-		{"rt://my-bucket-name/foo/bar", "my-bucket-name"},
-		{"rt://starts-with-an-s", "starts-with-an-s"},
-	} {
-		bucket, _ := ParseArtifactoryDestination(tc.Destination)
-		if bucket != tc.Bucket {
-			t.Fatalf("Expected %q, got %q", tc.Bucket, bucket)
+	for _, tc := range tests {
+		bucket, path := ParseArtifactoryDestination(tc.dest)
+		if bucket != tc.bucket || path != tc.path {
+			t.Errorf("ParseArtifactoryDestination(%q) = (%q, %q), want (%q, %q)", tc.dest, bucket, path, tc.bucket, tc.path)
 		}
 	}
 }

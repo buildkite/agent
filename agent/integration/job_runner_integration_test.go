@@ -33,9 +33,8 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	cfg := agent.AgentConfiguration{}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
-		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != jobToken {
-			t.Errorf("Expected access token to be %q, got %q\n",
-				jobToken, c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), jobToken; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
@@ -57,9 +56,8 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	cfg := agent.AgentConfiguration{}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
-		if c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN") != `llamasrock` {
-			t.Errorf("Expected access token to be %q, got %q\n",
-				`llamasrock`, c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"))
+		if got, want := c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN"), "llamasrock"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_AGENT_ACCESS_TOKEN) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
@@ -84,9 +82,8 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	}
 
 	runJob(t, ag, j, cfg, func(c *bintest.Call) {
-		if c.GetEnv("BUILDKITE_COMMAND_EVAL") != `true` {
-			t.Errorf("Expected BUILDKITE_COMMAND_EVAL to be %q, got %q\n",
-				`true`, c.GetEnv("BUILDKITE_COMMAND_EVAL"))
+		if got, want := c.GetEnv("BUILDKITE_COMMAND_EVAL"), "true"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_COMMAND_EVAL) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	})
@@ -101,7 +98,7 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 	// set up a mock bootstrap that the runner will call
 	bs, err := bintest.NewMock("buildkite-agent-bootstrap")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock() error = %v", err)
 	}
 	defer bs.CheckAndClose(t)
 
@@ -126,11 +123,11 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 		AgentConfiguration: cfg,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}
 
-	if err = jr.Run(); err != nil {
-		t.Fatal(err)
+	if err := jr.Run(); err != nil {
+		t.Errorf("jr.Run() = %v", err)
 	}
 }
 
@@ -147,8 +144,7 @@ func createTestAgentEndpoint(t *testing.T, jobID string) *httptest.Server {
 		case `/jobs/` + jobID + `/finish`:
 			rw.WriteHeader(http.StatusOK)
 		default:
-			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
-			http.Error(rw, "Not found", http.StatusNotFound)
+			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)
 		}
 	}))
 }

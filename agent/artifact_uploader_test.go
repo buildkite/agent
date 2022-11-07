@@ -112,14 +112,14 @@ func TestCollect(t *testing.T) {
 	experiments.Disable(`normalised-upload-paths`)
 	artifactsWithoutExperimentEnabled, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
 	experiments.Enable(`normalised-upload-paths`)
 	artifactsWithExperimentEnabled, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithExperimentEnabled))
 
@@ -129,7 +129,7 @@ func TestCollect(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			a := findArtifact(artifactsWithoutExperimentEnabled, tc.Name)
 			if a == nil {
-				t.Fatalf("Failed to find artifact %q", tc.Name)
+				t.Fatalf("findArtifact(%q) == nil", tc.Name)
 			}
 
 			assert.Equal(t, filepath.Join(tc.Path...), a.Path)
@@ -147,7 +147,7 @@ func TestCollect(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 			a := findArtifact(artifactsWithExperimentEnabled, tc.Name)
 			if a == nil {
-				t.Fatalf("Failed to find artifact %q", tc.Name)
+				t.Fatalf("findArtifact(%q) == nil", tc.Name)
 			}
 
 			// Note that the rootWithoutVolume component of some tc.Path values
@@ -183,7 +183,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	assert.Equal(t, len(artifacts), 0)
@@ -205,13 +205,12 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	if len(artifacts) != 4 {
-		t.Fatalf("Expected to match 4 artifacts, found %d", len(artifacts))
+		t.Errorf("len(artifacts) = %d, want 4", len(artifacts))
 	}
-
 }
 
 func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T) {
@@ -232,11 +231,11 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	if len(artifacts) != 5 {
-		t.Fatalf("Expected to match 5 artifacts, found %d", len(artifacts))
+		t.Errorf("len(artifacts) = %d, want 5", len(artifacts))
 	}
 }
 
@@ -255,7 +254,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	paths := []string{}
@@ -290,7 +289,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 
 	artifacts, err := uploader.Collect()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("uploader.Collect() error = %v", err)
 	}
 
 	paths := []string{}
