@@ -30,7 +30,7 @@ func TestAddingToKnownHosts(t *testing.T) {
 
 			ssh, err := bintest.NewMock("ssh")
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("bintest.NewMock(ssh) error = %v", err)
 			}
 			defer ssh.CheckAndClose(t)
 
@@ -53,10 +53,12 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 
 			f, err := os.CreateTemp("", "known-hosts")
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf(`os.CreateTemp("", "known-hosts") error = %v`, err)
 			}
-			_ = f.Close()
 			defer os.RemoveAll(f.Name())
+			if err := f.Close(); err != nil {
+				t.Fatalf("f.Close() = %v", err)
+			}
 
 			kh := knownHosts{
 				Shell: sh,
@@ -65,22 +67,22 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 
 			exists, err := kh.Contains(tc.Host)
 			if err != nil {
-				t.Fatal(err)
+				t.Errorf("kh.Contains(%q) error = %v", tc.Host, err)
 			}
-			if exists {
-				t.Fatalf("Host %q shouldn't exist yet in known_hosts", tc.Host)
+			if got, want := exists, false; got != want {
+				t.Errorf("kh.Contains(%q) = %t, want %t", tc.Host, got, want)
 			}
 
 			if err := kh.AddFromRepository(tc.Repository); err != nil {
-				t.Fatal(err)
+				t.Errorf("kh.AddFromRespository(%q) = %v", tc.Repository, err)
 			}
 
 			exists, err = kh.Contains(tc.Host)
 			if err != nil {
-				t.Fatal(err)
+				t.Errorf("kh.Contains(%q) error = %v", tc.Host, err)
 			}
-			if !exists {
-				t.Fatalf("Host %q should exist in known_hosts", tc.Host)
+			if got, want := exists, true; got != want {
+				t.Errorf("kh.Contains(%q) = %t, want %t", tc.Host, got, want)
 			}
 		})
 	}

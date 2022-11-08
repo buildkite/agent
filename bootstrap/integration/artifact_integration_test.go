@@ -13,15 +13,14 @@ func TestArtifactsUploadAfterCommand(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	// Write a file in the command hook
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
-		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
-		if err != nil {
-			t.Fatalf("Write failed with %v", err)
+		if err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700); err != nil {
+			t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
 		}
 		c.Exit(0)
 	})
@@ -43,14 +42,14 @@ func TestArtifactsUploadAfterCommandFails(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	tester.MustMock(t, "my-command").Expect().AndCallFunc(func(c *bintest.Call) {
 		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
-			t.Fatalf("Write failed with %v", err)
+			t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
 		}
 		c.Exit(1)
 	})
@@ -77,7 +76,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -85,7 +84,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 	tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
 		err := os.WriteFile(filepath.Join(c.Dir, "test.txt"), []byte("llamas"), 0700)
 		if err != nil {
-			t.Fatalf("Write failed with %v", err)
+			t.Fatalf("os.WriteFile(test.txt, llamas, 0700) = %v", err)
 		}
 		c.Exit(1)
 	})
@@ -100,7 +99,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 		AndExitWith(0)
 
 	if err := tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt"); err == nil {
-		t.Fatal("Expected bootstrap to fail")
+		t.Fatal("tester.Run(BUILDKITE_ARTIFACT_PATHS=llamas.txt) = nil, want non-nil error")
 	}
 
 	tester.CheckMocks(t)

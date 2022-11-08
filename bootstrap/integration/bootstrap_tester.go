@@ -46,32 +46,32 @@ type BootstrapTester struct {
 func NewBootstrapTester() (*BootstrapTester, error) {
 	homeDir, err := os.MkdirTemp("", "home")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("making home directory: %w", err)
 	}
 
 	pathDir, err := os.MkdirTemp("", "bootstrap-path")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("making bootstrap-path directory: %w", err)
 	}
 
 	buildDir, err := os.MkdirTemp("", "bootstrap-builds")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("making bootstrap-builds directory: %w", err)
 	}
 
 	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("making bootstrap-hooks directory: %w", err)
 	}
 
 	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("making bootstrap-plugins directory: %w", err)
 	}
 
 	repo, err := createTestGitRespository()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating test git repo: %w", err)
 	}
 
 	bt := &BootstrapTester{
@@ -112,7 +112,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 		if experiments.IsEnabled(`git-mirrors`) {
 			gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)
 			}
 
 			bt.GitMirrorsDir = gitMirrorsDir
@@ -140,7 +140,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	// Create a mock used for hook assertions
 	hook, err := bt.Mock("buildkite-agent-hooks")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mocking buildkite-agent-hooks: %w", err)
 	}
 	bt.hookMock = hook
 
@@ -155,14 +155,14 @@ func (b *BootstrapTester) Mock(name string) (*bintest.Mock, error) {
 	}
 
 	b.mocks = append(b.mocks, mock)
-	return mock, err
+	return mock, nil
 }
 
 // MustMock will fail the test if creating the mock fails
 func (b *BootstrapTester) MustMock(t *testing.T, name string) *bintest.Mock {
 	mock, err := b.Mock(name)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("BootstrapTester.Mock(%q) error = %v", name, err)
 	}
 	return mock
 }
@@ -319,7 +319,7 @@ func (b *BootstrapTester) RunAndCheck(t *testing.T, env ...string) {
 	t.Logf("Bootstrap output:\n%s", b.Output)
 
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("BootstrapTester.Run(%q) = %v", env, err)
 	}
 
 	b.CheckMocks(t)
@@ -403,11 +403,11 @@ func newTestLogWriter(t *testing.T) *testLogWriter {
 		}
 
 		if err := in.Err(); err != nil {
-			t.Errorf("Error with log writer: %v", err)
+			t.Errorf("Reading from pipe: %v", err)
 			r.CloseWithError(err)
-		} else {
-			r.Close()
+			return
 		}
+		r.Close()
 	}()
 
 	return lw
