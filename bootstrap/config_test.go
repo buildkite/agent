@@ -1,10 +1,10 @@
 package bootstrap
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestEnvVarsAreMappedToConfig(t *testing.T) {
@@ -30,7 +30,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	})
 
 	changes := config.ReadFromEnvironment(environ)
-	expected := map[string]string{
+	wantChanges := map[string]string{
 		"BUILDKITE_ARTIFACT_PATHS":             "newpath",
 		"BUILDKITE_GIT_CLONE_FLAGS":            "-f",
 		"BUILDKITE_REPO":                       "https://my.mirror/repo.git",
@@ -38,44 +38,45 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH": "true",
 	}
 
-	if !reflect.DeepEqual(expected, changes) {
-		t.Fatalf("%#v wasn't equal to %#v", expected, changes)
+	if diff := cmp.Diff(changes, wantChanges); diff != "" {
+		t.Errorf("config.ReadFromEnvironment(environ) diff (-got +want):\n%s", diff)
 	}
 
-	if expected := "-v"; config.GitCleanFlags != expected {
-		t.Fatalf("Expected GitCleanFlags to be %v, got %v",
-			expected, config.GitCleanFlags)
+	if got, want := config.GitCleanFlags, "-v"; got != want {
+		t.Errorf("config.GitCleanFlags = %q, want %q", got, want)
 	}
 
-	if expected := "https://my.mirror/repo.git"; config.Repository != expected {
-		t.Fatalf("Expected Repository to be %v, got %v",
-			expected, config.Repository)
+	if got, want := config.Repository, "https://my.mirror/repo.git"; got != want {
+		t.Errorf("config.Repository = %q, want %q", got, want)
 	}
 
-	if expected := true; config.CleanCheckout != expected {
-		t.Fatalf("Expected CleanCheckout to be %v, got %v",
-			expected, config.CleanCheckout)
+	if got, want := config.CleanCheckout, true; got != want {
+		t.Errorf("config.CleanCheckout = %t, want %t", got, want)
 	}
 
-	if expected := true; config.PluginsAlwaysCloneFresh != expected {
-		t.Fatalf("Expected PluginsAlwaysCloneFresh to be %v, got %v",
-			expected, config.PluginsAlwaysCloneFresh)
+	if got, want := config.PluginsAlwaysCloneFresh, true; got != want {
+		t.Errorf("config.PluginsAlwaysCloneFresh = %t, want %t", got, want)
 	}
 }
 
 func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	t.Parallel()
 	config := &Config{
-		CleanCheckout: true,
+		CleanCheckout:           true,
+		PluginsAlwaysCloneFresh: false,
 	}
 	environ := env.FromSlice([]string{
 		"BUILDKITE_CLEAN_CHECKOUT=blarg",
+		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=grarg",
 	})
 	changes := config.ReadFromEnvironment(environ)
 	if len(changes) != 0 {
-		t.Fatalf("expected no changes, got %#v", changes)
+		t.Errorf("changes = %v, want none", changes)
 	}
-	if expected := true; config.CleanCheckout != expected {
-		t.Fatalf("Expected %v, got %v", expected, config.CleanCheckout)
+	if got, want := config.CleanCheckout, true; got != want {
+		t.Errorf("config.CleanCheckout = %t, want %t", got, want)
+	}
+	if got, want := config.PluginsAlwaysCloneFresh, false; got != want {
+		t.Errorf("config.PluginsAlwaysCloneFresh = %t, want %t", got, want)
 	}
 }

@@ -2,71 +2,66 @@ package bootstrap
 
 import (
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/bintest/v3"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestParsingGittableRepositoryFromFilesPaths(t *testing.T) {
+func TestParseGittableURL(t *testing.T) {
 	t.Parallel()
 
-	u, err := parseGittableURL(`/home/vagrant/repo`)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		url, wantParsed, wantHost string
+	}{
+		{
+			url:        "/home/vagrant/repo",
+			wantParsed: "file:///home/vagrant/repo",
+			wantHost:   "",
+		},
+		{
+			url:        "file:///C:/Users/vagrant/repo",
+			wantParsed: "file:///C:/Users/vagrant/repo",
+			wantHost:   "",
+		},
+		{
+			url:        "git@github.com:buildkite/agent.git",
+			wantParsed: "ssh://git@github.com/buildkite/agent.git",
+			wantHost:   "github.com",
+		},
+		{
+			url:        "git@github.com-alias1:buildkite/agent.git",
+			wantParsed: "ssh://git@github.com-alias1/buildkite/agent.git",
+			wantHost:   "github.com-alias1",
+		},
+		{
+			url:        "ssh://git@scm.xxx:7999/yyy/zzz.git",
+			wantParsed: "ssh://git@scm.xxx:7999/yyy/zzz.git",
+			wantHost:   "scm.xxx:7999",
+		},
+		{
+			url:        "ssh://root@git.host.de:4019/var/cache/git/project.git",
+			wantParsed: "ssh://root@git.host.de:4019/var/cache/git/project.git",
+			wantHost:   "git.host.de:4019",
+		},
 	}
-	assert.Equal(t, `file:///home/vagrant/repo`, u.String())
-	assert.Empty(t, u.Host)
 
-	u, err = parseGittableURL(`file:///C:/Users/vagrant/repo`)
-	if err != nil {
-		t.Fatal(err)
+	for _, test := range tests {
+		u, err := parseGittableURL(test.url)
+		if err != nil {
+			t.Errorf("parseGittableURL(%q) error = %v", test.url, err)
+			continue
+		}
+		if got, want := u.String(), test.wantParsed; got != want {
+			t.Errorf("parseGittableURL(%q) u.String() = %q, want %q", test.url, got, want)
+		}
+		if got, want := u.Host, test.wantHost; got != want {
+			t.Errorf("parseGittableURL(%q) u.Host = %q, want %q", test.url, got, want)
+		}
 	}
-	assert.Equal(t, `file:///C:/Users/vagrant/repo`, u.String())
-	assert.Empty(t, u.Host)
-}
-
-func TestParsingGittableRepositoryFromGitURLs(t *testing.T) {
-	t.Parallel()
-
-	u, err := parseGittableURL(`git@github.com:buildkite/agent.git`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, `ssh://git@github.com/buildkite/agent.git`, u.String())
-	assert.Equal(t, `github.com`, u.Host)
-}
-
-func TestParsingGittableRepositoryFromGitURLsWithAliases(t *testing.T) {
-	t.Parallel()
-
-	u, err := parseGittableURL(`git@github.com-alias1:buildkite/agent.git`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, `ssh://git@github.com-alias1/buildkite/agent.git`, u.String())
-	assert.Equal(t, `github.com-alias1`, u.Host)
-}
-
-func TestParsingGittableRepositoryFromSSHURLsWithPorts(t *testing.T) {
-	t.Parallel()
-
-	u, err := parseGittableURL(`ssh://git@scm.xxx:7999/yyy/zzz.git`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, `ssh://git@scm.xxx:7999/yyy/zzz.git`, u.String())
-	assert.Equal(t, `scm.xxx:7999`, u.Host)
-
-	u, err = parseGittableURL(`ssh://root@git.host.de:4019/var/cache/git/project.git`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, `ssh://root@git.host.de:4019/var/cache/git/project.git`, u.String())
-	assert.Equal(t, `git.host.de:4019`, u.Host)
 }
 
 func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
@@ -76,7 +71,7 @@ func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 
 	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock(ssh) error = %v", err)
 	}
 	defer ssh.CheckAndClose(t)
 
@@ -312,7 +307,7 @@ func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
 
 	ssh, err := bintest.NewMock("ssh")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock(ssh) error = %v", err)
 	}
 	defer ssh.CheckAndClose(t)
 
@@ -350,7 +345,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 }
 
 func TestGitCheckRefFormat(t *testing.T) {
-	for ref, expect := range map[string]bool{
+	for ref, want := range map[string]bool{
 		"hello":          true,
 		"hello-world":    true,
 		"hello/world":    true,
@@ -367,85 +362,78 @@ func TestGitCheckRefFormat(t *testing.T) {
 		"@":              false,
 		"back\\slash":    false,
 	} {
-		t.Run(ref, func(t *testing.T) {
-			if gitCheckRefFormat(ref) != expect {
-				t.Errorf("gitCheckRefFormat(%q) should be %v", ref, expect)
-			}
-		})
+		if got := gitCheckRefFormat(ref); got != want {
+			t.Errorf("gitCheckRefFormat(%q) = %t, want %t", ref, got, want)
+		}
 	}
 }
 
 func TestGitCheckoutValidatesRef(t *testing.T) {
-	sh := mockRunner()
+	sh := new(mockShellRunner)
 	defer sh.Check(t)
 	err := gitCheckout(&shell.Shell{}, "", "--nope")
 	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
 }
 
 func TestGitCheckout(t *testing.T) {
-	sh := mockRunner().Expect("git", "checkout", "-f", "-q", "main")
+	sh := new(mockShellRunner).Expect("git", "checkout", "-f", "-q", "main")
 	defer sh.Check(t)
 	err := gitCheckout(sh, "-f -q", "main")
 	require.NoError(t, err)
 }
 
 func TestGitCheckoutSketchyArgs(t *testing.T) {
-	sh := mockRunner()
+	sh := new(mockShellRunner)
 	defer sh.Check(t)
 	err := gitCheckout(sh, "-f -q", "  --hello")
 	assert.EqualError(t, err, `"  --hello" is not a valid git ref format`)
 }
 
 func TestGitClone(t *testing.T) {
-	sh := mockRunner().Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
+	sh := new(mockShellRunner).Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
 	defer sh.Check(t)
 	err := gitClone(sh, "-v --references url", "repo", "dir")
 	require.NoError(t, err)
 }
 
 func TestGitClean(t *testing.T) {
-	sh := mockRunner().Expect("git", "clean", "--foo", "--bar")
+	sh := new(mockShellRunner).Expect("git", "clean", "--foo", "--bar")
 	defer sh.Check(t)
 	err := gitClean(sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitCleanSubmodules(t *testing.T) {
-	sh := mockRunner().Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
+	sh := new(mockShellRunner).Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
 	defer sh.Check(t)
 	err := gitCleanSubmodules(sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitFetch(t *testing.T) {
-	sh := mockRunner().Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
+	sh := new(mockShellRunner).Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
 	defer sh.Check(t)
 	err := gitFetch(sh, "--foo --bar", "repo", "ref1", "ref2")
 	require.NoError(t, err)
 }
 
-func mockRunner() *mockShellRunner {
-	return &mockShellRunner{}
-}
-
 // mockShellRunner implements shellRunner for testing expected calls.
 type mockShellRunner struct {
-	expect [][]string
-	calls  [][]string
+	got, want [][]string
 }
 
 func (r *mockShellRunner) Expect(cmd string, args ...string) *mockShellRunner {
-	r.expect = append(r.expect, append([]string{cmd}, args...))
+	r.want = append(r.want, append([]string{cmd}, args...))
 	return r
 }
 
 func (r *mockShellRunner) Run(cmd string, args ...string) error {
-	r.calls = append(r.calls, append([]string{cmd}, args...))
+	r.got = append(r.got, append([]string{cmd}, args...))
 	return nil
 }
 
 func (r *mockShellRunner) Check(t *testing.T) {
-	if !reflect.DeepEqual(r.calls, r.expect) {
-		t.Errorf("\nexpected: %q\n     got: %q\n", r.expect, r.calls)
+	if diff := cmp.Diff(r.got, r.want); diff != "" {
+		t.Errorf("mockShellRunner diff (-got +want):\n%s", diff)
 	}
 }

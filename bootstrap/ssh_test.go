@@ -19,14 +19,13 @@ func TestFindingSSHTools(t *testing.T) {
 
 	sh, err := shell.New()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
 
-	sh.Logger = shell.TestingLogger{t}
+	sh.Logger = shell.TestingLogger{T: t}
 
-	_, err = findPathToSSHTools(sh)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := findPathToSSHTools(sh); err != nil {
+		t.Errorf(`findPathToSSHTools(sh) error = %v`, err)
 	}
 }
 
@@ -37,7 +36,7 @@ func TestSSHKeyscanReturnsOutput(t *testing.T) {
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
 	}
 	defer keyScan.CheckAndClose(t)
 
@@ -61,7 +60,7 @@ func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
 	}
 	defer keyScan.CheckAndClose(t)
 
@@ -85,7 +84,7 @@ func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
 	}
 	defer keyScan.CheckAndClose(t)
 
@@ -110,7 +109,7 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 
 	keyScan, err := bintest.NewMock("ssh-keyscan")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.NewMock(ssh-keyscan) error = %v", err)
 	}
 	defer keyScan.CheckAndClose(t)
 

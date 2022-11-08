@@ -588,11 +588,7 @@ func (b *Bootstrap) tearDown(ctx context.Context) error {
 }
 
 func (b *Bootstrap) hasPlugins() bool {
-	if b.Config.Plugins == "" {
-		return false
-	}
-
-	return true
+	return b.Config.Plugins != ""
 }
 
 func (b *Bootstrap) preparePlugins() error {
