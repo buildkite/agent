@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.40.0](https://github.com/buildkite/agent/tree/v3.40.0) (2022-11-08)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.39.0...v3.40.0)
+
+### Added
+
+- Agent binaries for windows/arm64 [#1767](https://github.com/buildkite/agent/pull/1767) (@yob)
+- Alpine k8s image [#1771](https://github.com/buildkite/agent/pull/1771) (@dabarrell)
+
+### Security
+
+- (Fixed in 3.39.1) A security issue in environment handling between buildkite-agent and Bash 5.2 [#1781](https://github.com/buildkite/agent/pull/1781) (@moskyb)
+- Secret redaction now handles secrets containing UTF-8 code points greater than 255 [#1809](https://github.com/buildkite/agent/pull/1809) (@DrJosh9000)
+- The update to Go 1.19.3 fixes two Go security issues (particularly on Windows):
+   - The current directory (`.`) in `$PATH` is now ignored for finding executables - see https://go.dev/blog/path-security
+   - Environment variable values containing null bytes are now sanitised - see https://github.com/golang/go/issues/56284
+
+### Changed
+
+- 5xx responses are now retried when attempting to start a job [#1777](https://github.com/buildkite/agent/pull/1777) (@jonahbull)
+- 🧹 A variety of dependency updates and cleanups!
+
 ## [v3.39.0](https://github.com/buildkite/agent/tree/v3.39.0) (2022-09-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.38.0...v3.39.0)
 
