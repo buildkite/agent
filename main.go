@@ -91,6 +91,13 @@ func main() {
 			},
 		},
 		{
+			Name:  "oidc",
+			Usage: "Obtains OIDC information from Buildkite",
+			Subcommands: []cli.Command{
+				clicommand.OidcTokenCommand,
+			},
+		},
+		{
 			Name:  "pipeline",
 			Usage: "Make changes to the pipeline of the currently running build",
 			Subcommands: []cli.Command{
