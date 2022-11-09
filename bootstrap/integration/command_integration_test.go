@@ -16,7 +16,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -25,9 +25,8 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 
 	setup.Expect().Once()
 	build.Expect().Once().AndCallFunc(func(c *bintest.Call) {
-		llamas := c.GetEnv(`LLAMAS`)
-		if llamas != "COOL" {
-			t.Errorf("Expected LLAMAS=COOL, got %s", llamas)
+		if got, want := c.GetEnv("LLAMAS"), "COOL"; got != want {
+			t.Errorf("c.GetEnv(LLAMAS) = %q, want %q", got, want)
 			c.Exit(1)
 		} else {
 			c.Exit(0)
@@ -45,7 +44,7 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -56,9 +55,8 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 		AndExitWith(0)
 
 	preExitFunc := func(c *bintest.Call) {
-		cmdExitStatus := c.GetEnv(`BUILDKITE_COMMAND_EXIT_STATUS`)
-		if cmdExitStatus != "1" {
-			t.Errorf("Expected an exit status of 1, got %v", cmdExitStatus)
+		if got, want := c.GetEnv("BUILDKITE_COMMAND_EXIT_STATUS"), "1"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_COMMAND_EXIT_STATUS) = %q, want %q", got, want)
 		}
 		c.Exit(0)
 	}
@@ -66,8 +64,8 @@ func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(preExitFunc)
 
-	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
-		t.Fatal("Expected the bootstrap to fail")
+	if err := tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
+		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=false) = %v, want non-nil error", err)
 	}
 
 	tester.CheckMocks(t)

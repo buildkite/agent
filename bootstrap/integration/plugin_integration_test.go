@@ -19,35 +19,34 @@ func TestRunningPlugins(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	pluginMock := tester.MustMock(t, "my-plugin")
 
-	var p *testPlugin
-
+	hooks := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"export LLAMAS_ROCK=absolutely",
+			pluginMock.Path + " testing",
+		},
+	}
 	if runtime.GOOS == "windows" {
-		p = createTestPlugin(t, map[string][]string{
+		hooks = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"set LLAMAS_ROCK=absolutely",
 				pluginMock.Path + " testing",
 			},
-		})
-	} else {
-		p = createTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"export LLAMAS_ROCK=absolutely",
-				pluginMock.Path + " testing",
-			},
-		})
+		}
 	}
+
+	p := createTestPlugin(t, hooks)
 
 	json, err := p.ToJSON()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("testPlugin.ToJSON() error = %v", err)
 	}
 
 	env := []string{
@@ -81,31 +80,30 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	var p *testPlugin
-
+	hooks := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"exit 5",
+		},
+	}
 	if runtime.GOOS == "windows" {
-		p = createTestPlugin(t, map[string][]string{
+		hooks = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"exit 5",
 			},
-		})
-	} else {
-		p = createTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"exit 5",
-			},
-		})
+		}
 	}
+
+	p := createTestPlugin(t, hooks)
 
 	json, err := p.ToJSON()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("testPlugin.ToJSON() error = %v", err)
 	}
 
 	env := []string{
@@ -113,14 +111,12 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	}
 
 	err = tester.Run(t, env...)
+
 	if err == nil {
-		t.Fatal("Expected the bootstrap to fail")
+		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
-
-	exitCode := shell.GetExitCode(err)
-
-	if exitCode != 5 {
-		t.Fatalf("Expected an exit code of %d, got %d", 5, exitCode)
+	if got, want := shell.GetExitCode(err), 5; got != want {
+		t.Fatalf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 	}
 
 	tester.CheckMocks(t)
@@ -131,7 +127,7 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -139,8 +135,8 @@ func TestMalformedPluginNamesDontCrashBootstrap(t *testing.T) {
 		`BUILDKITE_PLUGINS=["sdgmdgn.@$!sdf,asdf#llamas"]`,
 	}
 
-	if err = tester.Run(t, env...); err == nil {
-		t.Fatal("Expected the bootstrap to fail")
+	if err := tester.Run(t, env...); err == nil {
+		t.Fatalf("tester.Run(t, %v) = %v, want non-nil error", env, err)
 	}
 
 	tester.CheckMocks(t)
@@ -155,7 +151,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -199,7 +195,7 @@ func TestOverlappingPluginHooks(t *testing.T) {
 
 	pluginsJSON, err := json.Marshal(testPlugins)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("json.Marshal(testPlugins) error = %v", err)
 	}
 
 	env := []string{
@@ -219,32 +215,33 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	var p *testPlugin
+	hooks := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"export LLAMAS_ROCK=absolutely",
+		},
+	}
+
 	if runtime.GOOS == "windows" {
-		p = createTestPlugin(t, map[string][]string{
+		hooks = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"set LLAMAS_ROCK=absolutely",
 			},
-		})
-	} else {
-		p = createTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"export LLAMAS_ROCK=absolutely",
-			},
-		})
+		}
 	}
+
+	p := createTestPlugin(t, hooks)
 
 	callCount := 0
 
 	realGit, err := exec.LookPath("git")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("exec.LookPath(git) error = %v", err)
 	}
 
 	git := tester.MustMock(t, "git")
@@ -263,7 +260,7 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	json, err := p.ToJSON()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("testPlugin.ToJSON() error = %v", err)
 	}
 
 	env := []string{
@@ -284,7 +281,7 @@ func TestPluginCloneRetried(t *testing.T) {
 func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -293,7 +290,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// test run, too.
 	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "bootstrap-plugins") error = %v`, err)
 	}
 	tester.PluginsDir = pluginsDir
 
@@ -303,22 +300,21 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
 
 	// Create a test plugin that sets an environment variable.
-	var p *testPlugin
+	hooks := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"export OSTRICH_EGGS=quite_large",
+		},
+	}
 	if runtime.GOOS == "windows" {
-		p = createTestPlugin(t, map[string][]string{
+		hooks = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"set OSTRICH_EGGS=quite_large",
 			},
-		})
-	} else {
-		p = createTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"export OSTRICH_EGGS=quite_large",
-			},
-		})
+		}
 	}
+	p := createTestPlugin(t, hooks)
 
 	// You may be surprised that we're creating a branch here.  This is so we can test the behaviour
 	// when a branch has had new commits added to it.
@@ -329,7 +325,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 
 	json, err := p.ToJSON()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("testPlugin.ToJSON() error = %v", err)
 	}
 
 	env := []string{
@@ -350,7 +346,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	// Now, we want to "repeat" the test build, having modified the plugin's contents.
 	tester2, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -358,21 +354,21 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	tester2.PluginsDir = pluginsDir
 	tester2.Env = replacePluginPathInEnv(tester2.Env, pluginsDir)
 
+	hooks2 := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"export OSTRICH_EGGS=huge_actually",
+		},
+	}
 	if runtime.GOOS == "windows" {
-		modifyTestPlugin(t, map[string][]string{
+		hooks2 = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"set OSTRICH_EGGS=huge_actually",
 			},
-		}, p)
-	} else {
-		modifyTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"export OSTRICH_EGGS=huge_actually",
-			},
-		}, p)
+		}
 	}
+	modifyTestPlugin(t, hooks2, p)
 
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
 		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
@@ -392,7 +388,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 func TestModifiedPluginWithForcePull(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -400,29 +396,28 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	// which defeats our test.
 	pluginsDir, err := os.MkdirTemp("", "bootstrap-plugins")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "bootstrap-plugins") error = %v`, err)
 	}
 
 	// Same resetting code for BUILDKITE_PLUGINS_PATH as in the previous test
 	tester.PluginsDir = pluginsDir
 	tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
 
-	var p *testPlugin
+	hooks := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"export OSTRICH_EGGS=quite_large",
+		},
+	}
 	if runtime.GOOS == "windows" {
-		p = createTestPlugin(t, map[string][]string{
+		hooks = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"set OSTRICH_EGGS=quite_large",
 			},
-		})
-	} else {
-		p = createTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"export OSTRICH_EGGS=quite_large",
-			},
-		})
+		}
 	}
+	p := createTestPlugin(t, hooks)
 
 	// Same branch-name jiggery pokery as in the previous integration test
 	p.gitRepository.CreateBranch("something-fixed")
@@ -430,7 +425,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	json, err := p.ToJSON()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("testPlugin.ToJSON() error = %v", err)
 	}
 
 	env := []string{
@@ -450,7 +445,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 
 	tester2, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester2.Close()
 
@@ -460,21 +455,21 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	// Notice the all-important setting, BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH, being enabled.
 	tester2.Env = append(tester2.Env, "BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true")
 
+	hooks2 := map[string][]string{
+		"environment": {
+			"#!/bin/bash",
+			"export OSTRICH_EGGS=huge_actually",
+		},
+	}
 	if runtime.GOOS == "windows" {
-		modifyTestPlugin(t, map[string][]string{
+		hooks2 = map[string][]string{
 			"environment.bat": {
 				"@echo off",
 				"set OSTRICH_EGGS=huge_actually",
 			},
-		}, p)
-	} else {
-		modifyTestPlugin(t, map[string][]string{
-			"environment": {
-				"#!/bin/bash",
-				"export OSTRICH_EGGS=huge_actually",
-			},
-		}, p)
+		}
 	}
+	modifyTestPlugin(t, hooks2, p)
 
 	// This time, we expect the value of OSTRICH_EGGS to have changed compared to the first test
 	// run.
@@ -500,31 +495,31 @@ type testPlugin struct {
 func createTestPlugin(t *testing.T, hooks map[string][]string) *testPlugin {
 	repo, err := newGitRepository()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("newGitRepository() error = %v", err)
 	}
 
 	if err := os.MkdirAll(filepath.Join(repo.Path, "hooks"), 0700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.MkdirAll(hooks, 0700) = %v", err)
 	}
 
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
 		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
-			t.Fatal(err)
+			t.Fatalf("os.WriteFile(hooks/%s, data, 0600) = %v", hook, err)
 		}
 	}
 
-	if err = repo.Add("."); err != nil {
-		t.Fatal(err)
+	if err := repo.Add("."); err != nil {
+		t.Fatalf("repo.Add(.) = %v", err)
 	}
 
-	if err = repo.Commit("Initial commit of plugin hooks"); err != nil {
-		t.Fatal(err)
+	if err := repo.Commit("Initial commit of plugin hooks"); err != nil {
+		t.Fatalf(`repo.Commit("Initial commit of plugin hooks") = %v`, err)
 	}
 
 	commitHash, err := repo.RevParse("HEAD")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`repo.RevParse("HEAD") error = %v`, err)
 	}
 	return &testPlugin{repo, commitHash}
 }
@@ -537,16 +532,16 @@ func modifyTestPlugin(t *testing.T, hooks map[string][]string, testPlugin *testP
 	for hook, lines := range hooks {
 		data := []byte(strings.Join(lines, "\n"))
 		if err := os.WriteFile(filepath.Join(repo.Path, "hooks", hook), data, 0600); err != nil {
-			t.Fatal(err)
+			t.Fatalf("os.WriteFile(hooks/%s, data, 0600) = %v", hook, err)
 		}
 	}
 
 	if err := repo.Add("."); err != nil {
-		t.Fatal(err)
+		t.Fatalf("repo.Add(.) = %v", err)
 	}
 
 	if err := repo.Commit("Updating content of plugin"); err != nil {
-		t.Fatal(err)
+		t.Fatalf(`repo.Commit("Updating content of plugin") = %v`, err)
 	}
 }
 
