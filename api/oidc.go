@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -33,14 +32,10 @@ func (c *Client) OidcToken(jobId string, audience ...string) (*OidcToken, *Respo
 		return nil, nil, err
 	}
 
-	resp, err := c.doRequest(req, m)
+	t := &OidcToken{}
+	resp, err := c.doRequest(req, t)
 	if err != nil {
 		return nil, nil, err
-	}
-
-	t := &OidcToken{}
-	if err := json.NewDecoder(resp.Body).Decode(t); err != nil {
-		return nil, resp, err
 	}
 
 	return t, resp, err
