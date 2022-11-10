@@ -13,7 +13,7 @@ import (
 func NewTestShell(t *testing.T) *Shell {
 	sh, err := New()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
 
 	sh.Logger = DiscardLogger

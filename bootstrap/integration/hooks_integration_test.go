@@ -19,30 +19,25 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
-	if runtime.GOOS != "windows" {
-		var script = []string{
-			"#!/bin/bash",
-			"export LLAMAS_ROCK=absolutely",
-		}
-
-		if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"),
-			[]byte(strings.Join(script, "\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		var script = []string{
+	filename := "environment"
+	script := []string{
+		"#!/bin/bash",
+		"export LLAMAS_ROCK=absolutely",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
 			"@echo off",
 			"set LLAMAS_ROCK=absolutely",
 		}
+	}
 
-		if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment.bat"),
-			[]byte(strings.Join(script, "\r\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0700) = %v", filename, err)
 	}
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
@@ -71,46 +66,38 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
+	preCmdFile, postCmdFile := "pre-command", "post-command"
+	preCommand := []string{
+		"#!/bin/bash",
+		"export LLAMAS_ROCK=absolutely",
+	}
+	postCommand := []string{
+		"#!/bin/bash",
+		"unset LLAMAS_ROCK",
+	}
+
 	if runtime.GOOS == "windows" {
-		var preCommand = []string{
+		preCmdFile, postCmdFile = "pre-command.bat", "post-command.bat"
+		preCommand = []string{
 			"@echo off",
 			"set LLAMAS_ROCK=absolutely",
 		}
-		if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command.bat"),
-			[]byte(strings.Join(preCommand, "\r\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
-
-		var postCommand = []string{
+		postCommand = []string{
 			"@echo off",
 			"set LLAMAS_ROCK=",
 		}
-		if err := os.WriteFile(filepath.Join(tester.HooksDir, "post-command.bat"),
-			[]byte(strings.Join(postCommand, "\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		var preCommand = []string{
-			"#!/bin/bash",
-			"export LLAMAS_ROCK=absolutely",
-		}
-		if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"),
-			[]byte(strings.Join(preCommand, "\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
+	}
 
-		var postCommand = []string{
-			"#!/bin/bash",
-			"unset LLAMAS_ROCK",
-		}
-		if err := os.WriteFile(filepath.Join(tester.HooksDir, "post-command"),
-			[]byte(strings.Join(postCommand, "\n")), 0700); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, preCmdFile), []byte(strings.Join(preCommand, "\n")), 0700); err != nil {
+		t.Fatalf("os.WriteFile(%q, preCommand, 0700) = %v", preCmdFile, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, postCmdFile), []byte(strings.Join(postCommand, "\n")), 0700); err != nil {
+		t.Fatalf("os.WriteFile(%q, postCommand, 0700) = %v", postCmdFile, err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -139,7 +126,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -147,7 +134,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 		t.Skip("Not implemented for windows yet")
 	}
 
-	var script = []string{
+	script := []string{
 		"#!/bin/bash",
 		"mkdir -p ./mysubdir",
 		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
@@ -155,7 +142,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -173,7 +160,7 @@ func TestDirectoryPassesBetweenHooks(t *testing.T) {
 func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -181,7 +168,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 		t.Skip("Not implemented for windows yet")
 	}
 
-	var script = []string{
+	script := []string{
 		"#!/bin/bash",
 		"mkdir -p ./mysubdir",
 		"export MY_CUSTOM_SUBDIR=$(cd mysubdir; pwd)",
@@ -190,7 +177,7 @@ func TestDirectoryPassesBetweenHooksIgnoredUnderExit(t *testing.T) {
 	}
 
 	if err := os.WriteFile(filepath.Join(tester.HooksDir, "pre-command"), []byte(strings.Join(script, "\n")), 0700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.WriteFile(pre-command, script, 0700) = %v", err)
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
@@ -210,7 +197,7 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -240,7 +227,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -269,7 +256,7 @@ func TestReplacingGlobalCommandHook(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -294,7 +281,7 @@ func TestReplacingLocalCommandHook(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -320,15 +307,15 @@ func TestPreExitHooksFireAfterCommandFailures(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	if err = tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
-		t.Fatal("Expected the bootstrap to fail")
+	if err := tester.Run(t, "BUILDKITE_COMMAND=false"); err == nil {
+		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=false) = %v, want non-nil error", err)
 	}
 
 	tester.CheckMocks(t)
@@ -361,7 +348,7 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 
 			tester, err := NewBootstrapTester()
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("NewBootstrapTester() error = %v", err)
 			}
 			defer tester.Close()
 
@@ -397,8 +384,8 @@ func TestPreExitHooksFireAfterHookFailures(t *testing.T) {
 					AndExitWith(0)
 			}
 
-			if err = tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
-				t.Fatal("Expected the bootstrap to fail")
+			if err := tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=test.txt"); err == nil {
+				t.Fatalf("tester.Run(t, BUILDKITE_ARTIFACT_PATHS=test.txt) = %v, want non-nil error", err)
 			}
 
 			tester.CheckMocks(t)
@@ -411,7 +398,7 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -421,7 +408,7 @@ func TestNoLocalHooksCalledWhenConfigSet(t *testing.T) {
 	tester.ExpectLocalHook("pre-command").NotCalled()
 
 	if err = tester.Run(t, "BUILDKITE_COMMAND=true"); err == nil {
-		t.Fatal("Expected the bootstrap to fail due to local hook being called")
+		t.Fatalf("tester.Run(t, BUILDKITE_COMMAND=true) = %v, want non-nil error", err)
 	}
 
 	tester.CheckMocks(t)
@@ -445,21 +432,19 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 		t.Run(hook, func(t *testing.T) {
 			tester, err := NewBootstrapTester()
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("NewBootstrapTester() error = %v", err)
 			}
 			defer tester.Close()
 
 			tester.ExpectGlobalHook(hook).Once().AndExitWith(5)
 
 			err = tester.Run(t)
+
 			if err == nil {
-				t.Fatalf("Expected the bootstrap to fail because %s hook exits", hook)
+				t.Fatalf("tester.Run(t) = %v, want non-nil error", err)
 			}
-
-			exitCode := shell.GetExitCode(err)
-
-			if exitCode != 5 {
-				t.Fatalf("Expected an exit code of %d, got %d", 5, exitCode)
+			if got, want := shell.GetExitCode(err), 5; got != want {
+				t.Fatalf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 			}
 
 			tester.CheckMocks(t)
@@ -468,6 +453,7 @@ func TestExitCodesPropagateOutFromGlobalHooks(t *testing.T) {
 }
 
 func TestPreExitHooksFireAfterCancel(t *testing.T) {
+	// TODO: Why is this test skipped on windows and darwin?
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		t.Skip()
 	}
@@ -476,7 +462,7 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 
 	tester, err := NewBootstrapTester()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("NewBootstrapTester() error = %v", err)
 	}
 	defer tester.Close()
 
@@ -488,8 +474,8 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		if err = tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
-			t.Errorf("Expected tester to fail with error")
+		if err := tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
+			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=sleep 5") = %v, want non-nil error`, err)
 		}
 		t.Logf("Command finished")
 	}()

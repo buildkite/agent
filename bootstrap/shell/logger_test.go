@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestAnsiLogger(t *testing.T) {
-	b := &bytes.Buffer{}
-	l := shell.WriterLogger{Writer: b, Ansi: false}
+	got := &bytes.Buffer{}
+	l := shell.WriterLogger{Writer: got, Ansi: false}
 
 	l.Headerf("Testing header: %q", "llamas")
 	l.Printf("Testing print: %q", "llamas")
@@ -20,33 +21,30 @@ func TestAnsiLogger(t *testing.T) {
 	l.Warningf("Testing warning: %q", "llamas")
 	l.Promptf("Testing prompt: %q", "llamas")
 
-	expected := &bytes.Buffer{}
+	want := &bytes.Buffer{}
 
-	fmt.Fprintln(expected, `~~~ Testing header: "llamas"`)
-	fmt.Fprintln(expected, `Testing print: "llamas"`)
-	fmt.Fprintln(expected, `# Testing comment: "llamas"`)
-	fmt.Fprintln(expected, `🚨 Error: Testing error: "llamas"`)
-	fmt.Fprintln(expected, `^^^ +++`)
-	fmt.Fprintln(expected, `⚠️ Warning: Testing warning: "llamas"`)
-	fmt.Fprintln(expected, `^^^ +++`)
+	fmt.Fprintln(want, `~~~ Testing header: "llamas"`)
+	fmt.Fprintln(want, `Testing print: "llamas"`)
+	fmt.Fprintln(want, `# Testing comment: "llamas"`)
+	fmt.Fprintln(want, `🚨 Error: Testing error: "llamas"`)
+	fmt.Fprintln(want, `^^^ +++`)
+	fmt.Fprintln(want, `⚠️ Warning: Testing warning: "llamas"`)
+	fmt.Fprintln(want, `^^^ +++`)
 
 	if runtime.GOOS == "windows" {
-		fmt.Fprintln(expected, `> Testing prompt: "llamas"`)
+		fmt.Fprintln(want, `> Testing prompt: "llamas"`)
 	} else {
-
-		fmt.Fprintln(expected, `$ Testing prompt: "llamas"`)
+		fmt.Fprintln(want, `$ Testing prompt: "llamas"`)
 	}
 
-	actual := b.String()
-
-	if actual != expected.String() {
-		t.Fatalf("Expected %q, got %q", expected.String(), actual)
+	if diff := cmp.Diff(got.String(), want.String()); diff != "" {
+		t.Fatalf("shell.WriterLogger output buffer diff (-got +want):\n%s", diff)
 	}
 }
 
 func TestLoggerStreamer(t *testing.T) {
-	b := &bytes.Buffer{}
-	l := &shell.WriterLogger{Writer: b, Ansi: false}
+	got := &bytes.Buffer{}
+	l := &shell.WriterLogger{Writer: got, Ansi: false}
 
 	streamer := shell.NewLoggerStreamer(l)
 	streamer.Prefix = "TEST>"
@@ -58,18 +56,16 @@ func TestLoggerStreamer(t *testing.T) {
 	fmt.Fprint(streamer, "# No line end")
 
 	if err := streamer.Close(); err != nil {
-		t.Fatal(err)
+		t.Errorf("streamer.Close() = %v", err)
 	}
 
-	expected := &bytes.Buffer{}
+	want := &bytes.Buffer{}
 
-	fmt.Fprintln(expected, `TEST># Rest of the line`)
-	fmt.Fprintln(expected, `TEST># And another`)
-	fmt.Fprintln(expected, `TEST># No line end`)
+	fmt.Fprintln(want, `TEST># Rest of the line`)
+	fmt.Fprintln(want, `TEST># And another`)
+	fmt.Fprintln(want, `TEST># No line end`)
 
-	actual := b.String()
-
-	if actual != expected.String() {
-		t.Fatalf("Expected %q, got %q", expected.String(), actual)
+	if diff := cmp.Diff(got.String(), want.String()); diff != "" {
+		t.Fatalf("shell.WriterLogger output buffer diff (-got +want):\n%s", diff)
 	}
 }

@@ -17,13 +17,13 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/bintest/v3"
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
 	defer sshKeygen.Close()
 
@@ -36,20 +36,20 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 		call.Exit(0)
 	}()
 
-	actual, err := sh.RunAndCapture(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
+	got, err := sh.RunAndCapture(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com")
 	if err != nil {
-		t.Error(err)
+		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
 	}
 
-	if expected := "Llama party! 🎉"; string(actual) != expected {
-		t.Errorf("Expected %q, got %q", expected, actual)
+	if want := "Llama party! 🎉"; got != want {
+		t.Errorf(`sh.RunAndCapture(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") output = %q, want %q`, got, want)
 	}
 }
 
 func TestRunAndCaptureWithExitCode(t *testing.T) {
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
 	defer sshKeygen.Close()
 
@@ -63,18 +63,18 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 
 	_, err = sh.RunAndCapture(sshKeygen.Path)
 	if err == nil {
-		t.Error("Expected an error, got nil")
+		t.Errorf("sh.RunAndCapture(ssh-keygen) error = %v, want non-nil error", err)
 	}
 
-	if exitCode := shell.GetExitCode(err); exitCode != 24 {
-		t.Fatalf("Expected %d, got %d", 24, exitCode)
+	if got, want := shell.GetExitCode(err), 24; got != want {
+		t.Errorf("shell.GetExitCode(%v) = %d, want %d", err, got, want)
 	}
 }
 
 func TestRun(t *testing.T) {
 	sshKeygen, err := bintest.CompileProxy("ssh-keygen")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.CompileProxy(ssh-keygen) error = %v", err)
 	}
 	defer sshKeygen.Close()
 
@@ -91,19 +91,18 @@ func TestRun(t *testing.T) {
 		call.Exit(0)
 	}()
 
-	if err = sh.Run(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com"); err != nil {
-		t.Fatal(err)
+	if err := sh.Run(sshKeygen.Path, "-f", "my_hosts", "-F", "llamas.com"); err != nil {
+		t.Errorf(`sh.Run(ssh-keygen, "-f", "my_hosts", "-F", "llamas.com") error = %v`, err)
 	}
-
-	actual := out.String()
 
 	promptPrefix := "$"
 	if runtime.GOOS == "windows" {
 		promptPrefix = ">"
 	}
 
-	if expected := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"; actual != expected {
-		t.Fatalf("Expected %q, got %q", expected, actual)
+	want := promptPrefix + " " + sshKeygen.Path + " -f my_hosts -F llamas.com\nLlama party! 🎉\n"
+	if diff := cmp.Diff(out.String(), want); diff != "" {
+		t.Fatalf("sh.Writer diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -112,23 +111,22 @@ func TestRunWithStdin(t *testing.T) {
 	sh := newShellForTest(t)
 	sh.Writer = out
 
-	err := sh.WithStdin(strings.NewReader("hello stdin")).Run("tr", "hs", "HS")
-	if err != nil {
-		t.Fatal(err)
+	if err := sh.WithStdin(strings.NewReader("hello stdin")).Run("tr", "hs", "HS"); err != nil {
+		t.Fatalf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") error = %v`, err)
 	}
-	if expected, actual := "Hello Stdin", out.String(); expected != actual {
-		t.Errorf("expected %q, got %q", expected, actual)
+	if got, want := out.String(), "Hello Stdin"; want != got {
+		t.Errorf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") output = %q, want %q`, got, want)
 	}
 }
 
 func TestContextCancelTerminates(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
 	}
 
 	sleepCmd, err := bintest.CompileProxy("sleep")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
 	}
 	defer sleepCmd.Close()
 
@@ -137,7 +135,7 @@ func TestContextCancelTerminates(t *testing.T) {
 
 	sh, err := shell.NewWithContext(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.NewWithContext(ctx) error = %v", err)
 	}
 
 	sh.Logger = shell.DiscardLogger
@@ -150,9 +148,8 @@ func TestContextCancelTerminates(t *testing.T) {
 
 	cancel()
 
-	err = sh.Run(sleepCmd.Path)
-	if !shell.IsExitSignaled(err) {
-		t.Fatalf("Expected signal exit, got %#v", err)
+	if err := sh.Run(sleepCmd.Path); !shell.IsExitSignaled(err) {
+		t.Errorf("sh.Run(sleep) error = %v, want shell.IsExitSignaled(err) = true", err)
 	}
 }
 
@@ -163,7 +160,7 @@ func TestInterrupt(t *testing.T) {
 
 	sleepCmd, err := bintest.CompileProxy("sleep")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bintest.CompileProxy(sleep) error = %v", err)
 	}
 	defer sleepCmd.Close()
 
@@ -172,7 +169,7 @@ func TestInterrupt(t *testing.T) {
 
 	sh, err := shell.NewWithContext(ctx)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.NewWithContext(ctx) error = %v", err)
 	}
 
 	sh.Logger = shell.DiscardLogger
@@ -189,85 +186,100 @@ func TestInterrupt(t *testing.T) {
 		sh.Interrupt()
 	}()
 
-	err = sh.Run(sleepCmd.Path)
-	if err == nil {
-		t.Error("Expected an error")
+	if err := sh.Run(sleepCmd.Path); err == nil {
+		t.Errorf("sh.Run(sleep) = %v, want non-nil error", err)
 	}
 }
 
 func TestDefaultWorkingDirFromSystem(t *testing.T) {
 	sh, err := shell.New()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
 
-	currentWd, _ := os.Getwd()
-	if actual := sh.Getwd(); actual != currentWd {
-		t.Fatalf("Expected working dir %q, got %q", currentWd, actual)
+	want, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+	if got := sh.Getwd(); got != want {
+		t.Fatalf("sh.Getwd() = %q, want %q", got, want)
 	}
 }
 
 func TestWorkingDir(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "shelltest") error = %v`, err)
 	}
 	defer os.RemoveAll(tempDir)
 
 	// macos has a symlinked temp dir
 	if runtime.GOOS == "darwin" {
-		tempDir, _ = filepath.EvalSymlinks(tempDir)
+		td, err := filepath.EvalSymlinks(tempDir)
+		if err != nil {
+			t.Fatalf("filepath.EvalSymlinks(tempDir) error = %v", err)
+		}
+		tempDir = td
 	}
 
 	dirs := []string{tempDir, "my", "test", "dirs"}
 
 	if err := os.MkdirAll(filepath.Join(dirs...), 0700); err != nil {
-		t.Fatal(err)
+		t.Fatalf("os.MkdirAll(dirs, 0700) = %v", err)
 	}
 
-	currentWd, _ := os.Getwd()
+	currentWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
 
 	sh, err := shell.New()
-	sh.Logger = shell.DiscardLogger
-
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
 
+	sh.Logger = shell.DiscardLogger
+
 	for idx := range dirs {
-		dir := filepath.Join(dirs[0 : idx+1]...)
+		dir := filepath.Join(dirs[:idx+1]...)
 
 		if err := sh.Chdir(dir); err != nil {
-			t.Fatal(err)
+			t.Fatalf("sh.Chdir(%q) = %v", dir, err)
 		}
 
-		if actual := sh.Getwd(); actual != dir {
-			t.Fatalf("Expected working dir %q, got %q", dir, actual)
+		if got, want := sh.Getwd(), dir; got != want {
+			t.Fatalf("sh.Getwd() = %q, want %q", got, want)
 		}
 
-		var out string
+		var pwd string
 
 		// there is no pwd for windows, and getting it requires using a shell builtin
 		if runtime.GOOS == "windows" {
-			out, err = sh.RunAndCapture("cmd", "/c", "echo", "%cd%")
+			out, err := sh.RunAndCapture("cmd", "/c", "echo", "%cd%")
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("sh.RunAndCapture(cmd /c echo %%cd%%) error = %v", err)
 			}
+			pwd = out
 		} else {
-			out, err = sh.RunAndCapture("pwd")
+			out, err := sh.RunAndCapture("pwd")
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("sh.RunAndCapture(pwd) error = %v", err)
 			}
+			pwd = out
 		}
 
-		if actual := out; actual != dir {
-			t.Fatalf("Expected working dir (from pwd command) %q, got %q", dir, actual)
+		if got, want := pwd, dir; got != want {
+			t.Fatalf("sh.RunAndCapture(pwd or equivalent) = %q, want %q", got, want)
 		}
 	}
 
-	afterWd, _ := os.Getwd()
-	if afterWd != currentWd {
-		t.Fatalf("Expected working dir to be the same as before shell commands ran")
+	afterWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+	if got, want := afterWd, currentWd; got != want {
+		// Expect working dir to be the same as before shell commands ran.
+		t.Fatalf("os.Getwd() = %q, want %q", got, want)
 	}
 }
 
@@ -278,7 +290,7 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 
 	dir, err := os.MkdirTemp("", "shelltest")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "shelltest") error = %v`, err)
 	}
 	defer os.RemoveAll(dir)
 
@@ -290,15 +302,13 @@ func TestLockFileRetriesAndTimesOut(t *testing.T) {
 	// acquire a lock in another process
 	cmd, err := acquireLockInOtherProcess(lockPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Errorf("acquireLockInOtherProcess(%q) error = %v", lockPath, err)
 	}
-
 	defer cmd.Process.Kill()
 
-	// acquire lock
-	_, err = sh.LockFile(lockPath, time.Second*2)
-	if err != context.DeadlineExceeded {
-		t.Fatalf("Expected DeadlineExceeded error, got %v", err)
+	timeout := time.Second * 2
+	if _, err := sh.LockFile(lockPath, timeout); err != context.DeadlineExceeded {
+		t.Errorf("sh.LockFile(%q, %v) error = %v, want context.DeadlineExceeded", lockPath, timeout, err)
 	}
 }
 
@@ -365,7 +375,7 @@ func TestAcquiringLockHelperProcess(t *testing.T) {
 func newShellForTest(t *testing.T) *shell.Shell {
 	sh, err := shell.New()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
 	sh.Logger = shell.DiscardLogger
 	return sh
@@ -374,67 +384,76 @@ func newShellForTest(t *testing.T) *shell.Shell {
 func TestRunWithoutPrompt(t *testing.T) {
 	sh, err := shell.New()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
-	out := bytes.NewBufferString("")
+	out := &bytes.Buffer{}
 	sh.Writer = out
 
-	err = sh.RunWithoutPrompt("echo", "hi")
-	assert.NoError(t, err)
-	assert.Equal(t, "hi\n", out.String())
+	if err := sh.RunWithoutPrompt("echo", "hi"); err != nil {
+		t.Fatalf("sh.RunWithoutPrompt(echo hi) = %v", err)
+	}
+	if got, want := out.String(), "hi\n"; got != want {
+		t.Errorf("sh.RunWithoutPrompt(echo hi) output = %q, want %q", got, want)
+	}
 
 	out.Reset()
-	err = sh.RunWithoutPrompt("asdasdasdasdzxczxczxzxc")
-	assert.Error(t, err)
+	if err := sh.RunWithoutPrompt("asdasdasdasdzxczxczxzxc"); err == nil {
+		t.Errorf("sh.RunWithoutPrompt(asdasdasdasdzxczxczxzxc) = %v, want non-nil error", err)
+	}
 }
 
 func TestRunWithoutPromptWithContext(t *testing.T) {
-	sh, err := shell.New()
 	ctx := context.Background()
+
+	sh, err := shell.New()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("shell.New() error = %v", err)
 	}
-	out := bytes.NewBufferString("")
+	out := &bytes.Buffer{}
 	sh.Writer = out
 
-	err = sh.RunWithoutPromptWithContext(ctx, "echo", "hi")
-	assert.NoError(t, err)
-	assert.Equal(t, "hi\n", out.String())
+	if err := sh.RunWithoutPromptWithContext(ctx, "echo", "hi"); err != nil {
+		t.Fatalf("sh.RunWithoutPromptWithContext(echo hi) = %v", err)
+	}
+	if got, want := out.String(), "hi\n"; got != want {
+		t.Errorf("sh.RunWithoutPrompt(echo hi) output = %q, want %q", got, want)
+	}
 
 	out.Reset()
-	err = sh.RunWithoutPromptWithContext(ctx, "asdasdasdasdzxczxczxzxc")
-	assert.Error(t, err)
-}
-
-var roundTests = []struct {
-	in     time.Duration
-	want   time.Duration
-	outStr string
-}{
-	{3 * time.Nanosecond, 3 * time.Nanosecond, "3ns"},
-	{32 * time.Nanosecond, 32 * time.Nanosecond, "32ns"},
-	{321 * time.Nanosecond, 321 * time.Nanosecond, "321ns"},
-	{4321 * time.Nanosecond, 4321 * time.Nanosecond, "4.321µs"},
-	{54321 * time.Nanosecond, 54321 * time.Nanosecond, "54.321µs"},
-	{654321 * time.Nanosecond, 654320 * time.Nanosecond, "654.32µs"},
-	{7654321 * time.Nanosecond, 7654300 * time.Nanosecond, "7.6543ms"},
-	{87654321 * time.Nanosecond, 87654000 * time.Nanosecond, "87.654ms"},
-	{987654321 * time.Nanosecond, 987650000 * time.Nanosecond, "987.65ms"},
-	{1987654321 * time.Nanosecond, 1987700000 * time.Nanosecond, "1.9877s"},
-	{21987654321 * time.Nanosecond, 21988000000 * time.Nanosecond, "21.988s"},
-	{321987654321 * time.Nanosecond, 321990000000 * time.Nanosecond, "5m21.99s"},
-	{4321987654321 * time.Nanosecond, 4320000000000 * time.Nanosecond, "1h12m0s"},
-	{54321987654321 * time.Nanosecond, 54320000000000 * time.Nanosecond, "15h5m20s"},
+	if err := sh.RunWithoutPromptWithContext(ctx, "asdasdasdasdzxczxczxzxc"); err == nil {
+		t.Errorf("sh.RunWithoutPromptWithContext(asdasdasdasdzxczxczxzxc) = %v, want non-nil error", err)
+	}
 }
 
 func TestRound(t *testing.T) {
-	for _, tt := range roundTests {
+	tests := []struct {
+		in      time.Duration
+		want    time.Duration
+		wantStr string
+	}{
+		{3 * time.Nanosecond, 3 * time.Nanosecond, "3ns"},
+		{32 * time.Nanosecond, 32 * time.Nanosecond, "32ns"},
+		{321 * time.Nanosecond, 321 * time.Nanosecond, "321ns"},
+		{4321 * time.Nanosecond, 4321 * time.Nanosecond, "4.321µs"},
+		{54321 * time.Nanosecond, 54321 * time.Nanosecond, "54.321µs"},
+		{654321 * time.Nanosecond, 654320 * time.Nanosecond, "654.32µs"},
+		{7654321 * time.Nanosecond, 7654300 * time.Nanosecond, "7.6543ms"},
+		{87654321 * time.Nanosecond, 87654000 * time.Nanosecond, "87.654ms"},
+		{987654321 * time.Nanosecond, 987650000 * time.Nanosecond, "987.65ms"},
+		{1987654321 * time.Nanosecond, 1987700000 * time.Nanosecond, "1.9877s"},
+		{21987654321 * time.Nanosecond, 21988000000 * time.Nanosecond, "21.988s"},
+		{321987654321 * time.Nanosecond, 321990000000 * time.Nanosecond, "5m21.99s"},
+		{4321987654321 * time.Nanosecond, 4320000000000 * time.Nanosecond, "1h12m0s"},
+		{54321987654321 * time.Nanosecond, 54320000000000 * time.Nanosecond, "15h5m20s"},
+	}
+
+	for _, tt := range tests {
 		got := shell.Round(tt.in)
 		if got != tt.want {
-			t.Errorf("round(%v): got %v, want %v", tt.in, got, tt.want)
+			t.Errorf("shell.Round(%v): got %v, want %v", tt.in, got, tt.want)
 		}
-		if got.String() != tt.outStr {
-			t.Errorf("round(%v): got %q, want %v", tt.in, got.String(), tt.outStr)
+		if got.String() != tt.wantStr {
+			t.Errorf("shell.Round(%v): got %q, want %v", tt.in, got.String(), tt.wantStr)
 		}
 	}
 }
