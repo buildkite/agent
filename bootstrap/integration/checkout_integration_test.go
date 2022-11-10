@@ -646,8 +646,8 @@ func TestCheckoutDoesNotRetryOnHookFailure(t *testing.T) {
 		}
 	})
 
-	if err = tester.Run(t); err == nil {
-		t.Fatal("Expected the bootstrap to fail")
+	if err := tester.Run(t); err == nil {
+		t.Fatalf("tester.Run(t) = %v, want non-nil error", err)
 	}
 
 	tester.CheckMocks(t)

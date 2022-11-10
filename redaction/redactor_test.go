@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestRedactorEmpty(t *testing.T) {
@@ -18,7 +16,9 @@ func TestRedactorEmpty(t *testing.T) {
 	fmt.Fprint(redactor, "Lorem ipsum dolor sit amet")
 	redactor.Flush()
 
-	assert.Equal(t, "Lorem ipsum dolor sit amet", buf.String())
+	if got, want := buf.String(), "Lorem ipsum dolor sit amet"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
+	}
 }
 
 func TestRedactorSingle(t *testing.T) {
@@ -31,8 +31,8 @@ func TestRedactorSingle(t *testing.T) {
 	fmt.Fprint(redactor, "Lorem ipsum dolor sit amet")
 	redactor.Flush()
 
-	if buf.String() != "Lorem [REDACTED] dolor sit amet" {
-		t.Errorf("Redaction failed: %s", buf.String())
+	if got, want := buf.String(), "Lorem [REDACTED] dolor sit amet"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
@@ -46,8 +46,8 @@ func TestRedactorMulti(t *testing.T) {
 	fmt.Fprint(redactor, "Lorem ipsum dolor sit amet")
 	redactor.Flush()
 
-	if buf.String() != "Lorem [REDACTED] dolor sit [REDACTED]" {
-		t.Errorf("Redaction failed: %s", buf.String())
+	if got, want := buf.String(), "Lorem [REDACTED] dolor sit [REDACTED]"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
@@ -62,8 +62,8 @@ func TestRedactorWriteBoundaries(t *testing.T) {
 	redactor.Write([]byte("sum dolor sit amet"))
 	redactor.Flush()
 
-	if buf.String() != "Lorem [REDACTED] dolor sit amet" {
-		t.Errorf("Redaction failed: %s", buf.String())
+	if got, want := buf.String(), "Lorem [REDACTED] dolor sit amet"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
@@ -84,8 +84,8 @@ func TestRedactorResetMidStream(t *testing.T) {
 	redactor.Write([]byte(" after secret2222 is added\n"))
 	redactor.Flush()
 
-	if buf.String() != "redact [REDACTED] but don't redact secret2222 until after [REDACTED] is added\n" {
-		t.Errorf("Redaction failed: %s", buf.String())
+	if got, want := buf.String(), "redact [REDACTED] but don't redact secret2222 until after [REDACTED] is added\n"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestRedactorSlowLoris(t *testing.T) {
 	redactor.Write([]byte("1"))
 	redactor.Flush()
 
-	if buf.String() != "[REDACTED]" {
-		t.Errorf("Redaction failed: %s", buf.String())
+	if got, want := buf.String(), "[REDACTED]"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
@@ -135,8 +135,8 @@ func TestRedactorSubsetSecrets(t *testing.T) {
 	redactor.Write([]byte("secret1111"))
 	redactor.Flush()
 
-	if buf.String() != "[REDACTED]1111" {
-		t.Errorf("Redaction failed: %s", buf.String())
+	if got, want := buf.String(), "[REDACTED]1111"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
 
@@ -149,7 +149,7 @@ func TestRedactorMultibyte(t *testing.T) {
 	redactor.Write([]byte("fooÿbar"))
 	redactor.Flush()
 
-	if got, want := buf.Bytes(), []byte("foo[REDACTED]bar"); !bytes.Equal(got, want) {
-		t.Errorf("post-redaction buf.Bytes() = %q, want %q", got, want)
+	if got, want := buf.String(), "foo[REDACTED]bar"; got != want {
+		t.Errorf("post-redaction buf.String() = %q, want %q", got, want)
 	}
 }
