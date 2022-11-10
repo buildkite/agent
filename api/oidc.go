@@ -23,6 +23,9 @@ func (c *Client) OidcToken(jobId string, audience ...string) (*OidcToken, *Respo
 	case 1:
 		m = &oidcTokenRequest{Audience: audience[0]}
 	default:
+		// While the spec supports multiple audiences in an Id JWT, our API does
+		// not support issuing them.
+		// See: https://openid.net/specs/openid-connect-core-1_0.html#IDToken.
 		return nil, nil, ErrAudienceTooLong
 	}
 
