@@ -37,9 +37,5 @@ func (c *Client) OidcToken(jobId string, audience ...string) (*OidcToken, *Respo
 
 	t := &OidcToken{}
 	resp, err := c.doRequest(req, t)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	return t, resp, err
 }

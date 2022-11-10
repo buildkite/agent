@@ -123,7 +123,7 @@ var OidcTokenCommand = cli.Command{
 
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses
-				case http.StatusUnauthorized | http.StatusForbidden | http.StatusUnprocessableEntity:
+				case http.StatusUnauthorized, http.StatusForbidden, http.StatusUnprocessableEntity:
 					r.Break()
 					return err
 				}
