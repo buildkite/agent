@@ -13,15 +13,14 @@ type OidcToken struct {
 
 func (c *Client) OidcToken(jobId string, audience ...string) (*OidcToken, *Response, error) {
 	type oidcTokenRequest struct {
-		Audience string `json:"audience"`
+		Audience string `json:"audience,omitempty"`
 	}
 
-	var m *oidcTokenRequest
+	m := &oidcTokenRequest{}
 	switch len(audience) {
 	case 0:
-		m = nil
 	case 1:
-		m = &oidcTokenRequest{Audience: audience[0]}
+		m.Audience = audience[0]
 	default:
 		// While the spec supports multiple audiences in an Id JWT, our API does
 		// not support issuing them.
