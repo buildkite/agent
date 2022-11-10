@@ -33,10 +33,12 @@ type OidcTokenConfig struct {
 const (
 	oidcTokenDescription = `Usage:
 
-   buildkite-agent oidc token [options]
+   buildkite-agent oidc token [options...]
 
 Description:
-   Requests and prints an OIDC token from Buildkite with the specified audience.
+   Requests and prints an OIDC token from Buildkite that claims the Job ID and
+	 the specified audience. If no audience is specified, the endpoint's default
+	 audience will be claimed.
 
 Example:
    $ buildkite-agent oidc token --audience sts.amazonaws.com
@@ -60,7 +62,7 @@ var OidcTokenCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "job",
 			Value:  "",
-			Usage:  "Buildkite Job ID",
+			Usage:  "Buildkite Job Id to claim in the OIDC token",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
 
@@ -116,9 +118,9 @@ var OidcTokenCommand = cli.Command{
 			}
 
 			token, resp, err = client.OidcToken(cfg.Job, audience...)
-			// Don't bother retrying if the response was one of these statuses
 			if resp != nil {
 				switch resp.StatusCode {
+				// Don't bother retrying if the response was one of these statuses
 				case http.StatusUnauthorized | http.StatusForbidden | http.StatusUnprocessableEntity:
 					r.Break()
 					return err

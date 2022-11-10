@@ -92,7 +92,7 @@ func main() {
 		},
 		{
 			Name:  "oidc",
-			Usage: "Obtains OIDC information from Buildkite",
+			Usage: "Interact with Buildkite OIDC",
 			Subcommands: []cli.Command{
 				clicommand.OidcTokenCommand,
 			},
