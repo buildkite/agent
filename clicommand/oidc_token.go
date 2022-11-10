@@ -30,7 +30,8 @@ type OidcTokenConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-const oidcTokenDescription = `Usage:
+const (
+	oidcTokenDescription = `Usage:
 
    buildkite-agent oidc token [options]
 
@@ -42,6 +43,9 @@ Example:
 
    Prints the environment passed into the process
 `
+	backoffSeconds = 2
+	maxAttempts    = 5
+)
 
 var OidcTokenCommand = cli.Command{
 	Name:        "token",
@@ -103,8 +107,8 @@ var OidcTokenCommand = cli.Command{
 		var resp *api.Response
 
 		err = roko.NewRetrier(
-			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.Constant(5*time.Second)),
+			roko.WithMaxAttempts(maxAttempts),
+			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
 		).Do(func(r *roko.Retrier) error {
 			var audience []string
 			if len(cfg.Audience) > 0 {
