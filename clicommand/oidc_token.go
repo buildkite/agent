@@ -108,7 +108,7 @@ var OidcTokenCommand = cli.Command{
 		var token *api.OidcToken
 		var resp *api.Response
 
-		err = roko.NewRetrier(
+		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(maxAttempts),
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
 		).Do(func(r *roko.Retrier) error {
@@ -119,6 +119,8 @@ var OidcTokenCommand = cli.Command{
 
 			token, resp, err = client.OidcToken(cfg.Job, audience...)
 			if resp != nil {
+				fmt.Println(resp.StatusCode, r.ShouldGiveUp())
+
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses
 				case http.StatusUnauthorized | http.StatusForbidden | http.StatusUnprocessableEntity:
@@ -132,7 +134,14 @@ var OidcTokenCommand = cli.Command{
 			}
 
 			return err
-		})
+		}); err != nil {
+			if len(cfg.Audience) > 0 {
+				l.Error("Could not obtain OIDC token for audience %s", cfg.Audience)
+			} else {
+				l.Error("Could not obtain OIDC token for default audience")
+			}
+			return err
+		}
 
 		fmt.Println(token.Token)
 		return nil
