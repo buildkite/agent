@@ -56,17 +56,20 @@ func TestOidcToken(t *testing.T) {
 	for _, testData := range []struct {
 		JobId       string
 		AccessToken string
+		OidcToken   *api.OidcToken
 		Audience    []string
 		Error       error
 	}{
 		{
 			JobId:       jobId,
 			AccessToken: accessToken,
+			OidcToken:   &api.OidcToken{Token: oidcToken},
 			Audience:    []string{},
 		},
 		{
 			JobId:       jobId,
 			AccessToken: accessToken,
+			OidcToken:   &api.OidcToken{Token: oidcToken},
 			Audience:    []string{"sts.amazonaws.com"},
 		},
 		{
@@ -78,10 +81,16 @@ func TestOidcToken(t *testing.T) {
 	} {
 		if token, resp, err := client.OidcToken(testData.JobId, testData.Audience...); err != nil {
 			if !errors.Is(err, testData.Error) {
-				t.Fatalf("OidcToken(%v, %v) got error = %# v, want error = %# v", testData.JobId, testData.Audience, err, testData.Error)
+				t.Fatalf(
+					"OidcToken(%v, %v) got error = %# v, want error = %# v",
+					testData.JobId,
+					testData.Audience,
+					err,
+					testData.Error,
+				)
 			}
 		} else if token.Token != oidcToken {
-			t.Fatalf("OidcToken(%v, %v) got token = %# v, want %# v", testData.JobId, testData.Audience, token, &api.OidcToken{Token: oidcToken})
+			t.Fatalf("OidcToken(%v, %v) got token = %# v, want %# v", testData.JobId, testData.Audience, token, testData.OidcToken)
 		} else if resp.StatusCode != http.StatusOK {
 			t.Fatalf("OidcToken(%v, %v) got StatusCode = %# v, want %# v", testData.JobId, testData.Audience, resp.StatusCode, http.StatusOK)
 		}
