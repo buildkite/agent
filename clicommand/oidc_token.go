@@ -119,8 +119,6 @@ var OidcTokenCommand = cli.Command{
 
 			token, resp, err = client.OidcToken(cfg.Job, audience...)
 			if resp != nil {
-				fmt.Println(resp.StatusCode, r.ShouldGiveUp())
-
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses
 				case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusUnprocessableEntity:
