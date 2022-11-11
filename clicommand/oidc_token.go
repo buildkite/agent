@@ -113,12 +113,14 @@ var OidcTokenCommand = cli.Command{
 			roko.WithMaxAttempts(maxAttempts),
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
 		).Do(func(r *roko.Retrier) error {
-			var audience []string
+			req := &api.OidcTokenRequest{
+				JobId: cfg.Job,
+			}
 			if len(cfg.Audience) > 0 {
-				audience = []string{cfg.Audience}
+				req.Audience = cfg.Audience
 			}
 
-			token, resp, err = client.OidcToken(cfg.Job, audience...)
+			token, resp, err = client.OidcToken(req)
 			if resp != nil {
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses

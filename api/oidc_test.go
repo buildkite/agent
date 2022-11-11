@@ -78,37 +78,32 @@ func TestOidcToken(t *testing.T) {
 	const accessToken = "llamas"
 
 	for _, testData := range []struct {
-		JobId        string
-		AccessToken  string
-		Audience     []string
-		ExpectedBody []byte
-		OidcToken    *api.OidcToken
-		Error        error
+		OidcTokenRequest *api.OidcTokenRequest
+		AccessToken      string
+		ExpectedBody     []byte
+		OidcToken        *api.OidcToken
+		Error            error
 	}{
 		{
-			JobId:        jobId,
-			AccessToken:  accessToken,
-			Audience:     []string{},
+			AccessToken: accessToken,
+			OidcTokenRequest: &api.OidcTokenRequest{
+				JobId: jobId,
+			},
 			ExpectedBody: []byte("{}\n"),
 			OidcToken:    &api.OidcToken{Token: oidcToken},
 		},
 		{
-			JobId:       jobId,
 			AccessToken: accessToken,
-			Audience:    []string{"sts.amazonaws.com"},
+			OidcTokenRequest: &api.OidcTokenRequest{
+				JobId:    jobId,
+				Audience: "sts.amazonaws.com",
+			},
 			ExpectedBody: []byte(`{"audience":"sts.amazonaws.com"}
 `),
 			OidcToken: &api.OidcToken{Token: oidcToken},
 		},
-		{
-			JobId:       jobId,
-			AccessToken: accessToken,
-			Audience:    []string{"sts.amazonaws.com", "buildkite.com"},
-			OidcToken:   &api.OidcToken{Token: oidcToken},
-			Error:       api.ErrAudienceTooLong,
-		},
 	} {
-		path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.JobId)
+		path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.OidcTokenRequest.JobId)
 
 		server := newOidcTokenServer(
 			t,
@@ -127,20 +122,19 @@ func TestOidcToken(t *testing.T) {
 			DebugHTTP: true,
 		})
 
-		if token, resp, err := client.OidcToken(testData.JobId, testData.Audience...); err != nil {
+		if token, resp, err := client.OidcToken(testData.OidcTokenRequest); err != nil {
 			if !errors.Is(err, testData.Error) {
 				t.Fatalf(
-					"OidcToken(%v, %v) got error = %v, want error = %v",
-					testData.JobId,
-					testData.Audience,
+					"OidcToken(%v) got error = %v, want error = %v",
+					testData.OidcTokenRequest,
 					err,
 					testData.Error,
 				)
 			}
 		} else if token.Token != oidcToken {
-			t.Fatalf("OidcToken(%v, %v) got token = %v, want %v", testData.JobId, testData.Audience, token, testData.OidcToken)
+			t.Fatalf("OidcToken(%v) got token = %v, want %v", testData.OidcTokenRequest, token, testData.OidcToken)
 		} else if resp.StatusCode != http.StatusOK {
-			t.Fatalf("OidcToken(%v, %v) got StatusCode = %v, want %v", testData.JobId, testData.Audience, resp.StatusCode, http.StatusOK)
+			t.Fatalf("OidcToken(%v) got StatusCode = %v, want %v", testData.OidcTokenRequest, resp.StatusCode, http.StatusOK)
 		}
 	}
 }
