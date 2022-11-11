@@ -33,7 +33,7 @@ type OidcTokenConfig struct {
 const (
 	oidcTokenDescription = `Usage:
 
-   buildkite-agent oidc token [options...]
+   buildkite-agent oidc request-token [options...]
 
 Description:
    Requests and prints an OIDC token from Buildkite that claims the Job ID
@@ -41,7 +41,7 @@ Description:
    specified, the endpoint's default audience will be claimed.
 
 Example:
-   $ buildkite-agent oidc token --audience sts.amazonaws.com
+   $ buildkite-agent oidc request-token --audience sts.amazonaws.com
 
    Requests and prints an OIDC token from Buildkite that claims the Job ID
    (amongst other things) and the audience "sts.amazonaws.com".
@@ -50,7 +50,7 @@ Example:
 	maxAttempts    = 5
 )
 
-var OidcTokenCommand = cli.Command{
+var OidcRequestTokenCommand = cli.Command{
 	Name:        "request-token",
 	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
 	Description: oidcTokenDescription,
