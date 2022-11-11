@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/google/go-cmp/cmp"
 )
 
 func newOidcTokenServer(
@@ -132,7 +133,7 @@ func TestOidcToken(t *testing.T) {
 						testData.Error,
 					)
 				}
-			} else if token.Token != oidcToken {
+			} else if !cmp.Equal(token, testData.OidcToken) {
 				t.Fatalf("OidcToken(%v) got token = %v, want %v", testData.OidcTokenRequest, token, testData.OidcToken)
 			} else if resp.StatusCode != http.StatusOK {
 				t.Fatalf("OidcToken(%v) got StatusCode = %v, want %v", testData.OidcTokenRequest, resp.StatusCode, http.StatusOK)
