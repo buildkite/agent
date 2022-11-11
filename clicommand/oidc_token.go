@@ -51,7 +51,7 @@ Example:
 )
 
 var OidcTokenCommand = cli.Command{
-	Name:        "token",
+	Name:        "request-token",
 	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
 	Description: oidcTokenDescription,
 	Flags: []cli.Flag{
