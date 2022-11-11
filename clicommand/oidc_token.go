@@ -36,14 +36,15 @@ const (
    buildkite-agent oidc token [options...]
 
 Description:
-   Requests and prints an OIDC token from Buildkite that claims the Job ID and
-	 the specified audience. If no audience is specified, the endpoint's default
-	 audience will be claimed.
+   Requests and prints an OIDC token from Buildkite that claims the Job ID
+   (amongst other things) and the specified audience. If no audience is
+   specified, the endpoint's default audience will be claimed.
 
 Example:
    $ buildkite-agent oidc token --audience sts.amazonaws.com
 
-   Prints the environment passed into the process
+   Requests and prints an OIDC token from Buildkite that claims the Job ID
+   (amongst other things) and the audience "sts.amazonaws.com".
 `
 	backoffSeconds = 2
 	maxAttempts    = 5
