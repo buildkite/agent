@@ -103,38 +103,40 @@ func TestOidcToken(t *testing.T) {
 			OidcToken: &api.OidcToken{Token: oidcToken},
 		},
 	} {
-		path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.OidcTokenRequest.JobId)
+		func() { // this exists to allow closing the server on each iteration
+			path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.OidcTokenRequest.JobId)
 
-		server := newOidcTokenServer(
-			t,
-			testData.AccessToken,
-			testData.OidcToken.Token,
-			path,
-			testData.ExpectedBody,
-		)
-		defer server.Close()
+			server := newOidcTokenServer(
+				t,
+				testData.AccessToken,
+				testData.OidcToken.Token,
+				path,
+				testData.ExpectedBody,
+			)
+			defer server.Close()
 
-		// Initial client with a registration token
-		client := api.NewClient(logger.Discard, api.Config{
-			UserAgent: "Test",
-			Endpoint:  server.URL,
-			Token:     accessToken,
-			DebugHTTP: true,
-		})
+			// Initial client with a registration token
+			client := api.NewClient(logger.Discard, api.Config{
+				UserAgent: "Test",
+				Endpoint:  server.URL,
+				Token:     accessToken,
+				DebugHTTP: true,
+			})
 
-		if token, resp, err := client.OidcToken(testData.OidcTokenRequest); err != nil {
-			if !errors.Is(err, testData.Error) {
-				t.Fatalf(
-					"OidcToken(%v) got error = %v, want error = %v",
-					testData.OidcTokenRequest,
-					err,
-					testData.Error,
-				)
+			if token, resp, err := client.OidcToken(testData.OidcTokenRequest); err != nil {
+				if !errors.Is(err, testData.Error) {
+					t.Fatalf(
+						"OidcToken(%v) got error = %v, want error = %v",
+						testData.OidcTokenRequest,
+						err,
+						testData.Error,
+					)
+				}
+			} else if token.Token != oidcToken {
+				t.Fatalf("OidcToken(%v) got token = %v, want %v", testData.OidcTokenRequest, token, testData.OidcToken)
+			} else if resp.StatusCode != http.StatusOK {
+				t.Fatalf("OidcToken(%v) got StatusCode = %v, want %v", testData.OidcTokenRequest, resp.StatusCode, http.StatusOK)
 			}
-		} else if token.Token != oidcToken {
-			t.Fatalf("OidcToken(%v) got token = %v, want %v", testData.OidcTokenRequest, token, testData.OidcToken)
-		} else if resp.StatusCode != http.StatusOK {
-			t.Fatalf("OidcToken(%v) got StatusCode = %v, want %v", testData.OidcTokenRequest, resp.StatusCode, http.StatusOK)
-		}
+		}()
 	}
 }
