@@ -32,15 +32,15 @@ func TestProcessOutput(t *testing.T) {
 
 	// wait for the process to finish
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
-	if s := stdout.String(); s != `llamas1llamas2` {
-		t.Fatalf("Bad stdout, %q", s)
+	if got, want := stdout.String(), "llamas1llamas2"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if s := stderr.String(); s != `alpacas1alpacas2` {
-		t.Fatalf("Bad stderr, %q", s)
+	if got, want := stderr.String(), "alpacas1alpacas2"; got != want {
+		t.Errorf("stderr.String() = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -62,11 +62,11 @@ func TestProcessOutputPTY(t *testing.T) {
 
 	// wait for the process to finish
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
-	if s := stdout.String(); s != `llamas1alpacas1llamas2alpacas2` {
-		t.Fatalf("Bad stdout, %q", s)
+	if got, want := stdout.String(), "llamas1alpacas1llamas2alpacas2"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -83,10 +83,10 @@ func TestProcessInput(t *testing.T) {
 	})
 	// wait for the process to finish
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
-	if expected, actual := "Hello World", stdout.String(); expected != actual {
-		t.Errorf("stdout expected %q, got %q", expected, actual)
+	if got, want := stdout.String(), "Hello World"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 	assertProcessDoesntExist(t, p)
 }
@@ -114,18 +114,17 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 
 	// wait for the process to finish
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
 	// wait for our go routine to finish
 	wg.Wait()
 
-	if startedVal := atomic.LoadInt32(&started); startedVal != 1 {
-		t.Fatalf("Expected started to be 1, got %d", startedVal)
+	if got, want := atomic.LoadInt32(&started), int32(1); got != want {
+		t.Errorf("started = %d, want %d", got, want)
 	}
-
-	if doneVal := atomic.LoadInt32(&done); doneVal != 1 {
-		t.Fatalf("Expected done to be 1, got %d", doneVal)
+	if got, want := atomic.LoadInt32(&done), int32(1); got != want {
+		t.Errorf("done = %d, want %d", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -149,12 +148,12 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	}()
 
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
-	if runtime.GOOS != `windows` {
-		if !p.WaitStatus().Signaled() {
-			t.Fatalf("Expected signaled")
+	if runtime.GOOS != "windows" {
+		if got, want := p.WaitStatus().Signaled(), true; got != want {
+			t.Fatalf("p.WaitStatus().Signaled() = %t, want %t", got, want)
 		}
 	}
 
@@ -167,12 +166,12 @@ func TestProcessInterrupts(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	b := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
 
 	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=tester-signal"},
-		Stdout: b,
+		Stdout: stdout,
 	})
 
 	var wg sync.WaitGroup
@@ -185,21 +184,19 @@ func TestProcessInterrupts(t *testing.T) {
 		// give the signal handler some time to install
 		time.Sleep(time.Millisecond * 50)
 
-		err := p.Interrupt()
-		if err != nil {
-			t.Error(err)
+		if err := p.Interrupt(); err != nil {
+			t.Errorf("p.Interrupt() = %v", err)
 		}
 	}()
 
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
 	wg.Wait()
 
-	output := b.String()
-	if output != `SIG terminated` {
-		t.Fatalf("Bad output: %q", output)
+	if got, want := stdout.String(), "SIG terminated"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -210,12 +207,12 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	b := &bytes.Buffer{}
+	stdout := &bytes.Buffer{}
 
 	p := process.New(logger.Discard, process.Config{
 		Path:            os.Args[0],
 		Env:             []string{"TEST_MAIN=tester-signal"},
-		Stdout:          b,
+		Stdout:          stdout,
 		InterruptSignal: process.SIGINT,
 	})
 
@@ -229,21 +226,19 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 		// give the signal handler some time to install
 		time.Sleep(time.Millisecond * 50)
 
-		err := p.Interrupt()
-		if err != nil {
-			t.Error(err)
+		if err := p.Interrupt(); err != nil {
+			t.Errorf("p.Interrupt() = %v", err)
 		}
 	}()
 
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
 	wg.Wait()
 
-	output := b.String()
-	if output != `SIG interrupt` {
-		t.Fatalf("Bad output: %q", output)
+	if got, want := stdout.String(), "SIG interrupt"; got != want {
+		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -261,7 +256,7 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 	})
 
 	if err := p.Run(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("p.Run() = %v", err)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -274,8 +269,7 @@ func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 	if err != nil {
 		return
 	}
-	signalErr := proc.Signal(syscall.Signal(0))
-	if signalErr == nil {
+	if err := proc.Signal(syscall.Signal(0)); err == nil {
 		t.Fatalf("Process %d exists and is running", p.Pid())
 	}
 }
@@ -287,7 +281,7 @@ func BenchmarkProcess(b *testing.B) {
 			Env:  []string{"TEST_MAIN=output"},
 		})
 		if err := proc.Run(); err != nil {
-			b.Fatal(err)
+			b.Fatalf("p.Run() = %v", err)
 		}
 	}
 }

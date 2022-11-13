@@ -48,12 +48,12 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 	sh := shell.NewTestShell(t)
 
 	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sh.RunScript(ctx, %q, nil) = %v", wrapper.Path(), err)
 	}
 
 	changes, err := wrapper.Changes()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("wrapper.Changes() error = %v", err)
 	}
 
 	// Windows’ batch 'SET >' normalises environment variables case so we apply
@@ -181,7 +181,7 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 
 	tempDir, err := os.MkdirTemp("", "hookwrapperdir")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf(`os.MkdirTemp("", "hookwrapperdir") error = %v`, err)
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -209,39 +209,40 @@ func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 
 	sh := shell.NewTestShell(t)
 	if err := sh.Chdir(tempDir); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sh.Chdir(%q) = %v", tempDir, err)
 	}
 
 	if err := sh.RunScript(ctx, wrapper.Path(), nil); err != nil {
-		t.Fatal(err)
+		t.Fatalf("sh.RunScript(ctx, %q, nil) = %v", wrapper.Path(), err)
 	}
 
 	changes, err := wrapper.Changes()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("wrapper.Changes() error = %v", err)
 	}
 
-	expected, err := filepath.EvalSymlinks(filepath.Join(tempDir, "mysubdir"))
+	wantChangesDir, err := filepath.EvalSymlinks(filepath.Join(tempDir, "mysubdir"))
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("filepath.EvalSymlinks(mysubdir) error = %v", err)
 	}
 
 	afterWd, err := changes.GetAfterWd()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("changes.GetAfterWd() error = %v", err)
 	}
 
 	changesDir, err := filepath.EvalSymlinks(afterWd)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("filepath.EvalSymlinks(%q) error = %v", afterWd, err)
 	}
 
-	if changesDir != expected {
-		t.Fatalf("Expected working dir of %q, got %q", expected, changesDir)
+	if changesDir != wantChangesDir {
+		t.Fatalf("changesDir = %q, want %q", changesDir, wantChangesDir)
 	}
 
-	err = agent.CheckAndClose(t)
-	require.NoError(t, err)
+	if err := agent.CheckAndClose(t); err != nil {
+		t.Errorf("agent.CheckAndClose(t) = %v", err)
+	}
 }
 
 func newTestScriptWrapper(t *testing.T, script []string) *ScriptWrapper {

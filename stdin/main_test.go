@@ -2,7 +2,6 @@ package stdin_test
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -67,23 +66,23 @@ func TestIsStdinIsReadableWithAPipe(t *testing.T) {
 func TestIsStdinIsReadableWithOutputRedirection(t *testing.T) {
 	tmpfile, err := os.CreateTemp("", "output-redirect")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf(`os.CreateTemp("", "output-redirect") error = %v`, err)
 	}
 
 	defer os.Remove(tmpfile.Name())
 
 	if _, err := tmpfile.Write([]byte("output")); err != nil {
-		t.Fatal(err)
+		t.Fatalf(`tmpfile.Write([]byte("output")) error = %v`, err)
 	}
 	if err := tmpfile.Close(); err != nil {
-		t.Fatal(err)
+		t.Fatalf("tmpfile.Close() = %v", err)
 	}
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == `windows` {
-		cmd = exec.Command("cmd", "/c", os.Args[0]+`< `+tmpfile.Name())
+		cmd = exec.Command("cmd", "/c", os.Args[0]+"< "+tmpfile.Name())
 	} else {
-		cmd = exec.Command("/bin/sh", "-c", os.Args[0]+`< `+tmpfile.Name())
+		cmd = exec.Command("/bin/sh", "-c", os.Args[0]+"< "+tmpfile.Name())
 	}
 	cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1")
 

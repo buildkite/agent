@@ -7,24 +7,38 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/process"
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestPrefixer(t *testing.T) {
-	for _, tc := range []struct {
-		input, expected string
+	tests := []struct {
+		input, want string
 	}{
-		{"alpacas\nllamas\n", "#1: alpacas\n#2: llamas\n#3: "},
-		{"blah\x1b[Kbler\x1bgh", "#1: blah\x1b[K#2: bler\x1bgh"},
-		{"blah\x1b[2Kblergh", "#1: blah\x1b[2K#2: blergh"},
-		{"blah\x1b[1B\x1b[1A\x1b[2Kblergh", "#1: blah\x1b[1B\x1b[1A\x1b[2K#2: blergh"},
-	} {
+		{
+			input: "alpacas\nllamas\n",
+			want:  "#1: alpacas\n#2: llamas\n#3: ",
+		},
+		{
+			input: "blah\x1b[Kbler\x1bgh",
+			want:  "#1: blah\x1b[K#2: bler\x1bgh",
+		},
+		{
+			input: "blah\x1b[2Kblergh",
+			want:  "#1: blah\x1b[2K#2: blergh",
+		},
+		{
+			input: "blah\x1b[1B\x1b[1A\x1b[2Kblergh",
+			want:  "#1: blah\x1b[1B\x1b[1A\x1b[2K#2: blergh",
+		},
+	}
+
+	for _, tc := range tests {
 		tc := tc
-		t.Run("", func(tt *testing.T) {
-			tt.Parallel()
+		t.Run(tc.input, func(t *testing.T) {
+			t.Parallel()
 
 			var lineCounter int32
-			var out = &bytes.Buffer{}
+			out := &bytes.Buffer{}
 
 			pw := process.NewPrefixer(out, func() string {
 				lineNumber := atomic.AddInt32(&lineCounter, 1)
@@ -33,14 +47,16 @@ func TestPrefixer(t *testing.T) {
 
 			n, err := pw.Write([]byte(tc.input))
 			if err != nil {
-				t.Fatal(err)
+				t.Fatalf("pw.Write([]byte(%q)) error = %v", tc.input, err)
 			}
 
-			if expected := len(tc.input); n != expected {
-				tt.Fatalf("Short write: %d vs expected %d", n, expected)
+			if got, want := n, len(tc.input); got != want {
+				t.Errorf("pw.Write([]byte(%q)) length = %d, want %d", tc.input, got, want)
 			}
 
-			assert.Equal(tt, tc.expected, out.String())
+			if diff := cmp.Diff(out.String(), tc.want); diff != "" {
+				t.Errorf("prefixer output diff (-got +want):\n%s", diff)
+			}
 		})
 	}
 }

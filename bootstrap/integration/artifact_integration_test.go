@@ -99,7 +99,7 @@ func TestArtifactsUploadAfterCommandHookFails(t *testing.T) {
 		AndExitWith(0)
 
 	if err := tester.Run(t, "BUILDKITE_ARTIFACT_PATHS=llamas.txt"); err == nil {
-		t.Fatal("tester.Run(BUILDKITE_ARTIFACT_PATHS=llamas.txt) = nil, want non-nil error")
+		t.Fatalf("tester.Run(BUILDKITE_ARTIFACT_PATHS=llamas.txt) = %v, want non-nil error", err)
 	}
 
 	tester.CheckMocks(t)

@@ -3,7 +3,6 @@ package process_test
 import (
 	"fmt"
 	"io"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/google/go-cmp/cmp"
 )
 
 const longTestOutput = `+++ My header
@@ -36,16 +36,16 @@ func TestScanLines(t *testing.T) {
 
 	scanner := process.NewScanner(logger.Discard)
 
-	err := scanner.ScanLines(pr, func(l string) {
+	scanFunc := func(l string) {
 		lineNumber := atomic.AddInt32(&lineCounter, 1)
-		s := fmt.Sprintf("#%d: chars %d", lineNumber, len(l))
-		lines = append(lines, s)
-	})
-	if err != nil {
-		t.Fatal(err)
+		lines = append(lines, fmt.Sprintf("#%d: chars %d", lineNumber, len(l)))
 	}
 
-	var expected = []string{
+	if err := scanner.ScanLines(pr, scanFunc); err != nil {
+		t.Fatalf("scanner.ScanLines(pr, scanFunc) = %v", err)
+	}
+
+	wantLines := []string{
 		`#1: chars 13`,
 		`#2: chars 6`,
 		`#3: chars 15`,
@@ -53,7 +53,7 @@ func TestScanLines(t *testing.T) {
 		`#5: chars 16`,
 	}
 
-	if !reflect.DeepEqual(expected, lines) {
-		t.Fatalf("Lines was unexpected:\nWanted: %v\nGot: %v\n", expected, lines)
+	if diff := cmp.Diff(lines, wantLines); diff != "" {
+		t.Errorf("lines diff (-got +want):\n%s", diff)
 	}
 }
