@@ -114,10 +114,8 @@ var OidcRequestTokenCommand = cli.Command{
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
 		).Do(func(r *roko.Retrier) error {
 			req := &api.OidcTokenRequest{
-				JobId: cfg.Job,
-			}
-			if len(cfg.Audience) > 0 {
-				req.Audience = cfg.Audience
+				JobId:    cfg.Job,
+				Audience: cfg.Audience,
 			}
 
 			token, resp, err = client.OidcToken(req)
