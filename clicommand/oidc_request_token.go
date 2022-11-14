@@ -87,7 +87,7 @@ var OIDCRequestTokenCommand = cli.Command{
 		loader := cliconfig.Loader{CLI: c, Config: &cfg}
 		warnings, err := loader.Load()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
+			fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
 			os.Exit(1)
 		}
 
@@ -114,7 +114,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
 		).Do(func(r *roko.Retrier) error {
 			req := &api.OIDCTokenRequest{
-				JobId:    cfg.Job,
+				Job:      cfg.Job,
 				Audience: cfg.Audience,
 			}
 

@@ -9,7 +9,7 @@ type OIDCToken struct {
 }
 
 type OIDCTokenRequest struct {
-	JobId    string
+	Job      string
 	Audience string
 }
 
@@ -20,7 +20,7 @@ func (c *Client) OIDCToken(methodReq *OIDCTokenRequest) (*OIDCToken, *Response, 
 		Audience: methodReq.Audience,
 	}
 
-	u := fmt.Sprintf("jobs/%s/oidc/tokens", methodReq.JobId)
+	u := fmt.Sprintf("jobs/%s/oidc/tokens", methodReq.Job)
 	httpReq, err := c.newRequest("POST", u, m)
 	if err != nil {
 		return nil, nil, err

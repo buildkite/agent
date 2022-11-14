@@ -96,7 +96,7 @@ func TestOIDCToken(t *testing.T) {
 		{
 			AccessToken: accessToken,
 			OIDCTokenRequest: &api.OIDCTokenRequest{
-				JobId: jobID,
+				Job: jobID,
 			},
 			ExpectedBody: []byte("{}\n"),
 			OIDCToken:    &api.OIDCToken{Token: oidcToken},
@@ -104,7 +104,7 @@ func TestOIDCToken(t *testing.T) {
 		{
 			AccessToken: accessToken,
 			OIDCTokenRequest: &api.OIDCTokenRequest{
-				JobId:    jobID,
+				Job:      jobID,
 				Audience: audience,
 			},
 			ExpectedBody: []byte(fmt.Sprintf(`{"audience":%q}`+"\n", audience)),
@@ -178,7 +178,7 @@ func TestOIDCTokenError(t *testing.T) {
 		{
 			AccessToken: "camels",
 			OIDCTokenRequest: &api.OIDCTokenRequest{
-				JobId:    jobID,
+				Job:      jobID,
 				Audience: audience,
 			},
 			ExpectedStatus: http.StatusUnauthorized,
@@ -186,7 +186,7 @@ func TestOIDCTokenError(t *testing.T) {
 		{
 			AccessToken: accessToken,
 			OIDCTokenRequest: &api.OIDCTokenRequest{
-				JobId:    unauthorizedJobID,
+				Job:      unauthorizedJobID,
 				Audience: audience,
 			},
 			ExpectedStatus: http.StatusForbidden,
@@ -194,7 +194,7 @@ func TestOIDCTokenError(t *testing.T) {
 		{
 			AccessToken: accessToken,
 			OIDCTokenRequest: &api.OIDCTokenRequest{
-				JobId:    "2",
+				Job:      "2",
 				Audience: audience,
 			},
 			ExpectedStatus: http.StatusNotFound,
