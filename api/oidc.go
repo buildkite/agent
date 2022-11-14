@@ -28,5 +28,9 @@ func (c *Client) OIDCToken(methodReq *OIDCTokenRequest) (*OIDCToken, *Response, 
 
 	t := &OIDCToken{}
 	resp, err := c.doRequest(httpReq, t)
-	return t, resp, err
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return t, resp, nil
 }
