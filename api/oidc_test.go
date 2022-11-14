@@ -78,7 +78,7 @@ func TestOIDCToken(t *testing.T) {
 	const oidcToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.NHVaYe26MbtOYhSKkoKYdFVomg4i8ZJd8_-RU8VNbftc4TSMb4bXP3l3YlNWACwyXPGffz5aXHc6lty1Y2t4SWRqGteragsVdZufDn5BlnJl9pdR_kdVFUsra2rWKEofkZeIC4yWytE58sMIihvo9H1ScmmVwBcQP6XETqYd0aSHp1gOa9RdUPDvoXQ5oqygTqVtxaDr6wUFKrKItgBMzWIdNZ6y7O9E0DhEPTbE9rfBo6KTFsHAZnMg4k68CDp2woYIaXbmYTWcvbzIuHO7_37GT79XdIwkm95QJ7hYC9RiwrV7mesbY4PAahERJawntho0my942XheVLmGwLMBkQ"
 	const accessToken = "llamas"
 
-	for _, testData := range []struct {
+	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest
 		AccessToken      string
 		ExpectedBody     []byte
@@ -103,16 +103,18 @@ func TestOIDCToken(t *testing.T) {
 `),
 			OIDCToken: &api.OIDCToken{Token: oidcToken},
 		},
-	} {
+	}
+
+	for _, test := range tests {
 		func() { // this exists to allow closing the server on each iteration
-			path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.OIDCTokenRequest.JobId)
+			path := fmt.Sprintf("/jobs/%s/oidc/tokens", test.OIDCTokenRequest.JobId)
 
 			server := newOIDCTokenServer(
 				t,
-				testData.AccessToken,
-				testData.OIDCToken.Token,
+				test.AccessToken,
+				test.OIDCToken.Token,
 				path,
-				testData.ExpectedBody,
+				test.ExpectedBody,
 			)
 			defer server.Close()
 
@@ -124,19 +126,19 @@ func TestOIDCToken(t *testing.T) {
 				DebugHTTP: true,
 			})
 
-			if token, resp, err := client.OIDCToken(testData.OIDCTokenRequest); err != nil {
-				if !errors.Is(err, testData.Error) {
+			if token, resp, err := client.OIDCToken(test.OIDCTokenRequest); err != nil {
+				if !errors.Is(err, test.Error) {
 					t.Fatalf(
 						"OIDCToken(%v) got error = %v, want error = %v",
-						testData.OIDCTokenRequest,
+						test.OIDCTokenRequest,
 						err,
-						testData.Error,
+						test.Error,
 					)
 				}
-			} else if !cmp.Equal(token, testData.OIDCToken) {
-				t.Fatalf("OIDCToken(%v) got token = %v, want %v", testData.OIDCTokenRequest, token, testData.OIDCToken)
+			} else if !cmp.Equal(token, test.OIDCToken) {
+				t.Fatalf("OIDCToken(%v) got token = %v, want %v", test.OIDCTokenRequest, token, test.OIDCToken)
 			} else if resp.StatusCode != http.StatusOK {
-				t.Fatalf("OIDCToken(%v) got StatusCode = %v, want %v", testData.OIDCTokenRequest, resp.StatusCode, http.StatusOK)
+				t.Fatalf("OIDCToken(%v) got StatusCode = %v, want %v", test.OIDCTokenRequest, resp.StatusCode, http.StatusOK)
 			}
 		}()
 	}
