@@ -107,7 +107,6 @@ var OIDCRequestTokenCommand = cli.Command{
 
 		// Request the token
 		var token *api.OIDCToken
-		var resp *api.Response
 
 		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(maxAttempts),
@@ -118,6 +117,7 @@ var OIDCRequestTokenCommand = cli.Command{
 				Audience: cfg.Audience,
 			}
 
+			var resp *api.Response
 			token, resp, err = client.OIDCToken(req)
 			if resp != nil {
 				switch resp.StatusCode {
