@@ -95,6 +95,7 @@ func main() {
 			Usage: "Make changes to the pipeline of the currently running build",
 			Subcommands: []cli.Command{
 				clicommand.PipelineUploadCommand,
+				clicommand.PipelineEvalCommand,
 			},
 		},
 		{
