@@ -105,7 +105,7 @@ var OIDCRequestTokenCommand = cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		// Find the meta data value
+		// Request the token
 		var token *api.OIDCToken
 		var resp *api.Response
 
