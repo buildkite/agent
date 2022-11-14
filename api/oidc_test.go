@@ -126,19 +126,22 @@ func TestOIDCToken(t *testing.T) {
 				DebugHTTP: true,
 			})
 
-			if token, resp, err := client.OIDCToken(test.OIDCTokenRequest); err != nil {
+			token, resp, err := client.OIDCToken(test.OIDCTokenRequest)
+			if err != nil {
 				if !errors.Is(err, test.Error) {
-					t.Fatalf(
+					t.Errorf(
 						"OIDCToken(%v) got error = %v, want error = %v",
 						test.OIDCTokenRequest,
 						err,
 						test.Error,
 					)
 				}
-			} else if !cmp.Equal(token, test.OIDCToken) {
-				t.Fatalf("OIDCToken(%v) got token = %v, want %v", test.OIDCTokenRequest, token, test.OIDCToken)
-			} else if resp.StatusCode != http.StatusOK {
-				t.Fatalf("OIDCToken(%v) got StatusCode = %v, want %v", test.OIDCTokenRequest, resp.StatusCode, http.StatusOK)
+			}
+			if !cmp.Equal(token, test.OIDCToken) {
+				t.Errorf("OIDCToken(%v) got token = %v, want %v", test.OIDCTokenRequest, token, test.OIDCToken)
+			}
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("OIDCToken(%v) got StatusCode = %v, want %v", test.OIDCTokenRequest, resp.StatusCode, http.StatusOK)
 			}
 		}()
 	}
