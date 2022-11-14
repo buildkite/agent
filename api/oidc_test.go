@@ -14,7 +14,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func newOidcTokenServer(
+func newOIDCTokenServer(
 	t *testing.T,
 	accessToken, oidcToken, path string,
 	expectedBody []byte,
@@ -73,44 +73,44 @@ func newOidcTokenServer(
 	}))
 }
 
-func TestOidcToken(t *testing.T) {
+func TestOIDCToken(t *testing.T) {
 	const jobId = "b078e2d2-86e9-4c12-bf3b-612a8058d0a4"
 	const oidcToken = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.NHVaYe26MbtOYhSKkoKYdFVomg4i8ZJd8_-RU8VNbftc4TSMb4bXP3l3YlNWACwyXPGffz5aXHc6lty1Y2t4SWRqGteragsVdZufDn5BlnJl9pdR_kdVFUsra2rWKEofkZeIC4yWytE58sMIihvo9H1ScmmVwBcQP6XETqYd0aSHp1gOa9RdUPDvoXQ5oqygTqVtxaDr6wUFKrKItgBMzWIdNZ6y7O9E0DhEPTbE9rfBo6KTFsHAZnMg4k68CDp2woYIaXbmYTWcvbzIuHO7_37GT79XdIwkm95QJ7hYC9RiwrV7mesbY4PAahERJawntho0my942XheVLmGwLMBkQ"
 	const accessToken = "llamas"
 
 	for _, testData := range []struct {
-		OidcTokenRequest *api.OidcTokenRequest
+		OIDCTokenRequest *api.OIDCTokenRequest
 		AccessToken      string
 		ExpectedBody     []byte
-		OidcToken        *api.OidcToken
+		OIDCToken        *api.OIDCToken
 		Error            error
 	}{
 		{
 			AccessToken: accessToken,
-			OidcTokenRequest: &api.OidcTokenRequest{
+			OIDCTokenRequest: &api.OIDCTokenRequest{
 				JobId: jobId,
 			},
 			ExpectedBody: []byte("{}\n"),
-			OidcToken:    &api.OidcToken{Token: oidcToken},
+			OIDCToken:    &api.OIDCToken{Token: oidcToken},
 		},
 		{
 			AccessToken: accessToken,
-			OidcTokenRequest: &api.OidcTokenRequest{
+			OIDCTokenRequest: &api.OIDCTokenRequest{
 				JobId:    jobId,
 				Audience: "sts.amazonaws.com",
 			},
 			ExpectedBody: []byte(`{"audience":"sts.amazonaws.com"}
 `),
-			OidcToken: &api.OidcToken{Token: oidcToken},
+			OIDCToken: &api.OIDCToken{Token: oidcToken},
 		},
 	} {
 		func() { // this exists to allow closing the server on each iteration
-			path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.OidcTokenRequest.JobId)
+			path := fmt.Sprintf("/jobs/%s/oidc/tokens", testData.OIDCTokenRequest.JobId)
 
-			server := newOidcTokenServer(
+			server := newOIDCTokenServer(
 				t,
 				testData.AccessToken,
-				testData.OidcToken.Token,
+				testData.OIDCToken.Token,
 				path,
 				testData.ExpectedBody,
 			)
@@ -124,19 +124,19 @@ func TestOidcToken(t *testing.T) {
 				DebugHTTP: true,
 			})
 
-			if token, resp, err := client.OidcToken(testData.OidcTokenRequest); err != nil {
+			if token, resp, err := client.OIDCToken(testData.OIDCTokenRequest); err != nil {
 				if !errors.Is(err, testData.Error) {
 					t.Fatalf(
-						"OidcToken(%v) got error = %v, want error = %v",
-						testData.OidcTokenRequest,
+						"OIDCToken(%v) got error = %v, want error = %v",
+						testData.OIDCTokenRequest,
 						err,
 						testData.Error,
 					)
 				}
-			} else if !cmp.Equal(token, testData.OidcToken) {
-				t.Fatalf("OidcToken(%v) got token = %v, want %v", testData.OidcTokenRequest, token, testData.OidcToken)
+			} else if !cmp.Equal(token, testData.OIDCToken) {
+				t.Fatalf("OIDCToken(%v) got token = %v, want %v", testData.OIDCTokenRequest, token, testData.OIDCToken)
 			} else if resp.StatusCode != http.StatusOK {
-				t.Fatalf("OidcToken(%v) got StatusCode = %v, want %v", testData.OidcTokenRequest, resp.StatusCode, http.StatusOK)
+				t.Fatalf("OIDCToken(%v) got StatusCode = %v, want %v", testData.OIDCTokenRequest, resp.StatusCode, http.StatusOK)
 			}
 		}()
 	}

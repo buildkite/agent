@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-type OidcTokenConfig struct {
+type OIDCTokenConfig struct {
 	Audience string `cli:"audience"`
 	Job      string `cli:"job"      validate:"required"`
 
@@ -50,7 +50,7 @@ Example:
 	maxAttempts    = 5
 )
 
-var OidcRequestTokenCommand = cli.Command{
+var OIDCRequestTokenCommand = cli.Command{
 	Name:        "request-token",
 	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
 	Description: oidcTokenDescription,
@@ -82,7 +82,7 @@ var OidcRequestTokenCommand = cli.Command{
 	},
 	Action: func(c *cli.Context) error {
 		// The configuration will be loaded into this struct
-		cfg := OidcTokenConfig{}
+		cfg := OIDCTokenConfig{}
 
 		loader := cliconfig.Loader{CLI: c, Config: &cfg}
 		warnings, err := loader.Load()
@@ -106,19 +106,19 @@ var OidcRequestTokenCommand = cli.Command{
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
-		var token *api.OidcToken
+		var token *api.OIDCToken
 		var resp *api.Response
 
 		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(maxAttempts),
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
 		).Do(func(r *roko.Retrier) error {
-			req := &api.OidcTokenRequest{
+			req := &api.OIDCTokenRequest{
 				JobId:    cfg.Job,
 				Audience: cfg.Audience,
 			}
 
-			token, resp, err = client.OidcToken(req)
+			token, resp, err = client.OIDCToken(req)
 			if resp != nil {
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses

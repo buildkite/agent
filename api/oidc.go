@@ -4,16 +4,16 @@ import (
 	"fmt"
 )
 
-type OidcToken struct {
+type OIDCToken struct {
 	Token string `json:"token"`
 }
 
-type OidcTokenRequest struct {
+type OIDCTokenRequest struct {
 	JobId    string
 	Audience string
 }
 
-func (c *Client) OidcToken(methodReq *OidcTokenRequest) (*OidcToken, *Response, error) {
+func (c *Client) OIDCToken(methodReq *OIDCTokenRequest) (*OIDCToken, *Response, error) {
 	m := &struct {
 		Audience string `json:"audience,omitempty"`
 	}{
@@ -26,7 +26,7 @@ func (c *Client) OidcToken(methodReq *OidcTokenRequest) (*OidcToken, *Response, 
 		return nil, nil, err
 	}
 
-	t := &OidcToken{}
+	t := &OIDCToken{}
 	resp, err := c.doRequest(httpReq, t)
 	return t, resp, err
 }
