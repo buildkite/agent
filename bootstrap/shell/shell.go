@@ -60,9 +60,6 @@ type Shell struct {
 	// Current working directory that shell commands get executed in
 	wd string
 
-	// The context for the shell
-	ctx context.Context
-
 	// Currently running command
 	cmd     *command
 	cmdLock sync.Mutex
@@ -83,19 +80,7 @@ func New() (*Shell, error) {
 		Env:    env.FromSlice(os.Environ()),
 		Writer: os.Stdout,
 		wd:     wd,
-		ctx:    context.Background(),
 	}, nil
-}
-
-// New returns a new Shell with provided context.Context
-func NewWithContext(ctx context.Context) (*Shell, error) {
-	sh, err := New()
-	if err != nil {
-		return nil, err
-	}
-
-	sh.ctx = ctx
-	return sh, nil
 }
 
 // WithStdin returns a copy of the Shell with the provided io.Reader set as the
@@ -112,7 +97,6 @@ func (s *Shell) WithStdin(r io.Reader) *Shell {
 		stdin:           r, // our new stdin
 		Writer:          s.Writer,
 		wd:              s.wd,
-		ctx:             s.ctx,
 		InterruptSignal: s.InterruptSignal,
 	}
 }
@@ -186,7 +170,7 @@ type LockFile interface {
 	Unlock() error
 }
 
-func (s *Shell) lockfile(path string, timeout time.Duration) (LockFile, error) {
+func (s *Shell) lockfile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
 	absolutePathToLock, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
@@ -197,7 +181,7 @@ func (s *Shell) lockfile(path string, timeout time.Duration) (LockFile, error) {
 		return nil, fmt.Errorf("Failed to create lock \"%s\" (%s)", absolutePathToLock, err)
 	}
 
-	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	for {
@@ -221,7 +205,7 @@ func (s *Shell) lockfile(path string, timeout time.Duration) (LockFile, error) {
 	return &lock, err
 }
 
-func (s *Shell) flock(path string, timeout time.Duration) (LockFile, error) {
+func (s *Shell) flock(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
 	absolutePathToLock, err := filepath.Abs(path + "f") // + "f" to ensure that flocks and lockfiles never share a filename
 	if err != nil {
 		return nil, fmt.Errorf("Failed to find absolute path to lock \"%s\" (%v)", path, err)
@@ -229,7 +213,7 @@ func (s *Shell) flock(path string, timeout time.Duration) (LockFile, error) {
 
 	lock := flock.New(absolutePathToLock)
 
-	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	for {
@@ -258,18 +242,17 @@ func (s *Shell) flock(path string, timeout time.Duration) (LockFile, error) {
 }
 
 // Create a cross-process file-based lock based on pid files
-func (s *Shell) LockFile(path string, timeout time.Duration) (LockFile, error) {
+func (s *Shell) LockFile(ctx context.Context, path string, timeout time.Duration) (LockFile, error) {
 	if experiments.IsEnabled("flock-file-locks") {
 		s.Commentf("Using flock-file-locks experiment 🧪")
-		return s.flock(path, timeout)
-	} else {
-		return s.lockfile(path, timeout)
+		return s.flock(ctx, path, timeout)
 	}
+	return s.lockfile(ctx, path, timeout)
 }
 
 // Run runs a command, write stdout and stderr to the logger and return an error
 // if it fails
-func (s *Shell) Run(command string, arg ...string) error {
+func (s *Shell) Run(ctx context.Context, command string, arg ...string) error {
 	formatted := process.FormatCommand(command, arg)
 	if s.stdin == nil {
 		s.Promptf("%s", formatted)
@@ -278,21 +261,13 @@ func (s *Shell) Run(command string, arg ...string) error {
 		s.Promptf("%s < /dev/stdin", formatted)
 	}
 
-	return s.RunWithoutPrompt(command, arg...)
+	return s.RunWithoutPrompt(ctx, command, arg...)
 }
 
-// RunWithoutPrompt runs a command, write stdout and stderr to the logger and
-// return an error if it fails. Notably it doesn't show a prompt. It will use the
-// context set on the Shell object itself.
-func (s *Shell) RunWithoutPrompt(command string, arg ...string) error {
-	return s.RunWithoutPromptWithContext(s.ctx, command, arg...)
-}
-
-// RunWithoutPromptWithContext runs a command, writes stdout and err to the logger,
-// and returns an error if it fails. It doesn't show a prompt. It will use the given
-// context.
-func (s *Shell) RunWithoutPromptWithContext(ctx context.Context, command string, arg ...string) error {
-	cmd, err := s.buildCommand(ctx, command, arg...)
+// RunWithoutPrompt runs a command, writes stdout and err to the logger,
+// and returns an error if it fails. It doesn't show a prompt.
+func (s *Shell) RunWithoutPrompt(ctx context.Context, command string, arg ...string) error {
+	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -308,19 +283,19 @@ func (s *Shell) RunWithoutPromptWithContext(ctx context.Context, command string,
 // RunAndCapture runs a command and captures the output for processing. Stdout is captured, but
 // stderr isn't. If the shell is in debug mode then the command will be eched and both stderr
 // and stdout will be written to the logger. A PTY is never used for RunAndCapture.
-func (s *Shell) RunAndCapture(command string, arg ...string) (string, error) {
+func (s *Shell) RunAndCapture(ctx context.Context, command string, arg ...string) (string, error) {
 	if s.Debug {
 		s.Promptf("%s", process.FormatCommand(command, arg))
 	}
 
-	cmd, err := s.buildCommand(s.ctx, command, arg...)
+	cmd, err := s.buildCommand(command, arg...)
 	if err != nil {
 		return "", err
 	}
 
 	var b bytes.Buffer
 
-	err = s.executeCommand(s.ctx, cmd, &b, executeFlags{
+	err = s.executeCommand(ctx, cmd, &b, executeFlags{
 		Stdout: true,
 		Stderr: false,
 		PTY:    false,
@@ -396,7 +371,7 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environmen
 		args = []string{}
 	}
 
-	cmd, err := s.buildCommand(ctx, command, args...)
+	cmd, err := s.buildCommand(command, args...)
 	if err != nil {
 		s.Errorf("Error building command: %v", err)
 		return err
@@ -416,12 +391,11 @@ func (s *Shell) RunScript(ctx context.Context, path string, extra env.Environmen
 
 type command struct {
 	process.Config
-	proc   *process.Process
-	cancel context.CancelFunc
+	proc *process.Process
 }
 
 // buildCommand returns a command that can later be executed
-func (s *Shell) buildCommand(ctx context.Context, name string, arg ...string) (*command, error) {
+func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 	// Always use absolute path as Windows has a hard time
 	// finding executables in its path
 	absPath, err := s.AbsolutePath(name)
@@ -438,17 +412,12 @@ func (s *Shell) buildCommand(ctx context.Context, name string, arg ...string) (*
 		InterruptSignal: s.InterruptSignal,
 	}
 
-	// Create a sub-context so that shell.Cancel() can interrupt
-	// a running command
-	subctx, cancel := context.WithCancel(ctx)
-	cfg.Context = subctx
-
 	// Add env that commands expect a shell to set
 	cfg.Env = append(cfg.Env,
 		`PWD=`+s.wd,
 	)
 
-	return &command{Config: cfg, cancel: cancel}, nil
+	return &command{Config: cfg}, nil
 }
 
 type executeFlags struct {
@@ -509,11 +478,6 @@ func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, f
 		}()
 	}
 
-	// Must cancel the context regardless of outcome
-	defer func() {
-		cmd.cancel()
-	}()
-
 	cfg := cmd.Config
 
 	// Modify process config based on execution flags
@@ -546,7 +510,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, f
 	s.cmd.proc = p
 	s.cmdLock.Unlock()
 
-	if err := p.Run(); err != nil {
+	if err := p.Run(ctx); err != nil {
 		return errors.Wrapf(err, "Error running `%s`", cmdStr)
 	}
 

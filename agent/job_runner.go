@@ -74,10 +74,6 @@ type JobRunner struct {
 	// A scope for metrics within a job
 	metrics *metrics.Scope
 
-	// Go context for goroutine supervision
-	context       context.Context
-	contextCancel context.CancelFunc
-
 	// The internal process of the job
 	process *process.Process
 
@@ -95,9 +91,6 @@ type JobRunner struct {
 
 	// If the agent is being stopped
 	stopped bool
-
-	// Used to wait on various routines that we spin up
-	routineWaitGroup sync.WaitGroup
 
 	// A lock to protect concurrent calls to cancel
 	cancelLock sync.Mutex
@@ -124,8 +117,6 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		clientConf.Token = job.Token
 		runner.apiClient = api.NewClient(l, clientConf)
 	}
-
-	runner.context, runner.contextCancel = context.WithCancel(context.Background())
 
 	// Create our header times struct
 	runner.headerTimesStreamer = newHeaderTimesStreamer(l, runner.onUploadHeaderTime)
@@ -174,14 +165,16 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	pr, pw := io.Pipe()
 
-	if experiments.IsEnabled(`ansi-timestamps`) {
+	switch {
+	case experiments.IsEnabled("ansi-timestamps"):
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
 		processWriter = process.NewPrefixer(runner.output, func() string {
 			return fmt.Sprintf("\x1b_bk;t=%d\x07",
 				time.Now().UnixNano()/int64(time.Millisecond))
 		})
-	} else if conf.AgentConfiguration.TimestampLines {
+
+	case conf.AgentConfiguration.TimestampLines:
 		// If we have timestamp lines on, we have to buffer lines before we flush them
 		// because we need to know if the line is a header or not. It's a bummer.
 		processWriter = pw
@@ -204,7 +197,8 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 				l.Error("[JobRunner] Encountered error %v", err)
 			}
 		}()
-	} else {
+
+	default:
 		// Write output directly to the line buffer so we
 		processWriter = io.MultiWriter(pw, runner.output)
 
@@ -262,20 +256,17 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 		}
 	}()
 
-	// Kick off our callback when the process starts
-	go func() {
-		<-runner.process.Started()
-		runner.onProcessStartCallback()
-	}()
-
 	return runner, nil
 }
 
 // Runs the job
-func (r *JobRunner) Run() error {
+func (r *JobRunner) Run(ctx context.Context) error {
 	r.logger.Info("Starting job %s", r.job.ID)
 
 	startedAt := time.Now()
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
@@ -318,7 +309,7 @@ func (r *JobRunner) Run() error {
 	if hook, _ := hook.Find(r.conf.AgentConfiguration.HooksPath, "pre-bootstrap"); hook != "" {
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true
 		// positive result from the hook
-		okay, err := r.executePreBootstrapHook(hook)
+		okay, err := r.executePreBootstrapHook(ctx, hook)
 		if !okay {
 			environmentCommandOkay = false
 
@@ -332,9 +323,18 @@ func (r *JobRunner) Run() error {
 		}
 	}
 
+	// Used to wait on various routines that we spin up
+	var wg sync.WaitGroup
+
 	if environmentCommandOkay {
+		// Kick off log streaming and job status checking when the process
+		// starts.
+		wg.Add(2)
+		go r.jobLogStreamer(ctx, &wg)
+		go r.jobCancellationChecker(ctx, &wg)
+
 		// Run the process. This will block until it finishes.
-		if err := r.process.Run(); err != nil {
+		if err := r.process.Run(ctx); err != nil {
 			// Send the error as output
 			r.logStreamer.Process(fmt.Sprintf("%s", err))
 
@@ -377,10 +377,12 @@ func (r *JobRunner) Run() error {
 		r.logger.Warn("%d chunks failed to upload for this job", count)
 	}
 
+	// Ensure the additional goroutines are stopped.
+	cancel()
+
 	// Wait for the routines that we spun up to finish
 	r.logger.Debug("[JobRunner] Waiting for all other routines to finish")
-	r.contextCancel()
-	r.routineWaitGroup.Wait()
+	wg.Wait()
 
 	// Remove the env file, if any
 	if r.envFile != nil {
@@ -477,9 +479,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	// The agent registration token should never make it into the job environment
-	if _, exists := env[`BUILDKITE_AGENT_TOKEN`]; exists {
-		delete(env, `BUILDKITE_AGENT_TOKEN`)
-	}
+	delete(env, `BUILDKITE_AGENT_TOKEN`)
 
 	// Write out the job environment to a file, in k="v" format, with newlines escaped
 	// We present only the clean environment - i.e only variables configured
@@ -656,7 +656,7 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
-func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
+func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
 	r.logger.Info("Running pre-bootstrap hook %q", hook)
 
 	sh, err := shell.New()
@@ -672,7 +672,7 @@ func (r *JobRunner) executePreBootstrapHook(hook string) (bool, error) {
 		l: r.logger,
 	}
 
-	if err := sh.RunWithoutPrompt(hook); err != nil {
+	if err := sh.RunWithoutPrompt(ctx, hook); err != nil {
 		r.logger.Error("Finished pre-bootstrap hook %q: job rejected", hook)
 		return false, err
 	}
@@ -748,70 +748,77 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 	})
 }
 
-func (r *JobRunner) onProcessStartCallback() {
-	// Since we're spinning up 2 routines here, we might as well add them
-	// to the routine wait group here.
-	r.routineWaitGroup.Add(2)
+// jobLogStreamer waits for the process to start, then grabs the job output
+// every few seconds and sends it back to Buildkite.
+func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
+	defer func() {
+		wg.Done()
+		r.logger.Debug("[JobRunner] Routine that processes the log has finished")
+	}()
 
-	// Start a routine that will grab the output every few seconds and send
-	// it back to Buildkite
-	go func() {
-		defer func() {
-			r.routineWaitGroup.Done()
-			r.logger.Debug("[JobRunner] Routine that processes the log has finished")
-		}()
+	select {
+	case <-r.process.Started():
+	case <-ctx.Done():
+		return
+	}
 
-		for {
-			// Send the output of the process to the log streamer
-			// for processing
-			r.logStreamer.Process(r.output.String())
+	for {
+		// Send the output of the process to the log streamer
+		// for processing
+		r.logStreamer.Process(r.output.String())
 
-			// Sleep for a bit, or until the job is finished
-			select {
-			case <-time.After(1 * time.Second):
-			case <-r.context.Done():
-				return
-			case <-r.process.Done():
-				return
+		// Sleep for a bit, or until the job is finished
+		select {
+		case <-time.After(1 * time.Second):
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
+		}
+	}
+
+	// The final output after the process has finished is processed in Run().
+}
+
+// jobCancellationChecker waits for the processs to start, then continuously
+// polls GetJobState to see if the job has been cancelled server-side. If so,
+// it calls r.Cancel.
+func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {
+	defer func() {
+		// Mark this routine as done in the wait group
+		wg.Done()
+
+		r.logger.Debug("[JobRunner] Routine that refreshes the job has finished")
+	}()
+
+	select {
+	case <-r.process.Started():
+	case <-ctx.Done():
+		return
+	}
+
+	for {
+		// Re-get the job and check its status to see if it's been cancelled
+		jobState, _, err := r.apiClient.GetJobState(r.job.ID)
+		if err != nil {
+			// We don't really care if it fails, we'll just
+			// try again soon anyway
+			r.logger.Warn("Problem with getting job state %s (%s)", r.job.ID, err)
+		} else if jobState.State == "canceling" || jobState.State == "canceled" {
+			if err := r.Cancel(); err != nil {
+				r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
 			}
 		}
 
-		// The final output after the process has finished is processed in Run()
-	}()
-
-	// Start a routine that will constantly ping Buildkite to see if the
-	// job has been canceled
-	go func() {
-		defer func() {
-			// Mark this routine as done in the wait group
-			r.routineWaitGroup.Done()
-
-			r.logger.Debug("[JobRunner] Routine that refreshes the job has finished")
-		}()
-		for {
-			// Re-get the job and check its status to see if it's been cancelled
-			jobState, _, err := r.apiClient.GetJobState(r.job.ID)
-			if err != nil {
-				// We don't really care if it fails, we'll just
-				// try again soon anyway
-				r.logger.Warn("Problem with getting job state %s (%s)", r.job.ID, err)
-			} else if jobState.State == "canceling" || jobState.State == "canceled" {
-				err = r.Cancel()
-				if err != nil {
-					r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
-				}
-			}
-
-			// Sleep for a bit, or until the job is finished
-			select {
-			case <-time.After(time.Duration(r.agent.JobStatusInterval) * time.Second):
-			case <-r.context.Done():
-				return
-			case <-r.process.Done():
-				return
-			}
+		// Sleep for a bit, or until the job is finished
+		select {
+		case <-time.After(time.Duration(r.agent.JobStatusInterval) * time.Second):
+		case <-ctx.Done():
+			return
+		case <-r.process.Done():
+			return
 		}
-	}()
+	}
 }
 
 func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {

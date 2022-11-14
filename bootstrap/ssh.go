@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,8 +17,8 @@ var (
 	sshKeyscanRetryInterval = 2 * time.Second
 )
 
-func sshKeyScan(sh *shell.Shell, host string) (string, error) {
-	toolsDir, err := findPathToSSHTools(sh)
+func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, error) {
+	toolsDir, err := findPathToSSHTools(ctx, sh)
 	if err != nil {
 		return "", err
 	}
@@ -34,10 +35,10 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 		var sshKeyScanCommand string
 		if len(hostParts) == 2 {
 			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan -p %q %q", hostParts[1], hostParts[0])
-			sshKeyScanOutput, err = sh.RunAndCapture(sshKeyScanPath, "-p", hostParts[1], hostParts[0])
+			sshKeyScanOutput, err = sh.RunAndCapture(ctx, sshKeyScanPath, "-p", hostParts[1], hostParts[0])
 		} else {
 			sshKeyScanCommand = fmt.Sprintf("ssh-keyscan %q", host)
-			sshKeyScanOutput, err = sh.RunAndCapture(sshKeyScanPath, host)
+			sshKeyScanOutput, err = sh.RunAndCapture(ctx, sshKeyScanPath, host)
 		}
 
 		if err != nil {
@@ -67,14 +68,14 @@ func sshKeyScan(sh *shell.Shell, host string) (string, error) {
 //
 // Some more details on the relative paths at
 // https://stackoverflow.com/a/11771907
-func findPathToSSHTools(sh *shell.Shell) (string, error) {
+func findPathToSSHTools(ctx context.Context, sh *shell.Shell) (string, error) {
 	sshKeyscan, err := sh.AbsolutePath("ssh-keyscan")
 	if err == nil {
 		return filepath.Dir(sshKeyscan), nil
 	}
 
 	if runtime.GOOS == "windows" {
-		execPath, _ := sh.RunAndCapture("git", "--exec-path")
+		execPath, _ := sh.RunAndCapture(ctx, "git", "--exec-path")
 		if len(execPath) > 0 {
 			for _, path := range []string{
 				filepath.Join(execPath, "..", "..", "..", "usr", "bin", "ssh-keygen.exe"),

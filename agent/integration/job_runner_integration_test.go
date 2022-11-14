@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -126,7 +127,7 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 		t.Fatalf("agent.NewJobRunner() error = %v", err)
 	}
 
-	if err := jr.Run(); err != nil {
+	if err := jr.Run(context.Background()); err != nil {
 		t.Errorf("jr.Run() = %v", err)
 	}
 }

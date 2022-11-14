@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -73,7 +74,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
 				t.Errorf("kh.Contains(%q) = %t, want %t", tc.Host, got, want)
 			}
 
-			if err := kh.AddFromRepository(tc.Repository); err != nil {
+			if err := kh.AddFromRepository(context.Background(), tc.Repository); err != nil {
 				t.Errorf("kh.AddFromRespository(%q) = %v", tc.Repository, err)
 			}
 

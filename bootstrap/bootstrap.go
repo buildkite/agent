@@ -63,7 +63,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Check if not nil to allow for tests to overwrite shell
 	if b.shell == nil {
 		var err error
-		b.shell, err = shell.NewWithContext(ctx)
+		b.shell, err = shell.New()
 		if err != nil {
 			fmt.Printf("Error creating shell: %v", err)
 			return 1
@@ -475,7 +475,7 @@ func dirForRepository(repository string) string {
 }
 
 // Given a repository, it will add the host to the set of SSH known_hosts on the machine
-func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
+func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repository string) {
 	if utils.FileExists(repository) {
 		return
 	}
@@ -486,7 +486,7 @@ func addRepositoryHostToSSHKnownHosts(sh *shell.Shell, repository string) {
 		return
 	}
 
-	if err = knownHosts.AddFromRepository(repository); err != nil {
+	if err = knownHosts.AddFromRepository(ctx, repository); err != nil {
 		sh.Warningf("Error adding to known_hosts: %v", err)
 		return
 	}
@@ -575,7 +575,7 @@ func (b *Bootstrap) tearDown(ctx context.Context) error {
 
 	// Support deprecated BUILDKITE_DOCKER* env vars
 	if hasDeprecatedDockerIntegration(b.shell) {
-		return tearDownDeprecatedDockerIntegration(b.shell)
+		return tearDownDeprecatedDockerIntegration(ctx, b.shell)
 	}
 
 	for _, dir := range b.cleanupDirs {
@@ -683,7 +683,7 @@ func (b *Bootstrap) PluginPhase(ctx context.Context) error {
 			continue
 		}
 
-		checkout, err := b.checkoutPlugin(p)
+		checkout, err := b.checkoutPlugin(ctx, p)
 		if err != nil {
 			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
 		}
@@ -799,7 +799,7 @@ func (b *Bootstrap) hasPluginHook(name string) bool {
 }
 
 // Checkout a given plugin to the plugins directory and return that directory
-func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
+func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*pluginCheckout, error) {
 	// Make sure we have a plugin path before trying to do anything
 	if b.PluginsPath == "" {
 		return nil, fmt.Errorf("Can't checkout plugin without a `plugins-path`")
@@ -813,8 +813,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 
 	// Ensure the plugin directory exists, otherwise we can't create the lock
 	// Actual file permissions will be reduced by umask, and won't be 0777 unless the user has manually changed the umask to 000
-	err = os.MkdirAll(b.PluginsPath, 0777)
-	if err != nil {
+	if err := os.MkdirAll(b.PluginsPath, 0777); err != nil {
 		return nil, err
 	}
 
@@ -830,7 +829,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Try and lock this particular plugin while we check it out (we create
 	// the file outside of the plugin directory so git clone doesn't have
 	// a cry about the directory not being empty)
-	pluginCheckoutHook, err := b.shell.LockFile(filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
+	pluginCheckoutHook, err := b.shell.LockFile(ctx, filepath.Join(b.PluginsPath, id+".lock"), time.Minute*5)
 	if err != nil {
 		return nil, err
 	}
@@ -861,7 +860,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	if utils.FileExists(pluginGitDirectory) {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
-		headCommit, err := gitRevParseInWorkingDirectory(b.shell, pluginDirectory, "--short=7", "HEAD")
+		headCommit, err := gitRevParseInWorkingDirectory(ctx, b.shell, pluginDirectory, "--short=7", "HEAD")
 		if err != nil {
 			b.shell.Commentf("Plugin %q already checked out (can't `git rev-parse HEAD` plugin git directory)", p.Label())
 		} else {
@@ -879,7 +878,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	}
 
 	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(b.shell, repo)
+		addRepositoryHostToSSHKnownHosts(ctx, b.shell, repo)
 	}
 
 	// Make the directory
@@ -910,7 +909,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
 	).Do(func(r *roko.Retrier) error {
-		return b.shell.Run("git", args...)
+		return b.shell.Run(ctx, "git", args...)
 	})
 	if err != nil {
 		return nil, err
@@ -919,7 +918,7 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Switch to the version if we need to
 	if p.Version != "" {
 		b.shell.Commentf("Checking out `%s`", p.Version)
-		if err = b.shell.Run("git", "checkout", "-f", p.Version); err != nil {
+		if err = b.shell.Run(ctx, "git", "checkout", "-f", p.Version); err != nil {
 			return nil, err
 		}
 	}
@@ -1129,9 +1128,9 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 	return utils.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
 }
 
-func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
+func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir string, commit string) bool {
 	// Resolve commit to an actual commit object
-	output, err := sh.RunAndCapture("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}")
+	output, err := sh.RunAndCapture(ctx, "git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}")
 	if err != nil {
 		return false
 	}
@@ -1145,7 +1144,7 @@ func hasGitCommit(sh *shell.Shell, gitDir string, commit string) bool {
 	return true
 }
 
-func (b *Bootstrap) updateGitMirror() (string, error) {
+func (b *Bootstrap) updateGitMirror(ctx context.Context) (string, error) {
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(b.Config.GitMirrorsPath, dirForRepository(b.Repository))
 
@@ -1167,7 +1166,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 
 	// Lock the mirror dir to prevent concurrent clones
-	mirrorCloneLock, err := b.shell.LockFile(mirrorDir+".clonelock", lockTimeout)
+	mirrorCloneLock, err := b.shell.LockFile(ctx, mirrorDir+".clonelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}
@@ -1177,7 +1176,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	if !utils.FileExists(mirrorDir) {
 		b.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
 		flags := "--mirror " + b.GitCloneMirrorFlags
-		if err := gitClone(b.shell, flags, b.Repository, mirrorDir); err != nil {
+		if err := gitClone(ctx, b.shell, flags, b.Repository, mirrorDir); err != nil {
 			b.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
 				b.shell.Errorf("Failed to remove \"%s\" (%s)", mirrorDir, err)
@@ -1192,7 +1191,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	mirrorCloneLock.Unlock()
 
 	// Check if the mirror has a commit, this is atomic so should be safe to do
-	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
+	if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
 		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
 		return mirrorDir, nil
 	}
@@ -1202,14 +1201,14 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	}
 
 	// Lock the mirror dir to prevent concurrent updates
-	mirrorUpdateLock, err := b.shell.LockFile(mirrorDir+".updatelock", lockTimeout)
+	mirrorUpdateLock, err := b.shell.LockFile(ctx, mirrorDir+".updatelock", lockTimeout)
 	if err != nil {
 		return "", err
 	}
 	defer mirrorUpdateLock.Unlock()
 
 	// Check again after we get a lock, in case the other process has already updated
-	if hasGitCommit(b.shell, mirrorDir, b.Commit) {
+	if hasGitCommit(ctx, b.shell, mirrorDir, b.Commit) {
 		b.shell.Commentf("Commit %q exists in mirror", b.Commit)
 		return mirrorDir, nil
 	}
@@ -1217,7 +1216,7 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 	b.shell.Commentf("Updating existing repository mirror to find commit %s", b.Commit)
 
 	// Update the origin of the repository so we can gracefully handle repository renames
-	if err := b.shell.Run("git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
+	if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "set-url", "origin", b.Repository); err != nil {
 		return "", err
 	}
 
@@ -1225,12 +1224,12 @@ func (b *Bootstrap) updateGitMirror() (string, error) {
 		b.shell.Commentf("Fetch and mirror pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 		// Fetch the PR head from the upstream repository into the mirror.
-		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
+		if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", refspec); err != nil {
 			return "", err
 		}
 	} else {
 		// Fetch the build branch from the upstream repository into the mirror.
-		if err := b.shell.Run("git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
+		if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "fetch", "origin", b.Branch); err != nil {
 			return "", err
 		}
 	}
@@ -1251,7 +1250,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	defer func() { span.FinishWithError(err) }()
 
 	if b.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(b.shell, b.Repository)
+		addRepositoryHostToSSHKnownHosts(ctx, b.shell, b.Repository)
 	}
 
 	var mirrorDir string
@@ -1273,7 +1272,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 				mirrorDir = ""
 			}
 		} else {
-			mirrorDir, err = b.updateGitMirror()
+			mirrorDir, err = b.updateGitMirror(ctx)
 			if err != nil {
 				return err
 			}
@@ -1296,11 +1295,11 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	existingGitDir := filepath.Join(b.shell.Getwd(), ".git")
 	if utils.FileExists(existingGitDir) {
 		// Update the origin of the repository so we can gracefully handle repository renames
-		if err := b.shell.Run("git", "remote", "set-url", "origin", b.Repository); err != nil {
+		if err := b.shell.Run(ctx, "git", "remote", "set-url", "origin", b.Repository); err != nil {
 			return err
 		}
 	} else {
-		if err := gitClone(b.shell, gitCloneFlags, b.Repository, "."); err != nil {
+		if err := gitClone(ctx, b.shell, gitCloneFlags, b.Repository, "."); err != nil {
 			return err
 		}
 	}
@@ -1308,12 +1307,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// Git clean prior to checkout, we do this even if submodules have been
 	// disabled to ensure previous submodules are cleaned up
 	if hasGitSubmodules(b.shell) {
-		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
+		if err := gitCleanSubmodules(ctx, b.shell, b.GitCleanFlags); err != nil {
 			return err
 		}
 	}
 
-	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
+	if err := gitClean(ctx, b.shell, b.GitCleanFlags); err != nil {
 		return err
 	}
 
@@ -1323,7 +1322,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// For example, `refs/not/a/head`
 	if b.RefSpec != "" {
 		b.shell.Commentf("Fetch and checkout custom refspec")
-		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
+		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.RefSpec); err != nil {
 			return err
 		}
 
@@ -1335,18 +1334,18 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		b.shell.Commentf("Fetch and checkout pull request head from GitHub")
 		refspec := fmt.Sprintf("refs/pull/%s/head", b.PullRequest)
 
-		if err := gitFetch(b.shell, gitFetchFlags, "origin", refspec); err != nil {
+		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", refspec); err != nil {
 			return err
 		}
 
-		gitFetchHead, _ := b.shell.RunAndCapture("git", "rev-parse", "FETCH_HEAD")
+		gitFetchHead, _ := b.shell.RunAndCapture(ctx, "git", "rev-parse", "FETCH_HEAD")
 		b.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 	} else if b.Commit == "HEAD" {
 		b.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
+		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.Branch); err != nil {
 			return err
 		}
 
@@ -1354,24 +1353,24 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		// support fetching a specific commit so we fall back to fetching all heads
 		// and tags, hoping that the commit is included.
 	} else {
-		if err := gitFetch(b.shell, gitFetchFlags, "origin", b.Commit); err != nil {
+		if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", b.Commit); err != nil {
 			// By default `git fetch origin` will only fetch tags which are
 			// reachable from a fetches branch. git 1.9.0+ changed `--tags` to
 			// fetch all tags in addition to the default refspec, but pre 1.9.0 it
 			// excludes the default refspec.
-			gitFetchRefspec, _ := b.shell.RunAndCapture("git", "config", "remote.origin.fetch")
-			if err := gitFetch(b.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
+			gitFetchRefspec, _ := b.shell.RunAndCapture(ctx, "git", "config", "remote.origin.fetch")
+			if err := gitFetch(ctx, b.shell, gitFetchFlags, "origin", gitFetchRefspec, "+refs/tags/*:refs/tags/*"); err != nil {
 				return err
 			}
 		}
 	}
 
 	if b.Commit == "HEAD" {
-		if err := gitCheckout(b.shell, "-f", "FETCH_HEAD"); err != nil {
+		if err := gitCheckout(ctx, b.shell, "-f", "FETCH_HEAD"); err != nil {
 			return err
 		}
 	} else {
-		if err := gitCheckout(b.shell, "-f", b.Commit); err != nil {
+		if err := gitCheckout(ctx, b.shell, "-f", b.Commit); err != nil {
 			return err
 		}
 	}
@@ -1390,29 +1389,29 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		// is only available in git version 1.8.1, so
 		// if the call fails, continue the bootstrap
 		// script, and show an informative error.
-		if err := b.shell.Run("git", "submodule", "sync", "--recursive"); err != nil {
-			gitVersionOutput, _ := b.shell.RunAndCapture("git", "--version")
+		if err := b.shell.Run(ctx, "git", "submodule", "sync", "--recursive"); err != nil {
+			gitVersionOutput, _ := b.shell.RunAndCapture(ctx, "git", "--version")
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
 
 		// Checking for submodule repositories
-		submoduleRepos, err := gitEnumerateSubmoduleURLs(b.shell)
+		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, b.shell)
 		if err != nil {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
 			for _, repository := range submoduleRepos {
 				// submodules might need their fingerprints verified too
 				if b.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(b.shell, repository)
+					addRepositoryHostToSSHKnownHosts(ctx, b.shell, repository)
 				}
 			}
 		}
 
-		if err := b.shell.Run("git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
+		if err := b.shell.Run(ctx, "git", "submodule", "update", "--init", "--recursive", "--force"); err != nil {
 			return err
 		}
 
-		if err := b.shell.Run("git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
+		if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
 			return err
 		}
 	}
@@ -1422,12 +1421,12 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// good solution to this problem that we've found
 	b.shell.Commentf("Cleaning again to catch any post-checkout changes")
 
-	if err := gitClean(b.shell, b.GitCleanFlags); err != nil {
+	if err := gitClean(ctx, b.shell, b.GitCleanFlags); err != nil {
 		return err
 	}
 
 	if gitSubmodules {
-		if err := gitCleanSubmodules(b.shell, b.GitCleanFlags); err != nil {
+		if err := gitCleanSubmodules(ctx, b.shell, b.GitCleanFlags); err != nil {
 			return err
 		}
 	}
@@ -1440,7 +1439,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// resolve BUILDKITE_COMMIT based on the local git repo
 	if experiments.IsEnabled(`resolve-commit-after-checkout`) {
 		b.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
-		b.resolveCommit()
+		b.resolveCommit(ctx)
 	}
 
 	// Grab author and commit information and send
@@ -1448,14 +1447,14 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	// we'll check to see if someone else has done
 	// it first.
 	b.shell.Commentf("Checking to see if Git data needs to be sent to Buildkite")
-	if err := b.shell.Run("buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
+	if err := b.shell.Run(ctx, "buildkite-agent", "meta-data", "exists", "buildkite:git:commit"); err != nil {
 		b.shell.Commentf("Sending Git commit information back to Buildkite")
-		out, err := b.shell.RunAndCapture("git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--")
+		out, err := b.shell.RunAndCapture(ctx, "git", "--no-pager", "show", "HEAD", "-s", "--format=fuller", "--no-color", "--")
 		if err != nil {
 			return err
 		}
 		stdin := strings.NewReader(out)
-		if err := b.shell.WithStdin(stdin).Run("buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
+		if err := b.shell.WithStdin(stdin).Run(ctx, "buildkite-agent", "meta-data", "set", "buildkite:git:commit"); err != nil {
 			return err
 		}
 	}
@@ -1463,13 +1462,13 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bootstrap) resolveCommit() {
+func (b *Bootstrap) resolveCommit(ctx context.Context) {
 	commitRef, _ := b.shell.Env.Get("BUILDKITE_COMMIT")
 	if commitRef == "" {
 		b.shell.Warningf("BUILDKITE_COMMIT was empty")
 		return
 	}
-	cmdOut, err := b.shell.RunAndCapture(`git`, `rev-parse`, commitRef)
+	cmdOut, err := b.shell.RunAndCapture(ctx, "git", "rev-parse", commitRef)
 	if err != nil {
 		b.shell.Warningf("Error running git rev-parse %q: %v", commitRef, err)
 		return
@@ -1698,7 +1697,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 		if b.Debug {
 			b.shell.Commentf("Detected deprecated docker environment variables")
 		}
-		err = runDeprecatedDockerIntegration(b.shell, []string{cmdToExec})
+		err = runDeprecatedDockerIntegration(ctx, b.shell, []string{cmdToExec})
 		return err
 	}
 
@@ -1722,7 +1721,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 		b.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = b.shell.RunWithoutPromptWithContext(ctx, cmd[0], cmd[1:]...)
+	err = b.shell.RunWithoutPrompt(ctx, cmd[0], cmd[1:]...)
 	return err
 }
 
@@ -1866,7 +1865,7 @@ func (b *Bootstrap) uploadArtifacts(ctx context.Context) error {
 		args = append(args, b.ArtifactUploadDestination)
 	}
 
-	if err = b.shell.Run("buildkite-agent", args...); err != nil {
+	if err = b.shell.Run(ctx, "buildkite-agent", args...); err != nil {
 		return err
 	}
 

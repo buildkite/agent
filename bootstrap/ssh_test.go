@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -24,7 +25,7 @@ func TestFindingSSHTools(t *testing.T) {
 
 	sh.Logger = shell.TestingLogger{T: t}
 
-	if _, err := findPathToSSHTools(sh); err != nil {
+	if _, err := findPathToSSHTools(context.Background(), sh); err != nil {
 		t.Errorf(`findPathToSSHTools(sh) error = %v`, err)
 	}
 }
@@ -47,7 +48,7 @@ func TestSSHKeyscanReturnsOutput(t *testing.T) {
 		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(sh, "github.com")
+	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
 
 	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
 	assert.NoError(t, err)
@@ -71,7 +72,7 @@ func TestSSHKeyscanWithHostAndPortReturnsOutput(t *testing.T) {
 		AndWriteToStdout("github.com ssh-rsa xxx=").
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(sh, "github.com:123")
+	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com:123")
 
 	assert.Equal(t, keyScanOutput, "github.com ssh-rsa xxx=")
 	assert.NoError(t, err)
@@ -96,7 +97,7 @@ func TestSSHKeyscanRetriesOnExit1(t *testing.T) {
 		Exactly(3).
 		AndExitWith(1)
 
-	keyScanOutput, err := sshKeyScan(sh, "github.com")
+	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
 
 	assert.Equal(t, keyScanOutput, "")
 	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` failed")
@@ -121,7 +122,7 @@ func TestSSHKeyscanRetriesOnBlankOutputAndExit0(t *testing.T) {
 		Exactly(3).
 		AndExitWith(0)
 
-	keyScanOutput, err := sshKeyScan(sh, "github.com")
+	keyScanOutput, err := sshKeyScan(context.Background(), sh, "github.com")
 
 	assert.Equal(t, keyScanOutput, "")
 	assert.EqualError(t, err, "`ssh-keyscan \"github.com\"` returned nothing")

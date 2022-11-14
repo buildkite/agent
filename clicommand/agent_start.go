@@ -911,7 +911,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Start the agent pool
-		if err := pool.Start(); err != nil {
+		if err := pool.Start(context.Background()); err != nil {
 			l.Fatal("%s", err)
 		}
 	},
