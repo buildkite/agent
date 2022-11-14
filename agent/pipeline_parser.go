@@ -3,10 +3,12 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"path"
 	"reflect"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/jspipeline"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/interpolate"
@@ -36,6 +38,16 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 
 	var pipelineAsSlice []topLevelStep
 	var pipeline yaml.MapSlice
+
+	// if pipeline is a javascript file, evaluate it and use the JSON as a the input
+	if path.Ext(p.Filename) == ".js" {
+		jsparser := jspipeline.Evaluator{}
+		result, err := jsparser.Evaluate(p.Pipeline)
+		if err != nil {
+			return nil, err
+		}
+		p.Pipeline = result
+	}
 
 	// We support top-level arrays of steps, so try that first
 	if err := yaml.Unmarshal(p.Pipeline, &pipelineAsSlice); err == nil {
