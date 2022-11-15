@@ -11,13 +11,16 @@ type OIDCToken struct {
 type OIDCTokenRequest struct {
 	Job      string
 	Audience string
+	Lifetime int
 }
 
 func (c *Client) OIDCToken(methodReq *OIDCTokenRequest) (*OIDCToken, *Response, error) {
 	m := &struct {
 		Audience string `json:"audience,omitempty"`
+		Lifetime int    `json:"lifetime,omitempty"`
 	}{
 		Audience: methodReq.Audience,
+		Lifetime: methodReq.Lifetime,
 	}
 
 	u := fmt.Sprintf("jobs/%s/oidc/tokens", methodReq.Job)
