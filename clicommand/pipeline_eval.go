@@ -131,7 +131,7 @@ var PipelineEvalCommand = cli.Command{
 			}
 		}
 
-		pipelineYAML, err := js.EvalJS(filename, input)
+		pipelineYAML, err := js.EvalJS(filename, input, l)
 		if err != nil {
 			panic(err)
 		}

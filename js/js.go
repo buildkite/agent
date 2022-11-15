@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"strings"
 
+	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/yaml"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"
@@ -27,8 +28,8 @@ const (
 // a YAML serialization of the exported value (e.g. a YAML Pipeline).
 // The name arg is the name of the file/stream/source of the JavaScript code,
 // used for stack/error messages.
-func EvalJS(name string, input []byte) ([]byte, error) {
-	runtime, rootModule, err := newJavaScriptRuntime()
+func EvalJS(name string, input []byte, log logger.Logger) ([]byte, error) {
+	runtime, rootModule, err := newJavaScriptRuntime(log)
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +63,14 @@ func EvalJS(name string, input []byte) ([]byte, error) {
 	return pipelineYAML, nil
 }
 
-func newJavaScriptRuntime() (*goja.Runtime, *goja.Object, error) {
+func newJavaScriptRuntime(log logger.Logger) (*goja.Runtime, *goja.Object, error) {
 	runtime := goja.New()
 
 	// Add support for require() CommonJS modules.
 	// require("buildkite/*") is handled by embedded resources/node_modules/buildkite/* filesystem.
 	// Other paths are loaded from the host filesystem.
 	registry := require.NewRegistry(
-		require.WithLoader(requireSourceLoader),
+		require.WithLoader(requireSourceLoader(log)),
 	)
 
 	// Add basic utilities
@@ -101,17 +102,32 @@ var embeddedFS embed.FS
 // require("buildkite/*") from a filesystem embedded in the compiled binary,
 // and delegates other paths to require.DefaultSourceLoader to be loaded from
 // the host filesystem.
-func requireSourceLoader(name string) ([]byte, error) {
-	if !strings.HasPrefix(name, "node_modules/buildkite/") {
-		return require.DefaultSourceLoader(name)
+func requireSourceLoader(log logger.Logger) require.SourceLoader {
+	return func(name string) ([]byte, error) {
+		// attempt to load require("buildkite/*") from embedded FS,
+		// but continue to default filesystem loader when not found.
+		if strings.HasPrefix(name, "node_modules/buildkite/") {
+			data, err := embeddedFS.ReadFile(name)
+			if errors.Is(err, fs.ErrNotExist) {
+				log.Debug("js require() embedded: %q %v", name, require.ModuleFileDoesNotExistError)
+				// continue to default loader
+			} else if err != nil {
+				log.Debug("js require() embedded: %q %v", name, err)
+				return nil, err
+			} else {
+				log.Debug("js require() embedded: %q loaded %d bytes", name, len(data))
+				return data, nil
+			}
+		}
+
+		data, err := require.DefaultSourceLoader(name)
+		if err != nil {
+			log.Debug("js require()  default: %q %v", name, err)
+			return data, err
+		}
+		log.Debug("js require()  default: %q loaded %d bytes", name, len(data))
+		return data, err
 	}
-	data, err := embeddedFS.ReadFile(name)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, require.ModuleFileDoesNotExistError
-	} else if err != nil {
-		return nil, err
-	}
-	return data, nil
 }
 
 func pluginNativeModule(runtime *goja.Runtime, module *goja.Object) {
