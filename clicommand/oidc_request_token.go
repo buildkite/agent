@@ -64,7 +64,8 @@ var OIDCRequestTokenCommand = cli.Command{
 		cli.IntFlag{
 			Name:  "lifetime",
 			Value: 0,
-			Usage: "The time (in seconds) the OIDC token will be valid for before expiry",
+			Usage: `The time (in seconds) the OIDC token will be valid for before expiry.
+Specfying 0 will result the in the API substituting its default value for the lifetime instead of 0.`,
 		},
 		cli.StringFlag{
 			Name:   "job",
