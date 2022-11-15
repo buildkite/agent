@@ -246,14 +246,13 @@ func TestPluginCloneRetried(t *testing.T) {
 
 	git := tester.MustMock(t, "git")
 
-	git.Expect("clone", "-v", "--", p.Path, bintest.MatchAny()).Exactly(2).AndCallFunc(func(c *bintest.Call) {
-		callCount = callCount + 1
-
+	git.Expect("clone", "-v", "--recursive", "--", p.Path, bintest.MatchAny()).Exactly(2).AndCallFunc(func(c *bintest.Call) {
+		callCount++
 		if callCount == 1 {
 			c.Exit(1)
-		} else {
-			c.Passthrough(realGit)
+			return
 		}
+		c.Passthrough(realGit)
 	})
 
 	git.IgnoreUnexpectedInvocations()

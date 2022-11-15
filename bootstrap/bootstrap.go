@@ -891,18 +891,26 @@ func (b *Bootstrap) checkoutPlugin(p *plugin.Plugin) (*pluginCheckout, error) {
 	// Switch to the plugin directory
 	b.shell.Commentf("Switching to the temporary plugin directory")
 	previousWd := b.shell.Getwd()
-	if err = b.shell.Chdir(tempDir); err != nil {
+	if err := b.shell.Chdir(tempDir); err != nil {
 		return nil, err
 	}
 	// Switch back to the previous working directory
 	defer b.shell.Chdir(previousWd)
+
+	args := []string{"clone", "-v"}
+	if b.GitSubmodules {
+		// "--recursive" was added in Git 1.6.5, and is an alias to
+		// "--recurse-submodules" from Git 2.13.
+		args = append(args, "--recursive")
+	}
+	args = append(args, "--", repo, ".")
 
 	// Plugin clones shouldn't use custom GitCloneFlags
 	err = roko.NewRetrier(
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
 	).Do(func(r *roko.Retrier) error {
-		return b.shell.Run("git", "clone", "-v", "--", repo, ".")
+		return b.shell.Run("git", args...)
 	})
 	if err != nil {
 		return nil, err
