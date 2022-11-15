@@ -91,6 +91,13 @@ func main() {
 			},
 		},
 		{
+			Name:  "oidc",
+			Usage: "Interact with Buildkite OpenID Connect (OIDC)",
+			Subcommands: []cli.Command{
+				clicommand.OIDCRequestTokenCommand,
+			},
+		},
+		{
 			Name:  "pipeline",
 			Usage: "Make changes to the pipeline of the currently running build",
 			Subcommands: []cli.Command{

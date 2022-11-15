@@ -1,4 +1,4 @@
-package api
+package api_test
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 )
 
@@ -36,13 +37,13 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	defer server.Close()
 
 	// Initial client with a registration token
-	c := NewClient(logger.Discard, Config{
+	c := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
 	})
 
 	// Check a register works
-	regResp, _, err := c.Register(&AgentRegisterRequest{})
+	regResp, _, err := c.Register(&api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("c.Register(&AgentRegisterRequest{}) error = %v", err)
 	}
