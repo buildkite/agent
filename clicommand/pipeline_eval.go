@@ -4,20 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
 	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/resources"
+	"github.com/buildkite/agent/v3/js"
 	"github.com/buildkite/agent/v3/stdin"
-	"github.com/buildkite/yaml"
-	"github.com/dop251/goja"
-	"github.com/dop251/goja_nodejs/console"
-	"github.com/dop251/goja_nodejs/process"
-	"github.com/dop251/goja_nodejs/require"
 	"github.com/urfave/cli"
 )
 
@@ -95,6 +89,7 @@ var PipelineEvalCommand = cli.Command{
 			l.Info("Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
+			filename = "(stdin)"
 			input, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				l.Fatal("Failed to read from STDIN: %s", err)
@@ -136,82 +131,19 @@ var PipelineEvalCommand = cli.Command{
 			}
 		}
 
-		if err := evalJS(filename, input, c.App.Writer); err != nil {
+		pipelineYAML, err := js.EvalJS(filename, input)
+		if err != nil {
 			panic(err)
 		}
+
+		n, err := c.App.Writer.Write(pipelineYAML)
+		if err != nil {
+			return nil
+		}
+		if n != len(pipelineYAML) {
+			return errors.New("short write")
+		}
+
 		return nil
 	},
-}
-
-func evalJS(filename string, input []byte, output io.Writer) error {
-	runtime := goja.New()
-	runtime.SetFieldNameMapper(goja.TagFieldNameMapper("json", true))
-
-	// Add support for require() CommonJS modules.
-	// require("buildkite/*") is handled by embedded resources/node_modules/buildkite/* filesystem.
-	// Other paths are loaded from the host filesystem.
-	registry := require.NewRegistry(
-		require.WithLoader(func(name string) ([]byte, error) {
-			if !strings.HasPrefix(name, "node_modules/buildkite/") {
-				return require.DefaultSourceLoader(name)
-			}
-			res := resources.FS
-			data, err := res.ReadFile(name)
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil, require.ModuleFileDoesNotExistError
-			} else if err != nil {
-				return nil, err
-			}
-			return data, nil
-		}),
-	)
-	registry.Enable(runtime)
-
-	// Add basic utilities
-	console.Enable(runtime) // console.log()
-	process.Enable(runtime) // process.env()
-
-	// provide plugin() as a native module (implemented in Go)
-	registry.RegisterNativeModule("buildkite/plugin", func(runtime *goja.Runtime, module *goja.Object) {
-		module.Set("exports", func(call goja.FunctionCall) goja.Value {
-			name := call.Argument(0)
-			ref := call.Argument(1)
-			config := call.Argument(2)
-			plugin := runtime.NewObject()
-			plugin.Set(name.String()+"#"+ref.String(), config)
-			return plugin
-		})
-	})
-
-	// provide assignable module.exports for Pipeline result
-	rootModule := runtime.NewObject()
-	rootModule.Set("exports", runtime.NewObject())
-	err := runtime.Set("module", rootModule)
-	if err != nil {
-		return err
-	}
-
-	if filename == "" {
-		filename = "(stdin)"
-	}
-
-	v, err := runtime.RunScript(filename, string(input))
-	if err != nil {
-		panic(err)
-	}
-
-	y, err := yaml.Marshal(v.Export())
-	if err != nil {
-		return err
-	}
-
-	n, err := output.Write(y)
-	if err != nil {
-		return nil
-	}
-	if n != len(y) {
-		return errors.New("short write")
-	}
-
-	return nil
 }
