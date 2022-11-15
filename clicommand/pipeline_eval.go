@@ -133,7 +133,7 @@ var PipelineEvalCommand = cli.Command{
 
 		pipelineYAML, err := js.EvalJS(filename, input, l)
 		if err != nil {
-			panic(err)
+			return fmt.Errorf("JavaScript evaluation: %w", err)
 		}
 
 		n, err := c.App.Writer.Write(pipelineYAML)
