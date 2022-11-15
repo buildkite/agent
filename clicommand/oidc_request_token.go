@@ -14,6 +14,7 @@ import (
 
 type OIDCTokenConfig struct {
 	Audience string `cli:"audience"`
+	Lifetime int    `cli:"lifetime"`
 	Job      string `cli:"job"      validate:"required"`
 
 	// Global flags
@@ -59,6 +60,12 @@ var OIDCRequestTokenCommand = cli.Command{
 			Name:  "audience",
 			Value: "",
 			Usage: "The audience that will consume the OIDC token",
+		},
+		cli.IntFlag{
+			Name:  "lifetime",
+			Value: 0,
+			Usage: `The time (in seconds) the OIDC token will be valid for before expiry.
+Specfying 0 will result the in the API substituting its default value for the lifetime instead of 0.`,
 		},
 		cli.StringFlag{
 			Name:   "job",
@@ -115,6 +122,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			req := &api.OIDCTokenRequest{
 				Job:      cfg.Job,
 				Audience: cfg.Audience,
+				Lifetime: cfg.Lifetime,
 			}
 
 			var resp *api.Response
