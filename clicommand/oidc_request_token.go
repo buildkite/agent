@@ -107,6 +107,11 @@ var OIDCRequestTokenCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
+		// Note: if --lifetime is omitted, cfg.Lifetime = 0
+		if cfg.Lifetime < 0 {
+			l.Fatal("Lifetime %d must be a non-negative integer.", cfg.Lifetime)
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
