@@ -116,6 +116,8 @@ func main() {
 		clicommand.BootstrapCommand,
 	}
 
+	app.ErrWriter = os.Stderr
+
 	// When no sub command is used
 	app.Action = func(c *cli.Context) {
 		cli.ShowAppHelp(c)
