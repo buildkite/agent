@@ -58,11 +58,11 @@ var OIDCRequestTokenCommand = cli.Command{
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "audience",
-			Usage: "The audience that will consume the OIDC token. The API will supply a default audience if it is ommited.",
+			Usage: "The audience that will consume the OIDC token. The API will choose a default audience if it is omitted.",
 		},
 		cli.IntFlag{
 			Name:  "lifetime",
-			Usage: "The time (in seconds) the OIDC token will be valid for before expiry. Must be a non-negative integer. Ommitting this flag or specifying 0 will result the in the API substituting its default value and NOT a non-expriing token.",
+			Usage: "The time (in seconds) the OIDC token will be valid for before expiry. Must be a non-negative integer. If the flag is omitted or set to 0, the API will choose a default finite lifetime.",
 		},
 		cli.StringFlag{
 			Name:   "job",
