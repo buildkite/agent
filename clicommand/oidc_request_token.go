@@ -62,12 +62,10 @@ var OIDCRequestTokenCommand = cli.Command{
 		},
 		cli.IntFlag{
 			Name:  "lifetime",
-			Value: 0,
 			Usage: "The time (in seconds) the OIDC token will be valid for before expiry. Must be a non-negative integer. Ommitting this flag or specifying 0 will result the in the API substituting its default value and NOT a non-expriing token.",
 		},
 		cli.StringFlag{
 			Name:   "job",
-			Value:  "",
 			Usage:  "Buildkite Job Id to claim in the OIDC token",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
