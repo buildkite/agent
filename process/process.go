@@ -68,7 +68,6 @@ type Config struct {
 	Stdout          io.Writer
 	Stderr          io.Writer
 	Dir             string
-	Context         context.Context
 	InterruptSignal Signal
 }
 
@@ -110,7 +109,7 @@ func (p *Process) WaitStatus() syscall.WaitStatus {
 }
 
 // Run the command and block until it finishes
-func (p *Process) Run() error {
+func (p *Process) Run(ctx context.Context) error {
 	if p.command != nil {
 		return fmt.Errorf("Process is already running")
 	}
@@ -214,10 +213,10 @@ func (p *Process) Run() error {
 	}
 
 	// When the context finishes, terminate the process
-	if p.conf.Context != nil {
+	if ctx != nil {
 		go func() {
 			select {
-			case <-p.conf.Context.Done():
+			case <-ctx.Done():
 				p.logger.Debug("[Process] Context done, terminating")
 				if err := p.Terminate(); err != nil {
 					p.logger.Debug("[Process] Failed terminate: %v", err)

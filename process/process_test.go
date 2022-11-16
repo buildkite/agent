@@ -31,8 +31,8 @@ func TestProcessOutput(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
-		t.Fatalf("p.Run() = %v", err)
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatalf("p.Run(ctx) = %v", err)
 	}
 
 	if got, want := stdout.String(), "llamas1llamas2"; got != want {
@@ -61,7 +61,7 @@ func TestProcessOutputPTY(t *testing.T) {
 	})
 
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
+	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestProcessInput(t *testing.T) {
 		Stdout: stdout,
 	})
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
+	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 	if got, want := stdout.String(), "Hello World"; got != want {
@@ -113,7 +113,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	}()
 
 	// wait for the process to finish
-	if err := p.Run(); err != nil {
+	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -135,9 +135,8 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	defer cancel()
 
 	p := process.New(logger.Discard, process.Config{
-		Path:    os.Args[0],
-		Env:     []string{"TEST_MAIN=tester-signal"},
-		Context: ctx,
+		Path: os.Args[0],
+		Env:  []string{"TEST_MAIN=tester-signal"},
 	})
 
 	go func() {
@@ -147,7 +146,7 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 		cancel()
 	}()
 
-	if err := p.Run(); err != nil {
+	if err := p.Run(ctx); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -189,7 +188,7 @@ func TestProcessInterrupts(t *testing.T) {
 		}
 	}()
 
-	if err := p.Run(); err != nil {
+	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -231,7 +230,7 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 		}
 	}()
 
-	if err := p.Run(); err != nil {
+	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -255,7 +254,7 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
 
-	if err := p.Run(); err != nil {
+	if err := p.Run(context.Background()); err != nil {
 		t.Fatalf("p.Run() = %v", err)
 	}
 
@@ -280,8 +279,8 @@ func BenchmarkProcess(b *testing.B) {
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},
 		})
-		if err := proc.Run(); err != nil {
-			b.Fatalf("p.Run() = %v", err)
+		if err := proc.Run(context.Background()); err != nil {
+			b.Fatalf("proc.Run() = %v", err)
 		}
 	}
 }

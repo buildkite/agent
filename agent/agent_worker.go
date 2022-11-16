@@ -108,7 +108,7 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 }
 
 // Starts the agent worker
-func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
+func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error {
 	a.metrics = a.metricsCollector.Scope(metrics.Tags{
 		"agent_name": a.agent.Name,
 	})
@@ -120,7 +120,7 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 	defer a.metricsCollector.Stop()
 
 	// Use a context to run heartbeats for as long as the agent runs for
-	heartbeatCtx, cancel := context.WithCancel(context.Background())
+	heartbeatCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	// Register our worker specific health check handler
@@ -176,13 +176,13 @@ func (a *AgentWorker) Start(idleMonitor *IdleMonitor) error {
 		// measure.
 		idleMonitor.MarkBusy(a.agent.UUID)
 
-		return a.AcquireAndRunJob(a.agentConfiguration.AcquireJob)
-	} else {
-		return a.startPingLoop(idleMonitor)
+		return a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob)
 	}
+
+	return a.startPingLoop(ctx, idleMonitor)
 }
 
-func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
+func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonitor) error {
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 	pingTicker := time.NewTicker(pingInterval)
@@ -203,7 +203,7 @@ func (a *AgentWorker) startPingLoop(idleMonitor *IdleMonitor) error {
 				idleMonitor.MarkBusy(a.agent.UUID)
 
 				// Runs the job, only errors if something goes wrong
-				if runErr := a.AcceptAndRunJob(job); runErr != nil {
+				if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
 					a.logger.Error("%v", runErr)
 				} else {
 					if a.agentConfiguration.DisconnectAfterJob {
@@ -420,7 +420,7 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 // Attempts to acquire a job and run it, only returns an error if something
 // goes wrong
-func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
+func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
 	// Acquire the job using the ID we were provided. We'll retry as best
@@ -461,11 +461,11 @@ func (a *AgentWorker) AcquireAndRunJob(jobId string) error {
 	}
 
 	// Now that we've acquired the job, lets' run it
-	return a.RunJob(acquiredJob)
+	return a.RunJob(ctx, acquiredJob)
 }
 
 // Accepts a job and runs it, only returns an error if something goes wrong
-func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
+func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 	a.logger.Info("Assigned job %s. Accepting...", job.ID)
 
 	// Accept the job. We'll retry on connection related issues, but if
@@ -496,10 +496,10 @@ func (a *AgentWorker) AcceptAndRunJob(job *api.Job) error {
 	}
 
 	// Now that we've accepted the job, lets' run it
-	return a.RunJob(accepted)
+	return a.RunJob(ctx, accepted)
 }
 
-func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
+func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error {
 	jobMetricsScope := a.metrics.With(metrics.Tags{
 		`pipeline`: acceptResponse.Env[`BUILDKITE_PIPELINE_SLUG`],
 		`org`:      acceptResponse.Env[`BUILDKITE_ORGANIZATION_SLUG`],
@@ -508,14 +508,8 @@ func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
 		`queue`:    acceptResponse.Env[`BUILDKITE_AGENT_META_DATA_QUEUE`],
 	})
 
-	defer func() {
-		// No more job, no more runner.
-		a.jobRunner = nil
-	}()
-
 	// Now that we've got a job to do, we can start it.
-	var err error
-	a.jobRunner, err = NewJobRunner(a.logger, jobMetricsScope, a.agent, acceptResponse, a.apiClient, JobRunnerConfig{
+	jr, err := NewJobRunner(a.logger, jobMetricsScope, a.agent, acceptResponse, a.apiClient, JobRunnerConfig{
 		Debug:              a.debug,
 		DebugHTTP:          a.debugHTTP,
 		CancelSignal:       a.cancelSig,
@@ -526,9 +520,14 @@ func (a *AgentWorker) RunJob(acceptResponse *api.Job) error {
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %v", err)
 	}
+	a.jobRunner = jr
+	defer func() {
+		// No more job, no more runner.
+		a.jobRunner = nil
+	}()
 
 	// Start running the job
-	if err = a.jobRunner.Run(); err != nil {
+	if err := jr.Run(ctx); err != nil {
 		return fmt.Errorf("Failed to run job: %v", err)
 	}
 

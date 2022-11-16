@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -149,7 +150,7 @@ streamlocalbindmask 0177
 syslogfacility USER`).
 		AndExitWith(0)
 
-	assert.Equal(t, "github.com", resolveGitHost(sh, "github.com-alias1"))
+	assert.Equal(t, "github.com", resolveGitHost(context.Background(), sh, "github.com-alias1"))
 
 	ssh.
 		Expect("-G", "blargh-no-alias.com").
@@ -223,7 +224,7 @@ streamlocalbindmask 0177
 syslogfacility USER`).
 		AndExitWith(0)
 
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
+	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(context.Background(), sh, "blargh-no-alias.com"))
 
 	ssh.
 		Expect("-G", "cool-alias").
@@ -297,7 +298,7 @@ streamlocalbindmask 0177
 syslogfacility USER`).
 		AndExitWith(0)
 
-	assert.Equal(t, "rad-git-host.com:443", resolveGitHost(sh, "cool-alias"))
+	assert.Equal(t, "rad-git-host.com:443", resolveGitHost(context.Background(), sh, "cool-alias"))
 }
 
 func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
@@ -326,7 +327,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
            [-w local_tun[:remote_tun]] [user@]hostname [command]`).
 		AndExitWith(255)
 
-	assert.Equal(t, "github.com", resolveGitHost(sh, "github.com-alias1"))
+	assert.Equal(t, "github.com", resolveGitHost(context.Background(), sh, "github.com-alias1"))
 
 	ssh.
 		Expect("-G", "blargh-no-alias.com").
@@ -341,7 +342,7 @@ usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
            [-w local_tun[:remote_tun]] [user@]hostname [command]`).
 		AndExitWith(255)
 
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(sh, "blargh-no-alias.com"))
+	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(context.Background(), sh, "blargh-no-alias.com"))
 }
 
 func TestGitCheckRefFormat(t *testing.T) {
@@ -371,49 +372,49 @@ func TestGitCheckRefFormat(t *testing.T) {
 func TestGitCheckoutValidatesRef(t *testing.T) {
 	sh := new(mockShellRunner)
 	defer sh.Check(t)
-	err := gitCheckout(&shell.Shell{}, "", "--nope")
+	err := gitCheckout(context.Background(), &shell.Shell{}, "", "--nope")
 	assert.EqualError(t, err, `"--nope" is not a valid git ref format`)
 }
 
 func TestGitCheckout(t *testing.T) {
 	sh := new(mockShellRunner).Expect("git", "checkout", "-f", "-q", "main")
 	defer sh.Check(t)
-	err := gitCheckout(sh, "-f -q", "main")
+	err := gitCheckout(context.Background(), sh, "-f -q", "main")
 	require.NoError(t, err)
 }
 
 func TestGitCheckoutSketchyArgs(t *testing.T) {
 	sh := new(mockShellRunner)
 	defer sh.Check(t)
-	err := gitCheckout(sh, "-f -q", "  --hello")
+	err := gitCheckout(context.Background(), sh, "-f -q", "  --hello")
 	assert.EqualError(t, err, `"  --hello" is not a valid git ref format`)
 }
 
 func TestGitClone(t *testing.T) {
 	sh := new(mockShellRunner).Expect("git", "clone", "-v", "--references", "url", "--", "repo", "dir")
 	defer sh.Check(t)
-	err := gitClone(sh, "-v --references url", "repo", "dir")
+	err := gitClone(context.Background(), sh, "-v --references url", "repo", "dir")
 	require.NoError(t, err)
 }
 
 func TestGitClean(t *testing.T) {
 	sh := new(mockShellRunner).Expect("git", "clean", "--foo", "--bar")
 	defer sh.Check(t)
-	err := gitClean(sh, "--foo --bar")
+	err := gitClean(context.Background(), sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitCleanSubmodules(t *testing.T) {
 	sh := new(mockShellRunner).Expect("git", "submodule", "foreach", "--recursive", "git clean --foo --bar")
 	defer sh.Check(t)
-	err := gitCleanSubmodules(sh, "--foo --bar")
+	err := gitCleanSubmodules(context.Background(), sh, "--foo --bar")
 	require.NoError(t, err)
 }
 
 func TestGitFetch(t *testing.T) {
 	sh := new(mockShellRunner).Expect("git", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2")
 	defer sh.Check(t)
-	err := gitFetch(sh, "--foo --bar", "repo", "ref1", "ref2")
+	err := gitFetch(context.Background(), sh, "--foo --bar", "repo", "ref1", "ref2")
 	require.NoError(t, err)
 }
 
@@ -427,7 +428,7 @@ func (r *mockShellRunner) Expect(cmd string, args ...string) *mockShellRunner {
 	return r
 }
 
-func (r *mockShellRunner) Run(cmd string, args ...string) error {
+func (r *mockShellRunner) Run(_ context.Context, cmd string, args ...string) error {
 	r.got = append(r.got, append([]string{cmd}, args...))
 	return nil
 }

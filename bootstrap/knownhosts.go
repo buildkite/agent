@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,9 +90,9 @@ func (kh *knownHosts) Contains(host string) (bool, error) {
 	return false, nil
 }
 
-func (kh *knownHosts) Add(host string) error {
+func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	// Use a lockfile to prevent parallel processes stepping on each other
-	lock, err := kh.Shell.LockFile(kh.Path+".lock", time.Second*30)
+	lock, err := kh.Shell.LockFile(ctx, kh.Path+".lock", time.Second*30)
 	if err != nil {
 		return err
 	}
@@ -108,7 +109,7 @@ func (kh *knownHosts) Add(host string) error {
 	}
 
 	// Scan the key and then write it to the known_host file
-	keyscanOutput, err := sshKeyScan(kh.Shell, host)
+	keyscanOutput, err := sshKeyScan(ctx, kh.Shell, host)
 	if err != nil {
 		return errors.Wrap(err, "Could not perform `ssh-keyscan`")
 	}
@@ -130,7 +131,7 @@ func (kh *knownHosts) Add(host string) error {
 }
 
 // AddFromRepository takes a git repo url, extracts the host and adds it
-func (kh *knownHosts) AddFromRepository(repository string) error {
+func (kh *knownHosts) AddFromRepository(ctx context.Context, repository string) error {
 	u, err := parseGittableURL(repository)
 	if err != nil {
 		kh.Shell.Warningf("Could not parse %q as a URL - skipping adding host to SSH known_hosts", repository)
@@ -142,9 +143,9 @@ func (kh *knownHosts) AddFromRepository(repository string) error {
 		return nil
 	}
 
-	host := resolveGitHost(kh.Shell, u.Host)
+	host := resolveGitHost(ctx, kh.Shell, u.Host)
 
-	if err = kh.Add(host); err != nil {
+	if err = kh.Add(ctx, host); err != nil {
 		return errors.Wrapf(err, "Failed to add `%s` to known_hosts file `%s`", host, u)
 	}
 

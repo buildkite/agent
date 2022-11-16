@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -29,10 +30,10 @@ type gitError struct {
 }
 
 type shellRunner interface {
-	Run(string, ...string) error
+	Run(context.Context, string, ...string) error
 }
 
-func gitCheckout(sh shellRunner, gitCheckoutFlags, reference string) error {
+func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, reference string) error {
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
 		return err
@@ -45,7 +46,7 @@ func gitCheckout(sh shellRunner, gitCheckoutFlags, reference string) error {
 	commandArgs = append(commandArgs, individualCheckoutFlags...)
 	commandArgs = append(commandArgs, reference)
 
-	if err = sh.Run("git", commandArgs...); err != nil {
+	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
 		if strings.HasPrefix(err.Error(), `fatal: reference is not a tree: `) {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
@@ -55,7 +56,7 @@ func gitCheckout(sh shellRunner, gitCheckoutFlags, reference string) error {
 	return nil
 }
 
-func gitClone(sh shellRunner, gitCloneFlags, repository, dir string) error {
+func gitClone(ctx context.Context, sh shellRunner, gitCloneFlags, repository, dir string) error {
 	individualCloneFlags, err := shellwords.Split(gitCloneFlags)
 	if err != nil {
 		return err
@@ -65,14 +66,14 @@ func gitClone(sh shellRunner, gitCloneFlags, repository, dir string) error {
 	commandArgs = append(commandArgs, individualCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
-	if err = sh.Run("git", commandArgs...); err != nil {
+	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
 		return &gitError{error: err, Type: gitErrorClone}
 	}
 
 	return nil
 }
 
-func gitClean(sh shellRunner, gitCleanFlags string) error {
+func gitClean(ctx context.Context, sh shellRunner, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -81,14 +82,14 @@ func gitClean(sh shellRunner, gitCleanFlags string) error {
 	commandArgs := []string{"clean"}
 	commandArgs = append(commandArgs, individualCleanFlags...)
 
-	if err = sh.Run("git", commandArgs...); err != nil {
+	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
 		return &gitError{error: err, Type: gitErrorClean}
 	}
 
 	return nil
 }
 
-func gitCleanSubmodules(sh shellRunner, gitCleanFlags string) error {
+func gitCleanSubmodules(ctx context.Context, sh shellRunner, gitCleanFlags string) error {
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -97,14 +98,14 @@ func gitCleanSubmodules(sh shellRunner, gitCleanFlags string) error {
 	gitCleanCommand := strings.Join(append([]string{"git", "clean"}, individualCleanFlags...), " ")
 	commandArgs := append([]string{"submodule", "foreach", "--recursive"}, gitCleanCommand)
 
-	if err = sh.Run("git", commandArgs...); err != nil {
+	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
 	return nil
 }
 
-func gitFetch(sh shellRunner, gitFetchFlags, repository string, refSpec ...string) error {
+func gitFetch(ctx context.Context, sh shellRunner, gitFetchFlags, repository string, refSpec ...string) error {
 	individualFetchFlags, err := shellwords.Split(gitFetchFlags)
 	if err != nil {
 		return err
@@ -123,14 +124,14 @@ func gitFetch(sh shellRunner, gitFetchFlags, repository string, refSpec ...strin
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
 
-	if err = sh.Run("git", commandArgs...); err != nil {
+	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
 		return &gitError{error: err, Type: gitErrorFetch}
 	}
 
 	return nil
 }
 
-func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
+func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, error) {
 	urls := []string{}
 
 	// The output of this command looks like:
@@ -138,8 +139,7 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	// submodule.bitbucket-https-docker-example.url\nhttps://lox24@bitbucket.org/lox24/docker-example.git\0
 	// submodule.github-git-docker-example.url\ngit@github.com:buildkite/docker-example.git\0
 	// submodule.github-https-docker-example.url\nhttps://github.com/buildkite/docker-example.git\0
-	output, err := sh.RunAndCapture(
-		"git", "config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url")
+	output, err := sh.RunAndCapture(ctx, "git", "config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url")
 	if err != nil {
 		return nil, err
 	}
@@ -159,13 +159,13 @@ func gitEnumerateSubmoduleURLs(sh *shell.Shell) ([]string, error) {
 	return urls, nil
 }
 
-func gitRevParseInWorkingDirectory(sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
+func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
 	gitDirectory := filepath.Join(workingDirectory, ".git")
 
 	revParseArgs := []string{"--git-dir", gitDirectory, "--work-tree", workingDirectory, "rev-parse"}
 	revParseArgs = append(revParseArgs, extraRevParseArgs...)
 
-	return sh.RunAndCapture("git", revParseArgs...)
+	return sh.RunAndCapture(ctx, "git", revParseArgs...)
 }
 
 var (
@@ -195,12 +195,12 @@ func parseGittableURL(ref string) (*url.URL, error) {
 // https://buildkite.com/docs/agent/ssh-keys#creating-multiple-ssh-keys
 var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
 
-func resolveGitHost(sh *shell.Shell, host string) string {
+func resolveGitHost(ctx context.Context, sh *shell.Shell, host string) string {
 	var hostname string
 	var port string
 
 	// ask SSH to print its configuration for this host, honouring .ssh/config
-	output, err := sh.RunAndCapture("ssh", "-G", host)
+	output, err := sh.RunAndCapture(ctx, "ssh", "-G", host)
 
 	// if we got no error, let's process the output
 	if err == nil {

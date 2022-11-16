@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -26,7 +27,7 @@ func hasDeprecatedDockerIntegration(sh *shell.Shell) bool {
 	return false
 }
 
-func runDeprecatedDockerIntegration(sh *shell.Shell, cmd []string) error {
+func runDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell, cmd []string) error {
 	var warnNotSet = func(k1, k2 string) {
 		sh.Warningf("%s is set, but without %s, which it requires. You should be able to safely remove this from your pipeline.", k1, k2)
 	}
@@ -34,11 +35,11 @@ func runDeprecatedDockerIntegration(sh *shell.Shell, cmd []string) error {
 	switch {
 	case sh.Env.Exists(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`):
 		sh.Warningf("BUILDKITE_DOCKER_COMPOSE_CONTAINER is set, which is deprecated in Agent v3 and will be removed in v4. Consider using the :docker: docker-compose plugin instead at https://github.com/buildkite-plugins/docker-compose-buildkite-plugin.")
-		return runDockerComposeCommand(sh, cmd)
+		return runDockerComposeCommand(ctx, sh, cmd)
 
 	case sh.Env.Exists(`BUILDKITE_DOCKER`):
 		sh.Warningf("BUILDKITE_DOCKER is set, which is deprecated in Agent v3 and will be removed in v4. Consider using the docker plugin instead at https://github.com/buildkite-plugins/docker-buildkite-plugin.")
-		return runDockerCommand(sh, cmd)
+		return runDockerCommand(ctx, sh, cmd)
 
 	case sh.Env.Exists(`BUILDKITE_DOCKER_COMPOSE_FILE`):
 		warnNotSet(`BUILDKITE_DOCKER_COMPOSE_FILE`, `BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
@@ -56,26 +57,26 @@ func runDeprecatedDockerIntegration(sh *shell.Shell, cmd []string) error {
 	return errors.New("Failed to find any docker env")
 }
 
-func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
+func tearDownDeprecatedDockerIntegration(ctx context.Context, sh *shell.Shell) error {
 	if container, ok := sh.Env.Get(`DOCKER_CONTAINER`); ok {
 		sh.Printf("~~~ Cleaning up Docker containers")
 
-		if err := sh.Run("docker", "rm", "-f", "-v", container); err != nil {
+		if err := sh.Run(ctx, "docker", "rm", "-f", "-v", container); err != nil {
 			return err
 		}
 	} else if projectName, ok := sh.Env.Get(`COMPOSE_PROJ_NAME`); ok {
 		sh.Printf("~~~ Cleaning up Docker containers")
 
 		// Friendly kill
-		_ = runDockerCompose(sh, projectName, "kill")
+		_ = runDockerCompose(ctx, sh, projectName, "kill")
 
 		if sh.Env.GetBool(`BUILDKITE_DOCKER_COMPOSE_LEAVE_VOLUMES`, false) {
-			_ = runDockerCompose(sh, projectName, "rm", "--force", "--all")
+			_ = runDockerCompose(ctx, sh, projectName, "rm", "--force", "--all")
 		} else {
-			_ = runDockerCompose(sh, projectName, "rm", "--force", "--all", "-v")
+			_ = runDockerCompose(ctx, sh, projectName, "rm", "--force", "--all", "-v")
 		}
 
-		return runDockerCompose(sh, projectName, "down")
+		return runDockerCompose(ctx, sh, projectName, "down")
 	}
 
 	return nil
@@ -83,7 +84,7 @@ func tearDownDeprecatedDockerIntegration(sh *shell.Shell) error {
 
 // runDockerCommand executes a command inside a docker container that is built as needed
 // Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L439
-func runDockerCommand(sh *shell.Shell, cmd []string) error {
+func runDockerCommand(ctx context.Context, sh *shell.Shell, cmd []string) error {
 	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
 	dockerContainer := fmt.Sprintf("buildkite_%s_container", jobId)
 	dockerImage := fmt.Sprintf("buildkite_%s_image", jobId)
@@ -97,12 +98,12 @@ func runDockerCommand(sh *shell.Shell, cmd []string) error {
 	sh.Env.Set(`DOCKER_IMAGE`, dockerImage)
 
 	sh.Printf("~~~ :docker: Building Docker image %s", dockerImage)
-	if err := sh.Run("docker", "build", "-f", dockerFile, "-t", dockerImage, "."); err != nil {
+	if err := sh.Run(ctx, "docker", "build", "-f", dockerFile, "-t", dockerImage, "."); err != nil {
 		return err
 	}
 
 	sh.Headerf(":docker: Running command (in Docker container)")
-	if err := sh.Run("docker", append([]string{"run", "--name", dockerContainer, dockerImage}, cmd...)...); err != nil {
+	if err := sh.Run(ctx, "docker", append([]string{"run", "--name", dockerContainer, dockerImage}, cmd...)...); err != nil {
 		return err
 	}
 
@@ -111,7 +112,7 @@ func runDockerCommand(sh *shell.Shell, cmd []string) error {
 
 // runDockerComposeCommand executes a command with docker-compose
 // Ported from https://github.com/buildkite/agent/blob/2b8f1d569b659e07de346c0e3ae7090cb98e49ba/templates/bootstrap.sh#L462
-func runDockerComposeCommand(sh *shell.Shell, cmd []string) error {
+func runDockerComposeCommand(ctx context.Context, sh *shell.Shell, cmd []string) error {
 	composeContainer, _ := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_CONTAINER`)
 	jobId, _ := sh.Env.Get(`BUILDKITE_JOB_ID`)
 
@@ -123,20 +124,20 @@ func runDockerComposeCommand(sh *shell.Shell, cmd []string) error {
 	sh.Headerf(":docker: Building Docker images")
 
 	if sh.Env.GetBool(`BUILDKITE_DOCKER_COMPOSE_BUILD_ALL`, false) {
-		if err := runDockerCompose(sh, projectName, "build", "--pull"); err != nil {
+		if err := runDockerCompose(ctx, sh, projectName, "build", "--pull"); err != nil {
 			return err
 		}
 	} else {
-		if err := runDockerCompose(sh, projectName, "build", "--pull", composeContainer); err != nil {
+		if err := runDockerCompose(ctx, sh, projectName, "build", "--pull", composeContainer); err != nil {
 			return err
 		}
 	}
 
 	sh.Headerf(":docker: Running command (in Docker Compose container)")
-	return runDockerCompose(sh, projectName, append([]string{"run", composeContainer}, cmd...)...)
+	return runDockerCompose(ctx, sh, projectName, append([]string{"run", composeContainer}, cmd...)...)
 }
 
-func runDockerCompose(sh *shell.Shell, projectName string, commandArgs ...string) error {
+func runDockerCompose(ctx context.Context, sh *shell.Shell, projectName string, commandArgs ...string) error {
 	args := []string{}
 
 	composeFile, _ := sh.Env.Get(`BUILDKITE_DOCKER_COMPOSE_FILE`)
@@ -158,5 +159,5 @@ func runDockerCompose(sh *shell.Shell, projectName string, commandArgs ...string
 	}
 
 	args = append(args, commandArgs...)
-	return sh.Run("docker-compose", args...)
+	return sh.Run(ctx, "docker-compose", args...)
 }

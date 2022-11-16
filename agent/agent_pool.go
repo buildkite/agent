@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"sync"
 )
 
@@ -17,7 +18,7 @@ func NewAgentPool(workers []*AgentWorker) *AgentPool {
 }
 
 // Start kicks off the parallel AgentWorkers and waits for them to finish
-func (r *AgentPool) Start() error {
+func (r *AgentPool) Start(ctx context.Context) error {
 	var wg sync.WaitGroup
 	var spawn int = len(r.workers)
 	var errs = make(chan error, spawn)
@@ -32,7 +33,7 @@ func (r *AgentPool) Start() error {
 		go func(worker *AgentWorker) {
 			defer wg.Done()
 
-			if err := r.runWorker(worker, idleMonitor); err != nil {
+			if err := r.runWorker(ctx, worker, idleMonitor); err != nil {
 				errs <- err
 			}
 		}(worker)
@@ -46,7 +47,7 @@ func (r *AgentPool) Start() error {
 	return <-errs
 }
 
-func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
+func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker, im *IdleMonitor) error {
 	// Connect the worker to the API
 	if err := worker.Connect(); err != nil {
 		return err
@@ -55,7 +56,7 @@ func (r *AgentPool) runWorker(worker *AgentWorker, im *IdleMonitor) error {
 	defer worker.Disconnect()
 
 	// Starts the agent worker and wait for it to finish.
-	return worker.Start(im)
+	return worker.Start(ctx, im)
 }
 
 func (r *AgentPool) Stop(graceful bool) {
