@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -121,6 +122,8 @@ var PipelineUploadCommand = cli.Command{
 		RedactedVars,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := PipelineUploadConfig{}
 
@@ -307,7 +310,7 @@ var PipelineUploadCommand = cli.Command{
 			roko.WithMaxAttempts(60),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).Do(func(r *roko.Retrier) error {
-			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
+			_, err = client.UploadPipeline(ctx, cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
 

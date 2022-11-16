@@ -1,6 +1,9 @@
 package api
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Pipeline represents a Buildkite Agent API Pipeline
 type Pipeline struct {
@@ -11,10 +14,10 @@ type Pipeline struct {
 
 // Uploads the pipeline to the Buildkite Agent API. This request doesn't use JSON,
 // but a multi-part HTTP form upload
-func (c *Client) UploadPipeline(jobId string, pipeline *Pipeline) (*Response, error) {
+func (c *Client) UploadPipeline(ctx context.Context, jobId string, pipeline *Pipeline) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/pipelines", jobId)
 
-	req, err := c.newRequest("POST", u, pipeline)
+	req, err := c.newRequest(ctx, "POST", u, pipeline)
 	if err != nil {
 		return nil, err
 	}

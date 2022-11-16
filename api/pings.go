@@ -1,5 +1,7 @@
 package api
 
+import "context"
+
 // Ping represents a Buildkite Agent API Ping
 type Ping struct {
 	Action   string `json:"action,omitempty"`
@@ -9,8 +11,8 @@ type Ping struct {
 }
 
 // Pings the API and returns any work the client needs to perform
-func (c *Client) Ping() (*Ping, *Response, error) {
-	req, err := c.newRequest("GET", "ping", nil)
+func (c *Client) Ping(ctx context.Context) (*Ping, *Response, error) {
+	req, err := c.newRequest(ctx, "GET", "ping", nil)
 	if err != nil {
 		return nil, nil, err
 	}

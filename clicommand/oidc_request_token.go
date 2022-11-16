@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -84,6 +85,8 @@ var OIDCRequestTokenCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := OIDCTokenConfig{}
 
@@ -127,7 +130,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			}
 
 			var resp *api.Response
-			token, resp, err = client.OIDCToken(req)
+			token, resp, err = client.OIDCToken(ctx, req)
 			if resp != nil {
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses

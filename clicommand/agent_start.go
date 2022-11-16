@@ -861,7 +861,7 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := agent.Register(l, client, registerReq)
+			ag, err := agent.Register(context.Background(), l, client, registerReq)
 			if err != nil {
 				l.Fatal("%s", err)
 			}

@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -110,6 +111,8 @@ var AnnotateCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := AnnotateConfig{}
 
@@ -165,7 +168,7 @@ var AnnotateCommand = cli.Command{
 			roko.WithJitter(),
 		).Do(func(r *roko.Retrier) error {
 			// Attempt to create the annotation
-			resp, err := client.Annotate(cfg.Job, annotation)
+			resp, err := client.Annotate(ctx, cfg.Job, annotation)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {

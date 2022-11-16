@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -91,10 +92,10 @@ type ArtifactBatchUpdateRequest struct {
 }
 
 // CreateArtifacts takes a slice of artifacts, and creates them on Buildkite as a batch.
-func (c *Client) CreateArtifacts(jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
+func (c *Client) CreateArtifacts(ctx context.Context, jobId string, batch *ArtifactBatch) (*ArtifactBatchCreateResponse, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 
-	req, err := c.newRequest("POST", u, batch)
+	req, err := c.newRequest(ctx, "POST", u, batch)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,7 +110,7 @@ func (c *Client) CreateArtifacts(jobId string, batch *ArtifactBatch) (*ArtifactB
 }
 
 // Updates a particular artifact
-func (c *Client) UpdateArtifacts(jobId string, artifactStates map[string]string) (*Response, error) {
+func (c *Client) UpdateArtifacts(ctx context.Context, jobId string, artifactStates map[string]string) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/artifacts", jobId)
 	payload := ArtifactBatchUpdateRequest{}
 
@@ -117,7 +118,7 @@ func (c *Client) UpdateArtifacts(jobId string, artifactStates map[string]string)
 		payload.Artifacts = append(payload.Artifacts, &ArtifactBatchUpdateArtifact{id, state})
 	}
 
-	req, err := c.newRequest("PUT", u, payload)
+	req, err := c.newRequest(ctx, "PUT", u, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -131,14 +132,14 @@ func (c *Client) UpdateArtifacts(jobId string, artifactStates map[string]string)
 }
 
 // SearchArtifacts searches Buildkite for a set of artifacts
-func (c *Client) SearchArtifacts(buildId string, opt *ArtifactSearchOptions) ([]*Artifact, *Response, error) {
+func (c *Client) SearchArtifacts(ctx context.Context, buildId string, opt *ArtifactSearchOptions) ([]*Artifact, *Response, error) {
 	u := fmt.Sprintf("builds/%s/artifacts/search", buildId)
 	u, err := addOptions(u, opt)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	req, err := c.newRequest("GET", u, nil)
+	req, err := c.newRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}

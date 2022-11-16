@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,8 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
+	ctx := context.Background()
+
 	ac := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    `llamasforever`,
@@ -41,7 +44,7 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 		BuildID: "my-build",
 	})
 
-	if err := d.Download(); err != nil {
+	if err := d.Download(ctx); err != nil {
 		t.Errorf("d.Download() = %v", err)
 	}
 }

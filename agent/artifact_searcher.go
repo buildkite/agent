@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -27,7 +28,7 @@ func NewArtifactSearcher(l logger.Logger, ac APIClient, buildID string) *Artifac
 	}
 }
 
-func (a *ArtifactSearcher) Search(query, scope string, includeRetriedJobs, includeDuplicates bool) ([]*api.Artifact, error) {
+func (a *ArtifactSearcher) Search(ctx context.Context, query, scope string, includeRetriedJobs, includeDuplicates bool) ([]*api.Artifact, error) {
 	if scope == "" {
 		a.logger.Info("Searching for artifacts: \"%s\"", query)
 	} else {
@@ -42,7 +43,7 @@ func (a *ArtifactSearcher) Search(query, scope string, includeRetriedJobs, inclu
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).Do(func(*roko.Retrier) error {
 		var searchErr error
-		artifacts, _, searchErr = a.apiClient.SearchArtifacts(a.buildID, &api.ArtifactSearchOptions{
+		artifacts, _, searchErr = a.apiClient.SearchArtifacts(ctx, a.buildID, &api.ArtifactSearchOptions{
 			Query:              query,
 			Scope:              scope,
 			State:              "finished",

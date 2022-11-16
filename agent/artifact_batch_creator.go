@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -38,7 +39,7 @@ func NewArtifactBatchCreator(l logger.Logger, ac APIClient, c ArtifactBatchCreat
 	}
 }
 
-func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
+func (a *ArtifactBatchCreator) Create(ctx context.Context) ([]*api.Artifact, error) {
 	length := len(a.conf.Artifacts)
 	chunks := 30
 
@@ -74,7 +75,7 @@ func (a *ArtifactBatchCreator) Create() ([]*api.Artifact, error) {
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).Do(func(r *roko.Retrier) error {
-			creation, resp, err = a.apiClient.CreateArtifacts(a.conf.JobID, batch)
+			creation, resp, err = a.apiClient.CreateArtifacts(ctx, a.conf.JobID, batch)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}

@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -74,6 +75,8 @@ var MetaDataSetCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataSetConfig{}
 
@@ -120,7 +123,7 @@ var MetaDataSetCommand = cli.Command{
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).Do(func(r *roko.Retrier) error {
-			resp, err := client.SetMetaData(cfg.Job, metaData)
+			resp, err := client.SetMetaData(ctx, cfg.Job, metaData)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}

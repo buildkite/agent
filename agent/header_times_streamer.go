@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"regexp"
 	"strconv"
 	"sync"
@@ -15,7 +16,7 @@ type headerTimesStreamer struct {
 
 	// The callback that will be called when a header time is ready for
 	// upload
-	uploadCallback func(int, int, map[string]string)
+	uploadCallback func(context.Context, int, int, map[string]string)
 
 	// The times that have found while scanning lines
 	times      []string
@@ -39,20 +40,20 @@ type headerTimesStreamer struct {
 	cursor int
 }
 
-func newHeaderTimesStreamer(l logger.Logger, upload func(int, int, map[string]string)) *headerTimesStreamer {
+func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, int, map[string]string)) *headerTimesStreamer {
 	return &headerTimesStreamer{
 		logger:         l,
 		uploadCallback: upload,
 	}
 }
 
-func (h *headerTimesStreamer) Start() error {
+func (h *headerTimesStreamer) Start(ctx context.Context) error {
 	h.streaming = true
 
 	go func() {
 		h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
 
-		for true {
+		for {
 			// Break out of streaming if it's finished. We also
 			// need to aquire a read lock on the flag because it
 			// can be modified by other routines.
@@ -63,10 +64,14 @@ func (h *headerTimesStreamer) Start() error {
 			h.streamingMutex.Unlock()
 
 			// Upload any pending header times
-			h.Upload()
+			h.Upload(ctx)
 
 			// Sleep for a second and try upload some more later
-			time.Sleep(1 * time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(1 * time.Second):
+			}
 		}
 
 		h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
@@ -99,7 +104,7 @@ func (h *headerTimesStreamer) Scan(line string) bool {
 	return false
 }
 
-func (h *headerTimesStreamer) Upload() {
+func (h *headerTimesStreamer) Upload(ctx context.Context) {
 	// Store the current cursor value
 	c := h.cursor
 
@@ -126,7 +131,7 @@ func (h *headerTimesStreamer) Upload() {
 	if timesToUpload > 0 {
 		// Call our callback with the times for upload
 		h.logger.Debug("[HeaderTimesStreamer] Uploading header times %d..%d", c, length-1)
-		h.uploadCallback(c, length, payload)
+		h.uploadCallback(ctx, c, length, payload)
 		h.logger.Debug("[HeaderTimesStreamer] Finished uploading header times %d..%d", c, length-1)
 
 		// Decrement the wait group for every time we've uploaded.

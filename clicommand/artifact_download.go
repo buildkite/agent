@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -104,6 +105,8 @@ var ArtifactDownloadCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactDownloadConfig{}
 
@@ -139,7 +142,7 @@ var ArtifactDownloadCommand = cli.Command{
 		})
 
 		// Download the artifacts
-		if err := downloader.Download(); err != nil {
+		if err := downloader.Download(ctx); err != nil {
 			l.Fatal("Failed to download artifacts: %s", err)
 		}
 	},

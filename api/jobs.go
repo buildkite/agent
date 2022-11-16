@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -38,10 +39,10 @@ type jobFinishRequest struct {
 }
 
 // GetJobState returns the state of a given job
-func (c *Client) GetJobState(id string) (*JobState, *Response, error) {
+func (c *Client) GetJobState(ctx context.Context, id string) (*JobState, *Response, error) {
 	u := fmt.Sprintf("jobs/%s", id)
 
-	req, err := c.newRequest("GET", u, nil)
+	req, err := c.newRequest(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -56,10 +57,10 @@ func (c *Client) GetJobState(id string) (*JobState, *Response, error) {
 }
 
 // Acquires a job using its ID
-func (c *Client) AcquireJob(id string) (*Job, *Response, error) {
+func (c *Client) AcquireJob(ctx context.Context, id string) (*Job, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/acquire", id)
 
-	req, err := c.newRequest("PUT", u, nil)
+	req, err := c.newRequest(ctx, "PUT", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -76,10 +77,10 @@ func (c *Client) AcquireJob(id string) (*Job, *Response, error) {
 // AcceptJob accepts the passed in job. Returns the job with its finalized set of
 // environment variables (when a job is accepted, the agents environment is
 // applied to the job)
-func (c *Client) AcceptJob(job *Job) (*Job, *Response, error) {
+func (c *Client) AcceptJob(ctx context.Context, job *Job) (*Job, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/accept", job.ID)
 
-	req, err := c.newRequest("PUT", u, nil)
+	req, err := c.newRequest(ctx, "PUT", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -94,10 +95,10 @@ func (c *Client) AcceptJob(job *Job) (*Job, *Response, error) {
 }
 
 // StartJob starts the passed in job
-func (c *Client) StartJob(job *Job) (*Response, error) {
+func (c *Client) StartJob(ctx context.Context, job *Job) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/start", job.ID)
 
-	req, err := c.newRequest("PUT", u, &jobStartRequest{
+	req, err := c.newRequest(ctx, "PUT", u, &jobStartRequest{
 		StartedAt: job.StartedAt,
 	})
 	if err != nil {
@@ -108,10 +109,10 @@ func (c *Client) StartJob(job *Job) (*Response, error) {
 }
 
 // FinishJob finishes the passed in job
-func (c *Client) FinishJob(job *Job) (*Response, error) {
+func (c *Client) FinishJob(ctx context.Context, job *Job) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/finish", job.ID)
 
-	req, err := c.newRequest("PUT", u, &jobFinishRequest{
+	req, err := c.newRequest(ctx, "PUT", u, &jobFinishRequest{
 		FinishedAt:        job.FinishedAt,
 		ExitStatus:        job.ExitStatus,
 		Signal:            job.Signal,

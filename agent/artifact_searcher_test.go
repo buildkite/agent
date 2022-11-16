@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,8 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
+	ctx := context.Background()
+
 	ac := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    `llamasforever`,
@@ -39,7 +42,7 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 
 	s := NewArtifactSearcher(logger.Discard, ac, "my-build")
 
-	artifacts, err := s.Search("llamas.txt", "my-build", false, false)
+	artifacts, err := s.Search(ctx, "llamas.txt", "my-build", false, false)
 	if err != nil {
 		t.Fatalf(`s.Search("llamas.txt", "my-build", false, false) error = %v`, err)
 	}

@@ -265,13 +265,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 
 	startedAt := time.Now()
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
 	// Start the build in the Buildkite Agent API. This is the first thing
 	// we do so if it fails, we don't have to worry about cleaning things
 	// up like started log streamer workers, and so on.
-	if err := r.startJob(startedAt); err != nil {
+	if err := r.startJob(ctx, startedAt); err != nil {
 		return err
 	}
 
@@ -287,12 +284,12 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Start the header time streamer
-	if err := r.headerTimesStreamer.Start(); err != nil {
+	if err := r.headerTimesStreamer.Start(ctx); err != nil {
 		return err
 	}
 
-	// Start the log streamer
-	if err := r.logStreamer.Start(); err != nil {
+	// Start the log streamer.
+	if err := r.logStreamer.Start(ctx); err != nil {
 		return err
 	}
 
@@ -326,15 +323,19 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	// Used to wait on various routines that we spin up
 	var wg sync.WaitGroup
 
+	// Set up a child context for helper goroutines related to running the job.
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	if environmentCommandOkay {
 		// Kick off log streaming and job status checking when the process
 		// starts.
 		wg.Add(2)
-		go r.jobLogStreamer(ctx, &wg)
-		go r.jobCancellationChecker(ctx, &wg)
+		go r.jobLogStreamer(cctx, &wg)
+		go r.jobCancellationChecker(cctx, &wg)
 
 		// Run the process. This will block until it finishes.
-		if err := r.process.Run(ctx); err != nil {
+		if err := r.process.Run(cctx); err != nil {
 			// Send the error as output
 			r.logStreamer.Process(fmt.Sprintf("%s", err))
 
@@ -408,7 +409,7 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	//
 	// Once we tell the API we're finished it might assign us new work, so make
 	// sure everything else is done first.
-	r.finishJob(finishedAt, exitStatus, signal, signalReason, r.logStreamer.FailedChunks())
+	r.finishJob(ctx, finishedAt, exitStatus, signal, signalReason, r.logStreamer.FailedChunks())
 
 	r.logger.Info("Finished job %s", r.job.ID)
 
@@ -455,11 +456,7 @@ func (r *JobRunner) Cancel() error {
 		r.logger.Info("Job %s hasn't stopped in time, terminating", r.job.ID)
 
 		// Terminate the process as we've exceeded our context
-		if err := r.process.Terminate(); err != nil {
-			return err
-		}
-
-		return nil
+		return r.process.Terminate()
 
 	// Process successfully terminated
 	case <-r.process.Done():
@@ -685,14 +682,14 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 // issues, but if a connection succeeds and we get an client error response back from
 // Buildkite, we won't bother retrying. For example, a "no such host" will
 // retry, but an HTTP response from Buildkite that isn't retryable won't.
-func (r *JobRunner) startJob(startedAt time.Time) error {
+func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 	r.job.StartedAt = startedAt.UTC().Format(time.RFC3339Nano)
 
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 	).Do(func(rtr *roko.Retrier) error {
-		response, err := r.apiClient.StartJob(r.job)
+		response, err := r.apiClient.StartJob(ctx, r.job)
 
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
@@ -711,7 +708,7 @@ func (r *JobRunner) startJob(startedAt time.Time) error {
 
 // Finishes the job in the Buildkite Agent API. This call will keep on retrying
 // forever until it finally gets a successfull response from the API.
-func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal string, signalReason string, failedChunkCount int) error {
+func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitStatus, signal, signalReason string, failedChunkCount int) error {
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.job.ExitStatus = exitStatus
 	r.job.Signal = signal
@@ -725,7 +722,7 @@ func (r *JobRunner) finishJob(finishedAt time.Time, exitStatus string, signal st
 		roko.TryForever(),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 	).Do(func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.FinishJob(r.job)
+		response, err := r.apiClient.FinishJob(ctx, r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully tried to finish the job, but Buildkite
@@ -799,7 +796,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 
 	for {
 		// Re-get the job and check its status to see if it's been cancelled
-		jobState, _, err := r.apiClient.GetJobState(r.job.ID)
+		jobState, _, err := r.apiClient.GetJobState(ctx, r.job.ID)
 		if err != nil {
 			// We don't really care if it fails, we'll just
 			// try again soon anyway
@@ -821,12 +818,12 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 	}
 }
 
-func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]string) {
+func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, times map[string]string) {
 	roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).Do(func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.SaveHeaderTimes(r.job.ID, &api.HeaderTimes{Times: times})
+		response, err := r.apiClient.SaveHeaderTimes(ctx, r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
 				r.logger.Warn("Buildkite rejected the header times (%s)", err)
@@ -841,7 +838,7 @@ func (r *JobRunner) onUploadHeaderTime(cursor int, total int, times map[string]s
 }
 
 // Call when a chunk is ready for upload.
-func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
+func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) error {
 	// We consider logs to be an important thing, and we shouldn't give up
 	// on sending the chunk data back to Buildkite. In the event Buildkite
 	// is having downtime or there are connection problems, we'll want to
@@ -855,7 +852,7 @@ func (r *JobRunner) onUploadChunk(chunk *LogStreamerChunk) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 		roko.WithJitter(),
 	).Do(func(retrier *roko.Retrier) error {
-		response, err := r.apiClient.UploadChunk(r.job.ID, &api.Chunk{
+		response, err := r.apiClient.UploadChunk(ctx, r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
 			Offset:   chunk.Offset,

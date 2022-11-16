@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -54,7 +55,7 @@ func NewArtifactDownloader(l logger.Logger, ac APIClient, c ArtifactDownloaderCo
 	}
 }
 
-func (a *ArtifactDownloader) Download() error {
+func (a *ArtifactDownloader) Download(ctx context.Context) error {
 	// Turn the download destination into an absolute path and confirm it exists
 	downloadDestination, _ := filepath.Abs(a.conf.Destination)
 	fileInfo, err := os.Stat(downloadDestination)
@@ -67,7 +68,7 @@ func (a *ArtifactDownloader) Download() error {
 	}
 
 	artifacts, err := NewArtifactSearcher(a.logger, a.apiClient, a.conf.BuildID).
-		Search(a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
+		Search(ctx, a.conf.Query, a.conf.Step, a.conf.IncludeRetriedJobs, false)
 	if err != nil {
 		return err
 	}

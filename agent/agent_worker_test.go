@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -27,6 +28,8 @@ func TestDisconnect(t *testing.T) {
 	}))
 	defer server.Close()
 
+	ctx := context.Background()
+
 	client := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
@@ -44,7 +47,7 @@ func TestDisconnect(t *testing.T) {
 		},
 	}
 
-	err := worker.Disconnect()
+	err := worker.Disconnect(ctx)
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"[info] Disconnecting...", "[info] Disconnected"}, l.Messages)
@@ -69,6 +72,8 @@ func TestDisconnectRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
+	ctx := context.Background()
+
 	client := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
 		Token:    "llamas",
@@ -89,7 +94,7 @@ func TestDisconnectRetry(t *testing.T) {
 		retrySleepFunc:     retrySleepFunc,
 	}
 
-	err := worker.Disconnect()
+	err := worker.Disconnect(ctx)
 	assert.NoError(t, err)
 
 	// 2 failed attempts sleep 1 second each

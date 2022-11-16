@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"strings"
@@ -23,7 +24,7 @@ var (
 
 // Register takes an api.Agent and registers it with the Buildkite API
 // and populates the result of the register call
-func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
+func Register(ctx context.Context, l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
 	var registered *api.AgentRegisterResponse
 	var err error
 	var resp *api.Response
@@ -41,7 +42,7 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 	req.OS = osVersionDump
 
 	register := func(r *roko.Retrier) error {
-		registered, resp, err = ac.Register(&req)
+		registered, resp, err = ac.Register(ctx, &req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				l.Warn("Buildkite rejected the registration (%s)", err)

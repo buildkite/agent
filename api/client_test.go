@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -36,6 +37,8 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	}))
 	defer server.Close()
 
+	ctx := context.Background()
+
 	// Initial client with a registration token
 	c := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
@@ -43,7 +46,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	})
 
 	// Check a register works
-	regResp, _, err := c.Register(&api.AgentRegisterRequest{})
+	regResp, _, err := c.Register(ctx, &api.AgentRegisterRequest{})
 	if err != nil {
 		t.Fatalf("c.Register(&AgentRegisterRequest{}) error = %v", err)
 	}
@@ -60,7 +63,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	c2 := c.FromAgentRegisterResponse(regResp)
 
 	// Check a connect works
-	if _, err := c2.Connect(); err != nil {
+	if _, err := c2.Connect(ctx); err != nil {
 		t.Errorf("c.FromAgentRegisterResponse(regResp).Connect() error = %v", err)
 	}
 }

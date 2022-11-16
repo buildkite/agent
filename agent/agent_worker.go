@@ -146,8 +146,7 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		for {
 			select {
 			case <-time.After(heartbeatInterval):
-				err := a.Heartbeat()
-				if err != nil {
+				if err := a.Heartbeat(heartbeatCtx); err != nil {
 					// Get the last heartbeat time to the nearest microsecond
 					a.stats.Lock()
 					if a.stats.lastHeartbeat.IsZero() {
@@ -194,7 +193,7 @@ func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonito
 	// Continue this loop until the closing of the stop channel signals termination
 	for {
 		if !a.stopping {
-			job, err := a.Ping()
+			job, err := a.Ping(ctx)
 			if err != nil {
 				a.logger.Warn("%v", err)
 			} else if job != nil {
@@ -311,14 +310,14 @@ func (a *AgentWorker) Stop(graceful bool) {
 
 // Connects the agent to the Buildkite Agent API, retrying up to 30 times if it
 // fails.
-func (a *AgentWorker) Connect() error {
+func (a *AgentWorker) Connect(ctx context.Context) error {
 	a.logger.Info("Connecting to Buildkite...")
 
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).Do(func(r *roko.Retrier) error {
-		_, err := a.apiClient.Connect()
+		_, err := a.apiClient.Connect(ctx)
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
 		}
@@ -327,7 +326,7 @@ func (a *AgentWorker) Connect() error {
 }
 
 // Performs a heatbeat
-func (a *AgentWorker) Heartbeat() error {
+func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	var beat *api.Heartbeat
 	var err error
 
@@ -336,7 +335,7 @@ func (a *AgentWorker) Heartbeat() error {
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).Do(func(r *roko.Retrier) error {
-		beat, _, err = a.apiClient.Heartbeat()
+		beat, _, err = a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
 		}
@@ -361,8 +360,8 @@ func (a *AgentWorker) Heartbeat() error {
 
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
-func (a *AgentWorker) Ping() (*api.Job, error) {
-	ping, _, err := a.apiClient.Ping()
+func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
+	ping, _, err := a.apiClient.Ping(ctx)
 	if err != nil {
 		// Get the last ping time to the nearest microsecond
 		a.stats.Lock()
@@ -388,7 +387,7 @@ func (a *AgentWorker) Ping() (*api.Job, error) {
 
 		// Before switching to the new one, do a ping test to make sure it's
 		// valid. If it is, switch and carry on, otherwise ignore the switch
-		newPing, _, err := newAPIClient.Ping()
+		newPing, _, err := newAPIClient.Ping(ctx)
 		if err != nil {
 			a.logger.Warn("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
 		} else {
@@ -439,7 +438,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		var err error
 		var response *api.Response
 
-		acquiredJob, response, err = a.apiClient.AcquireJob(jobId)
+		acquiredJob, response, err = a.apiClient.AcquireJob(ctx, jobId)
 		if err != nil {
 			// If the API returns with a 422, that means that we
 			// succesfully *tried* to acquire the job, but
@@ -477,7 +476,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).Do(func(r *roko.Retrier) error {
 		var err error
-		accepted, _, err = a.apiClient.AcceptJob(job)
+		accepted, _, err = a.apiClient.AcceptJob(ctx, job)
 		if err != nil {
 			if api.IsRetryableError(err) {
 				a.logger.Warn("%s (%s)", err, r)
@@ -537,14 +536,14 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 // Disconnect notifies the Buildkite API that this agent worker/session is
 // permanently disconnecting. Don't spend long retrying, because we want to
 // disconnect as fast as possible.
-func (a *AgentWorker) Disconnect() error {
+func (a *AgentWorker) Disconnect(ctx context.Context) error {
 	a.logger.Info("Disconnecting...")
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(4),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 		roko.WithSleepFunc(a.retrySleepFunc),
 	).Do(func(r *roko.Retrier) error {
-		if _, err := a.apiClient.Disconnect(); err != nil {
+		if _, err := a.apiClient.Disconnect(ctx); err != nil {
 			a.logger.Warn("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
 			return err
 		}

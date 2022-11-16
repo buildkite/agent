@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"errors"
@@ -66,7 +67,7 @@ func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig
 	}
 }
 
-func (a *ArtifactUploader) Upload() error {
+func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
@@ -78,8 +79,7 @@ func (a *ArtifactUploader) Upload() error {
 	} else {
 		a.logger.Info("Found %d files that match \"%s\"", len(artifacts), a.conf.Paths)
 
-		err := a.upload(artifacts)
-		if err != nil {
+		if err := a.upload(ctx, artifacts); err != nil {
 			return err
 		}
 	}
@@ -229,7 +229,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
+func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
 	var uploader Uploader
 	var err error
 
@@ -280,7 +280,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		UploadDestination: a.conf.Destination,
 	})
 
-	artifacts, err = batchCreator.Create()
+	artifacts, err = batchCreator.Create(ctx)
 	if err != nil {
 		return err
 	}
@@ -330,8 +330,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 					roko.WithMaxAttempts(10),
 					roko.WithStrategy(roko.Constant(5*time.Second)),
 				).Do(func(r *roko.Retrier) error {
-					_, err = a.apiClient.UpdateArtifacts(a.conf.JobID, statesToUpload)
-					if err != nil {
+					if _, err := a.apiClient.UpdateArtifacts(ctx, a.conf.JobID, statesToUpload); err != nil {
 						a.logger.Warn("%s (%s)", err, r)
 					}
 

@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -89,6 +90,8 @@ var StepGetCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := StepGetConfig{}
 
@@ -127,7 +130,7 @@ var StepGetCommand = cli.Command{
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).Do(func(r *roko.Retrier) error {
-			stepExportResponse, resp, err = client.StepExport(cfg.StepOrKey, stepExportRequest)
+			stepExportResponse, resp, err = client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()

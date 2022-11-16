@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -88,6 +89,8 @@ func TestOIDCToken(t *testing.T) {
 	const audience = "sts.amazonaws.com"
 	const lifetime = 600
 
+	ctx := context.Background()
+
 	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest
 		AccessToken      string
@@ -141,7 +144,7 @@ func TestOIDCToken(t *testing.T) {
 				DebugHTTP: true,
 			})
 
-			token, resp, err := client.OIDCToken(test.OIDCTokenRequest)
+			token, resp, err := client.OIDCToken(ctx, test.OIDCTokenRequest)
 			if err != nil {
 				t.Errorf(
 					"OIDCToken(%v) got error = %v",
@@ -177,6 +180,8 @@ func TestOIDCTokenError(t *testing.T) {
 	const unauthorizedJobID = "a078e2d2-86e9-4c12-bf3b-612a8058d0a4"
 	const accessToken = "llamas"
 	const audience = "sts.amazonaws.com"
+
+	ctx := context.Background()
 
 	tests := []struct {
 		OIDCTokenRequest *api.OIDCTokenRequest
@@ -228,7 +233,7 @@ func TestOIDCTokenError(t *testing.T) {
 				DebugHTTP: true,
 			})
 
-			_, resp, err := client.OIDCToken(test.OIDCTokenRequest)
+			_, resp, err := client.OIDCToken(ctx, test.OIDCTokenRequest)
 			// TODO: make api.ErrorReponse a serializable type and test that the right error type is returned here
 			if err == nil {
 				t.Errorf("OIDCToken(%v) did not return an error as expected", test.OIDCTokenRequest)
