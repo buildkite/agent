@@ -58,18 +58,14 @@ var OIDCRequestTokenCommand = cli.Command{
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "audience",
-			Value: "",
-			Usage: "The audience that will consume the OIDC token",
+			Usage: "The audience that will consume the OIDC token. The API will choose a default audience if it is omitted.",
 		},
 		cli.IntFlag{
 			Name:  "lifetime",
-			Value: 0,
-			Usage: `The time (in seconds) the OIDC token will be valid for before expiry.
-Specfying 0 will result the in the API substituting its default value for the lifetime instead of 0.`,
+			Usage: "The time (in seconds) the OIDC token will be valid for before expiry. Must be a non-negative integer. If the flag is omitted or set to 0, the API will choose a default finite lifetime.",
 		},
 		cli.StringFlag{
 			Name:   "job",
-			Value:  "",
 			Usage:  "Buildkite Job Id to claim in the OIDC token",
 			EnvVar: "BUILDKITE_JOB_ID",
 		},
@@ -108,6 +104,11 @@ Specfying 0 will result the in the API substituting its default value for the li
 		// Setup any global configuration options
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
+
+		// Note: if --lifetime is omitted, cfg.Lifetime = 0
+		if cfg.Lifetime < 0 {
+			l.Fatal("Lifetime %d must be a non-negative integer.", cfg.Lifetime)
+		}
 
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
