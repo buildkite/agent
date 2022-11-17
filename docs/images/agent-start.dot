@@ -1,0 +1,152 @@
+digraph {
+    node[shape="box",style="rounded"]
+
+    subgraph cluster_nethttp {
+        label="net/http"
+        URL="https://pkg.go.dev/net/http"
+
+        "ListenAndServe"
+    }
+
+    subgraph cluster_clicommand {
+        label="clicommand"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/clicommand"
+
+        "AgentStartCommand.Action"
+        "handlePoolSignals"
+        "handlePoolSignals.<signalsLoop>"
+        "agentShutdownHook"
+        "agentShutdownHook.<outputToLogger>"
+    }
+
+    subgraph cluster_agent {
+        label="agent"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/agent"
+
+        "AgentPool.Start"
+        "AgentPool.Start.<wait>"
+        "AgentPool.runWorker"
+        "AgentWorker.Connect"
+        "AgentWorker.Start"
+        "AgentWorker.Disconnect"
+        "AgentWorker.heartbeatLoop"
+        "AgentWorker.Heartbeat"
+        "AgentWorker.startPingLoop"
+        "AgentWorker.Ping"
+        "AgentWorker.AcceptAndRunJob"
+        "AgentWorker.RunJob"
+        "NewJobRunner"
+        "NewJobRunner.<headerStreamer>"
+        "NewJobRunner.<cleanup>"
+        "JobRunner.Cancel"
+        "JobRunner.Run"
+        "JobRunner.jobLogStreamer"
+        "JobRunner.jobCancellationChecker"
+        "JobRunner.onUploadChunk"
+        "JobRunner.onUploadHeaderTime"
+        "JobRunner.startJob"
+        "LogStreamer.Start"
+        "LogStreamer.Process"
+        "LogStreamer.worker"
+        "headerTimesStreamer.Start"
+        "headerTimesStreamer.Start.<uploadLoop>"
+        "headerTimesStreamer.Upload"
+    }
+
+    subgraph cluster_api {
+        label="api"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/api"
+
+        "Client.AcceptJob"
+        "Client.GetJobStatus"
+        "Client.Heartbeat"
+        "Client.Ping"
+        "Client.SaveHeaderTimes"
+        "Client.StartJob"
+        "Client.UploadChunk"
+    }
+
+    subgraph cluster_process {
+        label="process"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/process"
+
+        "Scanner.ScanLines"
+        "Process.Run"
+        "Process.Run.<copyPTY>"
+        "Process.Run.<ctxTerminate>"
+        "timeoutWait"
+    }
+
+    subgraph cluster_osexec {
+        label="os/exec"
+        URL="https://pkg.go.dev/os/exec"
+
+        "Command.Wait"
+    }
+
+    "AgentStartCommand.Action" -> "AgentPool.Start"
+    "AgentStartCommand.Action" -> "handlePoolSignals"
+    "AgentStartCommand.Action" -> "ListenAndServe" [label="go" style=dotted]
+    "AgentStartCommand.Action" -> "agentShutdownHook"
+
+    "handlePoolSignals" -> "handlePoolSignals.<signalsLoop>" [label="go" style=dotted]
+
+    "agentShutdownHook" -> "agentShutdownHook.<outputToLogger>" [label="go" style=dotted]
+
+    "AgentPool.Start" -> "AgentPool.runWorker" [label="go * N" style=dotted]
+    "AgentPool.Start" -> "AgentPool.Start.<wait>" [label="go" style=dotted]
+    
+    "AgentPool.runWorker" -> "AgentWorker.Connect", "AgentWorker.Start", "AgentWorker.Disconnect"
+
+    "AgentWorker.Start" -> "AgentWorker.heartbeatLoop" [label="go" style=dotted]
+    "AgentWorker.Start" -> "AgentWorker.startPingLoop"
+
+    "AgentWorker.heartbeatLoop" -> "AgentWorker.Heartbeat" [label="∞"]
+
+    "AgentWorker.Heartbeat" -> "Client.Heartbeat"
+
+    "AgentWorker.startPingLoop" -> "AgentWorker.Ping" [label="∞"]
+    "AgentWorker.startPingLoop" -> "AgentWorker.AcceptAndRunJob" [label="∞"]
+
+    "AgentWorker.Ping" -> "Client.Ping"
+
+    "AgentWorker.AcceptAndRunJob" -> "Client.AcceptJob"
+    "AgentWorker.AcceptAndRunJob" -> "AgentWorker.RunJob"
+
+    "AgentWorker.RunJob" -> "NewJobRunner"
+    "AgentWorker.RunJob" -> "JobRunner.Run"
+
+    "NewJobRunner" -> "NewJobRunner.<headerStreamer>" [label="go" style=dotted]
+    "NewJobRunner" -> "NewJobRunner.<cleanup>" [label="go" style=dotted]
+    "NewJobRunner.<headerStreamer>" -> "Scanner.ScanLines"
+
+    "JobRunner.Run" -> "JobRunner.startJob"
+    "JobRunner.Run" -> "JobRunner.jobLogStreamer" [label="go" style=dotted]
+    "JobRunner.Run" -> "JobRunner.jobCancellationChecker" [label="go" style=dotted]
+    "JobRunner.Run" -> "Process.Run"
+    "JobRunner.Run" -> "headerTimesStreamer.Start"
+    "JobRunner.Run" -> "LogStreamer.Start"
+
+    "JobRunner.startJob" -> "Client.StartJob"
+
+    "LogStreamer.Start" -> "LogStreamer.worker" [label="go * 3" style=dotted]
+
+    "LogStreamer.worker" -> "JobRunner.onUploadChunk"
+
+    "JobRunner.onUploadChunk" -> "Client.UploadChunk"
+
+    "headerTimesStreamer.Start" -> "headerTimesStreamer.Start.<uploadLoop>" [label="go" style=dotted]
+    "headerTimesStreamer.Start.<uploadLoop>" -> "headerTimesStreamer.Upload"
+    "headerTimesStreamer.Upload" -> "JobRunner.onUploadHeaderTime"
+    "JobRunner.onUploadHeaderTime" -> "Client.SaveHeaderTimes"
+
+    "JobRunner.jobLogStreamer" -> "LogStreamer.Process" [label="∞"]
+
+    "JobRunner.jobCancellationChecker" -> "Client.GetJobStatus" [label="∞"]
+    "JobRunner.jobCancellationChecker" -> "JobRunner.Cancel"
+
+    "Process.Run" -> "Process.Run.<copyPTY>" [label="go" style=dotted]
+    "Process.Run" -> "Process.Run.<ctxTerminate>" [label="go" style=dotted]
+    "Process.Run" -> "Command.Wait"
+    "Process.Run" -> "timeoutWait"
+}
