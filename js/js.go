@@ -1,6 +1,7 @@
 package js
 
 import (
+	"bytes"
 	"embed"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/yaml"
+	"github.com/clarkmcc/go-typescript"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/process"
@@ -24,11 +26,11 @@ const (
 	nameExports = "exports"
 )
 
-// EvalJS takes JavaScript code (loaded from file or stdin etc) and returns
+// Eval takes TypeScript/JavaScript code (loaded from file or stdin etc) and returns
 // a YAML serialization of the exported value (e.g. a YAML Pipeline).
 // The name arg is the name of the file/stream/source of the JavaScript code,
 // used for stack/error messages.
-func EvalJS(name string, input []byte, log logger.Logger) ([]byte, error) {
+func Eval(filename string, input []byte, log logger.Logger) ([]byte, error) {
 	runtime, rootModule, err := newJavaScriptRuntime(log)
 	if err != nil {
 		return nil, err
@@ -36,7 +38,8 @@ func EvalJS(name string, input []byte, log logger.Logger) ([]byte, error) {
 
 	// Run the script; capture the return value as a fallback in case the
 	// preferred module.exports wasn't assigned.
-	returnValue, err := runtime.RunScript(name, string(input))
+	returnValue, err := typescript.Evaluate(bytes.NewReader(input), typescript.WithTranspile(), typescript.WithEvaluationRuntime(runtime))
+
 	if err != nil {
 		if exception, ok := err.(*goja.Exception); ok {
 			if exception.Value().String() == "GoError: Invalid module" {

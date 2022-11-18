@@ -35,6 +35,8 @@ require (
 require (
 	cloud.google.com/go/compute v1.9.0
 	github.com/buildkite/roko v1.0.1
+	github.com/dop251/goja v0.0.0-20221106173738-3b8a68ca89b4
+	github.com/dop251/goja_nodejs v0.0.0-20221009164102-3aa5028e57f6
 	github.com/google/go-cmp v0.5.9
 	go.opentelemetry.io/contrib/propagators/aws v1.11.1
 	go.opentelemetry.io/contrib/propagators/b3 v1.11.1
@@ -55,12 +57,11 @@ require (
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/clarkmcc/go-typescript v0.6.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.0-20190314233015-f79a8a8ca69d // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dgraph-io/ristretto v0.1.0 // indirect
 	github.com/dlclark/regexp2 v1.7.0 // indirect
-	github.com/dop251/goja v0.0.0-20221106173738-3b8a68ca89b4 // indirect
-	github.com/dop251/goja_nodejs v0.0.0-20221009164102-3aa5028e57f6 // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

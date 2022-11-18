@@ -99,8 +99,11 @@ var PipelineEvalCommand = cli.Command{
 
 			paths := []string{
 				"buildkite.js",
+				"buildkite-ts.ts",
 				filepath.FromSlash(".buildkite/buildkite.js"),
+				filepath.FromSlash(".buildkite/buildkite-ts.ts"),
 				filepath.FromSlash("buildkite/buildkite.js"),
+				filepath.FromSlash("buildkite/buildkite-ts.ts"),
 			}
 
 			// Collect all the files that exist
@@ -131,7 +134,7 @@ var PipelineEvalCommand = cli.Command{
 			}
 		}
 
-		pipelineYAML, err := js.EvalJS(filename, input, l)
+		pipelineYAML, err := js.Eval(filename, input, l)
 		if err != nil {
 			return fmt.Errorf("JavaScript evaluation: %w", err)
 		}
