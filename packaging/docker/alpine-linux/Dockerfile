@@ -4,6 +4,7 @@ RUN apk add --no-cache \
     bash \
     curl \
     docker-cli \
+    docker-cli-compose \
     docker-compose \
     git \
     jq \
