@@ -27,7 +27,7 @@ require (
 	github.com/urfave/cli v1.22.10
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
-	golang.org/x/sys v0.1.0
+	golang.org/x/sys v0.2.0
 	google.golang.org/api v0.100.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.43.1
 )
