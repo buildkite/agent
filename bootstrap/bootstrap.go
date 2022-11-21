@@ -908,7 +908,7 @@ func (b *Bootstrap) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plug
 	err = roko.NewRetrier(
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		return b.shell.Run(ctx, "git", args...)
 	})
 	if err != nil {
@@ -1015,26 +1015,26 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 	}
 
 	// Make sure the build directory exists
-	if err = b.createCheckoutDir(); err != nil {
+	if err := b.createCheckoutDir(); err != nil {
 		return err
 	}
 
 	// There can only be one checkout hook, either plugin or global, in that order
 	switch {
 	case b.hasPluginHook("checkout"):
-		if err = b.executePluginHook(ctx, "checkout", b.pluginCheckouts); err != nil {
+		if err := b.executePluginHook(ctx, "checkout", b.pluginCheckouts); err != nil {
 			return err
 		}
 	case b.hasGlobalHook("checkout"):
-		if err = b.executeGlobalHook(ctx, "checkout"); err != nil {
+		if err := b.executeGlobalHook(ctx, "checkout"); err != nil {
 			return err
 		}
 	default:
 		if b.Config.Repository != "" {
-			err = roko.NewRetrier(
+			err := roko.NewRetrier(
 				roko.WithMaxAttempts(3),
 				roko.WithStrategy(roko.Constant(2*time.Second)),
-			).Do(func(r *roko.Retrier) error {
+			).DoWithContext(ctx, func(r *roko.Retrier) error {
 				err := b.defaultCheckoutPhase(ctx)
 				if err == nil {
 					return nil
@@ -1097,15 +1097,15 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 	previousCheckoutPath, _ := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 
 	// Run post-checkout hooks
-	if err = b.executeGlobalHook(ctx, "post-checkout"); err != nil {
+	if err := b.executeGlobalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err = b.executeLocalHook(ctx, "post-checkout"); err != nil {
+	if err := b.executeLocalHook(ctx, "post-checkout"); err != nil {
 		return err
 	}
 
-	if err = b.executePluginHook(ctx, "post-checkout", b.pluginCheckouts); err != nil {
+	if err := b.executePluginHook(ctx, "post-checkout", b.pluginCheckouts); err != nil {
 		return err
 	}
 
@@ -1116,7 +1116,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 	if previousCheckoutPath != "" && previousCheckoutPath != newCheckoutPath {
 		b.shell.Headerf("A post-checkout hook has changed the working directory to \"%s\"", newCheckoutPath)
 
-		if err = b.shell.Chdir(newCheckoutPath); err != nil {
+		if err := b.shell.Chdir(newCheckoutPath); err != nil {
 			return err
 		}
 	}

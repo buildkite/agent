@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -14,7 +15,7 @@ type OIDCTokenRequest struct {
 	Lifetime int
 }
 
-func (c *Client) OIDCToken(methodReq *OIDCTokenRequest) (*OIDCToken, *Response, error) {
+func (c *Client) OIDCToken(ctx context.Context, methodReq *OIDCTokenRequest) (*OIDCToken, *Response, error) {
 	m := &struct {
 		Audience string `json:"audience,omitempty"`
 		Lifetime int    `json:"lifetime,omitempty"`
@@ -24,7 +25,7 @@ func (c *Client) OIDCToken(methodReq *OIDCTokenRequest) (*OIDCToken, *Response, 
 	}
 
 	u := fmt.Sprintf("jobs/%s/oidc/tokens", methodReq.Job)
-	httpReq, err := c.newRequest("POST", u, m)
+	httpReq, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}

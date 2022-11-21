@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -95,6 +96,8 @@ var StepUpdateCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := StepUpdateConfig{}
 
@@ -148,16 +151,16 @@ var StepUpdateCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			resp, err := client.StepUpdate(cfg.StepOrKey, update)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			resp, err := client.StepUpdate(ctx, cfg.StepOrKey, update)
 			if resp != nil && (resp.StatusCode == 400 || resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		if err != nil {

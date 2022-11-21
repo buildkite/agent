@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -130,6 +131,8 @@ Format specifiers:
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactSearchConfig{}
 
@@ -156,7 +159,7 @@ Format specifiers:
 
 		// Setup the searcher and try get the artifacts
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)
-		artifacts, err := searcher.Search(cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
+		artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {
 			return err
 		}

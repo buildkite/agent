@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 )
 
@@ -16,7 +17,7 @@ type Chunk struct {
 
 // Uploads the chunk to the Buildkite Agent API. This request sends the
 // compressed log directly as a request body.
-func (c *Client) UploadChunk(jobId string, chunk *Chunk) (*Response, error) {
+func (c *Client) UploadChunk(ctx context.Context, jobId string, chunk *Chunk) (*Response, error) {
 	// Create a compressed buffer of the log content
 	body := &bytes.Buffer{}
 	gzipper := gzip.NewWriter(body)
@@ -27,7 +28,7 @@ func (c *Client) UploadChunk(jobId string, chunk *Chunk) (*Response, error) {
 
 	// Pass most params as query
 	u := fmt.Sprintf("jobs/%s/chunks?sequence=%d&offset=%d&size=%d", jobId, chunk.Sequence, chunk.Offset, chunk.Size)
-	req, err := c.newFormRequest("POST", u, body)
+	req, err := c.newFormRequest(ctx, "POST", u, body)
 	if err != nil {
 		return nil, err
 	}

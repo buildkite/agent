@@ -7,12 +7,9 @@ import (
 	"google.golang.org/api/compute/v1"
 )
 
-type GCPLabels struct {
-}
+type GCPLabels struct{}
 
-func (e GCPLabels) Get() (map[string]string, error) {
-
-	ctx := context.Background()
+func (e GCPLabels) Get(ctx context.Context) (map[string]string, error) {
 	client, err := google.DefaultClient(ctx, compute.CloudPlatformScope)
 	if err != nil {
 		return nil, err

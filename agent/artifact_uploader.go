@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"crypto/sha1"
 	"crypto/sha256"
 	"errors"
@@ -66,7 +67,7 @@ func NewArtifactUploader(l logger.Logger, ac APIClient, c ArtifactUploaderConfig
 	}
 }
 
-func (a *ArtifactUploader) Upload() error {
+func (a *ArtifactUploader) Upload(ctx context.Context) error {
 	// Create artifact structs for all the files we need to upload
 	artifacts, err := a.Collect()
 	if err != nil {
@@ -78,8 +79,7 @@ func (a *ArtifactUploader) Upload() error {
 	} else {
 		a.logger.Info("Found %d files that match \"%s\"", len(artifacts), a.conf.Paths)
 
-		err := a.upload(artifacts)
-		if err != nil {
+		if err := a.upload(ctx, artifacts); err != nil {
 			return err
 		}
 	}
@@ -229,7 +229,7 @@ func (a *ArtifactUploader) build(path string, absolutePath string, globPath stri
 	return artifact, nil
 }
 
-func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
+func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact) error {
 	var uploader Uploader
 	var err error
 
@@ -280,7 +280,7 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 		UploadDestination: a.conf.Destination,
 	})
 
-	artifacts, err = batchCreator.Create()
+	artifacts, err = batchCreator.Create(ctx)
 	if err != nil {
 		return err
 	}
@@ -326,18 +326,16 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 				}
 
 				// Update the states of the artifacts in bulk.
-				err = roko.NewRetrier(
+				err := roko.NewRetrier(
 					roko.WithMaxAttempts(10),
 					roko.WithStrategy(roko.Constant(5*time.Second)),
-				).Do(func(r *roko.Retrier) error {
-					_, err = a.apiClient.UpdateArtifacts(a.conf.JobID, statesToUpload)
-					if err != nil {
+				).DoWithContext(ctx, func(r *roko.Retrier) error {
+					if _, err := a.apiClient.UpdateArtifacts(ctx, a.conf.JobID, statesToUpload); err != nil {
 						a.logger.Warn("%s (%s)", err, r)
+						return err
 					}
-
-					return err
+					return nil
 				})
-
 				if err != nil {
 					a.logger.Error("Error uploading artifact states: %s", err)
 
@@ -368,23 +366,21 @@ func (a *ArtifactUploader) upload(artifacts []*api.Artifact) error {
 			// Show a nice message that we're starting to upload the file
 			a.logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
 
+			var state string
+
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
 			// a couple of times before giving up.
-			err = roko.NewRetrier(
+			err := roko.NewRetrier(
 				roko.WithMaxAttempts(10),
 				roko.WithStrategy(roko.Constant(5*time.Second)),
-			).Do(func(r *roko.Retrier) error {
-				err := uploader.Upload(artifact)
-				if err != nil {
+			).DoWithContext(ctx, func(r *roko.Retrier) error {
+				if err := uploader.Upload(artifact); err != nil {
 					a.logger.Warn("%s (%s)", err, r)
+					return err
 				}
-
-				return err
+				return nil
 			})
-
-			var state string
-
 			// Did the upload eventually fail?
 			if err != nil {
 				a.logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)

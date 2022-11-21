@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -118,6 +119,8 @@ var ArtifactUploadCommand = cli.Command{
 		FollowSymlinksFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := ArtifactUploadConfig{}
 
@@ -153,7 +156,7 @@ var ArtifactUploadCommand = cli.Command{
 		})
 
 		// Upload the artifacts
-		if err := uploader.Upload(); err != nil {
+		if err := uploader.Upload(ctx); err != nil {
 			l.Fatal("Failed to upload artifacts: %s", err)
 		}
 	},

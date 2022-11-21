@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -84,6 +85,8 @@ var OIDCRequestTokenCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) error {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := OIDCTokenConfig{}
 
@@ -119,7 +122,7 @@ var OIDCRequestTokenCommand = cli.Command{
 		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(maxAttempts),
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			req := &api.OIDCTokenRequest{
 				Job:      cfg.Job,
 				Audience: cfg.Audience,
@@ -127,7 +130,7 @@ var OIDCRequestTokenCommand = cli.Command{
 			}
 
 			var resp *api.Response
-			token, resp, err = client.OIDCToken(req)
+			token, resp, err = client.OIDCToken(ctx, req)
 			if resp != nil {
 				switch resp.StatusCode {
 				// Don't bother retrying if the response was one of these statuses
@@ -139,9 +142,9 @@ var OIDCRequestTokenCommand = cli.Command{
 
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		}); err != nil {
 			if len(cfg.Audience) > 0 {
 				l.Error("Could not obtain OIDC token for audience %s", cfg.Audience)

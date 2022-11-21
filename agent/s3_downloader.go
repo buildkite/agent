@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -47,7 +48,7 @@ func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
 	}
 }
 
-func (d S3Downloader) Start() error {
+func (d S3Downloader) Start(ctx context.Context) error {
 	if d.conf.S3Client == nil {
 		return fmt.Errorf("S3Downloader for %s: S3Client is nil", d.conf.S3Path)
 	}
@@ -69,7 +70,7 @@ func (d S3Downloader) Start() error {
 		Destination: d.conf.Destination,
 		Retries:     d.conf.Retries,
 		DebugHTTP:   d.conf.DebugHTTP,
-	}).Start()
+	}).Start(ctx)
 }
 
 func (d S3Downloader) BucketFileLocation() string {

@@ -1,5 +1,7 @@
 package api
 
+import "context"
+
 // AgentRegisterRequest is a call to register on the Buildkite Agent API
 type AgentRegisterRequest struct {
 	Name               string   `json:"name"`
@@ -31,8 +33,8 @@ type AgentRegisterResponse struct {
 
 // Registers the agent against the Buildkite Agent API. The client for this
 // call must be authenticated using an Agent Registration Token
-func (c *Client) Register(regReq *AgentRegisterRequest) (*AgentRegisterResponse, *Response, error) {
-	req, err := c.newRequest("POST", "register", regReq)
+func (c *Client) Register(ctx context.Context, regReq *AgentRegisterRequest) (*AgentRegisterResponse, *Response, error) {
+	req, err := c.newRequest(ctx, "POST", "register", regReq)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -47,8 +49,8 @@ func (c *Client) Register(regReq *AgentRegisterRequest) (*AgentRegisterResponse,
 }
 
 // Connects the agent to the Buildkite Agent API
-func (c *Client) Connect() (*Response, error) {
-	req, err := c.newRequest("POST", "connect", nil)
+func (c *Client) Connect(ctx context.Context) (*Response, error) {
+	req, err := c.newRequest(ctx, "POST", "connect", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +59,8 @@ func (c *Client) Connect() (*Response, error) {
 }
 
 // Disconnects the agent to the Buildkite Agent API
-func (c *Client) Disconnect() (*Response, error) {
-	req, err := c.newRequest("POST", "disconnect", nil)
+func (c *Client) Disconnect(ctx context.Context) (*Response, error) {
+	req, err := c.newRequest(ctx, "POST", "disconnect", nil)
 	if err != nil {
 		return nil, err
 	}

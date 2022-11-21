@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"strings"
@@ -23,10 +24,7 @@ var (
 
 // Register takes an api.Agent and registers it with the Buildkite API
 // and populates the result of the register call
-func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
-	var registered *api.AgentRegisterResponse
-	var err error
-	var resp *api.Response
+func Register(ctx context.Context, l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
 
 	// Set up some slightly expensive system info once
 	cacheOnce.Do(func() { cacheRegisterSystemInfo(l) })
@@ -40,8 +38,11 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 	req.Hostname = hostname
 	req.OS = osVersionDump
 
+	var registered *api.AgentRegisterResponse
+	var resp *api.Response
+
 	register := func(r *roko.Retrier) error {
-		registered, resp, err = ac.Register(&req)
+		reg, rsp, err := ac.Register(ctx, &req)
 		if err != nil {
 			if resp != nil && resp.StatusCode == 401 {
 				l.Warn("Buildkite rejected the registration (%s)", err)
@@ -49,30 +50,33 @@ func Register(l logger.Logger, ac APIClient, req api.AgentRegisterRequest) (*api
 			} else {
 				l.Warn("%s (%s)", err, r)
 			}
+			return err
 		}
-
-		return err
+		registered, resp = reg, rsp
+		return nil
 	}
 
 	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
-	err = roko.NewRetrier(
+	err := roko.NewRetrier(
 		roko.WithMaxAttempts(30),
 		roko.WithStrategy(roko.Constant(10*time.Second)),
-	).Do(register)
-	if err == nil {
-		l.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
-			strings.Join(registered.Tags, ", "))
-
-		l.Debug("Ping interval: %ds", registered.PingInterval)
-		l.Debug("Job status interval: %ds", registered.JobStatusInterval)
-		l.Debug("Heartbeat interval: %ds", registered.HeartbeatInterval)
-
-		if registered.Endpoint != "" {
-			l.Debug("Endpoint: %s", registered.Endpoint)
-		}
+	).DoWithContext(ctx, register)
+	if err != nil {
+		return registered, err
 	}
 
-	return registered, err
+	l.Info("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
+		strings.Join(registered.Tags, ", "))
+
+	l.Debug("Ping interval: %ds", registered.PingInterval)
+	l.Debug("Job status interval: %ds", registered.JobStatusInterval)
+	l.Debug("Heartbeat interval: %ds", registered.HeartbeatInterval)
+
+	if registered.Endpoint != "" {
+		l.Debug("Endpoint: %s", registered.Endpoint)
+	}
+
+	return registered, nil
 }
 
 func cacheRegisterSystemInfo(l logger.Logger) {

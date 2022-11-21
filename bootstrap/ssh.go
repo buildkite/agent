@@ -30,7 +30,7 @@ func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, erro
 	err = roko.NewRetrier(
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(sshKeyscanRetryInterval)),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		// `ssh-keyscan` needs `-p` when scanning a host with a port
 		var sshKeyScanCommand string
 		if len(hostParts) == 2 {
@@ -45,7 +45,8 @@ func sshKeyScan(ctx context.Context, sh *shell.Shell, host string) (string, erro
 			keyScanError := fmt.Errorf("`%s` failed", sshKeyScanCommand)
 			sh.Warningf("%s (%s)", keyScanError, r)
 			return keyScanError
-		} else if strings.TrimSpace(sshKeyScanOutput) == "" {
+		}
+		if strings.TrimSpace(sshKeyScanOutput) == "" {
 			// Older versions of ssh-keyscan would exit 0 but not
 			// return anything, and we've observed newer versions
 			// of ssh-keyscan - just sometimes return no data

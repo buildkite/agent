@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"math"
 	"sync"
@@ -28,7 +29,7 @@ type LogStreamer struct {
 	chunksFailedCount int32
 
 	// The callback called when a chunk is ready for upload
-	callback func(chunk *LogStreamerChunk) error
+	callback func(context.Context, *LogStreamerChunk) error
 
 	// The queue of chunks that are needing to be uploaded
 	queue chan *LogStreamerChunk
@@ -63,7 +64,7 @@ type LogStreamerChunk struct {
 }
 
 // Creates a new instance of the log streamer
-func NewLogStreamer(l logger.Logger, cb func(chunk *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
+func NewLogStreamer(l logger.Logger, cb func(context.Context, *LogStreamerChunk) error, c LogStreamerConfig) *LogStreamer {
 	return &LogStreamer{
 		logger:   l,
 		conf:     c,
@@ -73,13 +74,13 @@ func NewLogStreamer(l logger.Logger, cb func(chunk *LogStreamerChunk) error, c L
 }
 
 // Spins up x number of log streamer workers
-func (ls *LogStreamer) Start() error {
-	if ls.conf.MaxChunkSizeBytes == 0 {
+func (ls *LogStreamer) Start(ctx context.Context) error {
+	if ls.conf.MaxChunkSizeBytes <= 0 {
 		return errors.New("Maximum chunk size must be more than 0. No logs will be sent.")
 	}
 
 	for i := 0; i < ls.conf.Concurrency; i++ {
-		go Worker(i, ls)
+		go ls.worker(ctx, i)
 	}
 
 	return nil
@@ -157,14 +158,13 @@ func (ls *LogStreamer) Stop() error {
 }
 
 // The actual log streamer worker
-func Worker(id int, ls *LogStreamer) {
+func (ls *LogStreamer) worker(ctx context.Context, id int) {
 	ls.logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
-	var chunk *LogStreamerChunk
 	for {
 		// Get the next chunk (pointer) from the queue. This will block
 		// until something is returned.
-		chunk = <-ls.queue
+		chunk := <-ls.queue
 
 		// If the next chunk is nil, then there is no more work to do
 		if chunk == nil {
@@ -172,7 +172,7 @@ func Worker(id int, ls *LogStreamer) {
 		}
 
 		// Upload the chunk
-		err := ls.callback(chunk)
+		err := ls.callback(ctx, chunk)
 		if err != nil {
 			atomic.AddInt32(&ls.chunksFailedCount, 1)
 

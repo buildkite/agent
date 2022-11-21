@@ -49,11 +49,11 @@ func (r *AgentPool) Start(ctx context.Context) error {
 
 func (r *AgentPool) runWorker(ctx context.Context, worker *AgentWorker, im *IdleMonitor) error {
 	// Connect the worker to the API
-	if err := worker.Connect(); err != nil {
+	if err := worker.Connect(ctx); err != nil {
 		return err
 	}
 	// Ensure the worker is disconnected at the end of this function.
-	defer worker.Disconnect()
+	defer worker.Disconnect(ctx)
 
 	// Starts the agent worker and wait for it to finish.
 	return worker.Start(ctx, im)

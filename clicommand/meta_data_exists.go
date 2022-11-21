@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -68,6 +69,8 @@ var MetaDataExistsCommand = cli.Command{
 		ProfileFlag,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := MetaDataExistsConfig{}
 
@@ -99,16 +102,16 @@ var MetaDataExistsCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			exists, resp, err = client.ExistsMetaData(cfg.Job, cfg.Key)
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			exists, resp, err = client.ExistsMetaData(ctx, cfg.Job, cfg.Key)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		if err != nil {

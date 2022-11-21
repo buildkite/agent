@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"os"
 	"runtime"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestFetchingTags(t *testing.T) {
-	tags := (&tagFetcher{}).Fetch(logger.Discard, FetchTagsConfig{
+	tags := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags: []string{"llamas", "rock"},
 	})
 
@@ -22,7 +23,7 @@ func TestFetchingTags(t *testing.T) {
 }
 
 func TestFetchingTagsWithHostTags(t *testing.T) {
-	tags := (&tagFetcher{}).Fetch(logger.Discard, FetchTagsConfig{
+	tags := (&tagFetcher{}).Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:         []string{"llamas", "rock"},
 		TagsFromHost: true,
 	})
@@ -54,7 +55,7 @@ func TestFetchingTagsFromEC2(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
+	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                []string{"llamas", "rock"},
 		TagsFromEC2MetaData: true,
 		TagsFromEC2Tags:     true,
@@ -73,7 +74,7 @@ func TestFetchingTagsFromEC2Tags(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
+	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		TagsFromEC2Tags: true,
 	})
 
@@ -103,7 +104,7 @@ func TestFetchingTagsFromGCP(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
+	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                []string{"llamas", "rock"},
 		TagsFromGCPMetaData: true,
 		TagsFromGCPLabels:   true,
@@ -137,7 +138,7 @@ func TestFetchingTagsFromAllSources(t *testing.T) {
 		},
 	}
 
-	tags := fetcher.Fetch(logger.Discard, FetchTagsConfig{
+	tags := fetcher.Fetch(context.Background(), logger.Discard, FetchTagsConfig{
 		Tags:                     []string{"llamas", "rock"},
 		TagsFromGCPMetaData:      true,
 		TagsFromGCPMetaDataPaths: []string{"tag=some/gcp/value"},

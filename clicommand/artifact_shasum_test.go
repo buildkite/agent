@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -26,6 +27,8 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	server := newTestServer(t)
 	defer server.Close()
 
+	ctx := context.Background()
+
 	cfg := ArtifactShasumConfig{
 		Query:            "foo.*",
 		Build:            "buildid",
@@ -35,7 +38,7 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(cfg, l, stdout)
+	searchAndPrintShaSum(ctx, cfg, l, stdout)
 
 	assert.Equal(t, "theshastring\n", stdout.String())
 
@@ -47,6 +50,8 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	server := newTestServer(t)
 	defer server.Close()
 
+	ctx := context.Background()
+
 	cfg := ArtifactShasumConfig{
 		Query:            "foo.*",
 		Build:            "buildid",
@@ -57,7 +62,7 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 	l := logger.NewBuffer()
 	stdout := new(bytes.Buffer)
 
-	searchAndPrintShaSum(cfg, l, stdout)
+	searchAndPrintShaSum(ctx, cfg, l, stdout)
 
 	assert.Equal(t, "thesha256string\n", stdout.String())
 

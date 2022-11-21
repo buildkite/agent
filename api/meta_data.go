@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -17,10 +18,10 @@ type MetaDataExists struct {
 }
 
 // Sets the meta data value
-func (c *Client) SetMetaData(jobId string, metaData *MetaData) (*Response, error) {
+func (c *Client) SetMetaData(ctx context.Context, jobId string, metaData *MetaData) (*Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/set", jobId)
 
-	req, err := c.newRequest("POST", u, metaData)
+	req, err := c.newRequest(ctx, "POST", u, metaData)
 	if err != nil {
 		return nil, err
 	}
@@ -29,11 +30,11 @@ func (c *Client) SetMetaData(jobId string, metaData *MetaData) (*Response, error
 }
 
 // Gets the meta data value
-func (c *Client) GetMetaData(jobId string, key string) (*MetaData, *Response, error) {
+func (c *Client) GetMetaData(ctx context.Context, jobId string, key string) (*MetaData, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/get", jobId)
 	m := &MetaData{Key: key}
 
-	req, err := c.newRequest("POST", u, m)
+	req, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -47,11 +48,11 @@ func (c *Client) GetMetaData(jobId string, key string) (*MetaData, *Response, er
 }
 
 // Returns true if the meta data key has been set, false if it hasn't.
-func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Response, error) {
+func (c *Client) ExistsMetaData(ctx context.Context, jobId string, key string) (*MetaDataExists, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/exists", jobId)
 	m := &MetaData{Key: key}
 
-	req, err := c.newRequest("POST", u, m)
+	req, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -65,10 +66,10 @@ func (c *Client) ExistsMetaData(jobId string, key string) (*MetaDataExists, *Res
 	return e, resp, err
 }
 
-func (c *Client) MetaDataKeys(jobId string) ([]string, *Response, error) {
+func (c *Client) MetaDataKeys(ctx context.Context, jobId string) ([]string, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/data/keys", jobId)
 
-	req, err := c.newRequest("POST", u, nil)
+	req, err := c.newRequest(ctx, "POST", u, nil)
 	if err != nil {
 		return nil, nil, err
 	}

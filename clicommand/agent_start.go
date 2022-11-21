@@ -570,6 +570,8 @@ var AgentStartCommand = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := AgentStartConfig{}
 
@@ -635,7 +637,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
-		if isSetNoPlugins && cfg.NoPlugins == false {
+		if isSetNoPlugins && !cfg.NoPlugins {
 			msg := `Plugins have been specifically enabled, despite %s being enabled. ` +
 				`Plugins can execute arbitrary hooks and commands, make sure you are ` +
 				`whitelisting your plugins in ` +
@@ -817,7 +819,7 @@ var AgentStartCommand = cli.Command{
 			Name:              cfg.Name,
 			Priority:          cfg.Priority,
 			ScriptEvalEnabled: !cfg.NoCommandEval,
-			Tags: agent.FetchTags(l, agent.FetchTagsConfig{
+			Tags: agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 				Tags:                      cfg.Tags,
 				TagsFromEC2MetaData:       (cfg.TagsFromEC2MetaData || cfg.TagsFromEC2),
 				TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
@@ -861,7 +863,7 @@ var AgentStartCommand = cli.Command{
 			}
 
 			// Register the agent with the buildkite API
-			ag, err := agent.Register(l, client, registerReq)
+			ag, err := agent.Register(ctx, l, client, registerReq)
 			if err != nil {
 				l.Fatal("%s", err)
 			}
@@ -911,7 +913,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Start the agent pool
-		if err := pool.Start(context.Background()); err != nil {
+		if err := pool.Start(ctx); err != nil {
 			l.Fatal("%s", err)
 		}
 	},

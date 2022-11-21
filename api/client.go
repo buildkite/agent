@@ -4,6 +4,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -143,7 +144,7 @@ func (c *Client) FromPing(resp *Ping) *Client {
 // Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
-func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Request, error) {
+func (c *Client) newRequest(ctx context.Context, method, urlStr string, body interface{}) (*http.Request, error) {
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
@@ -154,7 +155,7 @@ func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Requ
 		}
 	}
 
-	req, err := http.NewRequest(method, u, buf)
+	req, err := http.NewRequestWithContext(ctx, method, u, buf)
 	if err != nil {
 		return nil, err
 	}
@@ -172,10 +173,10 @@ func (c *Client) newRequest(method, urlStr string, body interface{}) (*http.Requ
 // provided in urlStr, in which case it is resolved relative to the UploadURL
 // of the Client. Relative URLs should always be specified without a preceding
 // slash.
-func (c *Client) newFormRequest(method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
+func (c *Client) newFormRequest(ctx context.Context, method, urlStr string, body *bytes.Buffer) (*http.Request, error) {
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
-	req, err := http.NewRequest(method, u, body)
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
 		return nil, err
 	}

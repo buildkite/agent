@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -121,6 +122,8 @@ var PipelineUploadCommand = cli.Command{
 		RedactedVars,
 	},
 	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
 		// The configuration will be loaded into this struct
 		cfg := PipelineUploadConfig{}
 
@@ -306,8 +309,8 @@ var PipelineUploadCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(60),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
-			_, err = client.UploadPipeline(cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			_, err := client.UploadPipeline(ctx, cfg.Job, &api.Pipeline{UUID: uuid, Pipeline: result, Replace: cfg.Replace})
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
 
@@ -316,9 +319,9 @@ var PipelineUploadCommand = cli.Command{
 					l.Error("Unrecoverable error, skipping retries")
 					r.Break()
 				}
+				return err
 			}
-
-			return err
+			return nil
 			// On a server error, it means there is downtime or other problems, we
 			// need to retry. Let's retry every 5 seconds, for a total of 5 minutes.
 		})
