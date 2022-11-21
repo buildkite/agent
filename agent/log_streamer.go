@@ -75,7 +75,7 @@ func NewLogStreamer(l logger.Logger, cb func(context.Context, *LogStreamerChunk)
 
 // Spins up x number of log streamer workers
 func (ls *LogStreamer) Start(ctx context.Context) error {
-	if ls.conf.MaxChunkSizeBytes == 0 {
+	if ls.conf.MaxChunkSizeBytes <= 0 {
 		return errors.New("Maximum chunk size must be more than 0. No logs will be sent.")
 	}
 

@@ -129,18 +129,17 @@ var StepGetCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			stepExportResponse, resp, err = client.StepExport(ctx, cfg.StepOrKey, stepExportRequest)
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
 				r.Break()
-				return err
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		// Deal with the error if we got one

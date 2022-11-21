@@ -101,16 +101,16 @@ var MetaDataKeysCommand = cli.Command{
 		err = roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			keys, resp, err = client.MetaDataKeys(ctx, cfg.Job)
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 				r.Break()
 			}
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		if err != nil {

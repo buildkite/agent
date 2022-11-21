@@ -166,7 +166,7 @@ var AnnotateCommand = cli.Command{
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(1*time.Second)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// Attempt to create the annotation
 			resp, err := client.Annotate(ctx, cfg.Job, annotation)
 
@@ -179,9 +179,9 @@ var AnnotateCommand = cli.Command{
 			// Show the unexpected error
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		// Show a fatal error if we gave up trying to create the annotation

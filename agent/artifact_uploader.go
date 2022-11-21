@@ -326,17 +326,16 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 				}
 
 				// Update the states of the artifacts in bulk.
-				err = roko.NewRetrier(
+				err := roko.NewRetrier(
 					roko.WithMaxAttempts(10),
 					roko.WithStrategy(roko.Constant(5*time.Second)),
-				).Do(func(r *roko.Retrier) error {
+				).DoWithContext(ctx, func(r *roko.Retrier) error {
 					if _, err := a.apiClient.UpdateArtifacts(ctx, a.conf.JobID, statesToUpload); err != nil {
 						a.logger.Warn("%s (%s)", err, r)
+						return err
 					}
-
-					return err
+					return nil
 				})
-
 				if err != nil {
 					a.logger.Error("Error uploading artifact states: %s", err)
 
@@ -367,23 +366,21 @@ func (a *ArtifactUploader) upload(ctx context.Context, artifacts []*api.Artifact
 			// Show a nice message that we're starting to upload the file
 			a.logger.Info("Uploading artifact %s %s (%d bytes)", artifact.ID, artifact.Path, artifact.FileSize)
 
+			var state string
+
 			// Upload the artifact and then set the state depending
 			// on whether or not it passed. We'll retry the upload
 			// a couple of times before giving up.
-			err = roko.NewRetrier(
+			err := roko.NewRetrier(
 				roko.WithMaxAttempts(10),
 				roko.WithStrategy(roko.Constant(5*time.Second)),
-			).Do(func(r *roko.Retrier) error {
-				err := uploader.Upload(artifact)
-				if err != nil {
+			).DoWithContext(ctx, func(r *roko.Retrier) error {
+				if err := uploader.Upload(artifact); err != nil {
 					a.logger.Warn("%s (%s)", err, r)
+					return err
 				}
-
-				return err
+				return nil
 			})
-
-			var state string
-
 			// Did the upload eventually fail?
 			if err != nil {
 				a.logger.Error("Error uploading artifact \"%s\": %s", artifact.Path, err)

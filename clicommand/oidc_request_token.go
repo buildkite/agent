@@ -122,7 +122,7 @@ var OIDCRequestTokenCommand = cli.Command{
 		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(maxAttempts),
 			roko.WithStrategy(roko.Exponential(backoffSeconds*time.Second, 0)),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			req := &api.OIDCTokenRequest{
 				Job:      cfg.Job,
 				Audience: cfg.Audience,
@@ -142,9 +142,9 @@ var OIDCRequestTokenCommand = cli.Command{
 
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		}); err != nil {
 			if len(cfg.Audience) > 0 {
 				l.Error("Could not obtain OIDC token for audience %s", cfg.Audience)

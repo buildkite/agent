@@ -316,7 +316,7 @@ func (a *AgentWorker) Connect(ctx context.Context) error {
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		_, err := a.apiClient.Connect(ctx)
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
@@ -328,18 +328,19 @@ func (a *AgentWorker) Connect(ctx context.Context) error {
 // Performs a heatbeat
 func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	var beat *api.Heartbeat
-	var err error
 
 	// Retry the heartbeat a few times
-	err = roko.NewRetrier(
+	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
-		beat, _, err = a.apiClient.Heartbeat(ctx)
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		b, _, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
 			a.logger.Warn("%s (%s)", err, r)
+			return err
 		}
-		return err
+		beat = b
+		return nil
 	})
 
 	a.stats.Lock()
@@ -428,7 +429,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(3*time.Second)),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
@@ -459,7 +460,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		return fmt.Errorf("Failed to acquire job: %v", err)
 	}
 
-	// Now that we've acquired the job, lets' run it
+	// Now that we've acquired the job, let's run it
 	return a.RunJob(ctx, acquiredJob)
 }
 
@@ -474,7 +475,7 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(30),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
 		accepted, _, err = a.apiClient.AcceptJob(ctx, job)
 		if err != nil {
@@ -494,17 +495,17 @@ func (a *AgentWorker) AcceptAndRunJob(ctx context.Context, job *api.Job) error {
 		return fmt.Errorf("Failed to accept job: %v", err)
 	}
 
-	// Now that we've accepted the job, lets' run it
+	// Now that we've accepted the job, let's run it
 	return a.RunJob(ctx, accepted)
 }
 
 func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error {
 	jobMetricsScope := a.metrics.With(metrics.Tags{
-		`pipeline`: acceptResponse.Env[`BUILDKITE_PIPELINE_SLUG`],
-		`org`:      acceptResponse.Env[`BUILDKITE_ORGANIZATION_SLUG`],
-		`branch`:   acceptResponse.Env[`BUILDKITE_BRANCH`],
-		`source`:   acceptResponse.Env[`BUILDKITE_SOURCE`],
-		`queue`:    acceptResponse.Env[`BUILDKITE_AGENT_META_DATA_QUEUE`],
+		"pipeline": acceptResponse.Env["BUILDKITE_PIPELINE_SLUG"],
+		"org":      acceptResponse.Env["BUILDKITE_ORGANIZATION_SLUG"],
+		"branch":   acceptResponse.Env["BUILDKITE_BRANCH"],
+		"source":   acceptResponse.Env["BUILDKITE_SOURCE"],
+		"queue":    acceptResponse.Env["BUILDKITE_AGENT_META_DATA_QUEUE"],
 	})
 
 	// Now that we've got a job to do, we can start it.
@@ -542,7 +543,7 @@ func (a *AgentWorker) Disconnect(ctx context.Context) error {
 		roko.WithMaxAttempts(4),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 		roko.WithSleepFunc(a.retrySleepFunc),
-	).Do(func(r *roko.Retrier) error {
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if _, err := a.apiClient.Disconnect(ctx); err != nil {
 			a.logger.Warn("%s (%s)", err, r) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
 			return err

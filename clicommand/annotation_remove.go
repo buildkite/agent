@@ -109,7 +109,7 @@ var AnnotationRemoveCommand = cli.Command{
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(1*time.Second)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// Attempt to remove the annotation
 			resp, err := client.AnnotationRemove(ctx, cfg.Job, cfg.Context)
 
@@ -122,9 +122,9 @@ var AnnotationRemoveCommand = cli.Command{
 			// Show the unexpected error
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
+				return err
 			}
-
-			return err
+			return nil
 		})
 
 		// Show a fatal error if we gave up trying to create the annotation

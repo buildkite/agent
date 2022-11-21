@@ -102,48 +102,50 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 			}
 
 			// Handle downloading from S3, GS, or RT
-			var err error
+			var dler interface {
+				Start(context.Context) error
+			}
 			switch {
 			case strings.HasPrefix(artifact.UploadDestination, "s3://"):
 				bucketName, _ := ParseS3Destination(artifact.UploadDestination)
-				err = NewS3Downloader(a.logger, S3DownloaderConfig{
+				dler = NewS3Downloader(a.logger, S3DownloaderConfig{
 					S3Client:    s3Clients[bucketName],
 					Path:        path,
 					S3Path:      artifact.UploadDestination,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			case strings.HasPrefix(artifact.UploadDestination, "gs://"):
-				err = NewGSDownloader(a.logger, GSDownloaderConfig{
+				dler = NewGSDownloader(a.logger, GSDownloaderConfig{
 					Path:        path,
 					Bucket:      artifact.UploadDestination,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			case strings.HasPrefix(artifact.UploadDestination, "rt://"):
-				err = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
+				dler = NewArtifactoryDownloader(a.logger, ArtifactoryDownloaderConfig{
 					Path:        path,
 					Repository:  artifact.UploadDestination,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			default:
-				err = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
+				dler = NewDownload(a.logger, http.DefaultClient, DownloadConfig{
 					URL:         artifact.URL,
 					Path:        path,
 					Destination: downloadDestination,
 					Retries:     5,
 					DebugHTTP:   a.conf.DebugHTTP,
-				}).Start()
+				})
 			}
 
 			// If the downloaded encountered an error, lock
 			// the pool, collect it, then unlock the pool
 			// again.
-			if err != nil {
+			if err := dler.Start(ctx); err != nil {
 				a.logger.Error("Failed to download artifact: %s", err)
 
 				p.Lock()

@@ -47,37 +47,35 @@ func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, i
 	}
 }
 
-func (h *headerTimesStreamer) Start(ctx context.Context) error {
+func (h *headerTimesStreamer) Run(ctx context.Context) {
+	h.streamingMutex.Lock()
 	h.streaming = true
+	h.streamingMutex.Unlock()
 
-	go func() {
-		h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
+	h.logger.Debug("[HeaderTimesStreamer] Streamer has started...")
 
-		for {
-			// Break out of streaming if it's finished. We also
-			// need to aquire a read lock on the flag because it
-			// can be modified by other routines.
-			h.streamingMutex.Lock()
-			if !h.streaming {
-				break
-			}
-			h.streamingMutex.Unlock()
-
-			// Upload any pending header times
-			h.Upload(ctx)
-
-			// Sleep for a second and try upload some more later
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(1 * time.Second):
-			}
+	for {
+		// Break out of streaming if it's finished. We also
+		// need to aquire a read lock on the flag because it
+		// can be modified by other routines.
+		h.streamingMutex.Lock()
+		if !h.streaming {
+			break
 		}
+		h.streamingMutex.Unlock()
 
-		h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
-	}()
+		// Upload any pending header times
+		h.Upload(ctx)
 
-	return nil
+		// Sleep for a second and try upload some more later
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(1 * time.Second):
+		}
+	}
+
+	h.logger.Debug("[HeaderTimesStreamer] Streamer has finished...")
 }
 
 // Scan takes a line of log output and tracks a time if it's a header.

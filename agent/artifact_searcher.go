@@ -41,7 +41,7 @@ func (a *ArtifactSearcher) Search(ctx context.Context, query, scope string, incl
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(*roko.Retrier) error {
+	).DoWithContext(ctx, func(*roko.Retrier) error {
 		var searchErr error
 		artifacts, _, searchErr = a.apiClient.SearchArtifacts(ctx, a.buildID, &api.ArtifactSearchOptions{
 			Query:              query,

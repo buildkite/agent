@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -30,7 +31,7 @@ type FetchTagsConfig struct {
 }
 
 // FetchTags loads tags from a variety of sources
-func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
+func FetchTags(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	f := &tagFetcher{
 		ec2MetaDataDefault: func() (map[string]string, error) {
 			return EC2MetaData{}.Get()
@@ -48,10 +49,10 @@ func FetchTags(l logger.Logger, conf FetchTagsConfig) []string {
 			return GCPMetaData{}.GetPaths(paths)
 		},
 		gcpLabels: func() (map[string]string, error) {
-			return GCPLabels{}.Get()
+			return GCPLabels{}.Get(ctx)
 		},
 	}
-	return f.Fetch(l, conf)
+	return f.Fetch(ctx, l, conf)
 }
 
 type tagFetcher struct {
@@ -63,7 +64,7 @@ type tagFetcher struct {
 	gcpLabels          func() (map[string]string, error)
 }
 
-func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
+func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsConfig) []string {
 	tags := conf.Tags
 
 	// Load tags from host
@@ -93,7 +94,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForEC2MetaDataTimeout/5)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			ec2Tags, err := t.ec2MetaDataDefault()
 			if err != nil {
 				l.Warn("%s (%s)", err, r)
@@ -140,7 +141,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForEC2TagsTimeout/5)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			ec2Tags, err := t.ec2Tags()
 			// EC2 tags are apparently "eventually consistent" and sometimes take several seconds
 			// to be applied to instances. This error will cause retries.
@@ -173,7 +174,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(1*time.Second)),
 			roko.WithJitter(),
-		).Do(func(_ *roko.Retrier) error {
+		).DoWithContext(ctx, func(_ *roko.Retrier) error {
 			gcpTags, err := t.gcpMetaDataDefault()
 			if err != nil {
 				// Don't blow up if we can't find them, just show a nasty error.
@@ -219,7 +220,7 @@ func (t *tagFetcher) Fetch(l logger.Logger, conf FetchTagsConfig) []string {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(conf.WaitForGCPLabelsTimeout/5)),
 			roko.WithJitter(),
-		).Do(func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			labels, err := t.gcpLabels()
 			if err == nil && len(labels) == 0 {
 				err = errors.New("GCP instance labels are empty")

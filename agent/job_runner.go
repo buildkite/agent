@@ -284,11 +284,9 @@ func (r *JobRunner) Run(ctx context.Context) error {
 	}
 
 	// Start the header time streamer
-	if err := r.headerTimesStreamer.Start(ctx); err != nil {
-		return err
-	}
+	go r.headerTimesStreamer.Run(ctx)
 
-	// Start the log streamer.
+	// Start the log streamer. Launches multiple goroutines.
 	if err := r.logStreamer.Start(ctx); err != nil {
 		return err
 	}
@@ -688,7 +686,7 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(7),
 		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-	).Do(func(rtr *roko.Retrier) error {
+	).DoWithContext(ctx, func(rtr *roko.Retrier) error {
 		response, err := r.apiClient.StartJob(ctx, r.job)
 
 		if err != nil {
@@ -721,7 +719,7 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitSta
 	return roko.NewRetrier(
 		roko.TryForever(),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
-	).Do(func(retrier *roko.Retrier) error {
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.FinishJob(ctx, r.job)
 		if err != nil {
 			// If the API returns with a 422, that means that we
@@ -822,7 +820,7 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 	roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
-	).Do(func(retrier *roko.Retrier) error {
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.SaveHeaderTimes(ctx, r.job.ID, &api.HeaderTimes{Times: times})
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
@@ -851,7 +849,7 @@ func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) 
 		roko.TryForever(),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 		roko.WithJitter(),
-	).Do(func(retrier *roko.Retrier) error {
+	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.UploadChunk(ctx, r.job.ID, &api.Chunk{
 			Data:     chunk.Data,
 			Sequence: chunk.Order,
