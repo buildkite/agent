@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/tracetools"
@@ -77,6 +78,30 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.PTY = b.Config.RunInPty
 		b.shell.Debug = b.Config.Debug
 		b.shell.InterruptSignal = b.Config.CancelSignal
+	}
+	var kubernetesClient kubernetes.Client
+	if experiments.IsEnabled("kubernetes-exec") {
+		b.shell.Commentf("Using experimental Kubernetes support")
+		err := roko.NewRetrier(
+			roko.WithMaxAttempts(7),
+			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+		).Do(func(rtr *roko.Retrier) error {
+			if err := kubernetesClient.Connect(); err != nil {
+				return err
+			}
+			writer := io.MultiWriter(os.Stdout, &kubernetesClient)
+			b.shell.Writer = writer
+			b.shell.Logger = &shell.WriterLogger{
+				Writer: writer,
+				Ansi:   true,
+			}
+			return nil
+		})
+		if err != nil {
+			b.shell.Errorf("Error connecting to kubernetes runner: %v", err)
+			return 1
+		}
+		defer kubernetesClient.Exit(b.shell.WaitStatus())
 	}
 
 	var err error
