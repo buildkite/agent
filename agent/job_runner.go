@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/hook"
+	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
@@ -56,6 +58,11 @@ type JobRunnerConfig struct {
 	DebugHTTP bool
 }
 
+type jobRunner interface {
+	Run(ctx context.Context) error
+	CancelAndStop() error
+}
+
 type JobRunner struct {
 	// The configuration for the job runner
 	conf JobRunnerConfig
@@ -76,7 +83,7 @@ type JobRunner struct {
 	metrics *metrics.Scope
 
 	// The internal process of the job
-	process *process.Process
+	process jobAPI
 
 	// The internal buffer of the process output
 	output *process.Buffer
@@ -100,8 +107,19 @@ type JobRunner struct {
 	envFile *os.File
 }
 
+type jobAPI interface {
+	Done() <-chan struct{}
+	Started() <-chan struct{}
+	Interrupt() error
+	Terminate() error
+	Run(ctx context.Context) error
+	WaitStatus() syscall.WaitStatus
+}
+
+var _ jobRunner = (*JobRunner)(nil)
+
 // Initializes the job runner
-func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, job *api.Job, apiClient APIClient, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterResponse, job *api.Job, apiClient APIClient, conf JobRunnerConfig) (jobRunner, error) {
 	runner := &JobRunner{
 		agent:     ag,
 		job:       job,
@@ -238,16 +256,24 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	runner.process = process.New(l, process.Config{
-		Path:            cmd[0],
-		Args:            cmd[1:],
-		Dir:             conf.AgentConfiguration.BuildPath,
-		Env:             processEnv,
-		PTY:             conf.AgentConfiguration.RunInPty,
-		Stdout:          processWriter,
-		Stderr:          processWriter,
-		InterruptSignal: conf.CancelSignal,
-	})
+	if experiments.IsEnabled("kubernetes-exec") {
+		runner.process = kubernetes.New(l, kubernetes.Config{
+			Env:    processEnv,
+			Stdout: processWriter,
+			Stderr: processWriter,
+		})
+	} else {
+		runner.process = process.New(l, process.Config{
+			Path:            cmd[0],
+			Args:            cmd[1:],
+			Dir:             conf.AgentConfiguration.BuildPath,
+			Env:             processEnv,
+			PTY:             conf.AgentConfiguration.RunInPty,
+			Stdout:          processWriter,
+			Stderr:          processWriter,
+			InterruptSignal: conf.CancelSignal,
+		})
+	}
 
 	// Close the writer end of the pipe when the process finishes
 	go func() {

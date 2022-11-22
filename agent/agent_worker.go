@@ -85,7 +85,7 @@ type AgentWorker struct {
 
 	// When this worker runs a job, we'll store an instance of the
 	// JobRunner here
-	jobRunner *JobRunner
+	jobRunner jobRunner
 
 	// retrySleepFunc is useful for testing retry loops fast
 	// Hopefully this can be replaced with a global setting for tests in future:
