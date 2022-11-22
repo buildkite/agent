@@ -40,6 +40,9 @@ test_docker_image() {
 
   echo "--- :hammer: Testing $image_tag has docker-compose"
   docker run --rm --entrypoint "docker-compose" "$image_tag" --version
+
+  echo "--- :hammer: Testing $image_tag has docker compose v2"
+  docker run --rm --entrypoint "docker" "$image_tag" compose version
 }
 
 push_docker_image() {
