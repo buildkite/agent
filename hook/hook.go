@@ -1,3 +1,7 @@
+// Package hook provides management and execution of hook scripts, and the
+// ability to capture environment variable changes caused by scripts.
+//
+// It is intended for internal use by buildkite-agent only.
 package hook
 
 import (

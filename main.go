@@ -1,3 +1,5 @@
+// Buildkite-agent is a small, reliable, cross-platform build runner that makes
+// it easy to run automated builds on your own infrastructure.
 package main
 
 // see https://blog.golang.org/generate

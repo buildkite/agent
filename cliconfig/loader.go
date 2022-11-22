@@ -1,3 +1,6 @@
+// Package cliconfig provides a configuration file loader.
+//
+// It is intended for internal use by buildkite-agent only.
 package cliconfig
 
 import (
@@ -15,7 +18,7 @@ import (
 )
 
 type Loader struct {
-	// The context that is passed when using a codegangsta/cli action
+	// The context that is passed when using a urfave/cli action
 	CLI *cli.Context
 
 	// The struct that the config values will be loaded into

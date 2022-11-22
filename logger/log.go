@@ -1,3 +1,8 @@
+// Package logger provides a logger abstraction for writing log messages in
+// configurable formats to different outputs, such as a console, plain text
+// file, or a JSON file.
+//
+// It is intended for internal use by buildkite-agent only.
 package logger
 
 import (
