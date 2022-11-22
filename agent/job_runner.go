@@ -605,6 +605,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 
 	if r.conf.AgentConfiguration.TracingBackend != "" {
 		env["BUILDKITE_TRACING_BACKEND"] = r.conf.AgentConfiguration.TracingBackend
+		env["BUILDKITE_TRACING_SERVICE_NAME"] = r.conf.AgentConfiguration.TracingServiceName
 	}
 
 	// see documentation for BuildkiteMessageMax
