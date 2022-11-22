@@ -1,3 +1,6 @@
+// Package yamltojson provides a helper for converting map slices to JSON.
+//
+// It is intended for internal use by buildkite-agent only.
 package yamltojson
 
 import (

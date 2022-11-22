@@ -1,3 +1,6 @@
+// Package metrics provides a wrapper around Datadog metrics collection.
+//
+// It is intended for internal use by buildkite-agent only.
 package metrics
 
 import (

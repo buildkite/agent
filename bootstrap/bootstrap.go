@@ -1,3 +1,7 @@
+// Package bootstrap provides management of the phases of execution of a
+// Buildkite job.
+//
+// It is intended for internal use by buildkite-agent only.
 package bootstrap
 
 import (
@@ -26,10 +30,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Bootstrap represents the phases of execution in a Buildkite Job. It's run
-// as a sub-process of the buildkite-agent and finishes at the conclusion of a job.
-// Historically (prior to v3) the bootstrap was a shell script, but was ported to
-// Golang for portability and testability
+// Bootstrap represents the phases of execution in a Buildkite Job. It's run as
+// a sub-process of the buildkite-agent and finishes at the conclusion of a job.
+//
+// Historically (prior to v3) the bootstrap was a shell script, but was ported
+// to Go for portability and testability.
 type Bootstrap struct {
 	// Config provides the bootstrap configuration
 	Config
@@ -120,7 +125,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		return false
 	}
 
-	//  Execute the bootstrap phases in order
+	// Execute the bootstrap phases in order
 	var phaseErr error
 
 	if includePhase(`plugin`) {

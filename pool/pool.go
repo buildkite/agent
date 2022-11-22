@@ -1,3 +1,7 @@
+// Package pool provides a worker pool that enforces an upper limit on
+// concurrent workers.
+//
+// It is intended for internal use by buildkite-agent only.
 package pool
 
 import (

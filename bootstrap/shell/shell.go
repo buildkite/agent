@@ -1,3 +1,7 @@
+// Package shell provides a cross-platform virtual shell abstraction for
+// executing commands.
+//
+// It is intended for internal use by buildkite-agent only.
 package shell
 
 import (

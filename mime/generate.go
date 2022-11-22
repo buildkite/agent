@@ -1,7 +1,9 @@
 //go:build ignore
 // +build ignore
 
-// Generates the mime type mappings.
+// This is a `go generate` script generates the MIME type mappings written to
+// mime.go. Both this script and the generated output are intended for internal
+// use only.
 package main
 
 import (
@@ -30,6 +32,10 @@ var mimeFileTemplate = template.Must(template.New("").Parse(
 // using data from the following sources:
 // {{ .URLs.apache }}
 // {{ .URLs.nginx }}
+
+// Package mime provides an extended mapping of file extensions to MIME types.
+//
+// It is intended for internal use by buildkite-agent only.
 package mime
 
 import (

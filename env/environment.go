@@ -1,3 +1,6 @@
+// Package env provides utilities for dealing with environment variables.
+//
+// It is intended for internal use by buildkite-agent only.
 package env
 
 import (

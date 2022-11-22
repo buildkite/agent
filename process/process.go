@@ -1,3 +1,6 @@
+// Package process provides a helper for running and managing a subprocess.
+//
+// It is intended for internal use by buildkite-agent only.
 package process
 
 import (
