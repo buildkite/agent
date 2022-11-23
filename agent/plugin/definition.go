@@ -14,8 +14,15 @@ import (
 	"github.com/qri-io/jsonschema"
 )
 
-// ErrDefinitionNotFound is used when a plugin definition file cannot be found.
-var ErrDefinitionNotFound = errors.New("Definition file not found")
+var (
+	// ErrDefinitionNotFound is used when a plugin definition file cannot be
+	// found.
+	ErrDefinitionNotFound = errors.New("Definition file not found")
+
+	// ErrCommandNotInPATH is the underlying error when a command cannot be
+	// found during plugin validation.
+	ErrCommandNotInPATH = errors.New("command not found in PATH")
+)
 
 // Definition defines the contents of the plugin.{yml,yaml,json} file that
 // each plugin has.
@@ -93,7 +100,7 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 
 	configJSON, err := json.Marshal(config)
 	if err != nil {
-		result.Errors = append(result.Errors, err)
+		result.errors = append(result.errors, err)
 		return result
 	}
 
@@ -105,10 +112,10 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 	// validate that the required commands exist
 	if def.Requirements != nil {
 		for _, command := range def.Requirements {
-			if !commandExistsFunc(command) {
-				result.Errors = append(result.Errors,
-					fmt.Errorf("Required command %q isn't in PATH", command))
+			if commandExistsFunc(command) {
+				continue
 			}
+			result.errors = append(result.errors, fmt.Errorf("%q %w", command, ErrCommandNotInPATH))
 		}
 	}
 
@@ -116,12 +123,10 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 	if def.Configuration != nil {
 		valErrors, err := def.Configuration.ValidateBytes(configJSON)
 		if err != nil {
-			result.Errors = append(result.Errors, err)
+			result.errors = append(result.errors, err)
 		}
-		if len(valErrors) > 0 {
-			for _, err := range valErrors {
-				result.Errors = append(result.Errors, err)
-			}
+		for _, err := range valErrors {
+			result.errors = append(result.errors, err)
 		}
 	}
 
@@ -130,18 +135,25 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 
 // ValidateResult contains results of a validation check.
 type ValidateResult struct {
-	Errors []error
+	errors []error
+}
+
+// Unwrap returns the errors contained in the ValidateResult.
+func (vr ValidateResult) Unwrap() []error {
+	// Support for multi-error wrapping is expected in Go 1.20.
+	// https://github.com/golang/go/issues/53435#issuecomment-1191752789
+	return vr.errors
 }
 
 // Valid reports if the result contains no errors.
 func (vr ValidateResult) Valid() bool {
-	return len(vr.Errors) == 0
+	return len(vr.errors) == 0
 }
 
-// Error returns a single string combining all the error strings from Errors.
+// Error returns a single string representing all the inner error strings.
 func (vr ValidateResult) Error() string {
-	s := make([]string, len(vr.Errors))
-	for i, err := range vr.Errors {
+	s := make([]string, len(vr.errors))
+	for i, err := range vr.errors {
 		s[i] = err.Error()
 	}
 	return strings.Join(s, ", ")

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -98,15 +99,17 @@ func TestCreateFromJSON(t *testing.T) {
 		},
 	} {
 		tc := tc
-		t.Run(tc.jsonText, func(tt *testing.T) {
-			tt.Parallel()
+		t.Run(tc.jsonText, func(t *testing.T) {
+			t.Parallel()
 
 			plugins, err := CreateFromJSON(tc.jsonText)
 			if err != nil {
-				tt.Error(err)
+				t.Errorf("CreateFromJSON(%q) error = %v", tc.jsonText, err)
 			}
 
-			assert.Equal(tt, tc.plugins, plugins)
+			if diff := cmp.Diff(tc.plugins, plugins); diff != "" {
+				t.Errorf("CreateFromJSON(%q) diff (-got +want)\n%s", tc.jsonText, diff)
+			}
 		})
 	}
 }
@@ -132,12 +135,12 @@ func TestCreateFromJSONFailsOnParseErrors(t *testing.T) {
 		},
 	} {
 		tc := tc
-		t.Run("", func(tt *testing.T) {
-			tt.Parallel()
+		t.Run("", func(t *testing.T) {
+			t.Parallel()
 
 			plugins, err := CreateFromJSON(tc.jsonText)
-			assert.Equal(t, 0, len(plugins))
 			assert.Error(t, err, tc.err)
+			assert.Equal(t, 0, len(plugins))
 		})
 	}
 }
@@ -162,10 +165,10 @@ func TestPluginNameParsedFromLocation(t *testing.T) {
 		{"", ""},
 	} {
 		tc := tc
-		t.Run(tc.location, func(tt *testing.T) {
-			tt.Parallel()
+		t.Run(tc.location, func(t *testing.T) {
+			t.Parallel()
 			plugin := &Plugin{Location: tc.location}
-			assert.Equal(tt, tc.expectedName, plugin.Name())
+			assert.Equal(t, tc.expectedName, plugin.Name())
 		})
 	}
 }
