@@ -1,3 +1,6 @@
+// Package plugin provides types for managing agent plugins.
+//
+// It is intended for internal use by buildkite-agent only.
 package plugin
 
 import (
@@ -11,32 +14,37 @@ import (
 	"github.com/buildkite/agent/v3/env"
 )
 
+var (
+	nonIDCharacterRE   = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	doubleHyphenRE     = regexp.MustCompile(`-+`)
+	toDashRE           = regexp.MustCompile(`-|\s+`)
+	whitespaceRE       = regexp.MustCompile(`\s+`)
+	doubleUnderscoreRE = regexp.MustCompile(`_+`)
+)
+
+// Plugin describes where to find, and how to configure, an agent plugin.
 type Plugin struct {
 	// Where the plugin can be found (can either be a file system path, or
-	// a git repository)
+	// a git repository).
 	Location string
 
-	// The version of the plugin that should be running
+	// The version of the plugin that should be running.
 	Version string
 
-	// The clone method
+	// The clone method.
 	Scheme string
 
-	// Any authentication attached to the repository
+	// Any authentication attached to the repository.
 	Authentication string
 
-	// Whether the plugin refers to a vendored path
+	// Whether the plugin refers to a vendored path.
 	Vendored bool
 
-	// Configuration for the plugin
+	// Configuration for the plugin.
 	Configuration map[string]interface{}
 }
 
-var (
-	locationSchemeRegex = regexp.MustCompile(`^[a-z\+]+://`)
-	vendoredRegex       = regexp.MustCompile(`^\.`)
-)
-
+// CreatePlugin returns a Plugin for the given location and config.
 func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
 	plugin := &Plugin{Configuration: config}
 
@@ -48,7 +56,7 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 	plugin.Scheme = u.Scheme
 	plugin.Location = u.Host + u.Path
 	plugin.Version = u.Fragment
-	plugin.Vendored = vendoredRegex.MatchString(plugin.Location)
+	plugin.Vendored = strings.HasPrefix(plugin.Location, ".")
 
 	if plugin.Version != "" && strings.Count(plugin.Version, "#") > 0 {
 		return nil, fmt.Errorf("Too many #'s in \"%s\"", location)
@@ -61,7 +69,7 @@ func CreatePlugin(location string, config map[string]interface{}) (*Plugin, erro
 	return plugin, nil
 }
 
-// Given a JSON structure, convert it to an array of plugins
+// CreateFromJSON returns a slice of Plugins loaded from a JSON string.
 func CreateFromJSON(j string) ([]*Plugin, error) {
 	// Use more versatile number decoding
 	decoder := json.NewDecoder(strings.NewReader(j))
@@ -69,8 +77,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 
 	// Parse the JSON
 	var f interface{}
-	err := decoder.Decode(&f)
-	if err != nil {
+	if err := decoder.Decode(&f); err != nil {
 		return nil, err
 	}
 
@@ -91,6 +98,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 				return nil, err
 			}
 			plugins = append(plugins, plugin)
+
 		case map[string]interface{}:
 			for location, config := range vv {
 				// Plugins without configs are easy!
@@ -118,6 +126,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 
 				plugins = append(plugins, plugin)
 			}
+
 		default:
 			return nil, fmt.Errorf("Unknown type in plugin definition (%s)", vv)
 		}
@@ -126,43 +135,39 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 	return plugins, nil
 }
 
-// Returns the name of the plugin
+// Name returns the name of the plugin.
 func (p *Plugin) Name() string {
-	if p.Location != "" {
-		// for filepaths, we can get windows backslashes, so we normalize them
-		location := strings.Replace(p.Location, "\\", "/", -1)
-
-		// Grab the last part of the location
-		parts := strings.Split(location, "/")
-		name := parts[len(parts)-1]
-
-		// Clean up the name
-		name = strings.ToLower(name)
-		name = regexp.MustCompile(`\s+`).ReplaceAllString(name, " ")
-		name = regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(name, "-")
-		name = strings.Replace(name, "-buildkite-plugin-git", "", -1)
-		name = strings.Replace(name, "-buildkite-plugin", "", -1)
-
-		return name
-	} else {
+	if p.Location == "" {
 		return ""
 	}
+	// for filepaths, we can get windows backslashes, so we normalize them
+	location := strings.Replace(p.Location, "\\", "/", -1)
+
+	// Grab the last part of the location
+	parts := strings.Split(location, "/")
+	name := parts[len(parts)-1]
+
+	// Clean up the name
+	name = strings.ToLower(name)
+	name = whitespaceRE.ReplaceAllString(name, " ")
+	name = nonIDCharacterRE.ReplaceAllString(name, "-")
+	name = strings.Replace(name, "-buildkite-plugin-git", "", -1)
+	name = strings.Replace(name, "-buildkite-plugin", "", -1)
+
+	return name
 }
 
-// Returns an ID for the plugin that can be used as a folder name
+// Identifier returns an ID for the plugin that can be used as a folder name.
 func (p *Plugin) Identifier() (string, error) {
-	nonIdCharacterRegex := regexp.MustCompile(`[^a-zA-Z0-9]`)
-	removeDoubleUnderscore := regexp.MustCompile(`-+`)
-
 	id := p.Label()
-	id = nonIdCharacterRegex.ReplaceAllString(id, "-")
-	id = removeDoubleUnderscore.ReplaceAllString(id, "-")
+	id = nonIDCharacterRE.ReplaceAllString(id, "-")
+	id = doubleHyphenRE.ReplaceAllString(id, "-")
 	id = strings.Trim(id, "-")
 
 	return id, nil
 }
 
-// Returns the repository host where the code is stored
+// Repository returns the repository host where the code is stored.
 func (p *Plugin) Repository() (string, error) {
 	s, err := p.constructRepositoryHost()
 	if err != nil {
@@ -186,7 +191,7 @@ func (p *Plugin) Repository() (string, error) {
 	return s, nil
 }
 
-// Returns the subdirectory path that the plugin is in
+// RepositorySubdirectory returns the subdirectory path that the plugin is in.
 func (p *Plugin) RepositorySubdirectory() (string, error) {
 	repository, err := p.constructRepositoryHost()
 	if err != nil {
@@ -198,18 +203,12 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 	return strings.TrimPrefix(dir, "/"), nil
 }
 
-var (
-	toDashRegex            = regexp.MustCompile(`-|\s+`)
-	removeWhitespaceRegex  = regexp.MustCompile(`\s+`)
-	removeDoubleUnderscore = regexp.MustCompile(`_+`)
-)
-
 // formatEnvKey converts strings into an ENV key friendly format
 func formatEnvKey(key string) string {
 	key = strings.ToUpper(key)
-	key = removeWhitespaceRegex.ReplaceAllString(key, " ")
-	key = toDashRegex.ReplaceAllString(key, "_")
-	key = removeDoubleUnderscore.ReplaceAllString(key, "_")
+	key = whitespaceRE.ReplaceAllString(key, " ")
+	key = toDashRE.ReplaceAllString(key, "_")
+	key = doubleUnderscoreRE.ReplaceAllString(key, "_")
 	return key
 }
 
@@ -243,7 +242,8 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 	return fmt.Errorf("Unknown type %T %v", v, v)
 }
 
-// Converts the plugin configuration values to environment variables
+// ConfigurationToEnvironment converts the plugin configuration values to
+// environment variables.
 func (p *Plugin) ConfigurationToEnvironment() (env.Environment, error) {
 	envSlice := []string{}
 	envPrefix := fmt.Sprintf("BUILDKITE_PLUGIN_%s", formatEnvKey(p.Name()))
@@ -262,23 +262,23 @@ func (p *Plugin) ConfigurationToEnvironment() (env.Environment, error) {
 	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_NAME=%s", formatEnvKey(p.Name())))
 
 	// Append current plugin configuration as JSON
-	configJson, err := json.Marshal(p.Configuration)
+	configJSON, err := json.Marshal(p.Configuration)
 	if err != nil {
 		return nil, err
 	}
-	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJson))
+	envSlice = append(envSlice, fmt.Sprintf("BUILDKITE_PLUGIN_CONFIGURATION=%s", configJSON))
 
 	return env.FromSlice(envSlice), nil
 }
 
-// Pretty name for the plugin
+// Label returns a pretty name for the plugin.
 func (p *Plugin) Label() string {
-	if p.Version != "" {
-		return p.Location + "#" + p.Version
-	} else {
+	if p.Version == "" {
 		return p.Location
 	}
+	return p.Location + "#" + p.Version
 }
+
 func (p *Plugin) constructRepositoryHost() (string, error) {
 	if p.Location == "" {
 		return "", fmt.Errorf("Missing plugin location")
@@ -288,17 +288,20 @@ func (p *Plugin) constructRepositoryHost() (string, error) {
 	if len(parts) < 2 {
 		return "", fmt.Errorf("Incomplete plugin path %q", p.Location)
 	}
+
 	switch parts[0] {
 	case "github.com", "bitbucket.org":
 		if len(parts) < 3 {
 			return "", fmt.Errorf("Incomplete plugin path %q", p.Location)
 		}
 		return strings.Join(parts[:3], "/"), nil
+
 	case "gitlab.com":
 		if len(parts) < 3 {
 			return "", fmt.Errorf("Incomplete plugin path %q", p.Location)
 		}
 		return strings.Join(parts, "/"), nil
+
 	default:
 		repo := []string{}
 
