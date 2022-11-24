@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.41.0](https://github.com/buildkite/agent/tree/v3.41.0) (2022-11-24)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.40.0...v3.41.0)
+
+### Added
+- Experimental `buildkite-agent oidc request-token` command [#1827](https://github.com/buildkite/agent/pull/1827) (@triarius)
+- Option to set the service name for tracing [#1779](https://github.com/buildkite/agent/pull/1779) (@goodspark)
+
+### Changed
+
+- Update windows install script to detect arm64 systems [#1768](https://github.com/buildkite/agent/pull/1768) (@yob)
+- Install docker compose v2 plugin in agent alpine and ubuntu docker images [#1841](https://github.com/buildkite/agent/pull/1841) (@ajoneil) (@triarius)
+- 🧹 A variety of dependency updates, documentation, and cleanups! (@dependabot[bot]) (@DrJosh9000)
+
+
 ## [v3.40.0](https://github.com/buildkite/agent/tree/v3.40.0) (2022-11-08)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.39.0...v3.40.0)
 
