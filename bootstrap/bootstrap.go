@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/agent/v3/hook"
 	"github.com/buildkite/agent/v3/process"
 	"github.com/buildkite/agent/v3/redaction"
+	"github.com/buildkite/agent/v3/secrets"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/roko"
@@ -111,6 +112,81 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	if err = b.setUp(ctx); err != nil {
 		b.shell.Errorf("Error setting up bootstrap: %v", err)
 		return shell.GetExitCode(err)
+	}
+
+	// Just pretend that these two jsons live in the pipeline.yml, and get passed through as env vars by the backend
+	secretProviderRegistryJSON := `[
+  {
+    "id": "ssm",
+    "type": "aws-ssm",
+    "config": {}
+  },
+  {
+    "id": "other-ssm",
+    "type": "aws-ssm",
+    "config": {
+      "role_arn": "arn:aws:iam::555555555555:role/benno-test-role-delete-after-2022-11-29"
+    }
+  }
+]`
+
+	secretProviderRegistry, err := secrets.NewProviderRegistryFromJSON(secrets.ProviderRegistryConfig{Shell: b.shell}, secretProviderRegistryJSON)
+	if err != nil {
+		b.shell.Errorf("Error creating secret provider registry: %v", err)
+		return 1
+	}
+
+	secretsJSON := []byte(`[
+  {
+    "env_var": "SUPER_SECRET_ENV_VAR",
+    "key": "/benno/secret/envar",
+    "provider_id": "ssm"
+  },
+  {
+    "file": "/Users/ben/secret-file",
+    "key": "/benno/secret/file",
+    "provider_id": "other-ssm"
+  }
+]`)
+
+	var secretConfigs []secrets.SecretConfig
+	err = json.Unmarshal(secretsJSON, &secretConfigs)
+	if err != nil {
+		b.shell.Errorf("Error unmarshalling secrets: %v", err)
+		return 1
+	}
+
+	validationErrs := make([]error, 0, len(secretConfigs))
+	for _, c := range secretConfigs {
+		err := c.Validate()
+		validationErrs = append(validationErrs, err)
+	}
+
+	for _, err := range validationErrs {
+		b.shell.Errorf("Error validating secret config: %v", err)
+	}
+
+	if len(validationErrs) > 0 {
+		return 1
+	}
+
+	secrets, errors := secretProviderRegistry.FetchAll(secretConfigs)
+	if len(errors) > 0 {
+		b.shell.Errorf("Errors fetching secrets:")
+		for _, err := range errors {
+			b.shell.Errorf("  %v", err)
+		}
+		return 1
+	}
+
+	for _, secret := range secrets {
+		// TODO: Automatically add env secrets to the redactor
+		err := secret.Store()
+		if err != nil {
+			b.shell.Errorf("Error storing secret: %v", err)
+		}
+
+		defer secret.Cleanup()
 	}
 
 	var includePhase = func(phase string) bool {
