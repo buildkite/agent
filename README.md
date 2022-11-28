@@ -65,7 +65,7 @@ buildkite-agent start --token
 
 ### Telemetry
 
-By default, the agent sends some information back to the Buildkite mothership on what features are in use on that agent. Nothing sensitive or identifying is sent back to Buildkite, but if you want, you can disable this feature reporting by adding the `--no-feature-reporting` flag to your `buildkite-agent start` call. A full list of the features that we track can be found [here](https://github.com/buildkite/agent/blob/main/clicommand/agent_start.go#L808=).
+By default, the agent sends some information back to the Buildkite mothership on what features are in use on that agent. Nothing sensitive or identifying is sent back to Buildkite, but if you want, you can disable this feature reporting by adding the `--no-feature-reporting` flag to your `buildkite-agent start` call. A full list of the features that we track can be found [here](https://github.com/buildkite/agent/blob/03aec39f97fe7d20936e6af63cd793a87fac2c19/clicommand/agent_start.go#L135).
 
 ## Development
 
