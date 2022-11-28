@@ -9,7 +9,7 @@ import (
 
 type Secret interface {
 	Store() error
-	Cleanup() func()
+	Cleanup() error
 }
 
 func newSecret(config SecretConfig, environment env.Environment, value string) (Secret, error) {
@@ -42,8 +42,8 @@ func (s EnvSecret) Store() error {
 	return nil
 }
 
-func (s EnvSecret) Cleanup() func() {
-	return func() {}
+func (s EnvSecret) Cleanup() error {
+	return nil
 }
 
 type FileSecret struct {
@@ -62,8 +62,6 @@ func (s FileSecret) Store() error {
 	return os.WriteFile(s.FilePath, []byte(s.Value), 0777)
 }
 
-func (s FileSecret) Cleanup() func() {
-	return func() {
-		os.Remove(s.FilePath)
-	}
+func (s FileSecret) Cleanup() error {
+	return os.Remove(s.FilePath)
 }

@@ -48,42 +48,32 @@ func NewProviderRegistryFromJSON(config ProviderRegistryConfig, jsonIn string) (
 
 func (pr *ProviderRegistry) FetchAll(configs []SecretConfig) ([]Secret, []error) {
 	secrets := make([]Secret, 0, len(configs))
-	secretsCh := make(chan Secret)
-
 	errors := make([]error, 0, len(configs))
-	errorsCh := make(chan error)
 
-	var wg sync.WaitGroup
+	var (
+		wg  sync.WaitGroup
+		mtx sync.Mutex
+	)
+
+	wg.Add(len(configs))
 	for _, c := range configs {
-		wg.Add(1)
 		go func(config SecretConfig) {
 			defer wg.Done()
 
 			secret, err := pr.Fetch(config)
-			if err != nil {
+			mtx.Lock()
+			defer mtx.Unlock()
 
-				errorsCh <- err
+			if err != nil {
+				errors = append(errors, err)
 				return
 			}
-			secretsCh <- secret
+
+			secrets = append(secrets, secret)
 		}(c)
 	}
 
-	go func() {
-		for err := range errorsCh {
-			errors = append(errors, err)
-		}
-	}()
-
-	go func() {
-		for secret := range secretsCh {
-			secrets = append(secrets, secret)
-		}
-	}()
-
 	wg.Wait()
-	close(secretsCh)
-	close(errorsCh)
 
 	return secrets, errors
 }

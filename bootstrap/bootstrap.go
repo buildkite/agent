@@ -114,6 +114,8 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		return shell.GetExitCode(err)
 	}
 
+	b.shell.Headerf("🤫 Fetching Build Secrets")
+
 	// Just pretend that these two jsons live in the pipeline.yml, and get passed through as env vars by the backend
 	secretProviderRegistryJSON := `[
   {
@@ -159,7 +161,9 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	validationErrs := make([]error, 0, len(secretConfigs))
 	for _, c := range secretConfigs {
 		err := c.Validate()
-		validationErrs = append(validationErrs, err)
+		if err != nil {
+			validationErrs = append(validationErrs, err)
+		}
 	}
 
 	for _, err := range validationErrs {
@@ -170,7 +174,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		return 1
 	}
 
-	secrets, errors := secretProviderRegistry.FetchAll(secretConfigs)
+	fetchedSecrets, errors := secretProviderRegistry.FetchAll(secretConfigs)
 	if len(errors) > 0 {
 		b.shell.Errorf("Errors fetching secrets:")
 		for _, err := range errors {
@@ -179,14 +183,19 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		return 1
 	}
 
-	for _, secret := range secrets {
+	for _, secret := range fetchedSecrets {
 		// TODO: Automatically add env secrets to the redactor
 		err := secret.Store()
 		if err != nil {
 			b.shell.Errorf("Error storing secret: %v", err)
 		}
 
-		defer secret.Cleanup()
+		defer func(secret secrets.Secret) {
+			err := secret.Cleanup()
+			if err != nil {
+				b.shell.Warningf("Error cleaning up secret: %s", err)
+			}
+		}(secret)
 	}
 
 	var includePhase = func(phase string) bool {
