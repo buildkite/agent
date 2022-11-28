@@ -3,8 +3,6 @@
 [![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=main)]()
 [![Go Reference](https://pkg.go.dev/badge/github.com/buildkite/agent/v3.svg)](https://pkg.go.dev/github.com/buildkite/agent/v3)
 
-_Note: This is the development branch of the buildkite-agent, and may not contain files or code in the current stable release._
-
 The buildkite-agent is a small, reliable, and cross-platform build runner that makes it easy to run automated builds on your own infrastructure. It’s main responsibilities are polling [buildkite.com](https://buildkite.com/) for work, running build jobs, reporting back the status code and output log of the job, and uploading the job's artifacts.
 
 Full documentation is available at [buildkite.com/docs/agent](https://buildkite.com/docs/agent)
