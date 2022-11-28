@@ -7,12 +7,17 @@ import (
 	"os"
 	"time"
 
-	"github.com/buildkite/agent/v3/stdin"
-	"github.com/buildkite/roko"
-
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/stdin"
+	"github.com/buildkite/roko"
 	"github.com/urfave/cli"
+)
+
+const (
+	// Buildkite-imposed maximum length of annotation body (bytes).
+	maxBodySize = 1024 * 1024
 )
 
 var AnnotateHelpDescription = `Usage:
@@ -33,7 +38,7 @@ Description:
    Flavored Markdown" extensions.
 
    The annotation body can be supplied as a command line argument, or by piping
-   content into the command.
+   content into the command. The maximum size of each annotation body is 1MiB.
 
    You can update an existing annotation's body by running the annotate command
    again and provide the same context as the one you want to update. Or if you
@@ -134,61 +139,73 @@ var AnnotateCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		var body string
-
-		if cfg.Body != "" {
-			body = cfg.Body
-		} else if stdin.IsReadable() {
-			l.Info("Reading annotation body from STDIN")
-
-			// Actually read the file from STDIN
-			stdin, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
-			}
-
-			body = string(stdin[:])
+		if err := annotate(ctx, cfg, l); err != nil {
+			l.Fatal(err.Error())
 		}
-
-		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
-
-		// Create the annotation we'll send to the Buildkite API
-		annotation := &api.Annotation{
-			Body:    body,
-			Style:   cfg.Style,
-			Context: cfg.Context,
-			Append:  cfg.Append,
-		}
-
-		// Retry the annotation a few times before giving up
-		err = roko.NewRetrier(
-			roko.WithMaxAttempts(5),
-			roko.WithStrategy(roko.Constant(1*time.Second)),
-			roko.WithJitter(),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			// Attempt to create the annotation
-			resp, err := client.Annotate(ctx, cfg.Job, annotation)
-
-			// Don't bother retrying if the response was one of these statuses
-			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
-				r.Break()
-				return err
-			}
-
-			// Show the unexpected error
-			if err != nil {
-				l.Warn("%s (%s)", err, r)
-				return err
-			}
-			return nil
-		})
-
-		// Show a fatal error if we gave up trying to create the annotation
-		if err != nil {
-			l.Fatal("Failed to annotate build: %s", err)
-		}
-
-		l.Debug("Successfully annotated build")
 	},
+}
+
+func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
+	var body string
+
+	if cfg.Body != "" {
+		body = cfg.Body
+	} else if stdin.IsReadable() {
+		l.Info("Reading annotation body from STDIN")
+
+		// Actually read the file from STDIN
+		stdin, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("Failed to read from STDIN: %w", err)
+		}
+
+		body = string(stdin[:])
+	}
+
+	if bodySize := len(cfg.Body); bodySize > maxBodySize {
+		return fmt.Errorf("Annotation body size (%dB) exceeds maximum (%dB)", bodySize, maxBodySize)
+	}
+
+	// Create the API client
+	client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+
+	// Create the annotation we'll send to the Buildkite API
+	annotation := &api.Annotation{
+		Body:    body,
+		Style:   cfg.Style,
+		Context: cfg.Context,
+		Append:  cfg.Append,
+	}
+
+	// Retry the annotation a few times before giving up
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.Constant(1*time.Second)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		// Attempt to create the annotation
+		resp, err := client.Annotate(ctx, cfg.Job, annotation)
+
+		// Don't bother retrying if the response was one of these statuses
+		if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
+			r.Break()
+			return err
+		}
+
+		// Show the unexpected error
+		if err != nil {
+			l.Warn("%s (%s)", err, r)
+			return err
+		}
+		return nil
+	})
+
+	// Show a fatal error if we gave up trying to create the annotation
+	if err != nil {
+		return fmt.Errorf("Failed to annotate build: %w", err)
+	}
+
+	l.Debug("Successfully annotated build")
+
+	return nil
 }
