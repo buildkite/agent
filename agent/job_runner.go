@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -251,10 +252,15 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	// The process that will run the bootstrap script
 	if experiments.IsEnabled("kubernetes-exec") {
+		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
+		}
 		runner.process = kubernetes.New(l, kubernetes.Config{
-			Env:    processEnv,
-			Stdout: processWriter,
-			Stderr: processWriter,
+			Env:         processEnv,
+			Stdout:      processWriter,
+			Stderr:      processWriter,
+			ClientCount: containerCount,
 		})
 	} else {
 		runner.process = process.New(l, process.Config{

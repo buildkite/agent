@@ -86,6 +86,11 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 			roko.WithMaxAttempts(7),
 			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 		).Do(func(rtr *roko.Retrier) error {
+			id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
+			if err != nil {
+				return fmt.Errorf("failed to parse container id, %s", os.Getenv("BUILDKITE_CONTAINER_ID"))
+			}
+			kubernetesClient.ID = id
 			if err := kubernetesClient.Connect(); err != nil {
 				return err
 			}
@@ -101,6 +106,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 			b.shell.Errorf("Error connecting to kubernetes runner: %v", err)
 			return 1
 		}
+		<-kubernetesClient.WaitReady()
 		defer kubernetesClient.Exit(b.shell.WaitStatus())
 	}
 
