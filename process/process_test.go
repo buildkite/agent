@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -134,21 +135,27 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	stdoutr, stdoutw := io.Pipe()
+
 	p := process.New(logger.Discard, process.Config{
-		Path: os.Args[0],
-		Env:  []string{"TEST_MAIN=tester-signal"},
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=tester-signal"},
+		Stdout: stdoutw,
 	})
 
 	go func() {
-		<-p.Started()
-
-		time.Sleep(time.Millisecond * 50)
-		cancel()
+		defer stdoutw.Close()
+		if err := p.Run(ctx); err != nil {
+			t.Errorf("p.Run(ctx) = %v", err)
+		}
 	}()
 
-	if err := p.Run(ctx); err != nil {
-		t.Fatalf("p.Run() = %v", err)
-	}
+	waitUntilReady(t, stdoutr)
+
+	cancel()
+
+	// wait until stdout is closed
+	io.ReadAll(stdoutr)
 
 	if runtime.GOOS != "windows" {
 		if got, want := p.WaitStatus().Signaled(), true; got != want {
@@ -157,6 +164,7 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 	}
 
 	<-p.Done()
+
 	assertProcessDoesntExist(t, p)
 }
 
@@ -165,37 +173,34 @@ func TestProcessInterrupts(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	stdout := &bytes.Buffer{}
+	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=tester-signal"},
-		Stdout: stdout,
+		Stdout: stdoutw,
 	})
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	go func() {
-		defer wg.Done()
-		<-p.Started()
-
-		// give the signal handler some time to install
-		time.Sleep(time.Millisecond * 50)
-
-		if err := p.Interrupt(); err != nil {
-			t.Errorf("p.Interrupt() = %v", err)
+		defer stdoutw.Close()
+		if err := p.Run(context.Background()); err != nil {
+			t.Errorf("p.Run(context.Background()) = %v", err)
 		}
 	}()
 
-	if err := p.Run(context.Background()); err != nil {
-		t.Fatalf("p.Run() = %v", err)
+	waitUntilReady(t, stdoutr)
+
+	if err := p.Interrupt(); err != nil {
+		t.Fatalf("p.Interrupt() = %v", err)
 	}
 
-	wg.Wait()
+	stdout, err := io.ReadAll(stdoutr)
+	if err != nil {
+		t.Fatalf("io.ReadAll(stdoutr) error = %v", err)
+	}
 
-	if got, want := stdout.String(), "SIG terminated"; got != want {
-		t.Errorf("stdout.String() = %q, want %q", got, want)
+	if got, want := string(stdout), "SIG terminated"; got != want {
+		t.Errorf("io.ReadAll(stdoutr) = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -206,38 +211,35 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 		t.Skip("Works in windows, but not in docker")
 	}
 
-	stdout := &bytes.Buffer{}
+	stdoutr, stdoutw := io.Pipe()
 
 	p := process.New(logger.Discard, process.Config{
 		Path:            os.Args[0],
 		Env:             []string{"TEST_MAIN=tester-signal"},
-		Stdout:          stdout,
+		Stdout:          stdoutw,
 		InterruptSignal: process.SIGINT,
 	})
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	go func() {
-		defer wg.Done()
-		<-p.Started()
-
-		// give the signal handler some time to install
-		time.Sleep(time.Millisecond * 50)
-
-		if err := p.Interrupt(); err != nil {
-			t.Errorf("p.Interrupt() = %v", err)
+		defer stdoutw.Close()
+		if err := p.Run(context.Background()); err != nil {
+			t.Errorf("p.Run(context.Background()) = %v", err)
 		}
 	}()
 
-	if err := p.Run(context.Background()); err != nil {
-		t.Fatalf("p.Run() = %v", err)
+	waitUntilReady(t, stdoutr)
+
+	if err := p.Interrupt(); err != nil {
+		t.Fatalf("p.Interrupt() = %v", err)
 	}
 
-	wg.Wait()
+	stdout, err := io.ReadAll(stdoutr)
+	if err != nil {
+		t.Fatalf("io.ReadAll(stdoutr) error = %v", err)
+	}
 
-	if got, want := stdout.String(), "SIG interrupt"; got != want {
-		t.Errorf("stdout.String() = %q, want %q", got, want)
+	if got, want := string(stdout), "SIG interrupt"; got != want {
+		t.Errorf("io.ReadAll(stdoutr) = %q, want %q", got, want)
 	}
 
 	assertProcessDoesntExist(t, p)
@@ -285,6 +287,20 @@ func BenchmarkProcess(b *testing.B) {
 	}
 }
 
+// waitUntilReady reads "Ready\n" from the pipe reader, and fails the test if
+// it cannot or the string it reads is different.
+func waitUntilReady(t *testing.T, stdoutr *io.PipeReader) {
+	t.Helper()
+	wantReady := "Ready\n"
+	buf := make([]byte, len(wantReady))
+	if _, err := io.ReadFull(stdoutr, buf); err != nil {
+		t.Fatalf("io.ReadFull(stdoutr, buf) error = %v", err)
+	}
+	if got := string(buf); got != wantReady {
+		t.Fatalf("io.ReadFull(stdoutr, buf) read %q, want %q", got, wantReady)
+	}
+}
+
 // Invoked by `go test`, switch between helper and running tests based on env
 func TestMain(m *testing.M) {
 	switch os.Getenv("TEST_MAIN") {
@@ -308,6 +324,7 @@ func TestMain(m *testing.M) {
 			syscall.SIGTERM,
 			syscall.SIGINT,
 		)
+		fmt.Println("Ready")
 		fmt.Printf("SIG %v", <-signals)
 		os.Exit(0)
 
