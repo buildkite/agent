@@ -14,16 +14,25 @@ import (
 	"github.com/qri-io/jsonschema"
 )
 
-var ErrDefinitionNotFound = errors.New("Definition file not found")
+var (
+	// ErrDefinitionNotFound is used when a plugin definition file cannot be
+	// found.
+	ErrDefinitionNotFound = errors.New("Definition file not found")
 
-// Definition defines the plugin.yml file that each plugin has
+	// ErrCommandNotInPATH is the underlying error when a command cannot be
+	// found during plugin validation.
+	ErrCommandNotInPATH = errors.New("command not found in PATH")
+)
+
+// Definition defines the contents of the plugin.{yml,yaml,json} file that
+// each plugin has.
 type Definition struct {
 	Name          string                 `json:"name"`
 	Requirements  []string               `json:"requirements"`
 	Configuration *jsonschema.RootSchema `json:"configuration"`
 }
 
-// ParseDefinition parses either yaml or json bytes into a Definition
+// ParseDefinition parses either YAML or JSON bytes into a Definition.
 func ParseDefinition(b []byte) (*Definition, error) {
 	var parsed yaml.MapSlice
 
@@ -46,7 +55,10 @@ func ParseDefinition(b []byte) (*Definition, error) {
 	return &def, nil
 }
 
-// LoadDefinitionFromDir looks in a directory for either a plugin.json or a plugin.yml
+// LoadDefinitionFromDir looks in a directory for one of plugin.json,
+// plugin.yaml, or plugin.yml. It parses the first one it finds, and returns the
+// resulting Definition. If none of those files can be found, it returns
+// ErrDefinitionNotFound.
 func LoadDefinitionFromDir(dir string) (*Definition, error) {
 	f, err := findDefinitionFile(dir)
 	if err != nil {
@@ -61,12 +73,12 @@ func LoadDefinitionFromDir(dir string) (*Definition, error) {
 	return ParseDefinition(b)
 }
 
-// findDefinitionFile searches for known plugin definition files
+// findDefinitionFile searches for known plugin definition files.
 func findDefinitionFile(dir string) (string, error) {
-	var possibleFilenames = []string{
-		filepath.Join(dir, `plugin.json`),
-		filepath.Join(dir, `plugin.yaml`),
-		filepath.Join(dir, `plugin.yml`),
+	possibleFilenames := []string{
+		filepath.Join(dir, "plugin.json"),
+		filepath.Join(dir, "plugin.yaml"),
+		filepath.Join(dir, "plugin.yml"),
 	}
 	for _, filename := range possibleFilenames {
 		if _, err := os.Stat(filename); err == nil {
@@ -76,22 +88,23 @@ func findDefinitionFile(dir string) (string, error) {
 	return "", ErrDefinitionNotFound
 }
 
+// Validator validates plugin definitions.
 type Validator struct {
 	commandExists func(string) bool
 }
 
+// Validate checks the plugin definition for errors, including missing commands
+// from $PATH and invalid configuration under the definition's JSON Schema.
 func (v Validator) Validate(def *Definition, config map[string]interface{}) ValidateResult {
-	result := ValidateResult{
-		Errors: []string{},
-	}
+	var result ValidateResult
 
-	configAsJson, err := json.Marshal(config)
+	configJSON, err := json.Marshal(config)
 	if err != nil {
-		result.Errors = append(result.Errors, err.Error())
+		result.errors = append(result.errors, err)
 		return result
 	}
 
-	var commandExistsFunc = v.commandExists
+	commandExistsFunc := v.commandExists
 	if commandExistsFunc == nil {
 		commandExistsFunc = commandExists
 	}
@@ -99,44 +112,55 @@ func (v Validator) Validate(def *Definition, config map[string]interface{}) Vali
 	// validate that the required commands exist
 	if def.Requirements != nil {
 		for _, command := range def.Requirements {
-			if !commandExistsFunc(command) {
-				result.Errors = append(result.Errors,
-					fmt.Sprintf(`Required command %q isn't in PATH`, command))
+			if commandExistsFunc(command) {
+				continue
 			}
+			result.errors = append(result.errors, fmt.Errorf("%q %w", command, ErrCommandNotInPATH))
 		}
 	}
 
 	// validate that the config matches the json schema we have
 	if def.Configuration != nil {
-		valErrors, err := def.Configuration.ValidateBytes(configAsJson)
+		valErrors, err := def.Configuration.ValidateBytes(configJSON)
 		if err != nil {
-			result.Errors = append(result.Errors, err.Error())
+			result.errors = append(result.errors, err)
 		}
-		if len(valErrors) > 0 {
-			for _, err := range valErrors {
-				result.Errors = append(result.Errors, err.Error())
-			}
+		for _, err := range valErrors {
+			result.errors = append(result.errors, err)
 		}
 	}
 
 	return result
 }
 
+// ValidateResult contains results of a validation check.
 type ValidateResult struct {
-	Errors []string
+	errors []error
 }
 
+// Unwrap returns the errors contained in the ValidateResult.
+func (vr ValidateResult) Unwrap() []error {
+	// Support for multi-error wrapping is expected in Go 1.20.
+	// https://github.com/golang/go/issues/53435#issuecomment-1191752789
+	return vr.errors
+}
+
+// Valid reports if the result contains no errors.
 func (vr ValidateResult) Valid() bool {
-	return len(vr.Errors) == 0
+	return len(vr.errors) == 0
 }
 
+// Error returns a single string representing all the inner error strings.
 func (vr ValidateResult) Error() string {
-	return strings.Join(vr.Errors, ", ")
+	s := make([]string, len(vr.errors))
+	for i, err := range vr.errors {
+		s[i] = err.Error()
+	}
+	return strings.Join(s, ", ")
 }
 
+// commandExists reports if the command is present somewhere in $PATH.
 func commandExists(command string) bool {
-	if _, err := exec.LookPath(command); err != nil {
-		return false
-	}
-	return true
+	_, err := exec.LookPath(command)
+	return err == nil
 }
