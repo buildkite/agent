@@ -66,8 +66,8 @@ const (
 type Config struct {
 	SocketPath     string
 	ClientCount    int
-	Env            []string
 	Stdout, Stderr io.Writer
+	AccessToken    string
 }
 
 func (r *Runner) Run(ctx context.Context) error {
@@ -136,7 +136,8 @@ type ExitCode struct {
 }
 
 type Status struct {
-	Ready bool
+	Ready       bool
+	AccessToken string
 }
 
 func (r *Runner) WriteLogs(args Logs, reply *Empty) error {
@@ -187,6 +188,7 @@ func (r *Runner) Register(id int, reply *Empty) error {
 func (r *Runner) Status(id int, reply *Status) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	reply.AccessToken = r.conf.AccessToken
 
 	if id == 0 {
 		reply.Ready = true
@@ -236,17 +238,22 @@ func (c *Client) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (c *Client) WaitReady() <-chan error {
-	result := make(chan error)
+type WaitReadyResponse struct {
+	Err error
+	Status
+}
+
+func (c *Client) WaitReady() <-chan WaitReadyResponse {
+	result := make(chan WaitReadyResponse)
 	go func() {
 		for {
 			var reply Status
 			if err := c.client.Call("Runner.Status", c.ID, &reply); err != nil {
-				result <- err
+				result <- WaitReadyResponse{Err: err}
 				return
 			}
 			if reply.Ready {
-				close(result)
+				result <- WaitReadyResponse{Status: reply}
 				return
 			}
 			// TODO: configurable interval
