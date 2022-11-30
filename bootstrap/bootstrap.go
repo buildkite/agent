@@ -106,7 +106,13 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 			b.shell.Errorf("Error connecting to kubernetes runner: %v", err)
 			return 1
 		}
-		<-kubernetesClient.WaitReady()
+		status := <-kubernetesClient.WaitReady()
+		if status.Err != nil {
+			b.shell.Errorf("Error waiting for client to become ready: %v", err)
+			return 1
+		}
+		os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", status.AccessToken)
+		b.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", status.AccessToken)
 		defer kubernetesClient.Exit(b.shell.WaitStatus())
 	}
 
