@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -90,6 +91,30 @@ type AgentWorker struct {
 	retrySleepFunc func(time.Duration)
 }
 
+type errUnrecoverable struct {
+	action   string
+	response *api.Response
+	err      error
+}
+
+func (e *errUnrecoverable) Error() string {
+	status := "unknown"
+	if e.response != nil {
+		status = e.response.Status
+	}
+
+	return fmt.Sprintf("%s failed with unrecoverable status: %s, mesage: %q", e.action, status, e.err)
+}
+
+func (e *errUnrecoverable) Is(other error) bool {
+	_, ok := other.(*errUnrecoverable)
+	return ok
+}
+
+func (e *errUnrecoverable) Unwrap() error {
+	return e.err
+}
+
 // Creates the agent worker and initializes its API Client
 func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Collector, apiClient APIClient, c AgentWorkerConfig) *AgentWorker {
 	return &AgentWorker{
@@ -147,6 +172,11 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 			select {
 			case <-time.After(heartbeatInterval):
 				if err := a.Heartbeat(heartbeatCtx); err != nil {
+					if errors.Is(err, &errUnrecoverable{}) {
+						a.logger.Error("%s", err)
+						return
+					}
+
 					// Get the last heartbeat time to the nearest microsecond
 					a.stats.Lock()
 					if a.stats.lastHeartbeat.IsZero() {
@@ -195,7 +225,11 @@ func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonito
 		if !a.stopping {
 			job, err := a.Ping(ctx)
 			if err != nil {
-				a.logger.Warn("%v", err)
+				if errors.Is(err, &errUnrecoverable{}) {
+					a.logger.Error("%v", err)
+				} else {
+					a.logger.Warn("%v", err)
+				}
 			} else if job != nil {
 				// Let other agents know this agent is now busy and
 				// not to idle terminate
@@ -334,8 +368,14 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		b, _, err := a.apiClient.Heartbeat(ctx)
+		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
+			if resp != nil && !api.IsRetryableStatus(resp) {
+				a.Stop(false)
+				r.Break()
+				return &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
+			}
+
 			a.logger.Warn("%s (%s)", err, r)
 			return err
 		}
@@ -362,8 +402,34 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 // Performs a ping that checks Buildkite for a job or action to take
 // Returns a job, or nil if none is found
 func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
-	ping, _, err := a.apiClient.Ping(ctx)
-	if err != nil {
+	ping, resp, pingErr := a.apiClient.Ping(ctx)
+	// wait a minute, where's my if err != nil block? TL;DR look for pingErr ~20 lines down
+	// the api client returns an error if the response code isn't a 2xx, but there's still information in resp and ping
+	// that we need to check out to do special handling for specific error codes or messages in the response body
+	// once we've done that, we can do the error handling for pingErr
+
+	if ping != nil {
+		// Is there a message that should be shown in the logs?
+		if ping.Message != "" {
+			a.logger.Info(ping.Message)
+		}
+
+		// Should the agent disconnect?
+		if ping.Action == "disconnect" {
+			a.Stop(false)
+			return nil, nil
+		}
+	}
+
+	if pingErr != nil {
+		// If the ping has a non-retryable status, we have to kill the agent, there's no way of recovering
+		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
+		// responses with non-retryable statuses
+		if resp != nil && !api.IsRetryableStatus(resp) {
+			a.Stop(false)
+			return nil, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
+		}
+
 		// Get the last ping time to the nearest microsecond
 		a.stats.Lock()
 		defer a.stats.Unlock()
@@ -371,9 +437,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 		// If a ping fails, we don't really care, because it'll
 		// ping again after the interval.
 		if a.stats.lastPing.IsZero() {
-			return nil, fmt.Errorf("Failed to ping: %v (No successful ping yet)", err)
+			return nil, fmt.Errorf("Failed to ping: %v (No successful ping yet)", pingErr)
 		} else {
-			return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", err, time.Since(a.stats.lastPing))
+			return nil, fmt.Errorf("Failed to ping: %v (Last successful was %v ago)", pingErr, time.Since(a.stats.lastPing))
 		}
 	}
 
@@ -397,17 +463,6 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 			a.agent.Endpoint = ping.Endpoint
 			ping = newPing
 		}
-	}
-
-	// Is there a message that should be shown in the logs?
-	if ping.Message != "" {
-		a.logger.Info(ping.Message)
-	}
-
-	// Should the agent disconnect?
-	if ping.Action == "disconnect" {
-		a.Stop(false)
-		return nil, nil
 	}
 
 	// If we don't have a job, there's nothing to do!
