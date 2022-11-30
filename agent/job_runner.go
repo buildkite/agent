@@ -705,8 +705,8 @@ func (r *JobRunner) startJob(ctx context.Context, startedAt time.Time) error {
 	})
 }
 
-// Finishes the job in the Buildkite Agent API. This call will keep on retrying
-// forever until it finally gets a successfull response from the API.
+// finishJob finishes the job in the Buildkite Agent API. If the FinishJob call
+// cannot return successfully, this will retry for a long time.
 func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitStatus, signal, signalReason string, failedChunkCount int) error {
 	r.job.FinishedAt = finishedAt.UTC().Format(time.RFC3339Nano)
 	r.job.ExitStatus = exitStatus
@@ -717,8 +717,12 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitSta
 	r.logger.Debug("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
 		r.job.ExitStatus, r.job.Signal, r.job.SignalReason)
 
+	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	defer cancel()
+
 	return roko.NewRetrier(
 		roko.TryForever(),
+		roko.WithJitter(),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := r.apiClient.FinishJob(ctx, r.job)
@@ -836,16 +840,20 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 	})
 }
 
-// Call when a chunk is ready for upload.
+// onUploadChunk uploads a log streamer chunk. If a valid chunk cannot be
+// uploaded, it will retry for a long time.
 func (r *JobRunner) onUploadChunk(ctx context.Context, chunk *LogStreamerChunk) error {
 	// We consider logs to be an important thing, and we shouldn't give up
 	// on sending the chunk data back to Buildkite. In the event Buildkite
 	// is having downtime or there are connection problems, we'll want to
 	// hold onto chunks until it's back online to upload them.
 	//
-	// This code will retry forever until we get back a successful response
-	// from Buildkite that it's considered the chunk (a 4xx will be
+	// This code will retry for a long time until we get back a successful
+	// response from Buildkite that it's considered the chunk (a 4xx will be
 	// returned if the chunk is invalid, and we shouldn't retry on that)
+	ctx, cancel := context.WithTimeout(ctx, 48*time.Hour)
+	defer cancel()
+
 	return roko.NewRetrier(
 		roko.TryForever(),
 		roko.WithStrategy(roko.Constant(5*time.Second)),
