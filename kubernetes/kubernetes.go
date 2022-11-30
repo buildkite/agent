@@ -156,6 +156,7 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	if !found {
 		return fmt.Errorf("unrecognized client id: %d", args.ID)
 	}
+	r.logger.Info("client %d exited with code %d", args.ID, args.ExitStatus.ExitStatus())
 	client.ExitStatus = args.ExitStatus
 	client.State = stateExited
 
