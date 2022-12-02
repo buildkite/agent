@@ -31,7 +31,7 @@ var retryableStatuses = []int{
 
 // IsRetryableStatus returns true if the response's StatusCode is one that we should retry.
 func IsRetryableStatus(r *Response) bool {
-	return slices.Contains(retryableStatuses, r.StatusCode)
+	return r.StatusCode >= 400 && slices.Contains(retryableStatuses, r.StatusCode)
 }
 
 // Looks at a bunch of connection related errors, and returns true if the error
