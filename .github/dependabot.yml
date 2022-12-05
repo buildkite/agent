@@ -1,7 +1,23 @@
 version: 2
 updates:
   - package-ecosystem: "docker"
-    directory: "/packaging/docker"
+    directory: "/packaging/docker/alpine-linux"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "docker"
+    directory: "/packaging/docker/alpine-linux-k8s"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "docker"
+    directory: "/packaging/docker/sidecar"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "docker"
+    directory: "/packaging/docker/ubuntu-18.04-linux"
+    schedule:
+      interval: "monthly"
+  - package-ecosystem: "docker"
+    directory: "/packaging/docker/ubuntu-20.04-linux"
     schedule:
       interval: "monthly"
   - package-ecosystem: "docker"
