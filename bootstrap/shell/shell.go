@@ -418,7 +418,7 @@ func (s *Shell) buildCommand(name string, arg ...string) (*command, error) {
 
 	// Add env that commands expect a shell to set
 	cfg.Env = append(cfg.Env,
-		`PWD=`+s.wd,
+		"PWD="+s.wd,
 	)
 
 	return &command{Config: cfg}, nil

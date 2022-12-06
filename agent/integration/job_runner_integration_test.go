@@ -23,11 +23,11 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	}
 
 	j := &api.Job{
-		ID:                 `my-job-id`,
+		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
 		Token:              jobToken,
 		Env: map[string]string{
-			`BUILDKITE_COMMAND`: `echo hello world`,
+			"BUILDKITE_COMMAND": "echo hello world",
 		},
 	}
 
@@ -47,10 +47,10 @@ func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
 	}
 
 	j := &api.Job{
-		ID:                 `my-job-id`,
+		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
 		Env: map[string]string{
-			`BUILDKITE_COMMAND`: `echo hello world`,
+			"BUILDKITE_COMMAND": "echo hello world",
 		},
 	}
 
@@ -70,11 +70,11 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 	}
 
 	j := &api.Job{
-		ID:                 `my-job-id`,
+		ID:                 "my-job-id",
 		ChunksMaxSizeBytes: 1024,
 		Env: map[string]string{
-			`BUILDKITE_COMMAND`:      `echo hello world`,
-			`BUILDKITE_COMMAND_EVAL`: `false`,
+			"BUILDKITE_COMMAND":      "echo hello world",
+			"BUILDKITE_COMMAND_EVAL": "false",
 		},
 	}
 
@@ -93,7 +93,7 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 
 func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
 	// create a mock agent API
-	server := createTestAgentEndpoint(t, `my-job-id`)
+	server := createTestAgentEndpoint(t, "my-job-id")
 	defer server.Close()
 
 	// set up a mock bootstrap that the runner will call
@@ -135,14 +135,14 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 func createTestAgentEndpoint(t *testing.T, jobID string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
-		case `/jobs/` + jobID:
+		case "/jobs/" + jobID:
 			rw.WriteHeader(http.StatusOK)
 			fmt.Fprintf(rw, `{"state":"running"}`)
-		case `/jobs/` + jobID + `/start`:
+		case "/jobs/" + jobID + "/start":
 			rw.WriteHeader(http.StatusOK)
-		case `/jobs/` + jobID + `/chunks`:
+		case "/jobs/" + jobID + "/chunks":
 			rw.WriteHeader(http.StatusCreated)
-		case `/jobs/` + jobID + `/finish`:
+		case "/jobs/" + jobID + "/finish":
 			rw.WriteHeader(http.StatusOK)
 		default:
 			http.Error(rw, fmt.Sprintf("not found; method = %q, path = %q", req.Method, req.URL.Path), http.StatusNotFound)

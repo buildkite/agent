@@ -47,7 +47,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 	commandArgs = append(commandArgs, reference)
 
 	if err := sh.Run(ctx, "git", commandArgs...); err != nil {
-		if strings.HasPrefix(err.Error(), `fatal: reference is not a tree: `) {
+		if strings.HasPrefix(err.Error(), "fatal: reference is not a tree: ") {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 		return &gitError{error: err, Type: gitErrorCheckout}

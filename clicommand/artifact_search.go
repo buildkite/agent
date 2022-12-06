@@ -114,7 +114,7 @@ Format specifiers:
 		cli.StringFlag{
 			Name:  "format",
 			Value: "%j %p %c\n",
-			Usage: `Output formatting of results. See below for listing of available format specifiers.`,
+			Usage: "Output formatting of results. See below for listing of available format specifiers.",
 		},
 
 		// API Flags
@@ -155,7 +155,7 @@ Format specifiers:
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the searcher and try get the artifacts
 		searcher := agent.NewArtifactSearcher(l, client, cfg.Build)

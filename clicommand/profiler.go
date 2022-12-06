@@ -13,12 +13,12 @@ import (
 type profilerMode string
 
 const (
-	cpuMode          profilerMode = `cpu`
-	memMode          profilerMode = `mem`
-	mutexMode        profilerMode = `mutex`
-	blockMode        profilerMode = `block`
-	traceMode        profilerMode = `trace`
-	threadCreateMode profilerMode = `thread`
+	cpuMode          profilerMode = "cpu"
+	memMode          profilerMode = "mem"
+	mutexMode        profilerMode = "mutex"
+	blockMode        profilerMode = "block"
+	traceMode        profilerMode = "trace"
+	threadCreateMode profilerMode = "thread"
 )
 
 type profiler struct {
@@ -32,17 +32,17 @@ func Profile(l logger.Logger, mode string) func() {
 	p := profiler{logger: l}
 
 	switch mode {
-	case `cpu`:
+	case "cpu":
 		p.mode = cpuMode
-	case `mem`, `memory`:
+	case "mem", "memory":
 		p.mode = memMode
-	case `mutex`:
+	case "mutex":
 		p.mode = mutexMode
-	case `block`:
+	case "block":
 		p.mode = blockMode
-	case `thread`:
+	case "thread":
 		p.mode = threadCreateMode
-	case `trace`:
+	case "trace":
 		p.mode = traceMode
 	default:
 		p.logger.Fatal("Unknown profile mode %q", mode)

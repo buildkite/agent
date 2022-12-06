@@ -154,7 +154,7 @@ func TestContextCancelTerminates(t *testing.T) {
 }
 
 func TestInterrupt(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Not supported in windows")
 	}
 

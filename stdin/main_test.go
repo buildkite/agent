@@ -26,7 +26,7 @@ func TestMain(m *testing.M) {
 
 func TestIsStdinIsNotReadableByDefault(t *testing.T) {
 	var cmd *exec.Cmd
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		cmd = exec.Command("cmd", "/c", os.Args[0])
 	} else {
 		cmd = exec.Command("/bin/sh", "-c", os.Args[0])
@@ -46,10 +46,10 @@ func TestIsStdinIsNotReadableByDefault(t *testing.T) {
 
 func TestIsStdinIsReadableWithAPipe(t *testing.T) {
 	var cmd *exec.Cmd
-	if runtime.GOOS == `windows` {
-		cmd = exec.Command("cmd", "/c", `echo output | `+os.Args[0])
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", "echo output | "+os.Args[0])
 	} else {
-		cmd = exec.Command("/bin/sh", "-c", `echo output | `+os.Args[0])
+		cmd = exec.Command("/bin/sh", "-c", "echo output | "+os.Args[0])
 	}
 	cmd.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1")
 
@@ -79,7 +79,7 @@ func TestIsStdinIsReadableWithOutputRedirection(t *testing.T) {
 	}
 
 	var cmd *exec.Cmd
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		cmd = exec.Command("cmd", "/c", os.Args[0]+"< "+tmpfile.Name())
 	} else {
 		cmd = exec.Command("/bin/sh", "-c", os.Args[0]+"< "+tmpfile.Name())

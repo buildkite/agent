@@ -93,7 +93,7 @@ var MetaDataExistsCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
 		var exists *api.MetaDataExists

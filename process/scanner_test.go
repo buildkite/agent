@@ -46,11 +46,11 @@ func TestScanLines(t *testing.T) {
 	}
 
 	wantLines := []string{
-		`#1: chars 13`,
-		`#2: chars 6`,
-		`#3: chars 15`,
-		`#4: chars 237`,
-		`#5: chars 16`,
+		"#1: chars 13",
+		"#2: chars 6",
+		"#3: chars 15",
+		"#4: chars 237",
+		"#5: chars 16",
 	}
 
 	if diff := cmp.Diff(lines, wantLines); diff != "" {

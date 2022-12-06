@@ -175,7 +175,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	// Get the kind of field we need to set
 	fieldKind, err := reflections.GetFieldKind(l.Config, fieldName)
 	if err != nil {
-		return fmt.Errorf(`Failed to get the type of struct field %s`, fieldName)
+		return fmt.Errorf("Failed to get the type of struct field %s", fieldName)
 	}
 
 	var value interface{}

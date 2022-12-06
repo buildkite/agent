@@ -50,12 +50,12 @@ func TestRunningPlugins(t *testing.T) {
 	}
 
 	env := []string{
-		`MY_CUSTOM_ENV=1`,
-		`BUILDKITE_PLUGINS=` + json,
+		"MY_CUSTOM_ENV=1",
+		"BUILDKITE_PLUGINS=" + json,
 	}
 
 	pluginMock.Expect("testing").Once().AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -64,7 +64,7 @@ func TestRunningPlugins(t *testing.T) {
 	})
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -107,7 +107,7 @@ func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	}
 
 	env := []string{
-		`BUILDKITE_PLUGINS=` + json,
+		"BUILDKITE_PLUGINS=" + json,
 	}
 
 	err = tester.Run(t, env...)
@@ -199,15 +199,15 @@ func TestOverlappingPluginHooks(t *testing.T) {
 	}
 
 	env := []string{
-		`MY_CUSTOM_ENV=1`,
-		`BUILDKITE_PLUGINS=` + string(pluginsJSON),
+		"MY_CUSTOM_ENV=1",
+		"BUILDKITE_PLUGINS=" + string(pluginsJSON),
 	}
 
 	tester.RunAndCheck(t, env...)
 }
 
 func TestPluginCloneRetried(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Not passing on windows, needs investigation")
 	}
 
@@ -263,7 +263,7 @@ func TestPluginCloneRetried(t *testing.T) {
 	}
 
 	env := []string{
-		`BUILDKITE_PLUGINS=` + json,
+		"BUILDKITE_PLUGINS=" + json,
 	}
 
 	tester.RunAndCheck(t, env...)
@@ -328,11 +328,11 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	}
 
 	env := []string{
-		`BUILDKITE_PLUGINS=` + json,
+		"BUILDKITE_PLUGINS=" + json,
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -370,7 +370,7 @@ func TestModifiedPluginNoForcePull(t *testing.T) {
 	modifyTestPlugin(t, hooks2, p)
 
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -428,11 +428,11 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	}
 
 	env := []string{
-		`BUILDKITE_PLUGINS=` + json,
+		"BUILDKITE_PLUGINS=" + json,
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=quite_large`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=quite_large"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -473,7 +473,7 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	// This time, we expect the value of OSTRICH_EGGS to have changed compared to the first test
 	// run.
 	tester2.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `OSTRICH_EGGS=huge_actually`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "OSTRICH_EGGS=huge_actually"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -561,7 +561,7 @@ func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
 
 	p := map[string]interface{}{
-		fmt.Sprintf(`file:///%s#%s`, normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{
+		fmt.Sprintf("file:///%s#%s", normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{
 			"settings": "blah",
 		},
 	}

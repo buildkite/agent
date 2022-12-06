@@ -237,9 +237,9 @@ func (c *Client) doRequest(req *http.Request, v interface{}) (*Response, error) 
 	}
 
 	c.logger.WithFields(
-		logger.StringField(`proto`, resp.Proto),
-		logger.IntField(`status`, resp.StatusCode),
-		logger.DurationField(`Δ`, time.Since(ts)),
+		logger.StringField("proto", resp.Proto),
+		logger.IntField("status", resp.StatusCode),
+		logger.DurationField("Δ", time.Since(ts)),
 	).Debug("↳ %s %s", req.Method, req.URL)
 
 	defer resp.Body.Close()

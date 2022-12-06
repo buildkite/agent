@@ -128,7 +128,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	// Execute the bootstrap phases in order
 	var phaseErr error
 
-	if includePhase(`plugin`) {
+	if includePhase("plugin") {
 		phaseErr = b.preparePlugins()
 
 		if phaseErr == nil {
@@ -136,20 +136,20 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 	}
 
-	if phaseErr == nil && includePhase(`checkout`) {
+	if phaseErr == nil && includePhase("checkout") {
 		phaseErr = b.CheckoutPhase(ctx)
 	} else {
-		checkoutDir, exists := b.shell.Env.Get(`BUILDKITE_BUILD_CHECKOUT_PATH`)
+		checkoutDir, exists := b.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 		if exists {
 			_ = b.shell.Chdir(checkoutDir)
 		}
 	}
 
-	if phaseErr == nil && includePhase(`plugin`) {
+	if phaseErr == nil && includePhase("plugin") {
 		phaseErr = b.VendoredPluginPhase(ctx)
 	}
 
-	if phaseErr == nil && includePhase(`command`) {
+	if phaseErr == nil && includePhase("command") {
 		var commandErr error
 		phaseErr, commandErr = b.CommandPhase(ctx)
 		/*
@@ -201,7 +201,7 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 	}
 
 	// Use the exit code from the command phase
-	exitStatus, _ := b.shell.Env.Get(`BUILDKITE_COMMAND_EXIT_STATUS`)
+	exitStatus, _ := b.shell.Env.Get("BUILDKITE_COMMAND_EXIT_STATUS")
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
@@ -453,7 +453,7 @@ func (b *Bootstrap) executeLocalHook(ctx context.Context, name string) error {
 	localHooksEnabled := b.Config.LocalHooksEnabled
 
 	// Allow hooks to disable local hooks by setting BUILDKITE_NO_LOCAL_HOOKS=true
-	noLocalHooks, _ := b.shell.Env.Get(`BUILDKITE_NO_LOCAL_HOOKS`)
+	noLocalHooks, _ := b.shell.Env.Get("BUILDKITE_NO_LOCAL_HOOKS")
 	if noLocalHooks == "true" || noLocalHooks == "1" {
 		localHooksEnabled = false
 	}
@@ -1013,7 +1013,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		b.shell.Env.Set(`BUILDKITE_BUILD_CHECKOUT_PATH`, buildDir)
+		b.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", buildDir)
 
 		// Track the directory so we can remove it at the end of the bootstrap
 		b.cleanupDirs = append(b.cleanupDirs, buildDir)
@@ -1442,7 +1442,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
-	if experiments.IsEnabled(`resolve-commit-after-checkout`) {
+	if experiments.IsEnabled("resolve-commit-after-checkout") {
 		b.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
 		b.resolveCommit(ctx)
 	}
@@ -1481,7 +1481,7 @@ func (b *Bootstrap) resolveCommit(ctx context.Context) {
 	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
 	if trimmedCmdOut != commitRef {
 		b.shell.Commentf("Updating BUILDKITE_COMMIT from %q to %q", commitRef, trimmedCmdOut)
-		b.shell.Env.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
+		b.shell.Env.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 	}
 }
 
@@ -1636,7 +1636,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
-	if strings.ToUpper(filepath.Base(shell[0])) == `CMD.EXE` {
+	if strings.ToUpper(filepath.Base(shell[0])) == "CMD.EXE" {
 		batchScript, err := b.writeBatchScript(b.Command)
 		if err != nil {
 			return err
@@ -1710,7 +1710,7 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 	// and if so add a trap so that the intermediate shell doesn't swallow signals
 	// from cancellation
 	if !commandIsScript && isPosixShell(shell) {
-		cmdToExec = fmt.Sprintf(`trap 'kill -- $$' INT TERM QUIT; %s`, cmdToExec)
+		cmdToExec = fmt.Sprintf("trap 'kill -- $$' INT TERM QUIT; %s", cmdToExec)
 	}
 
 	redactors := b.setupRedactors()
@@ -1734,12 +1734,12 @@ func (b *Bootstrap) defaultCommandPhase(ctx context.Context) error {
 func isPosixShell(shell []string) bool {
 	bin := filepath.Base(shell[0])
 
-	if filepath.Base(shell[0]) == `env` {
+	if filepath.Base(shell[0]) == "env" {
 		bin = filepath.Base(shell[1])
 	}
 
 	switch bin {
-	case `bash`, `sh`, `zsh`, `ksh`, `dash`:
+	case "bash", "sh", "zsh", "ksh", "dash":
 		return true
 	default:
 		return false
@@ -1778,7 +1778,7 @@ func shouldCallBatchLine(line string) bool {
 
 func (b *Bootstrap) writeBatchScript(cmd string) (string, error) {
 	scriptFile, err := shell.TempFileWithExtension(
-		`buildkite-script.bat`,
+		"buildkite-script.bat",
 	)
 	if err != nil {
 		return "", err
@@ -1905,9 +1905,9 @@ func (b *Bootstrap) postArtifactHooks(ctx context.Context) error {
 func (b *Bootstrap) ignoredEnv() []string {
 	var ignored []string
 	for _, env := range os.Environ() {
-		if strings.HasPrefix(env, `BUILDKITE_X_`) {
+		if strings.HasPrefix(env, "BUILDKITE_X_") {
 			ignored = append(ignored, fmt.Sprintf("BUILDKITE_%s",
-				strings.TrimPrefix(env, `BUILDKITE_X_`)))
+				strings.TrimPrefix(env, "BUILDKITE_X_")))
 		}
 	}
 	return ignored

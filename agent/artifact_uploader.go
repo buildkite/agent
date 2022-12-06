@@ -165,7 +165,7 @@ func (a *ArtifactUploader) Collect() (artifacts []*api.Artifact, err error) {
 				return nil, err
 			}
 
-			if experiments.IsEnabled(`normalised-upload-paths`) {
+			if experiments.IsEnabled("normalised-upload-paths") {
 				// Convert any Windows paths to Unix/URI form
 				path = filepath.ToSlash(path)
 			}

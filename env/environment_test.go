@@ -41,11 +41,11 @@ func TestEnvironmentGetBool(t *testing.T) {
 		"BUNYIP_ENABLED=off",
 	})
 
-	assert.True(t, env.GetBool(`LLAMAS_ENABLED`, false))
-	assert.False(t, env.GetBool(`ALPACAS_ENABLED`, true))
-	assert.False(t, env.GetBool(`PLATYPUS_ENABLED`, false))
-	assert.True(t, env.GetBool(`PLATYPUS_ENABLED`, true))
-	assert.False(t, env.GetBool(`BUNYIP_ENABLED`, true))
+	assert.True(t, env.GetBool("LLAMAS_ENABLED", false))
+	assert.False(t, env.GetBool("ALPACAS_ENABLED", true))
+	assert.False(t, env.GetBool("PLATYPUS_ENABLED", false))
+	assert.True(t, env.GetBool("PLATYPUS_ENABLED", true))
+	assert.False(t, env.GetBool("BUNYIP_ENABLED", true))
 }
 
 func TestEnvironmentRemove(t *testing.T) {

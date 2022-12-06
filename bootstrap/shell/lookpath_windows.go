@@ -59,7 +59,7 @@ func findExecutable(file string, exts []string) (string, error) {
 func LookPath(file string, path string, fileExtensions string) (string, error) {
 	var exts []string
 	if fileExtensions != "" {
-		for _, e := range strings.Split(strings.ToLower(fileExtensions), `;`) {
+		for _, e := range strings.Split(strings.ToLower(fileExtensions), ";") {
 			if e == "" {
 				continue
 			}

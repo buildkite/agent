@@ -478,7 +478,7 @@ var BootstrapCommand = cli.Command{
 
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately
-		if cancelled && runtime.GOOS != `windows` {
+		if cancelled && runtime.GOOS != "windows" {
 			p, err := os.FindProcess(os.Getpid())
 			if err != nil {
 				l.Error("Failed to find current process: %v", err)

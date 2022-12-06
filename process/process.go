@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	termType = `xterm-256color`
+	termType = "xterm-256color"
 )
 
 type Signal int
@@ -35,12 +35,12 @@ const (
 )
 
 var signalMap = map[string]Signal{
-	`SIGHUP`:  SIGHUP,
-	`SIGINT`:  SIGINT,
-	`SIGQUIT`: SIGQUIT,
-	`SIGUSR1`: SIGUSR1,
-	`SIGUSR2`: SIGUSR2,
-	`SIGTERM`: SIGTERM,
+	"SIGHUP":  SIGHUP,
+	"SIGINT":  SIGINT,
+	"SIGQUIT": SIGQUIT,
+	"SIGUSR1": SIGUSR1,
+	"SIGUSR2": SIGUSR2,
+	"SIGTERM": SIGTERM,
 }
 
 func (s Signal) String() string {
@@ -158,7 +158,7 @@ func (p *Process) Run(ctx context.Context) error {
 	// Toggle between running in a pty
 	if p.conf.PTY {
 		// Commands like tput expect a TERM value for a PTY
-		p.command.Env = append(p.command.Env, `TERM=`+termType)
+		p.command.Env = append(p.command.Env, "TERM="+termType)
 
 		pty, err := StartPTY(p.command)
 		if err != nil {

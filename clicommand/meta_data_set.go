@@ -110,7 +110,7 @@ var MetaDataSetCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Create the meta data to set
 		metaData := &api.MetaData{

@@ -218,14 +218,14 @@ var PipelineUploadCommand = cli.Command{
 		environ := env.FromSlice(os.Environ())
 
 		// resolve BUILDKITE_COMMIT based on the local git repo
-		if commitRef, ok := environ.Get(`BUILDKITE_COMMIT`); ok {
-			cmdOut, err := exec.Command(`git`, `rev-parse`, commitRef).Output()
+		if commitRef, ok := environ.Get("BUILDKITE_COMMIT"); ok {
+			cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
 			if err != nil {
 				l.Warn("Error running git rev-parse %q: %v", commitRef, err)
 			} else {
 				trimmedCmdOut := strings.TrimSpace(string(cmdOut))
 				l.Info("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut)
-				environ.Set(`BUILDKITE_COMMIT`, trimmedCmdOut)
+				environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 			}
 		}
 
@@ -298,7 +298,7 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Generate a UUID that will identify this pipeline change. We
 		// do this outside of the retry loop because we want this UUID
