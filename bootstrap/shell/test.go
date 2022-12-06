@@ -26,20 +26,20 @@ func NewTestShell(t *testing.T) *Shell {
 
 	// Windows requires certain env variables to be present
 	if runtime.GOOS == "windows" {
-		sh.Env = env.FromSlice([]string{
-			//			"PATH=" + os.Getenv("PATH"),
-			"SystemRoot=" + os.Getenv("SystemRoot"),
-			"WINDIR=" + os.Getenv("WINDIR"),
-			"COMSPEC=" + os.Getenv("COMSPEC"),
-			"PATHEXT=" + os.Getenv("PATHEXT"),
-			"TMP=" + os.Getenv("TMP"),
-			"TEMP=" + os.Getenv("TEMP"),
-			"ProgramData=" + os.Getenv("ProgramData"),
-		})
+		sh.Env = env.Environment{
+			//"PATH":        os.Getenv("PATH"),
+			"SystemRoot":  os.Getenv("SystemRoot"),
+			"WINDIR":      os.Getenv("WINDIR"),
+			"COMSPEC":     os.Getenv("COMSPEC"),
+			"PATHEXT":     os.Getenv("PATHEXT"),
+			"TMP":         os.Getenv("TMP"),
+			"TEMP":        os.Getenv("TEMP"),
+			"ProgramData": os.Getenv("ProgramData"),
+		}
 	} else {
-		sh.Env = env.FromSlice([]string{
-			"PATH=" + os.Getenv("PATH"),
-		})
+		sh.Env = env.Environment{
+			"PATH": os.Getenv("PATH"),
+		}
 	}
 
 	return sh

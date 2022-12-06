@@ -2,8 +2,8 @@ package bootstrap
 
 import (
 	"bufio"
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -23,6 +23,8 @@ const (
 	gitErrorClean
 	gitErrorCleanSubmodules
 )
+
+var errNoHostname = errors.New("no hostname found")
 
 type gitError struct {
 	error
@@ -196,57 +198,66 @@ func parseGittableURL(ref string) (*url.URL, error) {
 var gitHostAliasRegexp = regexp.MustCompile(`-[a-z0-9\-]+$`)
 
 func resolveGitHost(ctx context.Context, sh *shell.Shell, host string) string {
-	var hostname string
-	var port string
-
 	// ask SSH to print its configuration for this host, honouring .ssh/config
 	output, err := sh.RunAndCapture(ctx, "ssh", "-G", host)
+	if err != nil {
+		// fall back to the old behaviour of just replacing strings
+		return gitHostAliasRegexp.ReplaceAllString(host, "")
+	}
 
 	// if we got no error, let's process the output
-	if err == nil {
-		// split up the ssh -G output by lines
-		scanner := bufio.NewScanner(bytes.NewBufferString(output))
+	h, err := hostFromSSHG(output)
+	if err != nil {
+		// so we fall back to the old behaviour of just replacing strings
+		return gitHostAliasRegexp.ReplaceAllString(host, "")
+	}
+	return h
+}
 
-		for scanner.Scan() {
-			line := scanner.Text()
+func hostFromSSHG(sshconf string) (string, error) {
+	var hostname, port string
 
-			// search the ssh -G output for "hostname" and "port" lines
-			tokens := strings.SplitN(line, " ", 2)
+	// split up the ssh -G output by lines
+	scanner := bufio.NewScanner(strings.NewReader(sshconf))
+	for scanner.Scan() {
+		line := scanner.Text()
 
-			// skip any line which isn't a key-value pair
-			if len(tokens) != 2 {
-				break
-			}
+		// search the ssh -G output for "hostname" and "port" lines
+		tokens := strings.SplitN(line, " ", 2)
 
-			// grab the values we care about
-			if tokens[0] == "hostname" {
-				hostname = tokens[1]
-			} else if tokens[0] == "port" {
-				port = tokens[1]
-			}
-
-			// if we have both values, we're done here!
-			if hostname != "" && port != "" {
-				break
-			}
+		// skip any line which isn't a key-value pair
+		if len(tokens) != 2 {
+			continue
 		}
+
+		// grab the values we care about
+		switch tokens[0] {
+		case "hostname":
+			hostname = tokens[1]
+		case "port":
+			port = tokens[1]
+		}
+
+		// if we have both values, we're done here!
+		if hostname != "" && port != "" {
+			break
+		}
+	}
+
+	if hostname == "" {
+		// if we got here, either the `-G` flag was unsupported, or ssh -G
+		// didn't return a value for hostname (weird!)
+		return "", errNoHostname
 	}
 
 	// if we got out of that with a hostname, things worked
-	if hostname != "" {
-		// if the port is the default, we can leave it off
-		if port == "22" {
-			return hostname
-		}
-
-		// otherwise, output it in hostname:port form
-		return net.JoinHostPort(hostname, port)
+	// if the port is the default, we can leave it off
+	if port == "" || port == "22" {
+		return hostname, nil
 	}
 
-	// if we got here, either the `-G` flag was unsupported, or ssh -G
-	// didn't return a value for hostname (weird!),
-	// so we fall back to the old behaviour of just replacing strings
-	return gitHostAliasRegexp.ReplaceAllString(host, "")
+	// otherwise, output it in hostname:port form
+	return net.JoinHostPort(hostname, port), nil
 }
 
 // gitCheckRefFormatDenyRegexp is a pattern used by gitCheckRefFormat().

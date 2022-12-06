@@ -5,6 +5,7 @@ package process
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
-	"github.com/pkg/errors"
 )
 
 const (
