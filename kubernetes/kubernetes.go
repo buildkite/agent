@@ -3,6 +3,8 @@ package kubernetes
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,7 +16,12 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/process"
 )
+
+func init() {
+	gob.Register(new(syscall.WaitStatus))
+}
 
 const defaultSocketPath = "/workspace/buildkite.sock"
 
@@ -51,7 +58,7 @@ type Runner struct {
 }
 
 type clientResult struct {
-	ExitStatus syscall.WaitStatus
+	ExitStatus process.WaitStatus
 	State      clientState
 }
 
@@ -113,12 +120,17 @@ func (r *Runner) Terminate() error {
 	panic("unimplemented")
 }
 
-func (r *Runner) WaitStatus() syscall.WaitStatus {
-	// TODO: fix this somehow??
-	var ws syscall.WaitStatus
+func (r *Runner) WaitStatus() process.WaitStatus {
+	var ws process.WaitStatus
 	for _, client := range r.clients {
+		if client.ExitStatus.ExitStatus() != 0 {
+			return client.ExitStatus
+		}
+		if client.ExitStatus.Signaled() {
+			return client.ExitStatus
+		}
+		// just return any ExitStatus if we don't find any "interesting" ones
 		ws = client.ExitStatus
-		break
 	}
 	return ws
 }
@@ -132,7 +144,7 @@ type Logs struct {
 
 type ExitCode struct {
 	ID         int
-	ExitStatus syscall.WaitStatus
+	ExitStatus process.WaitStatus
 }
 
 type Status struct {
@@ -159,6 +171,11 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	r.logger.Info("client %d exited with code %d", args.ID, args.ExitStatus.ExitStatus())
 	client.ExitStatus = args.ExitStatus
 	client.State = stateExited
+	if client.ExitStatus.ExitStatus() != 0 {
+		r.closedOnce.Do(func() {
+			close(r.done)
+		})
+	}
 
 	allExited := true
 	for _, client := range r.clients {
@@ -205,6 +222,8 @@ type Client struct {
 	client     *rpc.Client
 }
 
+var errNotConnected = errors.New("client not connected")
+
 func (c *Client) Connect() error {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
@@ -217,9 +236,9 @@ func (c *Client) Connect() error {
 	return c.client.Call("Runner.Register", c.ID, nil)
 }
 
-func (c *Client) Exit(exitStatus syscall.WaitStatus) error {
+func (c *Client) Exit(exitStatus process.WaitStatus) error {
 	if c.client == nil {
-		return nil
+		return errNotConnected
 	}
 	return c.client.Call("Runner.Exit", ExitCode{
 		ID:         c.ID,
@@ -230,7 +249,7 @@ func (c *Client) Exit(exitStatus syscall.WaitStatus) error {
 // Write implements io.Writer
 func (c *Client) Write(p []byte) (int, error) {
 	if c.client == nil {
-		return 0, nil
+		return 0, errNotConnected
 	}
 	n := len(p)
 	err := c.client.Call("Runner.WriteLogs", Logs{
