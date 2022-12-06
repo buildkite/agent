@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -114,7 +113,7 @@ type jobAPI interface {
 	Interrupt() error
 	Terminate() error
 	Run(ctx context.Context) error
-	WaitStatus() syscall.WaitStatus
+	WaitStatus() process.WaitStatus
 }
 
 var _ jobRunner = (*JobRunner)(nil)

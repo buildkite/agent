@@ -170,14 +170,14 @@ func (s *Shell) Terminate() {
 }
 
 // Terminate running command
-func (s *Shell) WaitStatus() syscall.WaitStatus {
+func (s *Shell) WaitStatus() process.WaitStatus {
 	s.cmdLock.Lock()
 	defer s.cmdLock.Unlock()
 
 	if s.cmd != nil && s.cmd.proc != nil {
 		return s.cmd.proc.WaitStatus()
 	}
-	return 0
+	return syscall.WaitStatus(0)
 }
 
 // LockFile is a pid-based lock for cross-process locking

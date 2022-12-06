@@ -43,6 +43,12 @@ var signalMap = map[string]Signal{
 	"SIGTERM": SIGTERM,
 }
 
+type WaitStatus interface {
+	ExitStatus() int
+	Signaled() bool
+	Signal() syscall.Signal
+}
+
 func (s Signal) String() string {
 	for k, sig := range signalMap {
 		if sig == s {
@@ -107,7 +113,7 @@ func (p *Process) WaitResult() error {
 }
 
 // WaitStatus returns the status of the Wait() call
-func (p *Process) WaitStatus() syscall.WaitStatus {
+func (p *Process) WaitStatus() WaitStatus {
 	return p.status
 }
 

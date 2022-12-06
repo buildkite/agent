@@ -113,7 +113,9 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		}
 		os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", status.AccessToken)
 		b.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", status.AccessToken)
-		defer kubernetesClient.Exit(b.shell.WaitStatus())
+		defer func() {
+			kubernetesClient.Exit(b.shell.WaitStatus())
+		}()
 	}
 
 	var err error
