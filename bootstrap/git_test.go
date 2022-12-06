@@ -2,11 +2,11 @@ package bootstrap
 
 import (
 	"context"
-	"path/filepath"
+	"errors"
+	"os"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,284 +65,83 @@ func TestParseGittableURL(t *testing.T) {
 	}
 }
 
+func TestHostFromSSHG(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input   string
+		want    string
+		wantErr error
+	}{
+		{
+			input: "hostname github.com\nport 22\nuser buildkite\naddressfamily any",
+			want:  "github.com",
+		},
+		{
+			input: "\nuser buildkite\naddressfamily any\nhostname blargh-no-alias.com\nport 22\n",
+			want:  "blargh-no-alias.com",
+		},
+		{
+			input: "hostname rad-git-host.com\nport 443\nuser cool-admin\naddressfamily any",
+			want:  "rad-git-host.com:443",
+		},
+		{
+			input:   "",
+			wantErr: errNoHostname,
+		},
+		{
+			input: `unknown option -- G
+usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
+	[-D [bind_address:]port] [-E log_file] [-e escape_char]
+	[-F configfile] [-I pkcs11] [-i identity_file]
+	[-L [bind_address:]port:host:hostport] [-l login_name] [-m mac_spec]
+	[-O ctl_cmd] [-o option] [-p port]
+	[-Q cipher | cipher-auth | mac | kex | key]
+	[-R [bind_address:]port:host:hostport] [-S ctl_path] [-W host:port]
+	[-w local_tun[:remote_tun]] [user@]hostname [command]`,
+			wantErr: errNoHostname,
+		},
+	}
+
+	for _, test := range tests {
+		got, err := hostFromSSHG(test.input)
+		if !errors.Is(err, test.wantErr) {
+			t.Errorf("hostFromSSHG(%q) error = %v, want %v", test.input, err, test.wantErr)
+		}
+		if got != test.want {
+			t.Errorf("hostFromSSHG(%q) = %q, want %q", test.input, got, test.want)
+		}
+	}
+}
+
 func TestResolvingGitHostAliasesWithFlagSupport(t *testing.T) {
 	t.Parallel()
 
-	sh := shell.NewTestShell(t)
-
-	ssh, err := bintest.NewMock("ssh")
-	if err != nil {
-		t.Fatalf("bintest.NewMock(ssh) error = %v", err)
+	if _, err := os.Stat("/.dockerenv"); err != nil {
+		t.Skip("TestResolvingGitHostAliasesWithFlagSupport only meaningful in the prepared Docker container")
 	}
-	defer ssh.CheckAndClose(t)
 
-	sh.Env.Set("PATH", filepath.Dir(ssh.Path))
+	// Use the real SSH bundled in the Go Docker image, with the config
+	// .buildkite/build/ssh.conf.
 
-	ssh.
-		Expect("-G", "github.com-alias1").
-		AndWriteToStdout(`user buildkite
-hostname github.com
-port 22
-addkeystoagent false
-addressfamily any
-batchmode no
-canonicalizefallbacklocal yes
-canonicalizehostname false
-challengeresponseauthentication yes
-checkhostip yes
-compression no
-controlmaster false
-enablesshkeysign no
-clearallforwardings no
-exitonforwardfailure no
-fingerprinthash SHA256
-forwardagent no
-forwardx11 no
-forwardx11trusted no
-gatewayports no
-gssapiauthentication no
-gssapidelegatecredentials no
-hashknownhosts no
-hostbasedauthentication no
-identitiesonly no
-kbdinteractiveauthentication yes
-nohostauthenticationforlocalhost no
-passwordauthentication yes
-permitlocalcommand no
-proxyusefdpass no
-pubkeyauthentication yes
-requesttty auto
-streamlocalbindunlink no
-stricthostkeychecking ask
-tcpkeepalive yes
-tunnel false
-verifyhostkeydns false
-visualhostkey no
-updatehostkeys false
-canonicalizemaxdots 1
-connectionattempts 1
-forwardx11timeout 1200
-numberofpasswordprompts 3
-serveralivecountmax 3
-serveraliveinterval 0
-ciphers chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com
-hostkeyalgorithms ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-hostbasedkeytypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-kexalgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1
-casignaturealgorithms ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-loglevel INFO
-macs umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1
-pubkeyacceptedkeytypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-xauthlocation xauth
-identityfile ~/.ssh/github_rsa
-canonicaldomains
-globalknownhostsfile /etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts2
-userknownhostsfile ~/.ssh/known_hosts ~/.ssh/known_hosts2
-sendenv LANG
-sendenv LC_*
-connecttimeout none
-tunneldevice any:any
-controlpersist no
-escapechar ~
-ipqos af21 cs1
-rekeylimit 0 0
-streamlocalbindmask 0177
-syslogfacility USER`).
-		AndExitWith(0)
-
-	assert.Equal(t, "github.com", resolveGitHost(context.Background(), sh, "github.com-alias1"))
-
-	ssh.
-		Expect("-G", "blargh-no-alias.com").
-		AndWriteToStdout(`user buildkite
-hostname blargh-no-alias.com
-port 22
-addkeystoagent false
-addressfamily any
-batchmode no
-canonicalizefallbacklocal yes
-canonicalizehostname false
-challengeresponseauthentication yes
-checkhostip yes
-compression no
-controlmaster false
-enablesshkeysign no
-clearallforwardings no
-exitonforwardfailure no
-fingerprinthash SHA256
-forwardagent no
-forwardx11 no
-forwardx11trusted no
-gatewayports no
-gssapiauthentication no
-gssapidelegatecredentials no
-hashknownhosts no
-hostbasedauthentication no
-identitiesonly no
-kbdinteractiveauthentication yes
-nohostauthenticationforlocalhost no
-passwordauthentication yes
-permitlocalcommand no
-proxyusefdpass no
-pubkeyauthentication yes
-requesttty auto
-streamlocalbindunlink no
-stricthostkeychecking ask
-tcpkeepalive yes
-tunnel false
-verifyhostkeydns false
-visualhostkey no
-updatehostkeys false
-canonicalizemaxdots 1
-connectionattempts 1
-forwardx11timeout 1200
-numberofpasswordprompts 3
-serveralivecountmax 3
-serveraliveinterval 0
-ciphers chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com
-hostkeyalgorithms ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-hostbasedkeytypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-kexalgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1
-casignaturealgorithms ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-loglevel INFO
-macs umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1
-pubkeyacceptedkeytypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-xauthlocation xauth
-identityfile ~/.ssh/github_rsa
-canonicaldomains
-globalknownhostsfile /etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts2
-userknownhostsfile ~/.ssh/known_hosts ~/.ssh/known_hosts2
-sendenv LANG
-sendenv LC_*
-connecttimeout none
-tunneldevice any:any
-controlpersist no
-escapechar ~
-ipqos af21 cs1
-rekeylimit 0 0
-streamlocalbindmask 0177
-syslogfacility USER`).
-		AndExitWith(0)
-
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(context.Background(), sh, "blargh-no-alias.com"))
-
-	ssh.
-		Expect("-G", "cool-alias").
-		AndWriteToStdout(`user cool-admin
-hostname rad-git-host.com
-port 443
-addkeystoagent false
-addressfamily any
-batchmode no
-canonicalizefallbacklocal yes
-canonicalizehostname false
-challengeresponseauthentication yes
-checkhostip yes
-compression no
-controlmaster false
-enablesshkeysign no
-clearallforwardings no
-exitonforwardfailure no
-fingerprinthash SHA256
-forwardagent no
-forwardx11 no
-forwardx11trusted no
-gatewayports no
-gssapiauthentication no
-gssapidelegatecredentials no
-hashknownhosts no
-hostbasedauthentication no
-identitiesonly no
-kbdinteractiveauthentication yes
-nohostauthenticationforlocalhost no
-passwordauthentication yes
-permitlocalcommand no
-proxyusefdpass no
-pubkeyauthentication yes
-requesttty auto
-streamlocalbindunlink no
-stricthostkeychecking ask
-tcpkeepalive yes
-tunnel false
-verifyhostkeydns false
-visualhostkey no
-updatehostkeys false
-canonicalizemaxdots 1
-connectionattempts 1
-forwardx11timeout 1200
-numberofpasswordprompts 3
-serveralivecountmax 3
-serveraliveinterval 0
-ciphers chacha20-poly1305@openssh.com,aes128-ctr,aes192-ctr,aes256-ctr,aes128-gcm@openssh.com,aes256-gcm@openssh.com
-hostkeyalgorithms ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-hostbasedkeytypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-kexalgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,diffie-hellman-group14-sha256,diffie-hellman-group14-sha1
-casignaturealgorithms ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-loglevel INFO
-macs umac-64-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,hmac-sha1-etm@openssh.com,umac-64@openssh.com,umac-128@openssh.com,hmac-sha2-256,hmac-sha2-512,hmac-sha1
-pubkeyacceptedkeytypes ecdsa-sha2-nistp256-cert-v01@openssh.com,ecdsa-sha2-nistp384-cert-v01@openssh.com,ecdsa-sha2-nistp521-cert-v01@openssh.com,ssh-ed25519-cert-v01@openssh.com,rsa-sha2-512-cert-v01@openssh.com,rsa-sha2-256-cert-v01@openssh.com,ssh-rsa-cert-v01@openssh.com,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,ssh-ed25519,rsa-sha2-512,rsa-sha2-256,ssh-rsa
-xauthlocation xauth
-identityfile ~/.ssh/github_rsa
-canonicaldomains
-globalknownhostsfile /etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts2
-userknownhostsfile ~/.ssh/known_hosts ~/.ssh/known_hosts2
-sendenv LANG
-sendenv LC_*
-connecttimeout none
-tunneldevice any:any
-controlpersist no
-escapechar ~
-ipqos af21 cs1
-rekeylimit 0 0
-streamlocalbindmask 0177
-syslogfacility USER`).
-		AndExitWith(0)
-
-	assert.Equal(t, "rad-git-host.com:443", resolveGitHost(context.Background(), sh, "cool-alias"))
-}
-
-func TestResolvingGitHostAliasesWithoutFlagSupport(t *testing.T) {
-	t.Parallel()
+	ctx := context.Background()
 
 	sh := shell.NewTestShell(t)
+	sh.Env.Set("PATH", os.Getenv("PATH"))
 
-	ssh, err := bintest.NewMock("ssh")
-	if err != nil {
-		t.Fatalf("bintest.NewMock(ssh) error = %v", err)
+	tests := []struct {
+		alias, want string
+	}{
+		{alias: "github.com-alias1", want: "github.com"},
+		{alias: "blargh-no-alias.com", want: "blargh-no-alias.com"},
+		{alias: "cool-alias", want: "rad-git-host.com:443"},
 	}
-	defer ssh.CheckAndClose(t)
 
-	sh.Env.Set("PATH", filepath.Dir(ssh.Path))
-
-	ssh.
-		Expect("-G", "github.com-alias1").
-		AndWriteToStderr(`unknown option -- G
-usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
-           [-D [bind_address:]port] [-E log_file] [-e escape_char]
-           [-F configfile] [-I pkcs11] [-i identity_file]
-           [-L [bind_address:]port:host:hostport] [-l login_name] [-m mac_spec]
-           [-O ctl_cmd] [-o option] [-p port]
-           [-Q cipher | cipher-auth | mac | kex | key]
-           [-R [bind_address:]port:host:hostport] [-S ctl_path] [-W host:port]
-           [-w local_tun[:remote_tun]] [user@]hostname [command]`).
-		AndExitWith(255)
-
-	assert.Equal(t, "github.com", resolveGitHost(context.Background(), sh, "github.com-alias1"))
-
-	ssh.
-		Expect("-G", "blargh-no-alias.com").
-		AndWriteToStderr(`unknown option -- G
-usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
-           [-D [bind_address:]port] [-E log_file] [-e escape_char]
-           [-F configfile] [-I pkcs11] [-i identity_file]
-           [-L [bind_address:]port:host:hostport] [-l login_name] [-m mac_spec]
-           [-O ctl_cmd] [-o option] [-p port]
-           [-Q cipher | cipher-auth | mac | kex | key]
-           [-R [bind_address:]port:host:hostport] [-S ctl_path] [-W host:port]
-           [-w local_tun[:remote_tun]] [user@]hostname [command]`).
-		AndExitWith(255)
-
-	assert.Equal(t, "blargh-no-alias.com", resolveGitHost(context.Background(), sh, "blargh-no-alias.com"))
+	for _, test := range tests {
+		if got := resolveGitHost(ctx, sh, test.alias); got != test.want {
+			t.Errorf("resolveGitHost(ctx, sh, %q) = %q, want %q", test.alias, got, test.want)
+		}
+	}
 }
 
 func TestGitCheckRefFormat(t *testing.T) {

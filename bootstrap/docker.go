@@ -2,11 +2,11 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/pkg/errors"
 )
 
 var dockerEnv = []string{
