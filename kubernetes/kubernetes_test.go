@@ -34,13 +34,13 @@ func TestOrderedClients(t *testing.T) {
 	}
 	select {
 	case err := <-client0.WaitReady():
-		require.NoError(t, err)
+		require.NoError(t, err.Err)
 		break
 	case err := <-client1.WaitReady():
-		require.NoError(t, err)
+		require.NoError(t, err.Err)
 		require.FailNow(t, "client1 should not be ready")
 	case err := <-client2.WaitReady():
-		require.NoError(t, err)
+		require.NoError(t, err.Err)
 		require.FailNow(t, "client2 should not be ready")
 	case <-runner.Done():
 		require.FailNow(t, "runner should not be done")
@@ -51,10 +51,10 @@ func TestOrderedClients(t *testing.T) {
 	require.NoError(t, client0.Exit(0))
 	select {
 	case err := <-client1.WaitReady():
-		require.NoError(t, err)
+		require.NoError(t, err.Err)
 		break
 	case err := <-client2.WaitReady():
-		require.NoError(t, err)
+		require.NoError(t, err.Err)
 		require.FailNow(t, "client2 should not be ready")
 	case <-runner.Done():
 		require.FailNow(t, "runner should not be done")
@@ -65,7 +65,7 @@ func TestOrderedClients(t *testing.T) {
 	require.NoError(t, client1.Exit(0))
 	select {
 	case err := <-client2.WaitReady():
-		require.NoError(t, err)
+		require.NoError(t, err.Err)
 		break
 	case <-runner.Done():
 		require.FailNow(t, "runner should not be done")
