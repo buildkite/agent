@@ -86,8 +86,8 @@ func TestFetchingTagsFromECS(t *testing.T) {
 	fetcher := &tagFetcher{
 		ecsMetaDataDefault: func() (map[string]string, error) {
 			return map[string]string{
-				`ecs:container-name`: "ecs-buildkite-agent-blahblah",
-				`ecs:image`:          "buildkite/agent",
+				"ecs:container-name": "ecs-buildkite-agent-blahblah",
+				"ecs:image":          "buildkite/agent",
 				"ecs:task-arn":       "arn:aws:ecs:us-east-1:123456789012:task/MyCluster/4d590253bb114126b7afa7b58EXAMPLE",
 			}, nil
 		},

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	metadata "github.com/brunoscheufler/aws-ecs-metadata-go"
 	"net/http"
 )
@@ -26,6 +27,8 @@ func (e ECSMetadata) Get() (map[string]string, error) {
 		metaData["ecs:container-name"] = m.DockerName
 		metaData["ecs:image"] = m.Image
 		metaData["ecs:task-arn"] = m.Labels.EcsTaskArn
+	default:
+		return metaData, fmt.Errorf("ecs metadata returned unknown type %T", m)
 	}
 
 	return metaData, nil
