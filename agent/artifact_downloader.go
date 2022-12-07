@@ -97,7 +97,7 @@ func (a *ArtifactDownloader) Download(ctx context.Context) error {
 			// Convert windows paths to slashes, otherwise we get a literal
 			// download of "dir/dir/file" vs sub-directories on non-windows agents
 			path := artifact.Path
-			if runtime.GOOS != `windows` {
+			if runtime.GOOS != "windows" {
 				path = strings.Replace(path, `\`, `/`, -1)
 			}
 

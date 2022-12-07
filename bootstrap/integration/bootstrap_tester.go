@@ -84,20 +84,20 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 			"BUILDKITE_BUILD_PATH=" + buildDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
 			"BUILDKITE_PLUGINS_PATH=" + pluginsDir,
-			`BUILDKITE_REPO=` + repo.Path,
-			`BUILDKITE_AGENT_DEBUG=true`,
-			`BUILDKITE_AGENT_NAME=test-agent`,
-			`BUILDKITE_ORGANIZATION_SLUG=test`,
-			`BUILDKITE_PIPELINE_SLUG=test-project`,
-			`BUILDKITE_PULL_REQUEST=`,
-			`BUILDKITE_PIPELINE_PROVIDER=git`,
-			`BUILDKITE_COMMIT=HEAD`,
-			`BUILDKITE_BRANCH=master`,
-			`BUILDKITE_COMMAND_EVAL=true`,
-			`BUILDKITE_ARTIFACT_PATHS=`,
-			`BUILDKITE_COMMAND=true`,
-			`BUILDKITE_JOB_ID=1111-1111-1111-1111`,
-			`BUILDKITE_AGENT_ACCESS_TOKEN=test`,
+			"BUILDKITE_REPO=" + repo.Path,
+			"BUILDKITE_AGENT_DEBUG=true",
+			"BUILDKITE_AGENT_NAME=test-agent",
+			"BUILDKITE_ORGANIZATION_SLUG=test",
+			"BUILDKITE_PIPELINE_SLUG=test-project",
+			"BUILDKITE_PULL_REQUEST=",
+			"BUILDKITE_PIPELINE_PROVIDER=git",
+			"BUILDKITE_COMMIT=HEAD",
+			"BUILDKITE_BRANCH=master",
+			"BUILDKITE_COMMAND_EVAL=true",
+			"BUILDKITE_ARTIFACT_PATHS=",
+			"BUILDKITE_COMMAND=true",
+			"BUILDKITE_JOB_ID=1111-1111-1111-1111",
+			"BUILDKITE_AGENT_ACCESS_TOKEN=test",
 		},
 		PathDir:    pathDir,
 		BuildDir:   buildDir,
@@ -109,7 +109,7 @@ func NewBootstrapTester() (*BootstrapTester, error) {
 	if exp := experiments.Enabled(); len(exp) > 0 {
 		bt.Env = append(bt.Env, `BUILDKITE_AGENT_EXPERIMENT=`+strings.Join(exp, ","))
 
-		if experiments.IsEnabled(`git-mirrors`) {
+		if experiments.IsEnabled("git-mirrors") {
 			gitMirrorsDir, err := os.MkdirTemp("", "bootstrap-git-mirrors")
 			if err != nil {
 				return nil, fmt.Errorf("making bootstrap-git-mirrors directory: %w", err)

@@ -102,7 +102,7 @@ var AnnotationRemoveCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Retry the removal a few times before giving up
 		err = roko.NewRetrier(

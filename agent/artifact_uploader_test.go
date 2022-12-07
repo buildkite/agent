@@ -109,14 +109,14 @@ func TestCollect(t *testing.T) {
 			experiments.Disable(experimentKey)
 		}
 	}()
-	experiments.Disable(`normalised-upload-paths`)
+	experiments.Disable("normalised-upload-paths")
 	artifactsWithoutExperimentEnabled, err := uploader.Collect()
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths disabled] uploader.Collect() error = %v", err)
 	}
 	assert.Equal(t, 5, len(artifactsWithoutExperimentEnabled))
 
-	experiments.Enable(`normalised-upload-paths`)
+	experiments.Enable("normalised-upload-paths")
 	artifactsWithExperimentEnabled, err := uploader.Collect()
 	if err != nil {
 		t.Fatalf("[normalised-upload-paths enabled] uploader.Collect() error = %v", err)

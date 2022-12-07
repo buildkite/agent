@@ -129,7 +129,7 @@ var ArtifactDownloadCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the downloader
 		downloader := agent.NewArtifactDownloader(l, client, agent.ArtifactDownloaderConfig{

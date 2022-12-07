@@ -87,7 +87,7 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	hookFile, err := shell.TempFileWithExtension("hookName.bat")
 	assert.NoError(t, err)
 
-	_, err = fmt.Fprintln(hookFile, `echo Hello There!`)
+	_, err = fmt.Fprintln(hookFile, "echo Hello There!")
 	assert.NoError(t, err)
 
 	hookFile.Close()

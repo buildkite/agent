@@ -48,7 +48,7 @@ func TestProcessOutput(t *testing.T) {
 }
 
 func TestProcessOutputPTY(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("PTY not supported on windows")
 	}
 
@@ -169,7 +169,7 @@ func TestProcessTerminatesWhenContextDoes(t *testing.T) {
 }
 
 func TestProcessInterrupts(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Works in windows, but not in docker")
 	}
 
@@ -207,7 +207,7 @@ func TestProcessInterrupts(t *testing.T) {
 }
 
 func TestProcessInterruptsWithCustomSignal(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Works in windows, but not in docker")
 	}
 
@@ -246,7 +246,7 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 }
 
 func TestProcessSetsProcessGroupID(t *testing.T) {
-	if runtime.GOOS == `windows` {
+	if runtime.GOOS == "windows" {
 		t.Skip("Process groups not supported on windows")
 		return
 	}

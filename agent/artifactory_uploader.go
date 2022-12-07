@@ -119,19 +119,19 @@ func (u *ArtifactoryUploader) Upload(artifact *api.Artifact) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Add(`X-Checksum-MD5`, md5Checksum)
+	req.Header.Add("X-Checksum-MD5", md5Checksum)
 
 	sha1Checksum, err := checksumFile(sha1.New(), artifact.AbsolutePath)
 	if err != nil {
 		return err
 	}
-	req.Header.Add(`X-Checksum-SHA1`, sha1Checksum)
+	req.Header.Add("X-Checksum-SHA1", sha1Checksum)
 
 	sha256Checksum, err := checksumFile(sha256.New(), artifact.AbsolutePath)
 	if err != nil {
 		return err
 	}
-	req.Header.Add(`X-Checksum-SHA256`, sha256Checksum)
+	req.Header.Add("X-Checksum-SHA256", sha256Checksum)
 
 	res, err := u.client.Do(req)
 	if err != nil {

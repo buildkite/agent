@@ -41,7 +41,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	}
 
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
-		if err := bintest.ExpectEnv(t, i.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
+		if err := bintest.ExpectEnv(t, i.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
 			return err
 		}
 		return nil
@@ -50,7 +50,7 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	git.Expect().AtLeastOnce().WithAnyArguments()
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if err := bintest.ExpectEnv(t, c.Env, `MY_CUSTOM_ENV=1`, `LLAMAS_ROCK=absolutely`); err != nil {
+		if err := bintest.ExpectEnv(t, c.Env, "MY_CUSTOM_ENV=1", "LLAMAS_ROCK=absolutely"); err != nil {
 			fmt.Fprintf(c.Stderr, "%v\n", err)
 			c.Exit(1)
 		} else {
@@ -233,7 +233,7 @@ func TestReplacingCheckoutHook(t *testing.T) {
 
 	// run a checkout in our checkout hook, otherwise we won't have local hooks to run
 	tester.ExpectGlobalHook("checkout").Once().AndCallFunc(func(c *bintest.Call) {
-		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv(`BUILDKITE_BUILD_CHECKOUT_PATH`))
+		out, err := tester.Repo.Execute("clone", "-v", "--", tester.Repo.Path, c.GetEnv("BUILDKITE_BUILD_CHECKOUT_PATH"))
 		fmt.Fprint(c.Stderr, out)
 		if err != nil {
 			c.Exit(1)

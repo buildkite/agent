@@ -221,7 +221,7 @@ func TestPipelineParserInterpolatesKeysAsWellAsValues(t *testing.T) {
 	}
 
 	result, err := PipelineParser{
-		Env:      env.FromSlice([]string{`FROM_ENV=llamas`}),
+		Env:      env.FromSlice([]string{"FROM_ENV=llamas"}),
 		Pipeline: []byte(pipeline),
 	}.Parse()
 
@@ -256,7 +256,7 @@ func TestPipelineParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 
 	result, err := PipelineParser{
 		Pipeline: []byte(pipeline),
-		Env:      env.FromSlice([]string{`YEAR_FROM_SHELL=1912`}),
+		Env:      env.FromSlice([]string{"YEAR_FROM_SHELL=1912"}),
 	}.Parse()
 
 	if err != nil {
@@ -265,9 +265,9 @@ func TestPipelineParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	if err := decodeIntoStruct(&decoded, result); err != nil {
 		t.Fatalf("decodeIntoStruct(&decoded, result) error = %v", err)
 	}
-	assert.Equal(t, `England`, decoded.Env["TEAM1"])
-	assert.Equal(t, `England smashes Australia to win the ashes in 1912!!`, decoded.Env["HEADLINE"])
-	assert.Equal(t, `echo England smashes Australia to win the ashes in 1912!!`, decoded.Steps[0].Command)
+	assert.Equal(t, "England", decoded.Env["TEAM1"])
+	assert.Equal(t, "England smashes Australia to win the ashes in 1912!!", decoded.Env["HEADLINE"])
+	assert.Equal(t, "echo England smashes Australia to win the ashes in 1912!!", decoded.Steps[0].Command)
 }
 
 func decodeIntoStruct(into interface{}, from interface{}) error {

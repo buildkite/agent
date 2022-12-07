@@ -352,10 +352,10 @@ func (r *JobRunner) Run(ctx context.Context) error {
 			if r.stopped {
 				// The agent is being gracefully stopped, and we signaled the job to end. Often due
 				// to pending host shutdown or EC2 spot instance termination
-				signalReason = `agent_stop`
+				signalReason = "agent_stop"
 			} else if r.cancelled {
 				// The job was signaled because it was cancelled via the buildkite web UI
-				signalReason = `cancel`
+				signalReason = "cancel"
 			}
 		}
 	}
@@ -396,11 +396,11 @@ func (r *JobRunner) Run(ctx context.Context) error {
 		"exit_code": exitStatus,
 	})
 	if exitStatus == "0" {
-		jobMetrics.Timing(`jobs.duration.success`, finishedAt.Sub(startedAt))
-		jobMetrics.Count(`jobs.success`, 1)
+		jobMetrics.Timing("jobs.duration.success", finishedAt.Sub(startedAt))
+		jobMetrics.Count("jobs.success", 1)
 	} else {
-		jobMetrics.Timing(`jobs.duration.error`, finishedAt.Sub(startedAt))
-		jobMetrics.Count(`jobs.failed`, 1)
+		jobMetrics.Timing("jobs.duration.error", finishedAt.Sub(startedAt))
+		jobMetrics.Count("jobs.failed", 1)
 	}
 
 	// Finish the build in the Buildkite Agent API
@@ -474,7 +474,7 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	}
 
 	// The agent registration token should never make it into the job environment
-	delete(env, `BUILDKITE_AGENT_TOKEN`)
+	delete(env, "BUILDKITE_AGENT_TOKEN")
 
 	// Write out the job environment to a file, in k="v" format, with newlines escaped
 	// We present only the clean environment - i.e only variables configured
@@ -495,28 +495,28 @@ func (r *JobRunner) createEnvironment() ([]string, error) {
 	// We show the user a warning in the bootstrap if they use any of these at a job level.
 
 	var protectedEnv = []string{
-		`BUILDKITE_AGENT_ENDPOINT`,
-		`BUILDKITE_AGENT_ACCESS_TOKEN`,
-		`BUILDKITE_AGENT_DEBUG`,
-		`BUILDKITE_AGENT_PID`,
-		`BUILDKITE_BIN_PATH`,
-		`BUILDKITE_CONFIG_PATH`,
-		`BUILDKITE_BUILD_PATH`,
-		`BUILDKITE_GIT_MIRRORS_PATH`,
-		`BUILDKITE_GIT_MIRRORS_SKIP_UPDATE`,
-		`BUILDKITE_HOOKS_PATH`,
-		`BUILDKITE_PLUGINS_PATH`,
-		`BUILDKITE_SSH_KEYSCAN`,
-		`BUILDKITE_GIT_SUBMODULES`,
-		`BUILDKITE_COMMAND_EVAL`,
-		`BUILDKITE_PLUGINS_ENABLED`,
-		`BUILDKITE_LOCAL_HOOKS_ENABLED`,
-		`BUILDKITE_GIT_CLONE_FLAGS`,
-		`BUILDKITE_GIT_FETCH_FLAGS`,
-		`BUILDKITE_GIT_CLONE_MIRROR_FLAGS`,
-		`BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT`,
-		`BUILDKITE_GIT_CLEAN_FLAGS`,
-		`BUILDKITE_SHELL`,
+		"BUILDKITE_AGENT_ENDPOINT",
+		"BUILDKITE_AGENT_ACCESS_TOKEN",
+		"BUILDKITE_AGENT_DEBUG",
+		"BUILDKITE_AGENT_PID",
+		"BUILDKITE_BIN_PATH",
+		"BUILDKITE_CONFIG_PATH",
+		"BUILDKITE_BUILD_PATH",
+		"BUILDKITE_GIT_MIRRORS_PATH",
+		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+		"BUILDKITE_HOOKS_PATH",
+		"BUILDKITE_PLUGINS_PATH",
+		"BUILDKITE_SSH_KEYSCAN",
+		"BUILDKITE_GIT_SUBMODULES",
+		"BUILDKITE_COMMAND_EVAL",
+		"BUILDKITE_PLUGINS_ENABLED",
+		"BUILDKITE_LOCAL_HOOKS_ENABLED",
+		"BUILDKITE_GIT_CLONE_FLAGS",
+		"BUILDKITE_GIT_FETCH_FLAGS",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		"BUILDKITE_GIT_CLEAN_FLAGS",
+		"BUILDKITE_SHELL",
 	}
 
 	var ignoredEnv []string

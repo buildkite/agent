@@ -14,7 +14,7 @@ import (
 
 func TestMain(m *testing.M) {
 	// If we are passed "bootstrap", execute like the bootstrap cli
-	if len(os.Args) > 1 && os.Args[1] == `bootstrap` {
+	if len(os.Args) > 1 && os.Args[1] == "bootstrap" {
 		app := cli.NewApp()
 		app.Name = "buildkite-agent"
 		app.Version = agent.Version()

@@ -15,9 +15,9 @@ func TestNormalizingHomeDirectories(t *testing.T) {
 	usr, err := user.Current()
 	assert.NoError(t, err)
 
-	fp, err := NormalizeFilePath(filepath.Join(`~`, `.ssh`))
+	fp, err := NormalizeFilePath(filepath.Join("~", ".ssh"))
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(usr.HomeDir, `.ssh`), fp)
+	assert.Equal(t, filepath.Join(usr.HomeDir, ".ssh"), fp)
 	assert.True(t, filepath.IsAbs(fp))
 }
 
@@ -27,9 +27,9 @@ func TestNormalizingFilePaths(t *testing.T) {
 	workingDir, err := os.Getwd()
 	assert.NoError(t, err)
 
-	fp, err := NormalizeFilePath(filepath.Join(`.`, `builds`))
+	fp, err := NormalizeFilePath(filepath.Join(".", "builds"))
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(workingDir, `builds`), fp)
+	assert.Equal(t, filepath.Join(workingDir, "builds"), fp)
 	assert.True(t, filepath.IsAbs(fp))
 }
 
@@ -47,9 +47,9 @@ func TestNormalizingCommands(t *testing.T) {
 	usr, err := user.Current()
 	assert.NoError(t, err)
 
-	c, err := NormalizeCommand(filepath.Join(`~/`, `buildkite-agent`, `bootstrap.sh`))
+	c, err := NormalizeCommand(filepath.Join("~/", "buildkite-agent", "bootstrap.sh"))
 	assert.NoError(t, err)
-	assert.Equal(t, filepath.Join(usr.HomeDir, `buildkite-agent`, `bootstrap.sh`), c)
+	assert.Equal(t, filepath.Join(usr.HomeDir, "buildkite-agent", "bootstrap.sh"), c)
 
 	c, err = NormalizeCommand("cat test.log")
 	assert.NoError(t, err)

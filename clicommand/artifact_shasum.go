@@ -142,7 +142,7 @@ var ArtifactShasumCommand = cli.Command{
 
 func searchAndPrintShaSum(ctx context.Context, cfg ArtifactShasumConfig, l logger.Logger, stdout io.Writer) error {
 	// Create the API client
-	client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 	// Find the artifact we want to show the SHASUM for
 	searcher := agent.NewArtifactSearcher(l, client, cfg.Build)

@@ -18,7 +18,7 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.RequestURI() {
-		case `/builds/my-build/artifacts/search?query=llamas.txt&scope=my-build&state=finished`:
+		case "/builds/my-build/artifacts/search?query=llamas.txt&scope=my-build&state=finished":
 			fmt.Fprint(rw, `[{
 				"id": "4600ac5c-5a13-4e92-bb83-f86f218f7b32",
 				"file_size": 3,
@@ -37,7 +37,7 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 
 	ac := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
-		Token:    `llamasforever`,
+		Token:    "llamasforever",
 	})
 
 	s := NewArtifactSearcher(logger.Discard, ac, "my-build")

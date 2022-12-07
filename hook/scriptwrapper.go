@@ -130,7 +130,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 	var isBashHook bool
 	var isPwshHook bool
 
-	scriptFileName := `buildkite-agent-bootstrap-hook-runner`
+	scriptFileName := "buildkite-agent-bootstrap-hook-runner"
 	isWindows := wrap.os == "windows"
 
 	// we use bash hooks for scripts with no extension, otherwise on windows
@@ -153,7 +153,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	// We'll pump the ENV before the hook into this temp file
 	wrap.beforeEnvFile, err = shell.TempFileWithExtension(
-		`buildkite-agent-bootstrap-hook-env-before`,
+		"buildkite-agent-bootstrap-hook-env-before",
 	)
 	if err != nil {
 		return nil, err
@@ -162,7 +162,7 @@ func NewScriptWrapper(opts ...scriptWrapperOpt) (*ScriptWrapper, error) {
 
 	// We'll then pump the ENV _after_ the hook into this temp file
 	wrap.afterEnvFile, err = shell.TempFileWithExtension(
-		`buildkite-agent-bootstrap-hook-env-after`,
+		"buildkite-agent-bootstrap-hook-env-after",
 	)
 	if err != nil {
 		return nil, err

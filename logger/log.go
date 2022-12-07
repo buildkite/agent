@@ -252,7 +252,7 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 	b.WriteString(fmt.Sprintf(`"msg":%q,`, msg))
 
 	for _, field := range fields {
-		b.WriteString(fmt.Sprintf(`%q:%q,`, field.Key(), field.String()))
+		b.WriteString(fmt.Sprintf("%q:%q,", field.Key(), field.String()))
 	}
 
 	// Make sure we're only outputting a line one at a time

@@ -10,8 +10,8 @@ import (
 func argumentForCommand(cmd string) interface{} {
 	// This is unpleasant, but we have to work around the fact that we generate
 	// batch scripts for windows and plain commands for everything else
-	if runtime.GOOS == `windows` {
-		return bintest.MatchPattern(`buildkite-script-.+.bat$`)
+	if runtime.GOOS == "windows" {
+		return bintest.MatchPattern("buildkite-script-.+.bat$")
 	}
 	return cmd
 }

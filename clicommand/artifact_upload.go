@@ -143,7 +143,7 @@ var ArtifactUploadCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Setup the uploader
 		uploader := agent.NewArtifactUploader(l, client, agent.ArtifactUploaderConfig{

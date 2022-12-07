@@ -167,7 +167,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 	}
 
 	// Create the API client
-	client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 	// Create the annotation we'll send to the Buildkite API
 	annotation := &api.Annotation{

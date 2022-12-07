@@ -93,7 +93,7 @@ var RedactedVars = cli.StringSliceFlag{
 
 func CreateLogger(cfg interface{}) logger.Logger {
 	var l logger.Logger
-	logFormat := `text`
+	logFormat := "text"
 
 	// Check the LogFormat config field
 	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err == nil {
@@ -104,7 +104,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 
 	// Create a logger based on the type
 	switch logFormat {
-	case `text`, ``:
+	case "text", "":
 		printer := logger.NewTextPrinter(os.Stderr)
 
 		// Show agent fields as a prefix
@@ -126,7 +126,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 		}
 
 		l = logger.NewConsoleLogger(printer, os.Exit)
-	case `json`:
+	case "json":
 		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
 	default:
 		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
@@ -200,12 +200,12 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 	for _, fl := range flags {
 		// use golang reflection to find EnvVar values on flags
 		r := reflect.ValueOf(fl)
-		f := reflect.Indirect(r).FieldByName(`EnvVar`)
+		f := reflect.Indirect(r).FieldByName("EnvVar")
 		if !f.IsValid() {
 			return errors.New("EnvVar field not found on flag")
 		}
 		// split comma delimited env
-		if envVars := f.String(); envVars != `` {
+		if envVars := f.String(); envVars != "" {
 			for _, env := range strings.Split(envVars, ",") {
 				os.Unsetenv(env)
 			}

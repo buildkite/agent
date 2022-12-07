@@ -114,7 +114,7 @@ var StepGetCommand = cli.Command{
 		defer done()
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Create the request
 		stepExportRequest := &api.StepExportRequest{

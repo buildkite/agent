@@ -184,11 +184,11 @@ func DefaultShell() string {
 	case "windows":
 		return `C:\Windows\System32\CMD.exe /S /C`
 	case "freebsd", "openbsd":
-		return `/usr/local/bin/bash -e -c`
+		return "/usr/local/bin/bash -e -c"
 	case "netbsd":
-		return `/usr/pkg/bin/bash -e -c`
+		return "/usr/pkg/bin/bash -e -c"
 	default:
-		return `/bin/bash -e -c`
+		return "/bin/bash -e -c"
 	}
 }
 
@@ -616,8 +616,8 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Check if git-mirrors are enabled
-		if experiments.IsEnabled(`git-mirrors`) {
-			if cfg.GitMirrorsPath == `` {
+		if experiments.IsEnabled("git-mirrors") {
+			if cfg.GitMirrorsPath == "" {
 				l.Fatal("Must provide a git-mirrors-path in your configuration for git-mirrors experiment")
 			}
 		}
@@ -645,16 +645,16 @@ var AgentStartCommand = cli.Command{
 
 		// Show a warning if plugins are enabled by no-command-eval or no-local-hooks is set
 		if isSetNoPlugins && !cfg.NoPlugins {
-			msg := `Plugins have been specifically enabled, despite %s being enabled. ` +
-				`Plugins can execute arbitrary hooks and commands, make sure you are ` +
-				`whitelisting your plugins in ` +
-				`your environment hook.`
+			msg := "Plugins have been specifically enabled, despite %s being enabled. " +
+				"Plugins can execute arbitrary hooks and commands, make sure you are " +
+				"whitelisting your plugins in " +
+				"your environment hook."
 
 			switch {
 			case cfg.NoCommandEval:
-				l.Warn(msg, `no-command-eval`)
+				l.Warn(msg, "no-command-eval")
 			case cfg.NoLocalHooks:
-				l.Warn(msg, `no-local-hooks`)
+				l.Warn(msg, "no-local-hooks")
 			}
 		}
 
@@ -748,7 +748,7 @@ var AgentStartCommand = cli.Command{
 			agentConf.ConfigPath = loader.File.Path
 		}
 
-		if cfg.LogFormat == `text` {
+		if cfg.LogFormat == "text" {
 			welcomeMessage :=
 				"\n" +
 					"%s   _           _ _     _ _    _ _                                _\n" +
@@ -820,7 +820,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `Token`))
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
 
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
@@ -879,7 +879,7 @@ var AgentStartCommand = cli.Command{
 			// Create an agent worker to run the agent
 			workers = append(workers,
 				agent.NewAgentWorker(
-					l.WithFields(logger.StringField(`agent`, ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
+					l.WithFields(logger.StringField("agent", ag.Name)), ag, mc, client, agent.AgentWorkerConfig{
 						AgentConfiguration: agentConf,
 						CancelSignal:       cancelSig,
 						Debug:              cfg.Debug,

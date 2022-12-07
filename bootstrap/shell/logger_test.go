@@ -27,9 +27,9 @@ func TestAnsiLogger(t *testing.T) {
 	fmt.Fprintln(want, `Testing print: "llamas"`)
 	fmt.Fprintln(want, `# Testing comment: "llamas"`)
 	fmt.Fprintln(want, `🚨 Error: Testing error: "llamas"`)
-	fmt.Fprintln(want, `^^^ +++`)
+	fmt.Fprintln(want, "^^^ +++")
 	fmt.Fprintln(want, `⚠️ Warning: Testing warning: "llamas"`)
-	fmt.Fprintln(want, `^^^ +++`)
+	fmt.Fprintln(want, "^^^ +++")
 
 	if runtime.GOOS == "windows" {
 		fmt.Fprintln(want, `> Testing prompt: "llamas"`)
@@ -61,9 +61,9 @@ func TestLoggerStreamer(t *testing.T) {
 
 	want := &bytes.Buffer{}
 
-	fmt.Fprintln(want, `TEST># Rest of the line`)
-	fmt.Fprintln(want, `TEST># And another`)
-	fmt.Fprintln(want, `TEST># No line end`)
+	fmt.Fprintln(want, "TEST># Rest of the line")
+	fmt.Fprintln(want, "TEST># And another")
+	fmt.Fprintln(want, "TEST># No line end")
 
 	if diff := cmp.Diff(got.String(), want.String()); diff != "" {
 		t.Fatalf("shell.WriterLogger output buffer diff (-got +want):\n%s", diff)

@@ -26,7 +26,7 @@ func TestFindingSSHTools(t *testing.T) {
 	sh.Logger = shell.TestingLogger{T: t}
 
 	if _, err := findPathToSSHTools(context.Background(), sh); err != nil {
-		t.Errorf(`findPathToSSHTools(sh) error = %v`, err)
+		t.Errorf("findPathToSSHTools(sh) error = %v", err)
 	}
 }
 

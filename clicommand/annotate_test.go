@@ -38,7 +38,7 @@ func TestAnnotate(t *testing.T) {
 
 	err := annotate(ctx, cfg, l)
 	assert.NoError(t, err)
-	assert.Contains(t, l.Messages, `[debug] Successfully annotated build`)
+	assert.Contains(t, l.Messages, "[debug] Successfully annotated build")
 }
 
 func TestAnnotateMaxBodySize(t *testing.T) {
