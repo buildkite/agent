@@ -11,7 +11,6 @@ import (
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	homedir "github.com/mitchellh/go-homedir"
-	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
@@ -39,7 +38,7 @@ func findKnownHosts(sh *shell.Shell) (*knownHosts, error) {
 	if _, err := os.Stat(knownHostPath); err != nil {
 		f, err := os.OpenFile(knownHostPath, os.O_CREATE|os.O_WRONLY, 0600)
 		if err != nil {
-			return nil, errors.Wrapf(err, "Could not create %q", knownHostPath)
+			return nil, fmt.Errorf("create %q: %w", knownHostPath, err)
 		}
 		if err = f.Close(); err != nil {
 			return nil, err
@@ -111,7 +110,7 @@ func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	// Scan the key and then write it to the known_host file
 	keyscanOutput, err := sshKeyScan(ctx, kh.Shell, host)
 	if err != nil {
-		return errors.Wrap(err, "Could not perform `ssh-keyscan`")
+		return fmt.Errorf("Could not  `ssh-keyscan`: %w", err)
 	}
 
 	kh.Shell.Commentf("Added host %q to known hosts at \"%s\"", host, kh.Path)
@@ -119,14 +118,17 @@ func (kh *knownHosts) Add(ctx context.Context, host string) error {
 	// Try and open the existing hostfile in (append_only) mode
 	f, err := os.OpenFile(kh.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0700)
 	if err != nil {
-		return errors.Wrapf(err, "Could not open %q for appending", kh.Path)
+		return fmt.Errorf("Could not open %q for appending: %w", kh.Path, err)
 	}
 	defer f.Close()
 
-	if _, err = fmt.Fprintf(f, "%s\n", keyscanOutput); err != nil {
-		return errors.Wrapf(err, "Could not write to %q", kh.Path)
+	if _, err := fmt.Fprintf(f, "%s\n", keyscanOutput); err != nil {
+		return fmt.Errorf("Could not write to %q: %w", kh.Path, err)
 	}
 
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("Could not close %q: %w", kh.Path, err)
+	}
 	return nil
 }
 
@@ -145,8 +147,8 @@ func (kh *knownHosts) AddFromRepository(ctx context.Context, repository string) 
 
 	host := resolveGitHost(ctx, kh.Shell, u.Host)
 
-	if err = kh.Add(ctx, host); err != nil {
-		return errors.Wrapf(err, "Failed to add `%s` to known_hosts file `%s`", host, u)
+	if err := kh.Add(ctx, host); err != nil {
+		return fmt.Errorf("Failed to add %q to known_hosts file %q: %w", host, u, err)
 	}
 
 	return nil
