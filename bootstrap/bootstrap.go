@@ -7,6 +7,7 @@ package bootstrap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,7 +28,6 @@ import (
 	"github.com/buildkite/agent/v3/utils"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
-	"github.com/pkg/errors"
 )
 
 // Bootstrap represents the phases of execution in a Buildkite Job. It's run as
@@ -330,7 +330,7 @@ func (b *Bootstrap) executeHook(ctx context.Context, hookCfg HookConfig) error {
 			break
 		default:
 			// ...because something else happened, report it and stop the job
-			return errors.Wrapf(err, "Failed to get environment")
+			return fmt.Errorf("Failed to get environment: %w", err)
 		}
 	} else {
 		// Hook exited successfully (and not early!) We have an environment and
@@ -621,7 +621,7 @@ func (b *Bootstrap) preparePlugins() error {
 	var err error
 	b.plugins, err = plugin.CreateFromJSON(b.Config.Plugins)
 	if err != nil {
-		return errors.Wrap(err, "Failed to parse a plugin definition")
+		return fmt.Errorf("Failed to parse a plugin definition: %w", err)
 	}
 
 	if b.Debug {
@@ -690,7 +690,7 @@ func (b *Bootstrap) PluginPhase(ctx context.Context) error {
 
 		checkout, err := b.checkoutPlugin(ctx, p)
 		if err != nil {
-			return errors.Wrapf(err, "Failed to checkout plugin %s", p.Name())
+			return fmt.Errorf("Failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
 		err = b.validatePluginCheckout(checkout)
@@ -727,7 +727,7 @@ func (b *Bootstrap) VendoredPluginPhase(ctx context.Context) error {
 
 		pluginLocation, err := filepath.Abs(filepath.Join(checkoutPath, p.Location))
 		if err != nil {
-			return errors.Wrapf(err, "Failed to resolve vendored plugin path for plugin %s", p.Name())
+			return fmt.Errorf("Failed to resolve vendored plugin path for plugin %s: %w", p.Name(), err)
 		}
 
 		if !utils.FileExists(pluginLocation) {
@@ -1050,7 +1050,7 @@ func (b *Bootstrap) CheckoutPhase(ctx context.Context) error {
 					b.shell.Warningf("Checkout was interrupted by a signal")
 					r.Break()
 
-				case errors.Cause(err) == context.Canceled:
+				case errors.Is(err, context.Canceled):
 					b.shell.Warningf("Checkout was cancelled")
 					r.Break()
 

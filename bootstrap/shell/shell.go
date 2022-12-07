@@ -7,6 +7,7 @@ package shell
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +30,6 @@ import (
 	"github.com/buildkite/shellwords"
 	"github.com/gofrs/flock"
 	"github.com/nightlyone/lockfile"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -76,7 +76,7 @@ type Shell struct {
 func New() (*Shell, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to find current working directory")
+		return nil, fmt.Errorf("Failed to find current working directory: %w", err)
 	}
 
 	return &Shell{
@@ -515,7 +515,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmd *command, w io.Writer, f
 	s.cmdLock.Unlock()
 
 	if err := p.Run(ctx); err != nil {
-		return errors.Wrapf(err, "Error running `%s`", cmdStr)
+		return fmt.Errorf("Error running %q: %w", cmdStr, err)
 	}
 
 	return p.WaitResult()
@@ -527,11 +527,12 @@ func GetExitCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	switch cause := errors.Cause(err).(type) {
-	case *ExitError:
-		return cause.Code
 
-	case *exec.ExitError:
+	if cause := new(ExitError); errors.As(err, &cause) {
+		return cause.Code
+	}
+
+	if cause := new(exec.ExitError); errors.As(err, &cause) {
 		// The program has exited with an exit code != 0
 		// There is no platform independent way to retrieve
 		// the exit code, but the following will work on Unix/macOS
@@ -548,7 +549,7 @@ func IsExitSignaled(err error) bool {
 	if err == nil {
 		return false
 	}
-	if exitErr, ok := errors.Cause(err).(*exec.ExitError); ok {
+	if exitErr := new(exec.ExitError); errors.As(err, &exitErr) {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			return status.Signaled()
 		}
@@ -557,10 +558,10 @@ func IsExitSignaled(err error) bool {
 }
 
 func IsExitError(err error) bool {
-	switch errors.Cause(err).(type) {
-	case *ExitError:
+	if cause := new(ExitError); errors.As(err, &cause) {
 		return true
-	case *exec.ExitError:
+	}
+	if cause := new(exec.ExitError); errors.As(err, &cause) {
 		return true
 	}
 	return false
