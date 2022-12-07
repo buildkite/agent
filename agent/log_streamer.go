@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
 
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/status"
 )
 
 type LogStreamerConfig struct {
@@ -161,7 +163,13 @@ func (ls *LogStreamer) Stop() error {
 func (ls *LogStreamer) worker(ctx context.Context, id int) {
 	ls.logger.Debug("[LogStreamer/Worker#%d] Worker is starting...", id)
 
+	ctx, setStat, done := status.AddSimpleItem(ctx, fmt.Sprintf("Log Streamer Worker %d", id))
+	defer done()
+	setStat("🏃 Starting...")
+
 	for {
+		setStat("⌚️ Waiting for chunk")
+
 		// Get the next chunk (pointer) from the queue. This will block
 		// until something is returned.
 		chunk := <-ls.queue
@@ -170,6 +178,8 @@ func (ls *LogStreamer) worker(ctx context.Context, id int) {
 		if chunk == nil {
 			break
 		}
+
+		setStat("📨 Passing chunk to callback")
 
 		// Upload the chunk
 		err := ls.callback(ctx, chunk)

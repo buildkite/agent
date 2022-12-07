@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-agent_version=$(cat agent/VERSION)
+agent_version=$(cat version/VERSION)
 build_version=${BUILDKITE_BUILD_NUMBER:-1}
 full_agent_version="buildkite-agent version ${agent_version}, build ${build_version}"
 

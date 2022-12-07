@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -262,6 +263,9 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 // Runs the job
 func (r *JobRunner) Run(ctx context.Context) error {
 	r.logger.Info("Starting job %s", r.job.ID)
+
+	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
+	defer done()
 
 	startedAt := time.Now()
 
@@ -751,6 +755,10 @@ func (r *JobRunner) finishJob(ctx context.Context, finishedAt time.Time, exitSta
 // jobLogStreamer waits for the process to start, then grabs the job output
 // every few seconds and sends it back to Buildkite.
 func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Log Streamer")
+	defer done()
+	setStat("🏃 Starting...")
+
 	defer func() {
 		wg.Done()
 		r.logger.Debug("[JobRunner] Routine that processes the log has finished")
@@ -763,9 +771,13 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 	}
 
 	for {
+		setStat("📨 Sending process output to log streamer")
+
 		// Send the output of the process to the log streamer
 		// for processing
 		r.logStreamer.Process(r.output.String())
+
+		setStat("😴 Sleeping for a bit")
 
 		// Sleep for a bit, or until the job is finished
 		select {
@@ -784,6 +796,10 @@ func (r *JobRunner) jobLogStreamer(ctx context.Context, wg *sync.WaitGroup) {
 // polls GetJobState to see if the job has been cancelled server-side. If so,
 // it calls r.Cancel.
 func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGroup) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Job Cancellation Checker")
+	defer done()
+	setStat("Starting...")
+
 	defer func() {
 		// Mark this routine as done in the wait group
 		wg.Done()
@@ -798,6 +814,8 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 	}
 
 	for {
+		setStat("📡 Fetching job state from Buildkite")
+
 		// Re-get the job and check its status to see if it's been cancelled
 		jobState, _, err := r.apiClient.GetJobState(ctx, r.job.ID)
 		if err != nil {
@@ -809,6 +827,8 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context, wg *sync.WaitGro
 				r.logger.Error("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.job.ID, err)
 			}
 		}
+
+		setStat("😴 Sleeping for a bit")
 
 		// Sleep for a bit, or until the job is finished
 		select {

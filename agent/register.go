@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/system"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
 	"github.com/denisbrodbeck/machineid"
 )
@@ -30,8 +31,8 @@ func Register(ctx context.Context, l logger.Logger, ac APIClient, req api.AgentR
 	cacheOnce.Do(func() { cacheRegisterSystemInfo(l) })
 
 	// Set some static things to set on the register request
-	req.Version = Version()
-	req.Build = BuildVersion()
+	req.Version = version.Version()
+	req.Build = version.BuildVersion()
 	req.PID = os.Getpid()
 	req.Arch = runtime.GOARCH
 	req.MachineID = machineID

@@ -25,8 +25,10 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/utils"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
 	"github.com/urfave/cli"
 	"golang.org/x/exp/maps"
@@ -767,7 +769,7 @@ var AgentStartCommand = cli.Command{
 			}
 		}
 
-		l.Notice("Starting buildkite-agent v%s with PID: %s", agent.Version(), fmt.Sprintf("%d", os.Getpid()))
+		l.Notice("Starting buildkite-agent v%s with PID: %s", version.Version(), fmt.Sprintf("%d", os.Getpid()))
 		l.Notice("The agent source code can be found here: https://github.com/buildkite/agent")
 		l.Notice("For questions and support, email us at: hello@buildkite.com")
 
@@ -900,7 +902,7 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Handle process signals
-		signals := handlePoolSignals(l, pool)
+		signals := handlePoolSignals(ctx, l, pool)
 		defer close(signals)
 
 		l.Info("Starting %d Agent(s)", cfg.Spawn)
@@ -909,6 +911,7 @@ var AgentStartCommand = cli.Command{
 		// Determine the health check listening address and port for this agent
 		if cfg.HealthCheckAddr != "" {
 			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+				l.Info("%s %s", r.Method, r.URL.Path)
 				if r.URL.Path != "/" {
 					http.NotFound(w, r)
 				} else {
@@ -916,7 +919,15 @@ var AgentStartCommand = cli.Command{
 				}
 			})
 
+			if experiments.IsEnabled("inbuilt-status-page") {
+				http.HandleFunc("/status", status.Handle)
+			}
+
 			go func() {
+				_, setStatus, done := status.AddSimpleItem(ctx, "Health check server")
+				defer done()
+				setStatus("👂 Listening")
+
 				l.Notice("Starting HTTP health check server on %v", cfg.HealthCheckAddr)
 				err := http.ListenAndServe(cfg.HealthCheckAddr, nil)
 				if err != nil {
@@ -932,7 +943,7 @@ var AgentStartCommand = cli.Command{
 	},
 }
 
-func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
+func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt,
 		syscall.SIGHUP,
@@ -941,10 +952,15 @@ func handlePoolSignals(l logger.Logger, pool *agent.AgentPool) chan os.Signal {
 		syscall.SIGQUIT)
 
 	go func() {
+		_, setStatus, done := status.AddSimpleItem(ctx, "Handle Pool Signals")
+		defer done()
+		setStatus("⏳ Waiting for a signal")
+
 		var interruptCount int
 
 		for sig := range signals {
 			l.Debug("Received signal `%v`", sig)
+			setStatus(fmt.Sprintf("Recieved signal `%v`", sig))
 
 			switch sig {
 			case syscall.SIGQUIT:

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/status"
 )
 
 type headerTimesStreamer struct {
@@ -48,6 +49,10 @@ func newHeaderTimesStreamer(l logger.Logger, upload func(context.Context, int, i
 }
 
 func (h *headerTimesStreamer) Run(ctx context.Context) {
+	ctx, setStatus, done := status.AddSimpleItem(ctx, "Header Times Streamer")
+	defer done()
+	setStatus("🏃 Starting...")
+
 	h.streamingMutex.Lock()
 	h.streaming = true
 	h.streamingMutex.Unlock()
@@ -56,7 +61,7 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 
 	for {
 		// Break out of streaming if it's finished. We also
-		// need to aquire a read lock on the flag because it
+		// need to acquire a read lock on the flag because it
 		// can be modified by other routines.
 		h.streamingMutex.Lock()
 		if !h.streaming {
@@ -64,8 +69,12 @@ func (h *headerTimesStreamer) Run(ctx context.Context) {
 		}
 		h.streamingMutex.Unlock()
 
+		setStatus("📡 Uploading any pending header times")
+
 		// Upload any pending header times
 		h.Upload(ctx)
+
+		setStatus("😴 Sleeping for a bit")
 
 		// Sleep for a second and try upload some more later
 		select {
