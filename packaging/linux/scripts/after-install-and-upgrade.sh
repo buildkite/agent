@@ -120,15 +120,9 @@ fi
 
 # Crude method of causing all the agents to restart
 if [ "$OPERATION" = "upgrade" ] ; then
-  # Restart agents that have a process name of "buildkite-agent v1.2.3.4"
-  for KILLPID in `ps ax | grep 'buildkite-agent v' | awk ' { print $1;}'`; do
-    kill $KILLPID > /dev/null 2>&1 || true
-  done
-
-  # Restart agents that have a process name of "buildkite-agent start"
-  for KILLPID in `ps ax | grep 'buildkite-agent start' | awk ' { print $1;}'`; do
-    kill $KILLPID > /dev/null 2>&1 || true
-  done
+  # Restart agents that have a command line containing
+  # "buildkite-agent v1.2.3.4" or "buildkite-agent start"
+  pkill -f 'buildkite-agent (v|start)' > /dev/null 2>&1 || true
 fi
 
 # Make sure all the folders created are owned by the buildkite-agent user #
