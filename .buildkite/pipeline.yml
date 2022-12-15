@@ -59,6 +59,9 @@ steps:
     plugins:
       - junit-annotate#v1.6.0:
           artifacts: junit-*.xml
+      - test-collector#v1.2.0:
+          files: "junit-*.xml"
+          format: "junit"
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
