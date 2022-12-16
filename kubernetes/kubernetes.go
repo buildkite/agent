@@ -116,6 +116,7 @@ func (r *Runner) Done() <-chan struct{} {
 func (r *Runner) Interrupt() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
 	r.interruptOnce.Do(func() {
 		close(r.interrupt)
 	})
@@ -126,7 +127,11 @@ func (r *Runner) Interrupt() error {
 func (r *Runner) Terminate() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	panic("unimplemented")
+
+	r.closedOnce.Do(func() {
+		close(r.done)
+	})
+	return nil
 }
 
 func (r *Runner) WaitStatus() process.WaitStatus {
@@ -306,12 +311,10 @@ func (c *Client) Await(ctx context.Context, desiredState RunState) error {
 	for {
 		select {
 		case <-ctx.Done():
+			return ctx.Err()
 		default:
 			var current RunState
 			if err := c.client.Call("Runner.Status", c.ID, &current); err != nil {
-				if desiredState == RunStateInterrupt && errors.Is(err, rpc.ErrShutdown) {
-					return nil
-				}
 				return err
 			}
 			if current == desiredState {
