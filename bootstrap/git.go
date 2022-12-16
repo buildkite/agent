@@ -44,7 +44,7 @@ func gitCheckout(ctx context.Context, sh shellRunner, gitCheckoutFlags, referenc
 		return fmt.Errorf("%q is not a valid git ref format", reference)
 	}
 
-	commandArgs := []string{ "-c", "advice.detachedHead=false", "checkout"}
+	commandArgs := []string{"-c", "advice.detachedHead=false", "checkout"}
 	commandArgs = append(commandArgs, individualCheckoutFlags...)
 	commandArgs = append(commandArgs, reference)
 
