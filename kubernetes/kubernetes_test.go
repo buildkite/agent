@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"encoding/gob"
+	"net/rpc"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -116,23 +117,28 @@ func TestWaitStatusSignaled(t *testing.T) {
 
 func TestInterrupt(t *testing.T) {
 	runner := newRunner(t, 2)
-
+	ctx := context.Background()
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
-	client1 := &Client{ID: 1, SocketPath: runner.conf.SocketPath}
 
 	require.NoError(t, connect(client0))
-	require.NoError(t, connect(client1))
-
 	require.NoError(t, runner.Interrupt())
 
-	ctx := context.Background()
 	require.ErrorIs(t, client0.Await(ctx, RunStateWait), ErrInterrupt)
 	require.Error(t, client0.Await(ctx, RunStateStart), ErrInterrupt)
 	require.NoError(t, client0.Await(ctx, RunStateInterrupt))
+}
 
-	require.Error(t, client1.Await(ctx, RunStateWait), ErrInterrupt)
-	require.Error(t, client1.Await(ctx, RunStateStart), ErrInterrupt)
-	require.NoError(t, client1.Await(ctx, RunStateInterrupt))
+func TestTerminate(t *testing.T) {
+	runner := newRunner(t, 2)
+	ctx := context.Background()
+	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
+
+	require.NoError(t, connect(client0))
+	require.NoError(t, runner.Terminate())
+
+	require.ErrorContains(t, client0.Await(ctx, RunStateWait), rpc.ErrShutdown.Error())
+	require.ErrorContains(t, client0.Await(ctx, RunStateStart), rpc.ErrShutdown.Error())
+	require.ErrorContains(t, client0.Await(ctx, RunStateInterrupt), rpc.ErrShutdown.Error())
 }
 
 func newRunner(t *testing.T, clientCount int) *Runner {

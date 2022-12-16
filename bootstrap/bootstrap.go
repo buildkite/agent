@@ -116,7 +116,6 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		go func() {
 			if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil {
 				b.shell.Errorf("Error waiting for client interrupt: %v", err)
-				return
 			}
 			b.cancelCh <- struct{}{}
 		}()
