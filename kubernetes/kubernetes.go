@@ -34,24 +34,28 @@ func New(l logger.Logger, c Config) *Runner {
 		clients[i] = &clientResult{}
 	}
 	return &Runner{
-		logger:  l,
-		conf:    c,
-		clients: clients,
-		server:  rpc.NewServer(),
-		mux:     http.NewServeMux(),
-		done:    make(chan struct{}),
-		started: make(chan struct{}),
+		logger:    l,
+		conf:      c,
+		clients:   clients,
+		server:    rpc.NewServer(),
+		mux:       http.NewServeMux(),
+		done:      make(chan struct{}),
+		started:   make(chan struct{}),
+		interrupt: make(chan struct{}),
 	}
 }
 
 type Runner struct {
-	logger        logger.Logger
-	conf          Config
-	mu            sync.Mutex
-	listener      net.Listener
-	started, done chan struct{}
+	logger   logger.Logger
+	conf     Config
+	mu       sync.Mutex
+	listener net.Listener
+	started,
+	done,
+	interrupt chan struct{}
 	startedOnce,
-	closedOnce sync.Once
+	closedOnce,
+	interruptOnce sync.Once
 	server  *rpc.Server
 	mux     *http.ServeMux
 	clients map[int]*clientResult
@@ -108,12 +112,17 @@ func (r *Runner) Done() <-chan struct{} {
 	return r.done
 }
 
+// Interrupts all clients, triggering graceful shutdown
 func (r *Runner) Interrupt() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	panic("unimplemented")
+	r.interruptOnce.Do(func() {
+		close(r.interrupt)
+	})
+	return nil
 }
 
+// Stops the RPC server, allowing Run to return immediately
 func (r *Runner) Terminate() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -149,6 +158,10 @@ type ExitCode struct {
 
 type Status struct {
 	Ready       bool
+	AccessToken string
+}
+
+type RegisterResponse struct {
 	AccessToken string
 }
 
@@ -189,31 +202,43 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	return nil
 }
 
-func (r *Runner) Register(id int, reply *Empty) error {
+func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.startedOnce.Do(func() {
+		close(r.started)
+	})
 	client, found := r.clients[id]
 	if !found {
 		return fmt.Errorf("client id %d not found", id)
 	}
-	if client.State == stateConnected {
+	if client.State != stateUnknown {
 		return fmt.Errorf("client id %d already registered", id)
 	}
+	r.logger.Info("client %d connected", id)
 	client.State = stateConnected
+	reply.AccessToken = r.conf.AccessToken
 	return nil
 }
 
-func (r *Runner) Status(id int, reply *Status) error {
+func (r *Runner) Status(id int, reply *RunState) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	reply.AccessToken = r.conf.AccessToken
 
-	if id == 0 {
-		reply.Ready = true
-	} else if client, found := r.clients[id-1]; found && client.State == stateExited {
-		reply.Ready = true
+	select {
+	case <-r.done:
+		return rpc.ErrShutdown
+	case <-r.interrupt:
+		*reply = RunStateInterrupt
+		return nil
+	default:
+		if id == 0 {
+			*reply = RunStateStart
+		} else if client, found := r.clients[id-1]; found && client.State == stateExited {
+			*reply = RunStateStart
+		}
+		return nil
 	}
-	return nil
 }
 
 type Client struct {
@@ -224,16 +249,20 @@ type Client struct {
 
 var errNotConnected = errors.New("client not connected")
 
-func (c *Client) Connect() error {
+func (c *Client) Connect() (RegisterResponse, error) {
 	if c.SocketPath == "" {
 		c.SocketPath = defaultSocketPath
 	}
 	client, err := rpc.DialHTTP("unix", c.SocketPath)
 	if err != nil {
-		return err
+		return RegisterResponse{}, err
 	}
 	c.client = client
-	return c.client.Call("Runner.Register", c.ID, nil)
+	var resp RegisterResponse
+	if err := c.client.Call("Runner.Register", c.ID, &resp); err != nil {
+		return RegisterResponse{}, err
+	}
+	return resp, nil
 }
 
 func (c *Client) Exit(exitStatus process.WaitStatus) error {
@@ -263,24 +292,36 @@ type WaitReadyResponse struct {
 	Status
 }
 
-func (c *Client) WaitReady() <-chan WaitReadyResponse {
-	result := make(chan WaitReadyResponse)
-	go func() {
-		for {
-			var reply Status
-			if err := c.client.Call("Runner.Status", c.ID, &reply); err != nil {
-				result <- WaitReadyResponse{Err: err}
-				return
+type RunState int
+
+const (
+	RunStateWait RunState = iota
+	RunStateStart
+	RunStateInterrupt
+)
+
+var ErrInterrupt = errors.New("interrupt signal received")
+
+func (c *Client) Await(ctx context.Context, desiredState RunState) error {
+	for {
+		select {
+		case <-ctx.Done():
+		default:
+			var current RunState
+			if err := c.client.Call("Runner.Status", c.ID, &current); err != nil {
+				if desiredState == RunStateInterrupt && errors.Is(err, rpc.ErrShutdown) {
+					return nil
+				}
+				return err
 			}
-			if reply.Ready {
-				result <- WaitReadyResponse{Status: reply}
-				return
+			if current == desiredState {
+				return nil
+			} else if current == RunStateInterrupt {
+				return ErrInterrupt
 			}
-			// TODO: configurable interval
 			time.Sleep(time.Second)
 		}
-	}()
-	return result
+	}
 }
 
 func (c *Client) Close() {
