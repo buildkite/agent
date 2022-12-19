@@ -40,11 +40,11 @@ require (
 	go.opentelemetry.io/contrib/propagators/b3 v1.11.1
 	go.opentelemetry.io/contrib/propagators/jaeger v1.11.1
 	go.opentelemetry.io/contrib/propagators/ot v1.11.1
-	go.opentelemetry.io/otel v1.11.1
+	go.opentelemetry.io/otel v1.11.2
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.8.0
-	go.opentelemetry.io/otel/sdk v1.11.1
-	go.opentelemetry.io/otel/trace v1.11.1
+	go.opentelemetry.io/otel/sdk v1.11.2
+	go.opentelemetry.io/otel/trace v1.11.2
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 )
 
