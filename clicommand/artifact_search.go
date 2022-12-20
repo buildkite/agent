@@ -51,6 +51,7 @@ type ArtifactSearchConfig struct {
 	Step               string `cli:"step"`
 	Build              string `cli:"build" validate:"required"`
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
+	AllowEmptyResults  bool   `cli:"allow-empty-results"`
 	PrintFormat        string `cli:"format"`
 
 	// Global flags
@@ -111,6 +112,10 @@ Format specifiers:
 			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
 			Usage:  "Include artifacts from retried jobs in the search",
 		},
+		cli.BoolFlag{
+			Name:  "allow-empty-results",
+			Usage: "By default, searches exit 1 if there are no results. If this flag is set, searches will exit 0 with an empty set",
+		},
 		cli.StringFlag{
 			Name:  "format",
 			Value: "%j %p %c\n",
@@ -165,7 +170,11 @@ Format specifiers:
 		}
 
 		if len(artifacts) == 0 {
-			l.Fatal(fmt.Sprintf("No matches found for %q", cfg.Query))
+			if cfg.AllowEmptyResults {
+				l.Info(fmt.Sprintf("No matches found for %q", cfg.Query))
+			} else {
+				l.Fatal(fmt.Sprintf("No matches found for %q", cfg.Query))
+			}
 		}
 
 		for _, artifact := range artifacts {
