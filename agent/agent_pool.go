@@ -3,6 +3,8 @@ package agent
 import (
 	"context"
 	"sync"
+
+	"github.com/buildkite/agent/v3/status"
 )
 
 // AgentPool manages multiple parallel AgentWorkers
@@ -19,6 +21,10 @@ func NewAgentPool(workers []*AgentWorker) *AgentPool {
 
 // Start kicks off the parallel AgentWorkers and waits for them to finish
 func (r *AgentPool) Start(ctx context.Context) error {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Agent Pool")
+	defer done()
+	setStat("🏃 Spawning workers...")
+
 	var wg sync.WaitGroup
 	var spawn int = len(r.workers)
 	var errs = make(chan error, spawn)
@@ -38,6 +44,8 @@ func (r *AgentPool) Start(ctx context.Context) error {
 			}
 		}(worker)
 	}
+
+	setStat("✅ Workers spawned!")
 
 	go func() {
 		wg.Wait()

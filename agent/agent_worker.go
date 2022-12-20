@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/process"
+	"github.com/buildkite/agent/v3/status"
 	"github.com/buildkite/roko"
 )
 
@@ -132,21 +133,41 @@ func NewAgentWorker(l logger.Logger, a *api.AgentRegisterResponse, m *metrics.Co
 	}
 }
 
+const workerStatusPart = `{{if le .LastPing.Seconds 2.0}}✅{{else}}❌{{end}} Last ping: {{.LastPing}} ago <br/>
+{{if le .LastHeartbeat.Seconds 60.0}}✅{{else}}❌{{end}} Last heartbeat: {{.LastHeartbeat}} ago<br/>
+{{if .LastHeartbeatError}}❌{{else}}✅{{end}} Last heartbeat error: {{printf "%v" .LastHeartbeatError}}`
+
+func (a *AgentWorker) statusCallback(context.Context) (any, error) {
+	a.stats.Lock()
+	defer a.stats.Unlock()
+
+	return struct {
+		SpawnIndex         int
+		LastHeartbeat      time.Duration
+		LastHeartbeatError error
+		LastPing           time.Duration
+	}{
+		SpawnIndex:         a.spawnIndex,
+		LastHeartbeat:      time.Since(a.stats.lastHeartbeat),
+		LastHeartbeatError: a.stats.lastHeartbeatError,
+		LastPing:           time.Since(a.stats.lastPing),
+	}, nil
+}
+
 // Starts the agent worker
 func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error {
 	a.metrics = a.metricsCollector.Scope(metrics.Tags{
 		"agent_name": a.agent.Name,
 	})
 
+	ctx, done := status.AddItem(ctx, fmt.Sprintf("Worker %d", a.spawnIndex), workerStatusPart, a.statusCallback)
+	defer done()
+
 	// Start running our metrics collector
 	if err := a.metricsCollector.Start(); err != nil {
 		return err
 	}
 	defer a.metricsCollector.Stop()
-
-	// Use a context to run heartbeats for as long as the agent runs for
-	heartbeatCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	// Register our worker specific health check handler
 	http.HandleFunc("/agent/"+strconv.Itoa(a.spawnIndex), func(w http.ResponseWriter, r *http.Request) {
@@ -165,36 +186,11 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		}
 	})
 
-	// Setup and start the heartbeater
-	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
-	go func() {
-		for {
-			select {
-			case <-time.After(heartbeatInterval):
-				if err := a.Heartbeat(heartbeatCtx); err != nil {
-					if errors.Is(err, &errUnrecoverable{}) {
-						a.logger.Error("%s", err)
-						return
-					}
+	// Use a context to run heartbeats for as long as the ping loop or job runs
+	heartbeatCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-					// Get the last heartbeat time to the nearest microsecond
-					a.stats.Lock()
-					if a.stats.lastHeartbeat.IsZero() {
-						a.logger.Error("Failed to heartbeat %s. Will try again in %s. (No heartbeat yet)",
-							err, heartbeatInterval)
-					} else {
-						a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
-							err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
-					}
-					a.stats.Unlock()
-				}
-
-			case <-heartbeatCtx.Done():
-				a.logger.Debug("Stopping heartbeats")
-				return
-			}
-		}
-	}()
+	go a.runHeartbeatLoop(heartbeatCtx)
 
 	// If the agent is booted in acquisition mode, then we don't need to
 	// bother about starting the ping loop.
@@ -208,10 +204,52 @@ func (a *AgentWorker) Start(ctx context.Context, idleMonitor *IdleMonitor) error
 		return a.AcquireAndRunJob(ctx, a.agentConfiguration.AcquireJob)
 	}
 
-	return a.startPingLoop(ctx, idleMonitor)
+	return a.runPingLoop(ctx, idleMonitor)
 }
 
-func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonitor) error {
+func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Heartbeat loop")
+	defer done()
+	setStat("🏃 Starting...")
+
+	heartbeatInterval := time.Second * time.Duration(a.agent.HeartbeatInterval)
+	heartbeatTicker := time.NewTicker(heartbeatInterval)
+	defer heartbeatTicker.Stop()
+	for {
+		setStat("😴 Sleeping for a bit")
+		select {
+		case <-heartbeatTicker.C:
+			setStat("❤️ Sending heartbeat")
+			if err := a.Heartbeat(ctx); err != nil {
+				if errors.Is(err, &errUnrecoverable{}) {
+					a.logger.Error("%s", err)
+					return
+				}
+
+				// Get the last heartbeat time to the nearest microsecond
+				a.stats.Lock()
+				if a.stats.lastHeartbeat.IsZero() {
+					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (No heartbeat yet)",
+						err, heartbeatInterval)
+				} else {
+					a.logger.Error("Failed to heartbeat %s. Will try again in %s. (Last successful was %v ago)",
+						err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
+				}
+				a.stats.Unlock()
+			}
+
+		case <-ctx.Done():
+			a.logger.Debug("Stopping heartbeats")
+			return
+		}
+	}
+}
+
+func (a *AgentWorker) runPingLoop(ctx context.Context, idleMonitor *IdleMonitor) error {
+	ctx, setStat, done := status.AddSimpleItem(ctx, "Ping loop")
+	defer done()
+	setStat("🏃 Starting...")
+
 	// Create the ticker
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 	pingTicker := time.NewTicker(pingInterval)
@@ -223,6 +261,7 @@ func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonito
 	// Continue this loop until the closing of the stop channel signals termination
 	for {
 		if !a.stopping {
+			setStat("📡 Pinging Buildkite for work")
 			job, err := a.Ping(ctx)
 			if err != nil {
 				if errors.Is(err, &errUnrecoverable{}) {
@@ -234,6 +273,7 @@ func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonito
 				// Let other agents know this agent is now busy and
 				// not to idle terminate
 				idleMonitor.MarkBusy(a.agent.UUID)
+				setStat("💼 Accepting job")
 
 				// Runs the job, only errors if something goes wrong
 				if runErr := a.AcceptAndRunJob(ctx, job); runErr != nil {
@@ -257,6 +297,7 @@ func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonito
 
 					continue
 				}
+				setStat("✅ Finished job")
 			}
 
 			// Handle disconnect after idle timeout (and deprecated disconnect-after-job-timeout)
@@ -281,6 +322,8 @@ func (a *AgentWorker) startPingLoop(ctx context.Context, idleMonitor *IdleMonito
 				}
 			}
 		}
+
+		setStat("😴 Sleeping for a bit")
 
 		select {
 		case <-pingTicker.C:

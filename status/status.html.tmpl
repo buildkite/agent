@@ -1,0 +1,81 @@
+{{- define "render_items" -}}
+    {{- range $title, $item := . -}}
+    <details open>
+        <summary>{{$title}}</summary>
+        <div class="itemdata">{{$item.Eval $.Ctx}}</div>
+        <div class="subitems">{{template "render_items" $item.Items}}</div>
+    </details>
+    {{- end -}}
+{{- end -}}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Status for buildkite-agent</title>
+    <style>
+    body {
+        font-family: sans-serif;
+        background: #fff;
+    }
+    h1 {
+        clear: both;
+        width: 100%;
+        text-align: center;
+        font-size: 120%;
+        background: #eef;
+        padding: 4px;
+    }
+    summary {
+        width: 100%;
+        font-size: 120%;
+        background: #eef;
+        padding: 0.2em;
+        border: 1px #eef solid;
+    }
+    details {
+        display: block;
+        padding: 1em 0;
+    }
+    details[open] > summary {
+        background: #fff;
+        border: 1px #000 solid;
+    }
+    .error {
+        background: #fee;
+    }
+    div {
+        padding: 0.2em;
+    }
+    div.warning {
+        background: #ffd;
+    }
+    .itemdata {
+        margin: 0 0 0.5em 0.86em;
+        padding: 0.5em 0em 0.5em 1.5em;
+        border-left: 0.1em #ccc dotted;
+    }
+    .subitems {
+        margin: 0 0 0.5em 0.86em;
+        padding: 0.5em 0em 0.5em 1.5em;
+        border-left: 0.1em #ccc dotted;
+        border-bottom: 0.1em #ccc dotted;
+    }
+    </style>
+</head>
+<body>
+    <h1>Status for buildkite-agent</h1>
+    <div class="warning">
+        ⚠️ This page is experimental, and intended only for debugging purposes!<br>
+        Do not expect the structure and formatting of this page to be stable across versions.
+    </div>
+    <div class="summary">
+        {{.ExePath}}<br>
+        Started at {{.StartTime}} ({{.StartTimeAgo}} ago)<br>
+        Current time {{.CurrentTime}}<br>
+        Version {{.Version}}, build {{.Build}}<br>
+        Running in PID {{.PID}} as {{.Username}} on {{.Hostname}}<br>
+        {{.RuntimeVer}} on {{.GOOS}}/{{.GOARCH}} compiled by {{.Compiler}}<br>
+        {{.NumGoroutine}} goroutines running/{{.NumCPU}} logical CPUs usable<br>
+    </div>
+    {{template "render_items" .Items}}
+</body>
+</html>

@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/experiments"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/bintest/v3"
 	"github.com/urfave/cli"
 )
@@ -17,7 +17,7 @@ func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == "bootstrap" {
 		app := cli.NewApp()
 		app.Name = "buildkite-agent"
-		app.Version = agent.Version()
+		app.Version = version.Version()
 		app.Commands = []cli.Command{
 			clicommand.BootstrapCommand,
 		}

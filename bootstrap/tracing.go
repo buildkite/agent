@@ -6,9 +6,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/opentracing/opentracing-go"
 	"go.opentelemetry.io/contrib/propagators/aws/xray"
 	"go.opentelemetry.io/contrib/propagators/b3"
@@ -133,7 +133,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 
 	attributes := []attribute.KeyValue{
 		semconv.ServiceNameKey.String(b.Config.TracingServiceName),
-		semconv.ServiceVersionKey.String(agent.Version()),
+		semconv.ServiceVersionKey.String(version.Version()),
 		semconv.DeploymentEnvironmentKey.String("ci"),
 	}
 
@@ -163,7 +163,7 @@ func (b *Bootstrap) startTracingOpenTelemetry(ctx context.Context) (tracetools.S
 
 	tracer := tracerProvider.Tracer(
 		"buildkite-agent",
-		trace.WithInstrumentationVersion(agent.Version()),
+		trace.WithInstrumentationVersion(version.Version()),
 		trace.WithSchemaURL(semconv.SchemaURL),
 	)
 
@@ -225,7 +225,7 @@ func GenericTracingExtras(b *Bootstrap, env env.Environment) map[string]any {
 
 	return map[string]any{
 		"buildkite.agent":             b.AgentName,
-		"buildkite.version":           agent.Version(),
+		"buildkite.version":           version.Version(),
 		"buildkite.queue":             b.Queue,
 		"buildkite.org":               b.OrganizationSlug,
 		"buildkite.pipeline":          b.PipelineSlug,

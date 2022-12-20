@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/experiments"
 	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 )
@@ -216,7 +216,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 
 func loadAPIClientConfig(cfg interface{}, tokenField string) api.Config {
 	conf := api.Config{
-		UserAgent: agent.UserAgent(),
+		UserAgent: version.UserAgent(),
 	}
 
 	// Enable HTTP debugging

@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/clicommand"
+	"github.com/buildkite/agent/v3/version"
 	"github.com/urfave/cli"
 )
 
@@ -50,7 +50,7 @@ Options:
 `
 
 func printVersion(c *cli.Context) {
-	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, agent.BuildVersion())
+	fmt.Printf("%v version %v, build %v\n", c.App.Name, c.App.Version, version.BuildVersion())
 }
 
 func main() {
@@ -61,7 +61,7 @@ func main() {
 
 	app := cli.NewApp()
 	app.Name = "buildkite-agent"
-	app.Version = agent.Version()
+	app.Version = version.Version()
 	app.Commands = []cli.Command{
 		clicommand.AgentStartCommand,
 		clicommand.AnnotateCommand,

@@ -1,4 +1,5 @@
-package agent
+// Package version provides the agent version strings.
+package version
 
 import (
 	_ "embed"
