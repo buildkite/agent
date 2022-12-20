@@ -20,6 +20,9 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - name: ":linux: Linux ARM64 Tests"
     key: test-linux-arm64
@@ -31,6 +34,9 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - name: ":satellite: Detect Data Races"
     key: test-race-linux-arm64
@@ -42,6 +48,9 @@ steps:
       docker-compose#v3.0.0:
         config: .buildkite/docker-compose.yml
         run: agent
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - name: ":windows: Windows AMD64 Tests"
     key: test-windows
@@ -49,6 +58,10 @@ steps:
     artifact_paths: junit-*.xml
     agents:
       queue: agent-runners-windows-amd64
+    plugins:
+      test-collector#v1.2.0:
+        files: "junit-*.xml"
+        format: "junit"
 
   - label: ":writing_hand: Annotate with Test Failures"
     depends_on:
