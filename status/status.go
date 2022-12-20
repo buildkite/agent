@@ -1,8 +1,8 @@
 // Package status provides a status page handler, for exposing a summary of what
 // the various pieces of the agent are doing.
 //
-// Inspired heavily by Google "/statsuz", e.g.
-// https://github.com/youtube/doorman/blob/master/go/status/status.go.
+// Inspired heavily by Google "/statsuz" - one public example is at:
+// https://github.com/youtube/doorman/blob/master/go/status/status.go
 package status
 
 import (
@@ -50,10 +50,31 @@ var (
 		"printJSON": printJSON,
 	}
 
-	// The inbuilt templates should always parse.
-	statusTmpl = template.Must(template.New("status").Funcs(funcMap).Parse(statusTmplSrc))
-	errorTmpl  = template.Must(template.New("item-error").Funcs(funcMap).Parse(errorTmplSrc))
+	// The inbuilt templates should always parse. Rather than use template.Must,
+	// successful parsing is enforced by the smoke tests.
+	statusTmpl, _ = template.New("status").Funcs(funcMap).Parse(statusTmplSrc)
+	errorTmpl, _  = template.New("item-error").Funcs(funcMap).Parse(errorTmplSrc)
 )
+
+type statusData struct {
+	Items        map[string]item
+	Version      string
+	Build        string
+	Hostname     string
+	Username     string
+	ExePath      string
+	PID          int
+	Compiler     string
+	RuntimeVer   string
+	GOOS         string
+	GOARCH       string
+	NumCPU       int
+	NumGoroutine int
+	StartTime    string
+	StartTimeAgo time.Duration
+	CurrentTime  string
+	Ctx          context.Context // request context for Eval calls inside the template execution only
+}
 
 type errorData struct {
 	Operation string
@@ -163,25 +184,7 @@ func (i *templatedItem) Eval(ctx context.Context) template.HTML {
 
 // Handle handles status page requests.
 func Handle(w http.ResponseWriter, r *http.Request) {
-	data := struct {
-		Items        map[string]item
-		Version      string
-		Build        string
-		Hostname     string
-		Username     string
-		ExePath      string
-		PID          int
-		Compiler     string
-		RuntimeVer   string
-		GOOS         string
-		GOARCH       string
-		NumCPU       int
-		NumGoroutine int
-		StartTime    string
-		StartTimeAgo time.Duration
-		CurrentTime  string
-		Ctx          context.Context // only used in this response
-	}{
+	data := &statusData{
 		Items:        rootItem.items,
 		Version:      version.Version(),
 		Build:        version.BuildVersion(),
