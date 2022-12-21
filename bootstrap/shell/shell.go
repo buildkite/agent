@@ -177,7 +177,8 @@ func (s *Shell) WaitStatus() process.WaitStatus {
 	if s.cmd != nil && s.cmd.proc != nil {
 		return s.cmd.proc.WaitStatus()
 	}
-	return syscall.WaitStatus(0)
+	var ws syscall.WaitStatus
+	return ws
 }
 
 // LockFile is a pid-based lock for cross-process locking
