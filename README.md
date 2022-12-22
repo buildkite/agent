@@ -1,4 +1,4 @@
-# Buildkite Agent 
+# Buildkite Agent
 
 [![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=main)]()
 [![Go Reference](https://pkg.go.dev/badge/github.com/buildkite/agent/v3.svg)](https://pkg.go.dev/github.com/buildkite/agent/v3)
@@ -157,11 +157,7 @@ Buildkite Agent for versions of macOS prior to those listed above.
 
 ## Contributing
 
-1. Fork it
-1. Create your feature branch (`git checkout -b my-new-feature`)
-1. Commit your changes (`git commit -am 'Add some feature'`)
-1. Push to the branch (`git push origin my-new-feature`)
-1. Create new Pull Request
+See [./CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ## Contributors
 
