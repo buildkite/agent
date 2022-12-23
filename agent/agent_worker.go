@@ -526,7 +526,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 	var acquiredJob *api.Job
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(3*time.Second)),
+		roko.WithStrategy(roko.Constant(30*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
