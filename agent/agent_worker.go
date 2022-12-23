@@ -539,15 +539,23 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 
 		acquiredJob, response, err = a.apiClient.AcquireJob(ctx, jobId)
 		if err != nil {
-			// If the API returns with a 422, that means that we
-			// succesfully *tried* to acquire the job, but
-			// Buildkite rejected the finish for some reason.
-			if response != nil && response.StatusCode == 422 {
-				a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
-				r.Break()
-			} else {
-				a.logger.Warn("%s (%s)", err, r)
+			if response != nil {
+				switch response.StatusCode {
+				case http.StatusUnprocessableEntity:
+					// If the API returns with a 422, that means that we
+					// successfully *tried* to acquire the job, but
+					// Buildkite rejected the finish for some reason.
+					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
+					r.Break()
+				case http.StatusLocked:
+					// If the API returns with a 423, that means that we
+					// successfully *tried* to acquire the job, but it is not available to be
+					// run yet. One reason may be it is in a waiting state
+					a.logger.Info("The job is not available to be run yet (%s)", err)
+					return err
+				}
 			}
+			a.logger.Warn("%s (%s)", err, r)
 		}
 
 		return err
