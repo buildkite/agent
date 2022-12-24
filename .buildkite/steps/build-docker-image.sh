@@ -3,7 +3,7 @@ set -euo pipefail
 
 ## This script can be run locally like this:
 ##
-## .buildkite/steps/build-docker-image.sh (alpine|ubuntu) (image tag) (codename) (version)
+## .buildkite/steps/build-docker-image.sh (alpine|ubuntu) (image tag) (codename) (version) (architecture)
 ## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 ##
 ## You can then publish that image with
@@ -24,7 +24,7 @@ build_docker_image() {
 
   echo "--- Building :docker: $image_tag"
   cp -a packaging/linux/root/usr/share/buildkite-agent/hooks/ "${packaging_dir}/hooks/"
-  cp pkg/buildkite-agent-linux-amd64 "${packaging_dir}/buildkite-agent"
+  cp pkg/buildkite-agent-linux-$arch "${packaging_dir}/buildkite-agent"
   chmod +x "${packaging_dir}/buildkite-agent"
   docker build --tag "$image_tag" "${packaging_dir}"
 }
@@ -55,6 +55,7 @@ variant="${1:-}"
 image_tag="${2:-}"
 codename="${3:-}"
 version="${4:-}"
+arch="${5:-}"
 push="${PUSH_IMAGE:-true}"
 
 if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-18\.04|ubuntu-20\.04|sidecar)$ ]] ; then
@@ -70,13 +71,22 @@ fi
 rm -rf pkg
 mkdir -p pkg
 
+if [[ -z "$arch" ]]; then
+  arch="amd64"
+fi
+if [[ ! "$arch" =~ ^(amd64|arm64)$ ]] ; then
+  >&2 echo "Unsupported architecture $arch"
+  exit 1
+fi
+echo "--- Building for $arch architecture"
+
 if [[ -z "$version" ]] ; then
   echo '--- Downloading :linux: binaries from artifacts'
-  buildkite-agent artifact download "pkg/buildkite-agent-linux-amd64" .
+  buildkite-agent artifact download "pkg/buildkite-agent-linux-$arch" .
 else
   echo "--- Downloading :linux: binaries for version $version"
-  curl -Lf -o pkg/buildkite-agent-linux-amd64 \
-    https://download.buildkite.com/agent/${codename}/${version}/buildkite-agent-linux-amd64
+  curl -Lf -o pkg/buildkite-agent-linux-$arch \
+    https://download.buildkite.com/agent/${codename}/${version}/buildkite-agent-linux-$arch
 fi
 
 if [[ -z "$image_tag" ]] ; then
