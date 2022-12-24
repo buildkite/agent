@@ -62,6 +62,7 @@ type BootstrapConfig struct {
 	AutomaticArtifactUploadPaths string   `cli:"artifact-upload-paths"`
 	ArtifactUploadDestination    string   `cli:"artifact-upload-destination"`
 	CleanCheckout                bool     `cli:"clean-checkout"`
+	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
@@ -197,6 +198,12 @@ var BootstrapCommand = cli.Command{
 			Name:   "clean-checkout",
 			Usage:  "Whether or not the bootstrap should remove the existing repository before running the command",
 			EnvVar: "BUILDKITE_CLEAN_CHECKOUT",
+		},
+		cli.StringFlag{
+			Name:   "git-checkout-flags",
+			Value:  "-f",
+			Usage:  "Flags to pass to \"git checkout\" command",
+			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
@@ -410,6 +417,7 @@ var BootstrapCommand = cli.Command{
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,
 			Debug:                        cfg.Debug,
+			GitCheckoutFlags:             cfg.GitCheckoutFlags,
 			GitCleanFlags:                cfg.GitCleanFlags,
 			GitCloneFlags:                cfg.GitCloneFlags,
 			GitCloneMirrorFlags:          cfg.GitCloneMirrorFlags,

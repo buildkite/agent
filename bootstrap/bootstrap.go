@@ -1370,12 +1370,14 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		}
 	}
 
+	gitCheckoutFlags := b.GitCheckoutFlags
+
 	if b.Commit == "HEAD" {
-		if err := gitCheckout(ctx, b.shell, "-f", "FETCH_HEAD"); err != nil {
+		if err := gitCheckout(ctx, b.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
 			return err
 		}
 	} else {
-		if err := gitCheckout(ctx, b.shell, "-f", b.Commit); err != nil {
+		if err := gitCheckout(ctx, b.shell, gitCheckoutFlags, b.Commit); err != nil {
 			return err
 		}
 	}

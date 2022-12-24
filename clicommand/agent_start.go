@@ -84,6 +84,7 @@ type AgentStartConfig struct {
 	WaitForEC2MetaDataTimeout   string   `cli:"wait-for-ec2-meta-data-timeout"`
 	WaitForECSMetaDataTimeout   string   `cli:"wait-for-ecs-meta-data-timeout"`
 	WaitForGCPLabelsTimeout     string   `cli:"wait-for-gcp-labels-timeout"`
+	GitCheckoutFlags            string   `cli:"git-checkout-flags"`
 	GitCloneFlags               string   `cli:"git-clone-flags"`
 	GitCloneMirrorFlags         string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags               string   `cli:"git-clean-flags"`
@@ -361,6 +362,12 @@ var AgentStartCommand = cli.Command{
 			Usage:  "The amount of time to wait for labels from GCP before proceeding",
 			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
 			Value:  time.Second * 10,
+		},
+		cli.StringFlag{
+			Name:   "git-checkout-flags",
+			Value:  "-f",
+			Usage:  "Flags to pass to \"git checkout\" command",
+			EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
 		},
 		cli.StringFlag{
 			Name:   "git-clone-flags",
@@ -745,6 +752,7 @@ var AgentStartCommand = cli.Command{
 			GitMirrorsSkipUpdate:       cfg.GitMirrorsSkipUpdate,
 			HooksPath:                  cfg.HooksPath,
 			PluginsPath:                cfg.PluginsPath,
+			GitCheckoutFlags:           cfg.GitCheckoutFlags,
 			GitCloneFlags:              cfg.GitCloneFlags,
 			GitCloneMirrorFlags:        cfg.GitCloneMirrorFlags,
 			GitCleanFlags:              cfg.GitCleanFlags,
