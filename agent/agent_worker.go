@@ -521,18 +521,24 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
+	failureCount := 0
+	statusLockedCount := 0
+
 	// Acquire the job using the ID we were provided. We'll retry as best
-	// we can on non 422 error.
+	// we can on non 422 error. Except for 423 errors, in which we retry at
+	// a slower rate
 	var acquiredJob *api.Job
 	err := roko.NewRetrier(
-		roko.WithMaxAttempts(10),
-		roko.WithStrategy(roko.Constant(30*time.Second)),
+		roko.TryForever(),
+		roko.WithStrategy(roko.Constant(3*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
 			r.Break()
 		}
+
+		failureCount += 1
 
 		var err error
 		var response *api.Response
@@ -548,17 +554,28 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
 					r.Break()
 				case http.StatusLocked:
+					statusLockedCount += 1
 					// If the API returns with a 423, that means that we
 					// successfully *tried* to acquire the job, but it is not available to be
 					// run yet. One reason may be it is in a waiting state
-					a.logger.Info("The job is not available to be run yet (%s)", err)
+					a.logger.Warn("The job is not available to be run yet (%s)", err)
+					r.SetNextInterval(30 * time.Second)
+					if statusLockedCount >= 10 {
+						r.Break()
+					}
 					return err
 				}
 			}
 			a.logger.Warn("%s (%s)", err, r)
+
+			if failureCount >= 100 {
+				r.Break()
+			}
+
+			return err
 		}
 
-		return err
+		return nil
 	})
 
 	// If `acquiredJob` is nil, then the job was never acquired
