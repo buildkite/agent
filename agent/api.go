@@ -11,7 +11,7 @@ import (
 // APIClient is an interface generated for "github.com/buildkite/agent/v3/api.Client".
 type APIClient interface {
 	AcceptJob(context.Context, *api.Job) (*api.Job, *api.Response, error)
-	AcquireJob(context.Context, string) (*api.Job, *api.Response, error)
+	AcquireJob(context.Context, string, ...api.Header) (*api.Job, *api.Response, error)
 	Annotate(context.Context, string, *api.Annotation) (*api.Response, error)
 	AnnotationRemove(context.Context, string, string) (*api.Response, error)
 	Config() api.Config

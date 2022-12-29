@@ -543,7 +543,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		var err error
 		var response *api.Response
 
-		acquiredJob, response, err = a.apiClient.AcquireJob(ctx, jobId)
+		acquiredJob, response, err = a.apiClient.AcquireJob(ctx, jobId, api.Header{Name: "X-Waiting-As-Locked", Value: "1"})
 		if err != nil {
 			if response != nil {
 				switch response.StatusCode {

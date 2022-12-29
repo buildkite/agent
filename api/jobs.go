@@ -57,10 +57,10 @@ func (c *Client) GetJobState(ctx context.Context, id string) (*JobState, *Respon
 }
 
 // Acquires a job using its ID
-func (c *Client) AcquireJob(ctx context.Context, id string) (*Job, *Response, error) {
+func (c *Client) AcquireJob(ctx context.Context, id string, headers ...Header) (*Job, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/acquire", id)
 
-	req, err := c.newRequest(ctx, "PUT", u, nil)
+	req, err := c.newRequest(ctx, "PUT", u, nil, headers...)
 	if err != nil {
 		return nil, nil, err
 	}
