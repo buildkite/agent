@@ -106,3 +106,49 @@ func TestDisconnectRetry(t *testing.T) {
 	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 2/4`), l.Messages[2])
 	assert.Equal(t, "[info] Disconnected", l.Messages[3])
 }
+
+func TestAcquireAndRunJobWaiting(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/jobs/waitinguuid/acquire":
+			rw.WriteHeader(http.StatusLocked)
+			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assinged" }`)
+		default:
+			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	ctx := context.Background()
+
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewBuffer()
+
+	retrySleeps := make([]time.Duration, 0)
+	retrySleepFunc := func(d time.Duration) {
+		retrySleeps = append(retrySleeps, d)
+	}
+
+	worker := &AgentWorker{
+		logger:             l,
+		agent:              nil,
+		apiClient:          client,
+		agentConfiguration: AgentConfiguration{},
+		retrySleepFunc:     retrySleepFunc,
+	}
+
+	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
+	assert.ErrorContains(t, err, "423")
+
+	exptectedSleeps := make([]time.Duration, 0, 9)
+	for i := 0; i < 9; i++ {
+		exptectedSleeps = append(exptectedSleeps, 30*time.Second)
+	}
+
+	assert.Equal(t, exptectedSleeps, retrySleeps)
+}
