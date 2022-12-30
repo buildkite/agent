@@ -516,8 +516,10 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	return ping.Job, nil
 }
 
-// Attempts to acquire a job and run it, only returns an error if something
-// goes wrong
+// AcquireAndRunJob attempts to acquire a job an run it. It will retry at a slow
+// rate if the job is in the waiting state, and eventually timeout. If the job is in
+// an unassignable state, it will return an error immediately. Otherwise, it will
+// return at a faster rate.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
