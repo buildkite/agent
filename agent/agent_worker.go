@@ -641,8 +641,6 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 		CancelSignal:       a.cancelSig,
 		AgentConfiguration: a.agentConfiguration,
 	})
-
-	// Was there an error creating the job runner?
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %v", err)
 	}
