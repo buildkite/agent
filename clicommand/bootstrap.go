@@ -69,6 +69,7 @@ type BootstrapConfig struct {
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
+	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -220,6 +221,12 @@ var BootstrapCommand = cli.Command{
 			Value:  "",
 			Usage:  "Flags to pass to \"git fetch\" command",
 			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+		},
+		cli.StringSliceFlag{
+			Name:   "git-submodule-clone-config",
+			Value:  &cli.StringSlice{},
+			Usage:  "Config key=value for git submodule clone commands",
+			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		},
 		cli.StringFlag{
 			Name:   "git-mirrors-path",
@@ -411,6 +418,7 @@ var BootstrapCommand = cli.Command{
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			GitSubmodules:                cfg.GitSubmodules,
+			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,
 			JobID:                        cfg.JobID,
 			LocalHooksEnabled:            cfg.LocalHooksEnabled,
