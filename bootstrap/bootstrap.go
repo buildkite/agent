@@ -1416,7 +1416,7 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 		for _, config := range b.GitSubmoduleCloneConfig {
 			args = append(args, "-c", config)
 		}
-		args = append(args, []string{"submodule", "update", "--init", "--recursive", "--force"}...)
+		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
 		if err := b.shell.Run(ctx, "git", args...); err != nil {
 			return err
 		}
