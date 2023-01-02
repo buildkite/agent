@@ -203,7 +203,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	}
 	defer submoduleRepo.Close()
 
-	out, err := tester.Repo.Execute("submodule", "add", submoduleRepo.Path)
+	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
 		t.Fatalf("tester.Repo.Execute(submodule, add, %q) error = %v\nout = %s", submoduleRepo.Path, err, out)
 	}
@@ -217,6 +217,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
 	}
 
 	// Actually execute git commands, but with expectations
@@ -235,7 +236,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"submodule", "sync", "--recursive"},
 			{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-			{"submodule", "update", "--init", "--recursive", "--force"},
+			{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -250,7 +251,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 			{"checkout", "-f", "FETCH_HEAD"},
 			{"submodule", "sync", "--recursive"},
 			{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
-			{"submodule", "update", "--init", "--recursive", "--force"},
+			{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
 			{"submodule", "foreach", "--recursive", "git reset --hard"},
 			{"clean", "-fdq"},
 			{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -286,7 +287,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 	}
 	defer submoduleRepo.Close()
 
-	out, err := tester.Repo.Execute("submodule", "add", submoduleRepo.Path)
+	out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path)
 	if err != nil {
 		t.Fatalf("tester.Repo.Execute(submodule, add, %q) error = %v\nout = %s", submoduleRepo.Path, err, out)
 	}

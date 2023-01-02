@@ -83,6 +83,9 @@ type Config struct {
 	// Flags to pass to "git clean" command
 	GitCleanFlags string `env:"BUILDKITE_GIT_CLEAN_FLAGS"`
 
+	// Config key=value pairs to pass to "git" when submodule init commands are invoked
+	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" normalize:"list"`
+
 	// Whether or not to run the hooks/commands in a PTY
 	RunInPty bool
 
