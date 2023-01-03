@@ -117,6 +117,11 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/jobs/waitinguuid/acquire":
+			if req.Header.Get("X-Buildkite-Waiting-As-Locked") != "1" {
+				http.Error(rw, "Expected X-Buildkite-Waiting-As-Locked to be set to 1", http.StatusUnprocessableEntity)
+				return
+			}
+
 			backoff_seq, err := strconv.ParseFloat(req.Header.Get("X-Buildkite-Backoff-Sequence"), 64)
 			if err != nil {
 				backoff_seq = 0
@@ -134,7 +139,6 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 			rw.WriteHeader(http.StatusLocked)
 			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assinged" }`)
 		default:
-			t.Errorf("Unknown endpoint %s %s", req.Method, req.URL.Path)
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}
 	}))
@@ -162,6 +166,8 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
 	assert.ErrorContains(t, err, "context canceled")
+
+	require.GreaterOrEqual(t, len(exptectedSleeps), 1, "expected at least one retry")
 
 	// the last sleep is not used as the retries stops before using it
 	assert.Equal(t, exptectedSleeps[:len(exptectedSleeps)-1], retrySleeps)
