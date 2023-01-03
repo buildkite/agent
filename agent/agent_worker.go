@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -516,22 +517,24 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	return ping.Job, nil
 }
 
-// AcquireAndRunJob attempts to acquire a job an run it. It will retry at a slow
-// rate if the job is in the waiting state, and eventually timeout. If the job is in
-// an unassignable state, it will return an error immediately. Otherwise, it will
-// return at a faster rate.
+// AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
+// server determined interval (from the Retry-After response header) if the job is in the waiting
+// state. If the job is in an unassignable state, it will return an error immediately.
+// Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
-	failureCount := 0
-	statusLockedCount := 0
+	// timeout the context to prevent the exponentital backoff from growing too
+	// large if the job is in the waiting state
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 
-	// Acquire the job using the ID we were provided. We'll retry as best
-	// we can on non 422 error. Except for 423 errors, in which we retry at
-	// a slower rate
+	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
+	// Except for 423 errors, in which we exponentially back off under the direction of the API
+	// setting the Retry-After header
 	var acquiredJob *api.Job
 	err := roko.NewRetrier(
-		roko.TryForever(),
+		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(3*time.Second)),
 		roko.WithSleepFunc(a.retrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -541,12 +544,14 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 			r.Break()
 		}
 
-		failureCount += 1
-
 		var err error
 		var response *api.Response
 
-		acquiredJob, response, err = a.apiClient.AcquireJob(ctx, jobId, api.Header{Name: "X-Waiting-As-Locked", Value: "1"})
+		acquiredJob, response, err = a.apiClient.AcquireJob(
+			ctx, jobId,
+			api.Header{Name: "X-Buildkite-Waiting-As-Locked", Value: "1"},
+			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
+		)
 		if err != nil {
 			if response != nil {
 				switch response.StatusCode {
@@ -557,24 +562,17 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
 					r.Break()
 				case http.StatusLocked:
-					statusLockedCount += 1
-					// If the API returns with a 423, that means that we
-					// successfully *tried* to acquire the job, but it is not available to be
-					// run yet. One reason may be it is in a waiting state
-					a.logger.Warn("The job is not available to be run yet (%s)", err)
-					r.SetNextInterval(30 * time.Second)
-					if statusLockedCount >= 10 {
-						r.Break()
+					// If the API returns with a 423, the job is in the waiting state
+					a.logger.Warn("The job is waiting for a dependency (%s)", err)
+					duration, errParseDuration := time.ParseDuration(response.Header.Get("Retry-After") + "s")
+					if errParseDuration != nil {
+						duration = time.Second + time.Duration(rand.Int63n(int64(time.Second)))
 					}
+					r.SetNextInterval(duration)
 					return err
 				}
 			}
 			a.logger.Warn("%s (%s)", err, r)
-
-			if failureCount >= 100 {
-				r.Break()
-			}
-
 			return err
 		}
 

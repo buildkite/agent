@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -108,9 +110,27 @@ func TestDisconnectRetry(t *testing.T) {
 }
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
+	exptectedSleeps := []time.Duration{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/jobs/waitinguuid/acquire":
+			backoff_seq, err := strconv.ParseFloat(req.Header.Get("X-Buildkite-Backoff-Sequence"), 64)
+			if err != nil {
+				backoff_seq = 0
+			}
+			delay := math.Pow(2, backoff_seq)
+			sleep, _ := time.ParseDuration(fmt.Sprintf("%fs", delay))
+
+			if backoff_seq > 4 {
+				cancel()
+			}
+
+			exptectedSleeps = append(exptectedSleeps, sleep)
+
+			rw.Header().Set("Retry-After", fmt.Sprintf("%f", delay))
 			rw.WriteHeader(http.StatusLocked)
 			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assinged" }`)
 		default:
@@ -119,8 +139,6 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-
-	ctx := context.Background()
 
 	client := api.NewClient(logger.Discard, api.Config{
 		Endpoint: server.URL,
@@ -143,12 +161,8 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}
 
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
-	assert.ErrorContains(t, err, "423")
+	assert.ErrorContains(t, err, "context canceled")
 
-	exptectedSleeps := make([]time.Duration, 0, 9)
-	for i := 0; i < 9; i++ {
-		exptectedSleeps = append(exptectedSleeps, 30*time.Second)
-	}
-
-	assert.Equal(t, exptectedSleeps, retrySleeps)
+	// the last sleep is not used as the retries stops before using it
+	assert.Equal(t, exptectedSleeps[:len(exptectedSleeps)-1], retrySleeps)
 }
