@@ -3,88 +3,73 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/agent/v3/bootstrap/shell"
-	"github.com/buildkite/bintest/v3"
+	"github.com/gliderlabs/ssh"
 )
 
 func TestAddingToKnownHosts(t *testing.T) {
 	t.Parallel()
 
-	var testCases = []struct {
-		Name       string
-		Repository string
-		Alias      string
-		Host       string
-	}{
-		{"git url", "git@github.com:buildkite/agent.git", "github.com", "github.com"},
-		{"git url with alias", "git@github.com-alias1:buildkite/agent.git", "github.com-alias1", "github.com"},
-		{"ssh url with port", "ssh://git@ssh.github.com:443/var/cache/git/project.git", "ssh.github.com:443", "ssh.github.com:443"},
+	// Start a fake SSH server for ssh-keyscan to poke at.
+	// It will generate its own host key.
+	// This uses ':0' to pick an ephemeral port to listen on.
+	svr := &ssh.Server{
+		Addr:    "localhost:0",
+		Version: "Fake SSH Server v0.1",
+	}
+	ln, err := net.Listen("tcp", svr.Addr)
+	if err != nil {
+		t.Fatalf("net.Listen(tcp, %q) error = %v", svr.Addr, err)
+	}
+	go svr.Serve(ln)
+	defer svr.Close()
+
+	hostAddr := ln.Addr().String()
+	repoURL := fmt.Sprintf("ssh://git@%s/var/cache/git/project.git", hostAddr)
+	t.Logf("Fake SSH server listening at address %s", hostAddr)
+
+	// Create a new empty known-hosts file to add to.
+	f, err := os.CreateTemp("", "known-hosts")
+	if err != nil {
+		t.Fatalf(`os.CreateTemp("", "known-hosts") error = %v`, err)
+	}
+	defer os.RemoveAll(f.Name())
+	if err := f.Close(); err != nil {
+		t.Fatalf("f.Close() = %v", err)
 	}
 
-	for _, tc := range testCases {
-		t.Run(tc.Name, func(t *testing.T) {
-			sh := shell.NewTestShell(t)
+	sh := shell.NewTestShell(t)
+	sh.Env.Set("PATH", os.Getenv("PATH"))
+	kh := knownHosts{
+		Shell: sh,
+		Path:  f.Name(),
+	}
 
-			ssh, err := bintest.NewMock("ssh")
-			if err != nil {
-				t.Fatalf("bintest.NewMock(ssh) error = %v", err)
-			}
-			defer ssh.CheckAndClose(t)
+	// The file should not contain this host
+	exists, err := kh.Contains(hostAddr)
+	if err != nil {
+		t.Errorf("kh.Contains(%q) error = %v", hostAddr, err)
+	}
+	if got, want := exists, false; got != want {
+		t.Errorf("kh.Contains(%q) = %t, want %t", hostAddr, got, want)
+	}
 
-			path := fmt.Sprintf("%s%c%s", filepath.Dir(ssh.Path), os.PathListSeparator, os.Getenv("PATH"))
+	// Add the host - this resolves any SSH client configuration
+	// (in case the URL contains an alias), and runs ssh-keyscan to get its key.
+	if err := kh.AddFromRepository(context.Background(), repoURL); err != nil {
+		t.Errorf("kh.AddFromRespository(%q) = %v", repoURL, err)
+	}
 
-			sh.Env.Set("PATH", path)
-
-			ssh.
-				Expect("-G", tc.Alias).
-				AndWriteToStderr(`unknown option -- G
-usage: ssh [-1246AaCfgKkMNnqsTtVvXxYy] [-b bind_address] [-c cipher_spec]
-           [-D [bind_address:]port] [-E log_file] [-e escape_char]
-           [-F configfile] [-I pkcs11] [-i identity_file]
-           [-L [bind_address:]port:host:hostport] [-l login_name] [-m mac_spec]
-           [-O ctl_cmd] [-o option] [-p port]
-           [-Q cipher | cipher-auth | mac | kex | key]
-           [-R [bind_address:]port:host:hostport] [-S ctl_path] [-W host:port]
-           [-w local_tun[:remote_tun]] [user@]hostname [command]`).
-				AndExitWith(255)
-
-			f, err := os.CreateTemp("", "known-hosts")
-			if err != nil {
-				t.Fatalf(`os.CreateTemp("", "known-hosts") error = %v`, err)
-			}
-			defer os.RemoveAll(f.Name())
-			if err := f.Close(); err != nil {
-				t.Fatalf("f.Close() = %v", err)
-			}
-
-			kh := knownHosts{
-				Shell: sh,
-				Path:  f.Name(),
-			}
-
-			exists, err := kh.Contains(tc.Host)
-			if err != nil {
-				t.Errorf("kh.Contains(%q) error = %v", tc.Host, err)
-			}
-			if got, want := exists, false; got != want {
-				t.Errorf("kh.Contains(%q) = %t, want %t", tc.Host, got, want)
-			}
-
-			if err := kh.AddFromRepository(context.Background(), tc.Repository); err != nil {
-				t.Errorf("kh.AddFromRespository(%q) = %v", tc.Repository, err)
-			}
-
-			exists, err = kh.Contains(tc.Host)
-			if err != nil {
-				t.Errorf("kh.Contains(%q) error = %v", tc.Host, err)
-			}
-			if got, want := exists, true; got != want {
-				t.Errorf("kh.Contains(%q) = %t, want %t", tc.Host, got, want)
-			}
-		})
+	// The file should now contain the host key
+	exists, err = kh.Contains(hostAddr)
+	if err != nil {
+		t.Errorf("kh.Contains(%q) error = %v", hostAddr, err)
+	}
+	if got, want := exists, true; got != want {
+		t.Errorf("kh.Contains(%q) = %t, want %t", hostAddr, got, want)
 	}
 }
