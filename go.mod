@@ -3,7 +3,7 @@ module github.com/buildkite/agent/v3
 go 1.18
 
 require (
-	github.com/DataDog/datadog-go/v5 v5.1.1
+	github.com/DataDog/datadog-go/v5 v5.2.0
 	github.com/aws/aws-sdk-go v1.44.152
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
