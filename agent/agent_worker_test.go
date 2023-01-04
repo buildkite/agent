@@ -129,7 +129,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 			rw.Header().Set("Retry-After", fmt.Sprintf("%f", delay))
 			rw.WriteHeader(http.StatusLocked)
-			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assinged" }`)
+			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assigned"}`)
 		default:
 			http.Error(rw, "Not found", http.StatusNotFound)
 		}
