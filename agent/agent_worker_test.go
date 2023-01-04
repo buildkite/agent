@@ -110,7 +110,6 @@ func TestDisconnectRetry(t *testing.T) {
 }
 
 func TestAcquireAndRunJobWaiting(t *testing.T) {
-	exptectedSleeps := []time.Duration{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -127,13 +126,6 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 				backoff_seq = 0
 			}
 			delay := math.Pow(2, backoff_seq)
-			sleep, _ := time.ParseDuration(fmt.Sprintf("%fs", delay))
-
-			if backoff_seq > 4 {
-				cancel()
-			}
-
-			exptectedSleeps = append(exptectedSleeps, sleep)
 
 			rw.Header().Set("Retry-After", fmt.Sprintf("%f", delay))
 			rw.WriteHeader(http.StatusLocked)
@@ -151,7 +143,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 
 	l := logger.NewBuffer()
 
-	retrySleeps := make([]time.Duration, 0)
+	retrySleeps := []time.Duration{}
 	retrySleepFunc := func(d time.Duration) {
 		retrySleeps = append(retrySleeps, d)
 	}
@@ -165,10 +157,12 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	}
 
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
-	assert.ErrorContains(t, err, "context canceled")
+	assert.ErrorContains(t, err, "423")
 
-	require.GreaterOrEqual(t, len(exptectedSleeps), 1, "expected at least one retry")
-
-	// the last sleep is not used as the retries stops before using it
-	assert.Equal(t, exptectedSleeps[:len(exptectedSleeps)-1], retrySleeps)
+	// the last Retry-After is not recorded as the retries exists before using it
+	exptectedSleeps := make([]time.Duration, 0, 9)
+	for d := 1; d <= 1<<8; d *= 2 {
+		exptectedSleeps = append(exptectedSleeps, time.Duration(d)*time.Second)
+	}
+	assert.Equal(t, exptectedSleeps, retrySleeps)
 }
