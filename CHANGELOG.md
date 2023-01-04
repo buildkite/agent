@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [v3.41.0](https://github.com/buildkite/agent/tree/v3.42.0) (2023-01-05)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.41.0...v3.42.0)
+
+ ### Added
+ - Add an in-built hierarchical status page [#1873](https://github.com/buildkite/agent/pull/1873) (@DrJosh9000)
+ - Add an `agent-startup` hook that fires at the same time as the `agent-shutdown` hook is registered [#1778](https://github.com/buildkite/agent/pull/1778) (@donalmacc)
+
+ ### Changed
+- Enforce a timeout on `finishJob` and `onUploadChunk` [#1854](https://github.com/buildkite/agent/pull/1854) (@DrJosh9000)
+- A variety of dependency updates, documentation, and code cleanups! (@dependabot[bot], @DrJosh9000, @moskyb)
+- Flakey test fixes and test suite enhancements (@triarius, @DrJosh9000)
+
+ ### Fixed
+ - Ensure that unrecoverable errors for Heartbeat and Ping stop the agent [#1855](https://github.com/buildkite/agent/pull/1855) (@moskyb)
+
+ ### Security
+ - Update `x/crypto/ssh` to `0.3.0`, patching CVE-2020-9283 [#1857](https://github.com/buildkite/agent/pull/1857) (@moskyb)
+
+
 ## [v3.41.0](https://github.com/buildkite/agent/tree/v3.41.0) (2022-11-24)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.40.0...v3.41.0)
 
