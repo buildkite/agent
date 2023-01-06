@@ -225,7 +225,7 @@ var BootstrapCommand = cli.Command{
 		cli.StringSliceFlag{
 			Name:   "git-submodule-clone-config",
 			Value:  &cli.StringSlice{},
-			Usage:  "Config key=value for git submodule clone commands",
+			Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands, e.g. `update --init`. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead.",
 			EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		},
 		cli.StringFlag{
