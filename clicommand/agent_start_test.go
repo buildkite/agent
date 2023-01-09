@@ -37,8 +37,8 @@ func writeAgentShutdownHook(t *testing.T, dir string) string {
 func TestAgentShutdownHook(t *testing.T) {
 	cfg := func(hooksPath string) AgentStartConfig {
 		return AgentStartConfig{
-			HooksPath: hooksPath,
-			NoColor:   true,
+			HooksPath:    hooksPath,
+			GlobalConfig: GlobalConfig{NoColor: true},
 		}
 	}
 	prompt := "$"

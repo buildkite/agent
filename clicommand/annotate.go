@@ -2,7 +2,6 @@ package clicommand
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -11,7 +10,6 @@ import (
 	"github.com/buildkite/roko"
 
 	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/urfave/cli"
 )
 
@@ -56,25 +54,15 @@ type AnnotateConfig struct {
 	Append  bool   `cli:"append"`
 	Job     string `cli:"job" validate:"required"`
 
-	// Global flags
-	Debug       bool     `cli:"debug"`
-	LogLevel    string   `cli:"log-level"`
-	NoColor     bool     `cli:"no-color"`
-	Experiments []string `cli:"experiment" normalize:"list"`
-	Profile     string   `cli:"profile"`
-
-	// API config
-	DebugHTTP        bool   `cli:"debug-http"`
-	AgentAccessToken string `cli:"agent-access-token" validate:"required"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
+	GlobalConfig
+	APIConfig
 }
 
 var AnnotateCommand = cli.Command{
 	Name:        "annotate",
 	Usage:       "Annotate the build page within the Buildkite UI with text from within a Buildkite job",
 	Description: AnnotateHelpDescription,
-	Flags: []cli.Flag{
+	Flags: flatten([]cli.Flag{
 		cli.StringFlag{
 			Name:   "context",
 			Usage:  "The context of the annotation used to differentiate this annotation from others",
@@ -95,80 +83,46 @@ var AnnotateCommand = cli.Command{
 			Value:  "",
 			Usage:  "Which job should the annotation come from",
 			EnvVar: "BUILDKITE_JOB_ID",
-		},
-
-		// API Flags
-		AgentAccessTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
-
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-	},
-	Action: func(c *cli.Context) {
-		ctx := context.Background()
-
-		// The configuration will be loaded into this struct
-		cfg := AnnotateConfig{}
-
-		loader := cliconfig.Loader{CLI: c, Config: &cfg}
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(&cfg)
-
-		// Now that we have a logger, log out the warnings that loading config generated
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
-		defer done()
-
+		}},
+		globalFlags,
+		apiFlags,
+	),
+	Action: newCommand(func(cc commandConfig[AnnotateConfig]) {
 		var body string
-
-		if cfg.Body != "" {
-			body = cfg.Body
+		if cc.config.Body != "" {
+			body = cc.config.Body
 		} else if stdin.IsReadable() {
-			l.Info("Reading annotation body from STDIN")
+			cc.logger.Info("Reading annotation body from STDIN")
 
 			// Actually read the file from STDIN
 			stdin, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				l.Fatal("Failed to read from STDIN: %s", err)
+				cc.logger.Fatal("Failed to read from STDIN: %s", err)
 			}
 
 			body = string(stdin[:])
 		}
 
 		// Create the API client
-		client := api.NewClient(l, loadAPIClientConfig(cfg, `AgentAccessToken`))
+		client := api.NewClient(cc.logger, loadAPIClientConfig(cc.config, `AgentAccessToken`))
 
 		// Create the annotation we'll send to the Buildkite API
 		annotation := &api.Annotation{
 			Body:    body,
-			Style:   cfg.Style,
-			Context: cfg.Context,
-			Append:  cfg.Append,
+			Style:   cc.config.Style,
+			Context: cc.config.Context,
+			Append:  cc.config.Append,
 		}
 
+		ctx := context.Background()
 		// Retry the annotation a few times before giving up
-		err = roko.NewRetrier(
+		err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(1*time.Second)),
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// Attempt to create the annotation
-			resp, err := client.Annotate(ctx, cfg.Job, annotation)
+			resp, err := client.Annotate(ctx, cc.config.Job, annotation)
 
 			// Don't bother retrying if the response was one of these statuses
 			if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404 || resp.StatusCode == 400) {
@@ -178,7 +132,7 @@ var AnnotateCommand = cli.Command{
 
 			// Show the unexpected error
 			if err != nil {
-				l.Warn("%s (%s)", err, r)
+				cc.logger.Warn("%s (%s)", err, r)
 				return err
 			}
 			return nil
@@ -186,9 +140,9 @@ var AnnotateCommand = cli.Command{
 
 		// Show a fatal error if we gave up trying to create the annotation
 		if err != nil {
-			l.Fatal("Failed to annotate build: %s", err)
+			cc.logger.Fatal("Failed to annotate build: %s", err)
 		}
 
-		l.Debug("Successfully annotated build")
-	},
+		cc.logger.Debug("Successfully annotated build")
+	}),
 }
