@@ -171,9 +171,9 @@ Format specifiers:
 
 		if len(artifacts) == 0 {
 			if cfg.AllowEmptyResults {
-				l.Info(fmt.Sprintf("No matches found for %q", cfg.Query))
+				l.Info("No matches found for %q", cfg.Query)
 			} else {
-				l.Fatal(fmt.Sprintf("No matches found for %q", cfg.Query))
+				l.Fatal("No matches found for %q", cfg.Query)
 			}
 		}
 
