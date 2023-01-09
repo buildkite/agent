@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.4
+
 FROM alpine:3.17.0 AS base
 
 RUN apk update && apk add --no-cache \
@@ -18,19 +20,39 @@ RUN apk update && apk add --no-cache \
     tini \
     tzdata
 
-FROM base AS downloader
+FROM alpine:3.17.0 AS kubectl-downloader
+ARG TARGETOS
+ARG TARGETARCH
 
-WORKDIR /downloads
+RUN <<EOF
+set -eu
 
-RUN curl -fL "https://storage.googleapis.com/kubernetes-release/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o kubectl && \
-    chmod +x kubectl
+VERSION=$(wget -qO- https://dl.k8s.io/release/stable.txt)
+wget -qO kubectl \
+    "https://storage.googleapis.com/kubernetes-release/release/$VERSION/bin/linux/$TARGETARCH/kubectl"
+chmod +x kubectl
+EOF
 
-RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s "/downloads"
+FROM alpine:3.17.0 AS kustomize-downloader
+ARG TARGETOS
+ARG TARGETARCH
+
+RUN <<EOF
+set -eu
+
+apk update
+apk add jq
+URL=$(wget -qO- https://api.github.com/repos/kubernetes-sigs/kustomize/releases | jq -r '.[] | select(has("assets") and .assets != []) | .assets[].browser_download_url' | grep "${TARGETOS}_${TARGETARCH}" | head)
+wget -qO- $URL | tar xz
+EOF
 
 FROM base AS runtime
 
-COPY --from=downloader /downloads/kubectl /usr/local/bin/kubectl
-COPY --from=downloader /downloads/kustomize /usr/local/bin/kustomize
+ARG TARGETOS
+ARG TARGETARCH
+
+COPY --from=kubectl-downloader /kubectl /usr/local/bin/kubectl
+COPY --from=kustomize-downloader /kustomize /usr/local/bin/kustomize
 
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
@@ -39,7 +61,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
-COPY ./buildkite-agent /usr/local/bin/buildkite-agent
+COPY ./buildkite-agent-$TARGETOS-$TARGETARCH /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite
