@@ -39,7 +39,7 @@ require (
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/google/go-cmp v0.5.9
 	go.opentelemetry.io/contrib/propagators/aws v1.11.1
-	go.opentelemetry.io/contrib/propagators/b3 v1.11.1
+	go.opentelemetry.io/contrib/propagators/b3 v1.12.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.11.1
 	go.opentelemetry.io/contrib/propagators/ot v1.12.0
 	go.opentelemetry.io/otel v1.11.2
