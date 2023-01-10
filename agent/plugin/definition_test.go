@@ -90,7 +90,7 @@ func TestDefinitionValidatesConfiguration(t *testing.T) {
 		}`),
 	}
 
-	res := validator.Validate(def, map[string]interface{}{
+	res := validator.Validate(def, map[string]any{
 		"llamas": "always",
 	})
 
@@ -123,7 +123,7 @@ func TestDefinitionWithoutAdditionalProperties(t *testing.T) {
 		}`),
 	}
 
-	res := validator.Validate(def, map[string]interface{}{
+	res := validator.Validate(def, map[string]any{
 		"alpacas": "definitely",
 		"camels":  "never",
 	})
@@ -157,7 +157,7 @@ func TestDefinitionWithAdditionalProperties(t *testing.T) {
 		}`),
 	}
 
-	res := validator.Validate(def, map[string]interface{}{
+	res := validator.Validate(def, map[string]any{
 		"alpacas": "definitely",
 		"camels":  "never",
 	})

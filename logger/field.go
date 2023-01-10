@@ -28,7 +28,7 @@ func (f *Fields) Get(key string) []Field {
 
 type GenericField struct {
 	key    string
-	value  interface{}
+	value  any
 	format string
 }
 

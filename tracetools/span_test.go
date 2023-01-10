@@ -18,28 +18,28 @@ type TestOpenTracingSpan struct {
 	finished bool
 	fields   []log.Field
 	err      error
-	tags     map[string]interface{}
+	tags     map[string]any
 }
 
 func (t *TestOpenTracingSpan) Finish()                                       { t.finished = true }
 func (t *TestOpenTracingSpan) FinishWithOptions(_ opentracing.FinishOptions) { t.finished = true }
 func (t *TestOpenTracingSpan) Context() opentracing.SpanContext              { return t.ctx }
 func (t *TestOpenTracingSpan) SetOperationName(_ string) opentracing.Span    { return t }
-func (t *TestOpenTracingSpan) SetTag(k string, v interface{}) opentracing.Span {
+func (t *TestOpenTracingSpan) SetTag(k string, v any) opentracing.Span {
 	t.tags[k] = v
 	return t
 }
 func (t *TestOpenTracingSpan) LogFields(f ...log.Field)                    { t.fields = append(t.fields, f...) }
-func (t *TestOpenTracingSpan) LogKV(_ ...interface{})                      {}
+func (t *TestOpenTracingSpan) LogKV(_ ...any)                              {}
 func (t *TestOpenTracingSpan) SetBaggageItem(_, _ string) opentracing.Span { return t }
 func (t *TestOpenTracingSpan) BaggageItem(_ string) string                 { return "" }
 func (t *TestOpenTracingSpan) Tracer() opentracing.Tracer                  { return nil }
 func (t *TestOpenTracingSpan) LogEvent(_ string)                           {}
-func (t *TestOpenTracingSpan) LogEventWithPayload(_ string, _ interface{}) {}
+func (t *TestOpenTracingSpan) LogEventWithPayload(_ string, _ any)         {}
 func (t *TestOpenTracingSpan) Log(_ opentracing.LogData)                   {}
 
 func newTestOpenTracingSpan() *OpenTracingSpan {
-	return &OpenTracingSpan{Span: &TestOpenTracingSpan{tags: map[string]interface{}{}}}
+	return &OpenTracingSpan{Span: &TestOpenTracingSpan{tags: map[string]any{}}}
 }
 
 type TestOtelSpan struct {
@@ -87,7 +87,7 @@ func TestAddAttribute_OpenTracing(t *testing.T) {
 	assert.Empty(t, implSpan.tags)
 
 	span.AddAttributes(map[string]string{"colour": "green", "flavour": "spicy"})
-	assert.Equal(t, map[string]interface{}{"colour": "green", "flavour": "spicy"}, implSpan.tags)
+	assert.Equal(t, map[string]any{"colour": "green", "flavour": "spicy"}, implSpan.tags)
 }
 
 func TestAddAttributeToSpan_OpenTelemetry(t *testing.T) {

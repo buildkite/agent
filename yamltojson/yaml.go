@@ -33,7 +33,7 @@ func MarshalMapSliceJSON(m yaml.MapSlice) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-func marshalSliceJSON(m []interface{}) ([]byte, error) {
+func marshalSliceJSON(m []any) ([]byte, error) {
 	buffer := bytes.NewBufferString("[")
 	length := len(m)
 	count := 0
@@ -54,19 +54,19 @@ func marshalSliceJSON(m []interface{}) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-func marshalInterfaceJSON(i interface{}) ([]byte, error) {
+func marshalInterfaceJSON(i any) ([]byte, error) {
 	switch t := i.(type) {
 	case yaml.MapItem:
 		return marshalInterfaceJSON(t.Value)
 	case yaml.MapSlice:
 		return MarshalMapSliceJSON(t)
 	case []yaml.MapItem:
-		var s []interface{}
+		var s []any
 		for _, mi := range t {
 			s = append(s, mi.Value)
 		}
 		return marshalSliceJSON(s)
-	case []interface{}:
+	case []any:
 		return marshalSliceJSON(t)
 	default:
 		return json.Marshal(i)
