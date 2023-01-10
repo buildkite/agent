@@ -139,9 +139,9 @@ steps:
     key: set-metadata
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
-  - group: ":docker: Docker Container Builds"
+  - group: ":docker: Docker Image Builds"
     steps:
-      - name: ":docker: {{matrix}} container build"
+      - name: ":docker: {{matrix}} image build"
         key: build-docker
         agents:
           queue: elastic-builders
@@ -156,6 +156,37 @@ steps:
             - "ubuntu-18.04"
             - "ubuntu-20.04"
             - "sidecar"
+
+  - group: ":docker: Docker Image Tests"
+    steps:
+      - name: ":docker: {{matrix.variant}} amd64 image test"
+        key: test-docker-amd64
+        agents:
+          queue: elastic-builders
+        depends_on:
+          - build-docker
+        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+        matrix:
+          setup:
+            variant:
+              - alpine
+              - alpine-k8s
+              - ubuntu-18.04
+              - ubuntu-20.04
+      - name: ":docker: {{matrix.variant}} arm64 image test"
+        key: test-docker-arm64
+        agents:
+          queue: elastic-builders-arm64
+        depends_on:
+          - build-docker
+        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+        matrix:
+          setup:
+            variant:
+              - alpine
+              - alpine-k8s
+              - ubuntu-18.04
+              - ubuntu-20.04
 
   - name: ":debian: Debian package build"
     key: build-debian-packages
@@ -192,6 +223,7 @@ steps:
       - test-bk-cli
       - build-rpm-packages
       - build-debian-packages
-      - build-docker
       - build-github-release
+      - test-docker-amd64
+      - test-docker-arm64
     command: ".buildkite/steps/upload-release-steps.sh"

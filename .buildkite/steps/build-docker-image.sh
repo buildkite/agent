@@ -3,8 +3,6 @@
 set -Eeufo pipefail
 
 ## This script can be run locally like this:
-## If you are pushing, then images for all architectures need to be built using buildx.
-## This typically requires something like `qemu-user-static` to be avaliable
 ##
 ## .buildkite/steps/build-docker-image.sh (alpine|alpine-k8s|ubuntu-18.04|ubuntu-20.04|sidecar) (image tag) (codename) (version)
 ## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
@@ -92,12 +90,13 @@ docker buildx build --progress plain --builder "$builder_name" --platform linux/
 # from being done in one command. Luckliy the second build will be quick because of docker layer caching
 docker buildx build --progress plain --builder "$builder_name" --tag "$image_tag" --load "$packaging_dir"
 
+# Sanity check test before pushing. Only works for current arch. CI will test all arches as well.
 case $variant in
 sidecar)
   echo "Skipping tests for sidecar variant"
   ;;
 *)
-  test_docker_image "$image_tag"
+  .buildkite/steps/test-docker-image.sh "$variant" "$image_tag" "$(uname -m)"
   ;;
 esac
 
