@@ -73,7 +73,7 @@ func TestJSONPrinter(t *testing.T) {
 	printer := logger.NewJSONPrinter(b)
 	printer.Print(logger.INFO, "llamas rock", logger.Fields{logger.StringField("key", "val")})
 
-	var results map[string]interface{}
+	var results map[string]any
 	err := json.Unmarshal(b.Bytes(), &results)
 	if err != nil {
 		t.Fatalf("bad json: %v", err)

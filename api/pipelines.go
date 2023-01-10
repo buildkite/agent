@@ -7,9 +7,9 @@ import (
 
 // Pipeline represents a Buildkite Agent API Pipeline
 type Pipeline struct {
-	UUID     string      `json:"uuid"`
-	Pipeline interface{} `json:"pipeline"`
-	Replace  bool        `json:"replace,omitempty"`
+	UUID     string `json:"uuid"`
+	Pipeline any    `json:"pipeline"`
+	Replace  bool   `json:"replace,omitempty"`
 }
 
 // Uploads the pipeline to the Buildkite Agent API. This request doesn't use JSON,

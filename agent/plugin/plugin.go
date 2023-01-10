@@ -41,11 +41,11 @@ type Plugin struct {
 	Vendored bool
 
 	// Configuration for the plugin.
-	Configuration map[string]interface{}
+	Configuration map[string]any
 }
 
 // CreatePlugin returns a Plugin for the given location and config.
-func CreatePlugin(location string, config map[string]interface{}) (*Plugin, error) {
+func CreatePlugin(location string, config map[string]any) (*Plugin, error) {
 	plugin := &Plugin{Configuration: config}
 
 	u, err := url.Parse(location)
@@ -76,13 +76,13 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 	decoder.UseNumber()
 
 	// Parse the JSON
-	var f interface{}
+	var f any
 	if err := decoder.Decode(&f); err != nil {
 		return nil, err
 	}
 
 	// Try and convert the structure to an array
-	m, ok := f.([]interface{})
+	m, ok := f.([]any)
 	if !ok {
 		return nil, fmt.Errorf("JSON structure was not an array")
 	}
@@ -93,17 +93,17 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 		switch vv := v.(type) {
 		case string:
 			// Add the plugin with no config to the array
-			plugin, err := CreatePlugin(string(vv), map[string]interface{}{})
+			plugin, err := CreatePlugin(string(vv), map[string]any{})
 			if err != nil {
 				return nil, err
 			}
 			plugins = append(plugins, plugin)
 
-		case map[string]interface{}:
+		case map[string]any:
 			for location, config := range vv {
 				// Plugins without configs are easy!
 				if config == nil {
-					plugin, err := CreatePlugin(string(location), map[string]interface{}{})
+					plugin, err := CreatePlugin(string(location), map[string]any{})
 					if err != nil {
 						return nil, err
 					}
@@ -113,7 +113,7 @@ func CreateFromJSON(j string) ([]*Plugin, error) {
 				}
 
 				// Since there is a config, it's gotta be a hash
-				config, ok := config.(map[string]interface{})
+				config, ok := config.(map[string]any)
 				if !ok {
 					return nil, fmt.Errorf("Configuration for \"%s\" is not a hash", location)
 				}
@@ -212,7 +212,7 @@ func formatEnvKey(key string) string {
 	return key
 }
 
-func walkConfigValues(prefix string, v interface{}, into *[]string) error {
+func walkConfigValues(prefix string, v any, into *[]string) error {
 	switch vv := v.(type) {
 
 	// handles all of our primitive types, golang provides a good string representation
@@ -221,7 +221,7 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 		return nil
 
 	// handle lists of things, which get a KEY_N prefix depending on the index
-	case []interface{}:
+	case []any:
 		for i := range vv {
 			if err := walkConfigValues(fmt.Sprintf("%s_%d", prefix, i), vv[i], into); err != nil {
 				return err
@@ -230,7 +230,7 @@ func walkConfigValues(prefix string, v interface{}, into *[]string) error {
 		return nil
 
 	// handle maps of things, which get a KEY_SUBKEY prefix depending on the map keys
-	case map[string]interface{}:
+	case map[string]any:
 		for k, vvv := range vv {
 			if err := walkConfigValues(fmt.Sprintf("%s_%s", prefix, formatEnvKey(k)), vvv, into); err != nil {
 				return err

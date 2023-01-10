@@ -39,7 +39,7 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 
 	// We support top-level arrays of steps, so try that first
 	if err := yaml.Unmarshal(p.Pipeline, &pipelineAsSlice); err == nil {
-		var steps []interface{}
+		var steps []any
 
 		// Unwrap our custom topLevelStep types for marshaling later
 		for _, step := range pipelineAsSlice {
@@ -103,7 +103,7 @@ func (p PipelineParser) Parse() (*PipelineParserResult, error) {
 
 // upsertSliceItem will replace a key's value in the given MapSlice with the given
 // replacement or insert it if it doesn't exist.
-func upsertSliceItem(key string, s yaml.MapSlice, val interface{}) yaml.MapSlice {
+func upsertSliceItem(key string, s yaml.MapSlice, val any) yaml.MapSlice {
 	found := -1
 	for i, item := range s {
 		if k, ok := item.Key.(string); ok && k == key {
@@ -155,7 +155,7 @@ func formatYAMLError(err error) error {
 
 // interpolate function inspired from: https://gist.github.com/hvoecking/10772475
 
-func (p PipelineParser) interpolate(obj interface{}) (interface{}, error) {
+func (p PipelineParser) interpolate(obj any) (any, error) {
 	// Make sure there's something actually to interpolate
 	if obj == nil {
 		return nil, nil
@@ -301,7 +301,7 @@ type topLevelStep struct {
 	Body string
 }
 
-func (s *topLevelStep) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (s *topLevelStep) UnmarshalYAML(unmarshal func(any) error) error {
 	// Some steps are plain old strings like "wait". To avoid unmarshaling errors
 	// we check for plain old strings
 	if err := unmarshal(&s.Body); err == nil {

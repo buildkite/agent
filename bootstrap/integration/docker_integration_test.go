@@ -7,7 +7,7 @@ import (
 	"github.com/buildkite/bintest/v3"
 )
 
-func argumentForCommand(cmd string) interface{} {
+func argumentForCommand(cmd string) any {
 	// This is unpleasant, but we have to work around the fact that we generate
 	// batch scripts for windows and plain commands for everything else
 	if runtime.GOOS == "windows" {
@@ -38,7 +38,7 @@ func TestRunningCommandWithDocker(t *testing.T) {
 	containerId := "buildkite_" + jobId + "_container"
 
 	docker := tester.MustMock(t, "docker")
-	docker.ExpectAll([][]interface{}{
+	docker.ExpectAll([][]any{
 		{"build", "-f", "Dockerfile", "-t", imageId, "."},
 		{"run", "--name", containerId, imageId, argumentForCommand("true")},
 		{"rm", "-f", "-v", containerId},
@@ -72,7 +72,7 @@ func TestRunningCommandWithDockerAndCustomDockerfile(t *testing.T) {
 	containerId := "buildkite_" + jobId + "_container"
 
 	docker := tester.MustMock(t, "docker")
-	docker.ExpectAll([][]interface{}{
+	docker.ExpectAll([][]any{
 		{"build", "-f", "Dockerfile.llamas", "-t", imageId, "."},
 		{"run", "--name", containerId, imageId, argumentForCommand("true")},
 		{"rm", "-f", "-v", containerId},
@@ -105,7 +105,7 @@ func TestRunningFailingCommandWithDocker(t *testing.T) {
 	containerId := "buildkite_" + jobId + "_container"
 
 	docker := tester.MustMock(t, "docker")
-	docker.ExpectAll([][]interface{}{
+	docker.ExpectAll([][]any{
 		{"build", "-f", "Dockerfile", "-t", imageId, "."},
 		{"rm", "-f", "-v", containerId},
 	})
@@ -142,7 +142,7 @@ func TestRunningCommandWithDockerCompose(t *testing.T) {
 	projectName := "buildkite1111111111111111"
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
-	dockerCompose.ExpectAll([][]interface{}{
+	dockerCompose.ExpectAll([][]any{
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "run", "llamas", argumentForCommand("true")},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "kill"},
@@ -175,7 +175,7 @@ func TestRunningFailingCommandWithDockerCompose(t *testing.T) {
 	projectName := "buildkite1111111111111111"
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
-	dockerCompose.ExpectAll([][]interface{}{
+	dockerCompose.ExpectAll([][]any{
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "kill"},
 		{"-f", "docker-compose.yml", "-p", projectName, "--verbose", "rm", "--force", "--all", "-v"},
@@ -216,7 +216,7 @@ func TestRunningCommandWithDockerComposeAndExtraConfig(t *testing.T) {
 	projectName := "buildkite1111111111111111"
 
 	dockerCompose := tester.MustMock(t, "docker-compose")
-	dockerCompose.ExpectAll([][]interface{}{
+	dockerCompose.ExpectAll([][]any{
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "build", "--pull", "llamas"},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "run", "llamas", argumentForCommand("true")},
 		{"-f", "dc1.yml", "-f", "dc2.yml", "-f", "dc3.yml", "-p", projectName, "--verbose", "kill"},

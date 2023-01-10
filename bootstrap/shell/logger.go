@@ -15,22 +15,22 @@ type Logger interface {
 	io.Writer
 
 	// Printf prints a line of output
-	Printf(format string, v ...interface{})
+	Printf(format string, v ...any)
 
 	// Headerf prints a Buildkite formatted header
-	Headerf(format string, v ...interface{})
+	Headerf(format string, v ...any)
 
 	// Commentf prints a comment line, e.g `# my comment goes here`
-	Commentf(format string, v ...interface{})
+	Commentf(format string, v ...any)
 
 	// Errorf shows a Buildkite formatted error expands the previous group
-	Errorf(format string, v ...interface{})
+	Errorf(format string, v ...any)
 
 	// Warningf shows a buildkite bootstrap warning
-	Warningf(format string, v ...interface{})
+	Warningf(format string, v ...any)
 
 	// Promptf prints a shell prompt
-	Promptf(format string, v ...interface{})
+	Promptf(format string, v ...any)
 }
 
 // StderrLogger is a Logger that writes to Stderr
@@ -55,17 +55,17 @@ func (wl *WriterLogger) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (wl *WriterLogger) Printf(format string, v ...interface{}) {
+func (wl *WriterLogger) Printf(format string, v ...any) {
 	fmt.Fprintf(wl.Writer, "%s", fmt.Sprintf(format, v...))
 	fmt.Fprintln(wl.Writer)
 }
 
-func (wl *WriterLogger) Headerf(format string, v ...interface{}) {
+func (wl *WriterLogger) Headerf(format string, v ...any) {
 	fmt.Fprintf(wl.Writer, "~~~ %s", fmt.Sprintf(format, v...))
 	fmt.Fprintln(wl.Writer)
 }
 
-func (wl *WriterLogger) Commentf(format string, v ...interface{}) {
+func (wl *WriterLogger) Commentf(format string, v ...any) {
 	if wl.Ansi {
 		wl.Printf(ansiColor("# %s", "90"), fmt.Sprintf(format, v...))
 	} else {
@@ -73,7 +73,7 @@ func (wl *WriterLogger) Commentf(format string, v ...interface{}) {
 	}
 }
 
-func (wl *WriterLogger) Errorf(format string, v ...interface{}) {
+func (wl *WriterLogger) Errorf(format string, v ...any) {
 	if wl.Ansi {
 		wl.Printf(ansiColor("🚨 Error: %s", "31"), fmt.Sprintf(format, v...))
 	} else {
@@ -82,7 +82,7 @@ func (wl *WriterLogger) Errorf(format string, v ...interface{}) {
 	wl.Printf("^^^ +++")
 }
 
-func (wl *WriterLogger) Warningf(format string, v ...interface{}) {
+func (wl *WriterLogger) Warningf(format string, v ...any) {
 	if wl.Ansi {
 		wl.Printf(ansiColor("⚠️ Warning: %s", "33"), fmt.Sprintf(format, v...))
 	} else {
@@ -91,7 +91,7 @@ func (wl *WriterLogger) Warningf(format string, v ...interface{}) {
 	wl.Printf("^^^ +++")
 }
 
-func (wl *WriterLogger) Promptf(format string, v ...interface{}) {
+func (wl *WriterLogger) Promptf(format string, v ...any) {
 	prompt := "$"
 	if runtime.GOOS == "windows" {
 		prompt = ">"
@@ -116,27 +116,27 @@ func (tl TestingLogger) Write(b []byte) (int, error) {
 	return len(b), nil
 }
 
-func (tl TestingLogger) Printf(format string, v ...interface{}) {
+func (tl TestingLogger) Printf(format string, v ...any) {
 	tl.Logf(format, v...)
 }
 
-func (tl TestingLogger) Headerf(format string, v ...interface{}) {
+func (tl TestingLogger) Headerf(format string, v ...any) {
 	tl.Logf("~~~ "+format, v...)
 }
 
-func (tl TestingLogger) Commentf(format string, v ...interface{}) {
+func (tl TestingLogger) Commentf(format string, v ...any) {
 	tl.Logf("# %s", fmt.Sprintf(format, v...))
 }
 
-func (tl TestingLogger) Errorf(format string, v ...interface{}) {
+func (tl TestingLogger) Errorf(format string, v ...any) {
 	tl.Logf("🚨 Error: %s", fmt.Sprintf(format, v...))
 }
 
-func (tl TestingLogger) Warningf(format string, v ...interface{}) {
+func (tl TestingLogger) Warningf(format string, v ...any) {
 	tl.Logf("⚠️ Warning: %s", fmt.Sprintf(format, v...))
 }
 
-func (tl TestingLogger) Promptf(format string, v ...interface{}) {
+func (tl TestingLogger) Promptf(format string, v ...any) {
 	prompt := "$"
 	if runtime.GOOS == "windows" {
 		prompt = ">"

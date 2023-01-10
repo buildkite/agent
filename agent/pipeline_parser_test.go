@@ -270,7 +270,7 @@ func TestPipelineParserLoadsGlobalEnvBlockFirst(t *testing.T) {
 	assert.Equal(t, "echo England smashes Australia to win the ashes in 1912!!", decoded.Steps[0].Command)
 }
 
-func decodeIntoStruct(into interface{}, from interface{}) error {
+func decodeIntoStruct(into any, from any) error {
 	b, err := json.Marshal(from)
 	if err != nil {
 		return err

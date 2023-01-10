@@ -22,7 +22,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "github.com/buildkite-plugins/docker-compose",
 				Version:       "a34fa34",
 				Scheme:        "https",
-				Configuration: map[string]interface{}{"container": "app"},
+				Configuration: map[string]any{"container": "app"},
 			}},
 		},
 		{
@@ -31,7 +31,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "github.com/buildkite-plugins/docker-compose",
 				Version:       "a34fa34",
 				Scheme:        "",
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 		{
@@ -40,7 +40,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "github.com/buildkite-plugins/docker-compose",
 				Version:       "a34fa34",
 				Scheme:        "http",
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 		{`[{"https://gitlab.example.com/path/to/repo#main":{}}]`,
@@ -48,7 +48,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "gitlab.example.com/path/to/repo",
 				Version:       "main",
 				Scheme:        "https",
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 		{`[{"https://gitlab.com/group/team/path/to/repo#main":{}}]`,
@@ -56,7 +56,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "gitlab.com/group/team/path/to/repo",
 				Version:       "main",
 				Scheme:        "https",
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 		{
@@ -66,7 +66,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Version:        "a34fa34",
 				Scheme:         "ssh",
 				Authentication: "git:foo",
-				Configuration:  map[string]interface{}{},
+				Configuration:  map[string]any{},
 			}},
 		},
 		{
@@ -75,7 +75,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "github.com/buildkite-plugins/docker-compose",
 				Version:       "a34fa34",
 				Scheme:        "file",
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 		{
@@ -84,7 +84,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "github.com/buildkite-plugins/fake-plugin",
 				Version:       "master",
 				Scheme:        "",
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 		{
@@ -93,7 +93,7 @@ func TestCreateFromJSON(t *testing.T) {
 				Location:      "./.buildkite/plugins/llamas",
 				Scheme:        "",
 				Vendored:      true,
-				Configuration: map[string]interface{}{},
+				Configuration: map[string]any{},
 			}},
 		},
 	}
@@ -478,7 +478,7 @@ func TestConfigurationToEnvironment(t *testing.T) {
 }
 
 func pluginFromConfig(configJson string) (*Plugin, error) {
-	var config map[string]interface{}
+	var config map[string]any
 
 	if err := json.Unmarshal([]byte(configJson), &config); err != nil {
 		return nil, err
@@ -532,7 +532,7 @@ func TestConfigurationToEnvironment_DuplicatePlugin(t *testing.T) {
 }
 
 func duplicatePluginFromConfig(cfgJSON1, cfgJSON2 string) ([]*Plugin, error) {
-	var config1, config2 map[string]interface{}
+	var config1, config2 map[string]any
 
 	if err := json.Unmarshal([]byte(cfgJSON1), &config1); err != nil {
 		return nil, err

@@ -57,7 +57,7 @@ var types = map[string]string{
 }
 `))
 
-func writeMimeFile(file string, data interface{}) error {
+func writeMimeFile(file string, data any) error {
 	f, err := os.Create(file)
 	if err != nil {
 		return err

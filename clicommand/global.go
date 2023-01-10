@@ -91,7 +91,7 @@ var RedactedVars = cli.StringSliceFlag{
 	Value:  &cli.StringSlice{"*_PASSWORD", "*_SECRET", "*_TOKEN", "*_ACCESS_KEY", "*_SECRET_KEY"},
 }
 
-func CreateLogger(cfg interface{}) logger.Logger {
+func CreateLogger(cfg any) logger.Logger {
 	var l logger.Logger
 	logFormat := "text"
 
@@ -149,7 +149,7 @@ func CreateLogger(cfg interface{}) logger.Logger {
 	return l
 }
 
-func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
+func HandleProfileFlag(l logger.Logger, cfg any) func() {
 	// Enable profiling a profiling mode if Profile is present
 	modeField, _ := reflections.GetField(cfg, "Profile")
 	if mode, ok := modeField.(string); ok && mode != "" {
@@ -158,7 +158,7 @@ func HandleProfileFlag(l logger.Logger, cfg interface{}) func() {
 	return func() {}
 }
 
-func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
+func HandleGlobalFlags(l logger.Logger, cfg any) func() {
 	// Enable experiments
 	experimentNames, err := reflections.GetField(cfg, "Experiments")
 	if err == nil {
@@ -175,7 +175,7 @@ func HandleGlobalFlags(l logger.Logger, cfg interface{}) func() {
 	return HandleProfileFlag(l, cfg)
 }
 
-func handleLogLevelFlag(l logger.Logger, cfg interface{}) error {
+func handleLogLevelFlag(l logger.Logger, cfg any) error {
 	logLevel, err := reflections.GetField(cfg, "LogLevel")
 	if err != nil {
 		return err
@@ -214,7 +214,7 @@ func UnsetConfigFromEnvironment(c *cli.Context) error {
 	return nil
 }
 
-func loadAPIClientConfig(cfg interface{}, tokenField string) api.Config {
+func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	conf := api.Config{
 		UserAgent: version.UserAgent(),
 	}

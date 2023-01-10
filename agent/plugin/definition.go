@@ -95,7 +95,7 @@ type Validator struct {
 
 // Validate checks the plugin definition for errors, including missing commands
 // from $PATH and invalid configuration under the definition's JSON Schema.
-func (v Validator) Validate(def *Definition, config map[string]interface{}) ValidateResult {
+func (v Validator) Validate(def *Definition, config map[string]any) ValidateResult {
 	var result ValidateResult
 
 	configJSON, err := json.Marshal(config)

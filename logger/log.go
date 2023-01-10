@@ -38,12 +38,12 @@ var (
 )
 
 type Logger interface {
-	Debug(format string, v ...interface{})
-	Error(format string, v ...interface{})
-	Fatal(format string, v ...interface{})
-	Notice(format string, v ...interface{})
-	Warn(format string, v ...interface{})
-	Info(format string, v ...interface{})
+	Debug(format string, v ...any)
+	Error(format string, v ...any)
+	Fatal(format string, v ...any)
+	Notice(format string, v ...any)
+	Warn(format string, v ...any)
+	Info(format string, v ...any)
 
 	WithFields(fields ...Field) Logger
 	SetLevel(level Level)
@@ -78,34 +78,34 @@ func (l *ConsoleLogger) SetLevel(level Level) {
 	l.level = level
 }
 
-func (l *ConsoleLogger) Debug(format string, v ...interface{}) {
+func (l *ConsoleLogger) Debug(format string, v ...any) {
 	if l.level == DEBUG {
 		l.printer.Print(DEBUG, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *ConsoleLogger) Error(format string, v ...interface{}) {
+func (l *ConsoleLogger) Error(format string, v ...any) {
 	l.printer.Print(ERROR, fmt.Sprintf(format, v...), l.fields)
 }
 
-func (l *ConsoleLogger) Fatal(format string, v ...interface{}) {
+func (l *ConsoleLogger) Fatal(format string, v ...any) {
 	l.printer.Print(FATAL, fmt.Sprintf(format, v...), l.fields)
 	l.exitFn(1)
 }
 
-func (l *ConsoleLogger) Notice(format string, v ...interface{}) {
+func (l *ConsoleLogger) Notice(format string, v ...any) {
 	if l.level <= NOTICE {
 		l.printer.Print(NOTICE, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *ConsoleLogger) Info(format string, v ...interface{}) {
+func (l *ConsoleLogger) Info(format string, v ...any) {
 	if l.level <= INFO {
 		l.printer.Print(INFO, fmt.Sprintf(format, v...), l.fields)
 	}
 }
 
-func (l *ConsoleLogger) Warn(format string, v ...interface{}) {
+func (l *ConsoleLogger) Warn(format string, v ...any) {
 	if l.level <= WARN {
 		l.printer.Print(WARN, fmt.Sprintf(format, v...), l.fields)
 	}

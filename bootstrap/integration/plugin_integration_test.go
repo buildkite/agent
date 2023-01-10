@@ -560,7 +560,7 @@ func (tp *testPlugin) ToJSON() (string, error) {
 func (tp *testPlugin) MarshalJSON() ([]byte, error) {
 	normalizedPath := strings.TrimPrefix(strings.Replace(tp.Path, "\\", "/", -1), "/")
 
-	p := map[string]interface{}{
+	p := map[string]any{
 		fmt.Sprintf("file:///%s#%s", normalizedPath, strings.TrimSpace(tp.versionTag)): map[string]string{
 			"settings": "blah",
 		},

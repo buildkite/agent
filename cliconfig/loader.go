@@ -22,7 +22,7 @@ type Loader struct {
 	CLI *cli.Context
 
 	// The struct that the config values will be loaded into
-	Config interface{}
+	Config any
 
 	// The logger used
 	Logger logger.Logger
@@ -178,7 +178,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		return fmt.Errorf("Failed to get the type of struct field %s", fieldName)
 	}
 
-	var value interface{}
+	var value any
 
 	// See the if the cli option is using the arg format (arg:1)
 	argMatch := argCliNameRegexp.FindStringSubmatch(cliName)
@@ -258,7 +258,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	return nil
 }
 
-func (l Loader) Errorf(format string, v ...interface{}) error {
+func (l Loader) Errorf(format string, v ...any) error {
 	suffix := fmt.Sprintf(" See: `%s %s --help`", l.CLI.App.Name, l.CLI.Command.Name)
 
 	return fmt.Errorf(format+suffix, v...)

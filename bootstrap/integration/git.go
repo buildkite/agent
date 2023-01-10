@@ -104,7 +104,7 @@ func (gr *gitRepository) Add(path string) error {
 	return nil
 }
 
-func (gr *gitRepository) Commit(message string, params ...interface{}) error {
+func (gr *gitRepository) Commit(message string, params ...any) error {
 	if _, err := gr.Execute("commit", "-m", fmt.Sprintf(message, params...)); err != nil {
 		return err
 	}
