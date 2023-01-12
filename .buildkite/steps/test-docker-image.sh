@@ -8,18 +8,11 @@ platform="${3:-}"
 
 platform_any_to_uname() {
   case $1 in
-    amd64)
-      ;&
-    x86_64)
+    amd64 | x86_64)
       printf "x86_64"
       ;;
-    arm64)
-      ;&
-    aarch64)
+    arm64 | aarch64)
       printf "aarch64"
-      ;;
-    *)
-      printf ""
       ;;
   esac
 }
@@ -35,21 +28,57 @@ if [[ -z "$image_tag" ]] ; then
   echo "Docker Image Tag for $variant: $image_tag"
 fi
 
-echo "--- :hammer: Testing $image_tag platform"
-actual_platform=$(docker run --rm --platform "$platform" --entrypoint uname "$image_tag" -m)
-if [[ $actual_platform != "$expected_platform_uname" ]] ; then
-  echo "Error: expected $expected_platform_uname, received $actual_platform"
-  exit 1
-fi
+test_platform() {
+  echo "--- :hammer: Testing $image_tag platform"
+  actual_platform=$(docker run --rm --platform "$platform" --entrypoint uname "$image_tag" -m)
+  if [[ $actual_platform != "$expected_platform_uname" ]] ; then
+    echo "Error: expected $expected_platform_uname, received $actual_platform"
+    exit 1
+  fi
+}
 
-echo "--- :hammer: Testing $image_tag can run"
-docker run --rm --platform "$platform" "$image_tag" --version
+test_buildkite_agent() {
+  echo "--- :hammer: Testing $image_tag can run"
+  docker run --rm --platform "$platform" "$image_tag" --version
+}
 
-echo "--- :hammer: Testing $image_tag can access docker socket"
-docker run --rm --platform "$platform" -v /var/run/docker.sock:/var/run/docker.sock --entrypoint docker "$image_tag" version
+test_buildkite_agent_sidecar() {
+  echo "--- :hammer: Testing $image_tag can run"
+  docker run --rm --platform "$platform" "$image_tag" /buildkite/bin/buildkite-agent --version
+}
 
-echo "--- :hammer: Testing $image_tag has docker-compose"
-docker run --rm --platform "$platform" --entrypoint docker-compose "$image_tag" --version
+test_docker_socket() {
+  echo "--- :hammer: Testing $image_tag can access docker socket"
+  docker run --rm --platform "$platform" -v /var/run/docker.sock:/var/run/docker.sock --entrypoint docker "$image_tag" version
+}
 
-echo "--- :hammer: Testing $image_tag has docker compose v2"
-docker run --rm --platform "$platform" --entrypoint docker "$image_tag" compose version
+test_docker_compose() {
+  echo "--- :hammer: Testing $image_tag has docker-compose"
+  docker run --rm --platform "$platform" --entrypoint docker-compose "$image_tag" --version
+}
+
+test_docker_compose_v2() {
+  echo "--- :hammer: Testing $image_tag has docker compose v2"
+  docker run --rm --platform "$platform" --entrypoint docker "$image_tag" compose version
+}
+
+
+# Test Cases
+
+test_platform
+
+case $variant in
+  alpine | alpine-k8s | ubuntu-*)
+    test_buildkite_agent
+    test_docker_socket
+    test_docker_compose
+    test_docker_compose_v2
+    ;;
+  sidecar)
+    test_buildkite_agent_sidecar
+    ;;
+  *)
+    echo "Please add test cases for $variant"
+    exit 1
+    ;;
+esac

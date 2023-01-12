@@ -173,6 +173,8 @@ steps:
               - alpine-k8s
               - ubuntu-18.04
               - ubuntu-20.04
+              - sidecar
+
       - name: ":docker: {{matrix.variant}} arm64 image test"
         key: test-docker-arm64
         agents:
@@ -187,6 +189,7 @@ steps:
               - alpine-k8s
               - ubuntu-18.04
               - ubuntu-20.04
+              - sidecar
 
   - name: ":debian: Debian package build"
     key: build-debian-packages

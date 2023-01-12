@@ -91,14 +91,7 @@ docker buildx build --progress plain --builder "$builder_name" --platform linux/
 docker buildx build --progress plain --builder "$builder_name" --tag "$image_tag" --load "$packaging_dir"
 
 # Sanity check test before pushing. Only works for current arch. CI will test all arches as well.
-case $variant in
-sidecar)
-  echo "Skipping tests for sidecar variant"
-  ;;
-*)
-  .buildkite/steps/test-docker-image.sh "$variant" "$image_tag" "$(uname -m)"
-  ;;
-esac
+.buildkite/steps/test-docker-image.sh "$variant" "$image_tag" "$(uname -m)"
 
 if [[ $push == "true" ]] ; then
   echo "--- Pushing to ECR :ecr:"
