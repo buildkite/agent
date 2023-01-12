@@ -116,8 +116,8 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/jobs/waitinguuid/acquire":
-			if req.Header.Get("X-Buildkite-Waiting-As-Locked") != "1" {
-				http.Error(rw, "Expected X-Buildkite-Waiting-As-Locked to be set to 1", http.StatusUnprocessableEntity)
+			if req.Header.Get("X-Buildkite-Lock-Acquire-Job") != "1" {
+				http.Error(rw, "Expected X-Buildkite-Lock-Acquire-Job to be set to 1", http.StatusUnprocessableEntity)
 				return
 			}
 

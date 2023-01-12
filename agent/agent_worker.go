@@ -549,7 +549,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 
 		acquiredJob, response, err = a.apiClient.AcquireJob(
 			ctx, jobId,
-			api.Header{Name: "X-Buildkite-Waiting-As-Locked", Value: "1"},
+			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
 			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
 		)
 		if err != nil {
