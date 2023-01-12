@@ -31,6 +31,8 @@ if [[ -n "$image_tag" ]] ; then
   push="false"
 fi
 
+packaging_dir="packaging/docker/$variant"
+
 rm -rf pkg
 mkdir -p pkg
 
@@ -53,28 +55,6 @@ if [[ -z "$image_tag" ]] ; then
   image_tag=$(buildkite-agent meta-data get "agent-docker-image-$variant")
   echo "Docker Image Tag for $variant: $image_tag"
 fi
-
-case $variant in
-alpine)
-  packaging_dir="packaging/docker/alpine-linux"
-  ;;
-alpine-k8s)
-  packaging_dir="packaging/docker/alpine-linux-k8s"
-  ;;
-ubuntu-18.04)
-  packaging_dir="packaging/docker/ubuntu-18.04-linux"
-  ;;
-ubuntu-20.04)
-  packaging_dir="packaging/docker/ubuntu-20.04-linux"
-  ;;
-sidecar)
-  packaging_dir="packaging/docker/sidecar"
-  ;;
-*)
-  echo "Unknown variant $variant"
-  exit 1
-  ;;
-esac
 
 builder_name=$(docker buildx create --use)
 # shellcheck disable=SC2064 # we want the current $builder_name to be trapped, not the runtime one
