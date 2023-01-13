@@ -138,6 +138,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	app.EnableBashCompletion = true
+
 	if err := app.Run(os.Args); err != nil {
 		fmt.Printf("%v\n", err)
 		os.Exit(1)
