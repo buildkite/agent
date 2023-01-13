@@ -62,7 +62,7 @@ type Runner struct {
 }
 
 type clientResult struct {
-	ExitStatus process.WaitStatus
+	ExitStatus int
 	State      clientState
 }
 
@@ -137,17 +137,32 @@ func (r *Runner) Terminate() error {
 	return nil
 }
 
+type waitStatus struct {
+	Code       int
+	SignalCode *int
+}
+
+func (w waitStatus) ExitStatus() int {
+	return w.Code
+}
+
+func (w waitStatus) Signal() syscall.Signal {
+	var signal syscall.Signal
+	return signal
+}
+
+func (w waitStatus) Signaled() bool {
+	return false
+}
+
 func (r *Runner) WaitStatus() process.WaitStatus {
 	var ws process.WaitStatus
 	for _, client := range r.clients {
-		if client.ExitStatus.ExitStatus() != 0 {
-			return client.ExitStatus
-		}
-		if client.ExitStatus.Signaled() {
-			return client.ExitStatus
+		if client.ExitStatus != 0 {
+			return waitStatus{Code: client.ExitStatus}
 		}
 		// just return any ExitStatus if we don't find any "interesting" ones
-		ws = client.ExitStatus
+		ws = waitStatus{Code: client.ExitStatus}
 	}
 	return ws
 }
@@ -161,7 +176,7 @@ type Logs struct {
 
 type ExitCode struct {
 	ID         int
-	ExitStatus process.WaitStatus
+	ExitStatus int
 }
 
 type Status struct {
@@ -189,10 +204,10 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 	if !found {
 		return fmt.Errorf("unrecognized client id: %d", args.ID)
 	}
-	r.logger.Info("client %d exited with code %d", args.ID, args.ExitStatus.ExitStatus())
+	r.logger.Info("client %d exited with code %d", args.ID, args.ExitStatus)
 	client.ExitStatus = args.ExitStatus
 	client.State = stateExited
-	if client.ExitStatus.ExitStatus() != 0 {
+	if client.ExitStatus != 0 {
 		r.closedOnce.Do(func() {
 			close(r.done)
 		})
@@ -273,7 +288,7 @@ func (c *Client) Connect() (RegisterResponse, error) {
 	return resp, nil
 }
 
-func (c *Client) Exit(exitStatus process.WaitStatus) error {
+func (c *Client) Exit(exitStatus int) error {
 	if c.client == nil {
 		return errNotConnected
 	}

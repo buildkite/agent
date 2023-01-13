@@ -6,7 +6,6 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 	"time"
 
@@ -40,17 +39,17 @@ func TestOrderedClients(t *testing.T) {
 	require.NoError(t, client1.Await(ctx, RunStateWait))
 	require.NoError(t, client2.Await(ctx, RunStateWait))
 
-	require.NoError(t, client0.Exit(waitStatusSuccess))
+	require.NoError(t, client0.Exit(0))
 	require.NoError(t, client0.Await(ctx, RunStateStart))
 	require.NoError(t, client1.Await(ctx, RunStateStart))
 	require.NoError(t, client2.Await(ctx, RunStateWait))
 
-	require.NoError(t, client1.Exit(waitStatusSuccess))
+	require.NoError(t, client1.Exit(0))
 	require.NoError(t, client0.Await(ctx, RunStateStart))
 	require.NoError(t, client1.Await(ctx, RunStateStart))
 	require.NoError(t, client2.Await(ctx, RunStateStart))
 
-	require.NoError(t, client2.Exit(waitStatusSuccess))
+	require.NoError(t, client2.Exit(0))
 	select {
 	case <-runner.Done():
 		break
@@ -96,23 +95,9 @@ func TestWaitStatusNonZero(t *testing.T) {
 
 	require.NoError(t, connect(client0))
 	require.NoError(t, connect(client1))
-	require.NoError(t, client0.Exit(waitStatusFailure))
-	require.NoError(t, client1.Exit(waitStatusSuccess))
+	require.NoError(t, client0.Exit(1))
+	require.NoError(t, client1.Exit(0))
 	require.Equal(t, runner.WaitStatus().ExitStatus(), 1)
-}
-
-func TestWaitStatusSignaled(t *testing.T) {
-	runner := newRunner(t, 2)
-
-	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
-	client1 := &Client{ID: 1, SocketPath: runner.conf.SocketPath}
-
-	require.NoError(t, connect(client0))
-	require.NoError(t, connect(client1))
-	require.NoError(t, client0.Exit(waitStatusSignaled))
-	require.NoError(t, client1.Exit(waitStatusSuccess))
-	require.Equal(t, runner.WaitStatus().ExitStatus(), 0)
-	require.True(t, runner.WaitStatus().Signaled())
 }
 
 func TestInterrupt(t *testing.T) {
@@ -176,23 +161,6 @@ var (
 
 func init() {
 	gob.Register(new(waitStatus))
-}
-
-type waitStatus struct {
-	Code       int
-	SignalCode *int
-}
-
-func (w waitStatus) ExitStatus() int {
-	return w.Code
-}
-
-func (w waitStatus) Signaled() bool {
-	return w.SignalCode != nil
-}
-
-func (w waitStatus) Signal() syscall.Signal {
-	return syscall.Signal(*w.SignalCode)
 }
 
 func intptr(x int) *int {

@@ -120,12 +120,10 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 			b.cancelCh <- struct{}{}
 		}()
 		defer func() {
-			ws, err := b.shell.WaitStatus()
-			if err != nil {
-				b.shell.Errorf("Error getting wait status: %v", err)
-				return
-			}
-			kubernetesClient.Exit(ws)
+			exitStatus, _ := b.shell.Env.Get("BUILDKITE_COMMAND_EXIT_STATUS")
+			exitStatusCode, _ := strconv.Atoi(exitStatus)
+
+			kubernetesClient.Exit(exitStatusCode)
 		}()
 	}
 
