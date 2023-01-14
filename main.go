@@ -7,6 +7,7 @@ package main
 //go:generate go fmt mime/mime.go
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -54,6 +55,8 @@ func printVersion(c *cli.Context) {
 }
 
 func main() {
+	ctx := context.Background()
+
 	cli.AppHelpTemplate = AppHelpTemplate
 	cli.CommandHelpTemplate = CommandHelpTemplate
 	cli.SubcommandHelpTemplate = SubcommandHelpTemplate
@@ -63,7 +66,7 @@ func main() {
 	app.Name = "buildkite-agent"
 	app.Version = version.Version()
 	app.Commands = []cli.Command{
-		clicommand.AgentStartCommand,
+		clicommand.AgentStartCommand(ctx, clicommand.AgentStartAction),
 		clicommand.AnnotateCommand,
 		{
 			Name:  "annotation",
@@ -110,7 +113,7 @@ func main() {
 			Name:  "pipeline",
 			Usage: "Make changes to the pipeline of the currently running build",
 			Subcommands: []cli.Command{
-				clicommand.PipelineUploadCommand,
+				clicommand.PipelineUploadCommand(ctx, clicommand.PipelineUploadAction),
 			},
 		},
 		{

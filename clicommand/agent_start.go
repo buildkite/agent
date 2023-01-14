@@ -231,397 +231,383 @@ func DefaultConfigFilePaths() (paths []string) {
 	return
 }
 
-var AgentStartCommand = cli.Command{
-	Name:        "start",
-	Usage:       "Starts a Buildkite agent",
-	Description: StartDescription,
-	Flags: []cli.Flag{
-		cli.StringFlag{
-			Name:   "config",
-			Value:  "",
-			Usage:  "Path to a configuration file",
-			EnvVar: "BUILDKITE_AGENT_CONFIG",
-		},
-		cli.StringFlag{
-			Name:   "name",
-			Value:  "",
-			Usage:  "The name of the agent",
-			EnvVar: "BUILDKITE_AGENT_NAME",
-		},
-		cli.StringFlag{
-			Name:   "priority",
-			Value:  "",
-			Usage:  "The priority of the agent (higher priorities are assigned work first)",
-			EnvVar: "BUILDKITE_AGENT_PRIORITY",
-		},
-		cli.StringFlag{
-			Name:   "acquire-job",
-			Value:  "",
-			Usage:  "Start this agent and only run the specified job, disconnecting after it's finished",
-			EnvVar: "BUILDKITE_AGENT_ACQUIRE_JOB",
-		},
-		cli.BoolFlag{
-			Name:   "disconnect-after-job",
-			Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the ′--spawn′ flag, each worker booted will run exactly one job",
-			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
-		},
-		cli.IntFlag{
-			Name:   "disconnect-after-idle-timeout",
-			Value:  0,
-			Usage:  "The maximum idle time in seconds to wait for a job before disconnecting. The default of 0 means no timeout",
-			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
-		},
-		cli.IntFlag{
-			Name:   "cancel-grace-period",
-			Value:  10,
-			Usage:  "The number of seconds a canceled or timed out job is given to gracefully terminate and upload its artifacts",
-			EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
-		},
-		cli.BoolFlag{
-			Name:   "enable-job-log-tmpfile",
-			Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
-			EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
-		},
-		cli.StringFlag{
-			Name:   "shell",
-			Value:  DefaultShell(),
-			Usage:  "The shell command used to interpret build commands, e.g /bin/bash -e -c",
-			EnvVar: "BUILDKITE_SHELL",
-		},
-		cli.StringSliceFlag{
-			Name:   "tags",
-			Value:  &cli.StringSlice{},
-			Usage:  "A comma-separated list of tags for the agent (for example, \"linux\" or \"mac,xcode=8\")",
-			EnvVar: "BUILDKITE_AGENT_TAGS",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-host",
-			Usage:  "Include tags from the host (hostname, machine-id, os)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
-		},
-		cli.StringSliceFlag{
-			Name:   "tags-from-ec2-meta-data",
-			Value:  &cli.StringSlice{},
-			Usage:  "Include the default set of host EC2 meta-data as tags (instance-id, instance-type, ami-id, and instance-life-cycle)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA",
-		},
-		cli.StringSliceFlag{
-			Name:   "tags-from-ec2-meta-data-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Include additional tags fetched from EC2 meta-data using tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA_PATHS",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-ec2-tags",
-			Usage:  "Include the host's EC2 tags as tags",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-ecs-meta-data",
-			Usage:  "Include the host's ECS meta-data as tags (container-name, image, and task-arn)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_ECS_META_DATA",
-		},
-		cli.StringSliceFlag{
-			Name:   "tags-from-gcp-meta-data",
-			Value:  &cli.StringSlice{},
-			Usage:  "Include the default set of host Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA",
-		},
-		cli.StringSliceFlag{
-			Name:   "tags-from-gcp-meta-data-paths",
-			Value:  &cli.StringSlice{},
-			Usage:  "Include additional tags fetched from Google Cloud instance meta-data using tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA_PATHS",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-gcp-labels",
-			Usage:  "Include the host's Google Cloud instance labels as tags",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_LABELS",
-		},
-		cli.DurationFlag{
-			Name:   "wait-for-ec2-tags-timeout",
-			Usage:  "The amount of time to wait for tags from EC2 before proceeding",
-			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_TAGS_TIMEOUT",
-			Value:  time.Second * 10,
-		},
-		cli.DurationFlag{
-			Name:   "wait-for-ec2-meta-data-timeout",
-			Usage:  "The amount of time to wait for meta-data from EC2 before proceeding",
-			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_META_DATA_TIMEOUT",
-			Value:  time.Second * 10,
-		},
-		cli.DurationFlag{
-			Name:   "wait-for-ecs-meta-data-timeout",
-			Usage:  "The amount of time to wait for meta-data from ECS before proceeding",
-			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_ECS_META_DATA_TIMEOUT",
-			Value:  time.Second * 10,
-		},
-		cli.DurationFlag{
-			Name:   "wait-for-gcp-labels-timeout",
-			Usage:  "The amount of time to wait for labels from GCP before proceeding",
-			EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
-			Value:  time.Second * 10,
-		},
-		cli.StringFlag{
-			Name:   "git-clone-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command",
-			EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clean-flags",
-			Value:  "-ffxdq",
-			Usage:  "Flags to pass to \"git clean\" command",
-			EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
-			// -ff: delete files and directories, including untracked nested git repositories
-			// -x: don't use .gitignore rules
-			// -d: recurse into untracked directories
-			// -q: quiet, only report errors
-		},
-		cli.StringFlag{
-			Name:   "git-fetch-flags",
-			Value:  "-v --prune",
-			Usage:  "Flags to pass to \"git fetch\" command",
-			EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-clone-mirror-flags",
-			Value:  "-v",
-			Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
-			EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		},
-		cli.StringFlag{
-			Name:   "git-mirrors-path",
-			Value:  "",
-			Usage:  "Path to where mirrors of git repositories are stored",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
-		},
-		cli.IntFlag{
-			Name:   "git-mirrors-lock-timeout",
-			Value:  300,
-			Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
-		},
-		cli.BoolFlag{
-			Name:   "git-mirrors-skip-update",
-			Usage:  "Skip updating the Git mirror",
-			EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		},
-		cli.StringFlag{
-			Name:   "bootstrap-script",
-			Value:  "",
-			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
-			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
-		},
-		cli.StringFlag{
-			Name:   "build-path",
-			Value:  "",
-			Usage:  "Path to where the builds will run from",
-			EnvVar: "BUILDKITE_BUILD_PATH",
-		},
-		cli.StringFlag{
-			Name:   "hooks-path",
-			Value:  "",
-			Usage:  "Directory where the hook scripts are found",
-			EnvVar: "BUILDKITE_HOOKS_PATH",
-		},
-		cli.StringFlag{
-			Name:   "plugins-path",
-			Value:  "",
-			Usage:  "Directory where the plugins are saved to",
-			EnvVar: "BUILDKITE_PLUGINS_PATH",
-		},
-		cli.BoolFlag{
-			Name:   "timestamp-lines",
-			Usage:  "Prepend timestamps on each line of output.",
-			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
-		},
-		cli.StringFlag{
-			Name:   "health-check-addr",
-			Usage:  "Start an HTTP server on this addr:port that returns whether the agent is healthy, disabled by default",
-			EnvVar: "BUILDKITE_AGENT_HEALTH_CHECK_ADDR",
-		},
-		cli.BoolFlag{
-			Name:   "no-pty",
-			Usage:  "Do not run jobs within a pseudo terminal",
-			EnvVar: "BUILDKITE_NO_PTY",
-		},
-		cli.BoolFlag{
-			Name:   "no-ssh-keyscan",
-			Usage:  "Don't automatically run ssh-keyscan before checkout",
-			EnvVar: "BUILDKITE_NO_SSH_KEYSCAN",
-		},
-		cli.BoolFlag{
-			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
-			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
-		},
-		cli.BoolFlag{
-			Name:   "no-plugins",
-			Usage:  "Don't allow this agent to load plugins",
-			EnvVar: "BUILDKITE_NO_PLUGINS",
-		},
-		cli.BoolTFlag{
-			Name:   "no-plugin-validation",
-			Usage:  "Don't validate plugin configuration and requirements",
-			EnvVar: "BUILDKITE_NO_PLUGIN_VALIDATION",
-		},
-		cli.BoolFlag{
-			Name:   "no-local-hooks",
-			Usage:  "Don't allow local hooks to be run from checked out repositories",
-			EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
-		},
-		cli.BoolFlag{
-			Name:   "no-git-submodules",
-			Usage:  "Don't automatically checkout git submodules",
-			EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
-		},
-		cli.BoolFlag{
-			Name:   "metrics-datadog",
-			Usage:  "Send metrics to DogStatsD for Datadog",
-			EnvVar: "BUILDKITE_METRICS_DATADOG",
-		},
-		cli.BoolFlag{
-			Name:   "no-feature-reporting",
-			Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :)",
-			EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
-		},
-		cli.StringFlag{
-			Name:   "metrics-datadog-host",
-			Usage:  "The dogstatsd instance to send metrics to using udp",
-			EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
-			Value:  "127.0.0.1:8125",
-		},
-		cli.BoolFlag{
-			Name:   "metrics-datadog-distributions",
-			Usage:  "Use Datadog Distributions for Timing metrics",
-			EnvVar: "BUILDKITE_METRICS_DATADOG_DISTRIBUTIONS",
-		},
-		cli.StringFlag{
-			Name:   "log-format",
-			Usage:  "The format to use for the logger output",
-			EnvVar: "BUILDKITE_LOG_FORMAT",
-			Value:  "text",
-		},
-		cli.IntFlag{
-			Name:   "spawn",
-			Usage:  "The number of agents to spawn in parallel",
-			Value:  1,
-			EnvVar: "BUILDKITE_AGENT_SPAWN",
-		},
-		cli.BoolFlag{
-			Name:   "spawn-with-priority",
-			Usage:  "Assign priorities to every spawned agent (when using --spawn) equal to the agent's index",
-			EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
-		},
-		cli.StringFlag{
-			Name:   "cancel-signal",
-			Usage:  "The signal to use for cancellation",
-			EnvVar: "BUILDKITE_CANCEL_SIGNAL",
-			Value:  "SIGTERM",
-		},
-		cli.StringFlag{
-			Name:   "tracing-backend",
-			Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry"`,
-			EnvVar: "BUILDKITE_TRACING_BACKEND",
-			Value:  "",
-		},
-		cli.StringFlag{
-			Name:   "tracing-service-name",
-			Usage:  "Service name to use when reporting traces.",
-			EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
-			Value:  "buildkite-agent",
-		},
+func AgentStartCommand(
+	ctx context.Context,
+	action *AgentAction[AgentStartConfig],
+) cli.Command {
+	return cli.Command{
+		Name:        "start",
+		Usage:       "Starts a Buildkite agent",
+		Description: StartDescription,
+		Flags: []cli.Flag{
+			cli.StringFlag{
+				Name:   "config",
+				Value:  "",
+				Usage:  "Path to a configuration file",
+				EnvVar: "BUILDKITE_AGENT_CONFIG",
+			},
+			cli.StringFlag{
+				Name:   "name",
+				Value:  "",
+				Usage:  "The name of the agent",
+				EnvVar: "BUILDKITE_AGENT_NAME",
+			},
+			cli.StringFlag{
+				Name:   "priority",
+				Value:  "",
+				Usage:  "The priority of the agent (higher priorities are assigned work first)",
+				EnvVar: "BUILDKITE_AGENT_PRIORITY",
+			},
+			cli.StringFlag{
+				Name:   "acquire-job",
+				Value:  "",
+				Usage:  "Start this agent and only run the specified job, disconnecting after it's finished",
+				EnvVar: "BUILDKITE_AGENT_ACQUIRE_JOB",
+			},
+			cli.BoolFlag{
+				Name:   "disconnect-after-job",
+				Usage:  "Disconnect the agent after running exactly one job. When used in conjunction with the ′--spawn′ flag, each worker booted will run exactly one job",
+				EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB",
+			},
+			cli.IntFlag{
+				Name:   "disconnect-after-idle-timeout",
+				Value:  0,
+				Usage:  "The maximum idle time in seconds to wait for a job before disconnecting. The default of 0 means no timeout",
+				EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_IDLE_TIMEOUT",
+			},
+			cli.IntFlag{
+				Name:   "cancel-grace-period",
+				Value:  10,
+				Usage:  "The number of seconds a canceled or timed out job is given to gracefully terminate and upload its artifacts",
+				EnvVar: "BUILDKITE_CANCEL_GRACE_PERIOD",
+			},
+			cli.BoolFlag{
+				Name:   "enable-job-log-tmpfile",
+				Usage:  "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job",
+				EnvVar: "BUILDKITE_ENABLE_JOB_LOG_TMPFILE",
+			},
+			cli.StringFlag{
+				Name:   "shell",
+				Value:  DefaultShell(),
+				Usage:  "The shell command used to interpret build commands, e.g /bin/bash -e -c",
+				EnvVar: "BUILDKITE_SHELL",
+			},
+			cli.StringSliceFlag{
+				Name:   "tags",
+				Value:  &cli.StringSlice{},
+				Usage:  "A comma-separated list of tags for the agent (for example, \"linux\" or \"mac,xcode=8\")",
+				EnvVar: "BUILDKITE_AGENT_TAGS",
+			},
+			cli.BoolFlag{
+				Name:   "tags-from-host",
+				Usage:  "Include tags from the host (hostname, machine-id, os)",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_HOST",
+			},
+			cli.StringSliceFlag{
+				Name:   "tags-from-ec2-meta-data",
+				Value:  &cli.StringSlice{},
+				Usage:  "Include the default set of host EC2 meta-data as tags (instance-id, instance-type, ami-id, and instance-life-cycle)",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA",
+			},
+			cli.StringSliceFlag{
+				Name:   "tags-from-ec2-meta-data-paths",
+				Value:  &cli.StringSlice{},
+				Usage:  "Include additional tags fetched from EC2 meta-data using tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_META_DATA_PATHS",
+			},
+			cli.BoolFlag{
+				Name:   "tags-from-ec2-tags",
+				Usage:  "Include the host's EC2 tags as tags",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
+			},
+			cli.BoolFlag{
+				Name:   "tags-from-ecs-meta-data",
+				Usage:  "Include the host's ECS meta-data as tags (container-name, image, and task-arn)",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_ECS_META_DATA",
+			},
+			cli.StringSliceFlag{
+				Name:   "tags-from-gcp-meta-data",
+				Value:  &cli.StringSlice{},
+				Usage:  "Include the default set of host Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA",
+			},
+			cli.StringSliceFlag{
+				Name:   "tags-from-gcp-meta-data-paths",
+				Value:  &cli.StringSlice{},
+				Usage:  "Include additional tags fetched from Google Cloud instance meta-data using tag & path suffix pairs, e.g \"tag_name=path/to/value\"",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_META_DATA_PATHS",
+			},
+			cli.BoolFlag{
+				Name:   "tags-from-gcp-labels",
+				Usage:  "Include the host's Google Cloud instance labels as tags",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP_LABELS",
+			},
+			cli.DurationFlag{
+				Name:   "wait-for-ec2-tags-timeout",
+				Usage:  "The amount of time to wait for tags from EC2 before proceeding",
+				EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_TAGS_TIMEOUT",
+				Value:  time.Second * 10,
+			},
+			cli.DurationFlag{
+				Name:   "wait-for-ec2-meta-data-timeout",
+				Usage:  "The amount of time to wait for meta-data from EC2 before proceeding",
+				EnvVar: "BUILDKITE_AGENT_WAIT_FOR_EC2_META_DATA_TIMEOUT",
+				Value:  time.Second * 10,
+			},
+			cli.DurationFlag{
+				Name:   "wait-for-ecs-meta-data-timeout",
+				Usage:  "The amount of time to wait for meta-data from ECS before proceeding",
+				EnvVar: "BUILDKITE_AGENT_WAIT_FOR_ECS_META_DATA_TIMEOUT",
+				Value:  time.Second * 10,
+			},
+			cli.DurationFlag{
+				Name:   "wait-for-gcp-labels-timeout",
+				Usage:  "The amount of time to wait for labels from GCP before proceeding",
+				EnvVar: "BUILDKITE_AGENT_WAIT_FOR_GCP_LABELS_TIMEOUT",
+				Value:  time.Second * 10,
+			},
+			cli.StringFlag{
+				Name:   "git-clone-flags",
+				Value:  "-v",
+				Usage:  "Flags to pass to the \"git clone\" command",
+				EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
+			},
+			cli.StringFlag{
+				Name:   "git-clean-flags",
+				Value:  "-ffxdq",
+				Usage:  "Flags to pass to \"git clean\" command",
+				EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+				// -ff: delete files and directories, including untracked nested git repositories
+				// -x: don't use .gitignore rules
+				// -d: recurse into untracked directories
+				// -q: quiet, only report errors
+			},
+			cli.StringFlag{
+				Name:   "git-fetch-flags",
+				Value:  "-v --prune",
+				Usage:  "Flags to pass to \"git fetch\" command",
+				EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+			},
+			cli.StringFlag{
+				Name:   "git-clone-mirror-flags",
+				Value:  "-v",
+				Usage:  "Flags to pass to the \"git clone\" command when used for mirroring",
+				EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+			},
+			cli.StringFlag{
+				Name:   "git-mirrors-path",
+				Value:  "",
+				Usage:  "Path to where mirrors of git repositories are stored",
+				EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+			},
+			cli.IntFlag{
+				Name:   "git-mirrors-lock-timeout",
+				Value:  300,
+				Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+				EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+			},
+			cli.BoolFlag{
+				Name:   "git-mirrors-skip-update",
+				Usage:  "Skip updating the Git mirror",
+				EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+			},
+			cli.StringFlag{
+				Name:   "bootstrap-script",
+				Value:  "",
+				Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
+				EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
+			},
+			cli.StringFlag{
+				Name:   "build-path",
+				Value:  "",
+				Usage:  "Path to where the builds will run from",
+				EnvVar: "BUILDKITE_BUILD_PATH",
+			},
+			cli.StringFlag{
+				Name:   "hooks-path",
+				Value:  "",
+				Usage:  "Directory where the hook scripts are found",
+				EnvVar: "BUILDKITE_HOOKS_PATH",
+			},
+			cli.StringFlag{
+				Name:   "plugins-path",
+				Value:  "",
+				Usage:  "Directory where the plugins are saved to",
+				EnvVar: "BUILDKITE_PLUGINS_PATH",
+			},
+			cli.BoolFlag{
+				Name:   "timestamp-lines",
+				Usage:  "Prepend timestamps on each line of output.",
+				EnvVar: "BUILDKITE_TIMESTAMP_LINES",
+			},
+			cli.StringFlag{
+				Name:   "health-check-addr",
+				Usage:  "Start an HTTP server on this addr:port that returns whether the agent is healthy, disabled by default",
+				EnvVar: "BUILDKITE_AGENT_HEALTH_CHECK_ADDR",
+			},
+			cli.BoolFlag{
+				Name:   "no-pty",
+				Usage:  "Do not run jobs within a pseudo terminal",
+				EnvVar: "BUILDKITE_NO_PTY",
+			},
+			cli.BoolFlag{
+				Name:   "no-ssh-keyscan",
+				Usage:  "Don't automatically run ssh-keyscan before checkout",
+				EnvVar: "BUILDKITE_NO_SSH_KEYSCAN",
+			},
+			cli.BoolFlag{
+				Name:   "no-command-eval",
+				Usage:  "Don't allow this agent to run arbitrary console commands, including plugins",
+				EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
+			},
+			cli.BoolFlag{
+				Name:   "no-plugins",
+				Usage:  "Don't allow this agent to load plugins",
+				EnvVar: "BUILDKITE_NO_PLUGINS",
+			},
+			cli.BoolTFlag{
+				Name:   "no-plugin-validation",
+				Usage:  "Don't validate plugin configuration and requirements",
+				EnvVar: "BUILDKITE_NO_PLUGIN_VALIDATION",
+			},
+			cli.BoolFlag{
+				Name:   "no-local-hooks",
+				Usage:  "Don't allow local hooks to be run from checked out repositories",
+				EnvVar: "BUILDKITE_NO_LOCAL_HOOKS",
+			},
+			cli.BoolFlag{
+				Name:   "no-git-submodules",
+				Usage:  "Don't automatically checkout git submodules",
+				EnvVar: "BUILDKITE_NO_GIT_SUBMODULES,BUILDKITE_DISABLE_GIT_SUBMODULES",
+			},
+			cli.BoolFlag{
+				Name:   "metrics-datadog",
+				Usage:  "Send metrics to DogStatsD for Datadog",
+				EnvVar: "BUILDKITE_METRICS_DATADOG",
+			},
+			cli.BoolFlag{
+				Name:   "no-feature-reporting",
+				Usage:  "Disables sending a list of enabled features back to the Buildkite mothership. We use this information to measure feature usage, but if you're not comfortable sharing that information then that's totally okay :)",
+				EnvVar: "BUILDKITE_AGENT_NO_FEATURE_REPORTING",
+			},
+			cli.StringFlag{
+				Name:   "metrics-datadog-host",
+				Usage:  "The dogstatsd instance to send metrics to using udp",
+				EnvVar: "BUILDKITE_METRICS_DATADOG_HOST",
+				Value:  "127.0.0.1:8125",
+			},
+			cli.BoolFlag{
+				Name:   "metrics-datadog-distributions",
+				Usage:  "Use Datadog Distributions for Timing metrics",
+				EnvVar: "BUILDKITE_METRICS_DATADOG_DISTRIBUTIONS",
+			},
+			cli.StringFlag{
+				Name:   "log-format",
+				Usage:  "The format to use for the logger output",
+				EnvVar: "BUILDKITE_LOG_FORMAT",
+				Value:  "text",
+			},
+			cli.IntFlag{
+				Name:   "spawn",
+				Usage:  "The number of agents to spawn in parallel",
+				Value:  1,
+				EnvVar: "BUILDKITE_AGENT_SPAWN",
+			},
+			cli.BoolFlag{
+				Name:   "spawn-with-priority",
+				Usage:  "Assign priorities to every spawned agent (when using --spawn) equal to the agent's index",
+				EnvVar: "BUILDKITE_AGENT_SPAWN_WITH_PRIORITY",
+			},
+			cli.StringFlag{
+				Name:   "cancel-signal",
+				Usage:  "The signal to use for cancellation",
+				EnvVar: "BUILDKITE_CANCEL_SIGNAL",
+				Value:  "SIGTERM",
+			},
+			cli.StringFlag{
+				Name:   "tracing-backend",
+				Usage:  `Enable tracing for build jobs by specifying a backend, "datadog" or "opentelemetry"`,
+				EnvVar: "BUILDKITE_TRACING_BACKEND",
+				Value:  "",
+			},
+			cli.StringFlag{
+				Name:   "tracing-service-name",
+				Usage:  "Service name to use when reporting traces.",
+				EnvVar: "BUILDKITE_TRACING_SERVICE_NAME",
+				Value:  "buildkite-agent",
+			},
 
-		// API Flags
-		AgentRegisterTokenFlag,
-		EndpointFlag,
-		NoHTTP2Flag,
-		DebugHTTPFlag,
+			// API Flags
+			AgentRegisterTokenFlag,
+			EndpointFlag,
+			NoHTTP2Flag,
+			DebugHTTPFlag,
 
-		// Global flags
-		NoColorFlag,
-		DebugFlag,
-		LogLevelFlag,
-		ExperimentsFlag,
-		ProfileFlag,
-		RedactedVars,
+			// Global flags
+			NoColorFlag,
+			DebugFlag,
+			LogLevelFlag,
+			ExperimentsFlag,
+			ProfileFlag,
+			RedactedVars,
 
-		// Deprecated flags which will be removed in v4
-		cli.StringSliceFlag{
-			Name:   "meta-data",
-			Value:  &cli.StringSlice{},
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA",
+			// Deprecated flags which will be removed in v4
+			cli.StringSliceFlag{
+				Name:   "meta-data",
+				Value:  &cli.StringSlice{},
+				Hidden: true,
+				EnvVar: "BUILDKITE_AGENT_META_DATA",
+			},
+			cli.BoolFlag{
+				Name:   "meta-data-ec2",
+				Hidden: true,
+				EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
+			},
+			cli.BoolFlag{
+				Name:   "meta-data-ec2-tags",
+				Hidden: true,
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
+			},
+			cli.BoolFlag{
+				Name:   "meta-data-gcp",
+				Hidden: true,
+				EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
+			},
+			cli.BoolFlag{
+				Name:   "no-automatic-ssh-fingerprint-verification",
+				Hidden: true,
+				EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
+			},
+			cli.BoolFlag{
+				Name:   "tags-from-ec2",
+				Usage:  "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
+			},
+			cli.BoolFlag{
+				Name:   "tags-from-gcp",
+				Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
+				EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
+			},
+			cli.IntFlag{
+				Name:   "disconnect-after-job-timeout",
+				Hidden: true,
+				Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
+				EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
+			},
 		},
-		cli.BoolFlag{
-			Name:   "meta-data-ec2",
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA_EC2",
-		},
-		cli.BoolFlag{
-			Name:   "meta-data-ec2-tags",
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2_TAGS",
-		},
-		cli.BoolFlag{
-			Name:   "meta-data-gcp",
-			Hidden: true,
-			EnvVar: "BUILDKITE_AGENT_META_DATA_GCP",
-		},
-		cli.BoolFlag{
-			Name:   "no-automatic-ssh-fingerprint-verification",
-			Hidden: true,
-			EnvVar: "BUILDKITE_NO_AUTOMATIC_SSH_FINGERPRINT_VERIFICATION",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-ec2",
-			Usage:  "Include the host's EC2 meta-data as tags (instance-id, instance-type, and ami-id)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_EC2",
-		},
-		cli.BoolFlag{
-			Name:   "tags-from-gcp",
-			Usage:  "Include the host's Google Cloud instance meta-data as tags (instance-id, machine-type, preemptible, project-id, region, and zone)",
-			EnvVar: "BUILDKITE_AGENT_TAGS_FROM_GCP",
-		},
-		cli.IntFlag{
-			Name:   "disconnect-after-job-timeout",
-			Hidden: true,
-			Usage:  "When --disconnect-after-job is specified, the number of seconds to wait for a job before shutting down",
-			EnvVar: "BUILDKITE_AGENT_DISCONNECT_AFTER_JOB_TIMEOUT",
-		},
-	},
-	Action: func(c *cli.Context) {
-		ctx := context.Background()
+		Action: NewConfigAndLogger(ctx, &AgentStartConfig{}, action),
+	}
+}
 
-		// The configuration will be loaded into this struct
-		cfg := AgentStartConfig{}
-
-		// Setup the config loader. You'll see that we also path paths to
-		// potential config files. The loader will use the first one it finds.
-		loader := cliconfig.Loader{
-			CLI:                    c,
-			Config:                 &cfg,
-			DefaultConfigFilePaths: DefaultConfigFilePaths(),
-		}
-
-		// Load the configuration
-		warnings, err := loader.Load()
-		if err != nil {
-			fmt.Printf("%s", err)
-			os.Exit(1)
-		}
-
-		l := CreateLogger(cfg)
-
-		// Show warnings now we have a logger
-		for _, warning := range warnings {
-			l.Warn("%s", warning)
-		}
-
-		// Setup any global configuration options
-		done := HandleGlobalFlags(l, cfg)
-		defer done()
+var AgentStartAction = &AgentAction[AgentStartConfig]{
+	Action: func(
+		ctx context.Context,
+		c *cli.Context,
+		l logger.Logger,
+		loader cliconfig.Loader,
+		cfg *AgentStartConfig,
+	) error {
+		var err error
 
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		err = UnsetConfigFromEnvironment(c)
@@ -918,10 +904,10 @@ var AgentStartCommand = cli.Command{
 		pool := agent.NewAgentPool(workers)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer agentShutdownHook(l, cfg)
+		defer agentShutdownHook(l, *cfg)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, cfg); err != nil {
+		if err := agentStartupHook(l, *cfg); err != nil {
 			l.Fatal("%s", err)
 		}
 
@@ -964,6 +950,8 @@ var AgentStartCommand = cli.Command{
 		if err := pool.Start(ctx); err != nil {
 			l.Fatal("%s", err)
 		}
+
+		return nil
 	},
 }
 
