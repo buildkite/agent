@@ -1,4 +1,4 @@
-package clicommand
+package clicommand_test
 
 import (
 	"os"
@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/stretchr/testify/assert"
 )
@@ -35,8 +36,8 @@ func writeAgentHook(t *testing.T, dir, hookName string) string {
 }
 
 func TestAgentStartupHook(t *testing.T) {
-	cfg := func(hooksPath string) AgentStartConfig {
-		return AgentStartConfig{
+	cfg := func(hooksPath string) clicommand.AgentStartConfig {
+		return clicommand.AgentStartConfig{
 			HooksPath: hooksPath,
 			NoColor:   true,
 		}
@@ -50,8 +51,7 @@ func TestAgentStartupHook(t *testing.T) {
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-startup")
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath))
-
+		err := clicommand.AgentStartupHook(log, cfg(hooksPath))
 		if assert.NoError(t, err, log.Messages) {
 			assert.Equal(t, []string{
 				"[info] " + prompt + " " + filepath, // prompt
@@ -64,15 +64,14 @@ func TestAgentStartupHook(t *testing.T) {
 		defer closer()
 
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg(hooksPath))
+		err := clicommand.AgentStartupHook(log, cfg(hooksPath))
 		if assert.NoError(t, err, log.Messages) {
 			assert.Equal(t, []string{}, log.Messages)
 		}
 	})
 	t.Run("with bad hooks path", func(t *testing.T) {
 		log := logger.NewBuffer()
-		err := agentStartupHook(log, cfg("zxczxczxc"))
-
+		err := clicommand.AgentStartupHook(log, cfg("zxczxczxc"))
 		if assert.NoError(t, err, log.Messages) {
 			assert.Equal(t, []string{}, log.Messages)
 		}
@@ -80,8 +79,8 @@ func TestAgentStartupHook(t *testing.T) {
 }
 
 func TestAgentShutdownHook(t *testing.T) {
-	cfg := func(hooksPath string) AgentStartConfig {
-		return AgentStartConfig{
+	cfg := func(hooksPath string) clicommand.AgentStartConfig {
+		return clicommand.AgentStartConfig{
 			HooksPath: hooksPath,
 			NoColor:   true,
 		}
@@ -95,7 +94,7 @@ func TestAgentShutdownHook(t *testing.T) {
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown")
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg(hooksPath))
+		clicommand.AgentShutdownHook(log, cfg(hooksPath))
 
 		assert.Equal(t, []string{
 			"[info] " + prompt + " " + filepath, // prompt
@@ -107,12 +106,12 @@ func TestAgentShutdownHook(t *testing.T) {
 		defer closer()
 
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg(hooksPath))
+		clicommand.AgentShutdownHook(log, cfg(hooksPath))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 	t.Run("with bad hooks path", func(t *testing.T) {
 		log := logger.NewBuffer()
-		agentShutdownHook(log, cfg("zxczxczxc"))
+		clicommand.AgentShutdownHook(log, cfg("zxczxczxc"))
 		assert.Equal(t, []string{}, log.Messages)
 	})
 }

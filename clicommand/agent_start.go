@@ -904,10 +904,10 @@ var AgentStartAction = &AgentAction[AgentStartConfig]{
 		pool := agent.NewAgentPool(workers)
 
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
-		defer agentShutdownHook(l, *cfg)
+		defer AgentShutdownHook(l, *cfg)
 
 		// Once the shutdown hook has been setup, trigger the startup hook.
-		if err := agentStartupHook(l, *cfg); err != nil {
+		if err := AgentStartupHook(l, *cfg); err != nil {
 			l.Fatal("%s", err)
 		}
 
@@ -972,7 +972,7 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 
 		for sig := range signals {
 			l.Debug("Received signal `%v`", sig)
-			setStatus(fmt.Sprintf("Recieved signal `%v`", sig))
+			setStatus(fmt.Sprintf("Received signal `%v`", sig))
 
 			switch sig {
 			case syscall.SIGQUIT:
@@ -997,10 +997,11 @@ func handlePoolSignals(ctx context.Context, l logger.Logger, pool *agent.AgentPo
 	return signals
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
+func AgentStartupHook(log logger.Logger, cfg AgentStartConfig) error {
 	return agentLifecycleHook("agent-startup", log, cfg)
 }
-func agentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
+
+func AgentShutdownHook(log logger.Logger, cfg AgentStartConfig) {
 	_ = agentLifecycleHook("agent-shutdown", log, cfg)
 }
 
