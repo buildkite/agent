@@ -3,6 +3,7 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -16,7 +17,6 @@ import (
 	"github.com/buildkite/agent/v3/bootstrap/shell"
 	"github.com/buildkite/agent/v3/cliconfig"
 	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/redaction"
 	"github.com/buildkite/agent/v3/stdin"
 	"github.com/buildkite/roko"
@@ -75,73 +75,80 @@ type PipelineUploadConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-func PipelineUploadCommand(
-	ctx context.Context,
-	action *AgentAction[PipelineUploadConfig],
-) cli.Command {
-	return cli.Command{
-		Name:        "upload",
-		Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
-		Description: PipelineUploadHelpDescription,
-		Flags: []cli.Flag{
-			cli.BoolFlag{
-				Name:   "replace",
-				Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
-				EnvVar: "BUILDKITE_PIPELINE_REPLACE",
-			},
-			cli.StringFlag{
-				Name:   "job",
-				Value:  "",
-				Usage:  "The job that is making the changes to its build",
-				EnvVar: "BUILDKITE_JOB_ID",
-			},
-			cli.BoolFlag{
-				Name:   "dry-run",
-				Usage:  "Rather than uploading the pipeline, it will be echoed to stdout",
-				EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
-			},
-			cli.BoolFlag{
-				Name:   "no-interpolation",
-				Usage:  "Skip variable interpolation the pipeline when uploaded",
-				EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
-			},
-			cli.BoolFlag{
-				Name:   "reject-secrets",
-				Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
-				EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
-			},
-
-			// API Flags
-			AgentAccessTokenFlag,
-			EndpointFlag,
-			NoHTTP2Flag,
-			DebugHTTPFlag,
-
-			// Global flags
-			NoColorFlag,
-			DebugFlag,
-			LogLevelFlag,
-			ExperimentsFlag,
-			ProfileFlag,
-			RedactedVars,
+var PipelineUploadCommand = cli.Command{
+	Name:        "upload",
+	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
+	Description: PipelineUploadHelpDescription,
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:   "replace",
+			Usage:  "Replace the rest of the existing pipeline with the steps uploaded. Jobs that are already running are not removed.",
+			EnvVar: "BUILDKITE_PIPELINE_REPLACE",
 		},
-		Action: NewConfigAndLogger(ctx, &PipelineUploadConfig{}, action),
-	}
-}
+		cli.StringFlag{
+			Name:   "job",
+			Value:  "",
+			Usage:  "The job that is making the changes to its build",
+			EnvVar: "BUILDKITE_JOB_ID",
+		},
+		cli.BoolFlag{
+			Name:   "dry-run",
+			Usage:  "Rather than uploading the pipeline, it will be echoed to stdout",
+			EnvVar: "BUILDKITE_PIPELINE_UPLOAD_DRY_RUN",
+		},
+		cli.BoolFlag{
+			Name:   "no-interpolation",
+			Usage:  "Skip variable interpolation the pipeline when uploaded",
+			EnvVar: "BUILDKITE_PIPELINE_NO_INTERPOLATION",
+		},
+		cli.BoolFlag{
+			Name:   "reject-secrets",
+			Usage:  "When true, fail the pipeline upload early if the pipeline contains secrets",
+			EnvVar: "BUILDKITE_AGENT_PIPELINE_UPLOAD_REJECT_SECRETS",
+		},
 
-var PipelineUploadAction = &AgentAction[PipelineUploadConfig]{
-	Action: func(
-		ctx context.Context,
-		c *cli.Context,
-		l logger.Logger,
-		loader cliconfig.Loader,
-		cfg *PipelineUploadConfig,
-	) error {
+		// API Flags
+		AgentAccessTokenFlag,
+		EndpointFlag,
+		NoHTTP2Flag,
+		DebugHTTPFlag,
+
+		// Global flags
+		NoColorFlag,
+		DebugFlag,
+		LogLevelFlag,
+		ExperimentsFlag,
+		ProfileFlag,
+		RedactedVars,
+	},
+	Action: func(c *cli.Context) {
+		ctx := context.Background()
+
+		// The configuration will be loaded into this struct
+		cfg := PipelineUploadConfig{}
+
+		loader := cliconfig.Loader{CLI: c, Config: &cfg}
+		warnings, err := loader.Load()
+		if err != nil {
+			fmt.Printf("%s", err)
+			os.Exit(1)
+		}
+
+		l := CreateLogger(&cfg)
+
+		// Now that we have a logger, log out the warnings that loading config generated
+		for _, warning := range warnings {
+			l.Warn("%s", warning)
+		}
+
+		// Setup any global configuration options
+		done := HandleGlobalFlags(l, cfg)
+		defer done()
+
 		// Find the pipeline file either from STDIN or the first
 		// argument
 		var input []byte
 		var filename string
-		var err error
 
 		if cfg.FilePath != "" {
 			l.Info("Reading pipeline config from \"%s\"", cfg.FilePath)
@@ -277,7 +284,7 @@ var PipelineUploadAction = &AgentAction[PipelineUploadConfig]{
 				l.Fatal("%#v", err)
 			}
 
-			return nil
+			return
 		}
 
 		// Check we have a job id set if not in dry run
@@ -324,7 +331,5 @@ var PipelineUploadAction = &AgentAction[PipelineUploadConfig]{
 		}
 
 		l.Info("Successfully uploaded and parsed pipeline config")
-
-		return nil
 	},
 }

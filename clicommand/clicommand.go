@@ -9,7 +9,12 @@ import (
 	"github.com/urfave/cli"
 )
 
-type AgentAction[T any] struct {
+type Cliconfig interface {
+	AgentStartConfig | AnnotateConfig | AnnotationRemoveConfig | PipelineUploadConfig
+	// add more here
+}
+
+type AgentAction[T Cliconfig] struct {
 	Action func(
 		ctx context.Context,
 		c *cli.Context,
@@ -19,7 +24,7 @@ type AgentAction[T any] struct {
 	) error
 }
 
-func NewConfigAndLogger[T any](ctx context.Context, cfg *T, f *AgentAction[T]) cli.ActionFunc {
+func NewConfigAndLogger[T Cliconfig](ctx context.Context, cfg *T, f *AgentAction[T]) cli.ActionFunc {
 	return func(c *cli.Context) error {
 		loader := cliconfig.Loader{
 			CLI:                    c,
