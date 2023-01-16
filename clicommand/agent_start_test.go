@@ -160,7 +160,7 @@ func TestAgentStartCommand(t *testing.T) {
 			}),
 		},
 		{
-			name: "agent start git flags",
+			name: "agent start git flags with equals",
 			env:  map[string]string{},
 			args: []string{
 				"buildkite-agent", "start", "--git-clone-flags=-v --depth=1", "--git-fetch-flags=-v --depth=1",
@@ -181,10 +181,10 @@ func TestAgentStartCommand(t *testing.T) {
 			app.Name = "buildkite-agent"
 			app.Version = "1"
 			app.Action = func(c *cli.Context) {
-				t.Errorf("Error: %v", c.Args())
+				t.Errorf("Fell back to default action: %v", c.Args())
 			}
 			app.CommandNotFound = func(c *cli.Context, command string) {
-				t.Errorf("Error: %s %v", command, c.Args())
+				t.Errorf("Command not found: %s %v", command, c.Args())
 			}
 
 			for k, v := range test.env {
