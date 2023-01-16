@@ -159,7 +159,7 @@ func TestAcquireAndRunJobWaiting(t *testing.T) {
 	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
 	assert.ErrorContains(t, err, "423")
 
-	// the last Retry-After is not recorded as the retries exists before using it
+	// the last Retry-After is not recorded as the retries loop exits before using it
 	exptectedSleeps := make([]time.Duration, 0, 9)
 	for d := 1; d <= 1<<8; d *= 2 {
 		exptectedSleeps = append(exptectedSleeps, time.Duration(d)*time.Second)
