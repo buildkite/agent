@@ -34,8 +34,11 @@ var (
 	// Errors ignored below, as the status page is "best effort".
 	hostname, _ = os.Hostname()
 	username    = func() string {
-		user, _ := user.Current()
-		return fmt.Sprintf("%s (%s)", user.Username, user.Uid)
+		user, err := user.Current()
+		if err != nil {
+			return fmt.Sprintf("unknown (uid=unknown; error=%v)", err)
+		}
+		return fmt.Sprintf("%s (uid=%s)", user.Username, user.Uid)
 	}()
 	exepath, _ = os.Executable()
 	startTime  = time.Now()
