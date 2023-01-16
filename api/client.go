@@ -139,12 +139,22 @@ func (c *Client) FromPing(resp *Ping) *Client {
 	return NewClient(c.logger, conf)
 }
 
+type Header struct {
+	Name  string
+	Value string
+}
+
 // NewRequest creates an API request. A relative URL can be provided in urlStr,
 // in which case it is resolved relative to the BaseURL of the Client.
 // Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
-func (c *Client) newRequest(ctx context.Context, method, urlStr string, body any) (*http.Request, error) {
+func (c *Client) newRequest(
+	ctx context.Context,
+	method, urlStr string,
+	body any,
+	headers ...Header,
+) (*http.Request, error) {
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
@@ -161,6 +171,10 @@ func (c *Client) newRequest(ctx context.Context, method, urlStr string, body any
 	}
 
 	req.Header.Add("User-Agent", c.conf.UserAgent)
+
+	for _, header := range headers {
+		req.Header.Add(header.Name, header.Value)
+	}
 
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")

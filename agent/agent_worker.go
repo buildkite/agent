@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"sync"
@@ -516,17 +517,32 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 	return ping.Job, nil
 }
 
-// Attempts to acquire a job and run it, only returns an error if something
-// goes wrong
+// AcquireAndRunJob attempts to acquire a job an run it. It will retry at after the
+// server determined interval (from the Retry-After response header) if the job is in the waiting
+// state. If the job is in an unassignable state, it will return an error immediately.
+// Otherwise, it will retry every 3s for 30 s. The whole operation will timeout after 5 min.
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
-	// Acquire the job using the ID we were provided. We'll retry as best
-	// we can on non 422 error.
+	// Timeout the context to prevent the exponentital backoff from growing too
+	// large if the job is in the waiting state.
+	//
+	// If there were no delays or jitter, the attempts would happen at t = 0, 1, 2, 4, ..., 128s
+	// after the initial one. Therefore, there are 9 attempts taking at least 255s. If the jitter
+	// always hit the max of 1s, then another 8s is added to that. This is still comfortably within
+	// the timeout of 270s, and the bound seems tight enough so that the agent is not wasting time
+	// waiting for a retry that will never happen.
+	ctx, cancel := context.WithTimeout(ctx, 270*time.Second)
+	defer cancel()
+
+	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
+	// Except for 423 errors, in which we exponentially back off under the direction of the API
+	// setting the Retry-After header
 	var acquiredJob *api.Job
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(3*time.Second)),
+		roko.WithSleepFunc(a.retrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
@@ -537,20 +553,36 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		var err error
 		var response *api.Response
 
-		acquiredJob, response, err = a.apiClient.AcquireJob(ctx, jobId)
+		acquiredJob, response, err = a.apiClient.AcquireJob(
+			ctx, jobId,
+			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
+			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
+		)
 		if err != nil {
-			// If the API returns with a 422, that means that we
-			// succesfully *tried* to acquire the job, but
-			// Buildkite rejected the finish for some reason.
-			if response != nil && response.StatusCode == 422 {
-				a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
-				r.Break()
-			} else {
-				a.logger.Warn("%s (%s)", err, r)
+			if response != nil {
+				switch response.StatusCode {
+				case http.StatusUnprocessableEntity:
+					// If the API returns with a 422, that means that we
+					// successfully *tried* to acquire the job, but
+					// Buildkite rejected the finish for some reason.
+					a.logger.Warn("Buildkite rejected the call to acquire the job (%s)", err)
+					r.Break()
+				case http.StatusLocked:
+					// If the API returns with a 423, the job is in the waiting state
+					a.logger.Warn("The job is waiting for a dependency (%s)", err)
+					duration, errParseDuration := time.ParseDuration(response.Header.Get("Retry-After") + "s")
+					if errParseDuration != nil {
+						duration = time.Second + time.Duration(rand.Int63n(int64(time.Second)))
+					}
+					r.SetNextInterval(duration)
+					return err
+				}
 			}
+			a.logger.Warn("%s (%s)", err, r)
+			return err
 		}
 
-		return err
+		return nil
 	})
 
 	// If `acquiredJob` is nil, then the job was never acquired
@@ -613,8 +645,6 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job) error
 		CancelSignal:       a.cancelSig,
 		AgentConfiguration: a.agentConfiguration,
 	})
-
-	// Was there an error creating the job runner?
 	if err != nil {
 		return fmt.Errorf("Failed to initialize job: %v", err)
 	}

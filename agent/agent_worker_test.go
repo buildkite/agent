@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"strconv"
 	"testing"
 	"time"
 
@@ -105,4 +107,62 @@ func TestDisconnectRetry(t *testing.T) {
 	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 1/4`), l.Messages[1])
 	assert.Regexp(t, regexp.MustCompile(`\[warn\] POST http.*/disconnect: 500 \(Attempt 2/4`), l.Messages[2])
 	assert.Equal(t, "[info] Disconnected", l.Messages[3])
+}
+
+func TestAcquireAndRunJobWaiting(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/jobs/waitinguuid/acquire":
+			if req.Header.Get("X-Buildkite-Lock-Acquire-Job") != "1" {
+				http.Error(rw, "Expected X-Buildkite-Lock-Acquire-Job to be set to 1", http.StatusUnprocessableEntity)
+				return
+			}
+
+			backoff_seq, err := strconv.ParseFloat(req.Header.Get("X-Buildkite-Backoff-Sequence"), 64)
+			if err != nil {
+				backoff_seq = 0
+			}
+			delay := math.Pow(2, backoff_seq)
+
+			rw.Header().Set("Retry-After", fmt.Sprintf("%f", delay))
+			rw.WriteHeader(http.StatusLocked)
+			fmt.Fprintf(rw, `{"message": "Job waitinguuid is not yet eligible to be assigned"}`)
+		default:
+			http.Error(rw, "Not found", http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewBuffer()
+
+	retrySleeps := []time.Duration{}
+	retrySleepFunc := func(d time.Duration) {
+		retrySleeps = append(retrySleeps, d)
+	}
+
+	worker := &AgentWorker{
+		logger:             l,
+		agent:              nil,
+		apiClient:          client,
+		agentConfiguration: AgentConfiguration{},
+		retrySleepFunc:     retrySleepFunc,
+	}
+
+	err := worker.AcquireAndRunJob(ctx, "waitinguuid")
+	assert.ErrorContains(t, err, "423")
+
+	// the last Retry-After is not recorded as the retries loop exits before using it
+	exptectedSleeps := make([]time.Duration, 0, 9)
+	for d := 1; d <= 1<<8; d *= 2 {
+		exptectedSleeps = append(exptectedSleeps, time.Duration(d)*time.Second)
+	}
+	assert.Equal(t, exptectedSleeps, retrySleeps)
 }
