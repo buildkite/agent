@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/clicommand"
@@ -122,6 +123,20 @@ func TestAgentShutdownHook(t *testing.T) {
 
 func TestAgentStartCommand(t *testing.T) {
 	t.Parallel()
+
+	// Unset any buildkite env variables so that we don't pick them up in the tests
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "BUILDKITE") {
+			key, _, ok := strings.Cut(e, "=")
+			if !ok {
+				t.Fatalf("This was anticipated to to be impossible so the code is buggy")
+			}
+			if err := os.Unsetenv(key); err != nil {
+				t.Errorf("Error in test: %e", err)
+			}
+		}
+	}
+
 	ctx := context.Background()
 	tests := []Test[any]{
 		{
