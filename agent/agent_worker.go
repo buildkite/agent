@@ -524,9 +524,15 @@ func (a *AgentWorker) Ping(ctx context.Context) (*api.Job, error) {
 func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error {
 	a.logger.Info("Attempting to acquire job %s...", jobId)
 
-	// timeout the context to prevent the exponentital backoff from growing too
-	// large if the job is in the waiting state
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	// Timeout the context to prevent the exponentital backoff from growing too
+	// large if the job is in the waiting state.
+	//
+	// If there were no delays or jitter, the attempts would happen at t = 0, 1, 2, 4, ..., 128s
+	// after the initial one. Therefore, there are 9 attempts taking at least 255s. If the jitter
+	// always hit the max of 1s, then another 8s is added to that. This is still comfortably within
+	// the timeout of 270s, and the bound seems tight enough so that the agent is not wasting time
+	// waiting for a retry that will never happen.
+	ctx, cancel := context.WithTimeout(ctx, 270*time.Second)
 	defer cancel()
 
 	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
