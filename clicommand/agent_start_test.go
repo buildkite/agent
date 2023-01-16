@@ -132,6 +132,30 @@ func TestAgentStartCommand(t *testing.T) {
 				Token: "llamas",
 			}),
 		},
+		{
+			name: "agent start git flags",
+			env:  map[string]string{},
+			args: []string{
+				"buildkite-agent", "start", "--git-clone-flags", "-v --depth=1", "--git-fetch-flags", "-v --depth=1",
+			},
+			expectedConfig: defaultAgentStartConfig(&clicommand.AgentStartConfig{
+				GitCloneFlags: "-v --depth=1",
+				GitFetchFlags: "-v --depth=1",
+				Token:         "xxx",
+			}),
+		},
+		{
+			name: "agent start git flags",
+			env:  map[string]string{},
+			args: []string{
+				"buildkite-agent", "start", "--git-clone-flags=\"-v --depth=1\"", "--git-fetch-flags=\"-v --depth=1\"",
+			},
+			expectedConfig: defaultAgentStartConfig(&clicommand.AgentStartConfig{
+				GitCloneFlags: "-v --depth=1",
+				GitFetchFlags: "-v --depth=1",
+				Token:         "xxx",
+			}),
+		},
 	}
 
 	for _, test := range tests {
@@ -257,7 +281,7 @@ func defaultAgentStartConfig(cfg *clicommand.AgentStartConfig) clicommand.AgentS
 	}
 
 	if cfg != nil {
-		_ = mergo.Merge(&defaultCfg, cfg)
+		_ = mergo.MergeWithOverwrite(&defaultCfg, cfg)
 	}
 
 	return defaultCfg
