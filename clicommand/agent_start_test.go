@@ -148,7 +148,7 @@ func TestAgentStartCommand(t *testing.T) {
 			name: "agent start git flags",
 			env:  map[string]string{},
 			args: []string{
-				"buildkite-agent", "start", "--git-clone-flags=\"-v --depth=1\"", "--git-fetch-flags=\"-v --depth=1\"",
+				"buildkite-agent", "start", "--git-clone-flags=-v --depth=1", "--git-fetch-flags=-v --depth=1",
 			},
 			expectedConfig: defaultAgentStartConfig(&clicommand.AgentStartConfig{
 				GitCloneFlags: "-v --depth=1",
