@@ -28,10 +28,6 @@ for variant in "alpine" "alpine-k8s" "ubuntu-18.04" "ubuntu-20.04" "sidecar" ; d
   source_image=$(buildkite-agent meta-data get "agent-docker-image-$variant")
   echo "Docker Image Tag for $variant: $source_image"
 
-  echo "--- :docker: Pulling prebuilt image"
-  docker pull "$source_image"
-
   echo "--- :docker: Publishing images for $variant"
   .buildkite/steps/publish-docker-image.sh "$variant" "$source_image" "$CODENAME" "$version" "$build"
 done
-

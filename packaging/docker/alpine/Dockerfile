@@ -1,6 +1,9 @@
-FROM alpine:3.17.0 AS base
+FROM alpine:3.17.0
 
-RUN apk update && apk add --no-cache \
+ARG TARGETOS
+ARG TARGETARCH
+
+RUN apk add --no-cache \
     bash \
     curl \
     docker-cli \
@@ -18,20 +21,6 @@ RUN apk update && apk add --no-cache \
     tini \
     tzdata
 
-FROM base AS downloader
-
-WORKDIR /downloads
-
-RUN curl -fL "https://storage.googleapis.com/kubernetes-release/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o kubectl && \
-    chmod +x kubectl
-
-RUN curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s "/downloads"
-
-FROM base AS runtime
-
-COPY --from=downloader /downloads/kubectl /usr/local/bin/kubectl
-COPY --from=downloader /downloads/kustomize /usr/local/bin/kustomize
-
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg
 
 RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
@@ -39,7 +28,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && chmod +x /usr/local/bin/ssh-env-config.sh
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
-COPY ./buildkite-agent /usr/local/bin/buildkite-agent
+COPY ./buildkite-agent-$TARGETOS-$TARGETARCH /usr/local/bin/buildkite-agent
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite
