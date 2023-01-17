@@ -80,50 +80,12 @@ func (b *Bootstrap) Run(ctx context.Context) (exitCode int) {
 		b.shell.InterruptSignal = b.Config.CancelSignal
 	}
 	if experiments.IsEnabled("kubernetes-exec") {
-		var kubernetesClient kubernetes.Client
-		b.shell.Commentf("Using experimental Kubernetes support")
-		err := roko.NewRetrier(
-			roko.WithMaxAttempts(7),
-			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
-		).Do(func(rtr *roko.Retrier) error {
-			id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
-			if err != nil {
-				return fmt.Errorf("failed to parse container id, %s", os.Getenv("BUILDKITE_CONTAINER_ID"))
-			}
-			kubernetesClient.ID = id
-			connect, err := kubernetesClient.Connect()
-			if err != nil {
-				return err
-			}
-			os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-			b.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
-			writer := io.MultiWriter(os.Stdout, &kubernetesClient)
-			b.shell.Writer = writer
-			b.shell.Logger = &shell.WriterLogger{
-				Writer: writer,
-				Ansi:   true,
-			}
-			return nil
-		})
-		if err != nil {
-			b.shell.Errorf("Error connecting to kubernetes runner: %v", err)
-			return 1
+		kubernetesClient := &kubernetes.Client{}
+		if err := b.startKubernetesClient(ctx, kubernetesClient); err != nil {
+			b.shell.Errorf("Failed to start kubernetes client: %v", err)
 		}
-		if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
-			b.shell.Errorf("Error waiting for client to become ready: %v", err)
-			return 1
-		}
-		go func() {
-			if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil {
-				b.shell.Errorf("Error waiting for client interrupt: %v", err)
-			}
-			b.cancelCh <- struct{}{}
-		}()
 		defer func() {
-			exitStatus, _ := b.shell.Env.Get("BUILDKITE_COMMAND_EXIT_STATUS")
-			exitStatusCode, _ := strconv.Atoi(exitStatus)
-
-			kubernetesClient.Exit(exitStatusCode)
+			kubernetesClient.Exit(exitCode)
 		}()
 	}
 
@@ -2026,4 +1988,44 @@ type pluginCheckout struct {
 	*plugin.Definition
 	CheckoutDir string
 	HooksDir    string
+}
+
+func (b *Bootstrap) startKubernetesClient(ctx context.Context, kubernetesClient *kubernetes.Client) error {
+	b.shell.Commentf("Using experimental Kubernetes support")
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(7),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+	).Do(func(rtr *roko.Retrier) error {
+		id, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_ID"))
+		if err != nil {
+			return fmt.Errorf("failed to parse container id, %s", os.Getenv("BUILDKITE_CONTAINER_ID"))
+		}
+		kubernetesClient.ID = id
+		connect, err := kubernetesClient.Connect()
+		if err != nil {
+			return err
+		}
+		os.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
+		b.shell.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", connect.AccessToken)
+		writer := io.MultiWriter(os.Stdout, kubernetesClient)
+		b.shell.Writer = writer
+		b.shell.Logger = &shell.WriterLogger{
+			Writer: writer,
+			Ansi:   true,
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("error connecting to kubernetes runner: %w", err)
+	}
+	if err := kubernetesClient.Await(ctx, kubernetes.RunStateStart); err != nil {
+		return fmt.Errorf("error waiting for client to become ready: %w", err)
+	}
+	go func() {
+		if err := kubernetesClient.Await(ctx, kubernetes.RunStateInterrupt); err != nil {
+			b.shell.Errorf("Error waiting for client interrupt: %v", err)
+		}
+		b.cancelCh <- struct{}{}
+	}()
+	return nil
 }
