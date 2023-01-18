@@ -84,7 +84,7 @@ func main() {
 		},
 		{
 			Name:  "env",
-			Usage: "Something something environment variables",
+			Usage: "Process environment subcommands",
 			Subcommands: []cli.Command{
 				clicommand.EnvDumpCommand,
 			},
