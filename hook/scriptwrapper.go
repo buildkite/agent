@@ -20,26 +20,26 @@ const (
 
 	batchScript = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-buildkite-agent env > "{{.BeforeEnvFileName}}"
+buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 CALL "{{.PathToHook}}"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%CD%
-buildkite-agent env > "{{.AfterEnvFileName}}"
+buildkite-agent env dump > "{{.AfterEnvFileName}}"
 EXIT %BUILDKITE_HOOK_EXIT_STATUS%`
 
 	powershellScript = `$ErrorActionPreference = "STOP"
-buildkite-agent env | Set-Content "{{.BeforeEnvFileName}}"
+buildkite-agent env dump | Set-Content "{{.BeforeEnvFileName}}"
 {{.PathToHook}}
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-buildkite-agent env | Set-Content "{{.AfterEnvFileName}}"
+buildkite-agent env dump | Set-Content "{{.AfterEnvFileName}}"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
-	bashScript = `buildkite-agent env > "{{.BeforeEnvFileName}}"
+	bashScript = `buildkite-agent env dump > "{{.BeforeEnvFileName}}"
 . "{{.PathToHook}}"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR=$PWD
-buildkite-agent env > "{{.AfterEnvFileName}}"
+buildkite-agent env dump > "{{.AfterEnvFileName}}"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
