@@ -104,11 +104,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsBatch(t *testing.T) {
 	// See: https://pkg.go.dev/fmt > ctrl-f for "%%"
 	scriptTemplate := `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
-buildkite-agent env > "%s"
+buildkite-agent env dump > "%s"
 CALL "%s"
 SET BUILDKITE_HOOK_EXIT_STATUS=!ERRORLEVEL!
 SET BUILDKITE_HOOK_WORKING_DIR=%%CD%%
-buildkite-agent env > "%s"
+buildkite-agent env dump > "%s"
 EXIT %%BUILDKITE_HOOK_EXIT_STATUS%%`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -134,11 +134,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnWindowsPowershell(t *testing.T) {
 	defer wrapper.Close()
 
 	scriptTemplate := `$ErrorActionPreference = "STOP"
-buildkite-agent env | Set-Content "%s"
+buildkite-agent env dump | Set-Content "%s"
 %s
 if ($LASTEXITCODE -eq $null) {$Env:BUILDKITE_HOOK_EXIT_STATUS = 0} else {$Env:BUILDKITE_HOOK_EXIT_STATUS = $LASTEXITCODE}
 $Env:BUILDKITE_HOOK_WORKING_DIR = $PWD | Select-Object -ExpandProperty Path
-buildkite-agent env | Set-Content "%s"
+buildkite-agent env dump | Set-Content "%s"
 exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -163,11 +163,11 @@ func TestHookScriptsAreGeneratedCorrectlyOnUnix(t *testing.T) {
 
 	defer wrapper.Close()
 
-	scriptTemplate := `buildkite-agent env > "%s"
+	scriptTemplate := `buildkite-agent env dump > "%s"
 . "%s"
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR=$PWD
-buildkite-agent env > "%s"
+buildkite-agent env dump > "%s"
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 
 	assertScriptLike(t, scriptTemplate, hookFile.Name(), wrapper)
@@ -307,7 +307,7 @@ func mockAgent() (*bintest.Mock, func(), error) {
 		return nil, func() {}, err
 	}
 
-	agent.Expect("env").
+	agent.Expect("env", "dump").
 		Exactly(2).
 		AndCallFunc(func(c *bintest.Call) {
 			envMap := map[string]string{}

@@ -180,7 +180,7 @@ func (b *BootstrapTester) HasMock(name string) bool {
 // MockAgent creates a mock for the buildkite-agent binary
 func (b *BootstrapTester) MockAgent(t *testing.T) *bintest.Mock {
 	agent := b.MustMock(t, "buildkite-agent")
-	agent.Expect("env").
+	agent.Expect("env", "dump").
 		Min(0).
 		Max(bintest.InfiniteTimes).
 		AndCallFunc(mockEnvAsJSONOnStdout(b))

@@ -83,6 +83,13 @@ func main() {
 			},
 		},
 		{
+			Name:  "env",
+			Usage: "Process environment subcommands",
+			Subcommands: []cli.Command{
+				clicommand.EnvDumpCommand,
+			},
+		},
+		{
 			Name:  "meta-data",
 			Usage: "Get/set data from Buildkite jobs",
 			Subcommands: []cli.Command{
@@ -114,7 +121,6 @@ func main() {
 				clicommand.StepUpdateCommand,
 			},
 		},
-		clicommand.EnvCommand,
 		clicommand.BootstrapCommand,
 	}
 

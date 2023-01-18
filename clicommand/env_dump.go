@@ -9,8 +9,8 @@ import (
 	"github.com/urfave/cli"
 )
 
-const envDescription = `Usage:
-  buildkite-agent env [options]
+var EnvDumpHelpDescription = `Usage:
+  buildkite-agent env dump [options]
 
 Description:
    Prints out the environment of the current process as a JSON object, easily
@@ -18,20 +18,22 @@ Description:
    that hooks make to the environment.
 
 Example:
-   $ buildkite-agent env
 
-   Prints the environment passed into the process
-`
+    $ buildkite-agent env dump --format json-pretty`
 
-var EnvCommand = cli.Command{
-	Name:        "env",
-	Usage:       "Prints out the environment of the current process as a JSON object",
-	Description: envDescription,
+type EnvDumpConfig struct {
+}
+
+var EnvDumpCommand = cli.Command{
+	Name:        "dump",
+	Usage:       "Print the environment of the current process as a JSON object",
+	Description: EnvDumpHelpDescription,
 	Flags: []cli.Flag{
-		cli.BoolFlag{
-			Name:   "pretty",
-			Usage:  "Pretty print the JSON output",
-			EnvVar: "BUILDKITE_AGENT_ENV_PRETTY",
+		cli.StringFlag{
+			Name:   "format",
+			Usage:  "Output format; json or json-pretty",
+			EnvVar: "BUILDKITE_AGENT_ENV_DUMP_FORMAT",
+			Value:  "json",
 		},
 	},
 	Action: func(c *cli.Context) error {
@@ -45,7 +47,7 @@ var EnvCommand = cli.Command{
 		}
 
 		enc := json.NewEncoder(c.App.Writer)
-		if c.Bool("pretty") {
+		if c.String("format") == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}
 
