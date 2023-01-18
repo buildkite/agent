@@ -307,7 +307,7 @@ func mockAgent() (*bintest.Mock, func(), error) {
 		return nil, func() {}, err
 	}
 
-	agent.Expect("env").
+	agent.Expect("env", "dump").
 		Exactly(2).
 		AndCallFunc(func(c *bintest.Call) {
 			envMap := map[string]string{}
