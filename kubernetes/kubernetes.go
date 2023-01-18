@@ -85,7 +85,10 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.server.Register(r)
 	r.mux.Handle(rpc.DefaultRPCPath, r.server)
 
-	oldUmask := syscall.Umask(0) // set umask of socket file to 0777 (world read-write-executable)
+	oldUmask, err := Umask(0) // set umask of socket file to 0777 (world read-write-executable)
+	if err != nil {
+		return fmt.Errorf("failed to set socket umask: %w", err)
+	}
 	l, err := (&net.ListenConfig{}).Listen(ctx, "unix", r.conf.SocketPath)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %w", err)
@@ -93,7 +96,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	defer l.Close()
 	defer os.Remove(r.conf.SocketPath)
 
-	syscall.Umask(oldUmask) // change back to regular umask
+	Umask(oldUmask) // change back to regular umask
 	r.listener = l
 	go http.Serve(l, r.mux)
 
