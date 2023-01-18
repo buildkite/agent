@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.43.0](https://github.com/buildkite/agent/tree/3.43.0) (2023-01-18)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.42.0...3.43.0)
+
+### Fixed
+- A nil pointer dereference introduced in 3.42.0 due to missing error handling after calling `user.Current` [#1910](https://github.com/buildkite/agent/pull/1910) (@DrJosh9000)
+
+### Added
+- A flag to allow empty results with doing an artifact search [#1887](https://github.com/buildkite/agent/pull/1887) (@MatthewDolan)
+- Docker Images for linux/arm64 [#1901](https://github.com/buildkite/agent/pull/1901) (@triarius)
+- Agent tags are added from ECS container metadata [#1870](https://github.com/buildkite/agent/pull/1870) (@francoiscampbell)
+
+### Changed
+- The `env` subcommand is now `env dump` [#1920](https://github.com/buildkite/agent/pull/1920) (@pda)
+- AcquireJob now retries while the job is locked [#1894](https://github.com/buildkite/agent/pull/1894) (@triarius)
+- Various miscellaneous updates and improvements (@moskyb, @triarius, @mitchbne, @dependabot[bot])
+
 ## [v3.42.0](https://github.com/buildkite/agent/tree/v3.42.0) (2023-01-05)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.41.0...v3.42.0)
 
