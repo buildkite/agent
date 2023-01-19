@@ -8,7 +8,6 @@ require (
 	github.com/buildkite/bintest/v3 v3.1.1
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000
-	github.com/buildkite/yaml v0.0.0-20210326113714-4a3f40911396
 	github.com/creack/pty v1.1.18
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/gofrs/flock v0.8.1
@@ -48,6 +47,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.12.0
 	go.opentelemetry.io/otel/trace v1.12.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -103,6 +103,5 @@ require (
 	google.golang.org/genproto v0.0.0-20221206210731-b1a01be3a5f6 // indirect
 	google.golang.org/grpc v1.52.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	inet.af/netaddr v0.0.0-20220617031823-097006376321 // indirect
 )
