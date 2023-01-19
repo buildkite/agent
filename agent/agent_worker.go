@@ -532,7 +532,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 	// always hit the max of 1s, then another 8s is added to that. This is still comfortably within
 	// the timeout of 270s, and the bound seems tight enough so that the agent is not wasting time
 	// waiting for a retry that will never happen.
-	ctx, cancel := context.WithTimeout(ctx, 270*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 270*time.Second)
 	defer cancel()
 
 	// Acquire the job using the ID we were provided. We'll retry as best we can on non 422 error.
@@ -543,7 +543,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.Constant(3*time.Second)),
 		roko.WithSleepFunc(a.retrySleepFunc),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
+	).DoWithContext(timeoutCtx, func(r *roko.Retrier) error {
 		// If this agent has been asked to stop, don't even bother
 		// doing any retry checks and just bail.
 		if a.stopping {
@@ -554,7 +554,7 @@ func (a *AgentWorker) AcquireAndRunJob(ctx context.Context, jobId string) error 
 		var response *api.Response
 
 		acquiredJob, response, err = a.apiClient.AcquireJob(
-			ctx, jobId,
+			timeoutCtx, jobId,
 			api.Header{Name: "X-Buildkite-Lock-Acquire-Job", Value: "1"},
 			api.Header{Name: "X-Buildkite-Backoff-Sequence", Value: fmt.Sprintf("%d", r.AttemptCount())},
 		)
