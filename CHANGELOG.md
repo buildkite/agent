@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [3.43.1](https://github.com/buildkite/agent/tree/3.43.1) (2023-01-20)
+[Full Changelog](https://github.com/buildkite/agent/compare/v3.43.0...3.43.1)
+
+### Fixed
+- An issue introduced in v3.43.0 where agents running in acquire mode would exit after ~4.5 minutes, failing the job they were running [#1923](https://github.com/buildkite/agent/pull/1923) (@leathekd)
+
 ## [3.43.0](https://github.com/buildkite/agent/tree/3.43.0) (2023-01-18)
 [Full Changelog](https://github.com/buildkite/agent/compare/v3.42.0...3.43.0)
 
