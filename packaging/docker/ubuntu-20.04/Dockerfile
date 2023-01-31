@@ -34,6 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV BUILDKITE_AGENT_CONFIG=/buildkite/buildkite-agent.cfg \
     PATH="/usr/local/bin:${PATH}"
 
+RUN ln -s /usr/bin/tini /usr/sbin/tini
+
 RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
     && curl -Lfs -o /usr/local/bin/ssh-env-config.sh https://raw.githubusercontent.com/buildkite/docker-ssh-env-config/master/ssh-env-config.sh \
     && chmod +x /usr/local/bin/ssh-env-config.sh
