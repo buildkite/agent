@@ -62,6 +62,16 @@ test_docker_compose_v2() {
   docker run --rm --platform "$platform" --entrypoint docker "$image_tag" compose version
 }
 
+test_tini() {
+  echo "--- :hammer: Testing $image_tag has tini"
+  docker run --rm --platform "$platform" --entrypoint tini "$image_tag" --version
+}
+
+test_tini_old_path() {
+  echo "--- :hammer: Test $image_tag has tini executable at /sbin/tini"
+  docker run --rm --platform "$platform" --entrypoint sh "$image_tag" -c '[ -x /sbin/tini ]'
+}
+
 
 # Test Cases
 
@@ -73,6 +83,8 @@ case $variant in
     test_docker_socket
     test_docker_compose
     test_docker_compose_v2
+    test_tini
+    test_tini_old_path
     ;;
   sidecar)
     test_buildkite_agent_sidecar
