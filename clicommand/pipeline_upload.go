@@ -235,12 +235,13 @@ var PipelineUploadCommand = cli.Command{
 		}
 
 		// Parse the pipeline
-		result, err := agent.PipelineParser{
+		parser := agent.PipelineParser{
 			Env:             environ,
 			Filename:        filename,
 			Pipeline:        input,
 			NoInterpolation: cfg.NoInterpolation,
-		}.Parse()
+		}
+		result, err := parser.Parse()
 		if err != nil {
 			l.Fatal("Pipeline parsing of \"%s\" failed (%s)", src, err)
 		}

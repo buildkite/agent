@@ -1,9 +1,9 @@
 package agent
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
@@ -11,10 +11,11 @@ import (
 	"github.com/buildkite/agent/v3/yamltojson"
 	"github.com/buildkite/interpolate"
 
-	// This is a fork of gopkg.in/yaml.v2 that fixes anchors with MapSlice
-	yaml "github.com/buildkite/yaml"
+	"gopkg.in/yaml.v3"
 )
 
+// PipelineParser parses a pipeline, optionally interpolating values from
+// a given environment.
 type PipelineParser struct {
 	Env             env.Environment
 	Filename        string
@@ -22,290 +23,162 @@ type PipelineParser struct {
 	NoInterpolation bool
 }
 
-func (p PipelineParser) Parse() (*PipelineParserResult, error) {
+// Parse runs the parser.
+func (p *PipelineParser) Parse() (*PipelineParserResult, error) {
 	if p.Env == nil {
 		p.Env = env.New()
 	}
 
-	var errPrefix string
-	if p.Filename == "" {
-		errPrefix = "Failed to parse pipeline"
-	} else {
+	errPrefix := "Failed to parse pipeline"
+	if p.Filename != "" {
 		errPrefix = fmt.Sprintf("Failed to parse %s", p.Filename)
 	}
 
-	var pipelineAsSlice []topLevelStep
-	var pipeline yaml.MapSlice
-
-	// We support top-level arrays of steps, so try that first
-	if err := yaml.Unmarshal(p.Pipeline, &pipelineAsSlice); err == nil {
-		var steps []any
-
-		// Unwrap our custom topLevelStep types for marshaling later
-		for _, step := range pipelineAsSlice {
-			if step.MapSlice != nil {
-				steps = append(steps, step.MapSlice)
-			} else {
-				steps = append(steps, step.Body)
-			}
-		}
-
-		pipeline = yaml.MapSlice{
-			{Key: "steps", Value: steps},
-		}
-	} else if err := yaml.Unmarshal(p.Pipeline, &pipeline); err != nil {
+	// Run the pipeline through the YAML parser. Parse to a *yaml.Node because
+	// that will accept anything, but means we have more work to do.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(p.Pipeline, &doc); err != nil {
 		return nil, fmt.Errorf("%s: %v", errPrefix, formatYAMLError(err))
 	}
 
+	// Some quick paranoia checks...
+	// yaml.v3 parses the top level as a DocumentNode, and only parses one child
+	// node (that then has the content we care about).
+	if doc.Kind != yaml.DocumentNode {
+		// TODO: Use %v once yaml.Kind has a String method
+		return nil, fmt.Errorf("%s: line %d, col %d: pipeline is not a YAML document? (kind = %x)", errPrefix, doc.Line, doc.Column, doc.Kind)
+	}
+	if len(doc.Content) != 1 {
+		return nil, fmt.Errorf("%s: line %d, col %d: pipeline document contains %d top-level nodes, want 1", errPrefix, doc.Line, doc.Column, len(doc.Content))
+	}
+
+	// It's more useful to deal with the top-level mapping node than the
+	// document node.
+	pipeline := doc.Content[0]
+
+	// We support top-level arrays of steps. If the document content is
+	// a sequence node, hoist that out into a mapping node under the key "steps"
+	// to make it look like a modern pipeline.
+	if pipeline.Kind == yaml.SequenceNode {
+		steps := pipeline
+		pp, err := yamltojson.UpsertItem(nil, "steps", steps)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", errPrefix, err)
+		}
+		pipeline = pp
+	}
+
+	// No interpolation? No more to do.
 	if p.NoInterpolation {
 		return &PipelineParserResult{pipeline: pipeline}, nil
 	}
 
+	// Find the env map, if present.
+	envMap, err := yamltojson.LookupItem(pipeline, "env")
+	if err != nil && err != yamltojson.ErrNotFound {
+		return nil, fmt.Errorf("%s: %w", errPrefix, err)
+	}
+	if envMap != nil && envMap.Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("%s: line %d, col %d: top-level env block is not a map", errPrefix, envMap.Line, envMap.Column)
+	}
+
 	// Propagate distributed tracing context to the new pipelines if available
 	if tracing, has := p.Env.Get(tracetools.EnvVarTraceContextKey); has {
-		var envVars yaml.MapSlice
-		if envMap, has := mapSliceItem("env", pipeline); has {
-			envVars = envMap.Value.(yaml.MapSlice)
-		} else {
-			envVars = yaml.MapSlice{}
+		em, err := yamltojson.UpsertItem(envMap, tracetools.EnvVarTraceContextKey, yamltojson.StringNode(tracing))
+		if err != nil {
+			return nil, fmt.Errorf("Couldn't propagate distributed tracing context to the new pipeline: %v", err)
 		}
-		envVars = append(envVars, yaml.MapItem{
-			Key:   tracetools.EnvVarTraceContextKey,
-			Value: tracing,
-		})
-		// Since the actual env vars MapSlice is nested under the top level MapSlice,
-		// updating the env vars doesn't actually update the pipeline. So we have to
-		// replace it.
-		pipeline = upsertSliceItem("env", pipeline, envVars)
-	}
 
-	// Preprocess any env that are defined in the top level block and place them into env for
-	// later interpolation into env blocks
-	if item, ok := mapSliceItem("env", pipeline); ok {
-		if envMap, ok := item.Value.(yaml.MapSlice); ok {
-			if err := p.interpolateEnvBlock(envMap); err != nil {
-				return nil, err
+		// Insert the new envMap into the pipeline in case it was nil before
+		if envMap == nil {
+			if _, err := yamltojson.UpsertItem(pipeline, "env", em); err != nil {
+				return nil, fmt.Errorf("Couldn't insert environment block into to the new pipeline: %v", err)
 			}
-		} else {
-			return nil, fmt.Errorf("Expected pipeline top-level env block to be a map, got %T", item)
 		}
+		envMap = em
 	}
 
-	// Recursively go through the entire pipeline and perform environment
-	// variable interpolation on strings
-	interpolated, err := p.interpolate(pipeline)
-	if err != nil {
+	// Preprocess any env that are defined in the top level block and place them
+	// into env for later interpolation into env blocks
+	if err := p.interpolateEnvBlock(envMap); err != nil {
 		return nil, err
 	}
 
-	return &PipelineParserResult{pipeline: interpolated.(yaml.MapSlice)}, nil
+	// Recursively go through the entire pipeline and perform environment
+	// variable interpolation on strings. Interpolation is performed in-place.
+	if err := p.interpolateNode(pipeline); err != nil {
+		return nil, err
+	}
+
+	return &PipelineParserResult{pipeline: pipeline}, nil
 }
 
-// upsertSliceItem will replace a key's value in the given MapSlice with the given
-// replacement or insert it if it doesn't exist.
-func upsertSliceItem(key string, s yaml.MapSlice, val any) yaml.MapSlice {
-	found := -1
-	for i, item := range s {
-		if k, ok := item.Key.(string); ok && k == key {
-			found = i
-			break
+// interpolateEnvBlock runs Interpolate on each string value in the envMap,
+// interpolating with the variables defined in p.Env, and then adding the
+// results back into to p.Env.
+func (p *PipelineParser) interpolateEnvBlock(envMap *yaml.Node) error {
+	return yamltojson.RangeMap(envMap, func(k string, v *yaml.Node) error {
+		if v.Kind != yaml.ScalarNode || v.Tag != "!!str" {
+			return nil
 		}
-	}
-	if found != -1 {
-		s[found].Value = val
-	} else {
-		s = append(s, yaml.MapItem{
-			Key:   key,
-			Value: val,
-		})
-	}
-	return s
-}
-
-func mapSliceItem(key string, s yaml.MapSlice) (yaml.MapItem, bool) {
-	for _, item := range s {
-		if k, ok := item.Key.(string); ok && k == key {
-			return item, true
+		interped, err := interpolate.Interpolate(p.Env, v.Value)
+		if err != nil {
+			return err
 		}
-	}
-	return yaml.MapItem{}, false
-}
-
-func (p PipelineParser) interpolateEnvBlock(envMap yaml.MapSlice) error {
-	for _, item := range envMap {
-		k, ok := item.Key.(string)
-		if !ok {
-			return fmt.Errorf("Unexpected type of %T for env block key %v", item.Key, item.Key)
-		}
-		switch tv := item.Value.(type) {
-		case string:
-			interpolated, err := interpolate.Interpolate(p.Env, tv)
-			if err != nil {
-				return err
-			}
-			p.Env.Set(k, interpolated)
-		}
-	}
-	return nil
+		p.Env.Set(k, interped)
+		return nil
+	})
 }
 
 func formatYAMLError(err error) error {
 	return errors.New(strings.TrimPrefix(err.Error(), "yaml: "))
 }
 
-// interpolate function inspired from: https://gist.github.com/hvoecking/10772475
-
-func (p PipelineParser) interpolate(obj any) (any, error) {
-	// Make sure there's something actually to interpolate
-	if obj == nil {
-		return nil, nil
+// interpolateNode interpolates the YAML in-place.
+func (p *PipelineParser) interpolateNode(n *yaml.Node) error {
+	if n == nil {
+		return nil
 	}
 
-	// Wrap the original in a reflect.Value
-	original := reflect.ValueOf(obj)
+	switch n.Kind {
+	case yaml.AliasNode:
+		// Ignore; every node should be reachable without following aliases.
 
-	// Make a copy that we'll add the new values to
-	copy := reflect.New(original.Type()).Elem()
+	case yaml.DocumentNode, yaml.SequenceNode, yaml.MappingNode:
+		// Interpolate everything. Elements, keys, values, ...
+		for _, e := range n.Content {
+			if err := p.interpolateNode(e); err != nil {
+				return err
+			}
+		}
 
-	err := p.interpolateRecursive(copy, original)
-	if err != nil {
-		return nil, err
-	}
-
-	// Remove the reflection wrapper
-	return copy.Interface(), nil
-}
-
-func (p PipelineParser) interpolateRecursive(copy, original reflect.Value) error {
-	switch original.Kind() {
-	// If it is a pointer we need to unwrap and call once again
-	case reflect.Ptr:
-		// To get the actual value of the original we have to call Elem()
-		// At the same time this unwraps the pointer so we don't end up in
-		// an infinite recursion
-		originalValue := original.Elem()
-
-		// Check if the pointer is nil
-		if !originalValue.IsValid() {
+	case yaml.ScalarNode:
+		// Only interpolate strings.
+		if n.Tag != "!!str" {
 			return nil
 		}
-
-		// Allocate a new object and set the pointer to it
-		copy.Set(reflect.New(originalValue.Type()))
-
-		// Unwrap the newly created pointer
-		err := p.interpolateRecursive(copy.Elem(), originalValue)
+		interped, err := interpolate.Interpolate(p.Env, n.Value)
 		if err != nil {
 			return err
 		}
+		n.Value = interped
 
-	// If it is an interface (which is very similar to a pointer), do basically the
-	// same as for the pointer. Though a pointer is not the same as an interface so
-	// note that we have to call Elem() after creating a new object because otherwise
-	// we would end up with an actual pointer
-	case reflect.Interface:
-		// Get rid of the wrapping interface
-		originalValue := original.Elem()
-
-		// Check to make sure the interface isn't nil
-		if !originalValue.IsValid() {
-			return nil
-		}
-
-		// Create a new object. Now new gives us a pointer, but we want the value it
-		// points to, so we have to call Elem() to unwrap it
-		copyValue := reflect.New(originalValue.Type()).Elem()
-
-		err := p.interpolateRecursive(copyValue, originalValue)
-		if err != nil {
-			return err
-		}
-
-		copy.Set(copyValue)
-
-	// If it is a struct we interpolate each field
-	case reflect.Struct:
-		for i := 0; i < original.NumField(); i += 1 {
-			err := p.interpolateRecursive(copy.Field(i), original.Field(i))
-			if err != nil {
-				return err
-			}
-		}
-
-	// If it is a slice we create a new slice and interpolate each element
-	case reflect.Slice:
-		copy.Set(reflect.MakeSlice(original.Type(), original.Len(), original.Cap()))
-
-		for i := 0; i < original.Len(); i += 1 {
-			err := p.interpolateRecursive(copy.Index(i), original.Index(i))
-			if err != nil {
-				return err
-			}
-		}
-
-	// If it is a map we create a new map and interpolate each value
-	case reflect.Map:
-		copy.Set(reflect.MakeMap(original.Type()))
-
-		for _, key := range original.MapKeys() {
-			originalValue := original.MapIndex(key)
-
-			// New gives us a pointer, but again we want the value
-			copyValue := reflect.New(originalValue.Type()).Elem()
-			err := p.interpolateRecursive(copyValue, originalValue)
-			if err != nil {
-				return err
-			}
-
-			// Also interpolate the key if it's a string
-			if key.Kind() == reflect.String {
-				interpolatedKey, err := interpolate.Interpolate(p.Env, key.Interface().(string))
-				if err != nil {
-					return err
-				}
-				copy.SetMapIndex(reflect.ValueOf(interpolatedKey), copyValue)
-			} else {
-				copy.SetMapIndex(key, copyValue)
-			}
-		}
-
-	// If it is a string interpolate it (yay finally we're doing what we came for)
-	case reflect.String:
-		interpolated, err := interpolate.Interpolate(p.Env, original.Interface().(string))
-		if err != nil {
-			return err
-		}
-		copy.SetString(interpolated)
-
-	// And everything else will simply be taken from the original
 	default:
-		copy.Set(original)
+		return fmt.Errorf("line %d, col %d: unsupported node kind %x", n.Line, n.Column, n.Kind)
 	}
 
 	return nil
 }
 
-// PipelineParserResult is the ordered parse tree of a Pipeline document
+// PipelineParserResult is the ordered parse tree of a Pipeline document.
 type PipelineParserResult struct {
-	pipeline yaml.MapSlice
+	pipeline *yaml.Node
 }
 
 func (p *PipelineParserResult) MarshalJSON() ([]byte, error) {
-	return yamltojson.MarshalMapSliceJSON(p.pipeline)
-}
-
-// topLevelStep is a custom type to support "step or string" which works around
-// an issue where ordered parsing of yaml doesn't work with a top-level slice
-type topLevelStep struct {
-	yaml.MapSlice
-	Body string
-}
-
-func (s *topLevelStep) UnmarshalYAML(unmarshal func(any) error) error {
-	// Some steps are plain old strings like "wait". To avoid unmarshaling errors
-	// we check for plain old strings
-	if err := unmarshal(&s.Body); err == nil {
-		return nil
+	var buf bytes.Buffer
+	if err := yamltojson.Encode(&buf, p.pipeline); err != nil {
+		return nil, err
 	}
-	return unmarshal(&s.MapSlice)
+	return buf.Bytes(), nil
 }
