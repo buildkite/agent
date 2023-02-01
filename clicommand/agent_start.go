@@ -608,7 +608,7 @@ var AgentStartCommand = cli.Command{
 		// Load the configuration
 		warnings, err := loader.Load()
 		if err != nil {
-			fmt.Printf("%s", err)
+			fmt.Fprintf(os.Stderr, "Error loading config: %s\n", err)
 			os.Exit(1)
 		}
 

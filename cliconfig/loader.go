@@ -50,7 +50,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 			l.File = &file
 		} else {
 			absolutePath, _ := file.AbsolutePath()
-			return warnings, fmt.Errorf("A configuration file could not be found at: %q", absolutePath)
+			return warnings, fmt.Errorf("a configuration file could not be found at: %q", absolutePath)
 		}
 	} else if len(l.DefaultConfigFilePaths) > 0 {
 		for _, path := range l.DefaultConfigFilePaths {
@@ -69,7 +69,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 	if l.File != nil {
 		// Attempt to load the config file we've found
 		if err := l.File.Load(); err != nil {
-			return warnings, err
+			return warnings, fmt.Errorf("loading config file: %w", err)
 		}
 	}
 
@@ -88,7 +88,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 			// Load the value from the CLI Context
 			err := l.setFieldValueFromCLI(fieldName, cliName)
 			if err != nil {
-				return warnings, err
+				return warnings, fmt.Errorf("setting config field %s: %w", fieldName, err)
 			}
 		}
 
@@ -98,7 +98,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 			// Apply the normalization
 			err := l.normalizeField(fieldName, normalization)
 			if err != nil {
-				return warnings, err
+				return warnings, fmt.Errorf("normalizing config field %s: %w", fieldName, err)
 			}
 		}
 
@@ -119,14 +119,14 @@ func (l *Loader) Load() (warnings []string, err error) {
 				// Error if they specify the deprecated version and the new version
 				if !l.fieldValueIsEmpty(renamedToFieldName) {
 					renamedFieldValue, _ := reflections.GetField(l.Config, renamedToFieldName)
-					return warnings, fmt.Errorf("Can't set config option `%s=%v` because `%s=%v` has already been set", cliName, value, renamedFieldCliName, renamedFieldValue)
+					return warnings, fmt.Errorf("couldn't set config option `%s=%v`, `%s=%v` has already been set", cliName, value, renamedFieldCliName, renamedFieldValue)
 				}
 
 				// Set the proper config based on the deprecated value
 				if value != nil {
 					err := reflections.SetField(l.Config, renamedToFieldName, value)
 					if err != nil {
-						return warnings, fmt.Errorf("Could not set value `%s` to field `%s` (%s)", value, renamedToFieldName, err)
+						return warnings, fmt.Errorf("setting field %q to value %q: %w", renamedToFieldName, value, err)
 					}
 				}
 			}
@@ -175,7 +175,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	// Get the kind of field we need to set
 	fieldKind, err := reflections.GetFieldKind(l.Config, fieldName)
 	if err != nil {
-		return fmt.Errorf("Failed to get the type of struct field %s", fieldName)
+		return fmt.Errorf("getting the type of struct field %s: %w", fieldName, err)
 	}
 
 	var value any
@@ -188,7 +188,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		// Convert the arg position to an integer
 		argIndex, err := strconv.Atoi(argNum)
 		if err != nil {
-			return fmt.Errorf("Failed to convert string to int: %s", err)
+			return fmt.Errorf("converting string to int: %w", err)
 		}
 
 		// Only set the value if the args are long enough for
@@ -216,16 +216,17 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		if l.File != nil {
 			if configFileValue, ok := l.File.Config[cliName]; ok {
 				// Convert the config file value to its correct type
-				if fieldKind == reflect.String {
+				switch fieldKind {
+				case reflect.String:
 					value = configFileValue
-				} else if fieldKind == reflect.Slice {
+				case reflect.Slice:
 					value = strings.Split(configFileValue, ",")
-				} else if fieldKind == reflect.Bool {
+				case reflect.Bool:
 					value, _ = strconv.ParseBool(configFileValue)
-				} else if fieldKind == reflect.Int {
+				case reflect.Int:
 					value, _ = strconv.Atoi(configFileValue)
-				} else {
-					return fmt.Errorf("Unable to convert string to type %s", fieldKind)
+				default:
+					return fmt.Errorf("unable to convert string to type %s", fieldKind)
 				}
 			}
 		}
@@ -233,16 +234,17 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 		// If a value hasn't been found in a config file, but there
 		// _is_ one provided by the CLI context, then use that.
 		if value == nil || l.cliValueIsSet(cliName) {
-			if fieldKind == reflect.String {
+			switch fieldKind {
+			case reflect.String:
 				value = l.CLI.String(cliName)
-			} else if fieldKind == reflect.Slice {
+			case reflect.Slice:
 				value = l.CLI.StringSlice(cliName)
-			} else if fieldKind == reflect.Bool {
+			case reflect.Bool:
 				value = l.CLI.Bool(cliName)
-			} else if fieldKind == reflect.Int {
+			case reflect.Int:
 				value = l.CLI.Int(cliName)
-			} else {
-				return fmt.Errorf("Unable to handle type: %s", fieldKind)
+			default:
+				return fmt.Errorf("unable to handle type: %s", fieldKind)
 			}
 		}
 	}
@@ -251,7 +253,7 @@ func (l Loader) setFieldValueFromCLI(fieldName string, cliName string) error {
 	if value != nil {
 		err = reflections.SetField(l.Config, fieldName, value)
 		if err != nil {
-			return fmt.Errorf("Could not set value `%s` to field `%s` (%s)", value, fieldName, err)
+			return fmt.Errorf("setting value field %q to %q: %w", fieldName, value, err)
 		}
 	}
 
@@ -305,8 +307,6 @@ func (l Loader) fieldValueIsEmpty(fieldName string) bool {
 	} else {
 		panic(fmt.Sprintf("Can't determine empty-ness for field type %s", fieldKind))
 	}
-
-	return false
 }
 
 func (l Loader) validateField(fieldName string, label string, validationRules string) error {
@@ -326,11 +326,11 @@ func (l Loader) validateField(fieldName string, label string, validationRules st
 			if valueAsString, ok := value.(string); ok {
 				// Return an error if the path doesn't exist
 				if _, err := os.Stat(valueAsString); err != nil {
-					return fmt.Errorf("Could not find %s located at %s", label, value)
+					return fmt.Errorf("couldn't find %s located at %s: %w", label, value, err)
 				}
 			}
 		} else {
-			return fmt.Errorf("Unknown config validation rule `%s`", rule)
+			return fmt.Errorf("unknown config validation rule %q", rule)
 		}
 	}
 
@@ -408,7 +408,7 @@ func (l Loader) normalizeField(fieldName string, normalization string) error {
 		}
 
 	} else {
-		return fmt.Errorf("Unknown normalization `%s`", normalization)
+		return fmt.Errorf("unknown normalization %q", normalization)
 	}
 
 	return nil
