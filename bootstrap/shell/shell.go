@@ -533,12 +533,7 @@ func GetExitCode(err error) int {
 	}
 
 	if cause := new(exec.ExitError); errors.As(err, &cause) {
-		// The program has exited with an exit code != 0
-		// There is no platform independent way to retrieve
-		// the exit code, but the following will work on Unix/macOS
-		if status, ok := cause.Sys().(syscall.WaitStatus); ok {
-			return status.ExitStatus()
-		}
+		return cause.ExitCode()
 	}
 	return 1
 }
