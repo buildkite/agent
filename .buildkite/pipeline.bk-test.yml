@@ -53,34 +53,54 @@ steps:
 
   - wait
 
-  - label: "upload relative artifact"
+  - label: upload relative artifact
     command: |
-      echo "hello world" > llamas.txt
-      buildkite-agent artifact upload llamas.txt
-      rm llamas.txt
+      set -Eeufo pipefail
 
-  - label: "upload absolute artifact"
+      trap "rm llamas.txt" EXIT
+
+      echo "relative llamas" > llamas.txt
+      buildkite-agent artifact upload llamas.txt
+
+      shasum=$(buildkite-agent artifact shasum llamas.txt)
+      expected_shasum=fb60f84c2bd316e18a2f11e4da13684e41a16f31
+      if [[ \$shasum != \$expected_shasum ]]; then
+        echo expected: \$expected_shasum received: \$shasum
+        exit 1
+      fi
+
+  - label: upload absolute artifact
     command: |
-      echo "hello world" > /tmp/llamas.txt
+      set -Eeufo pipefail
+
+      trap "rm /tmp/llamas.txt" EXIT
+
+      echo "absolute llamas" > /tmp/llamas.txt
       buildkite-agent artifact upload /tmp/llamas.txt
-      rm /tmp/llamas.txt
+
+      shasum=$(buildkite-agent artifact shasum tmp/llamas.txt)
+      expected_shasum=9ce999892fbca0da31b2a781b2730ac11a2fc8a2
+      if [[ \$shasum != \$expected_shasum ]]; then
+        echo expected: \$expected_shasum received: \$shasum
+        exit 1
+      fi
 
   - wait
 
-  - label: "download absolute artifact"
+  - label: download relative artifact
     command: |
-      shasum=$(buildkite-agent artifact shasum tmp/llamas.txt)
-      [[ \$shasum == "22596363b3de40b06f981fb85d82312e8c0ed511" ]]
-      buildkite-agent artifact download tmp/llamas.txt .
-      cat tmp/llamas.txt
-      grep "hello world" tmp/llamas.txt
-      rm -rf tmp/
+      set -Eeufo pipefail
 
-  - label: "download relative artifact"
-    command: |
-      shasum=$(buildkite-agent artifact shasum llamas.txt)
-      [[ \$shasum == "22596363b3de40b06f981fb85d82312e8c0ed511" ]]
+      trap "rm llamas.txt" EXIT
+
       buildkite-agent artifact download llamas.txt .
-      cat llamas.txt
-      grep "hello world" llamas.txt
-      rm llamas.txt
+      echo "ee756d1e307dc245b0df42f81845a4ff559531bc4cb287e35b15e4115844e903 llamas.txt" | sha256sum --check
+
+  - label: download absolute artifact
+    command: |
+      set -Eeufo pipefail
+
+      trap "rm tmp/llamas.txt" EXIT
+
+      buildkite-agent artifact download tmp/llamas.txt .
+      echo "e14227c78a206decdf9e869aaa2c44f3ff546a8324874e7442ef02b1f41a0099 tmp/llamas.txt" | sha256sum --check
