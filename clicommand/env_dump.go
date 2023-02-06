@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var EnvDumpHelpDescription = `Usage:
+const envDumpHelpDescription = `Usage:
   buildkite-agent env dump [options]
 
 Description:
@@ -27,7 +27,7 @@ type EnvDumpConfig struct {
 var EnvDumpCommand = cli.Command{
 	Name:        "dump",
 	Usage:       "Print the environment of the current process as a JSON object",
-	Description: EnvDumpHelpDescription,
+	Description: envDumpHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "format",

@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataExistsHelpDescription = `Usage:
+const metaDataExistsHelpDescription = `Usage:
 
    buildkite-agent meta-data exists <key> [options...]
 
@@ -46,7 +46,7 @@ type MetaDataExistsConfig struct {
 var MetaDataExistsCommand = cli.Command{
 	Name:        "exists",
 	Usage:       "Check to see if the meta data key exists for a build",
-	Description: MetaDataExistsHelpDescription,
+	Description: metaDataExistsHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",

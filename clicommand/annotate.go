@@ -20,7 +20,7 @@ const (
 	maxBodySize = 1024 * 1024
 )
 
-var AnnotateHelpDescription = `Usage:
+const annotateHelpDescription = `Usage:
 
    buildkite-agent annotate [body] [options...]
 
@@ -78,7 +78,7 @@ type AnnotateConfig struct {
 var AnnotateCommand = cli.Command{
 	Name:        "annotate",
 	Usage:       "Annotate the build page within the Buildkite UI with text from within a Buildkite job",
-	Description: AnnotateHelpDescription,
+	Description: annotateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",

@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataGetHelpDescription = `Usage:
+const metaDataGetHelpDescription = `Usage:
 
    buildkite-agent meta-data get <key> [options...]
 
@@ -46,7 +46,7 @@ type MetaDataGetConfig struct {
 var MetaDataGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get data from a build",
-	Description: MetaDataGetHelpDescription,
+	Description: metaDataGetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "default",

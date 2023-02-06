@@ -23,7 +23,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var PipelineUploadHelpDescription = `Usage:
+const pipelineUploadHelpDescription = `Usage:
 
    buildkite-agent pipeline upload [file] [options...]
 
@@ -78,7 +78,7 @@ type PipelineUploadConfig struct {
 var PipelineUploadCommand = cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
-	Description: PipelineUploadHelpDescription,
+	Description: pipelineUploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:   "replace",

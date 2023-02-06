@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var AnnotationRemoveHelpDescription = `Usage:
+const annotationRemoveHelpDescription = `Usage:
 
    buildkite-agent annotation remove [arguments...]
 
@@ -49,7 +49,7 @@ type AnnotationRemoveConfig struct {
 var AnnotationRemoveCommand = cli.Command{
 	Name:        "remove",
 	Usage:       "Remove an existing annotation from a Buildkite build",
-	Description: AnnotationRemoveHelpDescription,
+	Description: annotationRemoveHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "context",

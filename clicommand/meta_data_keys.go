@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataKeysHelpDescription = `Usage:
+const metaDataKeysHelpDescription = `Usage:
 
    buildkite-agent meta-data keys [options...]
 
@@ -45,7 +45,7 @@ type MetaDataKeysConfig struct {
 var MetaDataKeysCommand = cli.Command{
 	Name:        "keys",
 	Usage:       "Lists all meta-data keys that have been previously set",
-	Description: MetaDataKeysHelpDescription,
+	Description: metaDataKeysHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",

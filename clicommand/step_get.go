@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var StepGetHelpDescription = `Usage:
+const stepGetHelpDescription = `Usage:
 
    buildkite-agent step get <attribute> [options...]
 
@@ -55,7 +55,7 @@ type StepGetConfig struct {
 var StepGetCommand = cli.Command{
 	Name:        "get",
 	Usage:       "Get the value of an attribute",
-	Description: StepGetHelpDescription,
+	Description: stepGetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "step",
