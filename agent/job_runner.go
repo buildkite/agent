@@ -166,14 +166,19 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 
 	pr, pw := io.Pipe()
 
+	// Additional steps needed to finish writing when the process is finished.
+	flush := func() error { return nil }
+
 	switch {
 	case experiments.IsEnabled("ansi-timestamps"):
 		// If we have ansi-timestamps, we can skip line timestamps AND header times
 		// this is the future of timestamping
-		processWriter = process.NewPrefixer(runner.output, func() string {
+		prefixer := process.NewPrefixer(runner.output, func() string {
 			return fmt.Sprintf("\x1b_bk;t=%d\x07",
 				time.Now().UnixNano()/int64(time.Millisecond))
 		})
+		processWriter = prefixer
+		flush = prefixer.Flush
 
 	case conf.AgentConfiguration.TimestampLines:
 		// If we have timestamp lines on, we have to buffer lines before we flush them
@@ -247,6 +252,9 @@ func NewJobRunner(l logger.Logger, scope *metrics.Scope, ag *api.AgentRegisterRe
 	// Close the writer end of the pipe when the process finishes
 	go func() {
 		<-runner.process.Done()
+		if err := flush(); err != nil {
+			l.Error("Flushing process log: %v", err)
+		}
 		if err := pw.Close(); err != nil {
 			l.Error("%v", err)
 		}
