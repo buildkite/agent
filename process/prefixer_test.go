@@ -16,7 +16,7 @@ func TestPrefixer(t *testing.T) {
 	}{
 		{
 			input: "alpacas\nllamas\n",
-			want:  "#1: alpacas\n#2: llamas\n#3: ",
+			want:  "#1: alpacas\n#2: llamas\n",
 		},
 		{
 			input: "blah\x1b[Kbler\x1bgh",
@@ -29,6 +29,10 @@ func TestPrefixer(t *testing.T) {
 		{
 			input: "blah\x1b[1B\x1b[1A\x1b[2Kblergh",
 			want:  "#1: blah\x1b[1B\x1b[1A\x1b[2K#2: blergh",
+		},
+		{
+			input: "foo\n\x1b[1B and then some time later square-bracket K [Kllama",
+			want:  "#1: foo\n#2: \x1b[1B and then some time later square-bracket K [Kllama",
 		},
 	}
 
@@ -48,6 +52,9 @@ func TestPrefixer(t *testing.T) {
 			n, err := pw.Write([]byte(tc.input))
 			if err != nil {
 				t.Fatalf("pw.Write([]byte(%q)) error = %v", tc.input, err)
+			}
+			if err := pw.Flush(); err != nil {
+				t.Fatalf("pw.Flush() = %v", err)
 			}
 
 			if got, want := n, len(tc.input); got != want {
