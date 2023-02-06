@@ -1414,13 +1414,17 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 				}
 				if mirrorDir != "" {
 					name := fmt.Sprintf("submodule-%d", idx+1)
-					if err := b.shell.Run(ctx, "git", "--git-dir", mirrorDir, "remote", "add", name, repository); err != nil {
+					if err := b.shell.Run(ctx,
+						"git", "--git-dir", mirrorDir, "remote", "add", name, repository,
+					); err != nil {
 						// Per https://git-scm.com/docs/git-remote#_exit_status: When the remote already exists, the exit status is 3
 						// That shouldn't be a fatal error in this case, so ignore it.
-						if err.Error() != "exit status 3" {
+						if shell.GetExitCode(err) != 3 {
 							return err
 						}
+						b.shell.Commentf("Skipping adding %s as the remote %s as it already exists", repository, name)
 					}
+
 					// Tests use a local temp path for the repository, real repositories don't. Handle both.
 					var repositoryPath string
 					if !utils.FileExists(repository) {
