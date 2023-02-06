@@ -15,7 +15,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var AppHelpTemplate = `Usage:
+const appHelpTemplate = `Usage:
 
   {{.Name}} <command> [options...]
 
@@ -27,7 +27,7 @@ Use "{{.Name}} <command> --help" for more information about a command.
 
 `
 
-var SubcommandHelpTemplate = `Usage:
+const subcommandHelpTemplate = `Usage:
 
   {{.Name}} {{if .VisibleFlags}}<command>{{end}} [options...]
 
@@ -41,7 +41,7 @@ Options:
    {{end}}{{end}}
 `
 
-var CommandHelpTemplate = `{{.Description}}
+const commandHelpTemplate = `{{.Description}}
 
 Options:
 
@@ -54,9 +54,9 @@ func printVersion(c *cli.Context) {
 }
 
 func main() {
-	cli.AppHelpTemplate = AppHelpTemplate
-	cli.CommandHelpTemplate = CommandHelpTemplate
-	cli.SubcommandHelpTemplate = SubcommandHelpTemplate
+	cli.AppHelpTemplate = appHelpTemplate
+	cli.CommandHelpTemplate = commandHelpTemplate
+	cli.SubcommandHelpTemplate = subcommandHelpTemplate
 	cli.VersionPrinter = printVersion
 
 	app := cli.NewApp()

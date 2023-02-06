@@ -34,7 +34,7 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-var StartDescription = `Usage:
+const startDescription = `Usage:
 
    buildkite-agent start [options...]
 
@@ -234,7 +234,7 @@ func DefaultConfigFilePaths() (paths []string) {
 var AgentStartCommand = cli.Command{
 	Name:        "start",
 	Usage:       "Starts a Buildkite agent",
-	Description: StartDescription,
+	Description: startDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "config",

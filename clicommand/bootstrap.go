@@ -16,7 +16,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var BootstrapHelpDescription = `Usage:
+const bootstrapHelpDescription = `Usage:
 
    buildkite-agent bootstrap [options...]
 
@@ -95,7 +95,7 @@ type BootstrapConfig struct {
 var BootstrapCommand = cli.Command{
 	Name:        "bootstrap",
 	Usage:       "Run a Buildkite job locally",
-	Description: BootstrapHelpDescription,
+	Description: bootstrapHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "command",

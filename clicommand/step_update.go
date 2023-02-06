@@ -13,7 +13,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var StepUpdateHelpDescription = `Usage:
+const stepUpdateHelpDescription = `Usage:
 
    buildkite-agent step update <attribute> <value> [options...]
 
@@ -62,7 +62,7 @@ type StepUpdateConfig struct {
 var StepUpdateCommand = cli.Command{
 	Name:        "update",
 	Usage:       "Change the value of an attribute",
-	Description: StepUpdateHelpDescription,
+	Description: stepUpdateHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "step",

@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var DownloadHelpDescription = `Usage:
+const downloadHelpDescription = `Usage:
 
    buildkite-agent artifact download [options] <query> <destination>
 
@@ -72,7 +72,7 @@ type ArtifactDownloadConfig struct {
 var ArtifactDownloadCommand = cli.Command{
 	Name:        "download",
 	Usage:       "Downloads artifacts from Buildkite to the local machine",
-	Description: DownloadHelpDescription,
+	Description: downloadHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:  "step",

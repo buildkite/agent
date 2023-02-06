@@ -11,7 +11,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var UploadHelpDescription = `Usage:
+const uploadHelpDescription = `Usage:
 
    buildkite-agent artifact upload [options] <pattern> [destination]
 
@@ -89,7 +89,7 @@ type ArtifactUploadConfig struct {
 var ArtifactUploadCommand = cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads files to a job as artifacts",
-	Description: UploadHelpDescription,
+	Description: uploadHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",

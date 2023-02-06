@@ -13,7 +13,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var MetaDataSetHelpDescription = `Usage:
+const metaDataSetHelpDescription = `Usage:
 
    buildkite-agent meta-data set <key> [value] [options...]
 
@@ -52,7 +52,7 @@ type MetaDataSetConfig struct {
 var MetaDataSetCommand = cli.Command{
 	Name:        "set",
 	Usage:       "Set data on a build",
-	Description: MetaDataSetHelpDescription,
+	Description: metaDataSetHelpDescription,
 	Flags: []cli.Flag{
 		cli.StringFlag{
 			Name:   "job",

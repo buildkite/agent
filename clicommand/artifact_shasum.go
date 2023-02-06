@@ -13,7 +13,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var ShasumHelpDescription = `Usage:
+const shasumHelpDescription = `Usage:
 
    buildkite-agent artifact shasum [options...]
 
@@ -74,7 +74,7 @@ type ArtifactShasumConfig struct {
 var ArtifactShasumCommand = cli.Command{
 	Name:        "shasum",
 	Usage:       "Prints the SHA-1 hash for a single artifact specified by a search query",
-	Description: ShasumHelpDescription,
+	Description: shasumHelpDescription,
 	Flags: []cli.Flag{
 		cli.BoolFlag{
 			Name:  "sha256",

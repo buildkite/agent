@@ -14,7 +14,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var SearchHelpDescription = `Usage:
+const searchHelpDescription = `Usage:
 
    buildkite-agent artifact search [options] <query>
 
@@ -71,7 +71,7 @@ type ArtifactSearchConfig struct {
 var ArtifactSearchCommand = cli.Command{
 	Name:        "search",
 	Usage:       "Searches artifacts in Buildkite",
-	Description: SearchHelpDescription,
+	Description: searchHelpDescription,
 	CustomHelpTemplate: `{{.Description}}
 
 Options:
