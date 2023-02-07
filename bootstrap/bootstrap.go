@@ -1398,31 +1398,52 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			gitVersionOutput, _ := b.shell.RunAndCapture(ctx, "git", "--version")
 			b.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 		}
-
+		args := []string{}
+		for _, config := range b.GitSubmoduleCloneConfig {
+			args = append(args, "-c", config)
+		}
 		// Checking for submodule repositories
 		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, b.shell)
 		if err != nil {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
-			for _, repository := range submoduleRepos {
+			for idx, repository := range submoduleRepos {
 				// submodules might need their fingerprints verified too
 				if b.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, b.shell, repository)
 				}
+				if mirrorDir != "" {
+					name := fmt.Sprintf("submodule-%d", idx+1)
+					if err := b.shell.Run(ctx,
+						"git", "--git-dir", mirrorDir, "remote", "add", name, repository,
+					); err != nil {
+						// Per https://git-scm.com/docs/git-remote#_exit_status: When the remote already exists, the exit status is 3
+						// That shouldn't be a fatal error in this case, so ignore it.
+						if shell.GetExitCode(err) != 3 {
+							return err
+						}
+						b.shell.Commentf("Skipping adding %s as the remote %s as it already exists", repository, name)
+					}
+
+					// Tests use a local temp path for the repository, real repositories don't. Handle both.
+					var repositoryPath string
+					if !utils.FileExists(repository) {
+						repositoryPath = filepath.Join(b.Config.GitMirrorsPath, dirForRepository(repository))
+					} else {
+						repositoryPath = repository
+					}
+					args = append(args, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+				} else {
+					args = append(args, "submodule", "update", "--init", "--recursive", "--force")
+				}
+				if err := b.shell.Run(ctx, "git", args...); err != nil {
+					return err
+				}
+
+				if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
+					return err
+				}
 			}
-		}
-
-		args := []string{}
-		for _, config := range b.GitSubmoduleCloneConfig {
-			args = append(args, "-c", config)
-		}
-		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-		if err := b.shell.Run(ctx, "git", args...); err != nil {
-			return err
-		}
-
-		if err := b.shell.Run(ctx, "git", "submodule", "foreach", "--recursive", "git reset --hard"); err != nil {
-			return err
 		}
 	}
 
