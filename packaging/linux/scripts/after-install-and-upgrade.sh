@@ -45,41 +45,18 @@ if [ ! -d /etc/buildkite-agent/hooks ]; then
   cp -r /usr/share/buildkite-agent/hooks /etc/buildkite-agent
 fi
 
-# Check if the system is Ubuntu 14.10. Systemd is broken on this release, so if
-# even if systemd exists on that system, skip using it.
-command -v lsb_release > /dev/null && lsb_release -d | grep -q "Ubuntu 14.10"
-BK_IS_UBUNTU_14_10=$?
-
 # Check if systemd exists
 command -v systemctl > /dev/null
 BK_SYSTEMD_EXISTS=$?
 
-# Check if upstart exists
-command -v initctl > /dev/null
-BK_UPSTART_EXISTS=$?
-
-# Check if upstart is version 0.6.5 as seen on Amazon linux, RHEL6 & CentOS-6
-BK_UPSTART_TOO_OLD=0
-if [ $BK_UPSTART_EXISTS -eq 0 ]; then
-  BK_UPSTART_VERSION="$(initctl --version | awk 'BEGIN{FS="[ ()]"} NR==1{print $4}')"
-  if [ "$BK_UPSTART_VERSION" = "0.6.5" ]; then
-    BK_UPSTART_TOO_OLD=1
-  fi
-fi
-
-# Install the relevant system process
-if [ $BK_SYSTEMD_EXISTS -eq 0 ] && [ $BK_IS_UBUNTU_14_10 -eq 1 ]; then
+# Try to install a systemd unit
+if [ $BK_SYSTEMD_EXISTS -eq 0 ]; then
   cp /usr/share/buildkite-agent/systemd/buildkite-agent.service /lib/systemd/system/buildkite-agent.service
   cp /usr/share/buildkite-agent/systemd/buildkite-agent@.service /lib/systemd/system/buildkite-agent@.service
 
   START_COMMAND="sudo systemctl enable buildkite-agent && sudo systemctl start buildkite-agent"
-elif [ $BK_UPSTART_EXISTS -eq 0 ] && [ $BK_UPSTART_TOO_OLD -eq 0 ]; then
-  if [ ! -f /etc/init/buildkite-agent.conf ]; then
-    cp /usr/share/buildkite-agent/upstart/buildkite-agent.conf /etc/init/buildkite-agent.conf
-  fi
-
-  START_COMMAND="sudo service buildkite-agent start"
 elif [ -d /etc/init.d ]; then
+  # Fall back to system v init script
   if [ ! -f /etc/init.d/buildkite-agent ]; then
     cp /usr/share/buildkite-agent/lsb/buildkite-agent.sh /etc/init.d/buildkite-agent
     command -v chkconfig > /dev/null && chkconfig --add buildkite-agent
@@ -88,7 +65,7 @@ elif [ -d /etc/init.d ]; then
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"
 else
   # If all the others fails, warn them and just let them run it the old
-  # fasioned way.
+  # fashioned way.
   echo "============================== WARNING ==================================="
   echo ""
   echo "The Buildkite Agent could not find a suitable system service to install."
