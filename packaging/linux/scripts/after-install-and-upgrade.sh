@@ -95,11 +95,19 @@ TXT
   echo "and then you can start your agent by running \"$START_COMMAND\""
 fi
 
-# Crude method of causing all the agents to restart
+# Restart on upgrade, if we can
 if [ "$OPERATION" = "upgrade" ] ; then
-  # Restart agents that have a command line containing
-  # "buildkite-agent v1.2.3.4" or "buildkite-agent start"
-  pkill -f 'buildkite-agent (v|start)' > /dev/null 2>&1 || true
+  if [ $BK_SYSTEMD_EXISTS -eq 0 ] && systemctl is-active buildkite-agent --quiet; then
+    # Try using systemd, if the unit is active
+    systemctl try-restart buildkite-agent
+  elif [ -x /etc/init.d/buildkite-agent ] && /etc/init.d/buildkite-agent status > /dev/null 2>&1; then
+    # Fall back to systemv, if the process is running
+    /etc/init.d/buildkite-agent restart
+  else
+    # Kill agents and hope they restart, looking for command line containing
+    # "buildkite-agent v1.2.3.4" or "buildkite-agent start"
+    pkill -f 'buildkite-agent (v|start)' > /dev/null 2>&1 || true
+  fi
 fi
 
 # Make sure all the folders created are owned by the buildkite-agent user #
