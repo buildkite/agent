@@ -310,6 +310,11 @@ func (r *ErrorResponse) Error() string {
 	return s
 }
 
+func IsErrHavingStatus(err error, code int) bool {
+	var apierr *ErrorResponse
+	return errors.As(err, &apierr) && apierr.Response.StatusCode == code
+}
+
 func checkResponse(r *http.Response) error {
 	if c := r.StatusCode; 200 <= c && c <= 299 {
 		return nil

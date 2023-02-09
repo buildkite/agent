@@ -106,9 +106,7 @@ func (u *PipelineUploader) pipelineUploadWithRetry(ctx context.Context, l logger
 			}
 
 			// 422 responses will always fail no need to retry
-			if apierr := new(
-				api.ErrorResponse,
-			); errors.As(err, &apierr) && apierr.Response.StatusCode == http.StatusUnprocessableEntity {
+			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
 				l.Error("Unrecoverable error, skipping retries")
 				r.Break()
 				return err
@@ -151,9 +149,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			}
 
 			// 422 responses will always fail no need to retry
-			if apierr := new(
-				api.ErrorResponse,
-			); errors.As(err, &apierr) && apierr.Response.StatusCode == http.StatusUnprocessableEntity {
+			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
 				l.Error("Unrecoverable error, skipping retries")
 				r.Break()
 				return err
@@ -206,9 +202,7 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 			l.Warn("%s (%s)", err, r)
 
 			// 422 responses will always fail no need to retry
-			if apierr := new(
-				api.ErrorResponse,
-			); errors.As(err, &apierr) && apierr.Response.StatusCode == http.StatusUnprocessableEntity {
+			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
 				l.Error("Unrecoverable error, skipping retries")
 				r.Break()
 				return err
