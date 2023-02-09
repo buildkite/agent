@@ -308,7 +308,7 @@ var PipelineUploadCommand = cli.Command{
 			RetrySleepFunc: time.Sleep,
 		}
 		if err := uploader.AsyncUploadFlow(ctx, l); err != nil {
-			l.Fatal("%e", err)
+			l.Fatal("%v", err)
 		}
 
 		l.Info("Successfully uploaded and parsed pipeline config")
