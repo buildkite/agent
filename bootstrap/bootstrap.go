@@ -1410,6 +1410,8 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 			b.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		} else {
 			for idx, repository := range submoduleRepos {
+				// Ensure we don't append duplicate arguments.
+				final_args := append([]string(nil), args...)
 				// submodules might need their fingerprints verified too
 				if b.SSHKeyscan {
 					addRepositoryHostToSSHKnownHosts(ctx, b.shell, repository)
@@ -1434,11 +1436,11 @@ func (b *Bootstrap) defaultCheckoutPhase(ctx context.Context) error {
 					} else {
 						repositoryPath = repository
 					}
-					args = append(args, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
+					final_args = append(final_args, "submodule", "update", "--init", "--recursive", "--force", "--reference", repositoryPath)
 				} else {
-					args = append(args, "submodule", "update", "--init", "--recursive", "--force")
+					final_args = append(final_args, "submodule", "update", "--init", "--recursive", "--force")
 				}
-				if err := b.shell.Run(ctx, "git", args...); err != nil {
+				if err := b.shell.Run(ctx, "git", final_args...); err != nil {
 					return err
 				}
 
