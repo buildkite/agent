@@ -36,37 +36,20 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 		return metaData, err
 	}
 
-	instanceId, err := c.GetMetadata("instance-id")
+	document, err := c.GetInstanceIdentityDocument()
 	if err != nil {
 		return metaData, err
 	}
-	metaData["aws:instance-id"] = string(instanceId)
 
-	instanceType, err := c.GetMetadata("instance-type")
-	if err != nil {
-		return metaData, err
-	}
-	metaData["aws:instance-type"] = string(instanceType)
-
-	amiId, err := c.GetMetadata("ami-id")
-	if err != nil {
-		return metaData, err
-	}
-	metaData["aws:ami-id"] = string(amiId)
+	metaData["aws:instance-id"] = string(document.InstanceID)
+	metaData["aws:instance-type"] = string(document.InstanceType)
+	metaData["aws:ami-id"] = string(document.ImageID)
+	metaData["aws:availability-zone"] = string(document.AvailabilityZone)
+	metaData["aws:region"] = string(document.Region)
 
 	instanceLifeCycle, err := c.GetMetadata("instance-life-cycle")
 	if err == nil {
 		metaData["aws:instance-life-cycle"] = string(instanceLifeCycle)
-	}
-
-	availabilityZone, err := c.GetMetadata("placement/availability-zone")
-	if err == nil {
-		metaData["aws:availability-zone"] = string(availabilityZone)
-	}
-
-	region, err := c.GetMetadata("placement/region")
-	if err == nil {
-		metaData["aws:region"] = string(region)
 	}
 
 	return metaData, nil
