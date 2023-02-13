@@ -59,6 +59,16 @@ func (e EC2MetaData) Get() (map[string]string, error) {
 		metaData["aws:instance-life-cycle"] = string(instanceLifeCycle)
 	}
 
+	availabilityZone, err := c.GetMetadata("placement/availability-zone")
+	if err == nil {
+		metaData["aws:availability-zone"] = string(availabilityZone)
+	}
+
+	region, err := c.GetMetadata("placement/region")
+	if err == nil {
+		metaData["aws:region"] = string(region)
+	}
+
 	return metaData, nil
 }
 
