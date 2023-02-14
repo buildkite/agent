@@ -1,2 +1,2 @@
-FROM golang:1.19.5@sha256:bb9811fad43a7d6fd2173248d8331b2dcf5ac9af20976b1937ecd214c5b8c383
+FROM golang:1.20.0@sha256:63c5d6404238855365d5bac79ed0564a1e1d3bcda916dfc87cfb32d027e28e1a
 COPY build/ssh.conf /etc/ssh/ssh_config.d/
