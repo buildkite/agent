@@ -37,15 +37,15 @@ require (
 	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/google/go-cmp v0.5.9
-	go.opentelemetry.io/contrib/propagators/aws v1.12.0
+	go.opentelemetry.io/contrib/propagators/aws v1.14.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.12.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.12.0
 	go.opentelemetry.io/contrib/propagators/ot v1.12.0
-	go.opentelemetry.io/otel v1.12.0
+	go.opentelemetry.io/otel v1.13.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.12.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.12.0
-	go.opentelemetry.io/otel/sdk v1.12.0
-	go.opentelemetry.io/otel/trace v1.12.0
+	go.opentelemetry.io/otel/sdk v1.13.0
+	go.opentelemetry.io/otel/trace v1.13.0
 	golang.org/x/exp v0.0.0-20220428152302-39d4317da171
 	gopkg.in/yaml.v3 v3.0.1
 )
