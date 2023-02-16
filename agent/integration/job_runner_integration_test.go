@@ -41,7 +41,7 @@ func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	})
 }
 
-func TestJobRunnerPassesAccessTokenToBootstrap(t *testing.T) {
+func TestJobRunnerPassesAccessTokenToJobExecute(t *testing.T) {
 	ag := &api.AgentRegisterResponse{
 		AccessToken: "llamasrock",
 	}
@@ -91,20 +91,20 @@ func TestJobRunnerIgnoresPipelineChangesToProtectedVars(t *testing.T) {
 
 }
 
-func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, bootstrap func(c *bintest.Call)) {
+func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.AgentConfiguration, executor func(c *bintest.Call)) {
 	// create a mock agent API
 	server := createTestAgentEndpoint(t, "my-job-id")
 	defer server.Close()
 
-	// set up a mock bootstrap that the runner will call
-	bs, err := bintest.NewMock("buildkite-agent-bootstrap")
+	// set up a mock executor that the runner will call
+	bs, err := bintest.NewMock("buildkite-agent-job-execute")
 	if err != nil {
 		t.Fatalf("bintest.NewMock() error = %v", err)
 	}
 	defer bs.CheckAndClose(t)
 
-	// execute the callback we have inside the bootstrap mock
-	bs.Expect().Once().AndExitWith(0).AndCallFunc(bootstrap)
+	// execute the callback we have inside the executor mock
+	bs.Expect().Once().AndExitWith(0).AndCallFunc(executor)
 
 	l := logger.Discard
 
@@ -112,8 +112,8 @@ func runJob(t *testing.T, ag *api.AgentRegisterResponse, j *api.Job, cfg agent.A
 	m := metrics.NewCollector(l, metrics.CollectorConfig{})
 	scope := m.Scope(metrics.Tags{})
 
-	// set the bootstrap into the config
-	cfg.BootstrapScript = bs.Path
+	// set the executor into the config
+	cfg.JobExecutorScript = bs.Path
 
 	client := api.NewClient(l, api.Config{
 		Endpoint: server.URL,

@@ -58,8 +58,8 @@ type Executor struct {
 	cancelCh chan struct{}
 }
 
-// New returns a new Executor instance
-func New(conf Config) *Executor {
+// NewExecutor returns a new Executor instance
+func NewExecutor(conf Config) *Executor {
 	return &Executor{
 		Config:   conf,
 		cancelCh: make(chan struct{}),

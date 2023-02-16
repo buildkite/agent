@@ -4,7 +4,7 @@ package agent
 // has been loaded from the config file and command-line params
 type AgentConfiguration struct {
 	ConfigPath                 string
-	BootstrapScript            string
+	JobExecutorScript          string
 	BuildPath                  string
 	HooksPath                  string
 	SocketsPath                string

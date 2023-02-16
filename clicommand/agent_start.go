@@ -42,7 +42,7 @@ const startDescription = `Usage:
 
 Description:
 
-   When a job is ready to run it will call the "bootstrap-script"
+   When a job is ready to run it will call the "job-executor-script"
    and pass it all the environment variables required for the job to run.
    This script is responsible for checking out the code, and running the
    actual build script defined in the pipeline.
@@ -56,8 +56,8 @@ Example:
 // Adding config requires changes in a few different spots
 // - The AgentStartConfig struct with a cli parameter
 // - As a flag in the AgentStartCommand (with matching env)
-// - Into an env to be passed to the bootstrap in agent/job_runner.go, createEnvironment()
-// - Into clicommand/bootstrap.go to read it from the env into the bootstrap config
+// - Into an env to be passed to the job executor in agent/job_runner.go, createEnvironment()
+// - Into clicommand/exec-job.go to read it from the env into the job executor config
 
 type AgentStartConfig struct {
 	Config                      string   `cli:"config"`
@@ -66,7 +66,7 @@ type AgentStartConfig struct {
 	AcquireJob                  string   `cli:"acquire-job"`
 	DisconnectAfterJob          bool     `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout  int      `cli:"disconnect-after-idle-timeout"`
-	BootstrapScript             string   `cli:"bootstrap-script" normalize:"commandpath"`
+	JobExecutorScript           string   `cli:"job-executor-script" normalize:"commandpath"`
 	CancelGracePeriod           int      `cli:"cancel-grace-period"`
 	EnableJobLogTmpfile         bool     `cli:"enable-job-log-tmpfile"`
 	WriteJobLogsToStdout        bool     `cli:"write-job-logs-to-stdout"`
@@ -138,6 +138,7 @@ type AgentStartConfig struct {
 	MetaDataGCP                  bool     `cli:"meta-data-gcp" deprecated-and-renamed-to:"TagsFromGCP"`
 	TagsFromEC2                  bool     `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                  bool     `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
+	BootstrapScript              string   `cli:"bootstrap-script" deprecated-and-renamed-to:"JobExecutorScript" normalize:"commandpath"`
 	DisconnectAfterJobTimeout    int      `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
@@ -426,8 +427,14 @@ var AgentStartCommand = cli.Command{
 		cli.StringFlag{
 			Name:   "bootstrap-script",
 			Value:  "",
-			Usage:  "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
+			Usage:  "The command that is executed for bootstrapping a job, defaults to the exec-job sub-command of this binary",
 			EnvVar: "BUILDKITE_BOOTSTRAP_SCRIPT_PATH",
+		},
+		cli.StringFlag{
+			Name:   "job-executor-script",
+			Value:  "",
+			Usage:  "The command that is executed for running a job, defaults to the exec-job sub-command of this binary",
+			EnvVar: "BUILDKITE_JOB_EXECUTOR_SCRIPT_PATH",
 		},
 		cli.StringFlag{
 			Name:   "build-path",
@@ -649,7 +656,7 @@ var AgentStartCommand = cli.Command{
 		done := HandleGlobalFlags(l, cfg)
 		defer done()
 
-		// Remove any config env from the environment to prevent them propagating to bootstrap
+		// Remove any config env from the environment to prevent them propagating to job execution
 		err = UnsetConfigFromEnvironment(c)
 		if err != nil {
 			fmt.Printf("%s", err)
@@ -669,12 +676,12 @@ var AgentStartCommand = cli.Command{
 		}
 
 		// Set a useful default for the bootstrap script
-		if cfg.BootstrapScript == "" {
+		if cfg.JobExecutorScript == "" {
 			exePath, err := os.Executable()
 			if err != nil {
-				l.Fatal("Unable to find executable path for bootstrap")
+				l.Fatal("Unable to find our executable path to construct the job executor script: %v", err)
 			}
-			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
+			cfg.JobExecutorScript = fmt.Sprintf("%s exec-job", shellwords.Quote(exePath))
 		}
 
 		isSetNoPlugins := c.IsSet("no-plugins")
@@ -757,7 +764,7 @@ var AgentStartCommand = cli.Command{
 			DatadogDistributions: cfg.MetricsDatadogDistributions,
 		})
 
-		// Sense check supported tracing backends, we don't want bootstrapped jobs to silently have no tracing
+		// Sense check supported tracing backends, we don't want jobs to silently have no tracing
 		if _, has := tracetools.ValidTracingBackends[cfg.TracingBackend]; !has {
 			l.Fatal("The given tracing backend %q is not supported. Valid backends are: %q", cfg.TracingBackend, maps.Keys(tracetools.ValidTracingBackends))
 		}
@@ -769,7 +776,7 @@ var AgentStartCommand = cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:            cfg.BootstrapScript,
+			JobExecutorScript:          cfg.JobExecutorScript,
 			BuildPath:                  cfg.BuildPath,
 			SocketsPath:                cfg.SocketsPath,
 			GitMirrorsPath:             cfg.GitMirrorsPath,
@@ -837,7 +844,7 @@ var AgentStartCommand = cli.Command{
 			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Info("Configuration loaded")
 		}
 
-		l.Debug("Bootstrap command: %s", agentConf.BootstrapScript)
+		l.Debug("Job Exec command: %s", agentConf.JobExecutorScript)
 		l.Debug("Build path: %s", agentConf.BuildPath)
 		l.Debug("Hooks directory: %s", agentConf.HooksPath)
 		l.Debug("Plugins directory: %s", agentConf.PluginsPath)
@@ -871,7 +878,7 @@ var AgentStartCommand = cli.Command{
 			l.Fatal("Failed to parse cancel-signal: %v", err)
 		}
 
-		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
+		// confirm the BuildPath is exists. The job executor is going to write to it when a job executes,
 		// so we may as well check that'll work now and fail early if it's a problem
 		if !utils.FileExists(agentConf.BuildPath) {
 			l.Info("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
